@@ -43,7 +43,7 @@ impl MarkdownRenderer {
         let mut heading_level: usize = 0;
         let mut in_emphasis = false;
         let mut in_strong = false;
-        let mut in_paragraph = false;
+        let mut _in_paragraph = false;
 
         for event in parser {
             match event {
@@ -55,7 +55,7 @@ impl MarkdownRenderer {
                             output.push('\n');
                         }
                         Tag::Paragraph => {
-                            in_paragraph = true;
+                            _in_paragraph = true;
                             if !output.is_empty() && !output.ends_with('\n') {
                                 output.push('\n');
                             }
@@ -97,7 +97,7 @@ impl MarkdownRenderer {
                             output.push('\n');
                         }
                         Tag::Paragraph => {
-                            in_paragraph = false;
+                            _in_paragraph = false;
                             output.push('\n');
                         }
                         Tag::List(_) => {

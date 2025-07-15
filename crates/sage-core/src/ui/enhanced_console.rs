@@ -74,7 +74,7 @@ impl EnhancedConsole {
         let mut message = format!("{} {}", status_icon, task);
         
         if let Some((current, total)) = progress {
-            let percentage = (current as f64 / total as f64 * 100.0) as usize;
+            let _percentage = (current as f64 / total as f64 * 100.0) as usize;
             message = format!("{} ({}/{})", message, current, total);
         }
 

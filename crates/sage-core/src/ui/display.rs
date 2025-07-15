@@ -2,7 +2,6 @@
 
 use colored::*;
 use super::markdown::render_markdown;
-use std::time::Duration;
 
 /// Theme colors for consistent UI styling
 pub struct Theme {
@@ -32,20 +31,20 @@ impl Theme {
 
 /// Display manager for consistent UI formatting
 pub struct DisplayManager {
-    theme: Theme,
+    _theme: Theme,
 }
 
 impl DisplayManager {
     /// Create a new display manager with default theme
     pub fn new() -> Self {
         Self {
-            theme: Theme::default(),
+            _theme: Theme::default(),
         }
     }
 
     /// Create a display manager with custom theme
     pub fn with_theme(theme: Theme) -> Self {
-        Self { theme }
+        Self { _theme: theme }
     }
     /// Apply theme color to text
     fn apply_color(&self, text: &str, color_name: &str) -> ColoredString {
