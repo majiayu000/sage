@@ -1,0 +1,82 @@
+{
+  "default_provider": "google",
+  "enable_lakeview": false,
+  "lakeview_config": null,
+  "logging": {
+    "format": "pretty",
+    "level": "info",
+    "log_file": null,
+    "log_to_console": true,
+    "log_to_file": false
+  },
+  "max_steps": 20,
+  "model_providers": {
+    "anthropic": {
+      "api_key": "your-anthropic-api-key-here",
+      "api_version": "2023-06-01",
+      "base_url": null,
+      "max_retries": 3,
+      "max_tokens": 4096,
+      "model": "claude-3-sonnet-20240229",
+      "parallel_tool_calls": false,
+      "stop_sequences": null,
+      "temperature": 0.7,
+      "top_k": null,
+      "top_p": 1.0
+    },
+    "google": {
+      "api_key": "your-google-api-key-here",
+      "api_version": null,
+      "base_url": null,
+      "max_retries": 3,
+      "max_tokens": 120000,
+      "model": "gemini-2.5-pro",
+      "parallel_tool_calls": true,
+      "stop_sequences": null,
+      "temperature": 0.7,
+      "top_k": null,
+      "top_p": 1.0
+    },
+    "ollama": {
+      "api_key": null,
+      "base_url": "http://localhost:11434",
+      "max_retries": 3,
+      "max_tokens": 4096,
+      "model": "llama3",
+      "temperature": 0.7,
+      "top_p": 1.0
+    },
+    "openai": {
+      "api_key": "your-openai-api-key-here",
+      "api_version": null,
+      "base_url": null,
+      "max_retries": 3,
+      "max_tokens": 4096,
+      "model": "gpt-4",
+      "parallel_tool_calls": true,
+      "stop_sequences": null,
+      "temperature": 0.7,
+      "top_k": null,
+      "top_p": 1.0
+    }
+  },
+  "tools": {
+    "allow_parallel_execution": true,
+    "enabled_tools": [
+      "str_replace_based_edit_tool",
+      "sequentialthinking",
+      "json_edit_tool",
+      "task_done",
+      "bash"
+    ],
+    "max_execution_time": 300,
+    "tool_settings": {}
+  },
+  "working_directory": null,
+  "trajectory": {
+    "enabled": false,
+    "directory": "trajectories",
+    "auto_save": true,
+    "save_interval_steps": 5
+  }
+}
