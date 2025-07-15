@@ -250,7 +250,7 @@ impl LLMClient {
         let url = format!("{}/openai/deployments/{}/chat/completions?api-version={}",
             self.config.get_base_url(),
             self.model_params.model,
-            self.config.api_version.as_deref().unwrap_or("2024-02-15-preview")
+            self.config.api_version.as_deref().unwrap_or("2025-02-15-preview")
         );
 
         let mut request_body = json!({

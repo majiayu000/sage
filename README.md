@@ -1,28 +1,78 @@
 # Sage Agent
 
+<div align="center">
+
+**🌐 Language / 语言**
+
+[![English](https://img.shields.io/badge/English-blue?style=for-the-badge)](README.md) [![中文](https://img.shields.io/badge/中文-red?style=for-the-badge)](README_zh.md)
+
+</div>
+
+---
+
 🤖 **Sage Agent** is a powerful LLM-based agent system for general-purpose software engineering tasks, built in Rust with modern async architecture and clean design patterns.
+
+<div align="center">
+
+[![Rust](https://img.shields.io/badge/Rust-1.85+-orange?logo=rust)](https://www.rust-lang.org/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg)]()
+[![Version](https://img.shields.io/badge/Version-0.1.0-blue.svg)]()
+
+</div>
 
 ## 🔄 Project Origin
 
 This project is a **Rust rewrite** of the original [**Trae Agent**](https://github.com/bytedance/trae-agent) by ByteDance. While maintaining the core functionality and philosophy of the original Python-based agent, Sage Agent brings:
 
-- **Performance**: Rust's zero-cost abstractions and memory safety
-- **Concurrency**: Modern async/await patterns with Tokio
-- **Type Safety**: Compile-time guarantees and robust error handling
-- **Modularity**: Clean architecture with well-defined service boundaries
+- **🚀 Performance**: Rust's zero-cost abstractions and memory safety
+- **⚡ Concurrency**: Modern async/await patterns with Tokio
+- **🛡️ Type Safety**: Compile-time guarantees and robust error handling
+- **🏗️ Modularity**: Clean architecture with well-defined service boundaries
 
 We extend our gratitude to the ByteDance team and the open-source community for creating the foundational Trae Agent project that inspired this implementation.
 
+## 📋 Table of Contents
+
+- [✨ Features](#-features)
+- [🏗️ Architecture](#️-architecture)
+- [🚀 Quick Start](#-quick-start)
+  - [System Requirements](#system-requirements)
+  - [Installation](#installation)
+  - [Configuration](#configuration)
+  - [Basic Usage](#basic-usage)
+- [🛠️ Available Tools](#️-available-tools)
+- [📖 Examples](#-examples)
+- [📊 Trajectory Recording](#-trajectory-recording)
+- [🎨 Advanced Features](#-advanced-features)
+- [⚡ Performance Optimization](#-performance-optimization)
+- [🔧 Development](#-development)
+- [📚 Documentation](#-documentation)
+- [🤝 Contributing](#-contributing)
+- [📄 License](#-license)
+
 ## ✨ Features
 
-- **Multi-LLM Support**: Compatible with OpenAI, Anthropic, and other LLM providers
-- **Rich Tool Ecosystem**: Built-in tools for code editing, bash execution, codebase retrieval, and task management
-- **Interactive CLI**: Beautiful terminal interface with animations and progress indicators
-- **SDK Integration**: High-level SDK for programmatic usage
-- **Trajectory Recording**: Complete execution tracking and replay capabilities
-- **Markdown Rendering**: Terminal-based markdown display with syntax highlighting
-- **Task Management**: Built-in task planning and progress tracking
-- **Clean Architecture**: Modular design with clear separation of concerns
+<div align="center">
+
+| 🤖 **AI Integration** | 🛠️ **Developer Tools** | 🎨 **User Experience** |
+|:---:|:---:|:---:|
+| Multi-LLM Support<br/>*(OpenAI, Anthropic, Google)* | Rich Tool Ecosystem<br/>*(Code editing, Bash, Retrieval)* | Interactive CLI<br/>*(Animations, Progress indicators)* |
+| Smart Context Handling | Task Management System | Terminal Markdown Rendering |
+| Trajectory Recording | SDK Integration | Beautiful UI Components |
+
+</div>
+
+### 🔥 Key Highlights
+
+- **🌐 Multi-LLM Support**: Compatible with OpenAI, Anthropic, Google, and other LLM providers
+- **🛠️ Rich Tool Ecosystem**: Built-in tools for code editing, bash execution, codebase retrieval, and task management
+- **💻 Interactive CLI**: Beautiful terminal interface with animations and progress indicators
+- **📦 SDK Integration**: High-level SDK for programmatic usage
+- **📊 Trajectory Recording**: Complete execution tracking and replay capabilities
+- **📝 Markdown Rendering**: Terminal-based markdown display with syntax highlighting
+- **📋 Task Management**: Built-in task planning and progress tracking
+- **🏗️ Clean Architecture**: Modular design with clear separation of concerns
 
 ## 🏗️ Architecture
 
@@ -34,6 +84,23 @@ The project is organized as a Rust workspace with four main crates:
 - **`sage-tools`**: Collection of built-in tools for various tasks
 
 ## 🚀 Quick Start
+
+> **💡 TL;DR**: `cargo install sage-cli && sage` - Get started in seconds!
+
+<div align="center">
+
+```bash
+# 🚀 One-line installation
+cargo install --git https://github.com/your-org/sage-agent sage-cli
+
+# 🎯 Start interactive mode
+sage
+
+# ✨ Or run a specific task
+sage run "Create a Python script that calculates fibonacci numbers"
+```
+
+</div>
 
 ### System Requirements
 

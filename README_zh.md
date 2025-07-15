@@ -1,28 +1,78 @@
 # Sage Agent
 
+<div align="center">
+
+**🌐 Language / 语言**
+
+[![English](https://img.shields.io/badge/English-blue?style=for-the-badge)](README.md) [![中文](https://img.shields.io/badge/中文-red?style=for-the-badge)](README_zh.md)
+
+</div>
+
+---
+
 🤖 **Sage Agent** 是一个基于大语言模型的强大智能体系统，专为通用软件工程任务而设计，采用 Rust 构建，具有现代异步架构和清晰的设计模式。
+
+<div align="center">
+
+[![Rust](https://img.shields.io/badge/Rust-1.85+-orange?logo=rust)](https://www.rust-lang.org/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg)]()
+[![Version](https://img.shields.io/badge/Version-0.1.0-blue.svg)]()
+
+</div>
 
 ## 🔄 项目起源
 
 本项目是字节跳动原始 [**Trae Agent**](https://github.com/bytedance/trae-agent) 的 **Rust 重写版本**。在保持原始 Python 版本智能体核心功能和设计理念的同时，Sage Agent 带来了：
 
-- **性能提升**：Rust 的零成本抽象和内存安全保障
-- **并发优化**：基于 Tokio 的现代 async/await 模式
-- **类型安全**：编译时保证和健壮的错误处理
-- **模块化设计**：清晰的架构和明确的服务边界
+- **🚀 性能提升**：Rust 的零成本抽象和内存安全保障
+- **⚡ 并发优化**：基于 Tokio 的现代 async/await 模式
+- **🛡️ 类型安全**：编译时保证和健壮的错误处理
+- **🏗️ 模块化设计**：清晰的架构和明确的服务边界
 
 我们向字节跳动团队和开源社区表示感谢，感谢他们创建了启发本项目实现的基础 Trae Agent 项目。
 
+## 📋 目录
+
+- [✨ 特性](#-特性)
+- [🏗️ 架构](#️-架构)
+- [🚀 快速开始](#-快速开始)
+  - [系统要求](#系统要求)
+  - [安装](#安装)
+  - [配置](#配置)
+  - [基本使用](#基本使用)
+- [🛠️ 可用工具](#️-可用工具)
+- [📖 示例](#-示例)
+- [📊 轨迹记录](#-轨迹记录)
+- [🎨 高级功能](#-高级功能)
+- [⚡ 性能优化](#-性能优化)
+- [🔧 开发](#-开发)
+- [📚 文档](#-文档)
+- [🤝 贡献](#-贡献)
+- [📄 许可证](#-许可证)
+
 ## ✨ 特性
 
-- **多 LLM 支持**：兼容 OpenAI、Anthropic 和其他 LLM 提供商
-- **丰富的工具生态**：内置代码编辑、bash 执行、代码库检索和任务管理工具
-- **交互式 CLI**：美观的终端界面，带有动画和进度指示器
-- **SDK 集成**：用于编程使用的高级 SDK
-- **轨迹记录**：完整的执行跟踪和重放功能
-- **Markdown 渲染**：基于终端的 Markdown 显示和语法高亮
-- **任务管理**：内置任务规划和进度跟踪
-- **清晰架构**：模块化设计，关注点分离明确
+<div align="center">
+
+| 🤖 **AI 集成** | 🛠️ **开发工具** | 🎨 **用户体验** |
+|:---:|:---:|:---:|
+| 多 LLM 支持<br/>*(OpenAI, Anthropic, Google)* | 丰富工具生态<br/>*(代码编辑, Bash, 检索)* | 交互式 CLI<br/>*(动画, 进度指示器)* |
+| 智能上下文处理 | 任务管理系统 | 终端 Markdown 渲染 |
+| 轨迹记录 | SDK 集成 | 美观 UI 组件 |
+
+</div>
+
+### 🔥 核心亮点
+
+- **🌐 多 LLM 支持**：兼容 OpenAI、Anthropic、Google 和其他 LLM 提供商
+- **🛠️ 丰富的工具生态**：内置代码编辑、bash 执行、代码库检索和任务管理工具
+- **💻 交互式 CLI**：美观的终端界面，带有动画和进度指示器
+- **📦 SDK 集成**：用于编程使用的高级 SDK
+- **📊 轨迹记录**：完整的执行跟踪和重放功能
+- **📝 Markdown 渲染**：基于终端的 Markdown 显示和语法高亮
+- **📋 任务管理**：内置任务规划和进度跟踪
+- **🏗️ 清晰架构**：模块化设计，关注点分离明确
 
 ## 🏗️ 架构
 
@@ -34,6 +84,23 @@
 - **`sage-tools`**：各种任务的内置工具集合
 
 ## 🚀 快速开始
+
+> **💡 简单说明**: `cargo install sage-cli && sage` - 几秒钟即可开始使用！
+
+<div align="center">
+
+```bash
+# 🚀 一行安装
+cargo install --git https://github.com/your-org/sage-agent sage-cli
+
+# 🎯 启动交互模式
+sage
+
+# ✨ 或运行特定任务
+sage run "创建一个计算斐波那契数列的 Python 脚本"
+```
+
+</div>
 
 ### 系统要求
 

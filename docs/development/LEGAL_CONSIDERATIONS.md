@@ -9,7 +9,7 @@ This document outlines the legal considerations and compliance measures for the 
 ### Original Project License
 - **Original Project**: [Trae Agent](https://github.com/bytedance/trae-agent) by ByteDance
 - **Original License**: MIT License
-- **Copyright**: © 2024 ByteDance Ltd.
+- **Copyright**: © 2025 ByteDance Ltd.
 
 ### Our License
 - **Current License**: MIT License
