@@ -1,0 +1,50 @@
+[package]
+name = "sage-tools"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Tool implementations for Sage Agent"
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+# Core library
+sage-core = { path = "../sage-core" }
+
+# Async runtime
+tokio = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Utilities
+uuid = { workspace = true }
+
+# Async traits
+async-trait = { workspace = true }
+
+# JSON path
+jsonpath-rust = { workspace = true }
+
+# Process management
+tokio-process = { workspace = true }
+
+# Time handling
+chrono = { workspace = true }
+
+# Static variables
+lazy_static = "1.4"
+
+[dev-dependencies]
+mockall = { workspace = true }
+tokio-test = "0.4"

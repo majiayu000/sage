@@ -1,0 +1,45 @@
+[package]
+name = "sage-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Command-line interface for Sage Agent"
+keywords.workspace = true
+categories.workspace = true
+
+[[bin]]
+name = "sage"
+path = "src/main.rs"
+
+[dependencies]
+# Core library
+sage-core = { path = "../sage-core" }
+sage-tools = { path = "../sage-tools" }
+sage-sdk = { path = "../sage-sdk" }
+
+# CLI
+clap = { workspace = true }
+console = { workspace = true }
+indicatif = { workspace = true }
+colored = { workspace = true }
+
+# Async runtime
+tokio = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# Utilities
+dirs = { workspace = true }
+shellexpand = { workspace = true }
+chrono = { workspace = true }

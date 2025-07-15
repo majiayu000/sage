@@ -1,0 +1,33 @@
+[package]
+name = "sage-sdk"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "SDK for Sage Agent"
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+# Core library
+sage-core = { path = "../sage-core" }
+sage-tools = { path = "../sage-tools" }
+
+# Async runtime
+tokio = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Utilities
+uuid = { workspace = true }
+chrono = { workspace = true }

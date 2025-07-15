@@ -1,0 +1,71 @@
+[package]
+name = "sage-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Core library for Sage Agent"
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+# Async runtime
+tokio = { workspace = true }
+futures = { workspace = true }
+
+# HTTP client
+reqwest = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+toml = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# CLI and formatting
+colored = { workspace = true }
+
+# Markdown rendering
+pulldown-cmark = "0.9"
+syntect = "5.0"
+textwrap = "0.16"
+
+# Utilities
+uuid = { workspace = true }
+chrono = { workspace = true }
+dirs = { workspace = true }
+shellexpand = { workspace = true }
+
+# Async traits
+async-trait = { workspace = true }
+
+# JSON path
+jsonpath-rust = { workspace = true }
+
+# Configuration
+config = { workspace = true }
+dotenv = { workspace = true }
+
+[dev-dependencies]
+mockall = { workspace = true }
+tokio-test = "0.4"
+
+[[example]]
+name = "markdown_demo"
+path = "../../examples/markdown_demo.rs"
+
+[[example]]
+name = "test_markdown_agent"
+path = "../../examples/test_markdown_agent.rs"
+
+[[example]]
+name = "ui_demo"
+path = "../../examples/ui_demo.rs"
