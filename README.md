@@ -6,8 +6,6 @@
 
 [![English](https://img.shields.io/badge/English-4285F4?style=for-the-badge&logo=google-translate&logoColor=white)](README.md) [![中文](https://img.shields.io/badge/中文-FF6B6B?style=for-the-badge&logo=google-translate&logoColor=white)](README_zh.md)
 
-[🔙 Language Selection / 语言选择](README_ENTRY.md)
-
 </div>
 
 ---
