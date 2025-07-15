@@ -37,7 +37,7 @@ The project is organized as a Rust workspace with four main crates:
 
 ### System Requirements
 
-- **Rust**: 1.70+ (latest stable recommended)
+- **Rust**: 1.85+ (latest stable recommended)
 - **Operating System**: Linux, macOS, Windows
 - **Memory**: Minimum 4GB RAM (8GB+ recommended)
 - **API Keys**: API keys for your chosen LLM providers
