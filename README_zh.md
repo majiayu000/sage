@@ -2,6 +2,15 @@
 
 <div align="center">
 
+[![Rust](https://img.shields.io/badge/Rust-1.85+-orange?logo=rust)](https://www.rust-lang.org/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg)]()
+[![Version](https://img.shields.io/badge/Version-0.1.0-blue.svg)]()
+
+</div>
+
+<div align="center">
+
 **🌐 Language / 语言**
 
 [![English](https://img.shields.io/badge/English-4285F4?style=for-the-badge&logo=google-translate&logoColor=white)](README.md) [![中文](https://img.shields.io/badge/中文-FF6B6B?style=for-the-badge&logo=google-translate&logoColor=white)](README_zh.md)
@@ -12,14 +21,7 @@
 
 🤖 **Sage Agent** 是一个基于大语言模型的强大智能体系统，专为通用软件工程任务而设计，采用 Rust 构建，具有现代异步架构和清晰的设计模式。
 
-<div align="center">
 
-[![Rust](https://img.shields.io/badge/Rust-1.85+-orange?logo=rust)](https://www.rust-lang.org/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg)]()
-[![Version](https://img.shields.io/badge/Version-0.1.0-blue.svg)]()
-
-</div>
 
 ## 🔄 项目起源
 

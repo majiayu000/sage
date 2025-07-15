@@ -2,24 +2,26 @@
 
 <div align="center">
 
-**🌐 Language / 语言**
-
-[![English](https://img.shields.io/badge/English-4285F4?style=for-the-badge&logo=google-translate&logoColor=white)](README.md) [![中文](https://img.shields.io/badge/中文-FF6B6B?style=for-the-badge&logo=google-translate&logoColor=white)](README_zh.md)
-
-</div>
-
----
-
-🤖 **Sage Agent** is a powerful LLM-based agent system for general-purpose software engineering tasks, built in Rust with modern async architecture and clean design patterns.
-
-<div align="center">
-
 [![Rust](https://img.shields.io/badge/Rust-1.85+-orange?logo=rust)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg)]()
 [![Version](https://img.shields.io/badge/Version-0.1.0-blue.svg)]()
 
 </div>
+
+
+
+**🌐 Language / 语言**
+
+[![English](https://img.shields.io/badge/English-4285F4?style=for-the-badge&logo=google-translate&logoColor=white)](README.md) [![中文](https://img.shields.io/badge/中文-FF6B6B?style=for-the-badge&logo=google-translate&logoColor=white)](README_zh.md)
+
+
+
+---
+
+🤖 **Sage Agent** is a powerful LLM-based agent system for general-purpose software engineering tasks, built in Rust with modern async architecture and clean design patterns.
+
+
 
 ## 🔄 Project Origin
 
