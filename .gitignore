@@ -101,3 +101,5 @@ logs/
 # Documentation build
 docs/_build/
 site/
+
+doc_consistency_report.json

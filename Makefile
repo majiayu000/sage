@@ -1,6 +1,6 @@
 # Sage Agent Makefile
 
-.PHONY: help build test clean install dev check fmt clippy docs examples
+.PHONY: help build test clean install dev check fmt clippy docs examples doc-check doc-status
 
 # Default target
 help:
@@ -27,6 +27,8 @@ help:
 	@echo "Documentation:"
 	@echo "  docs       - Generate and open documentation"
 	@echo "  examples   - Run all examples"
+	@echo "  doc-check  - Check documentation consistency"
+	@echo "  doc-status - Show documentation status"
 	@echo ""
 	@echo "Usage:"
 	@echo "  run        - Run sage with arguments (e.g., make run ARGS='--help')"
@@ -88,6 +90,18 @@ quick: fmt clippy test
 
 # Full CI check
 ci: fmt clippy test build
+
+# Documentation consistency
+doc-check:
+	@echo "🔍 Checking documentation consistency..."
+	@python3 scripts/check_doc_consistency.py
+
+doc-status:
+	@echo "📊 Documentation Status:"
+	@echo "English README: $$(wc -l < README.md) lines"
+	@echo "Chinese README: $$(wc -l < README_zh.md) lines"
+	@echo "Last modified:"
+	@ls -la README*.md | awk '{print "  " $$9 ": " $$6 " " $$7 " " $$8}'
 
 # Setup development environment
 setup:

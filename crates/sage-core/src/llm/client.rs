@@ -67,6 +67,21 @@ impl LLMClient {
         messages: &[LLMMessage],
         tools: Option<&[ToolSchema]>,
     ) -> SageResult<LLMResponse> {
+        // TODO: Add streaming response support
+        // - Implement streaming for all providers
+        // - Add Server-Sent Events (SSE) support
+        // - Support token-by-token processing
+
+        // TODO: Add response caching
+        // - Cache responses based on message hash
+        // - Implement cache invalidation strategies
+        // - Support distributed caching for multi-instance deployments
+
+        // TODO: Add request/response middleware
+        // - Request preprocessing and validation
+        // - Response post-processing and filtering
+        // - Metrics collection and monitoring
+
         match &self.provider {
             LLMProvider::OpenAI => self.openai_chat(messages, tools).await,
             LLMProvider::Anthropic => self.anthropic_chat(messages, tools).await,
@@ -76,6 +91,10 @@ impl LLMClient {
             LLMProvider::Doubao => self.doubao_chat(messages, tools).await,
             LLMProvider::Ollama => self.ollama_chat(messages, tools).await,
             LLMProvider::Custom(name) => {
+                // TODO: Implement plugin system for custom providers
+                // - Add provider plugin API
+                // - Support dynamic provider loading
+                // - Implement provider validation and security
                 Err(SageError::llm(format!("Custom provider '{name}' not implemented")))
             }
         }

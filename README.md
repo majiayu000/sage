@@ -2,6 +2,17 @@
 
 🤖 **Sage Agent** is a powerful LLM-based agent system for general-purpose software engineering tasks, built in Rust with modern async architecture and clean design patterns.
 
+## 🔄 Project Origin
+
+This project is a **Rust rewrite** of the original [**Trae Agent**](https://github.com/bytedance/trae-agent) by ByteDance. While maintaining the core functionality and philosophy of the original Python-based agent, Sage Agent brings:
+
+- **Performance**: Rust's zero-cost abstractions and memory safety
+- **Concurrency**: Modern async/await patterns with Tokio
+- **Type Safety**: Compile-time guarantees and robust error handling
+- **Modularity**: Clean architecture with well-defined service boundaries
+
+We extend our gratitude to the ByteDance team and the open-source community for creating the foundational Trae Agent project that inspired this implementation.
+
 ## ✨ Features
 
 - **Multi-LLM Support**: Compatible with OpenAI, Anthropic, and other LLM providers
@@ -24,7 +35,16 @@ The project is organized as a Rust workspace with four main crates:
 
 ## 🚀 Quick Start
 
+### System Requirements
+
+- **Rust**: 1.70+ (latest stable recommended)
+- **Operating System**: Linux, macOS, Windows
+- **Memory**: Minimum 4GB RAM (8GB+ recommended)
+- **API Keys**: API keys for your chosen LLM providers
+
 ### Installation
+
+#### Method 1: Build from Source
 
 ```bash
 # Clone the repository
@@ -36,6 +56,26 @@ cargo build --release
 
 # Install the CLI
 cargo install --path crates/sage-cli
+```
+
+#### Method 2: Install via Cargo
+
+```bash
+# Install from crates.io (if published)
+cargo install sage-cli
+
+# Or install from Git repository
+cargo install --git https://github.com/your-org/sage-agent sage-cli
+```
+
+#### Verify Installation
+
+```bash
+# Check version
+sage --version
+
+# Show help
+sage --help
 ```
 
 ### Configuration
@@ -132,6 +172,94 @@ cargo run --example markdown_demo
 cargo run --example trajectory_demo
 ```
 
+## 📊 Trajectory Recording
+
+Sage Agent automatically records detailed execution trajectories for debugging and analysis:
+
+```bash
+# Automatically generate trajectory files
+sage run "Debug authentication module"
+# Saved to: trajectories/trajectory_20250612_220546.json
+
+# Custom trajectory file
+sage run "Optimize database queries" --trajectory-file optimization_debug.json
+```
+
+Trajectory files contain:
+
+- **LLM Interactions**: All messages, responses, and tool calls
+- **Agent Steps**: State transitions and decision points
+- **Tool Usage**: Which tools were called and their results
+- **Metadata**: Timestamps, token usage, and execution metrics
+
+## 🎨 Advanced Features
+
+### Interactive Mode
+
+In interactive mode, you can:
+
+- Enter any task description to execute
+- Use `status` to view agent information
+- Use `help` to get available commands
+- Use `clear` to clear the screen
+- Use `exit` or `quit` to end the session
+
+### Multi-Provider Support
+
+```bash
+# Use OpenAI
+sage run "Create Python script" --provider openai --model gpt-4
+
+# Use Anthropic
+sage run "Code review" --provider anthropic --model claude-3-5-sonnet
+
+# Use custom working directory
+sage run "Add unit tests" --working-dir /path/to/project
+```
+
+### Configuration Priority
+
+1. Command line arguments (highest priority)
+2. Configuration file values
+3. Environment variables
+4. Default values (lowest priority)
+
+## ⚡ Performance Optimization
+
+### Best Practices
+
+- **Concurrent Processing**: Sage Agent uses Tokio async runtime for efficient concurrent operations
+- **Memory Management**: Rust's zero-cost abstractions ensure minimal runtime overhead
+- **Caching Strategy**: Intelligent caching of LLM responses and tool results for improved performance
+- **Streaming Processing**: Support for streaming LLM responses for better user experience
+
+### Configuration Tuning
+
+```json
+{
+  "model_parameters": {
+    "temperature": 0.1,        // Lower randomness for more consistent results
+    "max_tokens": 2000,        // Adjust based on task complexity
+    "stream": true             // Enable streaming responses
+  },
+  "max_steps": 15,             // Limit max steps to control costs
+  "timeout_seconds": 300       // Set reasonable timeout
+}
+```
+
+### Monitoring and Logging
+
+```bash
+# Enable verbose logging
+RUST_LOG=sage_core=debug,sage_cli=info cargo run
+
+# Monitor token usage
+sage run "Task description" --show-stats
+
+# Performance profiling
+RUST_LOG=trace cargo run --release
+```
+
 ## 🔧 Development
 
 ### Building
@@ -163,6 +291,12 @@ sage-agent/
 │   ├── sage-cli/           # Command-line interface
 │   ├── sage-sdk/           # High-level SDK
 │   └── sage-tools/         # Built-in tools collection
+├── docs/                   # Comprehensive documentation
+│   ├── user-guide/         # User documentation
+│   ├── development/        # Developer documentation
+│   ├── architecture/       # System architecture docs
+│   ├── api/                # API reference
+│   └── planning/           # Project planning and roadmap
 ├── examples/               # Usage examples
 ├── trajectories/           # Execution trajectory files (gitignored)
 ├── configs/                # Configuration templates and examples
@@ -215,25 +349,89 @@ Sage Agent supports flexible configuration through JSON files and environment va
 }
 ```
 
+## 📚 Documentation
+
+Comprehensive documentation is available in the [`docs/`](docs/) directory:
+
+- **[User Guide](docs/user-guide/)** - Installation, configuration, and usage
+- **[Development Guide](docs/development/)** - Contributing and development setup
+- **[Architecture Documentation](docs/architecture/)** - System design and architecture
+- **[API Reference](docs/api/)** - Detailed API documentation
+- **[Planning & Roadmap](docs/planning/)** - Project roadmap and TODO lists
+
+### Quick Links
+- [Getting Started](docs/user-guide/getting-started.md) - New user guide
+- [Contributing Guide](docs/development/contributing.md) - How to contribute
+- [TODO Lists](docs/planning/) - Current development priorities
+- [MCP Integration Plan](docs/development/MCP_INTEGRATION_PLAN.md) - Model Context Protocol support
+- [Documentation Consistency](docs/DOC_CONSISTENCY_GUIDE.md) - Maintaining doc consistency
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+**Import Errors:**
+```bash
+# Try setting RUST_LOG
+RUST_LOG=debug cargo run
+```
+
+**API Key Issues:**
+```bash
+# Verify API keys are set
+echo $OPENAI_API_KEY
+echo $ANTHROPIC_API_KEY
+
+# Check configuration
+sage --show-config
+```
+
+**Permission Errors:**
+```bash
+# Ensure proper permissions for file operations
+chmod +x /path/to/your/project
+```
+
+### Environment Variables
+
+- `OPENAI_API_KEY` - OpenAI API key
+- `ANTHROPIC_API_KEY` - Anthropic API key
+- `GOOGLE_API_KEY` - Google Gemini API key
+- `OPENROUTER_API_KEY` - OpenRouter API key
+
+### Development Guidelines
+
+- Follow Rust official code style guidelines
+- Add tests for new features
+- Update documentation as needed
+- Use appropriate type hints
+- Ensure all tests pass before committing
+
 ## 🤝 Contributing
 
-We welcome contributions! Please see our contributing guidelines for details on:
+We welcome contributions! Please see our [contributing guidelines](docs/development/contributing.md) for details on:
 
-- Code style and conventions
-- Testing requirements
-- Pull request process
-- Issue reporting
+- [Development setup](docs/development/setup.md)
+- [Code style and conventions](docs/development/code-style.md)
+- [Testing requirements](docs/development/testing.md)
+- [Pull request process](docs/development/contributing.md#pull-requests)
 
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+**Note**: This Rust implementation maintains compatibility with the MIT License of the original [Trae Agent](https://github.com/bytedance/trae-agent) project.
+
 ## 🙏 Acknowledgments
 
+- **Original Inspiration**: This project is based on [Trae Agent](https://github.com/bytedance/trae-agent) by ByteDance - a pioneering LLM-based agent for software engineering tasks
+- **Partial Inspiration**: [Augment Code](https://www.augmentcode.com/) - Advanced AI code assistant and context engine, providing valuable reference for agent tool system design
 - Built with [Rust](https://rust-lang.org/) and modern async patterns
-- Powered by leading LLM providers
-- Inspired by the need for intelligent development automation
+- Powered by leading LLM providers (Google、Anthropic、OpenAI, etc.)
+- Inspired by the open-source community's commitment to intelligent development automation
+- Special thanks to the Trae Agent contributors and maintainers for their foundational work
+- Appreciation to the Augment Code team for their innovative work in AI-assisted development
 
 ---
 
-**Sage Agent** - Empowering developers with intelligent automation 🚀
+**Sage Agent** - In learning.

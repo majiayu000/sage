@@ -12,6 +12,20 @@ pub mod trajectory;
 pub mod types;
 pub mod ui;
 
+// TODO: Add MCP (Model Context Protocol) support
+// pub mod mcp;  // Uncomment when implementing MCP integration
+// - Add MCP client and server implementations
+// - Support multiple transport layers (stdio, HTTP, WebSocket)
+// - Implement MCP tool discovery and registration
+// - Add MCP resource management capabilities
+
+// TODO: Add plugin system
+// pub mod plugins;  // Uncomment when implementing plugin system
+// - Design plugin API and lifecycle management
+// - Add plugin security validation and sandboxing
+// - Support dynamic plugin loading and unloading
+// - Implement plugin marketplace integration
+
 // Re-export commonly used types
 pub use agent::{Agent, AgentExecution, AgentStep, AgentState};
 pub use config::{Config, ModelParameters, LakeviewConfig};

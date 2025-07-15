@@ -1,0 +1,184 @@
+name: Documentation Consistency Check
+
+on:
+  pull_request:
+    paths:
+      - 'README*.md'
+      - 'docs/**/*.md'
+      - 'scripts/check_doc_consistency.py'
+  push:
+    branches: [main]
+    paths:
+      - 'README*.md'
+      - 'docs/**/*.md'
+  schedule:
+    # Run daily at 9 AM UTC to catch any inconsistencies
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+
+jobs:
+  check-consistency:
+    runs-on: ubuntu-latest
+    name: Check Documentation Consistency
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history for better file comparison
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Make script executable
+        run: chmod +x scripts/check_doc_consistency.py
+      
+      - name: Run documentation consistency check
+        id: consistency-check
+        run: |
+          python scripts/check_doc_consistency.py
+          echo "check_result=$?" >> $GITHUB_OUTPUT
+        continue-on-error: true
+      
+      - name: Upload consistency report
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: doc-consistency-report
+          path: doc_consistency_report.json
+          retention-days: 30
+      
+      - name: Comment on PR with results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            
+            try {
+              const report = JSON.parse(fs.readFileSync('doc_consistency_report.json', 'utf8'));
+              
+              let comment = `## 📚 Documentation Consistency Check\n\n`;
+              comment += `**Status:** ${report.status === 'pass' ? '✅ PASS' : '❌ FAIL'}\n`;
+              comment += `**Timestamp:** ${report.timestamp}\n`;
+              comment += `**File pairs checked:** ${report.stats.file_pairs_checked}\n`;
+              comment += `**Total issues:** ${report.stats.total_issues}\n\n`;
+              
+              if (report.stats.total_issues > 0) {
+                comment += `### 🔍 Issues Found:\n`;
+                comment += `- Missing files: ${report.stats.missing_files}\n`;
+                comment += `- Outdated files: ${report.stats.outdated_files}\n`;
+                comment += `- Structure issues: ${report.stats.structure_issues}\n\n`;
+                
+                comment += `### 📋 Detailed Issues:\n`;
+                report.issues.forEach((issue, index) => {
+                  comment += `${index + 1}. **[${issue.type.toUpperCase()}]** ${issue.message}\n`;
+                  if (issue.file) comment += `   - File: \`${issue.file}\`\n`;
+                  if (issue.en_file && issue.zh_file) {
+                    comment += `   - EN: \`${issue.en_file}\`\n`;
+                    comment += `   - ZH: \`${issue.zh_file}\`\n`;
+                  }
+                  comment += `\n`;
+                });
+                
+                comment += `### 💡 Recommendations:\n`;
+                comment += `- Review and update outdated Chinese documentation\n`;
+                comment += `- Create missing translation files\n`;
+                comment += `- Ensure structural consistency between language versions\n`;
+              } else {
+                comment += `### ✅ All documentation files are consistent!\n`;
+                comment += `Great job maintaining documentation quality across languages.\n`;
+              }
+              
+              // Find existing comment and update or create new one
+              const { data: comments } = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+              });
+              
+              const existingComment = comments.find(comment => 
+                comment.body.includes('📚 Documentation Consistency Check')
+              );
+              
+              if (existingComment) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: existingComment.id,
+                  body: comment
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  body: comment
+                });
+              }
+            } catch (error) {
+              console.error('Error processing consistency report:', error);
+            }
+      
+      - name: Create issue for consistency problems
+        if: steps.consistency-check.outputs.check_result != '0' && github.event_name == 'schedule'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            
+            try {
+              const report = JSON.parse(fs.readFileSync('doc_consistency_report.json', 'utf8'));
+              
+              if (report.stats.total_issues > 0) {
+                const title = `📚 Documentation Consistency Issues Detected - ${new Date().toISOString().split('T')[0]}`;
+                
+                let body = `## Documentation Consistency Report\n\n`;
+                body += `**Generated:** ${report.timestamp}\n`;
+                body += `**Total Issues:** ${report.stats.total_issues}\n\n`;
+                
+                body += `### Summary:\n`;
+                body += `- Missing files: ${report.stats.missing_files}\n`;
+                body += `- Outdated files: ${report.stats.outdated_files}\n`;
+                body += `- Structure issues: ${report.stats.structure_issues}\n\n`;
+                
+                body += `### Action Required:\n`;
+                body += `Please review and address the following documentation inconsistencies:\n\n`;
+                
+                report.issues.forEach((issue, index) => {
+                  body += `${index + 1}. **${issue.type.replace('_', ' ').toUpperCase()}**: ${issue.message}\n`;
+                  if (issue.file) body += `   - File: \`${issue.file}\`\n`;
+                  if (issue.en_file && issue.zh_file) {
+                    body += `   - English: \`${issue.en_file}\`\n`;
+                    body += `   - Chinese: \`${issue.zh_file}\`\n`;
+                  }
+                  body += `\n`;
+                });
+                
+                body += `### Next Steps:\n`;
+                body += `1. Assign translators for missing Chinese documentation\n`;
+                body += `2. Update outdated translations\n`;
+                body += `3. Fix structural inconsistencies\n`;
+                body += `4. Run \`python scripts/check_doc_consistency.py\` locally to verify fixes\n\n`;
+                body += `This issue was automatically created by the documentation consistency checker.\n`;
+                
+                await github.rest.issues.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title: title,
+                  body: body,
+                  labels: ['documentation', 'translation', 'consistency']
+                });
+              }
+            } catch (error) {
+              console.error('Error creating consistency issue:', error);
+            }
+      
+      - name: Fail workflow if consistency check failed
+        if: steps.consistency-check.outputs.check_result != '0'
+        run: |
+          echo "❌ Documentation consistency check failed!"
+          echo "Please review the issues and ensure Chinese documentation is up-to-date."
+          exit 1
