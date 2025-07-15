@@ -89,11 +89,11 @@
 
 > **💡 简单说明**: `cargo install sage-cli && sage` - 几秒钟即可开始使用！
 
-<div align="center">
+
 
 ```bash
 # 🚀 一行安装
-cargo install --git https://github.com/your-org/sage-agent sage-cli
+cargo install --git https://github.com/majiayu000/sage sage-cli
 
 # 🎯 启动交互模式
 sage
@@ -102,7 +102,7 @@ sage
 sage run "创建一个计算斐波那契数列的 Python 脚本"
 ```
 
-</div>
+
 
 ### 系统要求
 
@@ -117,7 +117,7 @@ sage run "创建一个计算斐波那契数列的 Python 脚本"
 
 ```bash
 # 克隆仓库
-git clone https://github.com/your-org/sage-agent
+git clone https://github.com/majiayu000/sage
 cd sage-agent
 
 # 构建项目
@@ -134,7 +134,7 @@ cargo install --path crates/sage-cli
 cargo install sage-cli
 
 # 或从 Git 仓库安装
-cargo install --git https://github.com/your-org/sage-agent sage-cli
+cargo install --git https://github.com/majiayu000/sage sage-cli
 ```
 
 #### 验证安装

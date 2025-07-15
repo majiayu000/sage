@@ -74,7 +74,7 @@ docs/
 
 ### Contributors
 - **First Contribution**: [Contributing Guide](docs/development/contributing.md) → [Development Setup](docs/development/setup.md)
-- **Finding Tasks**: [TODO Lists](docs/planning/) → [Issue Tracker](https://github.com/your-org/sage-agent/issues)
+- **Finding Tasks**: [TODO Lists](docs/planning/) → [Issue Tracker](https://github.com/majiayu000/sage/issues)
 - **Code Quality**: [Code Style](docs/development/code-style.md) → [Testing Guide](docs/development/testing.md)
 - **Architecture Changes**: [ADR Process](docs/planning/adr/README.md) → [ADR Template](docs/planning/adr/template.md)
 
@@ -123,8 +123,8 @@ docs/
 ## 🚀 Contributing to Documentation
 
 ### How to Help
-1. **Report Issues**: Found outdated or incorrect information? [Create an issue](https://github.com/your-org/sage-agent/issues)
-2. **Suggest Improvements**: Ideas for better documentation? [Start a discussion](https://github.com/your-org/sage-agent/discussions)
+1. **Report Issues**: Found outdated or incorrect information? [Create an issue](https://github.com/majiayu000/sage/issues)
+2. **Suggest Improvements**: Ideas for better documentation? [Start a discussion](https://github.com/majiayu000/sage/discussions)
 3. **Submit Changes**: Ready to contribute? [Follow the contributing guide](docs/development/contributing.md)
 4. **Translate**: Help translate documentation to other languages
 
@@ -136,4 +136,4 @@ docs/
 
 ---
 
-**Need help?** Check the [troubleshooting guide](docs/user-guide/troubleshooting.md) or [create an issue](https://github.com/your-org/sage-agent/issues).
+**Need help?** Check the [troubleshooting guide](docs/user-guide/troubleshooting.md) or [create an issue](https://github.com/majiayu000/sage/issues).

@@ -89,11 +89,11 @@ The project is organized as a Rust workspace with four main crates:
 
 > **💡 TL;DR**: `cargo install sage-cli && sage` - Get started in seconds!
 
-<div align="center">
+
 
 ```bash
 # 🚀 One-line installation
-cargo install --git https://github.com/your-org/sage-agent sage-cli
+cargo install --git https://github.com/majiayu000/sage sage-cli
 
 # 🎯 Start interactive mode
 sage
@@ -102,7 +102,7 @@ sage
 sage run "Create a Python script that calculates fibonacci numbers"
 ```
 
-</div>
+
 
 ### System Requirements
 
@@ -117,7 +117,7 @@ sage run "Create a Python script that calculates fibonacci numbers"
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/sage-agent
+git clone https://github.com/majiayu000/sage
 cd sage-agent
 
 # Build the project
@@ -134,7 +134,7 @@ cargo install --path crates/sage-cli
 cargo install sage-cli
 
 # Or install from Git repository
-cargo install --git https://github.com/your-org/sage-agent sage-cli
+cargo install --git https://github.com/majiayu000/sage sage-cli
 ```
 
 #### Verify Installation
