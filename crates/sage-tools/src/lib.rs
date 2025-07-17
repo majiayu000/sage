@@ -5,7 +5,8 @@ pub mod edit;
 pub mod json_edit;
 pub mod sequential_thinking;
 pub mod task_done;
-pub mod augment_tools;
+pub mod codebase_retrieval;
+pub mod task_management;
 pub mod utils;
 
 // TODO: Add MCP-compatible tools
@@ -45,10 +46,8 @@ pub use edit::EditTool;
 pub use json_edit::JsonEditTool;
 pub use sequential_thinking::SequentialThinkingTool;
 pub use task_done::TaskDoneTool;
-pub use augment_tools::{
-    CodebaseRetrievalTool, ViewTasklistTool, AddTasksTool,
-    UpdateTasksTool, ReorganizeTasklistTool
-};
+pub use codebase_retrieval::CodebaseRetrievalTool;
+pub use task_management::{ViewTasklistTool, AddTasksTool, UpdateTasksTool};
 
 use std::sync::Arc;
 use sage_core::tools::Tool;
@@ -65,6 +64,5 @@ pub fn get_default_tools() -> Vec<Arc<dyn Tool>> {
         Arc::new(ViewTasklistTool::new()),
         Arc::new(AddTasksTool::new()),
         Arc::new(UpdateTasksTool::new()),
-        Arc::new(ReorganizeTasklistTool::new()),
     ]
 }
