@@ -7,7 +7,11 @@ pub mod sequential_thinking;
 pub mod task_done;
 pub mod codebase_retrieval;
 pub mod task_management;
+pub mod reorganize_tasklist;
 pub mod utils;
+pub mod config;
+pub mod monitoring;
+pub mod enhanced_errors;
 
 // TODO: Add MCP-compatible tools
 // pub mod mcp_tools;  // MCP protocol compatible tools
@@ -48,6 +52,7 @@ pub use sequential_thinking::SequentialThinkingTool;
 pub use task_done::TaskDoneTool;
 pub use codebase_retrieval::CodebaseRetrievalTool;
 pub use task_management::{ViewTasklistTool, AddTasksTool, UpdateTasksTool};
+pub use reorganize_tasklist::ReorganizeTasklistTool;
 
 use std::sync::Arc;
 use sage_core::tools::Tool;
@@ -64,5 +69,6 @@ pub fn get_default_tools() -> Vec<Arc<dyn Tool>> {
         Arc::new(ViewTasklistTool::new()),
         Arc::new(AddTasksTool::new()),
         Arc::new(UpdateTasksTool::new()),
+        Arc::new(ReorganizeTasklistTool::new()),
     ]
 }

@@ -125,3 +125,144 @@ impl SequentialThinkingTool {
         processed.join("\n")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    use serde_json::json;
+
+    fn create_tool_call(id: &str, name: &str, args: serde_json::Value) -> ToolCall {
+        let arguments = if let serde_json::Value::Object(map) = args {
+            map.into_iter().collect()
+        } else {
+            HashMap::new()
+        };
+
+        ToolCall {
+            id: id.to_string(),
+            name: name.to_string(),
+            arguments,
+            call_id: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_sequential_thinking_basic() {
+        let tool = SequentialThinkingTool::new();
+        let call = create_tool_call("test-1", "sequentialthinking", json!({
+            "thinking": "Let me think about this problem step by step:\n1. First, I need to understand the requirements\n2. Then, I'll analyze the constraints\n3. Finally, I'll propose a solution"
+        }));
+
+        let result = tool.execute(&call).await.unwrap();
+        assert!(result.success);
+        let output = result.output.as_ref().unwrap();
+        assert!(output.contains("🤔 Sequential Thinking Process"));
+        assert!(output.contains("First, I need to understand"));
+        assert!(output.contains("Then, I'll analyze"));
+        assert!(output.contains("Finally, I'll propose"));
+    }
+
+    #[tokio::test]
+    async fn test_sequential_thinking_with_numbered_steps() {
+        let tool = SequentialThinkingTool::new();
+        let call = create_tool_call("test-2", "sequentialthinking", json!({
+            "thinking": "1. Analyze the problem\n2. Consider alternatives\n3. Choose the best approach"
+        }));
+
+        let result = tool.execute(&call).await.unwrap();
+        assert!(result.success);
+        let output = result.output.as_ref().unwrap();
+        assert!(output.contains("1️⃣ Analyze the problem"));
+        assert!(output.contains("2️⃣ Consider alternatives"));
+        assert!(output.contains("3️⃣ Choose the best approach"));
+    }
+
+    #[tokio::test]
+    async fn test_sequential_thinking_with_bullet_points() {
+        let tool = SequentialThinkingTool::new();
+        let call = create_tool_call("test-3", "sequentialthinking", json!({
+            "thinking": "• First consideration\n• Second point\n• Third aspect"
+        }));
+
+        let result = tool.execute(&call).await.unwrap();
+        assert!(result.success);
+        let output = result.output.as_ref().unwrap();
+        assert!(output.contains("🔸 First consideration"));
+        assert!(output.contains("🔸 Second point"));
+        assert!(output.contains("🔸 Third aspect"));
+    }
+
+    #[tokio::test]
+    async fn test_sequential_thinking_with_dashes() {
+        let tool = SequentialThinkingTool::new();
+        let call = create_tool_call("test-4", "sequentialthinking", json!({
+            "thinking": "- Problem identification\n- Solution brainstorming\n- Implementation planning"
+        }));
+
+        let result = tool.execute(&call).await.unwrap();
+        assert!(result.success);
+        let output = result.output.as_ref().unwrap();
+        assert!(output.contains("▪️ Problem identification"));
+        assert!(output.contains("▪️ Solution brainstorming"));
+        assert!(output.contains("▪️ Implementation planning"));
+    }
+
+    #[tokio::test]
+    async fn test_sequential_thinking_empty_input() {
+        let tool = SequentialThinkingTool::new();
+        let call = create_tool_call("test-5", "sequentialthinking", json!({
+            "thinking": ""
+        }));
+
+        let result = tool.execute(&call).await.unwrap();
+        assert!(!result.success);
+        assert!(result.error.as_ref().unwrap().contains("Thinking content cannot be empty"));
+    }
+
+    #[tokio::test]
+    async fn test_sequential_thinking_whitespace_only() {
+        let tool = SequentialThinkingTool::new();
+        let call = create_tool_call("test-6", "sequentialthinking", json!({
+            "thinking": "   \n\t  \n   "
+        }));
+
+        let result = tool.execute(&call).await.unwrap();
+        assert!(!result.success);
+        assert!(result.error.as_ref().unwrap().contains("Thinking content cannot be empty"));
+    }
+
+    #[tokio::test]
+    async fn test_sequential_thinking_missing_parameter() {
+        let tool = SequentialThinkingTool::new();
+        let call = create_tool_call("test-7", "sequentialthinking", json!({}));
+
+        let result = tool.execute(&call).await.unwrap();
+        assert!(!result.success);
+        assert!(result.error.as_ref().unwrap().contains("Missing 'thinking' parameter"));
+    }
+
+    #[tokio::test]
+    async fn test_sequential_thinking_mixed_formatting() {
+        let tool = SequentialThinkingTool::new();
+        let call = create_tool_call("test-8", "sequentialthinking", json!({
+            "thinking": "Let me analyze this:\n1. First step\n• Important point\n- Another consideration\nRegular text here"
+        }));
+
+        let result = tool.execute(&call).await.unwrap();
+        assert!(result.success);
+        let output = result.output.as_ref().unwrap();
+        assert!(output.contains("1️⃣ First step"));
+        assert!(output.contains("🔸 Important point"));
+        assert!(output.contains("▪️ Another consideration"));
+        assert!(output.contains("Regular text here"));
+    }
+
+    #[test]
+    fn test_sequential_thinking_schema() {
+        let tool = SequentialThinkingTool::new();
+        let schema = tool.schema();
+        assert_eq!(schema.name, "sequentialthinking");
+        assert!(!schema.description.is_empty());
+    }
+}

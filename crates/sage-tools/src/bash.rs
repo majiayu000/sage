@@ -233,3 +233,113 @@ impl CommandTool for BashTool {
         env
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    use serde_json::json;
+
+    fn create_tool_call(id: &str, name: &str, args: serde_json::Value) -> ToolCall {
+        let arguments = if let serde_json::Value::Object(map) = args {
+            map.into_iter().collect()
+        } else {
+            HashMap::new()
+        };
+
+        ToolCall {
+            id: id.to_string(),
+            name: name.to_string(),
+            arguments,
+            call_id: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_bash_tool_simple_command() {
+        let tool = BashTool::new();
+        let call = create_tool_call("test-1", "bash", json!({
+            "command": "echo 'Hello, World!'"
+        }));
+
+        let result = tool.execute(&call).await.unwrap();
+        assert!(result.success);
+        assert!(result.output.as_ref().unwrap().contains("Hello, World!"));
+    }
+
+    #[tokio::test]
+    async fn test_bash_tool_pwd_command() {
+        let tool = BashTool::new();
+        let call = create_tool_call("test-2", "bash", json!({
+            "command": "pwd"
+        }));
+
+        let result = tool.execute(&call).await.unwrap();
+        assert!(result.success);
+        assert!(result.output.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_bash_tool_invalid_command() {
+        let tool = BashTool::new();
+        let call = create_tool_call("test-3", "bash", json!({
+            "command": "nonexistent_command_12345"
+        }));
+
+        let result = tool.execute(&call).await.unwrap();
+        assert!(!result.success);
+        assert!(result.error.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_bash_tool_with_working_directory() {
+        let temp_dir = std::env::temp_dir();
+        let tool = BashTool::with_working_directory(&temp_dir);
+        let call = create_tool_call("test-4", "bash", json!({
+            "command": "pwd"
+        }));
+
+        let result = tool.execute(&call).await.unwrap();
+        assert!(result.success);
+        let output = result.output.as_ref().unwrap();
+        assert!(output.contains(&temp_dir.to_string_lossy().to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_bash_tool_missing_command() {
+        let tool = BashTool::new();
+        let call = create_tool_call("test-5", "bash", json!({}));
+
+        let result = tool.execute(&call).await.unwrap();
+        assert!(!result.success);
+        assert!(result.error.as_ref().unwrap().contains("Missing required parameter"));
+    }
+
+    #[tokio::test]
+    async fn test_bash_tool_allowed_commands() {
+        let tool = BashTool::new().with_allowed_commands(vec!["echo".to_string(), "pwd".to_string()]);
+
+        // Test allowed command
+        let call = create_tool_call("test-6a", "bash", json!({
+            "command": "echo 'allowed'"
+        }));
+        let result = tool.execute(&call).await.unwrap();
+        assert!(result.success);
+
+        // Test disallowed command
+        let call = create_tool_call("test-6b", "bash", json!({
+            "command": "ls"
+        }));
+        let result = tool.execute(&call).await.unwrap();
+        assert!(!result.success);
+        assert!(result.error.as_ref().unwrap().contains("Command not allowed"));
+    }
+
+    #[test]
+    fn test_bash_tool_schema() {
+        let tool = BashTool::new();
+        let schema = tool.schema();
+        assert_eq!(schema.name, "bash");
+        assert!(!schema.description.is_empty());
+    }
+}

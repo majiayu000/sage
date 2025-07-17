@@ -45,6 +45,10 @@ chrono = { workspace = true }
 # Static variables
 lazy_static = "1.4"
 
+# Configuration
+toml = "0.8"
+
 [dev-dependencies]
 mockall = { workspace = true }
 tokio-test = "0.4"
+tempfile = "3.8"

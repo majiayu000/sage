@@ -152,6 +152,29 @@ impl TaskList {
         root_tasks.clone()
     }
 
+    pub fn clear_and_rebuild(&self, new_tasks: Vec<Task>) -> Result<(), ToolError> {
+        let mut tasks = self.tasks.lock().unwrap();
+        let mut root_tasks = self.root_tasks.lock().unwrap();
+
+        tasks.clear();
+        root_tasks.clear();
+
+        // Add all tasks
+        for task in new_tasks {
+            if task.parent_id.is_none() {
+                root_tasks.push(task.id.clone());
+            } else if let Some(parent_id) = &task.parent_id {
+                if let Some(parent) = tasks.get_mut(parent_id) {
+                    parent.children.push(task.id.clone());
+                }
+            }
+
+            tasks.insert(task.id.clone(), task);
+        }
+
+        Ok(())
+    }
+
     fn format_task(&self, tasks: &HashMap<String, Task>, task: &Task, indent: usize, output: &mut String) {
         let indent_str = "  ".repeat(indent);
         output.push_str(&format!(
@@ -178,11 +201,19 @@ lazy_static::lazy_static! {
 }
 
 /// Tool for viewing the current task list
-pub struct ViewTasklistTool;
+pub struct ViewTasklistTool {
+    task_list: Arc<TaskList>,
+}
 
 impl ViewTasklistTool {
     pub fn new() -> Self {
-        Self
+        Self {
+            task_list: Arc::new(TaskList::new()),
+        }
+    }
+
+    pub fn with_task_list(task_list: Arc<TaskList>) -> Self {
+        Self { task_list }
     }
 }
 

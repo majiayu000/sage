@@ -283,3 +283,152 @@ impl FileSystemTool for EditTool {
         &self.working_directory
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    use serde_json::json;
+    use tokio::fs;
+    use tempfile::TempDir;
+
+    fn create_tool_call(id: &str, name: &str, args: serde_json::Value) -> ToolCall {
+        let arguments = if let serde_json::Value::Object(map) = args {
+            map.into_iter().collect()
+        } else {
+            HashMap::new()
+        };
+
+        ToolCall {
+            id: id.to_string(),
+            name: name.to_string(),
+            arguments,
+            call_id: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_edit_tool_string_replacement() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("test.txt");
+
+        // Create test file
+        fs::write(&file_path, "Hello, World!\nThis is a test file.\n").await.unwrap();
+
+        let tool = EditTool::with_working_directory(temp_dir.path());
+        let call = create_tool_call("test-1", "str_replace_based_edit_tool", json!({
+            "command": "str_replace",
+            "path": "test.txt",
+            "old_str": "World",
+            "new_str": "Rust"
+        }));
+
+        let result = tool.execute(&call).await.unwrap();
+        assert!(result.success);
+
+        // Verify the change
+        let content = fs::read_to_string(&file_path).await.unwrap();
+        assert!(content.contains("Hello, Rust!"));
+        assert!(!content.contains("Hello, World!"));
+    }
+
+    #[tokio::test]
+    async fn test_edit_tool_create_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let tool = EditTool::with_working_directory(temp_dir.path());
+
+        let call = create_tool_call("test-2", "str_replace_based_edit_tool", json!({
+            "command": "create",
+            "path": "new_file.txt",
+            "file_text": "This is a new file content."
+        }));
+
+        let result = tool.execute(&call).await.unwrap();
+        assert!(result.success);
+
+        // Verify the file was created
+        let file_path = temp_dir.path().join("new_file.txt");
+        let content = fs::read_to_string(&file_path).await.unwrap();
+        assert!(content.contains("This is a new file content."));
+    }
+
+    #[tokio::test]
+    async fn test_edit_tool_string_not_found() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("test.txt");
+
+        // Create test file
+        fs::write(&file_path, "Hello, World!\n").await.unwrap();
+
+        let tool = EditTool::with_working_directory(temp_dir.path());
+        let call = create_tool_call("test-3", "edit", json!({
+            "file_path": "test.txt",
+            "old_str": "NonexistentString",
+            "new_str": "replacement"
+        }));
+
+        let result = tool.execute(&call).await.unwrap();
+        assert!(!result.success);
+        assert!(result.error.as_ref().unwrap().contains("String not found"));
+    }
+
+    #[tokio::test]
+    async fn test_edit_tool_multiple_occurrences() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("test.txt");
+
+        // Create test file with multiple occurrences
+        fs::write(&file_path, "test test test\n").await.unwrap();
+
+        let tool = EditTool::with_working_directory(temp_dir.path());
+        let call = create_tool_call("test-4", "edit", json!({
+            "file_path": "test.txt",
+            "old_str": "test",
+            "new_str": "replaced"
+        }));
+
+        let result = tool.execute(&call).await.unwrap();
+        assert!(result.success);
+
+        // Verify all occurrences were replaced
+        let content = fs::read_to_string(&file_path).await.unwrap();
+        assert_eq!(content, "replaced replaced replaced\n");
+    }
+
+    #[tokio::test]
+    async fn test_edit_tool_missing_parameters() {
+        let tool = EditTool::new();
+
+        // Missing old_str
+        let call = create_tool_call("test-5a", "edit", json!({
+            "file_path": "test.txt",
+            "new_str": "replacement"
+        }));
+        let result = tool.execute(&call).await.unwrap();
+        assert!(!result.success);
+
+        // Missing new_str
+        let call = create_tool_call("test-5b", "edit", json!({
+            "file_path": "test.txt",
+            "old_str": "test"
+        }));
+        let result = tool.execute(&call).await.unwrap();
+        assert!(!result.success);
+
+        // Missing file_path
+        let call = create_tool_call("test-5c", "edit", json!({
+            "old_str": "test",
+            "new_str": "replacement"
+        }));
+        let result = tool.execute(&call).await.unwrap();
+        assert!(!result.success);
+    }
+
+    #[test]
+    fn test_edit_tool_schema() {
+        let tool = EditTool::new();
+        let schema = tool.schema();
+        assert_eq!(schema.name, "edit");
+        assert!(!schema.description.is_empty());
+    }
+}

@@ -1,9 +1,9 @@
 //! Reorganize tasklist tool for complex restructuring
 
 use async_trait::async_trait;
-use serde_json::{json, Value};
-use sage_core::error::{SageError, SageResult};
-use sage_core::tools::{Tool, ToolCall, ToolResult, ToolSchema, ToolParameter};
+use serde_json::json;
+use sage_core::tools::base::{Tool, ToolError};
+use sage_core::tools::types::{ToolCall, ToolResult, ToolSchema};
 use crate::task_management::{GLOBAL_TASK_LIST, Task, TaskState};
 use uuid::Uuid;
 
@@ -16,9 +16,9 @@ impl ReorganizeTasklistTool {
     }
 
     /// Parse markdown task list format
-    fn parse_markdown_tasklist(&self, markdown: &str) -> SageResult<Vec<ParsedTask>> {
+    fn parse_markdown_tasklist(&self, markdown: &str) -> Result<Vec<ParsedTask>, ToolError> {
         let mut tasks = Vec::new();
-        let mut current_indent = 0;
+        let _current_indent = 0;
         let mut parent_stack: Vec<String> = Vec::new();
 
         for line in markdown.lines() {
@@ -55,7 +55,7 @@ impl ReorganizeTasklistTool {
     }
 
     /// Parse a single task line
-    fn parse_task_line(&self, line: &str) -> SageResult<Option<ParsedTask>> {
+    fn parse_task_line(&self, line: &str) -> Result<Option<ParsedTask>, ToolError> {
         let trimmed = line.trim();
         
         // Check if it's a task line (starts with "- ")
@@ -73,7 +73,7 @@ impl ReorganizeTasklistTool {
         } else if trimmed.starts_with("- [x]") {
             TaskState::Complete
         } else {
-            return Err(SageError::tool("Invalid task state format".to_string()));
+            return Err(ToolError::InvalidArguments("Invalid task state format".to_string()));
         };
 
         // Remove state prefix
@@ -156,58 +156,33 @@ impl Tool for ReorganizeTasklistTool {
         "Reorganize the task list structure for the current conversation. Use this only for major restructuring like reordering tasks, changing hierarchy. For individual task updates, use update_tasks tool."
     }
 
-    fn parameters(&self) -> &[ToolParameter] {
-        &[
-            ToolParameter {
-                name: "markdown".to_string(),
-                description: "The markdown representation of the task list to update. Should be in the format specified by the view_tasklist tool. New tasks should have a UUID of 'NEW_UUID'. Must contain exactly one root task with proper hierarchy using dash indentation.".to_string(),
-                required: true,
-                parameter_type: "string".to_string(),
-            }
-        ]
-    }
-
-    async fn execute(&self, tool_call: &ToolCall) -> SageResult<ToolResult> {
+    async fn execute(&self, tool_call: &ToolCall) -> Result<ToolResult, ToolError> {
         let markdown = tool_call.arguments
             .get("markdown")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| SageError::tool("Missing required parameter: markdown".to_string()))?;
+            .ok_or_else(|| ToolError::InvalidArguments("Missing required parameter: markdown".to_string()))?;
 
         // Parse the markdown
         let parsed_tasks = self.parse_markdown_tasklist(markdown)?;
 
         if parsed_tasks.is_empty() {
-            return Ok(ToolResult::error("No valid tasks found in markdown".to_string()));
+            return Ok(ToolResult::error(&tool_call.id, self.name(), "No valid tasks found in markdown"));
+        }
+
+        // Convert parsed tasks to Task objects
+        let mut new_tasks = Vec::new();
+        for parsed_task in &parsed_tasks {
+            let mut task = Task::new(parsed_task.name.clone(), parsed_task.description.clone());
+            task.id = parsed_task.id.clone();
+            task.state = parsed_task.state.clone();
+            task.parent_id = parsed_task.parent_id.clone();
+            new_tasks.push(task);
         }
 
         // Clear existing tasks and rebuild
-        {
-            let mut tasks = GLOBAL_TASK_LIST.tasks.lock().unwrap();
-            let mut root_tasks = GLOBAL_TASK_LIST.root_tasks.lock().unwrap();
-            
-            tasks.clear();
-            root_tasks.clear();
+        GLOBAL_TASK_LIST.clear_and_rebuild(new_tasks)?;
 
-            // Add all tasks
-            for parsed_task in parsed_tasks {
-                let mut task = Task::new(parsed_task.name, parsed_task.description);
-                task.id = parsed_task.id.clone();
-                task.state = parsed_task.state;
-                task.parent_id = parsed_task.parent_id.clone();
-
-                if parsed_task.parent_id.is_none() {
-                    root_tasks.push(task.id.clone());
-                } else if let Some(parent_id) = &parsed_task.parent_id {
-                    if let Some(parent) = tasks.get_mut(parent_id) {
-                        parent.children.push(task.id.clone());
-                    }
-                }
-
-                tasks.insert(task.id.clone(), task);
-            }
-        }
-
-        Ok(ToolResult::success(format!(
+        Ok(ToolResult::success(&tool_call.id, self.name(), format!(
             "Task list reorganized successfully. {} tasks processed.",
             parsed_tasks.len()
         )))
@@ -228,5 +203,62 @@ impl Tool for ReorganizeTasklistTool {
                 "required": ["markdown"]
             }),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    use crate::task_management::GLOBAL_TASK_LIST;
+
+    fn create_tool_call(id: &str, name: &str, args: serde_json::Value) -> ToolCall {
+        let arguments = if let serde_json::Value::Object(map) = args {
+            map.into_iter().collect()
+        } else {
+            HashMap::new()
+        };
+
+        ToolCall {
+            id: id.to_string(),
+            name: name.to_string(),
+            arguments,
+            call_id: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_reorganize_tasklist() {
+        // Clear any existing tasks first
+        let root_tasks = GLOBAL_TASK_LIST.get_root_task_ids();
+        if !root_tasks.is_empty() {
+            // Skip test if there are existing tasks to avoid interference
+            return;
+        }
+
+        // First add some tasks
+        let markdown = r#"
+# Task List
+
+- [ ] UUID:NEW_UUID NAME:Root Task DESCRIPTION:This is the root task
+  - [ ] UUID:NEW_UUID NAME:Subtask 1 DESCRIPTION:This is the first subtask
+  - [/] UUID:NEW_UUID NAME:Subtask 2 DESCRIPTION:This is the second subtask
+    - [x] UUID:NEW_UUID NAME:Sub-subtask DESCRIPTION:This is a sub-subtask
+"#;
+
+        let tool = ReorganizeTasklistTool::new();
+        let call = create_tool_call("test-1", "reorganize_tasklist", json!({
+            "markdown": markdown
+        }));
+
+        let result = tool.execute(&call).await.unwrap();
+        assert!(result.output.as_ref().unwrap().contains("Task list reorganized successfully"));
+
+        // Verify the task list structure
+        let root_tasks = GLOBAL_TASK_LIST.get_root_task_ids();
+        assert_eq!(root_tasks.len(), 1);
+
+        // Clean up
+        GLOBAL_TASK_LIST.clear_and_rebuild(vec![]).unwrap();
     }
 }

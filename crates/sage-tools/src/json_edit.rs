@@ -337,3 +337,174 @@ impl FileSystemTool for JsonEditTool {
         &self.working_directory
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    use serde_json::json;
+    use tokio::fs;
+    use tempfile::TempDir;
+
+    fn create_tool_call(id: &str, name: &str, args: serde_json::Value) -> ToolCall {
+        let arguments = if let serde_json::Value::Object(map) = args {
+            map.into_iter().collect()
+        } else {
+            HashMap::new()
+        };
+
+        ToolCall {
+            id: id.to_string(),
+            name: name.to_string(),
+            arguments,
+            call_id: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_json_edit_get_value() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("test.json");
+
+        // Create test JSON file
+        let test_json = json!({
+            "name": "John",
+            "age": 30,
+            "city": "New York"
+        });
+        fs::write(&file_path, test_json.to_string()).await.unwrap();
+
+        let tool = JsonEditTool::with_working_directory(temp_dir.path());
+        let call = create_tool_call("test-1", "json_edit", json!({
+            "command": "get",
+            "path": "test.json",
+            "json_path": "$.name"
+        }));
+
+        let result = tool.execute(&call).await.unwrap();
+        assert!(result.success);
+        assert!(result.output.as_ref().unwrap().contains("John"));
+    }
+
+    #[tokio::test]
+    async fn test_json_edit_set_value() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("test.json");
+
+        // Create test JSON file
+        let test_json = json!({
+            "name": "John",
+            "age": 30
+        });
+        fs::write(&file_path, test_json.to_string()).await.unwrap();
+
+        let tool = JsonEditTool::with_working_directory(temp_dir.path());
+        let call = create_tool_call("test-2", "json_edit", json!({
+            "command": "set",
+            "path": "test.json",
+            "json_path": "$.age",
+            "value": "35"
+        }));
+
+        let result = tool.execute(&call).await.unwrap();
+        assert!(result.success);
+
+        // Verify the change
+        let content = fs::read_to_string(&file_path).await.unwrap();
+        let updated_json: serde_json::Value = serde_json::from_str(&content).unwrap();
+        assert_eq!(updated_json["age"], 35);
+    }
+
+    #[tokio::test]
+    async fn test_json_edit_delete_value() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("test.json");
+
+        // Create test JSON file
+        let test_json = json!({
+            "name": "John",
+            "age": 30,
+            "city": "New York"
+        });
+        fs::write(&file_path, test_json.to_string()).await.unwrap();
+
+        let tool = JsonEditTool::with_working_directory(temp_dir.path());
+        let call = create_tool_call("test-3", "json_edit", json!({
+            "command": "delete",
+            "path": "test.json",
+            "json_path": "$.city"
+        }));
+
+        let result = tool.execute(&call).await.unwrap();
+        assert!(result.success);
+
+        // Verify the deletion
+        let content = fs::read_to_string(&file_path).await.unwrap();
+        let updated_json: serde_json::Value = serde_json::from_str(&content).unwrap();
+        assert!(!updated_json.as_object().unwrap().contains_key("city"));
+    }
+
+    #[tokio::test]
+    async fn test_json_edit_invalid_json_path() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("test.json");
+
+        // Create test JSON file
+        let test_json = json!({"name": "John"});
+        fs::write(&file_path, test_json.to_string()).await.unwrap();
+
+        let tool = JsonEditTool::with_working_directory(temp_dir.path());
+        let call = create_tool_call("test-4", "json_edit", json!({
+            "command": "get",
+            "path": "test.json",
+            "json_path": "$.nonexistent"
+        }));
+
+        let result = tool.execute(&call).await.unwrap();
+        assert!(!result.success);
+        assert!(result.error.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_json_edit_invalid_command() {
+        let tool = JsonEditTool::new();
+        let call = create_tool_call("test-5", "json_edit", json!({
+            "command": "invalid_command",
+            "path": "test.json",
+            "json_path": "$.name"
+        }));
+
+        let result = tool.execute(&call).await.unwrap();
+        assert!(!result.success);
+        assert!(result.error.as_ref().unwrap().contains("Unknown command"));
+    }
+
+    #[tokio::test]
+    async fn test_json_edit_missing_parameters() {
+        let tool = JsonEditTool::new();
+
+        // Missing command
+        let call = create_tool_call("test-6a", "json_edit", json!({
+            "path": "test.json",
+            "json_path": "$.name"
+        }));
+        let result = tool.execute(&call).await.unwrap();
+        assert!(!result.success);
+
+        // Missing path
+        let call = create_tool_call("test-6b", "json_edit", json!({
+            "command": "get",
+            "json_path": "$.name"
+        }));
+        let result = tool.execute(&call).await.unwrap();
+        assert!(!result.success);
+    }
+
+    #[test]
+    fn test_json_edit_tool_schema() {
+        let tool = JsonEditTool::new();
+        let schema = tool.schema();
+        assert_eq!(schema.name, "json_edit");
+        assert!(!schema.description.is_empty());
+    }
+}
