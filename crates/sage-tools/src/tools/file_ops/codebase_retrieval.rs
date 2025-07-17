@@ -72,7 +72,7 @@ impl CodebaseRetrievalTool {
         // Search through files and rank results
         let mut results = Vec::new();
         for file_path in files.iter().take(50) { // Limit files to search
-            if let Ok(matches) = self.search_file(&file_path, &search_analysis).await {
+            if let Ok(matches) = self.search_file(file_path, &search_analysis).await {
                 if !matches.is_empty() {
                     results.extend(matches);
                 }
@@ -167,10 +167,10 @@ impl CodebaseRetrievalTool {
             return Ok(());
         }
 
-        let entries = fs::read_dir(dir).map_err(|e| ToolError::Io(e))?;
+        let entries = fs::read_dir(dir).map_err(ToolError::Io)?;
         
         for entry in entries {
-            let entry = entry.map_err(|e| ToolError::Io(e))?;
+            let entry = entry.map_err(ToolError::Io)?;
             let path = entry.path();
             
             if path.is_file() {
@@ -212,7 +212,7 @@ impl CodebaseRetrievalTool {
     
     /// Search within a single file for relevant content
     async fn search_file(&self, file_path: &Path, search_analysis: &SearchAnalysis) -> Result<Vec<SearchResult>, ToolError> {
-        let content = fs::read_to_string(file_path).map_err(|e| ToolError::Io(e))?;
+        let content = fs::read_to_string(file_path).map_err(ToolError::Io)?;
         let lines: Vec<&str> = content.lines().collect();
         let mut results = Vec::new();
 
@@ -303,7 +303,7 @@ impl CodebaseRetrievalTool {
 
         let mut file_groups: HashMap<PathBuf, Vec<&SearchResult>> = HashMap::new();
         for result in results {
-            file_groups.entry(result.file_path.clone()).or_insert_with(Vec::new).push(result);
+            file_groups.entry(result.file_path.clone()).or_default().push(result);
         }
 
         for (file_path, file_results) in file_groups {

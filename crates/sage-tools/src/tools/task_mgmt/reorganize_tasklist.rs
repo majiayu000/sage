@@ -4,11 +4,17 @@ use async_trait::async_trait;
 use serde_json::json;
 use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolResult, ToolSchema};
-use crate::task_management::{GLOBAL_TASK_LIST, Task, TaskState};
+use crate::tools::task_mgmt::task_management::{GLOBAL_TASK_LIST, Task, TaskState};
 use uuid::Uuid;
 
 /// Tool for reorganizing the task list structure
 pub struct ReorganizeTasklistTool;
+
+impl Default for ReorganizeTasklistTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl ReorganizeTasklistTool {
     pub fn new() -> Self {
@@ -210,7 +216,7 @@ impl Tool for ReorganizeTasklistTool {
 mod tests {
     use super::*;
     use std::collections::HashMap;
-    use crate::task_management::GLOBAL_TASK_LIST;
+    use crate::tools::task_mgmt::task_management::GLOBAL_TASK_LIST;
 
     fn create_tool_call(id: &str, name: &str, args: serde_json::Value) -> ToolCall {
         let arguments = if let serde_json::Value::Object(map) = args {

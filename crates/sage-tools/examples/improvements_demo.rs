@@ -7,12 +7,16 @@
 //! 4. Improved task management
 
 use sage_tools::{
-    config::{ToolsConfig, get_global_config, update_global_config},
-    monitoring::{get_monitoring_report, record_success, record_error},
-    enhanced_errors::{EnhancedToolError, ErrorCategory, helpers},
-    task_management::{ViewTasklistTool, AddTasksTool, UpdateTasksTool, GLOBAL_TASK_LIST},
+    config::{get_global_config, update_global_config},
+    tools::{
+        utils::{
+            monitoring::{get_monitoring_report, record_success, record_error},
+            enhanced_errors::helpers,
+        },
+        task_mgmt::{ViewTasklistTool, AddTasksTool, task_management::GLOBAL_TASK_LIST},
+    },
 };
-use sage_core::tools::base::{Tool, ToolError};
+use sage_core::tools::base::Tool;
 use sage_core::tools::types::ToolCall;
 use std::collections::HashMap;
 use std::time::Duration;

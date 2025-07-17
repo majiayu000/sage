@@ -214,7 +214,7 @@ impl MonitoringReport {
     }
 }
 
-/// Global tool monitor instance
+// Global tool monitor instance
 lazy_static::lazy_static! {
     pub static ref GLOBAL_MONITOR: ToolMonitor = ToolMonitor::new();
 }

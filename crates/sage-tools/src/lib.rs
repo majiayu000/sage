@@ -1,17 +1,7 @@
 //! Tool implementations for Sage Agent
 
-pub mod bash;
-pub mod edit;
-pub mod json_edit;
-pub mod sequential_thinking;
-pub mod task_done;
-pub mod codebase_retrieval;
-pub mod task_management;
-pub mod reorganize_tasklist;
-pub mod utils;
+pub mod tools;
 pub mod config;
-pub mod monitoring;
-pub mod enhanced_errors;
 
 // TODO: Add MCP-compatible tools
 // pub mod mcp_tools;  // MCP protocol compatible tools
@@ -44,31 +34,13 @@ pub mod enhanced_errors;
 // pub mod metrics_collector; // Metrics collection
 // pub mod health_checker;   // Health monitoring
 
-// Re-export tools
-pub use bash::BashTool;
-pub use edit::EditTool;
-pub use json_edit::JsonEditTool;
-pub use sequential_thinking::SequentialThinkingTool;
-pub use task_done::TaskDoneTool;
-pub use codebase_retrieval::CodebaseRetrievalTool;
-pub use task_management::{ViewTasklistTool, AddTasksTool, UpdateTasksTool};
-pub use reorganize_tasklist::ReorganizeTasklistTool;
+// Re-export tools from the organized structure
+pub use tools::*;
 
 use std::sync::Arc;
 use sage_core::tools::Tool;
 
 /// Get all default tools
 pub fn get_default_tools() -> Vec<Arc<dyn Tool>> {
-    vec![
-        Arc::new(BashTool::new()),
-        Arc::new(EditTool::new()),
-        Arc::new(JsonEditTool::new()),
-        Arc::new(SequentialThinkingTool::new()),
-        Arc::new(TaskDoneTool::new()),
-        Arc::new(CodebaseRetrievalTool::new()),
-        Arc::new(ViewTasklistTool::new()),
-        Arc::new(AddTasksTool::new()),
-        Arc::new(UpdateTasksTool::new()),
-        Arc::new(ReorganizeTasklistTool::new()),
-    ]
+    tools::get_default_tools()
 }

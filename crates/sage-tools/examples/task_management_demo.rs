@@ -6,7 +6,7 @@
 //! 3. Update task states
 //! 4. View the updated task list
 
-use sage_tools::task_management::{ViewTasklistTool, AddTasksTool, UpdateTasksTool};
+use sage_tools::tools::task_mgmt::{ViewTasklistTool, AddTasksTool, UpdateTasksTool};
 use sage_core::tools::base::Tool;
 use sage_core::tools::types::ToolCall;
 use serde_json::json;
@@ -83,7 +83,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Get the first task ID from the task list
     let task_ids = {
-        use sage_tools::task_management::GLOBAL_TASK_LIST;
+        use sage_tools::tools::task_mgmt::task_management::GLOBAL_TASK_LIST;
         GLOBAL_TASK_LIST.get_root_task_ids()
     };
 

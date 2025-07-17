@@ -69,6 +69,12 @@ pub struct TaskList {
     root_tasks: Arc<Mutex<Vec<String>>>,
 }
 
+impl Default for TaskList {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TaskList {
     pub fn new() -> Self {
         Self {
@@ -175,6 +181,7 @@ impl TaskList {
         Ok(())
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn format_task(&self, tasks: &HashMap<String, Task>, task: &Task, indent: usize, output: &mut String) {
         let indent_str = "  ".repeat(indent);
         output.push_str(&format!(
@@ -201,19 +208,17 @@ lazy_static::lazy_static! {
 }
 
 /// Tool for viewing the current task list
-pub struct ViewTasklistTool {
-    task_list: Arc<TaskList>,
+pub struct ViewTasklistTool;
+
+impl Default for ViewTasklistTool {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ViewTasklistTool {
     pub fn new() -> Self {
-        Self {
-            task_list: Arc::new(TaskList::new()),
-        }
-    }
-
-    pub fn with_task_list(task_list: Arc<TaskList>) -> Self {
-        Self { task_list }
+        Self
     }
 }
 
@@ -247,6 +252,12 @@ impl Tool for ViewTasklistTool {
 
 /// Tool for adding new tasks
 pub struct AddTasksTool;
+
+impl Default for AddTasksTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl AddTasksTool {
     pub fn new() -> Self {
@@ -364,6 +375,12 @@ impl Tool for AddTasksTool {
 
 /// Tool for updating existing tasks
 pub struct UpdateTasksTool;
+
+impl Default for UpdateTasksTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl UpdateTasksTool {
     pub fn new() -> Self {

@@ -214,9 +214,9 @@ impl ToolsConfig {
     }
 }
 
-/// Global configuration instance
+// Global configuration instance
 lazy_static::lazy_static! {
-    pub static ref GLOBAL_CONFIG: std::sync::RwLock<ToolsConfig> = 
+    pub static ref GLOBAL_CONFIG: std::sync::RwLock<ToolsConfig> =
         std::sync::RwLock::new(ToolsConfig::default());
 }
 

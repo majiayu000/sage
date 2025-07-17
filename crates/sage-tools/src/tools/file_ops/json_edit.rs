@@ -39,7 +39,7 @@ impl JsonEditTool {
             )));
         }
 
-        let content = fs::read_to_string(&path).await.map_err(|e| ToolError::Io(e))?;
+        let content = fs::read_to_string(&path).await.map_err(ToolError::Io)?;
 
         serde_json::from_str(&content).map_err(|e| {
             ToolError::ExecutionFailed(format!("Invalid JSON in file {}: {}", file_path, e))
@@ -68,7 +68,7 @@ impl JsonEditTool {
 
         fs::write(&path, content)
             .await
-            .map_err(|e| ToolError::Io(e))?;
+            .map_err(ToolError::Io)?;
 
         Ok(())
     }
@@ -162,6 +162,7 @@ impl JsonEditTool {
     }
 
     /// Set a value in JSON using path parts
+    #[allow(clippy::only_used_in_recursion)]
     fn set_json_value(
         &self,
         json: &mut serde_json::Value,
