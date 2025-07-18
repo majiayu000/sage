@@ -3,7 +3,7 @@
 use crate::agent::{AgentExecution, AgentStep, AgentState};
 use crate::config::model::Config;
 use crate::error::{SageError, SageResult};
-use crate::interrupt::{InterruptReason, TaskScope, global_interrupt_manager, reset_global_interrupt_manager};
+use crate::interrupt::{global_interrupt_manager, reset_global_interrupt_manager};
 use crate::llm::client::LLMClient;
 use crate::llm::messages::LLMMessage;
 use crate::llm::providers::LLMProvider;

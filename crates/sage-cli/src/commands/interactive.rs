@@ -1,7 +1,7 @@
 //! Interactive mode implementation
 
 use crate::console::CLIConsole;
-use crate::signal_handler::{start_global_signal_handling, stop_global_signal_handling, enable_global_signal_handling, disable_global_signal_handling};
+use crate::signal_handler::start_global_signal_handling;
 use std::io::Write;
 use std::path::PathBuf;
 use sage_core::error::{SageError, SageResult};

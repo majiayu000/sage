@@ -12,7 +12,7 @@ use sage_core::{
     types::LLMUsage,
     error::SageResult,
 };
-use futures::{stream, StreamExt};
+use futures::stream;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use std::io::{self, Write};

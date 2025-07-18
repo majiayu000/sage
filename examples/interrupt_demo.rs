@@ -91,7 +91,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     reset_global_interrupt_manager();
     
     let manager = global_interrupt_manager().lock().unwrap();
-    let mut receiver = manager.subscribe();
+    let _receiver = manager.subscribe();
     drop(manager);
     
     // Test different interrupt reasons

@@ -1,6 +1,6 @@
 //! Markdown rendering demo
 
-use sage_core::ui::{DisplayManager, render_markdown};
+use sage_core::ui::DisplayManager;
 
 fn main() {
     let markdown_content = r#"

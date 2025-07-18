@@ -141,6 +141,11 @@ impl CacheManager {
         }
         Ok(())
     }
+
+    /// Get the cache configuration
+    pub fn config(&self) -> &CacheConfig {
+        &self.config
+    }
 }
 
 /// Trait for cache storage backends

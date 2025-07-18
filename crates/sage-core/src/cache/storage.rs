@@ -186,13 +186,13 @@ impl DiskStorage {
     /// Create a new disk storage
     pub fn new(base_dir: impl AsRef<Path>, capacity: u64) -> SageResult<Self> {
         let base_dir = base_dir.as_ref().to_path_buf();
-        
+
         // Create directory if it doesn't exist
         if !base_dir.exists() {
             std::fs::create_dir_all(&base_dir)
                 .map_err(|e| SageError::Io(format!("Failed to create cache directory: {}", e)))?;
         }
-        
+
         Ok(Self {
             base_dir,
             capacity,
@@ -200,6 +200,11 @@ impl DiskStorage {
             index: Arc::new(Mutex::new(HashMap::new())),
             stats: Arc::new(Mutex::new(StorageStatistics::default())),
         })
+    }
+
+    /// Initialize the disk storage by scanning existing files
+    pub async fn initialize(&self) -> SageResult<()> {
+        self.initialize_index().await
     }
     
     /// Get file path for a cache key
@@ -345,7 +350,7 @@ impl CacheStorage for DiskStorage {
         // Check if we need to evict entries to make space
         loop {
             let mut index = self.index.lock().await;
-            let mut current_size = self.current_size.lock().await;
+            let current_size = self.current_size.lock().await;
             let mut stats = self.stats.lock().await;
 
             if *current_size + entry_size <= self.capacity || index.is_empty() {

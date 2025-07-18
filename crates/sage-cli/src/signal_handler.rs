@@ -64,9 +64,10 @@ impl SignalHandler {
     }
 
     /// Stop signal handling
+    #[allow(dead_code)]
     pub async fn stop(&mut self) {
         self.is_active.store(false, Ordering::Relaxed);
-        
+
         if let Some(handle) = self.task_handle.take() {
             handle.abort();
             // Give it a moment to clean up
@@ -75,16 +76,19 @@ impl SignalHandler {
     }
 
     /// Check if signal handling is active
+    #[allow(dead_code)]
     pub fn is_active(&self) -> bool {
         self.is_active.load(Ordering::Relaxed)
     }
 
     /// Enable signal handling (allows interrupts to be processed)
+    #[allow(dead_code)]
     pub fn enable(&self) {
         self.is_active.store(true, Ordering::Relaxed);
     }
 
     /// Disable signal handling (ignores interrupts)
+    #[allow(dead_code)]
     pub fn disable(&self) {
         self.is_active.store(false, Ordering::Relaxed);
     }
@@ -125,6 +129,7 @@ pub async fn start_global_signal_handling() -> Result<(), Box<dyn std::error::Er
 }
 
 /// Stop global signal handling
+#[allow(dead_code)]
 pub async fn stop_global_signal_handling() {
     if let Ok(mut handler) = global_signal_handler().lock() {
         handler.stop().await;
@@ -132,6 +137,7 @@ pub async fn stop_global_signal_handling() {
 }
 
 /// Enable global signal handling
+#[allow(dead_code)]
 pub fn enable_global_signal_handling() {
     if let Ok(handler) = global_signal_handler().lock() {
         handler.enable();
@@ -139,6 +145,7 @@ pub fn enable_global_signal_handling() {
 }
 
 /// Disable global signal handling
+#[allow(dead_code)]
 pub fn disable_global_signal_handling() {
     if let Ok(handler) = global_signal_handler().lock() {
         handler.disable();
@@ -146,6 +153,7 @@ pub fn disable_global_signal_handling() {
 }
 
 /// Check if global signal handling is active
+#[allow(dead_code)]
 pub fn is_global_signal_handling_active() -> bool {
     global_signal_handler()
         .lock()
@@ -156,7 +164,7 @@ pub fn is_global_signal_handling_active() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::time::{sleep, Duration};
+
 
     #[tokio::test]
     async fn test_signal_handler_creation() {
