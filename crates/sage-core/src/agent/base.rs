@@ -29,10 +29,13 @@ struct ModelIdentity {
 pub trait Agent: Send + Sync {
     /// Execute a task
     async fn execute_task(&mut self, task: TaskMetadata) -> SageResult<AgentExecution>;
-    
+
+    /// Continue an existing execution with new user message
+    async fn continue_execution(&mut self, execution: &mut AgentExecution, user_message: &str) -> SageResult<()>;
+
     /// Get the agent's configuration
     fn config(&self) -> &Config;
-    
+
     /// Get the agent's ID
     fn id(&self) -> Id;
 }
@@ -692,5 +695,67 @@ impl Agent for BaseAgent {
     
     fn id(&self) -> Id {
         self.id
+    }
+
+    async fn continue_execution(&mut self, execution: &mut AgentExecution, user_message: &str) -> SageResult<()> {
+        // Add user message to the execution context
+        let system_message = self.create_system_message(&execution.task);
+        let tool_schemas = self.tool_executor.get_tool_schemas();
+
+        // Build messages including the new user message
+        let mut messages = self.build_messages(execution, &system_message);
+        messages.push(LLMMessage::user(user_message));
+
+        // Continue execution from where we left off
+        let start_step = (execution.steps.len() + 1) as u32;
+        let max_step = start_step + self.max_steps - 1;
+
+        for step_number in start_step..=max_step {
+            match self.execute_step(step_number, &messages, &tool_schemas).await {
+                Ok(step) => {
+                    let is_completed = step.state == AgentState::Completed;
+
+                    // Record step in trajectory
+                    if let Some(recorder) = &self.trajectory_recorder {
+                        recorder.lock().await.record_step(step.clone()).await?;
+                    }
+
+                    execution.add_step(step);
+
+                    if is_completed {
+                        execution.complete(true, Some("Conversation continued successfully".to_string()));
+                        break;
+                    }
+
+                    // Update messages for next iteration
+                    let updated_messages = self.build_messages(execution, &system_message);
+                    messages.clear();
+                    messages.extend(updated_messages);
+                }
+                Err(e) => {
+                    // Stop animation on error
+                    self.animation_manager.stop_animation().await;
+
+                    let error_step = AgentStep::new(step_number, AgentState::Error)
+                        .with_error(e.to_string());
+
+                    // Record error step
+                    if let Some(recorder) = &self.trajectory_recorder {
+                        recorder.lock().await.record_step(error_step.clone()).await?;
+                    }
+
+                    execution.add_step(error_step);
+                    execution.complete(false, Some(format!("Conversation continuation failed: {}", e)));
+                    return Err(e);
+                }
+            }
+        }
+
+        // If we reached max steps without completion
+        if !execution.is_completed() {
+            execution.complete(false, Some("Conversation continuation reached maximum steps".to_string()));
+        }
+
+        Ok(())
     }
 }

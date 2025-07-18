@@ -5,7 +5,72 @@ use std::io::Write;
 use std::path::PathBuf;
 use sage_core::error::{SageError, SageResult};
 use sage_core::ui::EnhancedConsole;
+use sage_core::llm::messages::LLMMessage;
+use sage_core::agent::AgentExecution;
+use sage_core::types::TaskMetadata;
 use sage_sdk::{RunOptions, SageAgentSDK};
+use std::collections::HashMap;
+
+/// Conversation session manager for interactive mode
+struct ConversationSession {
+    /// Current conversation messages
+    messages: Vec<LLMMessage>,
+    /// Current task metadata
+    task: Option<TaskMetadata>,
+    /// Current agent execution
+    execution: Option<AgentExecution>,
+    /// Session metadata
+    metadata: HashMap<String, serde_json::Value>,
+    /// Whether this is the first message in the conversation
+    is_first_message: bool,
+}
+
+impl ConversationSession {
+    /// Create a new conversation session
+    fn new() -> Self {
+        Self {
+            messages: Vec::new(),
+            task: None,
+            execution: None,
+            metadata: HashMap::new(),
+            is_first_message: true,
+        }
+    }
+
+    /// Add a user message to the conversation
+    fn add_user_message(&mut self, content: &str) {
+        self.messages.push(LLMMessage::user(content));
+    }
+
+    /// Add an assistant message to the conversation
+    fn add_assistant_message(&mut self, content: &str) {
+        self.messages.push(LLMMessage::assistant(content));
+    }
+
+    /// Check if this is a new conversation (no messages yet)
+    fn is_new_conversation(&self) -> bool {
+        self.is_first_message
+    }
+
+    /// Mark that the first message has been processed
+    fn mark_first_message_processed(&mut self) {
+        self.is_first_message = false;
+    }
+
+    /// Reset the conversation session
+    fn reset(&mut self) {
+        self.messages.clear();
+        self.task = None;
+        self.execution = None;
+        self.metadata.clear();
+        self.is_first_message = true;
+    }
+
+    /// Get conversation summary
+    fn get_summary(&self) -> String {
+        format!("Conversation with {} messages", self.messages.len())
+    }
+}
 
 /// Arguments for interactive mode
 pub struct InteractiveArgs {
@@ -21,7 +86,7 @@ pub async fn execute(args: InteractiveArgs) -> SageResult<()> {
     // Use enhanced console for beautiful welcome
     EnhancedConsole::print_welcome_banner();
     EnhancedConsole::print_section_header("Interactive Mode", Some("Type 'help' for available commands, 'exit' to quit"));
-    
+
     // Initialize SDK
     let mut sdk = if std::path::Path::new(&args.config_file).exists() {
         console.info(&format!("Loading configuration from: {}", args.config_file));
@@ -30,17 +95,20 @@ pub async fn execute(args: InteractiveArgs) -> SageResult<()> {
         console.warn(&format!("Configuration file not found: {}, using defaults", args.config_file));
         SageAgentSDK::new()?
     };
-    
+
     if let Some(working_dir) = &args.working_dir {
         sdk = sdk.with_working_directory(working_dir);
     }
-    
+
     if let Some(trajectory_file) = &args.trajectory_file {
         sdk = sdk.with_trajectory_path(trajectory_file);
     }
-    
+
     console.success("Interactive mode initialized");
     console.print_separator();
+
+    // Initialize conversation session
+    let mut conversation = ConversationSession::new();
     
     // Main interactive loop
     loop {
@@ -93,14 +161,23 @@ pub async fn execute(args: InteractiveArgs) -> SageResult<()> {
                     "input-help" | "ih" => {
                         print_input_help(&console);
                     }
+                    "new" | "new-task" => {
+                        // Start a new conversation/task
+                        conversation.reset();
+                        console.success("Started new conversation. Previous context cleared.");
+                    }
+                    "conversation" | "conv" => {
+                        // Show conversation summary
+                        console.info(&format!("Current conversation: {}", conversation.get_summary()));
+                    }
                     _ => {
-                        // Execute task with proper error handling
-                        match execute_task(&console, &sdk, input).await {
+                        // Handle conversation mode
+                        match handle_conversation(&console, &sdk, &mut conversation, input).await {
                             Ok(()) => {
-                                // Task completed successfully
+                                // Conversation handled successfully
                             }
                             Err(e) => {
-                                console.error(&format!("Task execution failed: {e}"));
+                                console.error(&format!("Conversation failed: {e}"));
 
                                 // Check if this is a critical error that should break the loop
                                 if is_critical_error(&e) {
@@ -109,7 +186,7 @@ pub async fn execute(args: InteractiveArgs) -> SageResult<()> {
                                 }
 
                                 // For non-critical errors, continue the loop
-                                console.info("You can try another task or type 'help' for available commands.");
+                                console.info("You can try again or type 'help' for available commands.");
                             }
                         }
                     }
@@ -173,10 +250,20 @@ fn print_help(console: &CLIConsole) {
     console.info("clear, cls       - Clear the screen");
     console.info("reset, refresh   - Reset terminal display (fixes backspace issues)");
     console.info("input-help, ih   - Show input troubleshooting help");
+    console.info("new, new-task    - Start a new conversation (clears previous context)");
+    console.info("conversation, conv - Show current conversation summary");
     console.info("exit, quit, q    - Exit interactive mode");
     console.info("");
-    console.info("Any other input will be treated as a task to execute.");
-    console.info("Example: 'Create a hello world Python script'");
+    console.info("🗣️  Conversation Mode:");
+    console.info("Any other input will be treated as part of an ongoing conversation.");
+    console.info("The AI will remember previous messages and context within the same conversation.");
+    console.info("Use 'new' to start fresh if you want to change topics completely.");
+    console.info("");
+    console.info("Example conversation:");
+    console.info("  You: Create a hello world Python script");
+    console.info("  AI: [Creates the script]");
+    console.info("  You: Now add error handling to it");
+    console.info("  AI: [Modifies the existing script with error handling]");
 }
 
 /// Print input troubleshooting help
@@ -272,84 +359,175 @@ fn print_status(console: &CLIConsole, sdk: &SageAgentSDK) {
     }
 }
 
-/// Execute a task with improved error handling
-async fn execute_task(console: &CLIConsole, sdk: &SageAgentSDK, task: &str) -> SageResult<()> {
-    console.print_header("Task Execution");
-    console.info(&format!("Task: {task}"));
 
+
+/// Handle conversation mode - supports continuous dialogue
+async fn handle_conversation(
+    console: &CLIConsole,
+    sdk: &SageAgentSDK,
+    conversation: &mut ConversationSession,
+    user_input: &str,
+) -> SageResult<()> {
+    // Add user message to conversation
+    conversation.add_user_message(user_input);
+
+    if conversation.is_new_conversation() {
+        // This is the first message, create a new task
+        console.print_header("New Conversation");
+        console.info(&format!("Message: {user_input}"));
+
+        // Create task metadata for the conversation
+        let working_dir = std::env::current_dir()
+            .unwrap_or_else(|_| std::path::PathBuf::from("."))
+            .to_string_lossy()
+            .to_string();
+
+        let task = TaskMetadata::new(user_input, &working_dir);
+        conversation.task = Some(task.clone());
+
+        // Execute the initial task
+        execute_conversation_task(console, sdk, conversation, &task).await
+    } else {
+        // This is a continuation of existing conversation
+        console.print_header("Continuing Conversation");
+        console.info(&format!("Message: {user_input}"));
+
+        if let Some(task) = conversation.task.clone() {
+            // Continue with existing task context
+            execute_conversation_continuation(console, sdk, conversation, &task).await
+        } else {
+            // Fallback: create new task if somehow task is missing
+            let working_dir = std::env::current_dir()
+                .unwrap_or_else(|_| std::path::PathBuf::from("."))
+                .to_string_lossy()
+                .to_string();
+
+            let task = TaskMetadata::new(user_input, &working_dir);
+            conversation.task = Some(task.clone());
+            execute_conversation_task(console, sdk, conversation, &task).await
+        }
+    }
+}
+
+/// Execute a new conversation task
+async fn execute_conversation_task(
+    console: &CLIConsole,
+    sdk: &SageAgentSDK,
+    conversation: &mut ConversationSession,
+    task: &TaskMetadata,
+) -> SageResult<()> {
     let start_time = std::time::Instant::now();
 
-    // Show progress indicator
-    console.info("🤔 Starting task...");
-
-    // Enable info logging to show progress
-    unsafe {
-        std::env::set_var("RUST_LOG", "info");
-    }
+    console.info("🤔 Starting conversation...");
 
     let run_options = RunOptions::new()
-        .with_trajectory(true); // Always enable trajectory in interactive mode
+        .with_trajectory(true);
 
-    // Execute task with timeout and error handling
-    let result = match tokio::time::timeout(
-        std::time::Duration::from_secs(300), // 5 minute timeout
-        sdk.run_with_options(task, run_options)
+    match tokio::time::timeout(
+        std::time::Duration::from_secs(300),
+        sdk.run_with_options(&task.description, run_options)
     ).await {
-        Ok(result) => result,
+        Ok(result) => {
+            match result {
+                Ok(execution_result) => {
+                    let duration = start_time.elapsed();
+                    conversation.execution = Some(execution_result.execution.clone());
+                    conversation.mark_first_message_processed();
+
+                    // Add assistant response to conversation
+                    if let Some(final_result) = &execution_result.execution.final_result {
+                        conversation.add_assistant_message(final_result);
+                    }
+
+                    console.success("✓ Conversation completed successfully!");
+                    console.info(&format!("ℹ Execution time: {:.2}s", duration.as_secs_f64()));
+                    console.info(&format!("ℹ Steps: {}", execution_result.execution.steps.len()));
+                    console.info(&format!("ℹ Tokens: {}", execution_result.execution.total_usage.total_tokens));
+
+                    if let Some(trajectory_path) = execution_result.trajectory_path {
+                        console.info(&format!("ℹ Trajectory saved: {}", trajectory_path.display()));
+                    }
+
+                    Ok(())
+                }
+                Err(e) => {
+                    let duration = start_time.elapsed();
+                    console.error("✗ Conversation failed!");
+                    console.error(&format!("ℹ Execution time: {:.2}s", duration.as_secs_f64()));
+                    console.error(&format!("ℹ Error: {e}"));
+                    Err(e)
+                }
+            }
+        }
         Err(_) => {
             let duration = start_time.elapsed();
-            console.error(&format!("Task timed out after {:.2}s", duration.as_secs_f64()));
-            return Err(SageError::Timeout { seconds: 300 });
+            console.error(&format!("Conversation timed out after {:.2}s", duration.as_secs_f64()));
+            Err(SageError::Timeout { seconds: 300 })
         }
-    };
+    }
+}
 
-    match result {
-        Ok(result) => {
-            let duration = start_time.elapsed();
+/// Execute conversation continuation (for follow-up messages)
+async fn execute_conversation_continuation(
+    console: &CLIConsole,
+    sdk: &SageAgentSDK,
+    conversation: &mut ConversationSession,
+    _task: &TaskMetadata,
+) -> SageResult<()> {
+    let start_time = std::time::Instant::now();
 
-            if result.is_success() {
-                console.success("✓ Task completed successfully!");
-            } else {
-                console.error("✗ Task execution failed!");
+    console.info("🤔 Continuing conversation...");
+
+    // Get the last user message
+    let user_message = conversation.messages.last()
+        .map(|msg| msg.content.as_str())
+        .unwrap_or("No message");
+
+    // Get the current execution, if it exists
+    if let Some(execution) = &mut conversation.execution {
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(300),
+            sdk.continue_execution(execution, user_message)
+        ).await {
+            Ok(result) => {
+                match result {
+                    Ok(()) => {
+                        let duration = start_time.elapsed();
+
+                        // Get execution info before borrowing conversation again
+                        let final_result = execution.final_result.clone();
+                        let steps_len = execution.steps.len();
+                        let total_tokens = execution.total_usage.total_tokens;
+
+                        // Add assistant response to conversation
+                        if let Some(final_result) = final_result {
+                            conversation.add_assistant_message(&final_result);
+                        }
+
+                        console.success("✓ Conversation continued successfully!");
+                        console.info(&format!("ℹ Execution time: {:.2}s", duration.as_secs_f64()));
+                        console.info(&format!("ℹ Steps: {}", steps_len));
+                        console.info(&format!("ℹ Tokens: {}", total_tokens));
+
+                        Ok(())
+                    }
+                    Err(e) => {
+                        let duration = start_time.elapsed();
+                        console.error("✗ Conversation continuation failed!");
+                        console.error(&format!("ℹ Execution time: {:.2}s", duration.as_secs_f64()));
+                        console.error(&format!("ℹ Error: {e}"));
+                        Err(e)
+                    }
+                }
             }
-
-            console.info(&format!("ℹ Execution time: {:.2}s", duration.as_secs_f64()));
-            console.info(&format!("ℹ Steps: {}", result.execution.steps.len()));
-            console.info(&format!("ℹ Tokens: {}", result.execution.total_usage.total_tokens));
-
-            if let Some(final_result) = result.final_result() {
-                console.print_header("Result");
-                println!("{final_result}");
+            Err(_) => {
+                let duration = start_time.elapsed();
+                console.error(&format!("Conversation continuation timed out after {:.2}s", duration.as_secs_f64()));
+                Err(SageError::Timeout { seconds: 300 })
             }
-
-            if let Some(trajectory_path) = result.trajectory_path() {
-                console.info(&format!("ℹ Trajectory saved: {}", trajectory_path.display()));
-            }
-
-            Ok(())
         }
-        Err(e) => {
-            let duration = start_time.elapsed();
-
-            // Provide more helpful error messages
-            let error_msg = match &e {
-                SageError::Llm(msg) if msg.contains("overloaded") => {
-                    "The AI model is currently overloaded. Please try again in a few moments.".to_string()
-                }
-                SageError::Llm(msg) if msg.contains("rate limit") => {
-                    "Rate limit exceeded. Please wait a moment before trying again.".to_string()
-                }
-                SageError::Http(_) => {
-                    "Network error occurred. Please check your internet connection and try again.".to_string()
-                }
-                _ => format!("Task failed: {e}")
-            };
-
-            console.error(&format!("✗ Task execution failed!"));
-            console.error(&format!("ℹ Execution time: {:.2}s", duration.as_secs_f64()));
-            console.error(&format!("ℹ Error: {error_msg}"));
-
-            Err(e)
-        }
+    } else {
+        console.error("No existing execution to continue");
+        Err(SageError::InvalidInput("No existing execution to continue".to_string()))
     }
 }

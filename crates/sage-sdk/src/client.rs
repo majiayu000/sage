@@ -172,6 +172,36 @@ impl SageAgentSDK {
     pub fn validate_config(&self) -> SageResult<()> {
         self.config.validate()
     }
+
+    /// Continue an existing execution with a new user message
+    pub async fn continue_execution(
+        &self,
+        execution: &mut AgentExecution,
+        user_message: &str,
+    ) -> SageResult<()> {
+        // Create agent
+        let mut agent = BaseAgent::new(self.config.clone())?;
+
+        // Set up tool executor with default tools
+        let tool_executor = ToolExecutorBuilder::new()
+            .with_tools(get_default_tools())
+            .with_max_execution_time(std::time::Duration::from_secs(
+                self.config.tools.max_execution_time,
+            ))
+            .with_parallel_execution(self.config.tools.allow_parallel_execution)
+            .build();
+
+        agent.set_tool_executor(tool_executor);
+
+        // Set up trajectory recording if enabled
+        if let Some(trajectory_path) = &self.trajectory_path {
+            let recorder = Arc::new(Mutex::new(TrajectoryRecorder::new(trajectory_path.clone())?));
+            agent.set_trajectory_recorder(recorder);
+        }
+
+        // Continue the execution
+        agent.continue_execution(execution, user_message).await
+    }
 }
 
 impl Default for SageAgentSDK {
