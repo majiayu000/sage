@@ -3,6 +3,7 @@
 use crate::agent::{AgentExecution, AgentStep, AgentState};
 use crate::config::model::Config;
 use crate::error::{SageError, SageResult};
+use crate::interrupt::{InterruptReason, TaskScope, global_interrupt_manager, reset_global_interrupt_manager};
 use crate::llm::client::LLMClient;
 use crate::llm::messages::LLMMessage;
 use crate::llm::providers::LLMProvider;
@@ -16,6 +17,7 @@ use async_trait::async_trait;
 use colored::*;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tokio::select;
 
 /// Model identity information for system prompt
 #[derive(Debug, Clone)]
@@ -365,7 +367,24 @@ Remember: Respond appropriately to the type of request. Simple questions don't n
             "blue"
         ).await;
 
-        let llm_response = self.llm_client.chat(messages, Some(tools)).await?;
+        // Get cancellation token for interrupt handling
+        let cancellation_token = global_interrupt_manager()
+            .lock()
+            .map_err(|_| SageError::agent("Failed to acquire interrupt manager lock"))?
+            .cancellation_token();
+
+        // Execute LLM call with interrupt support
+        let llm_response = select! {
+            response = self.llm_client.chat(messages, Some(tools)) => {
+                response?
+            }
+            _ = cancellation_token.cancelled() => {
+                // Stop animation on interruption
+                self.animation_manager.stop_animation().await;
+                return Err(SageError::agent("Task interrupted during LLM call"));
+            }
+        };
+
         let api_duration = start_time.elapsed();
 
         // Stop animation and show timing
@@ -544,7 +563,18 @@ Remember: Respond appropriately to the type of request. Simple questions don't n
                 "cyan"
             ).await;
 
-            let tool_results = self.tool_executor.execute_tools(&llm_response.tool_calls).await;
+            // Execute tools with interrupt support
+            let tool_results = select! {
+                results = self.tool_executor.execute_tools(&llm_response.tool_calls) => {
+                    results
+                }
+                _ = cancellation_token.cancelled() => {
+                    // Stop animation on interruption
+                    self.animation_manager.stop_animation().await;
+                    return Err(SageError::agent("Task interrupted during tool execution"));
+                }
+            };
+
             let tool_duration = tool_start_time.elapsed();
 
             // Stop animation and show timing if significant
@@ -618,7 +648,16 @@ Remember: Respond appropriately to the type of request. Simple questions don't n
 impl Agent for BaseAgent {
     async fn execute_task(&mut self, task: TaskMetadata) -> SageResult<AgentExecution> {
         let mut execution = AgentExecution::new(task.clone());
-        
+
+        // Reset the global interrupt manager for this new task
+        reset_global_interrupt_manager();
+
+        // Create a task scope for interrupt handling
+        let task_scope = global_interrupt_manager()
+            .lock()
+            .map_err(|_| SageError::agent("Failed to acquire interrupt manager lock"))?
+            .create_task_scope();
+
         // Start trajectory recording if available
         if let Some(recorder) = &self.trajectory_recorder {
             let provider = self.config.get_default_provider().to_string();
@@ -630,12 +669,35 @@ impl Agent for BaseAgent {
                 self.config.max_steps
             ).await?;
         }
-        
+
         let system_message = self.create_system_message(&task);
         let tool_schemas = self.tool_executor.get_tool_schemas();
-        
+
         // Main execution loop
         for step_number in 1..=self.max_steps {
+            // Check for interruption before each step
+            if task_scope.is_cancelled() {
+                // Stop animation on interruption
+                self.animation_manager.stop_animation().await;
+
+                // Print interruption message
+                DisplayManager::print_separator("Task Interrupted", "yellow");
+                println!("{}", "🛑 Task interrupted by user (Ctrl+C)".yellow().bold());
+                println!("{}", "   Task execution stopped gracefully.".dimmed());
+
+                let interrupt_step = AgentStep::new(step_number, AgentState::Error)
+                    .with_error("Task interrupted by user".to_string());
+
+                // Record interrupt step
+                if let Some(recorder) = &self.trajectory_recorder {
+                    recorder.lock().await.record_step(interrupt_step.clone()).await?;
+                }
+
+                execution.add_step(interrupt_step);
+                execution.complete(false, Some("Task interrupted by user".to_string()));
+                break;
+            }
+
             let messages = self.build_messages(&execution, &system_message);
 
             match self.execute_step(step_number, &messages, &tool_schemas).await {

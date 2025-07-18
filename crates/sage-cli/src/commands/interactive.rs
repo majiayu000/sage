@@ -1,6 +1,7 @@
 //! Interactive mode implementation
 
 use crate::console::CLIConsole;
+use crate::signal_handler::{start_global_signal_handling, stop_global_signal_handling, enable_global_signal_handling, disable_global_signal_handling};
 use std::io::Write;
 use std::path::PathBuf;
 use sage_core::error::{SageError, SageResult};
@@ -82,6 +83,11 @@ pub struct InteractiveArgs {
 /// Execute interactive mode
 pub async fn execute(args: InteractiveArgs) -> SageResult<()> {
     let console = CLIConsole::new(true);
+
+    // Initialize signal handling for task interruption
+    if let Err(e) = start_global_signal_handling().await {
+        console.warn(&format!("Failed to initialize signal handling: {}", e));
+    }
 
     // Use enhanced console for beautiful welcome
     EnhancedConsole::print_welcome_banner();
@@ -452,10 +458,19 @@ async fn execute_conversation_task(
                 }
                 Err(e) => {
                     let duration = start_time.elapsed();
-                    console.error("✗ Conversation failed!");
-                    console.error(&format!("ℹ Execution time: {:.2}s", duration.as_secs_f64()));
-                    console.error(&format!("ℹ Error: {e}"));
-                    Err(e)
+
+                    // Check if this was an interruption
+                    if e.to_string().contains("interrupted") {
+                        console.warn("🛑 Task interrupted by user");
+                        console.info(&format!("ℹ Execution time: {:.2}s", duration.as_secs_f64()));
+                        console.info("ℹ You can continue with a new task or type 'exit' to quit");
+                        Ok(()) // Don't treat interruption as an error in interactive mode
+                    } else {
+                        console.error("✗ Conversation failed!");
+                        console.error(&format!("ℹ Execution time: {:.2}s", duration.as_secs_f64()));
+                        console.error(&format!("ℹ Error: {e}"));
+                        Err(e)
+                    }
                 }
             }
         }
@@ -513,10 +528,19 @@ async fn execute_conversation_continuation(
                     }
                     Err(e) => {
                         let duration = start_time.elapsed();
-                        console.error("✗ Conversation continuation failed!");
-                        console.error(&format!("ℹ Execution time: {:.2}s", duration.as_secs_f64()));
-                        console.error(&format!("ℹ Error: {e}"));
-                        Err(e)
+
+                        // Check if this was an interruption
+                        if e.to_string().contains("interrupted") {
+                            console.warn("🛑 Task interrupted by user");
+                            console.info(&format!("ℹ Execution time: {:.2}s", duration.as_secs_f64()));
+                            console.info("ℹ You can continue with a new task or type 'exit' to quit");
+                            Ok(()) // Don't treat interruption as an error in interactive mode
+                        } else {
+                            console.error("✗ Conversation continuation failed!");
+                            console.error(&format!("ℹ Execution time: {:.2}s", duration.as_secs_f64()));
+                            console.error(&format!("ℹ Error: {e}"));
+                            Err(e)
+                        }
                     }
                 }
             }

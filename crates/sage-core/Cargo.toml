@@ -12,6 +12,7 @@ categories.workspace = true
 [dependencies]
 # Async runtime
 tokio = { workspace = true }
+tokio-util = { workspace = true }
 tokio-stream = { version = "0.1", features = ["io-util"] }
 futures = { workspace = true }
 
@@ -81,3 +82,7 @@ path = "../../examples/retry_test.rs"
 [[example]]
 name = "retry_simulation"
 path = "../../examples/retry_simulation.rs"
+
+[[example]]
+name = "interrupt_demo"
+path = "../../examples/interrupt_demo.rs"

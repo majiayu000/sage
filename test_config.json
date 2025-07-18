@@ -1,0 +1,15 @@
+{
+  "default_provider": "openai",
+  "providers": {
+    "openai": {
+      "api_key": "sk-test-key-for-demo-purposes-only",
+      "model": "gpt-3.5-turbo",
+      "base_url": "https://api.openai.com/v1"
+    }
+  },
+  "max_steps": 5,
+  "max_tokens": 1000,
+  "tools": {
+    "enabled": ["bash", "str_replace_based_edit_tool", "task_done"]
+  }
+}

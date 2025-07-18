@@ -20,6 +20,7 @@ categories = ["command-line-utilities", "development-tools"]
 [workspace.dependencies]
 # Async runtime
 tokio = { version = "1.0", features = ["full"] }
+tokio-util = "0.7"
 futures = "0.3"
 
 # HTTP client
@@ -59,6 +60,10 @@ jsonpath-rust = "0.5"
 
 # Process management
 tokio-process = "0.2"
+
+# Signal handling
+signal-hook = "0.3"
+signal-hook-tokio = { version = "0.3", features = ["futures-v0_3"] }
 
 # Configuration
 config = "0.14"

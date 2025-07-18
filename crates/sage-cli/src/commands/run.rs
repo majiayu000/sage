@@ -1,6 +1,7 @@
 //! Run command implementation
 
 use crate::console::CLIConsole;
+use crate::signal_handler::start_global_signal_handling;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use sage_core::error::{SageError, SageResult};
@@ -25,7 +26,12 @@ pub struct RunArgs {
 /// Execute the run command
 pub async fn execute(args: RunArgs) -> SageResult<()> {
     let console = CLIConsole::new(args.verbose);
-    
+
+    // Initialize signal handling for task interruption
+    if let Err(e) = start_global_signal_handling().await {
+        console.warn(&format!("Failed to initialize signal handling: {}", e));
+    }
+
     // Load task from file if it's a file path
     let task_description = if let Ok(task_path) = std::path::Path::new(&args.task).canonicalize() {
         if task_path.is_file() {
@@ -184,28 +190,37 @@ pub async fn execute(args: RunArgs) -> SageResult<()> {
         Err(e) => {
             let duration = start_time.elapsed();
             console.print_separator();
-            console.error("Task execution failed!");
-            console.print_header("Final Result");
-            console.error(&format!("Task failed: {}", e));
 
-            // Print additional error context if available
-            match &e {
-                SageError::Tool { tool_name, message } => {
-                    console.info(&format!("Tool: {}", tool_name));
-                    console.info(&format!("Error: {}", message));
+            // Check if this was an interruption
+            if e.to_string().contains("interrupted") {
+                console.warn("🛑 Task interrupted by user (Ctrl+C)");
+                console.info(&format!("Execution time: {:.2}s", duration.as_secs_f64()));
+                console.info("Task was stopped gracefully.");
+                Ok(()) // Don't treat interruption as an error in run mode
+            } else {
+                console.error("Task execution failed!");
+                console.print_header("Final Result");
+                console.error(&format!("Task failed: {}", e));
+
+                // Print additional error context if available
+                match &e {
+                    SageError::Tool { tool_name, message } => {
+                        console.info(&format!("Tool: {}", tool_name));
+                        console.info(&format!("Error: {}", message));
+                    }
+                    SageError::Llm(msg) => {
+                        console.info(&format!("LLM Provider: {}", sdk.config().default_provider));
+                        console.info(&format!("Error: {}", msg));
+                    }
+                    SageError::Config(msg) => {
+                        console.info(&format!("Configuration Error: {}", msg));
+                    }
+                    _ => {}
                 }
-                SageError::Llm(msg) => {
-                    console.info(&format!("LLM Provider: {}", sdk.config().default_provider));
-                    console.info(&format!("Error: {}", msg));
-                }
-                SageError::Config(msg) => {
-                    console.info(&format!("Configuration Error: {}", msg));
-                }
-                _ => {}
+
+                console.info(&format!("Execution time: {:.2}s", duration.as_secs_f64()));
+                Err(e)
             }
-
-            console.info(&format!("Execution time: {:.2}s", duration.as_secs_f64()));
-            Err(e)
         }
     }
 }

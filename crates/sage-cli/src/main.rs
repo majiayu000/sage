@@ -3,6 +3,7 @@
 mod commands;
 mod console;
 mod progress;
+mod signal_handler;
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;

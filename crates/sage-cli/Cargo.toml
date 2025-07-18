@@ -47,3 +47,7 @@ tracing-subscriber = { workspace = true }
 dirs = { workspace = true }
 shellexpand = { workspace = true }
 chrono = { workspace = true }
+
+# Signal handling
+signal-hook = { workspace = true }
+signal-hook-tokio = { workspace = true }
