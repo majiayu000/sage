@@ -12,6 +12,7 @@ categories.workspace = true
 [dependencies]
 # Async runtime
 tokio = { workspace = true }
+tokio-stream = { version = "0.1", features = ["io-util"] }
 futures = { workspace = true }
 
 # HTTP client
@@ -43,6 +44,7 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 dirs = { workspace = true }
 shellexpand = { workspace = true }
+lru = "0.12"
 
 # Async traits
 async-trait = { workspace = true }

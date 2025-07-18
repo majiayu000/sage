@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 use async_trait::async_trait;
 use tokio::fs;
-use tracing::{info, debug};
+use tracing::info;
 use regex::Regex;
 
 use sage_core::tools::base::{Tool, ToolError};
@@ -133,7 +133,6 @@ impl LogAnalyzerTool {
         let lines: Vec<&str> = content.lines().collect();
         
         // Look for common log patterns and extract metrics
-        let mut timestamps: Vec<String> = Vec::new();
         let mut response_times: Vec<f64> = Vec::new();
         let mut status_codes = HashMap::new();
         

@@ -3,9 +3,11 @@
 use crate::error::{SageError, SageResult};
 use crate::llm::messages::{LLMMessage, LLMResponse};
 use crate::llm::providers::{LLMProvider, ModelParameters};
+use crate::llm::streaming::{StreamChunk, LLMStream, StreamingLLMClient};
 use crate::config::provider::ProviderConfig;
 use crate::tools::types::ToolSchema;
 use crate::types::LLMUsage;
+use async_trait::async_trait;
 use reqwest::Client;
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -59,6 +61,21 @@ impl LLMClient {
             model_params,
             http_client,
         })
+    }
+
+    /// Get the provider
+    pub fn provider(&self) -> &LLMProvider {
+        &self.provider
+    }
+
+    /// Get the model name
+    pub fn model(&self) -> &str {
+        &self.model_params.model
+    }
+
+    /// Get the provider configuration
+    pub fn config(&self) -> &ProviderConfig {
+        &self.config
     }
 
     /// Send a chat completion request
@@ -927,5 +944,176 @@ impl LLMClient {
             id: None, // Google doesn't provide request ID in the same way
             metadata: HashMap::new(),
         })
+    }
+}
+
+// Streaming support implementation
+#[async_trait]
+impl StreamingLLMClient for LLMClient {
+    /// Send a streaming chat completion request
+    async fn chat_stream(
+        &self,
+        messages: &[LLMMessage],
+        tools: Option<&[ToolSchema]>,
+    ) -> SageResult<LLMStream> {
+        match &self.provider {
+            LLMProvider::OpenAI => self.openai_chat_stream(messages, tools).await,
+            LLMProvider::Anthropic => self.anthropic_chat_stream(messages, tools).await,
+            LLMProvider::Google => self.google_chat_stream(messages, tools).await,
+            LLMProvider::Azure => self.azure_chat_stream(messages, tools).await,
+            LLMProvider::OpenRouter => self.openrouter_chat_stream(messages, tools).await,
+            LLMProvider::Doubao => self.doubao_chat_stream(messages, tools).await,
+            LLMProvider::Ollama => self.ollama_chat_stream(messages, tools).await,
+            LLMProvider::Custom(name) => {
+                Err(SageError::llm(format!("Streaming not supported for custom provider '{name}'")))
+            }
+        }
+    }
+}
+
+impl LLMClient {
+    /// OpenAI streaming chat completion
+    async fn openai_chat_stream(
+        &self,
+        messages: &[LLMMessage],
+        tools: Option<&[ToolSchema]>,
+    ) -> SageResult<LLMStream> {
+        use futures::StreamExt;
+
+        let url = format!("{}/chat/completions", self.config.get_base_url());
+
+        let mut request_body = json!({
+            "model": self.model_params.model,
+            "messages": self.convert_messages_for_openai(messages)?,
+            "stream": true,
+        });
+
+        // Add optional parameters
+        if let Some(max_tokens) = self.model_params.max_tokens {
+            request_body["max_tokens"] = json!(max_tokens);
+        }
+        if let Some(temperature) = self.model_params.temperature {
+            request_body["temperature"] = json!(temperature);
+        }
+        if let Some(top_p) = self.model_params.top_p {
+            request_body["top_p"] = json!(top_p);
+        }
+
+        // Add tools if provided
+        if let Some(tools) = tools {
+            if !tools.is_empty() {
+                request_body["tools"] = json!(self.convert_tools_for_openai(tools)?);
+            }
+        }
+
+        let mut request = self.http_client
+            .post(&url)
+            .json(&request_body);
+
+        // Add authentication
+        if let Some(api_key) = self.config.get_api_key() {
+            request = request.bearer_auth(api_key);
+        }
+
+        let response = request
+            .send()
+            .await
+            .map_err(|e| SageError::llm(format!("OpenAI streaming request failed: {}", e)))?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(SageError::llm(format!("OpenAI streaming API error: {}", error_text)));
+        }
+
+        // Convert response to stream
+        let byte_stream = response.bytes_stream();
+
+        let stream = byte_stream.filter_map(|chunk_result| async move {
+            match chunk_result {
+                Ok(chunk) => {
+                    // Convert bytes to string and process lines
+                    let chunk_str = String::from_utf8_lossy(&chunk);
+                    for line in chunk_str.lines() {
+                        if line.starts_with("data: ") {
+                            let data = &line[6..]; // Remove "data: " prefix
+                            if data == "[DONE]" {
+                                return Some(Ok(StreamChunk::final_chunk(None, Some("stop".to_string()))));
+                            }
+
+                            if let Ok(json_data) = serde_json::from_str::<Value>(data) {
+                                if let Some(choices) = json_data["choices"].as_array() {
+                                    if let Some(choice) = choices.first() {
+                                        if let Some(delta) = choice["delta"].as_object() {
+                                            if let Some(content) = delta["content"].as_str() {
+                                                return Some(Ok(StreamChunk::content(content)));
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    None
+                }
+                Err(e) => Some(Err(SageError::llm(format!("Stream error: {}", e)))),
+            }
+        });
+
+        Ok(Box::pin(stream))
+    }
+
+    /// Placeholder implementations for other providers
+    async fn anthropic_chat_stream(
+        &self,
+        _messages: &[LLMMessage],
+        _tools: Option<&[ToolSchema]>,
+    ) -> SageResult<LLMStream> {
+        // TODO: Implement Anthropic streaming
+        Err(SageError::llm("Anthropic streaming not yet implemented"))
+    }
+
+    async fn google_chat_stream(
+        &self,
+        _messages: &[LLMMessage],
+        _tools: Option<&[ToolSchema]>,
+    ) -> SageResult<LLMStream> {
+        // TODO: Implement Google streaming
+        Err(SageError::llm("Google streaming not yet implemented"))
+    }
+
+    async fn azure_chat_stream(
+        &self,
+        _messages: &[LLMMessage],
+        _tools: Option<&[ToolSchema]>,
+    ) -> SageResult<LLMStream> {
+        // TODO: Implement Azure streaming (similar to OpenAI)
+        Err(SageError::llm("Azure streaming not yet implemented"))
+    }
+
+    async fn openrouter_chat_stream(
+        &self,
+        _messages: &[LLMMessage],
+        _tools: Option<&[ToolSchema]>,
+    ) -> SageResult<LLMStream> {
+        // TODO: Implement OpenRouter streaming
+        Err(SageError::llm("OpenRouter streaming not yet implemented"))
+    }
+
+    async fn doubao_chat_stream(
+        &self,
+        _messages: &[LLMMessage],
+        _tools: Option<&[ToolSchema]>,
+    ) -> SageResult<LLMStream> {
+        // TODO: Implement Doubao streaming
+        Err(SageError::llm("Doubao streaming not yet implemented"))
+    }
+
+    async fn ollama_chat_stream(
+        &self,
+        _messages: &[LLMMessage],
+        _tools: Option<&[ToolSchema]>,
+    ) -> SageResult<LLMStream> {
+        // TODO: Implement Ollama streaming
+        Err(SageError::llm("Ollama streaming not yet implemented"))
     }
 }

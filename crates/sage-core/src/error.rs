@@ -24,6 +24,10 @@ pub enum SageError {
     #[error("Agent error: {0}")]
     Agent(String),
 
+    /// Cache errors
+    #[error("Cache error: {0}")]
+    Cache(String),
+
     /// IO errors
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
@@ -75,6 +79,11 @@ impl SageError {
     /// Create a new agent error
     pub fn agent(message: impl Into<String>) -> Self {
         Self::Agent(message.into())
+    }
+
+    /// Create a new cache error
+    pub fn cache(message: impl Into<String>) -> Self {
+        Self::Cache(message.into())
     }
 
     /// Create a new invalid input error
