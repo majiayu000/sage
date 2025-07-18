@@ -1,10 +1,11 @@
 use sage_core::interrupt::{global_interrupt_manager, InterruptReason};
 use signal_hook::consts::SIGINT;
 use signal_hook_tokio::Signals;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use tokio::task::JoinHandle;
 use futures::stream::StreamExt;
+use std::time::{Duration, Instant};
 
 /// Application state for signal handling
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -23,6 +24,10 @@ pub struct SignalHandler {
     task_handle: Option<JoinHandle<()>>,
     /// Current application state
     app_state: Arc<std::sync::Mutex<AppState>>,
+    /// Counter for consecutive Ctrl+C presses
+    ctrl_c_count: Arc<AtomicU32>,
+    /// Timestamp of last Ctrl+C press
+    last_ctrl_c_time: Arc<std::sync::Mutex<Option<Instant>>>,
 }
 
 impl SignalHandler {
@@ -32,6 +37,8 @@ impl SignalHandler {
             is_active: Arc::new(AtomicBool::new(false)),
             task_handle: None,
             app_state: Arc::new(std::sync::Mutex::new(AppState::WaitingForInput)),
+            ctrl_c_count: Arc::new(AtomicU32::new(0)),
+            last_ctrl_c_time: Arc::new(std::sync::Mutex::new(None)),
         }
     }
 
@@ -45,6 +52,8 @@ impl SignalHandler {
         let mut signals = Signals::new(&[SIGINT])?;
         let is_active = self.is_active.clone();
         let app_state = self.app_state.clone();
+        let ctrl_c_count = self.ctrl_c_count.clone();
+        let last_ctrl_c_time = self.last_ctrl_c_time.clone();
 
         // Mark as active
         is_active.store(true, Ordering::Relaxed);
@@ -59,9 +68,33 @@ impl SignalHandler {
                             if let Ok(state) = app_state.lock() {
                                 match *state {
                                     AppState::WaitingForInput => {
-                                        // During input prompt - exit the application
-                                        eprintln!("\nGoodbye!");
-                                        std::process::exit(0);
+                                        // During input prompt - implement double Ctrl+C to exit
+                                        let now = Instant::now();
+                                        let mut should_exit = false;
+
+                                        if let Ok(mut last_time) = last_ctrl_c_time.lock() {
+                                            if let Some(last) = *last_time {
+                                                // Check if this is within 2 seconds of the last Ctrl+C
+                                                if now.duration_since(last) < Duration::from_secs(2) {
+                                                    // Second Ctrl+C within 2 seconds - exit
+                                                    should_exit = true;
+                                                } else {
+                                                    // Reset counter if too much time has passed
+                                                    ctrl_c_count.store(1, Ordering::Relaxed);
+                                                }
+                                            } else {
+                                                // First Ctrl+C
+                                                ctrl_c_count.store(1, Ordering::Relaxed);
+                                            }
+                                            *last_time = Some(now);
+                                        }
+
+                                        if should_exit {
+                                            eprintln!("\nGoodbye!");
+                                            std::process::exit(0);
+                                        } else {
+                                            eprintln!("\n💡 Press Ctrl+C again within 2 seconds to exit, or continue typing...");
+                                        }
                                     }
                                     AppState::ExecutingTask => {
                                         // During task execution - interrupt the task

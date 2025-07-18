@@ -143,7 +143,7 @@ pub async fn execute(args: InteractiveArgs) -> SageResult<()> {
                 match input {
                     "exit" | "quit" | "q" => {
                         console.info("Goodbye!");
-                        break;
+                        return Ok(());
                     }
                     "help" | "h" => {
                         print_help(&console);
@@ -207,12 +207,11 @@ pub async fn execute(args: InteractiveArgs) -> SageResult<()> {
             Err(e) => {
                 // Check if this is EOF or Ctrl+C interruption
                 if e.kind() == std::io::ErrorKind::UnexpectedEof {
-                    console.info("Goodbye!");
+                    // EOF detected - exit without message (signal handler will handle it)
                     break;
                 } else if e.kind() == std::io::ErrorKind::Interrupted {
-                    // User pressed Ctrl+C during input prompt - exit gracefully
-                    // This handles the case where Ctrl+C is pressed while waiting for user input
-                    console.info("\nGoodbye!");
+                    // User pressed Ctrl+C during input prompt - exit without message
+                    // The signal handler will print the goodbye message
                     break;
                 } else {
                     console.error(&format!("Input error: {e}"));
@@ -225,7 +224,9 @@ pub async fn execute(args: InteractiveArgs) -> SageResult<()> {
 
         console.print_separator();
     }
-    
+
+    // If we reach here, it means we exited due to an error or interruption
+    // The goodbye message is handled elsewhere (signal handler or explicit exit command)
     Ok(())
 }
 

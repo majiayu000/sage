@@ -190,7 +190,9 @@ impl CLIConsole {
                         }
                     }
                     Key::CtrlC => {
-                        return Err(io::Error::new(io::ErrorKind::Interrupted, "Interrupted"));
+                        // Let the global signal handler deal with Ctrl+C
+                        // Don't return an error here, just ignore the key
+                        continue;
                     }
                     _ => {
                         // 忽略其他按键

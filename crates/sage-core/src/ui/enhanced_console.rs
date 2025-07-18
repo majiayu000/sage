@@ -6,16 +6,49 @@ use colored::*;
 pub struct EnhancedConsole;
 
 impl EnhancedConsole {
+    /// Get terminal width, with fallback to default
+    fn get_terminal_width() -> usize {
+        // Try to get terminal width from environment or use reasonable default
+        std::env::var("COLUMNS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(80) // Default fallback width
+    }
+
     /// Print a beautiful welcome banner
     pub fn print_welcome_banner() {
+        let title1 = "🚀 Sage Agent - Enhanced Terminal Experience";
+        let title2 = "AI-Powered Software Engineering Assistant";
+
+        // Calculate adaptive width based on content and terminal size
+        let content_width = std::cmp::max(title1.chars().count(), title2.chars().count());
+        let terminal_width = Self::get_terminal_width();
+        let box_width = std::cmp::min(terminal_width.saturating_sub(4), std::cmp::max(content_width + 6, 60));
+
         println!();
-        println!("{}", "╭─────────────────────────────────────────────────────────────╮".bright_cyan());
-        println!("{}", "│                                                             │".bright_cyan());
-        println!("{}", format!("│  🚀 {}                                    │", "Sage Agent - Enhanced Terminal Experience".bright_white().bold()).bright_cyan());
-        println!("{}", "│                                                             │".bright_cyan());
-        println!("{}", format!("│  {}                                          │", "AI-Powered Software Engineering Assistant".bright_blue()).bright_cyan());
-        println!("{}", "│                                                             │".bright_cyan());
-        println!("{}", "╰─────────────────────────────────────────────────────────────╯".bright_cyan());
+        println!("{}", format!("╭{}╮", "─".repeat(box_width - 2)).bright_cyan());
+        println!("{}", format!("│{}│", " ".repeat(box_width - 2)).bright_cyan());
+
+        // Title 1 - centered
+        let title1_padding = (box_width - title1.chars().count() - 2) / 2;
+        let title1_line = format!("│{}{title1}{}│",
+            " ".repeat(title1_padding),
+            " ".repeat(box_width - title1.chars().count() - title1_padding - 2)
+        );
+        println!("{}", title1_line.bright_white().bold());
+
+        println!("{}", format!("│{}│", " ".repeat(box_width - 2)).bright_cyan());
+
+        // Title 2 - centered
+        let title2_padding = (box_width - title2.chars().count() - 2) / 2;
+        let title2_line = format!("│{}{title2}{}│",
+            " ".repeat(title2_padding),
+            " ".repeat(box_width - title2.chars().count() - title2_padding - 2)
+        );
+        println!("{}", title2_line.bright_blue());
+
+        println!("{}", format!("│{}│", " ".repeat(box_width - 2)).bright_cyan());
+        println!("{}", format!("╰{}╯", "─".repeat(box_width - 2)).bright_cyan());
         println!();
     }
 
