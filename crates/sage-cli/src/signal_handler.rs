@@ -6,12 +6,23 @@ use std::sync::Arc;
 use tokio::task::JoinHandle;
 use futures::stream::StreamExt;
 
+/// Application state for signal handling
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum AppState {
+    /// Waiting for user input at prompt
+    WaitingForInput,
+    /// Executing a task
+    ExecutingTask,
+}
+
 /// Signal handler for managing Ctrl+C interrupts
 pub struct SignalHandler {
     /// Flag to track if signal handling is active
     is_active: Arc<AtomicBool>,
     /// Handle to the signal handling task
     task_handle: Option<JoinHandle<()>>,
+    /// Current application state
+    app_state: Arc<std::sync::Mutex<AppState>>,
 }
 
 impl SignalHandler {
@@ -20,6 +31,7 @@ impl SignalHandler {
         Self {
             is_active: Arc::new(AtomicBool::new(false)),
             task_handle: None,
+            app_state: Arc::new(std::sync::Mutex::new(AppState::WaitingForInput)),
         }
     }
 
@@ -32,7 +44,8 @@ impl SignalHandler {
         // Create signal stream for SIGINT (Ctrl+C)
         let mut signals = Signals::new(&[SIGINT])?;
         let is_active = self.is_active.clone();
-        
+        let app_state = self.app_state.clone();
+
         // Mark as active
         is_active.store(true, Ordering::Relaxed);
 
@@ -42,14 +55,26 @@ impl SignalHandler {
                 match signal {
                     SIGINT => {
                         if is_active.load(Ordering::Relaxed) {
-                            // Interrupt the current task instead of exiting
-                            if let Ok(manager) = global_interrupt_manager().lock() {
-                                manager.interrupt(InterruptReason::UserInterrupt);
-                            }
+                            // Check current application state
+                            if let Ok(state) = app_state.lock() {
+                                match *state {
+                                    AppState::WaitingForInput => {
+                                        // During input prompt - exit the application
+                                        eprintln!("\nGoodbye!");
+                                        std::process::exit(0);
+                                    }
+                                    AppState::ExecutingTask => {
+                                        // During task execution - interrupt the task
+                                        if let Ok(manager) = global_interrupt_manager().lock() {
+                                            manager.interrupt(InterruptReason::UserInterrupt);
+                                        }
 
-                            // Print a message to let user know the task was interrupted
-                            eprintln!("\n🛑 Interrupting current task... (Ctrl+C)");
-                            eprintln!("   Task will stop gracefully. Please wait...");
+                                        // Print a message to let user know the task was interrupted
+                                        eprintln!("\n🛑 Interrupting current task... (Ctrl+C)");
+                                        eprintln!("   Task will stop gracefully. Please wait...");
+                                    }
+                                }
+                            }
                         }
                     }
                     _ => {
@@ -91,6 +116,19 @@ impl SignalHandler {
     #[allow(dead_code)]
     pub fn disable(&self) {
         self.is_active.store(false, Ordering::Relaxed);
+    }
+
+    /// Set the application state for signal handling
+    pub fn set_app_state(&self, state: AppState) {
+        if let Ok(mut current_state) = self.app_state.lock() {
+            *current_state = state;
+        }
+    }
+
+    /// Get the current application state
+    #[allow(dead_code)]
+    pub fn get_app_state(&self) -> AppState {
+        self.app_state.lock().map(|state| *state).unwrap_or(AppState::WaitingForInput)
     }
 }
 
@@ -159,6 +197,22 @@ pub fn is_global_signal_handling_active() -> bool {
         .lock()
         .map(|handler| handler.is_active())
         .unwrap_or(false)
+}
+
+/// Set the global application state for signal handling
+pub fn set_global_app_state(state: AppState) {
+    if let Ok(handler) = global_signal_handler().lock() {
+        handler.set_app_state(state);
+    }
+}
+
+/// Get the global application state
+#[allow(dead_code)]
+pub fn get_global_app_state() -> AppState {
+    global_signal_handler()
+        .lock()
+        .map(|handler| handler.get_app_state())
+        .unwrap_or(AppState::WaitingForInput)
 }
 
 #[cfg(test)]

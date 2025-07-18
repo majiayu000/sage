@@ -1,7 +1,7 @@
 //! Interactive mode implementation
 
 use crate::console::CLIConsole;
-use crate::signal_handler::start_global_signal_handling;
+use crate::signal_handler::{start_global_signal_handling, set_global_app_state, AppState};
 use std::io::Write;
 use std::path::PathBuf;
 use sage_core::error::{SageError, SageResult};
@@ -122,6 +122,9 @@ pub async fn execute(args: InteractiveArgs) -> SageResult<()> {
         std::io::stdout().flush().unwrap_or(());
         std::io::stderr().flush().unwrap_or(());
 
+        // Set state to waiting for input
+        set_global_app_state(AppState::WaitingForInput);
+
         match console.input("sage") {
             Ok(input) => {
                 let input = input.trim();
@@ -177,6 +180,9 @@ pub async fn execute(args: InteractiveArgs) -> SageResult<()> {
                         console.info(&format!("Current conversation: {}", conversation.get_summary()));
                     }
                     _ => {
+                        // Set state to executing task
+                        set_global_app_state(AppState::ExecutingTask);
+
                         // Handle conversation mode
                         match handle_conversation(&console, &sdk, &mut conversation, input).await {
                             Ok(()) => {
@@ -199,17 +205,21 @@ pub async fn execute(args: InteractiveArgs) -> SageResult<()> {
                 }
             }
             Err(e) => {
-                console.error(&format!("Input error: {e}"));
-
-                // Check if this is EOF or a critical input error
+                // Check if this is EOF or Ctrl+C interruption
                 if e.kind() == std::io::ErrorKind::UnexpectedEof {
                     console.info("Goodbye!");
                     break;
+                } else if e.kind() == std::io::ErrorKind::Interrupted {
+                    // User pressed Ctrl+C during input prompt - exit gracefully
+                    // This handles the case where Ctrl+C is pressed while waiting for user input
+                    console.info("\nGoodbye!");
+                    break;
+                } else {
+                    console.error(&format!("Input error: {e}"));
+                    // For other input errors, try to continue
+                    console.warn("Input error occurred. Please try again.");
+                    continue;
                 }
-
-                // For other input errors, try to continue
-                console.warn("Input error occurred. Please try again.");
-                continue;
             }
         }
 
@@ -426,6 +436,9 @@ async fn execute_conversation_task(
 
     console.info("🤔 Starting conversation...");
 
+    // Set state to executing task
+    set_global_app_state(AppState::ExecutingTask);
+
     let run_options = RunOptions::new()
         .with_trajectory(true);
 
@@ -497,6 +510,9 @@ async fn execute_conversation_continuation(
     let user_message = conversation.messages.last()
         .map(|msg| msg.content.as_str())
         .unwrap_or("No message");
+
+    // Set state to executing task
+    set_global_app_state(AppState::ExecutingTask);
 
     // Get the current execution, if it exists
     if let Some(execution) = &mut conversation.execution {

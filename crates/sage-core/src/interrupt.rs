@@ -25,6 +25,8 @@ pub enum InterruptReason {
     Shutdown,
     /// Manual cancellation
     Manual,
+    /// API Error
+    ApiError,
 }
 
 impl Default for InterruptManager {
