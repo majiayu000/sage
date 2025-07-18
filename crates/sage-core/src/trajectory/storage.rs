@@ -90,17 +90,14 @@ impl TrajectoryStorage for FileStorage {
 
         // Ensure parent directory exists
         if let Some(parent) = file_path.parent() {
-            fs::create_dir_all(parent).await
-                .map_err(|e| SageError::Io(e))?;
+            fs::create_dir_all(parent).await?;
         }
 
         // Serialize record
-        let json = serde_json::to_string_pretty(record)
-            .map_err(|e| SageError::Json(e))?;
+        let json = serde_json::to_string_pretty(record)?;
 
         // Write to file
-        fs::write(&file_path, json).await
-            .map_err(|e| SageError::Io(e))?;
+        fs::write(&file_path, json).await?;
 
         Ok(())
     }
@@ -112,11 +109,9 @@ impl TrajectoryStorage for FileStorage {
             return Ok(None);
         }
         
-        let content = fs::read_to_string(&file_path).await
-            .map_err(|e| SageError::Io(e))?;
-        
-        let record: TrajectoryRecord = serde_json::from_str(&content)
-            .map_err(|e| SageError::Json(e))?;
+        let content = fs::read_to_string(&file_path).await?;
+
+        let record: TrajectoryRecord = serde_json::from_str(&content)?;
         
         Ok(Some(record))
     }
@@ -130,8 +125,7 @@ impl TrajectoryStorage for FileStorage {
         let file_path = self.get_file_path(id);
         
         if file_path.exists() {
-            fs::remove_file(&file_path).await
-                .map_err(|e| SageError::Io(e))?;
+            fs::remove_file(&file_path).await?;
         }
         
         Ok(())

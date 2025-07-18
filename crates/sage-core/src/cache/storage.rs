@@ -88,15 +88,26 @@ impl CacheStorage for MemoryStorage {
     async fn set(&self, key: CacheKey, entry: CacheEntry) -> SageResult<()> {
         let mut cache = self.cache.lock().await;
         let mut stats = self.stats.lock().await;
-        
+
+        // Check if this will cause an eviction
+        let will_evict = cache.len() >= cache.cap().get() && !cache.contains(&key.hash);
+
         // Update stats
         if let Some(old_entry) = cache.put(key.hash, entry.clone()) {
+            // Replacing existing entry
             stats.size_bytes = stats.size_bytes.saturating_sub(old_entry.size_bytes as u64);
+        } else if will_evict {
+            // New entry that caused eviction
+            stats.evictions += 1;
+            // Note: entry_count stays the same due to eviction
         } else {
+            // New entry, no eviction
             stats.entry_count += 1;
         }
+
         stats.size_bytes += entry.size_bytes as u64;
-        
+        stats.entry_count = cache.len(); // Ensure consistency
+
         Ok(())
     }
     
@@ -179,7 +190,7 @@ impl DiskStorage {
         // Create directory if it doesn't exist
         if !base_dir.exists() {
             std::fs::create_dir_all(&base_dir)
-                .map_err(|e| SageError::Io(std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to create cache directory: {}", e))))?;
+                .map_err(|e| SageError::Io(format!("Failed to create cache directory: {}", e)))?;
         }
         
         Ok(Self {

@@ -1,6 +1,6 @@
 //! Streaming response support for LLM clients
 
-use crate::error::{SageError, SageResult};
+use crate::error::SageResult;
 use crate::llm::messages::{LLMMessage, LLMResponse};
 use crate::tools::types::ToolSchema;
 use crate::types::LLMUsage;
@@ -291,8 +291,7 @@ pub mod sse {
 
     /// Convert a stream chunk to SSE event
     pub fn chunk_to_sse(chunk: StreamChunk) -> SageResult<SSEEvent> {
-        let data = serde_json::to_string(&chunk)
-            .map_err(|e| SageError::Json(e))?;
+        let data = serde_json::to_string(&chunk)?;
         
         let event_type = if chunk.is_final {
             "complete"

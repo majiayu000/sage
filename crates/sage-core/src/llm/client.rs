@@ -12,6 +12,8 @@ use reqwest::Client;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::time::Duration;
+use tokio::time::sleep;
+use tracing::warn;
 
 /// LLM client for making requests to various providers
 pub struct LLMClient {
@@ -78,6 +80,76 @@ impl LLMClient {
         &self.config
     }
 
+    /// Execute a request with retry logic and exponential backoff
+    async fn execute_with_retry<F, Fut>(&self, operation: F) -> SageResult<LLMResponse>
+    where
+        F: Fn() -> Fut,
+        Fut: std::future::Future<Output = SageResult<LLMResponse>>,
+    {
+        let max_retries = self.config.max_retries.unwrap_or(3);
+        let mut last_error = None;
+
+        for attempt in 0..=max_retries {
+            match operation().await {
+                Ok(response) => return Ok(response),
+                Err(error) => {
+                    last_error = Some(error.clone());
+
+                    // Check if error is retryable
+                    if !self.is_retryable_error(&error) {
+                        warn!("Non-retryable error encountered: {}", error);
+                        return Err(error);
+                    }
+
+                    if attempt < max_retries {
+                        // Calculate exponential backoff delay: 2^attempt seconds
+                        let delay_secs = 2_u64.pow(attempt as u32);
+                        let delay = Duration::from_secs(delay_secs);
+
+                        warn!(
+                            "Request failed (attempt {}/{}): {}. Retrying in {} seconds...",
+                            attempt + 1,
+                            max_retries + 1,
+                            error,
+                            delay_secs
+                        );
+
+                        sleep(delay).await;
+                    } else {
+                        warn!(
+                            "Request failed after {} attempts: {}",
+                            max_retries + 1,
+                            error
+                        );
+                    }
+                }
+            }
+        }
+
+        // Return the last error if all retries failed
+        Err(last_error.unwrap_or_else(|| SageError::llm("All retry attempts failed")))
+    }
+
+    /// Check if an error is retryable
+    fn is_retryable_error(&self, error: &SageError) -> bool {
+        match error {
+            SageError::Llm(msg) => {
+                // Check for specific retryable error patterns
+                let msg_lower = msg.to_lowercase();
+                msg_lower.contains("503") ||  // Service Unavailable
+                msg_lower.contains("502") ||  // Bad Gateway
+                msg_lower.contains("504") ||  // Gateway Timeout
+                msg_lower.contains("429") ||  // Too Many Requests
+                msg_lower.contains("overloaded") ||
+                msg_lower.contains("timeout") ||
+                msg_lower.contains("connection") ||
+                msg_lower.contains("network")
+            }
+            SageError::Http(_) => true,  // HTTP errors are generally retryable
+            _ => false,
+        }
+    }
+
     /// Send a chat completion request
     pub async fn chat(
         &self,
@@ -99,14 +171,29 @@ impl LLMClient {
         // - Response post-processing and filtering
         // - Metrics collection and monitoring
 
+        // Execute the request with retry logic
         match &self.provider {
-            LLMProvider::OpenAI => self.openai_chat(messages, tools).await,
-            LLMProvider::Anthropic => self.anthropic_chat(messages, tools).await,
-            LLMProvider::Google => self.google_chat(messages, tools).await,
-            LLMProvider::Azure => self.azure_chat(messages, tools).await,
-            LLMProvider::OpenRouter => self.openrouter_chat(messages, tools).await,
-            LLMProvider::Doubao => self.doubao_chat(messages, tools).await,
-            LLMProvider::Ollama => self.ollama_chat(messages, tools).await,
+            LLMProvider::OpenAI => {
+                self.execute_with_retry(|| self.openai_chat(messages, tools)).await
+            }
+            LLMProvider::Anthropic => {
+                self.execute_with_retry(|| self.anthropic_chat(messages, tools)).await
+            }
+            LLMProvider::Google => {
+                self.execute_with_retry(|| self.google_chat(messages, tools)).await
+            }
+            LLMProvider::Azure => {
+                self.execute_with_retry(|| self.azure_chat(messages, tools)).await
+            }
+            LLMProvider::OpenRouter => {
+                self.execute_with_retry(|| self.openrouter_chat(messages, tools)).await
+            }
+            LLMProvider::Doubao => {
+                self.execute_with_retry(|| self.doubao_chat(messages, tools)).await
+            }
+            LLMProvider::Ollama => {
+                self.execute_with_retry(|| self.ollama_chat(messages, tools)).await
+            }
             LLMProvider::Custom(name) => {
                 // TODO: Implement plugin system for custom providers
                 // - Add provider plugin API

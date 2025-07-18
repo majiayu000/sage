@@ -103,3 +103,5 @@ docs/_build/
 site/
 
 doc_consistency_report.json
+
+cache/

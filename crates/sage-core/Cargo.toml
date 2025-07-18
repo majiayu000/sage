@@ -45,6 +45,7 @@ chrono = { workspace = true }
 dirs = { workspace = true }
 shellexpand = { workspace = true }
 lru = "0.12"
+flate2 = "1.0"
 
 # Async traits
 async-trait = { workspace = true }
@@ -59,6 +60,7 @@ dotenv = { workspace = true }
 [dev-dependencies]
 mockall = { workspace = true }
 tokio-test = "0.4"
+tracing-subscriber = { workspace = true }
 
 [[example]]
 name = "markdown_demo"
@@ -71,3 +73,11 @@ path = "../../examples/test_markdown_agent.rs"
 [[example]]
 name = "ui_demo"
 path = "../../examples/ui_demo.rs"
+
+[[example]]
+name = "retry_test"
+path = "../../examples/retry_test.rs"
+
+[[example]]
+name = "retry_simulation"
+path = "../../examples/retry_simulation.rs"

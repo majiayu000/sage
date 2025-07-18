@@ -13,6 +13,8 @@ use tokio::sync::Mutex;
 /// Complete trajectory record - matches Python version format
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrajectoryRecord {
+    /// Unique identifier for this trajectory
+    pub id: crate::types::Id,
     /// Task description
     pub task: String,
     /// Start time in ISO format
@@ -155,6 +157,7 @@ impl TrajectoryRecorder {
         self.start_time = Some(start_time);
 
         let record = TrajectoryRecord {
+            id: uuid::Uuid::new_v4(),
             task: task.description.clone(),
             start_time: start_time.to_rfc3339(),
             end_time: String::new(), // Will be filled when recording ends

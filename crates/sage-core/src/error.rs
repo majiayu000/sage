@@ -6,7 +6,7 @@ use thiserror::Error;
 pub type SageResult<T> = Result<T, SageError>;
 
 /// Main error type for Sage Agent
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum SageError {
     /// Configuration related errors
     #[error("Configuration error: {0}")]
@@ -30,15 +30,15 @@ pub enum SageError {
 
     /// IO errors
     #[error("IO error: {0}")]
-    Io(#[from] std::io::Error),
+    Io(String),
 
     /// JSON serialization/deserialization errors
     #[error("JSON error: {0}")]
-    Json(#[from] serde_json::Error),
+    Json(String),
 
     /// HTTP request errors
     #[error("HTTP error: {0}")]
-    Http(#[from] reqwest::Error),
+    Http(String),
 
     /// Invalid input errors
     #[error("Invalid input: {0}")]
@@ -54,7 +54,7 @@ pub enum SageError {
 
     /// Generic error with context
     #[error("Error: {0}")]
-    Other(#[from] anyhow::Error),
+    Other(String),
 }
 
 impl SageError {
@@ -94,6 +94,30 @@ impl SageError {
     /// Create a new timeout error
     pub const fn timeout(seconds: u64) -> Self {
         Self::Timeout { seconds }
+    }
+}
+
+impl From<anyhow::Error> for SageError {
+    fn from(error: anyhow::Error) -> Self {
+        Self::Other(error.to_string())
+    }
+}
+
+impl From<std::io::Error> for SageError {
+    fn from(error: std::io::Error) -> Self {
+        Self::Io(error.to_string())
+    }
+}
+
+impl From<serde_json::Error> for SageError {
+    fn from(error: serde_json::Error) -> Self {
+        Self::Json(error.to_string())
+    }
+}
+
+impl From<reqwest::Error> for SageError {
+    fn from(error: reqwest::Error) -> Self {
+        Self::Http(error.to_string())
     }
 }
 
