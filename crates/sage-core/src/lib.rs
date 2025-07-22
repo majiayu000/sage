@@ -29,12 +29,12 @@ pub mod ui;
 // - Implement plugin marketplace integration
 
 // Re-export commonly used types
-pub use agent::{Agent, AgentExecution, AgentStep, AgentState};
+pub use agent::{Agent, AgentExecution, AgentStep, AgentState, ReactiveAgent, ReactiveResponse, ClaudeStyleAgent, ReactiveExecutionManager};
 pub use cache::{CacheManager, LLMCache, CacheKey, CacheEntry, CacheConfig};
 pub use config::{Config, ModelParameters, LakeviewConfig};
 pub use error::{SageError, SageResult};
 pub use interrupt::{InterruptManager, InterruptReason, TaskScope};
 pub use llm::{LLMClient, LLMMessage, LLMResponse, LLMProvider};
-pub use tools::{Tool, ToolCall, ToolExecutor, ToolResult};
+pub use tools::{Tool, ToolCall, ToolExecutor, ToolResult, BatchToolExecutor, BatchStrategy};
 pub use trajectory::TrajectoryRecorder;
 pub use types::*;

@@ -1,9 +1,12 @@
 //! Sage Agent CLI application
 
+mod claude_mode;
 mod commands;
 mod console;
 mod progress;
 mod signal_handler;
+mod ui_launcher;
+mod ui_backend;
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -32,6 +35,10 @@ struct Cli {
     /// Enable verbose output (used when no subcommand is provided)
     #[arg(long, short)]
     verbose: bool,
+
+    /// Use modern UI (Ink + React) instead of traditional CLI
+    #[arg(long)]
+    modern_ui: bool,
 }
 
 #[derive(Subcommand)]
@@ -84,6 +91,10 @@ enum Commands {
         /// Enable verbose output
         #[arg(long, short)]
         verbose: bool,
+
+        /// Use modern UI (Ink + React)
+        #[arg(long)]
+        modern_ui: bool,
     },
     
     /// Interactive mode
@@ -103,6 +114,14 @@ enum Commands {
         /// Enable verbose output
         #[arg(long, short)]
         verbose: bool,
+
+        /// Use modern UI (Ink + React)
+        #[arg(long)]
+        modern_ui: bool,
+
+        /// Use Claude Code style execution (lightweight, fast responses)
+        #[arg(long)]
+        claude_style: bool,
     },
     
     /// Configuration management
@@ -189,12 +208,20 @@ async fn main() -> SageResult<()> {
     match cli.command {
         // If no subcommand is provided, default to interactive mode
         None => {
-            commands::interactive::execute(commands::interactive::InteractiveArgs {
-                config_file: cli.config_file,
-                trajectory_file: cli.trajectory_file,
-                working_dir: cli.working_dir,
-            })
-            .await
+            if cli.modern_ui {
+                ui_launcher::launch_modern_ui(
+                    &cli.config_file,
+                    cli.trajectory_file.as_ref().map(|p| p.to_str()).flatten(),
+                    cli.working_dir.as_ref().map(|p| p.to_str()).flatten()
+                ).await
+            } else {
+                commands::interactive::execute(commands::interactive::InteractiveArgs {
+                    config_file: cli.config_file,
+                    trajectory_file: cli.trajectory_file,
+                    working_dir: cli.working_dir,
+                })
+                .await
+            }
         }
         Some(Commands::Run {
             task,
@@ -209,7 +236,10 @@ async fn main() -> SageResult<()> {
             patch_path,
             must_patch,
             verbose,
+            modern_ui: _,
         }) => {
+            // For now, Run command doesn't use modern UI
+            // TODO: Add modern UI support for run command
             commands::run::execute(commands::run::RunArgs {
                 task,
                 provider,
@@ -232,13 +262,25 @@ async fn main() -> SageResult<()> {
             trajectory_file,
             working_dir,
             verbose: _,
+            modern_ui,
+            claude_style,
         }) => {
-            commands::interactive::execute(commands::interactive::InteractiveArgs {
-                config_file,
-                trajectory_file,
-                working_dir,
-            })
-            .await
+            if claude_style {
+                claude_mode::run_claude_interactive(&config_file).await
+            } else if modern_ui {
+                ui_launcher::launch_modern_ui(
+                    &config_file,
+                    trajectory_file.as_ref().map(|p| p.to_str()).flatten(),
+                    working_dir.as_ref().map(|p| p.to_str()).flatten()
+                ).await
+            } else {
+                commands::interactive::execute(commands::interactive::InteractiveArgs {
+                    config_file,
+                    trajectory_file,
+                    working_dir,
+                })
+                .await
+            }
         }
 
         Some(Commands::Config { action }) => match action {

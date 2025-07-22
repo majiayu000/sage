@@ -3,6 +3,8 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
 
+pub mod simple;
+
 /// Global interrupt manager for handling task cancellation
 #[derive(Debug, Clone)]
 pub struct InterruptManager {

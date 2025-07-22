@@ -13,8 +13,8 @@ edition = "2024"
 authors = ["Sage Agent Team"]
 license = "MIT"
 repository = "https://github.com/majiayu000/sage"
-description = "LLM-based agent for general purpose software engineering tasks"
-keywords = ["llm", "agent", "ai", "automation", "software-engineering"]
+description = "[ARCHIVED] LLM-based agent for general purpose software engineering tasks - Reference implementation in Rust"
+keywords = ["llm", "agent", "ai", "automation", "software-engineering", "archived", "reference"]
 categories = ["command-line-utilities", "development-tools"]
 
 [workspace.dependencies]

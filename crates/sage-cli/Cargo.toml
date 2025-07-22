@@ -51,3 +51,8 @@ chrono = { workspace = true }
 # Signal handling
 signal-hook = { workspace = true }
 signal-hook-tokio = { workspace = true }
+
+# File system utilities
+walkdir = "2.4"
+
+
