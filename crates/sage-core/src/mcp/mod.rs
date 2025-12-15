@@ -32,6 +32,7 @@
 //! let tools = registry.all_tools().await;
 //! ```
 
+pub mod cache;
 pub mod client;
 pub mod discovery;
 pub mod error;
@@ -41,6 +42,7 @@ pub mod schema_translator;
 pub mod transport;
 pub mod types;
 
+pub use cache::{CacheConfig, CacheStats, McpCache};
 pub use client::McpClient;
 pub use discovery::{DiscoverySource, McpServerManager, McpServerManagerBuilder, ServerHealth, ServerStatus};
 pub use error::McpError;
