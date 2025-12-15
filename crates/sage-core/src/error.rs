@@ -121,4 +121,16 @@ impl From<reqwest::Error> for SageError {
     }
 }
 
+impl From<crate::mcp::McpError> for SageError {
+    fn from(error: crate::mcp::McpError) -> Self {
+        Self::Agent(format!("MCP error: {}", error))
+    }
+}
+
+impl From<crate::agent::lifecycle::LifecycleError> for SageError {
+    fn from(error: crate::agent::lifecycle::LifecycleError) -> Self {
+        Self::Agent(format!("Lifecycle error: {}", error))
+    }
+}
+
 

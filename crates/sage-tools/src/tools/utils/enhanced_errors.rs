@@ -69,6 +69,8 @@ impl EnhancedToolError {
             ToolError::Timeout => "Timeout".to_string(),
             ToolError::Json(_) => "Json".to_string(),
             ToolError::ExecutionFailed(_) => "ExecutionFailed".to_string(),
+            ToolError::ValidationFailed(_) => "ValidationFailed".to_string(),
+            ToolError::Cancelled => "Cancelled".to_string(),
             ToolError::Other(_) => "Other".to_string(),
         }
     }
@@ -113,6 +115,8 @@ impl EnhancedToolError {
             ToolError::Timeout => ErrorCategory::Resource,
             ToolError::Json(_) => ErrorCategory::UserInput,
             ToolError::ExecutionFailed(_) => ErrorCategory::Internal,
+            ToolError::ValidationFailed(_) => ErrorCategory::UserInput,
+            ToolError::Cancelled => ErrorCategory::Internal,
             ToolError::Other(_) => ErrorCategory::Internal,
         }
     }
@@ -127,6 +131,8 @@ impl EnhancedToolError {
             ToolError::Timeout => true,
             ToolError::Json(_) => true,
             ToolError::ExecutionFailed(_) => false,
+            ToolError::ValidationFailed(_) => true,
+            ToolError::Cancelled => false,
             ToolError::Other(_) => false,
         }
     }

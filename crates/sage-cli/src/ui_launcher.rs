@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::process::Command;
 use sage_core::error::{SageError, SageResult};
-use crate::ui_backend::{init_ui_backend, start_ui_bridge_server};
+use crate::ui_backend::init_ui_backend;
 
 /// Launch the modern UI (Ink + React) interface
 pub async fn launch_modern_ui(

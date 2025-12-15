@@ -823,18 +823,58 @@ impl LLMClient {
     }
 
     /// Parse Anthropic response
+    ///
+    /// Anthropic responses have a content array that may contain:
+    /// - {"type": "text", "text": "..."} - Text content
+    /// - {"type": "tool_use", "id": "...", "name": "...", "input": {...}} - Tool calls
     fn parse_anthropic_response(&self, response: Value) -> SageResult<LLMResponse> {
-        let content = response["content"][0]["text"]
-            .as_str()
-            .unwrap_or("")
-            .to_string();
+        let mut content = String::new();
+        let mut tool_calls = Vec::new();
+
+        // Iterate through content array to extract text and tool_use blocks
+        if let Some(content_array) = response["content"].as_array() {
+            for block in content_array {
+                match block["type"].as_str() {
+                    Some("text") => {
+                        // Append text content
+                        if let Some(text) = block["text"].as_str() {
+                            if !content.is_empty() {
+                                content.push('\n');
+                            }
+                            content.push_str(text);
+                        }
+                    }
+                    Some("tool_use") => {
+                        // Parse tool_use block
+                        let tool_call = crate::tools::types::ToolCall {
+                            id: block["id"].as_str().unwrap_or("").to_string(),
+                            name: block["name"].as_str().unwrap_or("").to_string(),
+                            arguments: block["input"]
+                                .as_object()
+                                .map(|obj| {
+                                    obj.iter()
+                                        .map(|(k, v)| (k.clone(), v.clone()))
+                                        .collect()
+                                })
+                                .unwrap_or_default(),
+                            call_id: None,
+                        };
+                        tool_calls.push(tool_call);
+                    }
+                    _ => {
+                        // Unknown content type, ignore
+                    }
+                }
+            }
+        }
 
         let usage = if let Some(usage_data) = response["usage"].as_object() {
             Some(LLMUsage {
                 prompt_tokens: usage_data["input_tokens"].as_u64().unwrap_or(0) as u32,
                 completion_tokens: usage_data["output_tokens"].as_u64().unwrap_or(0) as u32,
-                total_tokens: (usage_data["input_tokens"].as_u64().unwrap_or(0) + 
-                              usage_data["output_tokens"].as_u64().unwrap_or(0)) as u32,
+                total_tokens: (usage_data["input_tokens"].as_u64().unwrap_or(0)
+                    + usage_data["output_tokens"].as_u64().unwrap_or(0))
+                    as u32,
                 cost_usd: None,
             })
         } else {
@@ -843,7 +883,7 @@ impl LLMClient {
 
         Ok(LLMResponse {
             content,
-            tool_calls: Vec::new(), // TODO: Parse Anthropic tool calls
+            tool_calls,
             usage,
             model: response["model"].as_str().map(|s| s.to_string()),
             finish_reason: response["stop_reason"].as_str().map(|s| s.to_string()),
@@ -1149,14 +1189,268 @@ impl LLMClient {
         Ok(Box::pin(stream))
     }
 
-    /// Placeholder implementations for other providers
+    /// Anthropic streaming chat completion
+    ///
+    /// Handles Anthropic's SSE event types:
+    /// - message_start: Initial message metadata
+    /// - content_block_start: Start of a content block (text or tool_use)
+    /// - content_block_delta: Incremental content (text_delta or input_json_delta)
+    /// - content_block_stop: End of a content block
+    /// - message_delta: Final message metadata (stop_reason, usage)
+    /// - message_stop: Stream end marker
     async fn anthropic_chat_stream(
         &self,
-        _messages: &[LLMMessage],
-        _tools: Option<&[ToolSchema]>,
+        messages: &[LLMMessage],
+        tools: Option<&[ToolSchema]>,
     ) -> SageResult<LLMStream> {
-        // TODO: Implement Anthropic streaming
-        Err(SageError::llm("Anthropic streaming not yet implemented"))
+        use crate::llm::sse_decoder::SSEDecoder;
+        use futures::StreamExt;
+
+        let url = format!("{}/v1/messages", self.config.get_base_url());
+
+        let (system_message, user_messages) = self.extract_system_message(messages);
+
+        let mut request_body = json!({
+            "model": self.model_params.model,
+            "messages": self.convert_messages_for_anthropic(&user_messages)?,
+            "stream": true,
+        });
+
+        if let Some(system) = system_message {
+            request_body["system"] = json!(system);
+        }
+
+        // Add optional parameters - max_tokens is required for Anthropic
+        request_body["max_tokens"] = json!(self.model_params.max_tokens.unwrap_or(4096));
+
+        if let Some(temperature) = self.model_params.temperature {
+            request_body["temperature"] = json!(temperature);
+        }
+        if let Some(top_p) = self.model_params.top_p {
+            request_body["top_p"] = json!(top_p);
+        }
+        if let Some(stop) = &self.model_params.stop {
+            request_body["stop_sequences"] = json!(stop);
+        }
+
+        // Add tools if provided
+        if let Some(tools) = tools {
+            if !tools.is_empty() {
+                request_body["tools"] = json!(self.convert_tools_for_anthropic(tools)?);
+            }
+        }
+
+        let mut request = self.http_client.post(&url).json(&request_body);
+
+        // Add authentication
+        if let Some(api_key) = self.config.get_api_key() {
+            request = request.header("x-api-key", api_key);
+        }
+
+        // Add API version (required for Anthropic)
+        let api_version = self
+            .config
+            .api_version
+            .as_deref()
+            .unwrap_or("2023-06-01");
+        request = request.header("anthropic-version", api_version);
+
+        let response = request
+            .send()
+            .await
+            .map_err(|e| SageError::llm(format!("Anthropic streaming request failed: {}", e)))?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(SageError::llm(format!(
+                "Anthropic streaming API error: {}",
+                error_text
+            )));
+        }
+
+        // State for accumulating tool calls
+        struct StreamState {
+            decoder: SSEDecoder,
+            // Current content block being built
+            current_block_type: Option<String>,
+            current_block_id: Option<String>,
+            current_tool_name: Option<String>,
+            tool_input_buffer: String,
+            // Accumulated tool calls to emit
+            pending_tool_calls: Vec<crate::tools::types::ToolCall>,
+            // Final message info
+            stop_reason: Option<String>,
+            usage: Option<LLMUsage>,
+        }
+
+        let state = std::sync::Arc::new(tokio::sync::Mutex::new(StreamState {
+            decoder: SSEDecoder::new(),
+            current_block_type: None,
+            current_block_id: None,
+            current_tool_name: None,
+            tool_input_buffer: String::new(),
+            pending_tool_calls: Vec::new(),
+            stop_reason: None,
+            usage: None,
+        }));
+
+        let byte_stream = response.bytes_stream();
+
+        let stream = byte_stream.flat_map(move |chunk_result| {
+            let state = state.clone();
+            futures::stream::once(async move {
+                match chunk_result {
+                    Ok(chunk) => {
+                        let mut state = state.lock().await;
+                        let events = state.decoder.feed(&chunk);
+                        let mut chunks: Vec<SageResult<StreamChunk>> = Vec::new();
+
+                        for event in events {
+                            // Parse the event data as JSON
+                            let data: Value = match serde_json::from_str(&event.data) {
+                                Ok(v) => v,
+                                Err(_) => continue,
+                            };
+
+                            let event_type = event
+                                .event_type
+                                .as_deref()
+                                .or_else(|| data["type"].as_str());
+
+                            match event_type {
+                                Some("message_start") => {
+                                    // Message started, could extract model info
+                                }
+                                Some("content_block_start") => {
+                                    // Start of a content block
+                                    let block_type = data["content_block"]["type"].as_str();
+                                    state.current_block_type = block_type.map(String::from);
+
+                                    if block_type == Some("tool_use") {
+                                        state.current_block_id = data["content_block"]["id"]
+                                            .as_str()
+                                            .map(String::from);
+                                        state.current_tool_name = data["content_block"]["name"]
+                                            .as_str()
+                                            .map(String::from);
+                                        state.tool_input_buffer.clear();
+                                    }
+                                }
+                                Some("content_block_delta") => {
+                                    let delta = &data["delta"];
+
+                                    match delta["type"].as_str() {
+                                        Some("text_delta") => {
+                                            if let Some(text) = delta["text"].as_str() {
+                                                if !text.is_empty() {
+                                                    chunks.push(Ok(StreamChunk::content(text)));
+                                                }
+                                            }
+                                        }
+                                        Some("input_json_delta") => {
+                                            // Accumulate tool input JSON
+                                            if let Some(partial) = delta["partial_json"].as_str() {
+                                                state.tool_input_buffer.push_str(partial);
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                                Some("content_block_stop") => {
+                                    // End of content block
+                                    if state.current_block_type.as_deref() == Some("tool_use") {
+                                        // Parse accumulated JSON and create tool call
+                                        let arguments: HashMap<String, Value> =
+                                            serde_json::from_str(&state.tool_input_buffer)
+                                                .unwrap_or_default();
+
+                                        let tool_call = crate::tools::types::ToolCall {
+                                            id: state
+                                                .current_block_id
+                                                .take()
+                                                .unwrap_or_default(),
+                                            name: state
+                                                .current_tool_name
+                                                .take()
+                                                .unwrap_or_default(),
+                                            arguments,
+                                            call_id: None,
+                                        };
+
+                                        state.pending_tool_calls.push(tool_call);
+                                        state.tool_input_buffer.clear();
+                                    }
+                                    state.current_block_type = None;
+                                }
+                                Some("message_delta") => {
+                                    // Final message info
+                                    if let Some(stop_reason) = data["delta"]["stop_reason"].as_str()
+                                    {
+                                        state.stop_reason = Some(stop_reason.to_string());
+                                    }
+
+                                    // Extract usage from message_delta
+                                    if let Some(usage_data) = data["usage"].as_object() {
+                                        state.usage = Some(LLMUsage {
+                                            prompt_tokens: 0, // Not provided in delta
+                                            completion_tokens: usage_data["output_tokens"]
+                                                .as_u64()
+                                                .unwrap_or(0)
+                                                as u32,
+                                            total_tokens: usage_data["output_tokens"]
+                                                .as_u64()
+                                                .unwrap_or(0)
+                                                as u32,
+                                            cost_usd: None,
+                                        });
+                                    }
+                                }
+                                Some("message_stop") => {
+                                    // Emit pending tool calls if any
+                                    if !state.pending_tool_calls.is_empty() {
+                                        let tool_calls =
+                                            std::mem::take(&mut state.pending_tool_calls);
+                                        chunks.push(Ok(StreamChunk::tool_calls(tool_calls)));
+                                    }
+
+                                    // Emit final chunk
+                                    chunks.push(Ok(StreamChunk::final_chunk(
+                                        state.usage.take(),
+                                        state.stop_reason.take(),
+                                    )));
+                                }
+                                Some("ping") | Some("error") => {
+                                    // Handle ping (keep-alive) or errors
+                                    if event_type == Some("error") {
+                                        let error_msg = data["error"]["message"]
+                                            .as_str()
+                                            .unwrap_or("Unknown error");
+                                        chunks.push(Err(SageError::llm(format!(
+                                            "Anthropic stream error: {}",
+                                            error_msg
+                                        ))));
+                                    }
+                                }
+                                _ => {
+                                    // Unknown event type, ignore
+                                }
+                            }
+                        }
+
+                        futures::stream::iter(chunks)
+                    }
+                    Err(e) => futures::stream::iter(vec![Err(SageError::llm(format!(
+                        "Stream error: {}",
+                        e
+                    )))]),
+                }
+            })
+        });
+
+        // Flatten the nested stream
+        let flattened = stream.flatten();
+
+        Ok(Box::pin(flattened))
     }
 
     async fn google_chat_stream(

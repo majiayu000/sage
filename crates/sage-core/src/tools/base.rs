@@ -1,9 +1,10 @@
 //! Base trait and types for tools
 
 use crate::error::SageError;
+use crate::tools::permission::{PermissionResult, RiskLevel, ToolContext};
 use crate::tools::types::{ToolCall, ToolResult, ToolSchema};
 use async_trait::async_trait;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 /// Error type for tool operations
 #[derive(Debug, thiserror::Error)]
@@ -11,34 +12,59 @@ pub enum ToolError {
     /// Invalid arguments provided to the tool
     #[error("Invalid arguments: {0}")]
     InvalidArguments(String),
-    
+
     /// Tool execution failed
     #[error("Execution failed: {0}")]
     ExecutionFailed(String),
-    
+
     /// Tool not found
     #[error("Tool not found: {0}")]
     NotFound(String),
-    
+
     /// Tool timeout
     #[error("Tool execution timeout")]
     Timeout,
-    
+
     /// Permission denied
     #[error("Permission denied: {0}")]
     PermissionDenied(String),
-    
+
+    /// Validation failed
+    #[error("Validation failed: {0}")]
+    ValidationFailed(String),
+
     /// IO error
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-    
+
     /// JSON error
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
-    
+
+    /// Cancelled
+    #[error("Tool execution cancelled")]
+    Cancelled,
+
     /// Other error
     #[error("Other error: {0}")]
     Other(String),
+}
+
+/// Concurrency mode for tool execution
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ConcurrencyMode {
+    /// Tool can run in parallel with any other tool
+    #[default]
+    Parallel,
+
+    /// Tool must run sequentially (one at a time globally)
+    Sequential,
+
+    /// Tool can run in parallel but with a maximum count
+    Limited(usize),
+
+    /// Tool can run in parallel but not with tools of the same type
+    ExclusiveByType,
 }
 
 impl From<ToolError> for SageError {
@@ -49,65 +75,133 @@ impl From<ToolError> for SageError {
             ToolError::ExecutionFailed(msg) => SageError::tool("unknown", msg),
             ToolError::Timeout => SageError::tool("unknown", "Tool execution timeout"),
             ToolError::PermissionDenied(msg) => SageError::tool("unknown", msg),
+            ToolError::ValidationFailed(msg) => SageError::tool("unknown", msg),
             ToolError::Io(err) => SageError::tool("unknown", err.to_string()),
             ToolError::Json(err) => SageError::tool("unknown", err.to_string()),
+            ToolError::Cancelled => SageError::tool("unknown", "Cancelled"),
             ToolError::Other(msg) => SageError::tool("unknown", msg),
         }
     }
 }
 
 /// Base trait for all tools
+///
+/// Tools are capabilities that agents can use to interact with the environment.
+/// Each tool has a schema for validation, permission checking, and execution logic.
 #[async_trait]
 pub trait Tool: Send + Sync {
-    /// Get the tool's name
+    /// Get the tool's unique name
+    ///
+    /// Tool names must be unique within a registry and should follow
+    /// the pattern: lowercase with underscores (e.g., "read_file").
     fn name(&self) -> &str;
 
     /// Get the tool's description
+    ///
+    /// This description is included in the system prompt to help the
+    /// LLM understand when to use this tool.
     fn description(&self) -> &str;
 
-    /// Get the tool's JSON schema
+    /// Get the tool's JSON schema for input parameters
     fn schema(&self) -> ToolSchema;
 
     /// Execute the tool with the given arguments
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError>;
 
-    /// Validate the tool call arguments (optional override)
+    /// Validate the tool call arguments
+    ///
+    /// Default implementation does nothing. Override for custom validation.
     fn validate(&self, call: &ToolCall) -> Result<(), ToolError> {
-        // Default implementation - tools can override for custom validation
-        let _ = call; // Suppress unused parameter warning
+        let _ = call;
         Ok(())
     }
 
-    /// Get the maximum execution time for this tool in seconds (optional)
+    /// Check if the tool call is permitted in the current context
+    ///
+    /// This method is called before execution to determine if the
+    /// operation should be allowed, denied, or requires user approval.
+    async fn check_permission(
+        &self,
+        _call: &ToolCall,
+        _context: &ToolContext,
+    ) -> PermissionResult {
+        // Default: allow all operations
+        PermissionResult::Allow
+    }
+
+    /// Get the risk level for this tool
+    ///
+    /// Used for permission checking and user notifications.
+    fn risk_level(&self) -> RiskLevel {
+        RiskLevel::Medium
+    }
+
+    /// Get the concurrency mode for this tool
+    ///
+    /// Determines whether multiple instances can run in parallel.
+    fn concurrency_mode(&self) -> ConcurrencyMode {
+        ConcurrencyMode::Parallel
+    }
+
+    /// Get the maximum execution time as Duration
+    fn max_execution_duration(&self) -> Option<Duration> {
+        Some(Duration::from_secs(300)) // Default 5 minutes
+    }
+
+    /// Get the maximum execution time in seconds (for backwards compatibility)
     fn max_execution_time(&self) -> Option<u64> {
-        Some(300) // Default 5 minutes
+        self.max_execution_duration().map(|d| d.as_secs())
+    }
+
+    /// Whether this tool only reads data (no side effects)
+    fn is_read_only(&self) -> bool {
+        false
     }
 
     /// Whether this tool can be called in parallel with other tools
     fn supports_parallel_execution(&self) -> bool {
-        true
+        matches!(
+            self.concurrency_mode(),
+            ConcurrencyMode::Parallel | ConcurrencyMode::Limited(_)
+        )
     }
-    
+
+    /// Render the tool call for display to the user
+    fn render_call(&self, call: &ToolCall) -> String {
+        format!(
+            "{}({})",
+            self.name(),
+            serde_json::to_string(&call.arguments).unwrap_or_default()
+        )
+    }
+
+    /// Render the tool result for display to the user
+    fn render_result(&self, result: &ToolResult) -> String {
+        if result.success {
+            result.output.clone().unwrap_or_default()
+        } else {
+            format!("Error: {}", result.error.clone().unwrap_or_default())
+        }
+    }
+
     /// Execute the tool with timing and error handling
     async fn execute_with_timing(&self, call: &ToolCall) -> ToolResult {
         let start_time = Instant::now();
-        
+
         // Validate arguments first
         if let Err(err) = self.validate(call) {
             return ToolResult::error(&call.id, self.name(), err.to_string())
                 .with_execution_time(start_time.elapsed().as_millis() as u64);
         }
-        
+
         // Execute the tool
         match self.execute(call).await {
             Ok(mut result) => {
                 result.execution_time_ms = Some(start_time.elapsed().as_millis() as u64);
                 result
             }
-            Err(err) => {
-                ToolResult::error(&call.id, self.name(), err.to_string())
-                    .with_execution_time(start_time.elapsed().as_millis() as u64)
-            }
+            Err(err) => ToolResult::error(&call.id, self.name(), err.to_string())
+                .with_execution_time(start_time.elapsed().as_millis() as u64),
         }
     }
 }
