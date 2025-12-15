@@ -163,6 +163,10 @@ pub struct Config {
     pub default_provider: String,
     /// Maximum number of execution steps
     pub max_steps: u32,
+    /// Total token budget across all steps (input + output)
+    /// When exceeded, agent will stop with a budget exceeded error
+    #[serde(default)]
+    pub total_token_budget: Option<u64>,
     /// Model parameters for each provider
     pub model_providers: HashMap<String, ModelParameters>,
     /// Lakeview configuration
@@ -298,6 +302,7 @@ impl Default for Config {
         Self {
             default_provider: "anthropic".to_string(),
             max_steps: 20,
+            total_token_budget: None, // No limit by default
             model_providers,
             lakeview_config: None,
             enable_lakeview: true, // Python version defaults to true

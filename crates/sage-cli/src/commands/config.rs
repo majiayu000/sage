@@ -197,6 +197,7 @@ fn create_sample_config() -> Config {
     Config {
         default_provider: "openai".to_string(),
         max_steps: 20,
+        total_token_budget: None,
         model_providers,
         lakeview_config: None,
         enable_lakeview: false,

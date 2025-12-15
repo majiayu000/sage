@@ -136,6 +136,7 @@ impl ConfigLoader {
         let mut config = Config {
             default_provider: String::new(), // Don't set default here
             max_steps: 0, // Don't set default here
+            total_token_budget: None,
             model_providers: HashMap::new(),
             lakeview_config: None,
             enable_lakeview: false,
@@ -235,6 +236,7 @@ impl ConfigLoader {
         let mut config = Config {
             default_provider: String::new(), // Don't set default here
             max_steps: 0, // Don't set default here
+            total_token_budget: None,
             model_providers: HashMap::new(),
             lakeview_config: None,
             enable_lakeview: false,

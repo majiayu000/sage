@@ -1,5 +1,5 @@
 //! Reactive Agent - Claude Code style execution model
-//! 
+//!
 //! This module implements a lightweight, response-driven execution model
 //! inspired by Claude Code's design philosophy.
 
@@ -12,8 +12,60 @@ use crate::tools::batch_executor::BatchToolExecutor;
 use crate::tools::types::{ToolCall, ToolResult};
 use crate::types::{Id, TaskMetadata};
 use async_trait::async_trait;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 use uuid::Uuid;
+
+/// Token usage tracking across all steps
+#[derive(Debug, Default)]
+pub struct TokenUsage {
+    /// Total input tokens consumed
+    pub input_tokens: AtomicU64,
+    /// Total output tokens consumed
+    pub output_tokens: AtomicU64,
+}
+
+impl TokenUsage {
+    /// Create a new token usage tracker
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Add token usage from a single step
+    pub fn add(&self, input: u64, output: u64) {
+        self.input_tokens.fetch_add(input, Ordering::Relaxed);
+        self.output_tokens.fetch_add(output, Ordering::Relaxed);
+    }
+
+    /// Get total tokens (input + output)
+    pub fn total(&self) -> u64 {
+        self.input_tokens.load(Ordering::Relaxed) + self.output_tokens.load(Ordering::Relaxed)
+    }
+
+    /// Get input tokens
+    pub fn input(&self) -> u64 {
+        self.input_tokens.load(Ordering::Relaxed)
+    }
+
+    /// Get output tokens
+    pub fn output(&self) -> u64 {
+        self.output_tokens.load(Ordering::Relaxed)
+    }
+
+    /// Check if budget is exceeded
+    pub fn is_budget_exceeded(&self, budget: Option<u64>) -> bool {
+        if let Some(limit) = budget {
+            self.total() >= limit
+        } else {
+            false
+        }
+    }
+
+    /// Get remaining budget
+    pub fn remaining(&self, budget: Option<u64>) -> Option<u64> {
+        budget.map(|limit| limit.saturating_sub(self.total()))
+    }
+}
 
 /// Response-driven agent execution result
 #[derive(Debug, Clone)]
@@ -57,6 +109,10 @@ pub struct ClaudeStyleAgent {
     llm_client: LLMClient,
     batch_executor: BatchToolExecutor,
     conversation_history: Vec<LLMMessage>,
+    /// Token usage tracking
+    token_usage: TokenUsage,
+    /// Current step count
+    current_step: u32,
 }
 
 impl ClaudeStyleAgent {
@@ -86,6 +142,8 @@ impl ClaudeStyleAgent {
             llm_client,
             batch_executor,
             conversation_history: Vec::new(),
+            token_usage: TokenUsage::new(),
+            current_step: 0,
         })
     }
     
@@ -145,22 +203,82 @@ sequential requests."#,
             .collect::<Vec<_>>()
             .join("\n")
     }
+
+    /// Check if we can continue execution (budget and step limits)
+    fn can_continue(&self) -> Result<(), SageError> {
+        // Check step limit
+        if self.current_step >= self.config.max_steps {
+            return Err(SageError::agent(format!(
+                "Max steps ({}) reached. Total tokens used: {} (input: {}, output: {})",
+                self.config.max_steps,
+                self.token_usage.total(),
+                self.token_usage.input(),
+                self.token_usage.output()
+            )));
+        }
+
+        // Check token budget
+        if self.token_usage.is_budget_exceeded(self.config.total_token_budget) {
+            return Err(SageError::agent(format!(
+                "Token budget ({}) exceeded. Total tokens used: {} (input: {}, output: {})",
+                self.config.total_token_budget.unwrap_or(0),
+                self.token_usage.total(),
+                self.token_usage.input(),
+                self.token_usage.output()
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// Get current token usage
+    pub fn get_token_usage(&self) -> (u64, u64, u64) {
+        (
+            self.token_usage.input(),
+            self.token_usage.output(),
+            self.token_usage.total(),
+        )
+    }
+
+    /// Get remaining token budget
+    pub fn get_remaining_budget(&self) -> Option<u64> {
+        self.token_usage.remaining(self.config.total_token_budget)
+    }
+
+    /// Get current step count
+    pub fn get_current_step(&self) -> u32 {
+        self.current_step
+    }
     
     /// Execute a single request-response cycle
     async fn execute_single_turn(&mut self, request: &str, context: Option<&TaskMetadata>) -> SageResult<ReactiveResponse> {
+        // Check if we can continue (step and budget limits)
+        self.can_continue()?;
+
         let start_time = Instant::now();
         let response_id = Uuid::new_v4();
-        
+
+        // Increment step counter
+        self.current_step += 1;
+
         // Build conversation messages
         let mut messages = vec![self.create_system_message(context)];
         messages.extend(self.conversation_history.clone());
         messages.push(LLMMessage::user(request));
-        
+
         // Get tool schemas
         let tool_schemas = self.batch_executor.get_tool_schemas();
-        
+
         // Call LLM with tools
         let llm_response = self.llm_client.chat(&messages, Some(&tool_schemas)).await?;
+
+        // Track token usage from LLM response
+        if let Some(usage) = &llm_response.usage {
+            self.token_usage.add(
+                usage.prompt_tokens as u64,
+                usage.completion_tokens as u64,
+            );
+        }
         
         // Update conversation history
         let mut assistant_msg = LLMMessage::assistant(&llm_response.content);
