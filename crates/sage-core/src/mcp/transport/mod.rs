@@ -1,9 +1,16 @@
 //! MCP transport layer implementations
 //!
 //! Provides different transport mechanisms for MCP communication.
+//!
+//! ## Available Transports
+//!
+//! - **Stdio**: Standard I/O transport for subprocess-based MCP servers
+//! - **HTTP**: HTTP transport with SSE support for HTTP-based MCP servers
 
+pub mod http;
 pub mod stdio;
 
+pub use http::{HttpTransport, HttpTransportConfig};
 pub use stdio::StdioTransport;
 
 use super::error::McpError;

@@ -45,7 +45,7 @@ pub use discovery::{DiscoverySource, McpServerManager, McpServerManagerBuilder, 
 pub use error::McpError;
 pub use protocol::{McpMessage, McpNotification, McpRequest, McpResponse};
 pub use registry::McpRegistry;
-pub use transport::{McpTransport, StdioTransport, TransportConfig};
+pub use transport::{HttpTransport, HttpTransportConfig, McpTransport, StdioTransport, TransportConfig};
 pub use types::{
     McpCapabilities, McpPrompt, McpResource, McpResourceContent, McpServerInfo, McpTool,
     McpToolResult,

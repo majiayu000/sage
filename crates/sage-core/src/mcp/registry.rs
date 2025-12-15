@@ -4,7 +4,7 @@
 
 use super::client::McpClient;
 use super::error::McpError;
-use super::transport::{StdioTransport, TransportConfig};
+use super::transport::{HttpTransport, HttpTransportConfig, StdioTransport, TransportConfig};
 use super::types::{McpPrompt, McpResource, McpServerInfo, McpTool};
 use crate::tools::base::Tool;
 use crate::tools::types::{ToolCall, ToolResult, ToolSchema};
@@ -50,8 +50,14 @@ impl McpRegistry {
                 let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
                 Box::new(StdioTransport::spawn_with_env(&command, &args_refs, &env).await?)
             }
-            TransportConfig::Http { .. } => {
-                return Err(McpError::Transport("HTTP transport not yet implemented".into()));
+            TransportConfig::Http { base_url, headers } => {
+                let http_config = HttpTransportConfig::new(&base_url);
+                let http_config = headers.into_iter().fold(http_config, |cfg, (k, v)| {
+                    cfg.with_header(k, v)
+                });
+                let mut transport = HttpTransport::new(http_config)?;
+                transport.connect().await?;
+                Box::new(transport)
             }
             TransportConfig::WebSocket { .. } => {
                 return Err(McpError::Transport("WebSocket transport not yet implemented".into()));
