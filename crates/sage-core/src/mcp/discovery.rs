@@ -69,6 +69,7 @@ pub struct McpServerManager {
     /// Original configuration for servers (for reconnection)
     server_configs: RwLock<HashMap<String, McpServerConfig>>,
     /// Default timeout
+    #[allow(dead_code)]
     default_timeout: Duration,
 }
 

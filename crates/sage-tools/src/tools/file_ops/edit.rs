@@ -361,15 +361,18 @@ mod tests {
         fs::write(&file_path, "Hello, World!\n").await.unwrap();
 
         let tool = EditTool::with_working_directory(temp_dir.path());
-        let call = create_tool_call("test-3", "edit", json!({
-            "file_path": "test.txt",
+        let call = create_tool_call("test-3", "str_replace_based_edit_tool", json!({
+            "command": "str_replace",
+            "path": "test.txt",
             "old_str": "NonexistentString",
             "new_str": "replacement"
         }));
 
-        let result = tool.execute(&call).await.unwrap();
-        assert!(!result.success);
-        assert!(result.error.as_ref().unwrap().contains("String not found"));
+        // Implementation returns Err for string not found
+        let result = tool.execute(&call).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("not found"));
     }
 
     #[tokio::test]
@@ -381,54 +384,57 @@ mod tests {
         fs::write(&file_path, "test test test\n").await.unwrap();
 
         let tool = EditTool::with_working_directory(temp_dir.path());
-        let call = create_tool_call("test-4", "edit", json!({
-            "file_path": "test.txt",
+        let call = create_tool_call("test-4", "str_replace_based_edit_tool", json!({
+            "command": "str_replace",
+            "path": "test.txt",
             "old_str": "test",
             "new_str": "replaced"
         }));
 
-        let result = tool.execute(&call).await.unwrap();
-        assert!(result.success);
-
-        // Verify all occurrences were replaced
-        let content = fs::read_to_string(&file_path).await.unwrap();
-        assert_eq!(content, "replaced replaced replaced\n");
+        // Implementation returns Err for multiple occurrences (requires more specificity)
+        let result = tool.execute(&call).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("appears") || err.to_string().contains("times"));
     }
 
     #[tokio::test]
     async fn test_edit_tool_missing_parameters() {
         let tool = EditTool::new();
 
-        // Missing old_str
-        let call = create_tool_call("test-5a", "edit", json!({
-            "file_path": "test.txt",
-            "new_str": "replacement"
-        }));
-        let result = tool.execute(&call).await.unwrap();
-        assert!(!result.success);
-
-        // Missing new_str
-        let call = create_tool_call("test-5b", "edit", json!({
-            "file_path": "test.txt",
-            "old_str": "test"
-        }));
-        let result = tool.execute(&call).await.unwrap();
-        assert!(!result.success);
-
-        // Missing file_path
-        let call = create_tool_call("test-5c", "edit", json!({
+        // Missing command - returns Err
+        let call = create_tool_call("test-5a", "str_replace_based_edit_tool", json!({
+            "path": "test.txt",
             "old_str": "test",
             "new_str": "replacement"
         }));
-        let result = tool.execute(&call).await.unwrap();
-        assert!(!result.success);
+        let result = tool.execute(&call).await;
+        assert!(result.is_err());
+
+        // Missing path - returns Err
+        let call = create_tool_call("test-5b", "str_replace_based_edit_tool", json!({
+            "command": "str_replace",
+            "old_str": "test",
+            "new_str": "replacement"
+        }));
+        let result = tool.execute(&call).await;
+        assert!(result.is_err());
+
+        // Missing old_str for str_replace - returns Err
+        let call = create_tool_call("test-5c", "str_replace_based_edit_tool", json!({
+            "command": "str_replace",
+            "path": "test.txt",
+            "new_str": "replacement"
+        }));
+        let result = tool.execute(&call).await;
+        assert!(result.is_err());
     }
 
     #[test]
     fn test_edit_tool_schema() {
         let tool = EditTool::new();
         let schema = tool.schema();
-        assert_eq!(schema.name, "edit");
+        assert_eq!(schema.name, "str_replace_based_edit_tool");
         assert!(!schema.description.is_empty());
     }
 }

@@ -273,6 +273,7 @@ enum SupervisionAction {
 /// Supervisor for multiple tasks
 pub struct Supervisor {
     /// Name of the supervisor
+    #[allow(dead_code)]
     name: String,
     /// Default policy for supervised tasks
     default_policy: SupervisionPolicy,

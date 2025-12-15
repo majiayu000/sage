@@ -62,3 +62,4 @@ regex = "1.5"
 mockall = { workspace = true }
 tokio-test = "0.4"
 tempfile = "3.8"
+serial_test = "2.0"

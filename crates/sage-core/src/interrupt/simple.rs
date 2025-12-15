@@ -52,9 +52,9 @@ impl Default for SimpleInterruptManager {
     }
 }
 
-/// Thread-local interrupt manager for Claude Code style operations
+// Thread-local interrupt manager for Claude Code style operations
 thread_local! {
-    static LOCAL_INTERRUPT_MANAGER: std::cell::RefCell<SimpleInterruptManager> = 
+    static LOCAL_INTERRUPT_MANAGER: std::cell::RefCell<SimpleInterruptManager> =
         std::cell::RefCell::new(SimpleInterruptManager::new());
 }
 

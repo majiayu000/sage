@@ -7,9 +7,8 @@ use super::error::McpError;
 use super::protocol::McpNotification;
 use async_trait::async_trait;
 use serde_json::Value;
-use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{broadcast, mpsc, RwLock};
+use tokio::sync::{broadcast, RwLock};
 use tracing::{debug, error, info, warn};
 
 /// Standard MCP notification methods

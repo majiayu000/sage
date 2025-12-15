@@ -290,6 +290,7 @@ pub struct ExecutionBuilder {
     timeout: Duration,
 }
 
+#[allow(dead_code)]
 impl ExecutionBuilder {
     /// Create a new execution builder
     pub fn new(command: impl Into<String>) -> Self {

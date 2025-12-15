@@ -8,6 +8,7 @@ use std::io::{self, Write};
 #[derive(Debug, Default)]
 pub struct ClaudeStyleDisplay {
     /// Whether to use colors
+    #[allow(dead_code)]
     use_colors: bool,
 }
 

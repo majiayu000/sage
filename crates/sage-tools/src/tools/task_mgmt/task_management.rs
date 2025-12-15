@@ -135,8 +135,15 @@ impl TaskList {
     }
 
     pub fn view_tasklist(&self) -> String {
-        let tasks = self.tasks.lock().unwrap();
-        let root_tasks = self.root_tasks.lock().unwrap();
+        // Handle poisoned mutex by recovering the data
+        let tasks = match self.tasks.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        let root_tasks = match self.root_tasks.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
 
         if root_tasks.is_empty() {
             return "No tasks in the current task list.".to_string();
@@ -445,8 +452,11 @@ impl Tool for UpdateTasksTool {
 
         if !updated_tasks.is_empty() {
             result.push_str("\n\n# Task Changes\n\n## Updated Tasks\n\n");
-            // Show current state of updated tasks
-            let tasks = GLOBAL_TASK_LIST.tasks.lock().unwrap();
+            // Show current state of updated tasks - handle poison errors
+            let tasks = match GLOBAL_TASK_LIST.tasks.lock() {
+                Ok(guard) => guard,
+                Err(poisoned) => poisoned.into_inner(),
+            };
             for task_id in &updated_tasks {
                 if let Some(task) = tasks.get(task_id) {
                     result.push_str(&format!(
@@ -511,6 +521,7 @@ mod tests {
     use serde_json::json;
     use sage_core::tools::types::ToolCall;
     use std::collections::HashMap;
+    use serial_test::serial;
 
     fn create_tool_call(id: &str, name: &str, args: serde_json::Value) -> ToolCall {
         let arguments = if let serde_json::Value::Object(map) = args {
@@ -528,17 +539,21 @@ mod tests {
     }
 
     // Helper function to clear the global task list safely
+    // Handles poisoned mutex by recovering the inner data
     fn clear_global_task_list() {
-        // Replace the global task list contents
-        if let Ok(mut tasks) = GLOBAL_TASK_LIST.tasks.lock() {
-            tasks.clear();
+        // Replace the global task list contents - handle poison errors
+        match GLOBAL_TASK_LIST.tasks.lock() {
+            Ok(mut tasks) => tasks.clear(),
+            Err(poisoned) => poisoned.into_inner().clear(),
         }
-        if let Ok(mut root_tasks) = GLOBAL_TASK_LIST.root_tasks.lock() {
-            root_tasks.clear();
+        match GLOBAL_TASK_LIST.root_tasks.lock() {
+            Ok(mut root_tasks) => root_tasks.clear(),
+            Err(poisoned) => poisoned.into_inner().clear(),
         }
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_view_empty_tasklist() {
         clear_global_task_list();
 
@@ -551,6 +566,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_add_single_task() {
         clear_global_task_list();
 
@@ -575,6 +591,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_add_multiple_tasks() {
         clear_global_task_list();
 
@@ -608,6 +625,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_update_task_state() {
         clear_global_task_list();
 
@@ -622,11 +640,17 @@ mod tests {
         }));
         add_tool.execute(&add_call).await.unwrap();
 
-        // Get the task ID
+        // Get the task ID - handle potential poison errors
         let task_id = {
-            let _tasks = GLOBAL_TASK_LIST.tasks.lock().unwrap(); // Prefix with _ to indicate intentionally unused
-            let root_tasks = GLOBAL_TASK_LIST.root_tasks.lock().unwrap();
-            root_tasks.first().unwrap().clone()
+            let _tasks = match GLOBAL_TASK_LIST.tasks.lock() {
+                Ok(guard) => guard,
+                Err(poisoned) => poisoned.into_inner(),
+            };
+            let root_tasks = match GLOBAL_TASK_LIST.root_tasks.lock() {
+                Ok(guard) => guard,
+                Err(poisoned) => poisoned.into_inner(),
+            };
+            root_tasks.first().expect("Task list should not be empty after adding a task").clone()
         };
 
         // Update the task
@@ -649,6 +673,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_update_multiple_tasks() {
         clear_global_task_list();
 
@@ -670,9 +695,12 @@ mod tests {
         }));
         add_tool.execute(&add_call).await.unwrap();
 
-        // Get task IDs
+        // Get task IDs - handle poison errors
         let (task_id_1, task_id_2) = {
-            let root_tasks = GLOBAL_TASK_LIST.root_tasks.lock().unwrap();
+            let root_tasks = match GLOBAL_TASK_LIST.root_tasks.lock() {
+                Ok(guard) => guard,
+                Err(poisoned) => poisoned.into_inner(),
+            };
             (root_tasks[0].clone(), root_tasks[1].clone())
         };
 
@@ -703,6 +731,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_update_nonexistent_task() {
         let update_tool = UpdateTasksTool::new();
         let update_call = create_tool_call("test-update", "update_tasks", json!({
@@ -718,6 +747,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_task_state_display() {
         assert_eq!(format!("{}", TaskState::NotStarted), "[ ]");
         assert_eq!(format!("{}", TaskState::InProgress), "[/]");
@@ -726,6 +756,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_full_workflow_integration() {
         clear_global_task_list();
 
@@ -768,9 +799,12 @@ mod tests {
         assert!(output.contains("Write Tests"));
         assert!(output.contains("[ ]")); // All should be NOT_STARTED
 
-        // Step 4: Start working on first task
+        // Step 4: Start working on first task - handle poison errors
         let task_ids = {
-            let root_tasks = GLOBAL_TASK_LIST.root_tasks.lock().unwrap();
+            let root_tasks = match GLOBAL_TASK_LIST.root_tasks.lock() {
+                Ok(guard) => guard,
+                Err(poisoned) => poisoned.into_inner(),
+            };
             root_tasks.clone()
         };
 

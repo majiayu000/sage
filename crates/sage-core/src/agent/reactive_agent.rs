@@ -51,6 +51,7 @@ pub trait ReactiveAgent: Send + Sync {
 
 /// Claude Code style reactive agent implementation
 pub struct ClaudeStyleAgent {
+    #[allow(dead_code)]
     id: Id,
     config: Config,
     llm_client: LLMClient,
@@ -260,7 +261,7 @@ impl ReactiveExecutionManager {
     /// Execute a task using Claude Code style workflow
     pub async fn execute_task(&mut self, task: TaskMetadata) -> SageResult<Vec<ReactiveResponse>> {
         let mut responses = Vec::new();
-        let mut current_request = task.description.clone();
+        let current_request = task.description.clone();
         let mut context = Some(task);
         
         // Initial request processing

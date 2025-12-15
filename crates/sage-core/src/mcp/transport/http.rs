@@ -70,6 +70,7 @@ pub struct HttpTransport {
     /// Base URL
     base_url: String,
     /// Headers
+    #[allow(dead_code)]
     headers: HashMap<String, String>,
     /// Whether connected
     connected: Arc<AtomicBool>,

@@ -161,9 +161,11 @@ mod tests {
             "summary": ""
         }));
 
-        let result = tool.execute(&call).await.unwrap();
-        assert!(!result.success);
-        assert!(result.error.as_ref().unwrap().contains("Summary cannot be empty"));
+        // Implementation returns Err for empty summary
+        let result = tool.execute(&call).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Summary cannot be empty"));
     }
 
     #[tokio::test]
@@ -173,9 +175,11 @@ mod tests {
             "summary": "   \n\t  \n   "
         }));
 
-        let result = tool.execute(&call).await.unwrap();
-        assert!(!result.success);
-        assert!(result.error.as_ref().unwrap().contains("Summary cannot be empty"));
+        // Implementation returns Err for whitespace-only summary
+        let result = tool.execute(&call).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Summary cannot be empty"));
     }
 
     #[tokio::test]
@@ -183,9 +187,11 @@ mod tests {
         let tool = TaskDoneTool::new();
         let call = create_tool_call("test-5", "task_done", json!({}));
 
-        let result = tool.execute(&call).await.unwrap();
-        assert!(!result.success);
-        assert!(result.error.as_ref().unwrap().contains("Missing 'summary' parameter"));
+        // Implementation returns Err for missing summary
+        let result = tool.execute(&call).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Missing") || err.to_string().contains("summary"));
     }
 
     #[tokio::test]

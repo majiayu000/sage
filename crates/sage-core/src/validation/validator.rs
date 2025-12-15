@@ -1,6 +1,6 @@
 //! Validator implementation
 
-use super::schema::{FieldSchema, FieldType, ValidationSchema};
+use super::schema::{FieldSchema, ValidationSchema};
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -312,6 +312,7 @@ impl Default for Validator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::validation::schema::FieldType;
     use crate::validation::SchemaBuilder;
 
     #[test]

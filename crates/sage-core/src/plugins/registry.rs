@@ -216,7 +216,7 @@ impl PluginRegistry {
 
         // Sort by load order
         let mut entries: Vec<_> = self.plugins.iter().collect();
-        entries.sort_by_key(|e| {
+        entries.sort_by_key(|_e| {
             // We can't await inside sort, so we'll use a blocking read
             // In practice, this is fine since we're just reading load_order
             0 // Simplified - actual implementation would need to access load_order

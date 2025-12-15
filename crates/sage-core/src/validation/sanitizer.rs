@@ -271,11 +271,13 @@ impl InputSanitizer {
 }
 
 /// Convenience function for quick sanitization
+#[allow(dead_code)]
 pub fn sanitize_json(value: &Value) -> Value {
     InputSanitizer::new(SanitizeOptions::default()).sanitize(value)
 }
 
 /// Convenience function for strict sanitization
+#[allow(dead_code)]
 pub fn sanitize_json_strict(value: &Value) -> Value {
     InputSanitizer::new(SanitizeOptions::strict()).sanitize(value)
 }

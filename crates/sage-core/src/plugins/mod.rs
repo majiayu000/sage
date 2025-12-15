@@ -14,7 +14,7 @@ pub use lifecycle::{PluginLifecycle, PluginState};
 pub use manifest::{PluginManifest, PluginPermission, PluginDependency};
 pub use registry::{PluginRegistry, PluginEntry};
 
-use crate::error::{SageError, SageResult};
+use crate::error::SageError;
 use crate::tools::base::Tool;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};

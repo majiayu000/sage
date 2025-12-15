@@ -268,6 +268,7 @@ impl Default for PluginLifecycle {
 }
 
 /// Health check result
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HealthCheck {
     /// Plugin name
@@ -311,6 +312,7 @@ impl HealthCheck {
 }
 
 /// Perform health check on a plugin
+#[allow(dead_code)]
 pub async fn check_plugin_health(
     plugin: &dyn Plugin,
     lifecycle: &PluginLifecycle,
