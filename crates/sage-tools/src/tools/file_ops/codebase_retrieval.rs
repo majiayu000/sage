@@ -1,4 +1,7 @@
 //! Enhanced codebase retrieval tool for finding relevant code snippets
+//!
+//! **STATUS: DISABLED** - This is a Sage-specific tool not present in Claude Code.
+//! Kept for potential future use but not registered in the default tool set.
 
 use async_trait::async_trait;
 use serde_json::json;

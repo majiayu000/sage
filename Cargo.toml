@@ -77,6 +77,12 @@ regex = "1.10"
 humantime-serde = "1.1"
 libc = "0.2"
 
+# Process control (Unix signals)
+nix = { version = "0.29", features = ["signal", "process"] }
+
+# Static initialization
+once_cell = "1.19"
+
 [profile.release]
 lto = true
 codegen-units = 1
