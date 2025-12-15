@@ -339,10 +339,15 @@ impl SageBuilder {
         let provider_config = self.providers.get(&provider_name).cloned().or_else(|| {
             self.config.as_ref().and_then(|c| {
                 c.default_model_parameters().ok().map(|params| {
-                    ProviderConfig::new(&provider_name)
+                    let mut config = ProviderConfig::new(&provider_name)
                         .with_api_key(params.get_api_key().unwrap_or_default())
                         .with_timeout(60)
-                        .with_max_retries(3)
+                        .with_max_retries(3);
+                    // Apply custom base_url if configured (for OpenRouter, etc.)
+                    if let Some(base_url) = &params.base_url {
+                        config = config.with_base_url(base_url.clone());
+                    }
+                    config
                 })
             })
         });

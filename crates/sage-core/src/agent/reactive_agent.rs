@@ -125,10 +125,15 @@ impl ClaudeStyleAgent {
         let provider: LLMProvider = provider_name.parse()
             .map_err(|_| SageError::config(format!("Invalid provider: {}", provider_name)))?;
             
-        let provider_config = crate::config::provider::ProviderConfig::new(provider_name)
+        let mut provider_config = crate::config::provider::ProviderConfig::new(provider_name)
             .with_api_key(default_params.get_api_key().unwrap_or_default())
             .with_timeout(60)
             .with_max_retries(3);
+
+        // Apply custom base_url if configured (for OpenRouter, etc.)
+        if let Some(base_url) = &default_params.base_url {
+            provider_config = provider_config.with_base_url(base_url.clone());
+        }
             
         let model_params = default_params.to_llm_parameters();
         let llm_client = LLMClient::new(provider, provider_config, model_params)?;
