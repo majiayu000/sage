@@ -12,6 +12,9 @@ use sage_core::{
     trajectory::recorder::TrajectoryRecorder,
     types::TaskMetadata,
 };
+
+// Import and re-export outcome types
+pub use sage_core::agent::{ExecutionOutcome, ExecutionError, ExecutionErrorKind};
 use sage_tools::get_default_tools;
 
 /// SDK client for Sage Agent
@@ -153,11 +156,11 @@ impl SageAgentSDK {
             None
         };
 
-        // Execute the task
-        let execution = agent.execute_task(task).await?;
+        // Execute the task - now returns ExecutionOutcome
+        let outcome = agent.execute_task(task).await?;
 
         Ok(ExecutionResult {
-            execution,
+            outcome,
             trajectory_path,
             config_used: self.config.clone(),
         })
@@ -273,8 +276,8 @@ impl RunOptions {
 /// Result of task execution
 #[derive(Debug, Clone)]
 pub struct ExecutionResult {
-    /// The agent execution details
-    pub execution: AgentExecution,
+    /// The execution outcome (success, failure, interrupted, or max steps)
+    pub outcome: ExecutionOutcome,
     /// Path to trajectory file (if recorded)
     pub trajectory_path: Option<PathBuf>,
     /// Configuration used for execution
@@ -284,41 +287,77 @@ pub struct ExecutionResult {
 impl ExecutionResult {
     /// Check if the execution was successful
     pub fn is_success(&self) -> bool {
-        self.execution.success
+        self.outcome.is_success()
+    }
+
+    /// Check if the execution failed
+    pub fn is_failed(&self) -> bool {
+        self.outcome.is_failed()
+    }
+
+    /// Check if the execution was interrupted
+    pub fn is_interrupted(&self) -> bool {
+        self.outcome.is_interrupted()
+    }
+
+    /// Get the execution outcome
+    pub fn outcome(&self) -> &ExecutionOutcome {
+        &self.outcome
+    }
+
+    /// Get the underlying execution (regardless of outcome)
+    pub fn execution(&self) -> &AgentExecution {
+        self.outcome.execution()
+    }
+
+    /// Get the error if the execution failed
+    pub fn error(&self) -> Option<&ExecutionError> {
+        self.outcome.error()
     }
 
     /// Get the final result message
     pub fn final_result(&self) -> Option<&str> {
-        self.execution.final_result.as_deref()
+        self.outcome.execution().final_result.as_deref()
     }
 
     /// Get execution statistics
     pub fn statistics(&self) -> sage_core::agent::execution::ExecutionStatistics {
-        self.execution.statistics()
+        self.outcome.execution().statistics()
     }
 
     /// Get a summary of the execution
     pub fn summary(&self) -> String {
-        self.execution.summary()
+        self.outcome.execution().summary()
     }
 
     /// Get all tool calls made during execution
     pub fn tool_calls(&self) -> Vec<&sage_core::tools::types::ToolCall> {
-        self.execution.all_tool_calls()
+        self.outcome.execution().all_tool_calls()
     }
 
     /// Get all tool results from execution
     pub fn tool_results(&self) -> Vec<&sage_core::tools::types::ToolResult> {
-        self.execution.all_tool_results()
+        self.outcome.execution().all_tool_results()
     }
 
     /// Get steps that had errors
     pub fn error_steps(&self) -> Vec<&sage_core::agent::AgentStep> {
-        self.execution.error_steps()
+        self.outcome.execution().error_steps()
     }
 
     /// Get the trajectory file path if available
     pub fn trajectory_path(&self) -> Option<&PathBuf> {
         self.trajectory_path.as_ref()
     }
+
+    /// Get a user-friendly status message
+    pub fn status_message(&self) -> &'static str {
+        self.outcome.status_message()
+    }
+
+    /// Get the status icon for CLI display
+    pub fn status_icon(&self) -> &'static str {
+        self.outcome.status_icon()
+    }
 }
+

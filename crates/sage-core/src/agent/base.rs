@@ -1,6 +1,6 @@
 //! Base agent implementation
 
-use crate::agent::{AgentExecution, AgentStep, AgentState};
+use crate::agent::{AgentExecution, AgentStep, AgentState, ExecutionOutcome, ExecutionError};
 use crate::config::model::Config;
 use crate::error::{SageError, SageResult};
 use crate::interrupt::{global_interrupt_manager, reset_global_interrupt_manager};
@@ -29,8 +29,11 @@ struct ModelIdentity {
 /// Base agent trait
 #[async_trait]
 pub trait Agent: Send + Sync {
-    /// Execute a task
-    async fn execute_task(&mut self, task: TaskMetadata) -> SageResult<AgentExecution>;
+    /// Execute a task and return an explicit outcome
+    ///
+    /// Returns `ExecutionOutcome` which clearly indicates success, failure,
+    /// interruption, or max steps reached, while preserving the full execution trace.
+    async fn execute_task(&mut self, task: TaskMetadata) -> SageResult<ExecutionOutcome>;
 
     /// Continue an existing execution with new user message
     async fn continue_execution(&mut self, execution: &mut AgentExecution, user_message: &str) -> SageResult<()>;
@@ -646,7 +649,7 @@ Remember: Respond appropriately to the type of request. Simple questions don't n
 
 #[async_trait]
 impl Agent for BaseAgent {
-    async fn execute_task(&mut self, task: TaskMetadata) -> SageResult<AgentExecution> {
+    async fn execute_task(&mut self, task: TaskMetadata) -> SageResult<ExecutionOutcome> {
         let mut execution = AgentExecution::new(task.clone());
 
         // Reset the global interrupt manager for this new task
@@ -672,83 +675,91 @@ impl Agent for BaseAgent {
 
         let system_message = self.create_system_message(&task);
         let tool_schemas = self.tool_executor.get_tool_schemas();
+        let provider_name = self.config.get_default_provider().to_string();
 
-        // Main execution loop
-        for step_number in 1..=self.max_steps {
-            // Check for interruption before each step
-            if task_scope.is_cancelled() {
-                // Stop animation on interruption
-                self.animation_manager.stop_animation().await;
-
-                // Print interruption message
-                DisplayManager::print_separator("Task Interrupted", "yellow");
-                println!("{}", "🛑 Task interrupted by user (Ctrl+C)".yellow().bold());
-                println!("{}", "   Task execution stopped gracefully.".dimmed());
-
-                let interrupt_step = AgentStep::new(step_number, AgentState::Error)
-                    .with_error("Task interrupted by user".to_string());
-
-                // Record interrupt step
-                if let Some(recorder) = &self.trajectory_recorder {
-                    recorder.lock().await.record_step(interrupt_step.clone()).await?;
-                }
-
-                execution.add_step(interrupt_step);
-                execution.complete(false, Some("Task interrupted by user".to_string()));
-                break;
-            }
-
-            let messages = self.build_messages(&execution, &system_message);
-
-            match self.execute_step(step_number, &messages, &tool_schemas).await {
-                Ok(step) => {
-                    let is_completed = step.state == AgentState::Completed;
-                    
-                    // Record step in trajectory
-                    if let Some(recorder) = &self.trajectory_recorder {
-                        recorder.lock().await.record_step(step.clone()).await?;
-                    }
-                    
-                    execution.add_step(step);
-                    
-                    if is_completed {
-                        execution.complete(true, Some("Task completed successfully".to_string()));
-                        break;
-                    }
-                }
-                Err(e) => {
-                    // Stop animation on error
+        // Main execution loop - returns the final outcome
+        let final_outcome = 'execution_loop: {
+            for step_number in 1..=self.max_steps {
+                // Check for interruption before each step
+                if task_scope.is_cancelled() {
+                    // Stop animation on interruption
                     self.animation_manager.stop_animation().await;
 
-                    let error_step = AgentStep::new(step_number, AgentState::Error)
-                        .with_error(e.to_string());
+                    // Print interruption message
+                    DisplayManager::print_separator("Task Interrupted", "yellow");
+                    println!("{}", "🛑 Task interrupted by user (Ctrl+C)".yellow().bold());
+                    println!("{}", "   Task execution stopped gracefully.".dimmed());
 
-                    // Record error step
+                    let interrupt_step = AgentStep::new(step_number, AgentState::Error)
+                        .with_error("Task interrupted by user".to_string());
+
+                    // Record interrupt step
                     if let Some(recorder) = &self.trajectory_recorder {
-                        recorder.lock().await.record_step(error_step.clone()).await?;
+                        recorder.lock().await.record_step(interrupt_step.clone()).await?;
                     }
 
-                    execution.add_step(error_step);
-                    execution.complete(false, Some(format!("Task failed: {}", e)));
-                    break;
+                    execution.add_step(interrupt_step);
+                    execution.complete(false, Some("Task interrupted by user".to_string()));
+                    break 'execution_loop ExecutionOutcome::Interrupted { execution };
+                }
+
+                let messages = self.build_messages(&execution, &system_message);
+
+                match self.execute_step(step_number, &messages, &tool_schemas).await {
+                    Ok(step) => {
+                        let is_completed = step.state == AgentState::Completed;
+
+                        // Record step in trajectory
+                        if let Some(recorder) = &self.trajectory_recorder {
+                            recorder.lock().await.record_step(step.clone()).await?;
+                        }
+
+                        execution.add_step(step);
+
+                        if is_completed {
+                            execution.complete(true, Some("Task completed successfully".to_string()));
+                            break 'execution_loop ExecutionOutcome::Success(execution);
+                        }
+                    }
+                    Err(e) => {
+                        // Stop animation on error
+                        self.animation_manager.stop_animation().await;
+
+                        let error_step = AgentStep::new(step_number, AgentState::Error)
+                            .with_error(e.to_string());
+
+                        // Record error step
+                        if let Some(recorder) = &self.trajectory_recorder {
+                            recorder.lock().await.record_step(error_step.clone()).await?;
+                        }
+
+                        execution.add_step(error_step);
+                        execution.complete(false, Some(format!("Task failed: {}", e)));
+
+                        // Create structured error with classification and suggestions
+                        let exec_error = ExecutionError::from_sage_error(&e, Some(provider_name.clone()));
+                        break 'execution_loop ExecutionOutcome::Failed {
+                            execution,
+                            error: exec_error
+                        };
+                    }
                 }
             }
-        }
-        
-        // If we reached max steps without completion
-        if !execution.is_completed() {
+
+            // Max steps reached without completion
             execution.complete(false, Some("Task execution reached maximum steps".to_string()));
-        }
-        
+            ExecutionOutcome::MaxStepsReached { execution }
+        };
+
         // Finalize trajectory recording
         if let Some(recorder) = &self.trajectory_recorder {
             recorder.lock().await.finalize_recording(
-                execution.success,
-                execution.final_result.clone(),
+                final_outcome.is_success(),
+                final_outcome.execution().final_result.clone(),
             ).await?;
         }
-        
-        Ok(execution)
+
+        Ok(final_outcome)
     }
     
     fn config(&self) -> &Config {

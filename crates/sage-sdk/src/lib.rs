@@ -4,7 +4,7 @@
 
 pub mod client;
 
-pub use client::{SageAgentSDK, RunOptions, ExecutionResult};
+pub use client::{SageAgentSDK, RunOptions, ExecutionResult, ExecutionOutcome, ExecutionError, ExecutionErrorKind};
 
 // Re-export commonly used types from core
 pub use sage_core::{

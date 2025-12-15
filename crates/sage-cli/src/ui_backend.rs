@@ -81,7 +81,7 @@ impl SageUIBackend {
                     .map(|s| s.to_string())
                     .unwrap_or_else(|| {
                         // If no final result, try to get content from the last step
-                        result.execution.steps
+                        result.execution().steps
                             .last()
                             .and_then(|step| step.llm_response.as_ref())
                             .map(|response| response.content.clone())

@@ -9,7 +9,7 @@ use sage_core::ui::EnhancedConsole;
 use sage_core::llm::messages::LLMMessage;
 use sage_core::agent::AgentExecution;
 use sage_core::types::TaskMetadata;
-use sage_sdk::{RunOptions, SageAgentSDK};
+use sage_sdk::{RunOptions, SageAgentSDK, ExecutionOutcome, ExecutionErrorKind};
 use std::collections::HashMap;
 
 /// Conversation session manager for interactive mode
@@ -451,20 +451,74 @@ async fn execute_conversation_task(
             match result {
                 Ok(execution_result) => {
                     let duration = start_time.elapsed();
-                    conversation.execution = Some(execution_result.execution.clone());
+                    conversation.execution = Some(execution_result.execution().clone());
                     conversation.mark_first_message_processed();
 
                     // Add assistant response to conversation
-                    if let Some(final_result) = &execution_result.execution.final_result {
+                    if let Some(final_result) = &execution_result.execution().final_result {
                         conversation.add_assistant_message(final_result);
                     }
 
-                    console.success("✓ Conversation completed successfully!");
-                    console.info(&format!("ℹ Execution time: {:.2}s", duration.as_secs_f64()));
-                    console.info(&format!("ℹ Steps: {}", execution_result.execution.steps.len()));
-                    console.info(&format!("ℹ Tokens: {}", execution_result.execution.total_usage.total_tokens));
+                    // Handle different execution outcomes
+                    match &execution_result.outcome {
+                        ExecutionOutcome::Success(_) => {
+                            console.success("✓ Task completed successfully!");
+                        }
+                        ExecutionOutcome::Failed { error, .. } => {
+                            console.error("✗ Task failed!");
+                            console.error(&format!("  Error: {}", error.message));
 
-                    if let Some(trajectory_path) = execution_result.trajectory_path {
+                            // Show error type
+                            match &error.kind {
+                                ExecutionErrorKind::Authentication => {
+                                    console.error("  Type: Authentication Error");
+                                }
+                                ExecutionErrorKind::RateLimit => {
+                                    console.warn("  Type: Rate Limit");
+                                }
+                                ExecutionErrorKind::ServiceUnavailable => {
+                                    console.warn("  Type: Service Unavailable");
+                                }
+                                ExecutionErrorKind::ToolExecution { tool_name } => {
+                                    console.error(&format!("  Type: Tool Error ({})", tool_name));
+                                }
+                                ExecutionErrorKind::Configuration => {
+                                    console.error("  Type: Configuration Error");
+                                }
+                                ExecutionErrorKind::Network => {
+                                    console.error("  Type: Network Error");
+                                }
+                                ExecutionErrorKind::Timeout => {
+                                    console.warn("  Type: Timeout");
+                                }
+                                _ => {}
+                            }
+
+                            // Show provider if available
+                            if let Some(provider) = &error.provider {
+                                console.info(&format!("  Provider: {}", provider));
+                            }
+
+                            // Show suggestion if available
+                            if let Some(suggestion) = &error.suggestion {
+                                console.info(&format!("  💡 {}", suggestion));
+                            }
+                        }
+                        ExecutionOutcome::Interrupted { .. } => {
+                            console.warn("🛑 Task interrupted by user");
+                            console.info("ℹ You can continue with a new task or type 'exit' to quit");
+                        }
+                        ExecutionOutcome::MaxStepsReached { .. } => {
+                            console.warn("⚠ Task reached maximum steps without completion");
+                            console.info("ℹ Consider breaking down the task or increasing max_steps");
+                        }
+                    }
+
+                    console.info(&format!("ℹ Execution time: {:.2}s", duration.as_secs_f64()));
+                    console.info(&format!("ℹ Steps: {}", execution_result.execution().steps.len()));
+                    console.info(&format!("ℹ Tokens: {}", execution_result.execution().total_usage.total_tokens));
+
+                    if let Some(trajectory_path) = &execution_result.trajectory_path {
                         console.info(&format!("ℹ Trajectory saved: {}", trajectory_path.display()));
                     }
 
@@ -472,19 +526,10 @@ async fn execute_conversation_task(
                 }
                 Err(e) => {
                     let duration = start_time.elapsed();
-
-                    // Check if this was an interruption
-                    if e.to_string().contains("interrupted") {
-                        console.warn("🛑 Task interrupted by user");
-                        console.info(&format!("ℹ Execution time: {:.2}s", duration.as_secs_f64()));
-                        console.info("ℹ You can continue with a new task or type 'exit' to quit");
-                        Ok(()) // Don't treat interruption as an error in interactive mode
-                    } else {
-                        console.error("✗ Conversation failed!");
-                        console.error(&format!("ℹ Execution time: {:.2}s", duration.as_secs_f64()));
-                        console.error(&format!("ℹ Error: {e}"));
-                        Err(e)
-                    }
+                    console.error("✗ System error!");
+                    console.error(&format!("ℹ Execution time: {:.2}s", duration.as_secs_f64()));
+                    console.error(&format!("ℹ Error: {e}"));
+                    Err(e)
                 }
             }
         }

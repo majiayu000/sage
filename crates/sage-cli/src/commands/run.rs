@@ -5,7 +5,7 @@ use crate::signal_handler::start_global_signal_handling;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use sage_core::error::{SageError, SageResult};
-use sage_sdk::{RunOptions, SageAgentSDK};
+use sage_sdk::{RunOptions, SageAgentSDK, ExecutionOutcome, ExecutionErrorKind};
 
 /// Arguments for the run command
 pub struct RunArgs {
@@ -140,35 +140,87 @@ pub async fn execute(args: RunArgs) -> SageResult<()> {
     match sdk.run_with_options(&task_description, run_options).await {
         Ok(result) => {
             let duration = start_time.elapsed();
-            
+
             console.print_separator();
-            
-            if result.is_success() {
-                console.success("Task completed successfully!");
-            } else {
-                console.error("Task execution failed!");
+
+            // Handle different execution outcomes with detailed messages
+            match &result.outcome {
+                ExecutionOutcome::Success(_) => {
+                    console.success("Task completed successfully!");
+                }
+                ExecutionOutcome::Failed { error, .. } => {
+                    console.error("Task execution failed!");
+                    console.error(&format!("  Error: {}", error.message));
+
+                    // Show error type
+                    match &error.kind {
+                        ExecutionErrorKind::Authentication => {
+                            console.error("  Type: Authentication Error");
+                        }
+                        ExecutionErrorKind::RateLimit => {
+                            console.warn("  Type: Rate Limit");
+                        }
+                        ExecutionErrorKind::ServiceUnavailable => {
+                            console.warn("  Type: Service Unavailable");
+                        }
+                        ExecutionErrorKind::ToolExecution { tool_name } => {
+                            console.error(&format!("  Type: Tool Error ({})", tool_name));
+                        }
+                        ExecutionErrorKind::Configuration => {
+                            console.error("  Type: Configuration Error");
+                        }
+                        ExecutionErrorKind::Network => {
+                            console.error("  Type: Network Error");
+                        }
+                        ExecutionErrorKind::Timeout => {
+                            console.warn("  Type: Timeout");
+                        }
+                        ExecutionErrorKind::InvalidRequest => {
+                            console.error("  Type: Invalid Request");
+                        }
+                        ExecutionErrorKind::Other => {}
+                    }
+
+                    // Show provider if available
+                    if let Some(provider) = &error.provider {
+                        console.info(&format!("  Provider: {}", provider));
+                    }
+
+                    // Show suggestion if available
+                    if let Some(suggestion) = &error.suggestion {
+                        console.info(&format!("  💡 {}", suggestion));
+                    }
+                }
+                ExecutionOutcome::Interrupted { .. } => {
+                    console.warn("🛑 Task interrupted by user (Ctrl+C)");
+                    console.info("Task was stopped gracefully.");
+                }
+                ExecutionOutcome::MaxStepsReached { .. } => {
+                    console.warn("⚠ Task reached maximum steps without completion");
+                    console.info("Consider breaking down the task or increasing max_steps");
+                }
             }
-            
+
             console.info(&format!("Execution time: {:.2}s", duration.as_secs_f64()));
-            console.info(&format!("Steps executed: {}", result.execution.steps.len()));
-            console.info(&format!("Total tokens: {}", result.execution.total_usage.total_tokens));
-            
+            console.info(&format!("Steps executed: {}", result.execution().steps.len()));
+            console.info(&format!("Total tokens: {}", result.execution().total_usage.total_tokens));
+
             if let Some(final_result) = result.final_result() {
                 console.print_header("Final Result");
                 println!("{}", final_result);
             }
-            
+
             if let Some(trajectory_path) = result.trajectory_path() {
                 console.info(&format!("Trajectory saved to: {}", trajectory_path.display()));
             }
-            
+
             // Handle patch creation
             if args.must_patch || args.patch_path.is_some() {
                 console.info("Creating patch...");
                 // TODO: Implement patch creation
                 console.warn("Patch creation not yet implemented in Rust version");
             }
-            
+
             // Print statistics if verbose
             if args.verbose {
                 console.print_header("Execution Statistics");
@@ -176,7 +228,7 @@ pub async fn execute(args: RunArgs) -> SageResult<()> {
                 console.info(&format!("Successful steps: {}", stats.successful_steps));
                 console.info(&format!("Failed steps: {}", stats.failed_steps));
                 console.info(&format!("Tool calls: {}", stats.tool_calls));
-                
+
                 if !stats.tool_usage.is_empty() {
                     console.info("Tool usage:");
                     for (tool, count) in &stats.tool_usage {
@@ -184,43 +236,37 @@ pub async fn execute(args: RunArgs) -> SageResult<()> {
                     }
                 }
             }
-            
+
             Ok(())
         }
         Err(e) => {
             let duration = start_time.elapsed();
             console.print_separator();
 
-            // Check if this was an interruption
-            if e.to_string().contains("interrupted") {
-                console.warn("🛑 Task interrupted by user (Ctrl+C)");
-                console.info(&format!("Execution time: {:.2}s", duration.as_secs_f64()));
-                console.info("Task was stopped gracefully.");
-                Ok(()) // Don't treat interruption as an error in run mode
-            } else {
-                console.error("Task execution failed!");
-                console.print_header("Final Result");
-                console.error(&format!("Task failed: {}", e));
+            // This branch now only handles system-level errors
+            // (e.g., couldn't create agent, couldn't connect to API at all)
+            console.error("System error!");
+            console.print_header("Error Details");
+            console.error(&format!("Error: {}", e));
 
-                // Print additional error context if available
-                match &e {
-                    SageError::Tool { tool_name, message } => {
-                        console.info(&format!("Tool: {}", tool_name));
-                        console.info(&format!("Error: {}", message));
-                    }
-                    SageError::Llm(msg) => {
-                        console.info(&format!("LLM Provider: {}", sdk.config().default_provider));
-                        console.info(&format!("Error: {}", msg));
-                    }
-                    SageError::Config(msg) => {
-                        console.info(&format!("Configuration Error: {}", msg));
-                    }
-                    _ => {}
+            // Print additional error context if available
+            match &e {
+                SageError::Tool { tool_name, message } => {
+                    console.info(&format!("Tool: {}", tool_name));
+                    console.info(&format!("Error: {}", message));
                 }
-
-                console.info(&format!("Execution time: {:.2}s", duration.as_secs_f64()));
-                Err(e)
+                SageError::Llm(msg) => {
+                    console.info(&format!("LLM Provider: {}", sdk.config().default_provider));
+                    console.info(&format!("Error: {}", msg));
+                }
+                SageError::Config(msg) => {
+                    console.info(&format!("Configuration Error: {}", msg));
+                }
+                _ => {}
             }
+
+            console.info(&format!("Execution time: {:.2}s", duration.as_secs_f64()));
+            Err(e)
         }
     }
 }
