@@ -178,6 +178,9 @@ pub struct Config {
     /// Trajectory configuration
     #[serde(default)]
     pub trajectory: TrajectoryConfig,
+    /// MCP (Model Context Protocol) configuration
+    #[serde(default)]
+    pub mcp: McpConfig,
 }
 
 impl Default for Config {
@@ -302,6 +305,7 @@ impl Default for Config {
             tools: ToolConfig::default(),
             logging: LoggingConfig::default(),
             trajectory: TrajectoryConfig::default(),
+            mcp: McpConfig::default(),
         }
     }
 }
@@ -408,6 +412,7 @@ impl Config {
 
         self.tools.merge(other.tools);
         self.logging.merge(other.logging);
+        self.mcp.merge(other.mcp);
     }
 }
 
@@ -498,6 +503,118 @@ pub struct TrajectoryConfig {
     pub save_interval_steps: usize,
 }
 
+/// MCP (Model Context Protocol) configuration
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct McpConfig {
+    /// Whether MCP integration is enabled
+    #[serde(default)]
+    pub enabled: bool,
+    /// MCP servers to connect to
+    #[serde(default)]
+    pub servers: HashMap<String, McpServerConfig>,
+    /// Default timeout for MCP requests in seconds
+    #[serde(default = "default_mcp_timeout")]
+    pub default_timeout_secs: u64,
+    /// Whether to auto-connect to servers on startup
+    #[serde(default = "default_true")]
+    pub auto_connect: bool,
+}
+
+fn default_mcp_timeout() -> u64 {
+    300 // 5 minutes
+}
+
+fn default_true() -> bool {
+    true
+}
+
+/// Configuration for a single MCP server
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpServerConfig {
+    /// Transport type: "stdio", "http", or "websocket"
+    pub transport: String,
+    /// Command to execute (for stdio transport)
+    pub command: Option<String>,
+    /// Command arguments (for stdio transport)
+    #[serde(default)]
+    pub args: Vec<String>,
+    /// Environment variables (for stdio transport)
+    #[serde(default)]
+    pub env: HashMap<String, String>,
+    /// Base URL (for http/websocket transport)
+    pub url: Option<String>,
+    /// HTTP headers (for http transport)
+    #[serde(default)]
+    pub headers: HashMap<String, String>,
+    /// Whether this server is enabled
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Request timeout in seconds (overrides default)
+    pub timeout_secs: Option<u64>,
+}
+
+impl McpServerConfig {
+    /// Create a stdio transport config
+    pub fn stdio(command: impl Into<String>, args: Vec<String>) -> Self {
+        Self {
+            transport: "stdio".to_string(),
+            command: Some(command.into()),
+            args,
+            env: HashMap::new(),
+            url: None,
+            headers: HashMap::new(),
+            enabled: true,
+            timeout_secs: None,
+        }
+    }
+
+    /// Create an HTTP transport config
+    pub fn http(url: impl Into<String>) -> Self {
+        Self {
+            transport: "http".to_string(),
+            command: None,
+            args: Vec::new(),
+            env: HashMap::new(),
+            url: Some(url.into()),
+            headers: HashMap::new(),
+            enabled: true,
+            timeout_secs: None,
+        }
+    }
+
+    /// Create a WebSocket transport config
+    pub fn websocket(url: impl Into<String>) -> Self {
+        Self {
+            transport: "websocket".to_string(),
+            command: None,
+            args: Vec::new(),
+            env: HashMap::new(),
+            url: Some(url.into()),
+            headers: HashMap::new(),
+            enabled: true,
+            timeout_secs: None,
+        }
+    }
+
+    /// Add environment variable
+    pub fn with_env(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.env.insert(key.into(), value.into());
+        self
+    }
+
+    /// Add HTTP header
+    pub fn with_header(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.headers.insert(key.into(), value.into());
+        self
+    }
+
+    /// Set timeout
+    pub fn with_timeout(mut self, secs: u64) -> Self {
+        self.timeout_secs = Some(secs);
+        self
+    }
+}
+
 impl Default for LoggingConfig {
     fn default() -> Self {
         Self {
@@ -539,5 +656,38 @@ impl LoggingConfig {
         if !other.format.is_empty() {
             self.format = other.format;
         }
+    }
+}
+
+impl McpConfig {
+    /// Merge with another MCP config (other takes precedence)
+    pub fn merge(&mut self, other: McpConfig) {
+        if other.enabled {
+            self.enabled = true;
+        }
+
+        // Merge servers
+        for (name, config) in other.servers {
+            self.servers.insert(name, config);
+        }
+
+        if other.default_timeout_secs > 0 {
+            self.default_timeout_secs = other.default_timeout_secs;
+        }
+
+        self.auto_connect = other.auto_connect;
+    }
+
+    /// Get enabled servers
+    pub fn enabled_servers(&self) -> impl Iterator<Item = (&String, &McpServerConfig)> {
+        self.servers.iter().filter(|(_, config)| config.enabled)
+    }
+
+    /// Get timeout for a specific server
+    pub fn get_timeout(&self, server_name: &str) -> u64 {
+        self.servers
+            .get(server_name)
+            .and_then(|s| s.timeout_secs)
+            .unwrap_or(self.default_timeout_secs)
     }
 }

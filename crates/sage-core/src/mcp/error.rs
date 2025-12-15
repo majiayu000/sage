@@ -34,7 +34,7 @@ pub enum McpError {
     InvalidRequest(String),
 
     /// Timeout
-    #[error("Request timeout after {0}ms")]
+    #[error("Request timeout after {0} seconds")]
     Timeout(u64),
 
     /// Serialization error

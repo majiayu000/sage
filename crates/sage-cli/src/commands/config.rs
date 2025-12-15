@@ -204,5 +204,6 @@ fn create_sample_config() -> Config {
         tools: ToolConfig::default(),
         logging: LoggingConfig::default(),
         trajectory: TrajectoryConfig::default(),
+        mcp: sage_core::config::McpConfig::default(),
     }
 }

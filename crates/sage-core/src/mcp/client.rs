@@ -1,9 +1,15 @@
 //! MCP client implementation
 //!
 //! Provides a high-level client for communicating with MCP servers.
+//!
+//! # Features
+//! - Concurrent request support with proper message routing
+//! - Request timeout handling
+//! - Notification handling
+//! - Background message receiver
 
 use super::error::McpError;
-use super::protocol::{methods, McpMessage, McpNotification, McpRequest, McpResponse, RequestId, MCP_PROTOCOL_VERSION};
+use super::protocol::{methods, McpMessage, McpNotification, McpRequest, McpResponse, McpRpcError, RequestId, MCP_PROTOCOL_VERSION};
 use super::transport::McpTransport;
 use super::types::{
     ClientCapabilities, ClientInfo, InitializeParams, InitializeResult, McpCapabilities,
@@ -12,13 +18,31 @@ use super::types::{
 };
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
-use tokio::sync::{Mutex, RwLock};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
+use tokio::time::timeout;
+use tracing::{debug, error, warn};
+
+/// Default request timeout in seconds
+const DEFAULT_REQUEST_TIMEOUT_SECS: u64 = 300; // 5 minutes
+
+/// Message sender command for the background receiver
+enum ReceiverCommand {
+    /// Register a pending request
+    RegisterRequest {
+        id: String,
+        sender: oneshot::Sender<McpResponse>,
+    },
+    /// Shutdown the receiver
+    Shutdown,
+}
 
 /// MCP client for communicating with MCP servers
 pub struct McpClient {
-    /// Transport layer
-    transport: Mutex<Box<dyn McpTransport>>,
+    /// Transport layer (for sending)
+    transport: Arc<Mutex<Box<dyn McpTransport>>>,
     /// Server info
     server_info: RwLock<Option<McpServerInfo>>,
     /// Server capabilities
@@ -31,26 +55,152 @@ pub struct McpClient {
     prompts: RwLock<Vec<McpPrompt>>,
     /// Request ID counter
     request_id: AtomicU64,
-    /// Pending requests (id -> response channel)
-    pending_requests: RwLock<HashMap<String, tokio::sync::oneshot::Sender<McpResponse>>>,
+    /// Command sender to the background receiver
+    command_sender: mpsc::Sender<ReceiverCommand>,
     /// Whether initialized
     initialized: RwLock<bool>,
+    /// Whether the client is running
+    running: Arc<AtomicBool>,
+    /// Request timeout duration
+    request_timeout: Duration,
+    /// Notification handler
+    notification_handler: RwLock<Option<Box<dyn NotificationHandler>>>,
+}
+
+/// Trait for handling MCP notifications
+pub trait NotificationHandler: Send + Sync {
+    /// Handle a notification
+    fn handle(&self, method: &str, params: Option<Value>);
+}
+
+/// Default notification handler that logs notifications
+pub struct LoggingNotificationHandler;
+
+impl NotificationHandler for LoggingNotificationHandler {
+    fn handle(&self, method: &str, params: Option<Value>) {
+        debug!("MCP notification: {} {:?}", method, params);
+    }
 }
 
 impl McpClient {
     /// Create a new MCP client with the given transport
     pub fn new(transport: Box<dyn McpTransport>) -> Self {
-        Self {
-            transport: Mutex::new(transport),
+        Self::with_timeout(transport, Duration::from_secs(DEFAULT_REQUEST_TIMEOUT_SECS))
+    }
+
+    /// Create a new MCP client with custom timeout
+    pub fn with_timeout(transport: Box<dyn McpTransport>, request_timeout: Duration) -> Self {
+        let (command_sender, command_receiver) = mpsc::channel(100);
+        let transport = Arc::new(Mutex::new(transport));
+        let running = Arc::new(AtomicBool::new(true));
+
+        let client = Self {
+            transport: Arc::clone(&transport),
             server_info: RwLock::new(None),
             capabilities: RwLock::new(McpCapabilities::default()),
             tools: RwLock::new(Vec::new()),
             resources: RwLock::new(Vec::new()),
             prompts: RwLock::new(Vec::new()),
             request_id: AtomicU64::new(1),
-            pending_requests: RwLock::new(HashMap::new()),
+            command_sender,
             initialized: RwLock::new(false),
+            running: Arc::clone(&running),
+            request_timeout,
+            notification_handler: RwLock::new(Some(Box::new(LoggingNotificationHandler))),
+        };
+
+        // Start background message receiver
+        let transport_clone = Arc::clone(&transport);
+        let running_clone = Arc::clone(&running);
+        tokio::spawn(Self::message_receiver(
+            transport_clone,
+            command_receiver,
+            running_clone,
+        ));
+
+        client
+    }
+
+    /// Background task that receives messages and routes them
+    async fn message_receiver(
+        transport: Arc<Mutex<Box<dyn McpTransport>>>,
+        mut command_receiver: mpsc::Receiver<ReceiverCommand>,
+        running: Arc<AtomicBool>,
+    ) {
+        let mut pending_requests: HashMap<String, oneshot::Sender<McpResponse>> = HashMap::new();
+
+        while running.load(Ordering::SeqCst) {
+            tokio::select! {
+                // Handle commands from the client
+                cmd = command_receiver.recv() => {
+                    match cmd {
+                        Some(ReceiverCommand::RegisterRequest { id, sender }) => {
+                            pending_requests.insert(id, sender);
+                        }
+                        Some(ReceiverCommand::Shutdown) | None => {
+                            debug!("MCP message receiver shutting down");
+                            break;
+                        }
+                    }
+                }
+                // Receive messages from transport
+                result = async {
+                    let mut transport = transport.lock().await;
+                    transport.receive().await
+                } => {
+                    match result {
+                        Ok(message) => {
+                            match message {
+                                McpMessage::Response(response) => {
+                                    let id = response.id.to_string();
+                                    if let Some(sender) = pending_requests.remove(&id) {
+                                        if sender.send(response).is_err() {
+                                            warn!("Failed to send response to waiting request {}", id);
+                                        }
+                                    } else {
+                                        warn!("Received response for unknown request: {}", id);
+                                    }
+                                }
+                                McpMessage::Notification(notification) => {
+                                    debug!("Received notification: {}", notification.method);
+                                    // Notifications are handled separately
+                                    // TODO: Route to notification handler
+                                }
+                                McpMessage::Request(request) => {
+                                    // Server-initiated requests (rare)
+                                    warn!("Received server request: {}", request.method);
+                                    // TODO: Handle server requests
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            if running.load(Ordering::SeqCst) {
+                                error!("Error receiving MCP message: {}", e);
+                            }
+                            // On connection error, notify all pending requests
+                            for (id, sender) in pending_requests.drain() {
+                                warn!("Cancelling pending request {} due to connection error", id);
+                                let _ = sender.send(McpResponse::error(
+                                    RequestId::String(id),
+                                    McpRpcError::new(-32000, e.to_string()),
+                                ));
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
         }
+    }
+
+    /// Set a custom notification handler
+    pub async fn set_notification_handler(&self, handler: Box<dyn NotificationHandler>) {
+        *self.notification_handler.write().await = Some(handler);
+    }
+
+    /// Set request timeout
+    pub fn set_timeout(&mut self, timeout: Duration) {
+        self.request_timeout = timeout;
     }
 
     /// Initialize the MCP connection
@@ -108,7 +258,7 @@ impl McpClient {
         Ok(tools)
     }
 
-    /// Call a tool
+    /// Call a tool with timeout
     pub async fn call_tool(
         &self,
         name: &str,
@@ -200,13 +350,18 @@ impl McpClient {
 
     /// Close the client connection
     pub async fn close(&self) -> Result<(), McpError> {
+        // Signal the receiver to stop
+        self.running.store(false, Ordering::SeqCst);
+        let _ = self.command_sender.send(ReceiverCommand::Shutdown).await;
+
+        // Close the transport
         let mut transport = self.transport.lock().await;
         transport.close().await?;
         *self.initialized.write().await = false;
         Ok(())
     }
 
-    /// Make a request and wait for response
+    /// Make a request and wait for response with timeout
     async fn call<T>(&self, method: &str, params: Option<Value>) -> Result<T, McpError>
     where
         T: serde::de::DeserializeOwned,
@@ -221,14 +376,29 @@ impl McpClient {
             request
         };
 
+        // Create response channel
+        let (response_sender, response_receiver) = oneshot::channel();
+
+        // Register the pending request
+        self.command_sender
+            .send(ReceiverCommand::RegisterRequest {
+                id: id_str.clone(),
+                sender: response_sender,
+            })
+            .await
+            .map_err(|_| McpError::Connection("Failed to register request".into()))?;
+
         // Send request
         {
             let mut transport = self.transport.lock().await;
             transport.send(McpMessage::Request(request)).await?;
         }
 
-        // Wait for response
-        let response = self.receive_response(&id_str).await?;
+        // Wait for response with timeout
+        let response = timeout(self.request_timeout, response_receiver)
+            .await
+            .map_err(|_| McpError::Timeout(self.request_timeout.as_secs()))?
+            .map_err(|_| McpError::Connection("Response channel closed".into()))?;
 
         // Handle response
         match response.into_result() {
@@ -253,33 +423,6 @@ impl McpClient {
         transport
             .send(McpMessage::Notification(notification))
             .await
-    }
-
-    /// Receive a response for the given request ID
-    async fn receive_response(&self, expected_id: &str) -> Result<McpResponse, McpError> {
-        let mut transport = self.transport.lock().await;
-
-        loop {
-            let message = transport.receive().await?;
-
-            match message {
-                McpMessage::Response(response) => {
-                    if response.id.to_string() == expected_id {
-                        return Ok(response);
-                    }
-                    // Wrong ID, this shouldn't happen in single-threaded operation
-                    continue;
-                }
-                McpMessage::Notification(_) => {
-                    // Handle notifications separately if needed
-                    continue;
-                }
-                McpMessage::Request(_) => {
-                    // Server shouldn't send requests in typical operation
-                    continue;
-                }
-            }
-        }
     }
 
     /// Generate next request ID
@@ -309,6 +452,25 @@ impl McpClient {
     pub async fn cached_prompts(&self) -> Vec<McpPrompt> {
         self.prompts.read().await.clone()
     }
+
+    /// Refresh all caches (tools, resources, prompts)
+    pub async fn refresh_caches(&self) -> Result<(), McpError> {
+        self.list_tools().await?;
+        self.list_resources().await?;
+        self.list_prompts().await?;
+        Ok(())
+    }
+
+    /// Check if the client is connected
+    pub fn is_connected(&self) -> bool {
+        self.running.load(Ordering::SeqCst)
+    }
+}
+
+impl Drop for McpClient {
+    fn drop(&mut self) {
+        self.running.store(false, Ordering::SeqCst);
+    }
 }
 
 #[cfg(test)]
@@ -335,5 +497,10 @@ mod tests {
         let json = serde_json::to_string(&params).unwrap();
         assert!(json.contains("protocolVersion"));
         assert!(json.contains("sage-agent"));
+    }
+
+    #[test]
+    fn test_request_timeout_default() {
+        assert_eq!(DEFAULT_REQUEST_TIMEOUT_SECS, 300);
     }
 }

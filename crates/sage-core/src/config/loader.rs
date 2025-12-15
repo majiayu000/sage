@@ -148,6 +148,7 @@ impl ConfigLoader {
             },
             logging: crate::config::model::LoggingConfig::default(),
             trajectory: crate::config::model::TrajectoryConfig::default(),
+            mcp: crate::config::model::McpConfig::default(),
         };
 
         // Load provider settings
@@ -246,6 +247,7 @@ impl ConfigLoader {
             },
             logging: crate::config::model::LoggingConfig::default(),
             trajectory: crate::config::model::TrajectoryConfig::default(),
+            mcp: crate::config::model::McpConfig::default(),
         };
 
         if let Some(provider) = args.get("provider") {
