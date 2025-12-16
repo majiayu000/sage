@@ -159,22 +159,20 @@ impl McpServerManager {
             McpError::Connection(format!("Environment variable {} not set", var_name))
         })?;
 
-        let config: McpConfig = serde_json::from_str(&value).map_err(|e| {
-            McpError::Protocol(format!("Invalid JSON in {}: {}", var_name, e))
-        })?;
+        let config: McpConfig = serde_json::from_str(&value)
+            .map_err(|e| McpError::Protocol(format!("Invalid JSON in {}: {}", var_name, e)))?;
 
         self.discover_from_config(config).await
     }
 
     /// Discover servers from a file
     async fn discover_from_file(&self, path: &PathBuf) -> Result<Vec<String>, McpError> {
-        let content = tokio::fs::read_to_string(path).await.map_err(|e| {
-            McpError::Connection(format!("Failed to read file {:?}: {}", path, e))
-        })?;
+        let content = tokio::fs::read_to_string(path)
+            .await
+            .map_err(|e| McpError::Connection(format!("Failed to read file {:?}: {}", path, e)))?;
 
-        let config: McpConfig = serde_json::from_str(&content).map_err(|e| {
-            McpError::Protocol(format!("Invalid JSON in {:?}: {}", path, e))
-        })?;
+        let config: McpConfig = serde_json::from_str(&content)
+            .map_err(|e| McpError::Protocol(format!("Invalid JSON in {:?}: {}", path, e)))?;
 
         self.discover_from_config(config).await
     }
@@ -222,9 +220,7 @@ impl McpServerManager {
             Ok(server_info) => {
                 info!(
                     "MCP server '{}' connected: {} v{}",
-                    name,
-                    server_info.name,
-                    server_info.version
+                    name, server_info.name, server_info.version
                 );
                 self.update_health(name, ServerStatus::Connected).await;
                 Ok(())
@@ -248,10 +244,9 @@ impl McpServerManager {
     pub async fn reconnect_server(&self, name: &str) -> Result<(), McpError> {
         let config = {
             let configs = self.server_configs.read().await;
-            configs
-                .get(name)
-                .cloned()
-                .ok_or_else(|| McpError::Connection(format!("No config found for server: {}", name)))?
+            configs.get(name).cloned().ok_or_else(|| {
+                McpError::Connection(format!("No config found for server: {}", name))
+            })?
         };
 
         // Disconnect first (ignore errors)
@@ -356,10 +351,9 @@ impl Default for McpServerManager {
 fn server_config_to_transport(config: &McpServerConfig) -> Result<TransportConfig, McpError> {
     match config.transport.as_str() {
         "stdio" => {
-            let command = config
-                .command
-                .as_ref()
-                .ok_or_else(|| McpError::InvalidRequest("Stdio transport requires command".into()))?;
+            let command = config.command.as_ref().ok_or_else(|| {
+                McpError::InvalidRequest("Stdio transport requires command".into())
+            })?;
 
             Ok(TransportConfig::Stdio {
                 command: command.clone(),
@@ -379,10 +373,9 @@ fn server_config_to_transport(config: &McpServerConfig) -> Result<TransportConfi
             })
         }
         "websocket" => {
-            let url = config
-                .url
-                .as_ref()
-                .ok_or_else(|| McpError::InvalidRequest("WebSocket transport requires url".into()))?;
+            let url = config.url.as_ref().ok_or_else(|| {
+                McpError::InvalidRequest("WebSocket transport requires url".into())
+            })?;
 
             Ok(TransportConfig::WebSocket { url: url.clone() })
         }

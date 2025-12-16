@@ -1,6 +1,6 @@
 //! UI Enhancement Demo - Showcase all the beautiful new features
 
-use sage_core::ui::{EnhancedConsole, DisplayManager};
+use sage_core::ui::{DisplayManager, EnhancedConsole};
 use std::time::Duration;
 
 #[tokio::main]
@@ -15,22 +15,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 2. Section Headers
     println!("2️⃣ Section Headers:");
-    EnhancedConsole::print_section_header("Task Execution", Some("AI-powered software engineering"));
-    
+    EnhancedConsole::print_section_header(
+        "Task Execution",
+        Some("AI-powered software engineering"),
+    );
+
     // 3. Task Status Examples
     println!("3️⃣ Task Status Examples:");
     EnhancedConsole::print_task_status("Analyzing codebase", "starting", None);
     tokio::time::sleep(Duration::from_millis(500)).await;
-    
+
     EnhancedConsole::print_task_status("Processing files", "thinking", Some((3, 10)));
     tokio::time::sleep(Duration::from_millis(500)).await;
-    
+
     EnhancedConsole::print_task_status("Running tests", "executing", Some((7, 10)));
     tokio::time::sleep(Duration::from_millis(500)).await;
-    
+
     EnhancedConsole::print_task_status("Code generation", "completed", Some((10, 10)));
     tokio::time::sleep(Duration::from_millis(500)).await;
-    
+
     EnhancedConsole::print_task_status("Deployment", "failed", None);
     println!();
 
@@ -46,36 +49,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 5. Result Summary
     println!("5️⃣ Result Summary:");
-    EnhancedConsole::print_result_summary(
-        true,
-        Duration::from_secs_f64(23.45),
-        5,
-        8432
-    );
+    EnhancedConsole::print_result_summary(true, Duration::from_secs_f64(23.45), 5, 8432);
 
     // 6. Error Example
     println!("6️⃣ Error Example:");
     EnhancedConsole::print_error(
         "Configuration Error",
         "The API key for OpenAI is missing or invalid. Please check your configuration file.",
-        Some("Set the OPENAI_API_KEY environment variable or update your sage_config.json file.")
+        Some("Set the OPENAI_API_KEY environment variable or update your sage_config.json file."),
     );
 
     // 7. Info Box
     println!("7️⃣ Info Box:");
-    EnhancedConsole::print_info_box("Available Features", &[
-        "Multi-model LLM support",
-        "Interactive terminal mode", 
-        "Beautiful markdown rendering",
-        "Comprehensive tool integration",
-        "Real-time progress tracking"
-    ]);
+    EnhancedConsole::print_info_box(
+        "Available Features",
+        &[
+            "Multi-model LLM support",
+            "Interactive terminal mode",
+            "Beautiful markdown rendering",
+            "Comprehensive tool integration",
+            "Real-time progress tracking",
+        ],
+    );
     println!();
 
     // 8. Display Manager Examples
     println!("8️⃣ Display Manager Examples:");
     let display = DisplayManager::new();
-    
+
     display.print_separator_styled("Modern Separator", "primary");
     display.print_status("🚀", "Enhanced UI is ready!", "success");
     display.print_progress(8, 10, "Loading components");
@@ -88,7 +89,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 10. Separator
     println!("🔟 Beautiful Separator:");
     EnhancedConsole::print_separator();
-    
+
     println!("✨ Demo completed! Sage Agent now has a beautiful terminal interface! ✨");
     println!();
 

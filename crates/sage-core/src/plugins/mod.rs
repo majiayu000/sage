@@ -11,8 +11,8 @@ mod manifest;
 mod registry;
 
 pub use lifecycle::{PluginLifecycle, PluginState};
-pub use manifest::{PluginManifest, PluginPermission, PluginDependency};
-pub use registry::{PluginRegistry, PluginEntry};
+pub use manifest::{PluginDependency, PluginManifest, PluginPermission};
+pub use registry::{PluginEntry, PluginRegistry};
 
 use crate::error::SageError;
 use crate::tools::base::Tool;
@@ -328,10 +328,7 @@ mod tests {
         assert_eq!(ctx.plugin_name, "test");
         assert!(ctx.has_permission(&PluginPermission::ReadFiles));
         assert!(!ctx.has_permission(&PluginPermission::WriteFiles));
-        assert_eq!(
-            ctx.get_config("key"),
-            Some(&serde_json::json!("value"))
-        );
+        assert_eq!(ctx.get_config("key"), Some(&serde_json::json!("value")));
     }
 
     #[test]

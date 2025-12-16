@@ -4,12 +4,12 @@
 //! Kept for potential future use but not registered in the default tool set.
 
 use async_trait::async_trait;
-use serde_json::json;
-use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
-use std::fs;
 use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolResult, ToolSchema};
+use serde_json::json;
+use std::collections::{HashMap, HashSet};
+use std::fs;
+use std::path::{Path, PathBuf};
 
 /// Tool for retrieving relevant code snippets from the codebase
 pub struct CodebaseRetrievalTool {
@@ -39,7 +39,7 @@ impl CodebaseRetrievalTool {
         supported_extensions.insert("kt".to_string());
         supported_extensions.insert("scala".to_string());
         supported_extensions.insert("dart".to_string());
-        
+
         // Config and markup
         supported_extensions.insert("json".to_string());
         supported_extensions.insert("toml".to_string());
@@ -48,7 +48,7 @@ impl CodebaseRetrievalTool {
         supported_extensions.insert("xml".to_string());
         supported_extensions.insert("md".to_string());
         supported_extensions.insert("txt".to_string());
-        
+
         Self {
             name: "codebase-retrieval".to_string(),
             max_results: 20,
@@ -59,22 +59,24 @@ impl CodebaseRetrievalTool {
 
     /// Search for code snippets based on information request
     async fn search_codebase(&self, information_request: &str) -> Result<String, ToolError> {
-        let current_dir = std::env::current_dir()
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to get current directory: {}", e)))?;
-        
+        let current_dir = std::env::current_dir().map_err(|e| {
+            ToolError::ExecutionFailed(format!("Failed to get current directory: {}", e))
+        })?;
+
         // Extract search terms and analyze query
         let search_analysis = self.analyze_search_query(information_request);
-        
+
         // Find all relevant files
         let files = self.find_relevant_files(&current_dir, &search_analysis)?;
-        
+
         if files.is_empty() {
             return Ok(self.format_no_results_message(information_request));
         }
 
         // Search through files and rank results
         let mut results = Vec::new();
-        for file_path in files.iter().take(50) { // Limit files to search
+        for file_path in files.iter().take(50) {
+            // Limit files to search
             if let Ok(matches) = self.search_file(file_path, &search_analysis).await {
                 if !matches.is_empty() {
                     results.extend(matches);
@@ -83,7 +85,11 @@ impl CodebaseRetrievalTool {
         }
 
         // Sort and limit results by relevance
-        results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        results.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         results.truncate(self.max_results);
 
         if results.is_empty() {
@@ -92,7 +98,7 @@ impl CodebaseRetrievalTool {
             Ok(self.format_search_results(&results, information_request))
         }
     }
-    
+
     /// Analyze the search query to extract meaningful terms and patterns
     fn analyze_search_query(&self, query: &str) -> SearchAnalysis {
         let words: Vec<String> = query
@@ -143,42 +149,57 @@ impl CodebaseRetrievalTool {
     fn is_camel_case(&self, word: &str) -> bool {
         word.chars().any(|c| c.is_uppercase()) && word.chars().any(|c| c.is_lowercase())
     }
-    
+
     /// Find all relevant files in the directory
-    fn find_relevant_files(&self, dir: &Path, search_analysis: &SearchAnalysis) -> Result<Vec<PathBuf>, ToolError> {
+    fn find_relevant_files(
+        &self,
+        dir: &Path,
+        search_analysis: &SearchAnalysis,
+    ) -> Result<Vec<PathBuf>, ToolError> {
         let mut files = Vec::new();
         self.collect_files_recursive(dir, &mut files, 0, 5)?; // Max depth 5
-        
+
         // Filter by file patterns if specified
         if !search_analysis.file_patterns.is_empty() {
             files.retain(|path| {
-                let file_name = path.file_name()
+                let file_name = path
+                    .file_name()
                     .and_then(|n| n.to_str())
                     .unwrap_or("")
                     .to_lowercase();
-                search_analysis.file_patterns.iter().any(|pattern| {
-                    file_name.contains(pattern)
-                })
+                search_analysis
+                    .file_patterns
+                    .iter()
+                    .any(|pattern| file_name.contains(pattern))
             });
         }
 
         Ok(files)
     }
 
-    fn collect_files_recursive(&self, dir: &Path, files: &mut Vec<PathBuf>, depth: usize, max_depth: usize) -> Result<(), ToolError> {
+    fn collect_files_recursive(
+        &self,
+        dir: &Path,
+        files: &mut Vec<PathBuf>,
+        depth: usize,
+        max_depth: usize,
+    ) -> Result<(), ToolError> {
         if depth > max_depth {
             return Ok(());
         }
 
         let entries = fs::read_dir(dir).map_err(ToolError::Io)?;
-        
+
         for entry in entries {
             let entry = entry.map_err(ToolError::Io)?;
             let path = entry.path();
-            
+
             if path.is_file() {
                 if let Some(extension) = path.extension().and_then(|ext| ext.to_str()) {
-                    if self.supported_extensions.contains(&extension.to_lowercase()) {
+                    if self
+                        .supported_extensions
+                        .contains(&extension.to_lowercase())
+                    {
                         // Check file size
                         if let Ok(metadata) = fs::metadata(&path) {
                             if metadata.len() <= self.max_file_size as u64 {
@@ -188,33 +209,46 @@ impl CodebaseRetrievalTool {
                     }
                 }
             } else if path.is_dir() {
-                let dir_name = path.file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("");
-                
+                let dir_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
                 // Skip common directories that usually don't contain source code
                 if !self.should_skip_directory(dir_name) {
                     self.collect_files_recursive(&path, files, depth + 1, max_depth)?;
                 }
             }
         }
-        
+
         Ok(())
     }
 
     fn should_skip_directory(&self, dir_name: &str) -> bool {
-        matches!(dir_name, 
-            ".git" | ".svn" | ".hg" |
-            "node_modules" | "target" | "build" | "dist" | 
-            "__pycache__" | ".pytest_cache" | 
-            ".idea" | ".vscode" | 
-            "coverage" | "htmlcov" |
-            "tmp" | "temp" | "cache"
+        matches!(
+            dir_name,
+            ".git"
+                | ".svn"
+                | ".hg"
+                | "node_modules"
+                | "target"
+                | "build"
+                | "dist"
+                | "__pycache__"
+                | ".pytest_cache"
+                | ".idea"
+                | ".vscode"
+                | "coverage"
+                | "htmlcov"
+                | "tmp"
+                | "temp"
+                | "cache"
         ) || dir_name.starts_with('.')
     }
-    
+
     /// Search within a single file for relevant content
-    async fn search_file(&self, file_path: &Path, search_analysis: &SearchAnalysis) -> Result<Vec<SearchResult>, ToolError> {
+    async fn search_file(
+        &self,
+        file_path: &Path,
+        search_analysis: &SearchAnalysis,
+    ) -> Result<Vec<SearchResult>, ToolError> {
         let content = fs::read_to_string(file_path).map_err(ToolError::Io)?;
         let lines: Vec<&str> = content.lines().collect();
         let mut results = Vec::new();
@@ -254,14 +288,17 @@ impl CodebaseRetrievalTool {
             }
 
             // Bonus for comments or documentation
-            if line.trim_start().starts_with("//") || line.trim_start().starts_with("#") || line.trim_start().starts_with("*") {
+            if line.trim_start().starts_with("//")
+                || line.trim_start().starts_with("#")
+                || line.trim_start().starts_with("*")
+            {
                 score += 0.5;
             }
 
             if score > 0.0 && !matched_terms.is_empty() {
                 let context_start = line_number.saturating_sub(2);
                 let context_end = std::cmp::min(line_number + 3, lines.len());
-                
+
                 let context_lines: Vec<String> = (context_start..context_end)
                     .map(|i| format!("{:4}: {}", i + 1, lines[i]))
                     .collect();
@@ -289,7 +326,8 @@ impl CodebaseRetrievalTool {
             • Check if the files exist in the current directory\n\n\
             Supported file types: {}",
             query,
-            self.supported_extensions.iter()
+            self.supported_extensions
+                .iter()
                 .take(10)
                 .map(|ext| format!(".{}", ext))
                 .collect::<Vec<_>>()
@@ -306,24 +344,29 @@ impl CodebaseRetrievalTool {
 
         let mut file_groups: HashMap<PathBuf, Vec<&SearchResult>> = HashMap::new();
         for result in results {
-            file_groups.entry(result.file_path.clone()).or_default().push(result);
+            file_groups
+                .entry(result.file_path.clone())
+                .or_default()
+                .push(result);
         }
 
         for (file_path, file_results) in file_groups {
-            let relative_path = file_path.strip_prefix(std::env::current_dir().unwrap_or_default())
+            let relative_path = file_path
+                .strip_prefix(std::env::current_dir().unwrap_or_default())
                 .unwrap_or(&file_path)
                 .to_string_lossy();
-            
+
             output.push_str(&format!("📁 **{}**\n", relative_path));
-            
-            for result in file_results.iter().take(3) { // Max 3 results per file
+
+            for result in file_results.iter().take(3) {
+                // Max 3 results per file
                 output.push_str(&format!(
                     "   Line {}: [Score: {:.1}] Matches: {}\n",
                     result.line_number,
                     result.score,
                     result.matched_terms.join(", ")
                 ));
-                
+
                 for context_line in &result.context {
                     output.push_str(&format!("   {}\n", context_line));
                 }
@@ -352,14 +395,23 @@ impl Tool for CodebaseRetrievalTool {
     }
 
     async fn execute(&self, tool_call: &ToolCall) -> Result<ToolResult, ToolError> {
-        let information_request = tool_call.arguments
+        let information_request = tool_call
+            .arguments
             .get("information_request")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| ToolError::InvalidArguments("Missing required parameter: information_request".to_string()))?;
+            .ok_or_else(|| {
+                ToolError::InvalidArguments(
+                    "Missing required parameter: information_request".to_string(),
+                )
+            })?;
 
         match self.search_codebase(information_request).await {
             Ok(result) => Ok(ToolResult::success(&tool_call.id, self.name(), result)),
-            Err(e) => Ok(ToolResult::error(&tool_call.id, self.name(), format!("Codebase retrieval failed: {}", e))),
+            Err(e) => Ok(ToolResult::error(
+                &tool_call.id,
+                self.name(),
+                format!("Codebase retrieval failed: {}", e),
+            )),
         }
     }
 
@@ -404,10 +456,10 @@ struct SearchResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
     use serde_json::json;
-    use tokio::fs;
+    use std::collections::HashMap;
     use tempfile::TempDir;
+    use tokio::fs;
 
     fn create_tool_call(id: &str, name: &str, args: serde_json::Value) -> ToolCall {
         let arguments = if let serde_json::Value::Object(map) = args {
@@ -430,7 +482,9 @@ mod tests {
 
         // Create test files
         let rust_file = temp_dir.path().join("test.rs");
-        fs::write(&rust_file, r#"
+        fs::write(
+            &rust_file,
+            r#"
 fn main() {
     println!("Hello, world!");
 }
@@ -445,12 +499,19 @@ impl User {
         Self { name, email }
     }
 }
-"#).await.unwrap();
+"#,
+        )
+        .await
+        .unwrap();
 
         let tool = CodebaseRetrievalTool::new();
-        let call = create_tool_call("test-1", "codebase-retrieval", json!({
-            "information_request": "User struct implementation"
-        }));
+        let call = create_tool_call(
+            "test-1",
+            "codebase-retrieval",
+            json!({
+                "information_request": "User struct implementation"
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -465,7 +526,9 @@ impl User {
 
         // Create test file with functions
         let js_file = temp_dir.path().join("utils.js");
-        fs::write(&js_file, r#"
+        fs::write(
+            &js_file,
+            r#"
 function calculateSum(a, b) {
     return a + b;
 }
@@ -479,12 +542,19 @@ async function fetchUserData(userId) {
     const response = await fetch(`/api/users/${userId}`);
     return response.json();
 }
-"#).await.unwrap();
+"#,
+        )
+        .await
+        .unwrap();
 
         let tool = CodebaseRetrievalTool::new();
-        let call = create_tool_call("test-2", "codebase-retrieval", json!({
-            "information_request": "email validation function"
-        }));
+        let call = create_tool_call(
+            "test-2",
+            "codebase-retrieval",
+            json!({
+                "information_request": "email validation function"
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -498,23 +568,37 @@ async function fetchUserData(userId) {
 
         // Create test file
         let py_file = temp_dir.path().join("simple.py");
-        fs::write(&py_file, r#"
+        fs::write(
+            &py_file,
+            r#"
 print("Hello, Python!")
 x = 42
 y = "world"
-"#).await.unwrap();
+"#,
+        )
+        .await
+        .unwrap();
 
         let tool = CodebaseRetrievalTool::new();
-        let call = create_tool_call("test-3", "codebase-retrieval", json!({
-            "information_request": "complex machine learning algorithm implementation"
-        }));
+        let call = create_tool_call(
+            "test-3",
+            "codebase-retrieval",
+            json!({
+                "information_request": "complex machine learning algorithm implementation"
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         // Even when no matches, the tool returns success with a "no results" message
         assert!(result.success);
         let output = result.output.as_ref().unwrap();
         // The tool may return empty or no-match message
-        assert!(output.contains("No relevant") || output.contains("No matches") || output.contains("Found") || !output.is_empty());
+        assert!(
+            output.contains("No relevant")
+                || output.contains("No matches")
+                || output.contains("Found")
+                || !output.is_empty()
+        );
     }
 
     #[tokio::test]
@@ -523,15 +607,22 @@ y = "world"
 
         // Create multiple file types
         let rust_file = temp_dir.path().join("config.rs");
-        fs::write(&rust_file, r#"
+        fs::write(
+            &rust_file,
+            r#"
 pub struct Config {
     pub database_url: String,
     pub port: u16,
 }
-"#).await.unwrap();
+"#,
+        )
+        .await
+        .unwrap();
 
         let json_file = temp_dir.path().join("package.json");
-        fs::write(&json_file, r#"
+        fs::write(
+            &json_file,
+            r#"
 {
   "name": "my-app",
   "version": "1.0.0",
@@ -539,12 +630,19 @@ pub struct Config {
     "express": "^4.18.0"
   }
 }
-"#).await.unwrap();
+"#,
+        )
+        .await
+        .unwrap();
 
         let tool = CodebaseRetrievalTool::new();
-        let call = create_tool_call("test-4", "codebase-retrieval", json!({
-            "information_request": "configuration settings"
-        }));
+        let call = create_tool_call(
+            "test-4",
+            "codebase-retrieval",
+            json!({
+                "information_request": "configuration settings"
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -567,9 +665,13 @@ pub struct Config {
     #[tokio::test]
     async fn test_codebase_retrieval_empty_request() {
         let tool = CodebaseRetrievalTool::new();
-        let call = create_tool_call("test-6", "codebase-retrieval", json!({
-            "information_request": ""
-        }));
+        let call = create_tool_call(
+            "test-6",
+            "codebase-retrieval",
+            json!({
+                "information_request": ""
+            }),
+        );
 
         // Empty string is a valid input (returns no-match result), not an error
         let result = tool.execute(&call).await.unwrap();

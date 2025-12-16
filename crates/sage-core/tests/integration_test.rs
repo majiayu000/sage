@@ -1,16 +1,16 @@
 //! Integration tests for Sage Agent core functionality
-//! 
+//!
 //! This module tests the interaction between different components
 //! like caching, streaming, and LLM clients.
 
+use futures::{StreamExt, stream};
 use sage_core::{
-    cache::{CacheManager, CacheConfig, LLMCache},
-    llm::{LLMMessage, LLMResponse, MessageRole, StreamChunk},
-    llm::streaming::stream_utils,
-    types::LLMUsage,
+    cache::{CacheConfig, CacheManager, LLMCache},
     error::SageResult,
+    llm::streaming::stream_utils,
+    llm::{LLMMessage, LLMResponse, MessageRole, StreamChunk},
+    types::LLMUsage,
 };
-use futures::{stream, StreamExt};
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio::fs;
@@ -26,7 +26,7 @@ async fn test_cache_streaming_integration() -> SageResult<()> {
         memory_capacity: 50,
         enable_disk_cache: true,
         disk_cache_dir: "test_cache_integration".to_string(),
-        disk_capacity: 1024 * 1024, // 1MB
+        disk_capacity: 1024 * 1024,                  // 1MB
         default_ttl: Some(Duration::from_secs(300)), // 5 minutes
         ..Default::default()
     };
@@ -59,8 +59,13 @@ async fn test_cache_streaming_integration() -> SageResult<()> {
 
     // 3. Test cache miss (first request)
     println!("🔍 Testing cache miss...");
-    let cached_response = llm_cache.get_response(provider, model, &messages, None).await?;
-    assert!(cached_response.is_none(), "Should be cache miss on first request");
+    let cached_response = llm_cache
+        .get_response(provider, model, &messages, None)
+        .await?;
+    assert!(
+        cached_response.is_none(),
+        "Should be cache miss on first request"
+    );
 
     // 4. Simulate streaming response and cache it
     println!("🌊 Simulating streaming response...");
@@ -76,7 +81,7 @@ async fn test_cache_streaming_integration() -> SageResult<()> {
                 total_tokens: 45,
                 cost_usd: Some(0.002),
             }),
-            Some("stop".to_string())
+            Some("stop".to_string()),
         ),
     ];
 
@@ -90,20 +95,20 @@ async fn test_cache_streaming_integration() -> SageResult<()> {
 
     // 5. Cache the response
     println!("💾 Caching response...");
-    llm_cache.cache_response(
-        provider,
-        model,
-        &messages,
-        None,
-        &complete_response,
-        None,
-    ).await?;
+    llm_cache
+        .cache_response(provider, model, &messages, None, &complete_response, None)
+        .await?;
 
     // 6. Test cache hit (second request)
     println!("🎯 Testing cache hit...");
-    let cached_response = llm_cache.get_response(provider, model, &messages, None).await?;
-    assert!(cached_response.is_some(), "Should be cache hit on second request");
-    
+    let cached_response = llm_cache
+        .get_response(provider, model, &messages, None)
+        .await?;
+    assert!(
+        cached_response.is_some(),
+        "Should be cache hit on second request"
+    );
+
     let cached = cached_response.unwrap();
     assert_eq!(cached.content, complete_response.content);
     assert_eq!(cached.usage.as_ref().unwrap().total_tokens, 45);
@@ -112,27 +117,33 @@ async fn test_cache_streaming_integration() -> SageResult<()> {
     println!("📊 Checking cache statistics...");
     let stats = llm_cache.statistics().await?;
     assert!(stats.total_hits > 0, "Should have cache hits");
-    assert!(stats.memory_stats.entry_count > 0, "Should have cached entries");
+    assert!(
+        stats.memory_stats.entry_count > 0,
+        "Should have cached entries"
+    );
     println!("Cache hit rate: {:.2}%", stats.hit_rate() * 100.0);
 
     // 8. Test different request (should be cache miss)
-    let different_messages = vec![
-        LLMMessage {
-            role: MessageRole::User,
-            content: "What is Python?".to_string(),
-            tool_calls: None,
-            tool_call_id: None,
-            name: None,
-            metadata: HashMap::new(),
-        },
-    ];
+    let different_messages = vec![LLMMessage {
+        role: MessageRole::User,
+        content: "What is Python?".to_string(),
+        tool_calls: None,
+        tool_call_id: None,
+        name: None,
+        metadata: HashMap::new(),
+    }];
 
-    let different_cached = llm_cache.get_response(provider, model, &different_messages, None).await?;
-    assert!(different_cached.is_none(), "Different request should be cache miss");
+    let different_cached = llm_cache
+        .get_response(provider, model, &different_messages, None)
+        .await?;
+    assert!(
+        different_cached.is_none(),
+        "Different request should be cache miss"
+    );
 
     // 9. Cleanup
     let _ = fs::remove_dir_all("test_cache_integration").await;
-    
+
     println!("✅ Cache and streaming integration test passed!");
     Ok(())
 }
@@ -153,7 +164,7 @@ async fn test_stream_utilities() -> SageResult<()> {
 
     let mixed_stream = Box::pin(stream::iter(mixed_chunks));
     let content_stream = stream_utils::content_only(mixed_stream);
-    
+
     let mut content_parts = Vec::new();
     let mut content_stream = content_stream;
     while let Some(chunk_result) = content_stream.next().await {
@@ -214,7 +225,7 @@ async fn test_stream_utilities() -> SageResult<()> {
                 total_tokens: 25,
                 cost_usd: Some(0.001),
             }),
-            Some("stop".to_string())
+            Some("stop".to_string()),
         )),
     ];
 
@@ -247,16 +258,14 @@ async fn test_cache_performance() -> SageResult<()> {
     // Generate test data
     let mut test_cases = Vec::new();
     for i in 0..50 {
-        let messages = vec![
-            LLMMessage {
-                role: MessageRole::User,
-                content: format!("Test message {}", i),
-                tool_calls: None,
-                tool_call_id: None,
-                name: None,
-                metadata: HashMap::new(),
-            },
-        ];
+        let messages = vec![LLMMessage {
+            role: MessageRole::User,
+            content: format!("Test message {}", i),
+            tool_calls: None,
+            tool_call_id: None,
+            name: None,
+            metadata: HashMap::new(),
+        }];
 
         let response = LLMResponse {
             content: format!("Response to test message {}", i),
@@ -279,28 +288,44 @@ async fn test_cache_performance() -> SageResult<()> {
     // Measure cache write performance
     let start = std::time::Instant::now();
     for (messages, response) in &test_cases {
-        llm_cache.cache_response("test", "model", messages, None, response, None).await?;
+        llm_cache
+            .cache_response("test", "model", messages, None, response, None)
+            .await?;
     }
     let write_duration = start.elapsed();
-    println!("📝 Cached {} entries in {:?}", test_cases.len(), write_duration);
+    println!(
+        "📝 Cached {} entries in {:?}",
+        test_cases.len(),
+        write_duration
+    );
 
     // Measure cache read performance
     let start = std::time::Instant::now();
     let mut hits = 0;
     for (messages, _) in &test_cases {
-        if llm_cache.get_response("test", "model", messages, None).await?.is_some() {
+        if llm_cache
+            .get_response("test", "model", messages, None)
+            .await?
+            .is_some()
+        {
             hits += 1;
         }
     }
     let read_duration = start.elapsed();
-    println!("🔍 Read {} entries ({} hits) in {:?}", test_cases.len(), hits, read_duration);
+    println!(
+        "🔍 Read {} entries ({} hits) in {:?}",
+        test_cases.len(),
+        hits,
+        read_duration
+    );
 
     assert_eq!(hits, test_cases.len(), "All entries should be cache hits");
 
     // Check final statistics
     let stats = llm_cache.statistics().await?;
-    println!("📊 Final stats: {} entries, {:.2}% hit rate", 
-        stats.memory_stats.entry_count, 
+    println!(
+        "📊 Final stats: {} entries, {:.2}% hit rate",
+        stats.memory_stats.entry_count,
         stats.hit_rate() * 100.0
     );
 
@@ -329,7 +354,9 @@ async fn test_error_handling() -> SageResult<()> {
     // Test stream error handling
     let error_chunks = vec![
         Ok(StreamChunk::content("Good chunk")),
-        Err(sage_core::error::SageError::llm("Simulated stream error".to_string())),
+        Err(sage_core::error::SageError::llm(
+            "Simulated stream error".to_string(),
+        )),
         Ok(StreamChunk::content("Another good chunk")),
     ];
 

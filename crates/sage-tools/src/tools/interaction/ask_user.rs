@@ -1,10 +1,10 @@
 //! AskUserQuestion tool for interactive user input during agent execution
 
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
-use serde_json::json;
 use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolResult, ToolSchema};
+use serde::{Deserialize, Serialize};
+use serde_json::json;
 
 /// Represents a single option in a question
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -66,56 +66,53 @@ impl AskUserQuestionTool {
         for (idx, question) in questions.iter().enumerate() {
             // Check header length
             if question.header.len() > 12 {
-                return Err(ToolError::InvalidArguments(
-                    format!(
-                        "Question {} header '{}' exceeds 12 characters (length: {})",
-                        idx + 1,
-                        question.header,
-                        question.header.len()
-                    ),
-                ));
+                return Err(ToolError::InvalidArguments(format!(
+                    "Question {} header '{}' exceeds 12 characters (length: {})",
+                    idx + 1,
+                    question.header,
+                    question.header.len()
+                )));
             }
 
             // Check question text is not empty
             if question.question.trim().is_empty() {
-                return Err(ToolError::InvalidArguments(
-                    format!("Question {} has empty question text", idx + 1),
-                ));
+                return Err(ToolError::InvalidArguments(format!(
+                    "Question {} has empty question text",
+                    idx + 1
+                )));
             }
 
             // Check number of options
             if question.options.len() < 2 {
-                return Err(ToolError::InvalidArguments(
-                    format!("Question {} must have at least 2 options", idx + 1),
-                ));
+                return Err(ToolError::InvalidArguments(format!(
+                    "Question {} must have at least 2 options",
+                    idx + 1
+                )));
             }
 
             if question.options.len() > 4 {
-                return Err(ToolError::InvalidArguments(
-                    format!("Question {} has too many options (max 4)", idx + 1),
-                ));
+                return Err(ToolError::InvalidArguments(format!(
+                    "Question {} has too many options (max 4)",
+                    idx + 1
+                )));
             }
 
             // Validate each option
             for (opt_idx, option) in question.options.iter().enumerate() {
                 if option.label.trim().is_empty() {
-                    return Err(ToolError::InvalidArguments(
-                        format!(
-                            "Question {} option {} has empty label",
-                            idx + 1,
-                            opt_idx + 1
-                        ),
-                    ));
+                    return Err(ToolError::InvalidArguments(format!(
+                        "Question {} option {} has empty label",
+                        idx + 1,
+                        opt_idx + 1
+                    )));
                 }
 
                 if option.description.trim().is_empty() {
-                    return Err(ToolError::InvalidArguments(
-                        format!(
-                            "Question {} option {} has empty description",
-                            idx + 1,
-                            opt_idx + 1
-                        ),
-                    ));
+                    return Err(ToolError::InvalidArguments(format!(
+                        "Question {} option {} has empty description",
+                        idx + 1,
+                        opt_idx + 1
+                    )));
                 }
             }
         }
@@ -129,7 +126,11 @@ impl AskUserQuestionTool {
         output.push_str("The agent needs your input to proceed:\n\n");
 
         for (idx, question) in questions.iter().enumerate() {
-            output.push_str(&format!("## Question {} [{}]\n\n", idx + 1, question.header));
+            output.push_str(&format!(
+                "## Question {} [{}]\n\n",
+                idx + 1,
+                question.header
+            ));
             output.push_str(&format!("{}\n\n", question.question));
 
             output.push_str("Options:\n");
@@ -237,17 +238,12 @@ impl Tool for AskUserQuestionTool {
 
     async fn execute(&self, tool_call: &ToolCall) -> Result<ToolResult, ToolError> {
         // Parse questions from arguments
-        let questions_value = tool_call
-            .arguments
-            .get("questions")
-            .ok_or_else(|| {
-                ToolError::InvalidArguments("Missing required parameter: questions".to_string())
-            })?;
+        let questions_value = tool_call.arguments.get("questions").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing required parameter: questions".to_string())
+        })?;
 
         let questions: Vec<Question> = serde_json::from_value(questions_value.clone())
-            .map_err(|e| {
-                ToolError::InvalidArguments(format!("Invalid questions format: {}", e))
-            })?;
+            .map_err(|e| ToolError::InvalidArguments(format!("Invalid questions format: {}", e)))?;
 
         // Validate questions
         self.validate_questions(&questions)?;
@@ -263,29 +259,20 @@ impl Tool for AskUserQuestionTool {
                     if let Some(answer) = answers_obj.get(&question_key) {
                         response.push_str(&format!(
                             "**[{}]** {}\n",
-                            question.header,
-                            question.question
+                            question.header, question.question
                         ));
                         response.push_str(&format!("Answer: {}\n\n", answer));
                     }
                 }
             }
 
-            return Ok(ToolResult::success(
-                &tool_call.id,
-                self.name(),
-                response,
-            ));
+            return Ok(ToolResult::success(&tool_call.id, self.name(), response));
         }
 
         // First call: format questions for user
         let formatted = self.format_questions(&questions);
 
-        Ok(ToolResult::success(
-            &tool_call.id,
-            self.name(),
-            formatted,
-        ))
+        Ok(ToolResult::success(&tool_call.id, self.name(), formatted))
     }
 
     fn validate(&self, call: &ToolCall) -> Result<(), ToolError> {

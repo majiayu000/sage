@@ -8,8 +8,8 @@ pub mod test_generator;
 pub use log_analyzer::LogAnalyzerTool;
 pub use test_generator::TestGeneratorTool;
 
-use std::sync::Arc;
 use sage_core::tools::Tool;
+use std::sync::Arc;
 
 /// Get all monitoring tools
 pub fn get_monitoring_tools() -> Vec<Arc<dyn Tool>> {

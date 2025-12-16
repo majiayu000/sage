@@ -3,7 +3,7 @@
 //! Provides configurable retry behavior with backoff strategies.
 
 use super::backoff::{BackoffStrategy, ExponentialBackoff};
-use super::{classify_error, ErrorClass, RecoverableError, RecoveryError};
+use super::{ErrorClass, RecoverableError, RecoveryError, classify_error};
 use crate::error::SageError;
 use std::future::Future;
 use std::time::Duration;
@@ -221,9 +221,8 @@ impl RetryPolicy {
             // Check total duration
             if start.elapsed() >= self.config.max_duration {
                 return RetryResult::Failed {
-                    error: last_error.unwrap_or_else(|| {
-                        RecoverableError::permanent("Max duration exceeded")
-                    }),
+                    error: last_error
+                        .unwrap_or_else(|| RecoverableError::permanent("Max duration exceeded")),
                     attempts: attempt,
                     elapsed: start.elapsed(),
                 };
@@ -327,8 +326,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicU32, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicU32, Ordering};
 
     #[tokio::test]
     async fn test_retry_success_immediately() {

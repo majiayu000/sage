@@ -1,5 +1,5 @@
 //! Memory-optimized trajectory recording
-//! 
+//!
 //! This module provides memory-efficient trajectory recording that prevents
 //! memory leaks during long-running agent sessions.
 
@@ -116,7 +116,7 @@ impl MemoryOptimizedRecorder {
     /// Add a record to the trajectory
     pub async fn add_record(&self, record: TrajectoryRecord) -> SageResult<()> {
         let record_size = self.estimate_record_size(&record);
-        
+
         // Check if we need to evict records
         self.ensure_memory_capacity(record_size).await?;
 
@@ -131,7 +131,7 @@ impl MemoryOptimizedRecorder {
             buffer.push_back(record.clone());
             index.insert(record.id.clone(), buffer.len() - 1);
             *memory_bytes += record_size;
-            
+
             // Update stats
             stats.total_records += 1;
             stats.memory_records = buffer.len();
@@ -147,7 +147,7 @@ impl MemoryOptimizedRecorder {
         {
             let buffer = self.memory_buffer.read().await;
             let index = self.record_index.read().await;
-            
+
             if let Some(&position) = index.get(id) {
                 if let Some(record) = buffer.get(position) {
                     return Ok(Some(record.clone()));
@@ -162,12 +162,7 @@ impl MemoryOptimizedRecorder {
     /// Get recent records
     pub async fn get_recent_records(&self, limit: usize) -> SageResult<Vec<TrajectoryRecord>> {
         let buffer = self.memory_buffer.read().await;
-        let records = buffer
-            .iter()
-            .rev()
-            .take(limit)
-            .cloned()
-            .collect();
+        let records = buffer.iter().rev().take(limit).cloned().collect();
         Ok(records)
     }
 
@@ -197,8 +192,8 @@ impl MemoryOptimizedRecorder {
                 let memory_bytes = self.current_memory_bytes.lock().await;
                 let stats = self.stats.lock().await;
 
-                let should_evict = (*memory_bytes + needed_bytes > self.config.max_memory_bytes) ||
-                                  (stats.memory_records >= self.config.max_memory_records);
+                let should_evict = (*memory_bytes + needed_bytes > self.config.max_memory_bytes)
+                    || (stats.memory_records >= self.config.max_memory_records);
 
                 (should_evict, *memory_bytes, stats.memory_records)
             };
@@ -231,10 +226,10 @@ impl MemoryOptimizedRecorder {
 
         if let Some(record) = buffer.pop_front() {
             let record_size = self.estimate_record_size(&record);
-            
+
             // Remove from index and update positions
             index.remove(&record.id);
-            
+
             // Update all positions in index
             for position in index.values_mut() {
                 if *position > 0 {
@@ -244,7 +239,7 @@ impl MemoryOptimizedRecorder {
 
             // Save to disk before evicting
             self.save_to_disk(&record).await?;
-            
+
             Ok(record_size)
         } else {
             Ok(0)
@@ -254,13 +249,13 @@ impl MemoryOptimizedRecorder {
     /// Save a record to disk
     async fn save_to_disk(&self, record: &TrajectoryRecord) -> SageResult<()> {
         let file_path = self.config.storage_dir.join(format!("{}.json", record.id));
-        
+
         let content = if self.config.enable_compression {
             // Simple compression using gzip
-            use flate2::write::GzEncoder;
             use flate2::Compression;
+            use flate2::write::GzEncoder;
             use std::io::Write;
-            
+
             let json_data = serde_json::to_vec(record)?;
 
             let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
@@ -278,7 +273,7 @@ impl MemoryOptimizedRecorder {
     /// Load a record from disk
     async fn load_from_disk(&self, id: &Id) -> SageResult<Option<TrajectoryRecord>> {
         let file_path = self.config.storage_dir.join(format!("{}.json", id));
-        
+
         if !file_path.exists() {
             return Ok(None);
         }
@@ -306,13 +301,13 @@ impl MemoryOptimizedRecorder {
     async fn flush_to_disk(&self) -> SageResult<()> {
         let buffer = self.memory_buffer.read().await;
         let mut stats = self.stats.lock().await;
-        
+
         let mut flushed_count = 0;
         for record in buffer.iter() {
             self.save_to_disk(record).await?;
             flushed_count += 1;
         }
-        
+
         stats.flushed_records += flushed_count;
         Ok(())
     }
@@ -327,15 +322,15 @@ impl MemoryOptimizedRecorder {
     ) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
             let mut interval = interval(config.flush_interval);
-            
+
             loop {
                 interval.tick().await;
-                
+
                 // Flush records to disk periodically
                 let buffer = memory_buffer.read().await;
                 if !buffer.is_empty() {
                     drop(buffer);
-                    
+
                     // Create a temporary recorder instance for flushing
                     let temp_recorder = MemoryOptimizedRecorder {
                         config: config.clone(),
@@ -345,7 +340,7 @@ impl MemoryOptimizedRecorder {
                         stats: stats.clone(),
                         _flush_task: tokio::spawn(async {}), // Dummy task
                     };
-                    
+
                     if let Err(e) = temp_recorder.flush_to_disk().await {
                         tracing::error!("Failed to flush trajectory records: {}", e);
                     }

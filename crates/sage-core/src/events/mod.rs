@@ -12,10 +12,7 @@ use tokio::sync::broadcast;
 pub enum Event {
     // ========== Stream Events ==========
     /// LLM stream connected
-    StreamConnected {
-        provider: String,
-        model: String,
-    },
+    StreamConnected { provider: String, model: String },
 
     /// LLM stream disconnected
     StreamDisconnected {
@@ -31,16 +28,10 @@ pub enum Event {
     TextComplete(String),
 
     /// Tool call started
-    ToolCallStart {
-        id: String,
-        name: String,
-    },
+    ToolCallStart { id: String, name: String },
 
     /// Tool call progress update
-    ToolCallProgress {
-        id: String,
-        message: String,
-    },
+    ToolCallProgress { id: String, message: String },
 
     /// Tool call completed
     ToolCallComplete {
@@ -52,10 +43,7 @@ pub enum Event {
 
     // ========== Agent Events ==========
     /// Agent started processing
-    AgentStarted {
-        agent_id: String,
-        task: String,
-    },
+    AgentStarted { agent_id: String, task: String },
 
     /// Agent state changed
     AgentStateChanged {
@@ -65,28 +53,17 @@ pub enum Event {
     },
 
     /// Agent iteration started (for reactive agents)
-    AgentIterationStart {
-        agent_id: String,
-        iteration: u32,
-    },
+    AgentIterationStart { agent_id: String, iteration: u32 },
 
     /// Agent completed
-    AgentCompleted {
-        agent_id: String,
-        success: bool,
-    },
+    AgentCompleted { agent_id: String, success: bool },
 
     // ========== Session Events ==========
     /// New session created
-    SessionCreated {
-        session_id: String,
-    },
+    SessionCreated { session_id: String },
 
     /// Session ended
-    SessionEnded {
-        session_id: String,
-        reason: String,
-    },
+    SessionEnded { session_id: String, reason: String },
 
     // ========== Error Events ==========
     /// Error occurred
@@ -97,10 +74,7 @@ pub enum Event {
     },
 
     /// Warning
-    Warning {
-        source: String,
-        message: String,
-    },
+    Warning { source: String, message: String },
 
     // ========== System Events ==========
     /// System is shutting down

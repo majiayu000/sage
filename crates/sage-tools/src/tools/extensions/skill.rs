@@ -6,7 +6,7 @@
 
 use async_trait::async_trait;
 use sage_core::tools::base::{Tool, ToolError};
-use sage_core::tools::types::{ToolCall, ToolResult, ToolSchema, ToolParameter};
+use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
 
 /// Tool for executing specialized skills
 ///
@@ -56,7 +56,7 @@ impl SkillTool {
     fn validate_skill_name(&self, skill: &str) -> Result<(), ToolError> {
         if skill.is_empty() {
             return Err(ToolError::InvalidArguments(
-                "Skill name cannot be empty".to_string()
+                "Skill name cannot be empty".to_string(),
             ));
         }
 
@@ -102,21 +102,18 @@ impl Tool for SkillTool {
         ToolSchema::new(
             self.name(),
             self.description(),
-            vec![
-                ToolParameter::string(
-                    "skill",
-                    "The name of the skill to execute (e.g., 'pdf', 'xlsx', 'brainstorming', 'comprehensive-testing')"
-                ),
-            ],
+            vec![ToolParameter::string(
+                "skill",
+                "The name of the skill to execute (e.g., 'pdf', 'xlsx', 'brainstorming', 'comprehensive-testing')",
+            )],
         )
     }
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
         // Extract skill parameter
-        let skill = call.get_string("skill")
-            .ok_or_else(|| ToolError::InvalidArguments(
-                "Missing required parameter: skill".to_string()
-            ))?;
+        let skill = call.get_string("skill").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing required parameter: skill".to_string())
+        })?;
 
         // Validate skill name
         self.validate_skill_name(&skill)?;
@@ -128,10 +125,9 @@ impl Tool for SkillTool {
     }
 
     fn validate(&self, call: &ToolCall) -> Result<(), ToolError> {
-        let skill = call.get_string("skill")
-            .ok_or_else(|| ToolError::InvalidArguments(
-                "Missing required parameter: skill".to_string()
-            ))?;
+        let skill = call.get_string("skill").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing required parameter: skill".to_string())
+        })?;
 
         self.validate_skill_name(&skill)?;
         Ok(())
@@ -191,7 +187,12 @@ mod tests {
 
         let result = tool.execute(&call).await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Missing required parameter"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Missing required parameter")
+        );
     }
 
     #[tokio::test]
@@ -199,7 +200,11 @@ mod tests {
         let tool = SkillTool::new();
 
         // Test a few standard skills
-        let skills = vec!["brainstorming", "comprehensive-testing", "rust-best-practices"];
+        let skills = vec![
+            "brainstorming",
+            "comprehensive-testing",
+            "rust-best-practices",
+        ];
 
         for skill in skills {
             let call = create_tool_call(&format!("test-{}", skill), "skill", skill);

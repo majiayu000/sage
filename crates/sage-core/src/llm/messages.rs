@@ -120,7 +120,9 @@ impl LLMMessage {
 
     /// Check if this message has tool calls
     pub fn has_tool_calls(&self) -> bool {
-        self.tool_calls.as_ref().map_or(false, |calls| !calls.is_empty())
+        self.tool_calls
+            .as_ref()
+            .map_or(false, |calls| !calls.is_empty())
     }
 }
 
@@ -189,8 +191,6 @@ impl LLMResponse {
 
     /// Check if the response indicates task completion
     pub fn indicates_completion(&self) -> bool {
-        self.tool_calls
-            .iter()
-            .any(|call| call.name == "task_done")
+        self.tool_calls.iter().any(|call| call.name == "task_done")
     }
 }

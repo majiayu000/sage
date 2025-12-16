@@ -42,9 +42,9 @@ impl Tool for SequentialThinkingTool {
     }
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
-        let thinking = call
-            .get_string("thinking")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'thinking' parameter".to_string()))?;
+        let thinking = call.get_string("thinking").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'thinking' parameter".to_string())
+        })?;
 
         if thinking.trim().is_empty() {
             return Err(ToolError::InvalidArguments(
@@ -63,9 +63,9 @@ impl Tool for SequentialThinkingTool {
     }
 
     fn validate(&self, call: &ToolCall) -> Result<(), ToolError> {
-        let thinking = call
-            .get_string("thinking")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'thinking' parameter".to_string()))?;
+        let thinking = call.get_string("thinking").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'thinking' parameter".to_string())
+        })?;
 
         if thinking.trim().is_empty() {
             return Err(ToolError::InvalidArguments(
@@ -129,8 +129,8 @@ impl SequentialThinkingTool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
     use serde_json::json;
+    use std::collections::HashMap;
 
     fn create_tool_call(id: &str, name: &str, args: serde_json::Value) -> ToolCall {
         let arguments = if let serde_json::Value::Object(map) = args {
@@ -150,9 +150,13 @@ mod tests {
     #[tokio::test]
     async fn test_sequential_thinking_basic() {
         let tool = SequentialThinkingTool::new();
-        let call = create_tool_call("test-1", "sequentialthinking", json!({
-            "thinking": "Let me think about this problem step by step:\n1. First, I need to understand the requirements\n2. Then, I'll analyze the constraints\n3. Finally, I'll propose a solution"
-        }));
+        let call = create_tool_call(
+            "test-1",
+            "sequentialthinking",
+            json!({
+                "thinking": "Let me think about this problem step by step:\n1. First, I need to understand the requirements\n2. Then, I'll analyze the constraints\n3. Finally, I'll propose a solution"
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -166,9 +170,13 @@ mod tests {
     #[tokio::test]
     async fn test_sequential_thinking_with_numbered_steps() {
         let tool = SequentialThinkingTool::new();
-        let call = create_tool_call("test-2", "sequentialthinking", json!({
-            "thinking": "1. Analyze the problem\n2. Consider alternatives\n3. Choose the best approach"
-        }));
+        let call = create_tool_call(
+            "test-2",
+            "sequentialthinking",
+            json!({
+                "thinking": "1. Analyze the problem\n2. Consider alternatives\n3. Choose the best approach"
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -182,9 +190,13 @@ mod tests {
     #[tokio::test]
     async fn test_sequential_thinking_with_bullet_points() {
         let tool = SequentialThinkingTool::new();
-        let call = create_tool_call("test-3", "sequentialthinking", json!({
-            "thinking": "* First consideration\n* Second point\n* Third aspect"
-        }));
+        let call = create_tool_call(
+            "test-3",
+            "sequentialthinking",
+            json!({
+                "thinking": "* First consideration\n* Second point\n* Third aspect"
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -198,9 +210,13 @@ mod tests {
     #[tokio::test]
     async fn test_sequential_thinking_with_dashes() {
         let tool = SequentialThinkingTool::new();
-        let call = create_tool_call("test-4", "sequentialthinking", json!({
-            "thinking": "- Problem identification\n- Solution brainstorming\n- Implementation planning"
-        }));
+        let call = create_tool_call(
+            "test-4",
+            "sequentialthinking",
+            json!({
+                "thinking": "- Problem identification\n- Solution brainstorming\n- Implementation planning"
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -214,9 +230,13 @@ mod tests {
     #[tokio::test]
     async fn test_sequential_thinking_empty_input() {
         let tool = SequentialThinkingTool::new();
-        let call = create_tool_call("test-5", "sequentialthinking", json!({
-            "thinking": ""
-        }));
+        let call = create_tool_call(
+            "test-5",
+            "sequentialthinking",
+            json!({
+                "thinking": ""
+            }),
+        );
 
         let result = tool.execute(&call).await;
         assert!(result.is_err());
@@ -227,9 +247,13 @@ mod tests {
     #[tokio::test]
     async fn test_sequential_thinking_whitespace_only() {
         let tool = SequentialThinkingTool::new();
-        let call = create_tool_call("test-6", "sequentialthinking", json!({
-            "thinking": "   \n\t  \n   "
-        }));
+        let call = create_tool_call(
+            "test-6",
+            "sequentialthinking",
+            json!({
+                "thinking": "   \n\t  \n   "
+            }),
+        );
 
         let result = tool.execute(&call).await;
         assert!(result.is_err());
@@ -251,9 +275,13 @@ mod tests {
     #[tokio::test]
     async fn test_sequential_thinking_mixed_formatting() {
         let tool = SequentialThinkingTool::new();
-        let call = create_tool_call("test-8", "sequentialthinking", json!({
-            "thinking": "Let me analyze this:\n1. First step\n* Important point\n- Another consideration\nRegular text here"
-        }));
+        let call = create_tool_call(
+            "test-8",
+            "sequentialthinking",
+            json!({
+                "thinking": "Let me analyze this:\n1. First step\n* Important point\n- Another consideration\nRegular text here"
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);

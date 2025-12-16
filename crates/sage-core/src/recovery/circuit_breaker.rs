@@ -2,8 +2,8 @@
 //!
 //! Prevents cascading failures by temporarily disabling failing operations.
 
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 
@@ -141,8 +141,7 @@ impl CircuitBreaker {
             CircuitState::Closed => true,
             CircuitState::Open => false,
             CircuitState::HalfOpen => {
-                self.half_open_requests.load(Ordering::Acquire)
-                    < self.config.half_open_max_requests
+                self.half_open_requests.load(Ordering::Acquire) < self.config.half_open_max_requests
             }
         }
     }
@@ -367,7 +366,10 @@ impl CircuitBreakerRegistry {
         self.breakers
             .entry(name.to_string())
             .or_insert_with(|| {
-                Arc::new(CircuitBreaker::with_config(name, self.default_config.clone()))
+                Arc::new(CircuitBreaker::with_config(
+                    name,
+                    self.default_config.clone(),
+                ))
             })
             .clone()
     }
@@ -484,8 +486,7 @@ mod tests {
     async fn test_call_success() {
         let cb = CircuitBreaker::new("test");
 
-        let result: Result<i32, CircuitBreakerError<&str>> =
-            cb.call(|| async { Ok(42) }).await;
+        let result: Result<i32, CircuitBreakerError<&str>> = cb.call(|| async { Ok(42) }).await;
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 42);
@@ -502,8 +503,7 @@ mod tests {
         // Open the circuit
         cb.record_failure().await;
 
-        let result: Result<i32, CircuitBreakerError<&str>> =
-            cb.call(|| async { Ok(42) }).await;
+        let result: Result<i32, CircuitBreakerError<&str>> = cb.call(|| async { Ok(42) }).await;
 
         assert!(matches!(result, Err(CircuitBreakerError::Open { .. })));
     }

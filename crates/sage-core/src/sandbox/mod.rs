@@ -11,7 +11,7 @@ mod policy;
 pub use config::{SandboxConfig, SandboxMode};
 pub use executor::{SandboxExecutor, SandboxedExecution};
 pub use limits::{ResourceLimits, ResourceUsage};
-pub use policy::{SandboxPolicy, PathPolicy, CommandPolicy, NetworkPolicy};
+pub use policy::{CommandPolicy, NetworkPolicy, PathPolicy, SandboxPolicy};
 
 use crate::tools::base::ToolError;
 use async_trait::async_trait;

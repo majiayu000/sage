@@ -1,7 +1,7 @@
 //! Sandbox command executor
 
-use super::limits::ResourceLimits;
 use super::SandboxError;
+use super::limits::ResourceLimits;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Stdio;
@@ -105,7 +105,9 @@ impl SandboxExecutor {
         Self::apply_unix_limits(&mut cmd, limits);
 
         // Spawn process
-        let mut child = cmd.spawn().map_err(|e| SandboxError::SpawnFailed(e.to_string()))?;
+        let mut child = cmd
+            .spawn()
+            .map_err(|e| SandboxError::SpawnFailed(e.to_string()))?;
 
         // Capture output with limits
         let stdout_handle = child.stdout.take();

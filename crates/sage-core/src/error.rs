@@ -52,6 +52,14 @@ pub enum SageError {
     #[error("Task was cancelled")]
     Cancelled,
 
+    /// Storage/persistence errors
+    #[error("Storage error: {0}")]
+    Storage(String),
+
+    /// Resource not found
+    #[error("Not found: {0}")]
+    NotFound(String),
+
     /// Generic error with context
     #[error("Error: {0}")]
     Other(String),
@@ -95,6 +103,16 @@ impl SageError {
     pub const fn timeout(seconds: u64) -> Self {
         Self::Timeout { seconds }
     }
+
+    /// Create a new storage error
+    pub fn storage(message: impl Into<String>) -> Self {
+        Self::Storage(message.into())
+    }
+
+    /// Create a new not found error
+    pub fn not_found(message: impl Into<String>) -> Self {
+        Self::NotFound(message.into())
+    }
 }
 
 impl From<anyhow::Error> for SageError {
@@ -132,5 +150,3 @@ impl From<crate::agent::lifecycle::LifecycleError> for SageError {
         Self::Agent(format!("Lifecycle error: {}", error))
     }
 }
-
-

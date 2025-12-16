@@ -1,5 +1,5 @@
 //! Caching system for Sage Agent
-//! 
+//!
 //! This module provides intelligent caching for LLM responses and tool results
 //! to improve performance and reduce API costs.
 
@@ -11,8 +11,8 @@ pub mod types;
 mod tests;
 
 pub use llm_cache::LLMCache;
-pub use storage::{CacheStorage, MemoryStorage, DiskStorage};
-pub use types::{CacheKey, CacheEntry, CacheConfig, CacheStatistics};
+pub use storage::{CacheStorage, DiskStorage, MemoryStorage};
+pub use types::{CacheConfig, CacheEntry, CacheKey, CacheStatistics};
 
 use crate::error::SageResult;
 use async_trait::async_trait;
@@ -34,7 +34,10 @@ impl CacheManager {
     pub fn new(config: CacheConfig) -> SageResult<Self> {
         let memory_cache = MemoryStorage::new(config.memory_capacity);
         let disk_cache = if config.enable_disk_cache {
-            Some(DiskStorage::new(&config.disk_cache_dir, config.disk_capacity)?)
+            Some(DiskStorage::new(
+                &config.disk_cache_dir,
+                config.disk_capacity,
+            )?)
         } else {
             None
         };

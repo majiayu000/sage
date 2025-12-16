@@ -1,9 +1,6 @@
 //! Test markdown rendering in agent responses
 
-use sage_core::{
-    agent::base::BaseAgent,
-    ui::DisplayManager,
-};
+use sage_core::{agent::base::BaseAgent, ui::DisplayManager};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -39,20 +36,26 @@ That's my recommendation! 🚀"#;
 
     println!("🧪 Testing Markdown Rendering in Agent Response");
     println!("{}", "=".repeat(60));
-    
+
     // Test the is_markdown_content detection
     println!("\n📋 Testing Markdown Detection:");
-    println!("Is markdown: {}", BaseAgent::is_markdown_content(markdown_response));
-    
+    println!(
+        "Is markdown: {}",
+        BaseAgent::is_markdown_content(markdown_response)
+    );
+
     // Test direct markdown rendering
     println!("\n🎨 Direct Markdown Rendering:");
     DisplayManager::print_markdown(markdown_response);
-    
+
     // Test with plain text
     let plain_text = "This is just plain text without any markdown formatting.";
     println!("\n📝 Testing Plain Text:");
-    println!("Is markdown: {}", BaseAgent::is_markdown_content(plain_text));
+    println!(
+        "Is markdown: {}",
+        BaseAgent::is_markdown_content(plain_text)
+    );
     println!("Plain text: {}", plain_text);
-    
+
     Ok(())
 }

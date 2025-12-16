@@ -48,9 +48,9 @@ impl Tool for TaskDoneTool {
     }
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
-        let summary = call
-            .get_string("summary")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'summary' parameter".to_string()))?;
+        let summary = call.get_string("summary").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'summary' parameter".to_string())
+        })?;
 
         if summary.trim().is_empty() {
             return Err(ToolError::InvalidArguments(
@@ -60,7 +60,8 @@ impl Tool for TaskDoneTool {
 
         let details = call.get_string("details").unwrap_or_default();
 
-        let mut completion_message = format!("✅ Task Completed Successfully!\n\nSummary: {}", summary);
+        let mut completion_message =
+            format!("✅ Task Completed Successfully!\n\nSummary: {}", summary);
 
         if !details.trim().is_empty() {
             completion_message.push_str(&format!("\n\nDetails:\n{}", details));
@@ -78,9 +79,9 @@ impl Tool for TaskDoneTool {
     }
 
     fn validate(&self, call: &ToolCall) -> Result<(), ToolError> {
-        let summary = call
-            .get_string("summary")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'summary' parameter".to_string()))?;
+        let summary = call.get_string("summary").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'summary' parameter".to_string())
+        })?;
 
         if summary.trim().is_empty() {
             return Err(ToolError::InvalidArguments(
@@ -103,8 +104,8 @@ impl Tool for TaskDoneTool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
     use serde_json::json;
+    use std::collections::HashMap;
 
     fn create_tool_call(id: &str, name: &str, args: serde_json::Value) -> ToolCall {
         let arguments = if let serde_json::Value::Object(map) = args {
@@ -124,9 +125,13 @@ mod tests {
     #[tokio::test]
     async fn test_task_done_basic() {
         let tool = TaskDoneTool::new();
-        let call = create_tool_call("test-1", "task_done", json!({
-            "summary": "Successfully implemented the user authentication system"
-        }));
+        let call = create_tool_call(
+            "test-1",
+            "task_done",
+            json!({
+                "summary": "Successfully implemented the user authentication system"
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -139,10 +144,14 @@ mod tests {
     #[tokio::test]
     async fn test_task_done_with_details() {
         let tool = TaskDoneTool::new();
-        let call = create_tool_call("test-2", "task_done", json!({
-            "summary": "Fixed the database connection issue",
-            "details": "Updated the connection string and added proper error handling. All tests are now passing."
-        }));
+        let call = create_tool_call(
+            "test-2",
+            "task_done",
+            json!({
+                "summary": "Fixed the database connection issue",
+                "details": "Updated the connection string and added proper error handling. All tests are now passing."
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -157,9 +166,13 @@ mod tests {
     #[tokio::test]
     async fn test_task_done_empty_summary() {
         let tool = TaskDoneTool::new();
-        let call = create_tool_call("test-3", "task_done", json!({
-            "summary": ""
-        }));
+        let call = create_tool_call(
+            "test-3",
+            "task_done",
+            json!({
+                "summary": ""
+            }),
+        );
 
         // Implementation returns Err for empty summary
         let result = tool.execute(&call).await;
@@ -171,9 +184,13 @@ mod tests {
     #[tokio::test]
     async fn test_task_done_whitespace_summary() {
         let tool = TaskDoneTool::new();
-        let call = create_tool_call("test-4", "task_done", json!({
-            "summary": "   \n\t  \n   "
-        }));
+        let call = create_tool_call(
+            "test-4",
+            "task_done",
+            json!({
+                "summary": "   \n\t  \n   "
+            }),
+        );
 
         // Implementation returns Err for whitespace-only summary
         let result = tool.execute(&call).await;
@@ -197,10 +214,14 @@ mod tests {
     #[tokio::test]
     async fn test_task_done_empty_details() {
         let tool = TaskDoneTool::new();
-        let call = create_tool_call("test-6", "task_done", json!({
-            "summary": "Task completed",
-            "details": ""
-        }));
+        let call = create_tool_call(
+            "test-6",
+            "task_done",
+            json!({
+                "summary": "Task completed",
+                "details": ""
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -213,10 +234,14 @@ mod tests {
     #[tokio::test]
     async fn test_task_done_whitespace_details() {
         let tool = TaskDoneTool::new();
-        let call = create_tool_call("test-7", "task_done", json!({
-            "summary": "Task completed",
-            "details": "   \n\t  \n   "
-        }));
+        let call = create_tool_call(
+            "test-7",
+            "task_done",
+            json!({
+                "summary": "Task completed",
+                "details": "   \n\t  \n   "
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -231,12 +256,21 @@ mod tests {
         let tool = TaskDoneTool::new();
 
         // Test validation with empty summary
-        let call = create_tool_call("test-8", "task_done", json!({
-            "summary": ""
-        }));
+        let call = create_tool_call(
+            "test-8",
+            "task_done",
+            json!({
+                "summary": ""
+            }),
+        );
         let validation_result = tool.validate(&call);
         assert!(validation_result.is_err());
-        assert!(validation_result.unwrap_err().to_string().contains("Summary cannot be empty"));
+        assert!(
+            validation_result
+                .unwrap_err()
+                .to_string()
+                .contains("Summary cannot be empty")
+        );
     }
 
     #[test]

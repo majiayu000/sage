@@ -2,8 +2,8 @@
 
 use colored::*;
 use std::io::{self, Write};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::time::sleep;
 
@@ -27,25 +27,26 @@ impl ThinkingSpinner {
     pub async fn start(&self) {
         let running = self.running.clone();
         let message = self.message.clone();
-        
+
         running.store(true, Ordering::Relaxed);
-        
+
         tokio::spawn(async move {
             let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
             let mut frame_idx = 0;
-            
+
             while running.load(Ordering::Relaxed) {
-                print!("\r{} {} {}", 
+                print!(
+                    "\r{} {} {}",
                     frames[frame_idx].cyan().bold(),
                     message.blue().bold(),
                     "...".dimmed()
                 );
                 io::stdout().flush().unwrap();
-                
+
                 frame_idx = (frame_idx + 1) % frames.len();
                 sleep(Duration::from_millis(100)).await;
             }
-            
+
             // Clear the line
             print!("\r{}\r", " ".repeat(80));
             io::stdout().flush().unwrap();
@@ -63,13 +64,14 @@ impl ThinkingSpinner {
 pub fn show_tool_execution(tool_names: &[String]) {
     println!();
     println!("{}", "╭─────────────────────────────────────────╮".cyan());
-    println!("{} {} {}", 
+    println!(
+        "{} {} {}",
         "│".cyan(),
         "🔧 EXECUTING TOOLS".yellow().bold(),
         "│".cyan()
     );
     println!("{}", "├─────────────────────────────────────────┤".cyan());
-    
+
     for (i, tool) in tool_names.iter().enumerate() {
         let icon = match tool.as_str() {
             "bash" => "🖥️ ",
@@ -79,15 +81,16 @@ pub fn show_tool_execution(tool_names: &[String]) {
             "sequentialthinking" => "🧠",
             _ => "🔧",
         };
-        
-        println!("{} {} {} {}", 
+
+        println!(
+            "{} {} {} {}",
             "│".cyan(),
             format!("{}.", i + 1).dimmed(),
             format!("{} {}", icon, tool).green().bold(),
             "│".cyan()
         );
     }
-    
+
     println!("{}", "╰─────────────────────────────────────────╯".cyan());
 }
 
@@ -101,13 +104,17 @@ pub fn show_tool_results(successful: usize, total: usize) {
     } else {
         "❌".to_string()
     };
-    
+
     let status_text = if successful == total {
-        format!("All {} tools completed successfully!", total).green().bold()
+        format!("All {} tools completed successfully!", total)
+            .green()
+            .bold()
     } else {
-        format!("{}/{} tools completed successfully", successful, total).yellow().bold()
+        format!("{}/{} tools completed successfully", successful, total)
+            .yellow()
+            .bold()
     };
-    
+
     println!();
     println!("{} {}", status_icon, status_text);
     println!("{}", "─".repeat(50).dimmed());
@@ -118,15 +125,20 @@ pub fn show_tool_results(successful: usize, total: usize) {
 #[allow(dead_code)] // May be used in future features
 pub fn show_ai_response(content: &str, step: u32, max_steps: u32) {
     println!();
-    println!("{}", format!("╭─ 🤖 AI RESPONSE (Step {}/{}) ─╮", step, max_steps).magenta().bold());
-    
+    println!(
+        "{}",
+        format!("╭─ 🤖 AI RESPONSE (Step {}/{}) ─╮", step, max_steps)
+            .magenta()
+            .bold()
+    );
+
     // Truncate content if too long
     let display_content = if content.len() > 300 {
         format!("{}...", &content[..297])
     } else {
         content.to_string()
     };
-    
+
     // Split into lines and format
     for line in display_content.lines() {
         if line.trim().is_empty() {
@@ -134,8 +146,11 @@ pub fn show_ai_response(content: &str, step: u32, max_steps: u32) {
         }
         println!("{} {}", "│".magenta(), line.white());
     }
-    
-    println!("{}", "╰─────────────────────────────────────────╯".magenta());
+
+    println!(
+        "{}",
+        "╰─────────────────────────────────────────╯".magenta()
+    );
     println!();
 }
 
@@ -143,14 +158,16 @@ pub fn show_ai_response(content: &str, step: u32, max_steps: u32) {
 #[allow(dead_code)] // May be used in future features
 pub fn show_step_header(step: u32, max_steps: u32) {
     let progress = (step as f32 / max_steps as f32 * 20.0) as usize;
-    let progress_bar = format!("{}{}",
+    let progress_bar = format!(
+        "{}{}",
         "█".repeat(progress).green(),
         "░".repeat(20 - progress).dimmed()
     );
-    
+
     println!();
     println!("{}", "═".repeat(60).blue());
-    println!("{} {} {} {}", 
+    println!(
+        "{} {} {} {}",
         "🚀".to_string(),
         format!("STEP {}/{}", step, max_steps).blue().bold(),
         format!("[{}]", progress_bar),

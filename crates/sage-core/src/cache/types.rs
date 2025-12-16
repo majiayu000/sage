@@ -22,7 +22,7 @@ impl CacheKey {
     pub fn new(namespace: impl Into<String>, identifier: impl Into<String>) -> Self {
         let namespace = namespace.into();
         let identifier = identifier.into();
-        
+
         // Generate hash for fast comparison
         let mut hasher = DefaultHasher::new();
         namespace.hash(&mut hasher);
@@ -160,13 +160,13 @@ impl Default for CacheConfig {
             memory_capacity: 1000,
             enable_disk_cache: true,
             disk_cache_dir: "cache".to_string(),
-            disk_capacity: 100 * 1024 * 1024, // 100MB
+            disk_capacity: 100 * 1024 * 1024,             // 100MB
             default_ttl: Some(Duration::from_secs(3600)), // 1 hour
             llm_response_ttl: Some(Duration::from_secs(7200)), // 2 hours
             tool_result_ttl: Some(Duration::from_secs(1800)), // 30 minutes
             codebase_retrieval_ttl: Some(Duration::from_secs(3600)), // 1 hour
-            cleanup_interval: Duration::from_secs(300), // 5 minutes
-            max_entry_size: 1024 * 1024, // 1MB
+            cleanup_interval: Duration::from_secs(300),   // 5 minutes
+            max_entry_size: 1024 * 1024,                  // 1MB
         }
     }
 }
@@ -197,14 +197,12 @@ impl CacheStatistics {
 
     /// Get total entries across all cache layers
     pub fn total_entries(&self) -> usize {
-        self.memory_stats.entry_count + 
-        self.disk_stats.as_ref().map(|s| s.entry_count).unwrap_or(0)
+        self.memory_stats.entry_count + self.disk_stats.as_ref().map(|s| s.entry_count).unwrap_or(0)
     }
 
     /// Get total size across all cache layers
     pub fn total_size_bytes(&self) -> u64 {
-        self.memory_stats.size_bytes + 
-        self.disk_stats.as_ref().map(|s| s.size_bytes).unwrap_or(0)
+        self.memory_stats.size_bytes + self.disk_stats.as_ref().map(|s| s.size_bytes).unwrap_or(0)
     }
 }
 

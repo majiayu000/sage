@@ -35,11 +35,17 @@ impl Tool for ExitPlanModeTool {
             self.name(),
             self.description(),
             vec![
-                ToolParameter::boolean("launchSwarm", "Whether to launch a swarm of teammates to implement the plan")
-                    .optional(),
-                ToolParameter::number("teammateCount", "Number of teammates in the swarm (1-10). Only used if launchSwarm is true")
-                    .optional()
-                    .with_default(3),
+                ToolParameter::boolean(
+                    "launchSwarm",
+                    "Whether to launch a swarm of teammates to implement the plan",
+                )
+                .optional(),
+                ToolParameter::number(
+                    "teammateCount",
+                    "Number of teammates in the swarm (1-10). Only used if launchSwarm is true",
+                )
+                .optional()
+                .with_default(3),
             ],
         )
     }
@@ -61,7 +67,7 @@ impl Tool for ExitPlanModeTool {
 ║                  PLAN MODE EXITED                            ║
 ╚══════════════════════════════════════════════════════════════╝
 
-"#
+"#,
         );
 
         if launch_swarm {
@@ -142,8 +148,8 @@ Good luck with the implementation!
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
     use serde_json::json;
+    use std::collections::HashMap;
 
     fn create_tool_call(id: &str, name: &str, args: serde_json::Value) -> ToolCall {
         let arguments = if let serde_json::Value::Object(map) = args {
@@ -176,10 +182,14 @@ mod tests {
     #[tokio::test]
     async fn test_exit_plan_mode_with_swarm() {
         let tool = ExitPlanModeTool::new();
-        let call = create_tool_call("test-2", "exit_plan_mode", json!({
-            "launchSwarm": true,
-            "teammateCount": 5
-        }));
+        let call = create_tool_call(
+            "test-2",
+            "exit_plan_mode",
+            json!({
+                "launchSwarm": true,
+                "teammateCount": 5
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -193,9 +203,13 @@ mod tests {
     #[tokio::test]
     async fn test_exit_plan_mode_swarm_default_count() {
         let tool = ExitPlanModeTool::new();
-        let call = create_tool_call("test-3", "exit_plan_mode", json!({
-            "launchSwarm": true
-        }));
+        let call = create_tool_call(
+            "test-3",
+            "exit_plan_mode",
+            json!({
+                "launchSwarm": true
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -207,39 +221,57 @@ mod tests {
     #[tokio::test]
     async fn test_exit_plan_mode_swarm_invalid_count_low() {
         let tool = ExitPlanModeTool::new();
-        let call = create_tool_call("test-4", "exit_plan_mode", json!({
-            "launchSwarm": true,
-            "teammateCount": 0
-        }));
+        let call = create_tool_call(
+            "test-4",
+            "exit_plan_mode",
+            json!({
+                "launchSwarm": true,
+                "teammateCount": 0
+            }),
+        );
 
         let result = tool.execute(&call).await;
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(err.to_string().contains("teammateCount must be between 1 and 10"));
+        assert!(
+            err.to_string()
+                .contains("teammateCount must be between 1 and 10")
+        );
     }
 
     #[tokio::test]
     async fn test_exit_plan_mode_swarm_invalid_count_high() {
         let tool = ExitPlanModeTool::new();
-        let call = create_tool_call("test-5", "exit_plan_mode", json!({
-            "launchSwarm": true,
-            "teammateCount": 11
-        }));
+        let call = create_tool_call(
+            "test-5",
+            "exit_plan_mode",
+            json!({
+                "launchSwarm": true,
+                "teammateCount": 11
+            }),
+        );
 
         let result = tool.execute(&call).await;
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(err.to_string().contains("teammateCount must be between 1 and 10"));
+        assert!(
+            err.to_string()
+                .contains("teammateCount must be between 1 and 10")
+        );
     }
 
     #[tokio::test]
     async fn test_exit_plan_mode_no_swarm_ignores_count() {
         let tool = ExitPlanModeTool::new();
         // When launchSwarm is false, teammateCount should be ignored
-        let call = create_tool_call("test-6", "exit_plan_mode", json!({
-            "launchSwarm": false,
-            "teammateCount": 100 // Invalid count, but should be ignored
-        }));
+        let call = create_tool_call(
+            "test-6",
+            "exit_plan_mode",
+            json!({
+                "launchSwarm": false,
+                "teammateCount": 100 // Invalid count, but should be ignored
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -251,10 +283,14 @@ mod tests {
     #[tokio::test]
     async fn test_exit_plan_mode_validation_valid() {
         let tool = ExitPlanModeTool::new();
-        let call = create_tool_call("test-7", "exit_plan_mode", json!({
-            "launchSwarm": true,
-            "teammateCount": 5
-        }));
+        let call = create_tool_call(
+            "test-7",
+            "exit_plan_mode",
+            json!({
+                "launchSwarm": true,
+                "teammateCount": 5
+            }),
+        );
 
         let validation_result = tool.validate(&call);
         assert!(validation_result.is_ok());
@@ -263,10 +299,14 @@ mod tests {
     #[tokio::test]
     async fn test_exit_plan_mode_validation_invalid() {
         let tool = ExitPlanModeTool::new();
-        let call = create_tool_call("test-8", "exit_plan_mode", json!({
-            "launchSwarm": true,
-            "teammateCount": 15
-        }));
+        let call = create_tool_call(
+            "test-8",
+            "exit_plan_mode",
+            json!({
+                "launchSwarm": true,
+                "teammateCount": 15
+            }),
+        );
 
         let validation_result = tool.validate(&call);
         assert!(validation_result.is_err());
@@ -320,10 +360,14 @@ mod tests {
     #[tokio::test]
     async fn test_exit_plan_mode_swarm_min_valid() {
         let tool = ExitPlanModeTool::new();
-        let call = create_tool_call("test-10", "exit_plan_mode", json!({
-            "launchSwarm": true,
-            "teammateCount": 1
-        }));
+        let call = create_tool_call(
+            "test-10",
+            "exit_plan_mode",
+            json!({
+                "launchSwarm": true,
+                "teammateCount": 1
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -334,10 +378,14 @@ mod tests {
     #[tokio::test]
     async fn test_exit_plan_mode_swarm_max_valid() {
         let tool = ExitPlanModeTool::new();
-        let call = create_tool_call("test-11", "exit_plan_mode", json!({
-            "launchSwarm": true,
-            "teammateCount": 10
-        }));
+        let call = create_tool_call(
+            "test-11",
+            "exit_plan_mode",
+            json!({
+                "launchSwarm": true,
+                "teammateCount": 10
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);

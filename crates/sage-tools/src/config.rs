@@ -23,8 +23,9 @@ pub struct ToolsConfig {
 impl Default for ToolsConfig {
     fn default() -> Self {
         Self {
-            default_working_directory: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
-            max_execution_time_seconds: 300, // 5 minutes
+            default_working_directory: std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from(".")),
+            max_execution_time_seconds: 300,    // 5 minutes
             max_output_size_bytes: 1024 * 1024, // 1MB
             debug_logging: false,
             tool_configs: HashMap::new(),
@@ -127,16 +128,34 @@ impl Default for CodebaseRetrievalConfig {
             max_results: 50,
             max_file_size_bytes: 1024 * 1024, // 1MB
             supported_extensions: vec![
-                "rs".to_string(), "py".to_string(), "js".to_string(), "ts".to_string(),
-                "java".to_string(), "cpp".to_string(), "c".to_string(), "h".to_string(),
-                "go".to_string(), "rb".to_string(), "php".to_string(), "cs".to_string(),
-                "json".to_string(), "toml".to_string(), "yaml".to_string(), "yml".to_string(),
-                "md".to_string(), "txt".to_string(),
+                "rs".to_string(),
+                "py".to_string(),
+                "js".to_string(),
+                "ts".to_string(),
+                "java".to_string(),
+                "cpp".to_string(),
+                "c".to_string(),
+                "h".to_string(),
+                "go".to_string(),
+                "rb".to_string(),
+                "php".to_string(),
+                "cs".to_string(),
+                "json".to_string(),
+                "toml".to_string(),
+                "yaml".to_string(),
+                "yml".to_string(),
+                "md".to_string(),
+                "txt".to_string(),
             ],
             excluded_directories: vec![
-                "target".to_string(), "node_modules".to_string(), ".git".to_string(),
-                "build".to_string(), "dist".to_string(), ".vscode".to_string(),
-                ".idea".to_string(), "__pycache__".to_string(),
+                "target".to_string(),
+                "node_modules".to_string(),
+                ".git".to_string(),
+                "build".to_string(),
+                "dist".to_string(),
+                ".vscode".to_string(),
+                ".idea".to_string(),
+                "__pycache__".to_string(),
             ],
             enable_caching: true,
             cache_expiration_seconds: 3600, // 1 hour
@@ -185,7 +204,10 @@ impl ToolsConfig {
 
     /// Get configuration for a specific tool
     pub fn get_tool_config(&self, tool_name: &str) -> ToolConfig {
-        self.tool_configs.get(tool_name).cloned().unwrap_or_default()
+        self.tool_configs
+            .get(tool_name)
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// Set configuration for a specific tool
@@ -196,7 +218,8 @@ impl ToolsConfig {
     /// Get maximum execution time for a tool
     pub fn get_max_execution_time(&self, tool_name: &str) -> Duration {
         let tool_config = self.get_tool_config(tool_name);
-        let seconds = tool_config.max_execution_time_seconds
+        let seconds = tool_config
+            .max_execution_time_seconds
             .unwrap_or(self.max_execution_time_seconds);
         Duration::from_secs(seconds)
     }
@@ -204,7 +227,8 @@ impl ToolsConfig {
     /// Get maximum output size for a tool
     pub fn get_max_output_size(&self, tool_name: &str) -> usize {
         let tool_config = self.get_tool_config(tool_name);
-        tool_config.max_output_size_bytes
+        tool_config
+            .max_output_size_bytes
             .unwrap_or(self.max_output_size_bytes)
     }
 
@@ -226,7 +250,7 @@ pub fn get_global_config() -> ToolsConfig {
 }
 
 /// Helper function to update global configuration
-pub fn update_global_config<F>(updater: F) 
+pub fn update_global_config<F>(updater: F)
 where
     F: FnOnce(&mut ToolsConfig),
 {

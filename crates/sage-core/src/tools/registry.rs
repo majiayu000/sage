@@ -29,7 +29,7 @@ impl ToolRegistry {
     pub fn register_with_category(&mut self, tool: Arc<dyn Tool>, category: &str) {
         let name = tool.name().to_string();
         self.tools.insert(name.clone(), tool);
-        
+
         self.categories
             .entry(category.to_string())
             .or_insert_with(Vec::new)
@@ -88,7 +88,7 @@ impl ToolRegistry {
         for tools in self.categories.values_mut() {
             tools.retain(|tool_name| tool_name != name);
         }
-        
+
         self.tools.remove(name)
     }
 
@@ -103,7 +103,8 @@ impl ToolRegistry {
         RegistryStatistics {
             total_tools: self.tools.len(),
             total_categories: self.categories.len(),
-            tools_by_category: self.categories
+            tools_by_category: self
+                .categories
                 .iter()
                 .map(|(cat, tools)| (cat.clone(), tools.len()))
                 .collect(),
@@ -136,9 +137,7 @@ pub struct ToolRegistryBuilder {
 impl ToolRegistryBuilder {
     /// Create a new builder
     pub fn new() -> Self {
-        Self {
-            tools: Vec::new(),
-        }
+        Self { tools: Vec::new() }
     }
 
     /// Add a tool
@@ -164,7 +163,7 @@ impl ToolRegistryBuilder {
     /// Build the registry
     pub fn build(self) -> ToolRegistry {
         let mut registry = ToolRegistry::new();
-        
+
         for (tool, category) in self.tools {
             if let Some(cat) = category {
                 registry.register_with_category(tool, &cat);
@@ -172,7 +171,7 @@ impl ToolRegistryBuilder {
                 registry.register(tool);
             }
         }
-        
+
         registry
     }
 }
@@ -186,9 +185,8 @@ impl Default for ToolRegistryBuilder {
 use std::sync::{LazyLock, Mutex};
 
 /// Global tool registry instance using LazyLock (Rust 2024 edition)
-static GLOBAL_REGISTRY: LazyLock<Mutex<ToolRegistry>> = LazyLock::new(|| {
-    Mutex::new(ToolRegistry::new())
-});
+static GLOBAL_REGISTRY: LazyLock<Mutex<ToolRegistry>> =
+    LazyLock::new(|| Mutex::new(ToolRegistry::new()));
 
 /// Get the global tool registry
 pub fn with_global_registry<F, R>(f: F) -> R

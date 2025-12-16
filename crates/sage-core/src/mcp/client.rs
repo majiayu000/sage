@@ -9,19 +9,21 @@
 //! - Background message receiver
 
 use super::error::McpError;
-use super::protocol::{methods, McpMessage, McpNotification, McpRequest, McpResponse, McpRpcError, RequestId, MCP_PROTOCOL_VERSION};
+use super::protocol::{
+    MCP_PROTOCOL_VERSION, McpMessage, McpNotification, McpRequest, McpResponse, McpRpcError,
+    RequestId, methods,
+};
 use super::transport::McpTransport;
 use super::types::{
-    ClientCapabilities, ClientInfo, InitializeParams, InitializeResult, McpCapabilities,
-    McpPrompt, McpPromptMessage, McpResource, McpResourceContent, McpServerInfo, McpTool,
-    McpToolResult,
+    ClientCapabilities, ClientInfo, InitializeParams, InitializeResult, McpCapabilities, McpPrompt,
+    McpPromptMessage, McpResource, McpResourceContent, McpServerInfo, McpTool, McpToolResult,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
-use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
+use tokio::sync::{Mutex, RwLock, mpsc, oneshot};
 use tokio::time::timeout;
 use tracing::{debug, error, warn};
 
@@ -215,9 +217,7 @@ impl McpClient {
             client_info: ClientInfo::default(),
         };
 
-        let result: InitializeResult = self
-            .call(methods::INITIALIZE, Some(json!(params)))
-            .await?;
+        let result: InitializeResult = self.call(methods::INITIALIZE, Some(json!(params))).await?;
 
         // Store server info and capabilities
         *self.server_info.write().await = Some(result.server_info.clone());
@@ -251,19 +251,15 @@ impl McpClient {
 
         let result: Value = self.call(methods::TOOLS_LIST, None).await?;
 
-        let tools: Vec<McpTool> = serde_json::from_value(result["tools"].clone())
-            .unwrap_or_default();
+        let tools: Vec<McpTool> =
+            serde_json::from_value(result["tools"].clone()).unwrap_or_default();
 
         *self.tools.write().await = tools.clone();
         Ok(tools)
     }
 
     /// Call a tool with timeout
-    pub async fn call_tool(
-        &self,
-        name: &str,
-        arguments: Value,
-    ) -> Result<McpToolResult, McpError> {
+    pub async fn call_tool(&self, name: &str, arguments: Value) -> Result<McpToolResult, McpError> {
         self.ensure_initialized().await?;
 
         let params = json!({
@@ -281,8 +277,8 @@ impl McpClient {
 
         let result: Value = self.call(methods::RESOURCES_LIST, None).await?;
 
-        let resources: Vec<McpResource> = serde_json::from_value(result["resources"].clone())
-            .unwrap_or_default();
+        let resources: Vec<McpResource> =
+            serde_json::from_value(result["resources"].clone()).unwrap_or_default();
 
         *self.resources.write().await = resources.clone();
         Ok(resources)
@@ -314,8 +310,8 @@ impl McpClient {
 
         let result: Value = self.call(methods::PROMPTS_LIST, None).await?;
 
-        let prompts: Vec<McpPrompt> = serde_json::from_value(result["prompts"].clone())
-            .unwrap_or_default();
+        let prompts: Vec<McpPrompt> =
+            serde_json::from_value(result["prompts"].clone()).unwrap_or_default();
 
         *self.prompts.write().await = prompts.clone();
         Ok(prompts)
@@ -420,9 +416,7 @@ impl McpClient {
         };
 
         let mut transport = self.transport.lock().await;
-        transport
-            .send(McpMessage::Notification(notification))
-            .await
+        transport.send(McpMessage::Notification(notification)).await
     }
 
     /// Generate next request ID

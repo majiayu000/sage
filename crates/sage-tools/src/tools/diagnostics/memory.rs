@@ -1,6 +1,6 @@
-use sage_core::tools::{Tool, ToolResult, ToolError, ToolCall, ToolSchema, ToolParameter};
-use serde::{Deserialize, Serialize};
 use async_trait::async_trait;
+use sage_core::tools::{Tool, ToolCall, ToolError, ToolParameter, ToolResult, ToolSchema};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone)]
 pub struct RememberTool;
@@ -36,14 +36,16 @@ impl Tool for RememberTool {
         ToolSchema::new(
             self.name(),
             self.description(),
-            vec![
-                ToolParameter::string("memory", "The concise (1 sentence) memory to remember."),
-            ]
+            vec![ToolParameter::string(
+                "memory",
+                "The concise (1 sentence) memory to remember.",
+            )],
         )
     }
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
-        let memory = call.get_string("memory")
+        let memory = call
+            .get_string("memory")
             .ok_or_else(|| ToolError::InvalidArguments("Missing 'memory' parameter".to_string()))?;
 
         // TODO: Implement actual memory storage

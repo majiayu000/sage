@@ -1,7 +1,7 @@
 //! Plugin manifest definitions
 
-use serde::{Deserialize, Serialize};
 use super::PluginCapability;
+use serde::{Deserialize, Serialize};
 
 /// Plugin manifest describing metadata and requirements
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -114,8 +114,15 @@ impl PluginManifest {
         if self.name.is_empty() {
             errors.push("Plugin name cannot be empty".to_string());
         }
-        if !self.name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
-            errors.push("Plugin name can only contain alphanumeric characters, hyphens, and underscores".to_string());
+        if !self
+            .name
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+        {
+            errors.push(
+                "Plugin name can only contain alphanumeric characters, hyphens, and underscores"
+                    .to_string(),
+            );
         }
 
         // Version validation (basic semver check)

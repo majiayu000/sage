@@ -120,11 +120,7 @@ pub trait Tool: Send + Sync {
     ///
     /// This method is called before execution to determine if the
     /// operation should be allowed, denied, or requires user approval.
-    async fn check_permission(
-        &self,
-        _call: &ToolCall,
-        _context: &ToolContext,
-    ) -> PermissionResult {
+    async fn check_permission(&self, _call: &ToolCall, _context: &ToolContext) -> PermissionResult {
         // Default: allow all operations
         PermissionResult::Allow
     }
@@ -215,19 +211,19 @@ macro_rules! impl_tool {
                 Self {}
             }
         }
-        
+
         impl Default for $tool_type {
             fn default() -> Self {
                 Self::new()
             }
         }
-        
+
         #[async_trait::async_trait]
         impl $crate::tools::Tool for $tool_type {
             fn name(&self) -> &str {
                 $name
             }
-            
+
             fn description(&self) -> &str {
                 $description
             }
@@ -239,7 +235,7 @@ macro_rules! impl_tool {
 pub trait FileSystemTool: Tool {
     /// Get the working directory for file operations
     fn working_directory(&self) -> &std::path::Path;
-    
+
     /// Resolve a relative path to an absolute path
     fn resolve_path(&self, path: &str) -> std::path::PathBuf {
         let path = std::path::Path::new(path);
@@ -249,7 +245,7 @@ pub trait FileSystemTool: Tool {
             self.working_directory().join(path)
         }
     }
-    
+
     /// Check if a path is safe to access (within working directory)
     fn is_safe_path(&self, _path: &std::path::Path) -> bool {
         // Temporarily disable path restrictions for debugging
@@ -261,22 +257,22 @@ pub trait FileSystemTool: Tool {
 pub trait CommandTool: Tool {
     /// Get the allowed commands for this tool
     fn allowed_commands(&self) -> Vec<&str>;
-    
+
     /// Check if a command is allowed
     fn is_command_allowed(&self, command: &str) -> bool {
         let allowed = self.allowed_commands();
         if allowed.is_empty() {
             return true; // No restrictions
         }
-        
-        allowed.iter().any(|&allowed_cmd| {
-            command.starts_with(allowed_cmd)
-        })
+
+        allowed
+            .iter()
+            .any(|&allowed_cmd| command.starts_with(allowed_cmd))
     }
-    
+
     /// Get the working directory for command execution
     fn command_working_directory(&self) -> &std::path::Path;
-    
+
     /// Get environment variables for command execution
     fn command_environment(&self) -> std::collections::HashMap<String, String> {
         std::collections::HashMap::new()

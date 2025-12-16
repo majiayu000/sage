@@ -162,19 +162,13 @@ impl TaskSupervisor {
                             };
                         }
                         SupervisionAction::Resume => {
-                            return SupervisionResult::Resumed {
-                                error: recoverable,
-                            };
+                            return SupervisionResult::Resumed { error: recoverable };
                         }
                         SupervisionAction::Stop => {
-                            return SupervisionResult::Stopped {
-                                error: recoverable,
-                            };
+                            return SupervisionResult::Stopped { error: recoverable };
                         }
                         SupervisionAction::Escalate => {
-                            return SupervisionResult::Escalated {
-                                error: recoverable,
-                            };
+                            return SupervisionResult::Escalated { error: recoverable };
                         }
                     }
                 }
@@ -224,7 +218,10 @@ impl TaskSupervisor {
 
     fn handle_error(&self, error: &RecoverableError) -> SupervisionAction {
         match &self.policy {
-            SupervisionPolicy::Restart { max_restarts, window } => {
+            SupervisionPolicy::Restart {
+                max_restarts,
+                window,
+            } => {
                 // Check if we've exceeded max restarts in the window
                 if let Some(last_restart) = self.last_restart {
                     if last_restart.elapsed() > *window {
@@ -297,10 +294,7 @@ pub enum SupervisionEvent {
         will_restart: bool,
     },
     /// Task restarted
-    TaskRestarted {
-        task_name: String,
-        attempt: u32,
-    },
+    TaskRestarted { task_name: String, attempt: u32 },
     /// Supervisor shutting down
     ShuttingDown,
 }
@@ -484,14 +478,16 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicU32, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicU32, Ordering};
 
     #[tokio::test]
     async fn test_task_supervisor_success() {
         let mut supervisor = TaskSupervisor::new("test");
 
-        let result = supervisor.supervise(|| async { Ok::<_, SageError>(42) }).await;
+        let result = supervisor
+            .supervise(|| async { Ok::<_, SageError>(42) })
+            .await;
 
         assert!(matches!(result, SupervisionResult::Completed));
     }

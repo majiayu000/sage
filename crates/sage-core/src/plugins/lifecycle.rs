@@ -111,7 +111,11 @@ impl PluginLifecycle {
     }
 
     /// Transition to new state
-    pub fn transition(&mut self, new_state: PluginState, reason: Option<String>) -> PluginResult<()> {
+    pub fn transition(
+        &mut self,
+        new_state: PluginState,
+        reason: Option<String>,
+    ) -> PluginResult<()> {
         let valid = match (self.state, new_state) {
             // From Created
             (PluginState::Created, PluginState::Initializing) => true,
@@ -184,11 +188,17 @@ impl PluginLifecycle {
             )));
         }
 
-        self.transition(PluginState::Initializing, Some("Starting initialization".into()))?;
+        self.transition(
+            PluginState::Initializing,
+            Some("Starting initialization".into()),
+        )?;
 
         match plugin.initialize(ctx).await {
             Ok(()) => {
-                self.transition(PluginState::Active, Some("Initialization successful".into()))?;
+                self.transition(
+                    PluginState::Active,
+                    Some("Initialization successful".into()),
+                )?;
                 Ok(())
             }
             Err(e) => {
@@ -211,7 +221,10 @@ impl PluginLifecycle {
         }
 
         self.transition(PluginState::Suspending, Some("Starting suspension".into()))?;
-        self.transition(PluginState::Suspended, Some("Suspended successfully".into()))?;
+        self.transition(
+            PluginState::Suspended,
+            Some("Suspended successfully".into()),
+        )?;
 
         Ok(())
     }
@@ -246,10 +259,7 @@ impl PluginLifecycle {
                 Ok(())
             }
             Err(e) => {
-                self.transition(
-                    PluginState::Failed,
-                    Some(format!("Shutdown failed: {}", e)),
-                )?;
+                self.transition(PluginState::Failed, Some(format!("Shutdown failed: {}", e)))?;
                 Err(e)
             }
         }
@@ -313,10 +323,7 @@ impl HealthCheck {
 
 /// Perform health check on a plugin
 #[allow(dead_code)]
-pub async fn check_plugin_health(
-    plugin: &dyn Plugin,
-    lifecycle: &PluginLifecycle,
-) -> HealthCheck {
+pub async fn check_plugin_health(plugin: &dyn Plugin, lifecycle: &PluginLifecycle) -> HealthCheck {
     let start = Instant::now();
 
     if !lifecycle.state().is_operational() {
@@ -350,16 +357,20 @@ mod tests {
     fn test_lifecycle_valid_transitions() {
         let mut lifecycle = PluginLifecycle::new();
 
-        assert!(lifecycle
-            .transition(PluginState::Initializing, None)
-            .is_ok());
+        assert!(
+            lifecycle
+                .transition(PluginState::Initializing, None)
+                .is_ok()
+        );
         assert!(lifecycle.transition(PluginState::Active, None).is_ok());
         assert!(lifecycle.transition(PluginState::Suspending, None).is_ok());
         assert!(lifecycle.transition(PluginState::Suspended, None).is_ok());
         assert!(lifecycle.transition(PluginState::Active, None).is_ok());
-        assert!(lifecycle
-            .transition(PluginState::ShuttingDown, None)
-            .is_ok());
+        assert!(
+            lifecycle
+                .transition(PluginState::ShuttingDown, None)
+                .is_ok()
+        );
         assert!(lifecycle.transition(PluginState::Stopped, None).is_ok());
     }
 

@@ -1,9 +1,9 @@
 //! Tool monitoring and metrics system
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use serde::{Deserialize, Serialize};
 
 /// Metrics for a specific tool
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -49,7 +49,8 @@ impl ToolMetrics {
         self.success_count += 1;
         let execution_time_ms = execution_time.as_millis() as u64;
         self.total_execution_time_ms += execution_time_ms;
-        self.average_execution_time_ms = self.total_execution_time_ms as f64 / self.execution_count as f64;
+        self.average_execution_time_ms =
+            self.total_execution_time_ms as f64 / self.execution_count as f64;
         self.success_rate = self.success_count as f64 / self.execution_count as f64;
         self.last_execution = Some(chrono::Utc::now());
     }
@@ -60,10 +61,11 @@ impl ToolMetrics {
         self.error_count += 1;
         let execution_time_ms = execution_time.as_millis() as u64;
         self.total_execution_time_ms += execution_time_ms;
-        self.average_execution_time_ms = self.total_execution_time_ms as f64 / self.execution_count as f64;
+        self.average_execution_time_ms =
+            self.total_execution_time_ms as f64 / self.execution_count as f64;
         self.success_rate = self.success_count as f64 / self.execution_count as f64;
         self.last_execution = Some(chrono::Utc::now());
-        
+
         // Track error types
         *self.error_types.entry(error_type).or_insert(0) += 1;
     }
@@ -87,7 +89,8 @@ impl ToolMonitor {
     /// Record a successful tool execution
     pub fn record_success(&self, tool_name: &str, execution_time: Duration) {
         let mut metrics = self.metrics.lock().unwrap();
-        let tool_metrics = metrics.entry(tool_name.to_string())
+        let tool_metrics = metrics
+            .entry(tool_name.to_string())
             .or_insert_with(|| ToolMetrics::new(tool_name.to_string()));
         tool_metrics.record_success(execution_time);
     }
@@ -95,7 +98,8 @@ impl ToolMonitor {
     /// Record a failed tool execution
     pub fn record_error(&self, tool_name: &str, execution_time: Duration, error_type: String) {
         let mut metrics = self.metrics.lock().unwrap();
-        let tool_metrics = metrics.entry(tool_name.to_string())
+        let tool_metrics = metrics
+            .entry(tool_name.to_string())
             .or_insert_with(|| ToolMetrics::new(tool_name.to_string()));
         tool_metrics.record_error(execution_time, error_type);
     }
@@ -179,26 +183,44 @@ impl MonitoringReport {
     /// Format the report as a human-readable string
     pub fn format(&self) -> String {
         let mut output = String::new();
-        
+
         output.push_str("# Tool Monitoring Report\n\n");
-        output.push_str(&format!("Generated at: {}\n", self.generated_at.format("%Y-%m-%d %H:%M:%S UTC")));
+        output.push_str(&format!(
+            "Generated at: {}\n",
+            self.generated_at.format("%Y-%m-%d %H:%M:%S UTC")
+        ));
         output.push_str(&format!("System uptime: {:?}\n\n", self.uptime));
-        
+
         output.push_str("## Overall Statistics\n\n");
         output.push_str(&format!("- Total executions: {}\n", self.total_executions));
-        output.push_str(&format!("- Successful executions: {}\n", self.total_successes));
+        output.push_str(&format!(
+            "- Successful executions: {}\n",
+            self.total_successes
+        ));
         output.push_str(&format!("- Failed executions: {}\n", self.total_errors));
-        output.push_str(&format!("- Overall success rate: {:.2}%\n\n", self.overall_success_rate * 100.0));
-        
+        output.push_str(&format!(
+            "- Overall success rate: {:.2}%\n\n",
+            self.overall_success_rate * 100.0
+        ));
+
         if !self.tool_metrics.is_empty() {
             output.push_str("## Tool-Specific Metrics\n\n");
             for metrics in &self.tool_metrics {
                 output.push_str(&format!("### {}\n\n", metrics.tool_name));
                 output.push_str(&format!("- Executions: {}\n", metrics.execution_count));
-                output.push_str(&format!("- Success rate: {:.2}%\n", metrics.success_rate * 100.0));
-                output.push_str(&format!("- Average execution time: {:.2}ms\n", metrics.average_execution_time_ms));
+                output.push_str(&format!(
+                    "- Success rate: {:.2}%\n",
+                    metrics.success_rate * 100.0
+                ));
+                output.push_str(&format!(
+                    "- Average execution time: {:.2}ms\n",
+                    metrics.average_execution_time_ms
+                ));
                 if let Some(last_exec) = &metrics.last_execution {
-                    output.push_str(&format!("- Last execution: {}\n", last_exec.format("%Y-%m-%d %H:%M:%S UTC")));
+                    output.push_str(&format!(
+                        "- Last execution: {}\n",
+                        last_exec.format("%Y-%m-%d %H:%M:%S UTC")
+                    ));
                 }
                 if !metrics.error_types.is_empty() {
                     output.push_str("- Common errors:\n");
@@ -209,7 +231,7 @@ impl MonitoringReport {
                 output.push('\n');
             }
         }
-        
+
         output
     }
 }

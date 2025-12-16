@@ -1,6 +1,6 @@
-use sage_core::tools::{Tool, ToolResult, ToolError, ToolCall, ToolSchema, ToolParameter};
-use serde::{Deserialize, Serialize};
 use async_trait::async_trait;
+use sage_core::tools::{Tool, ToolCall, ToolError, ToolParameter, ToolResult, ToolSchema};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone)]
 pub struct DiagnosticsTool;
@@ -46,14 +46,16 @@ impl Tool for DiagnosticsTool {
         ToolSchema::new(
             self.name(),
             self.description(),
-            vec![
-                ToolParameter::string("paths", "Required list of file paths to get issues for from the IDE."),
-            ]
+            vec![ToolParameter::string(
+                "paths",
+                "Required list of file paths to get issues for from the IDE.",
+            )],
         )
     }
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
-        let paths: Vec<String> = call.get_argument("paths")
+        let paths: Vec<String> = call
+            .get_argument("paths")
             .ok_or_else(|| ToolError::InvalidArguments("Missing 'paths' parameter".to_string()))?;
 
         // TODO: Implement actual IDE diagnostics integration
@@ -72,8 +74,9 @@ impl Tool for DiagnosticsTool {
             });
         }
 
-        let output = serde_json::to_string_pretty(&issues)
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to serialize output: {}", e)))?;
+        let output = serde_json::to_string_pretty(&issues).map_err(|e| {
+            ToolError::ExecutionFailed(format!("Failed to serialize output: {}", e))
+        })?;
 
         Ok(ToolResult::success(&call.id, self.name(), output))
     }

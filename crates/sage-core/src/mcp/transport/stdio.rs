@@ -60,13 +60,15 @@ impl StdioTransport {
             ))
         })?;
 
-        let stdin = child.stdin.take().ok_or_else(|| {
-            McpError::Connection("Failed to get stdin handle".into())
-        })?;
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| McpError::Connection("Failed to get stdin handle".into()))?;
 
-        let stdout = child.stdout.take().ok_or_else(|| {
-            McpError::Connection("Failed to get stdout handle".into())
-        })?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| McpError::Connection("Failed to get stdout handle".into()))?;
 
         Ok(Self {
             child: Some(child),

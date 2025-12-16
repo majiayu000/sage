@@ -5,7 +5,7 @@
 
 use super::types::{McpContent, McpTool, McpToolResult};
 use crate::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use std::collections::HashMap;
 use tracing::warn;
 
@@ -28,10 +28,7 @@ impl SchemaTranslator {
 
     /// Convert multiple MCP tools to Sage ToolSchemas
     pub fn mcp_tools_to_sage_schemas(mcp_tools: &[McpTool]) -> Vec<ToolSchema> {
-        mcp_tools
-            .iter()
-            .map(Self::mcp_to_sage_schema)
-            .collect()
+        mcp_tools.iter().map(Self::mcp_to_sage_schema).collect()
     }
 
     // ==========================================================================
@@ -49,10 +46,7 @@ impl SchemaTranslator {
 
     /// Convert multiple Sage ToolSchemas to MCP tools
     pub fn sage_schemas_to_mcp_tools(schemas: &[ToolSchema]) -> Vec<McpTool> {
-        schemas
-            .iter()
-            .map(Self::sage_to_mcp_tool)
-            .collect()
+        schemas.iter().map(Self::sage_to_mcp_tool).collect()
     }
 
     // ==========================================================================
@@ -142,11 +136,7 @@ impl SchemaTranslator {
             let required = obj
                 .get("required")
                 .and_then(|r| r.as_array())
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|v| v.as_str())
-                        .collect::<Vec<_>>()
-                })
+                .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>())
                 .unwrap_or_default();
 
             if let Some(props) = properties {
@@ -322,10 +312,7 @@ impl SchemaTranslator {
 
             // Handle type coercion for numbers
             let type_matches = match (expected_type, actual_type) {
-                ("integer", "number") => value
-                    .as_f64()
-                    .map(|n| n.fract() == 0.0)
-                    .unwrap_or(false),
+                ("integer", "number") => value.as_f64().map(|n| n.fract() == 0.0).unwrap_or(false),
                 (expected, actual) => expected == actual,
             };
 
@@ -340,10 +327,7 @@ impl SchemaTranslator {
         // Check enum values
         if let Some(Value::Array(enum_values)) = schema.get("enum") {
             if !enum_values.contains(value) {
-                errors.push(format!(
-                    "Value not in allowed enum: {:?}",
-                    enum_values
-                ));
+                errors.push(format!("Value not in allowed enum: {:?}", enum_values));
             }
         }
 
@@ -489,10 +473,12 @@ mod tests {
         assert_eq!(schema["type"], "object");
         assert!(schema["properties"]["name"]["type"] == "string");
         assert!(schema["properties"]["count"]["type"] == "number");
-        assert!(schema["required"]
-            .as_array()
-            .unwrap()
-            .contains(&json!("name")));
+        assert!(
+            schema["required"]
+                .as_array()
+                .unwrap()
+                .contains(&json!("name"))
+        );
     }
 
     #[test]

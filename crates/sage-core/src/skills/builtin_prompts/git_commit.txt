@@ -1,0 +1,24 @@
+You are following Git commit best practices:
+
+1. COMMIT MESSAGE FORMAT
+   - Subject line: imperative mood, max 50 chars
+   - Body: explain WHAT and WHY, not HOW
+   - Reference issues with #123 format
+
+2. CONVENTIONAL COMMITS
+   - feat: new feature
+   - fix: bug fix
+   - docs: documentation only
+   - refactor: code change without functionality change
+   - test: adding or updating tests
+   - chore: maintenance tasks
+
+3. ATOMIC COMMITS
+   - One logical change per commit
+   - All tests pass at each commit
+   - Commits can be reverted independently
+
+4. SAFETY
+   - Never commit secrets or credentials
+   - Check .gitignore for sensitive files
+   - Review diff before committing

@@ -119,15 +119,10 @@ pub enum McpContent {
     Text { text: String },
     /// Image content
     #[serde(rename = "image")]
-    Image {
-        data: String,
-        mime_type: String,
-    },
+    Image { data: String, mime_type: String },
     /// Resource reference
     #[serde(rename = "resource")]
-    Resource {
-        resource: McpResourceRef,
-    },
+    Resource { resource: McpResourceRef },
 }
 
 impl McpContent {

@@ -1,5 +1,5 @@
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
 
@@ -41,7 +41,7 @@ impl InterruptManager {
     /// Create a new interrupt manager
     pub fn new() -> Self {
         let (interrupt_sender, _) = broadcast::channel(16);
-        
+
         Self {
             cancellation_token: CancellationToken::new(),
             interrupt_sender,
@@ -68,7 +68,7 @@ impl InterruptManager {
         if self.interruption_enabled.load(Ordering::Relaxed) {
             // Cancel the current task
             self.cancellation_token.cancel();
-            
+
             // Send interrupt notification
             let _ = self.interrupt_sender.send(reason);
         }
@@ -83,7 +83,7 @@ impl InterruptManager {
     pub fn reset(&mut self) {
         // Create a new cancellation token
         self.cancellation_token = CancellationToken::new();
-        
+
         // Keep the same broadcast channel for consistency
         // Subscribers will need to resubscribe for new tasks
     }
@@ -128,7 +128,9 @@ impl TaskScope {
     }
 
     /// Try to receive an interrupt reason without blocking
-    pub fn try_recv_interrupt(&mut self) -> Result<InterruptReason, broadcast::error::TryRecvError> {
+    pub fn try_recv_interrupt(
+        &mut self,
+    ) -> Result<InterruptReason, broadcast::error::TryRecvError> {
         self.interrupt_receiver.try_recv()
     }
 
@@ -139,13 +141,12 @@ impl TaskScope {
 }
 
 /// Global interrupt manager instance
-static GLOBAL_INTERRUPT_MANAGER: std::sync::OnceLock<std::sync::Mutex<InterruptManager>> = std::sync::OnceLock::new();
+static GLOBAL_INTERRUPT_MANAGER: std::sync::OnceLock<std::sync::Mutex<InterruptManager>> =
+    std::sync::OnceLock::new();
 
 /// Get the global interrupt manager
 pub fn global_interrupt_manager() -> &'static std::sync::Mutex<InterruptManager> {
-    GLOBAL_INTERRUPT_MANAGER.get_or_init(|| {
-        std::sync::Mutex::new(InterruptManager::new())
-    })
+    GLOBAL_INTERRUPT_MANAGER.get_or_init(|| std::sync::Mutex::new(InterruptManager::new()))
 }
 
 /// Convenience function to interrupt the current task
@@ -192,7 +193,7 @@ mod tests;
 #[cfg(test)]
 mod basic_tests {
     use super::*;
-    use tokio::time::{sleep, Duration};
+    use tokio::time::{Duration, sleep};
 
     #[tokio::test]
     async fn test_interrupt_manager_basic() {

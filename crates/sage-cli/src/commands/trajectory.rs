@@ -1,8 +1,8 @@
 //! Trajectory management commands
 
 use crate::console::CLIConsole;
-use std::path::Path;
 use sage_core::error::SageResult;
+use std::path::Path;
 
 /// List trajectory files
 pub async fn list(_directory: &Path) -> SageResult<()> {

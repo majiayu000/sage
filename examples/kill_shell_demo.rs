@@ -97,10 +97,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Started background process with PID: {}", pid);
 
         // Register the shell
-        sage_tools::tools::process::kill_shell::register_shell(
-            "demo_shell".to_string(),
-            pid,
-        ).await;
+        sage_tools::tools::process::kill_shell::register_shell("demo_shell".to_string(), pid).await;
 
         println!("Registered shell as 'demo_shell'");
 

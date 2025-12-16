@@ -252,12 +252,8 @@ impl ParallelToolExecutor {
                     // Delegate to permission handler
                     let handler = self.permission_handler.read().await;
                     if let Some(ref handler) = *handler {
-                        let request = PermissionRequest::new(
-                            tool.name(),
-                            call.clone(),
-                            question,
-                            risk_level,
-                        );
+                        let request =
+                            PermissionRequest::new(tool.name(), call.clone(), question, risk_level);
 
                         let decision = handler.handle_permission_request(request).await;
 
@@ -485,21 +481,19 @@ impl ParallelToolExecutor {
             }
             ConcurrencyMode::ExclusiveByType => {
                 if let Some(semaphore) = self.type_semaphores.get(tool.name()) {
-                    let permit = semaphore
-                        .clone()
-                        .acquire_owned()
-                        .await
-                        .map_err(|_| ToolError::Other("Failed to acquire type permit".into()))?;
+                    let permit =
+                        semaphore.clone().acquire_owned().await.map_err(|_| {
+                            ToolError::Other("Failed to acquire type permit".into())
+                        })?;
                     permits.add_type(permit);
                 }
             }
             ConcurrencyMode::Limited(_) => {
                 if let Some(semaphore) = self.limited_semaphores.get(tool.name()) {
-                    let permit = semaphore
-                        .clone()
-                        .acquire_owned()
-                        .await
-                        .map_err(|_| ToolError::Other("Failed to acquire limited permit".into()))?;
+                    let permit =
+                        semaphore.clone().acquire_owned().await.map_err(|_| {
+                            ToolError::Other("Failed to acquire limited permit".into())
+                        })?;
                     permits.add_limited(permit);
                 }
             }

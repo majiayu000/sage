@@ -1,11 +1,11 @@
 //! Jupyter notebook editing tool
 
 use async_trait::async_trait;
-use std::path::PathBuf;
-use tokio::fs;
 use sage_core::tools::base::{FileSystemTool, Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+use tokio::fs;
 
 /// Jupyter notebook cell representation
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,12 +55,11 @@ impl NotebookEditTool {
     fn source_to_string(source: &serde_json::Value) -> String {
         match source {
             serde_json::Value::String(s) => s.clone(),
-            serde_json::Value::Array(arr) => {
-                arr.iter()
-                    .filter_map(|v| v.as_str())
-                    .collect::<Vec<_>>()
-                    .join("")
-            }
+            serde_json::Value::Array(arr) => arr
+                .iter()
+                .filter_map(|v| v.as_str())
+                .collect::<Vec<_>>()
+                .join(""),
             _ => String::new(),
         }
     }
@@ -106,13 +105,12 @@ impl NotebookEditTool {
         }
 
         // Read and parse notebook
-        let content = fs::read_to_string(&path).await.map_err(|e| {
-            ToolError::Io(e)
-        })?;
+        let content = fs::read_to_string(&path)
+            .await
+            .map_err(|e| ToolError::Io(e))?;
 
-        let mut notebook: Notebook = serde_json::from_str(&content).map_err(|e| {
-            ToolError::Json(e)
-        })?;
+        let mut notebook: Notebook =
+            serde_json::from_str(&content).map_err(|e| ToolError::Json(e))?;
 
         // Find cell to replace
         let cell_index = if let Some(id) = cell_id {
@@ -144,13 +142,12 @@ impl NotebookEditTool {
         }
 
         // Write back to file
-        let new_content = serde_json::to_string_pretty(&notebook).map_err(|e| {
-            ToolError::Json(e)
-        })?;
+        let new_content =
+            serde_json::to_string_pretty(&notebook).map_err(|e| ToolError::Json(e))?;
 
-        fs::write(&path, new_content).await.map_err(|e| {
-            ToolError::Io(e)
-        })?;
+        fs::write(&path, new_content)
+            .await
+            .map_err(|e| ToolError::Io(e))?;
 
         Ok(ToolResult::success(
             "",
@@ -182,13 +179,12 @@ impl NotebookEditTool {
         }
 
         // Read and parse notebook
-        let content = fs::read_to_string(&path).await.map_err(|e| {
-            ToolError::Io(e)
-        })?;
+        let content = fs::read_to_string(&path)
+            .await
+            .map_err(|e| ToolError::Io(e))?;
 
-        let mut notebook: Notebook = serde_json::from_str(&content).map_err(|e| {
-            ToolError::Json(e)
-        })?;
+        let mut notebook: Notebook =
+            serde_json::from_str(&content).map_err(|e| ToolError::Json(e))?;
 
         // Create new cell
         let new_cell = NotebookCell {
@@ -227,13 +223,12 @@ impl NotebookEditTool {
         notebook.cells.insert(insert_pos, new_cell);
 
         // Write back to file
-        let new_content = serde_json::to_string_pretty(&notebook).map_err(|e| {
-            ToolError::Json(e)
-        })?;
+        let new_content =
+            serde_json::to_string_pretty(&notebook).map_err(|e| ToolError::Json(e))?;
 
-        fs::write(&path, new_content).await.map_err(|e| {
-            ToolError::Io(e)
-        })?;
+        fs::write(&path, new_content)
+            .await
+            .map_err(|e| ToolError::Io(e))?;
 
         let position_msg = if let Some(id) = cell_id {
             format!("after cell '{}'", id)
@@ -268,13 +263,12 @@ impl NotebookEditTool {
         }
 
         // Read and parse notebook
-        let content = fs::read_to_string(&path).await.map_err(|e| {
-            ToolError::Io(e)
-        })?;
+        let content = fs::read_to_string(&path)
+            .await
+            .map_err(|e| ToolError::Io(e))?;
 
-        let mut notebook: Notebook = serde_json::from_str(&content).map_err(|e| {
-            ToolError::Json(e)
-        })?;
+        let mut notebook: Notebook =
+            serde_json::from_str(&content).map_err(|e| ToolError::Json(e))?;
 
         // Find and remove cell
         let cell_index = notebook
@@ -288,13 +282,12 @@ impl NotebookEditTool {
         notebook.cells.remove(cell_index);
 
         // Write back to file
-        let new_content = serde_json::to_string_pretty(&notebook).map_err(|e| {
-            ToolError::Json(e)
-        })?;
+        let new_content =
+            serde_json::to_string_pretty(&notebook).map_err(|e| ToolError::Json(e))?;
 
-        fs::write(&path, new_content).await.map_err(|e| {
-            ToolError::Io(e)
-        })?;
+        fs::write(&path, new_content)
+            .await
+            .map_err(|e| ToolError::Io(e))?;
 
         Ok(ToolResult::success(
             "",
@@ -336,18 +329,27 @@ Cell IDs can be found by reading the notebook file first."
             vec![
                 ToolParameter::string("notebook_path", "Absolute path to the .ipynb file"),
                 ToolParameter::string("new_source", "The new content for the cell"),
-                ToolParameter::optional_string("cell_id", "ID of the cell to edit/delete, or cell after which to insert"),
-                ToolParameter::optional_string("cell_type", "Type of cell: 'code' or 'markdown' (required for insert)"),
-                ToolParameter::optional_string("edit_mode", "Edit operation: 'replace' (default), 'insert', or 'delete'")
-                    .with_default("replace"),
+                ToolParameter::optional_string(
+                    "cell_id",
+                    "ID of the cell to edit/delete, or cell after which to insert",
+                ),
+                ToolParameter::optional_string(
+                    "cell_type",
+                    "Type of cell: 'code' or 'markdown' (required for insert)",
+                ),
+                ToolParameter::optional_string(
+                    "edit_mode",
+                    "Edit operation: 'replace' (default), 'insert', or 'delete'",
+                )
+                .with_default("replace"),
             ],
         )
     }
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
-        let notebook_path = call
-            .get_string("notebook_path")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'notebook_path' parameter".to_string()))?;
+        let notebook_path = call.get_string("notebook_path").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'notebook_path' parameter".to_string())
+        })?;
 
         let edit_mode = call
             .get_string("edit_mode")
@@ -356,7 +358,9 @@ Cell IDs can be found by reading the notebook file first."
         let mut result = match edit_mode.as_str() {
             "replace" => {
                 let new_source = call.get_string("new_source").ok_or_else(|| {
-                    ToolError::InvalidArguments("Missing 'new_source' parameter for replace".to_string())
+                    ToolError::InvalidArguments(
+                        "Missing 'new_source' parameter for replace".to_string(),
+                    )
                 })?;
                 let cell_id = call.get_string("cell_id");
                 let cell_type = call.get_string("cell_type");
@@ -370,23 +374,24 @@ Cell IDs can be found by reading the notebook file first."
             }
             "insert" => {
                 let new_source = call.get_string("new_source").ok_or_else(|| {
-                    ToolError::InvalidArguments("Missing 'new_source' parameter for insert".to_string())
+                    ToolError::InvalidArguments(
+                        "Missing 'new_source' parameter for insert".to_string(),
+                    )
                 })?;
                 let cell_type = call.get_string("cell_type").ok_or_else(|| {
-                    ToolError::InvalidArguments("Missing 'cell_type' parameter for insert".to_string())
+                    ToolError::InvalidArguments(
+                        "Missing 'cell_type' parameter for insert".to_string(),
+                    )
                 })?;
                 let cell_id = call.get_string("cell_id");
-                self.insert_cell(
-                    &notebook_path,
-                    cell_id.as_deref(),
-                    &cell_type,
-                    &new_source,
-                )
-                .await?
+                self.insert_cell(&notebook_path, cell_id.as_deref(), &cell_type, &new_source)
+                    .await?
             }
             "delete" => {
                 let cell_id = call.get_string("cell_id").ok_or_else(|| {
-                    ToolError::InvalidArguments("Missing 'cell_id' parameter for delete".to_string())
+                    ToolError::InvalidArguments(
+                        "Missing 'cell_id' parameter for delete".to_string(),
+                    )
                 })?;
                 self.delete_cell(&notebook_path, &cell_id).await?
             }
@@ -403,9 +408,9 @@ Cell IDs can be found by reading the notebook file first."
     }
 
     fn validate(&self, call: &ToolCall) -> Result<(), ToolError> {
-        let _notebook_path = call
-            .get_string("notebook_path")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'notebook_path' parameter".to_string()))?;
+        let _notebook_path = call.get_string("notebook_path").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'notebook_path' parameter".to_string())
+        })?;
 
         let edit_mode = call
             .get_string("edit_mode")
@@ -472,10 +477,10 @@ impl FileSystemTool for NotebookEditTool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
     use serde_json::json;
-    use tokio::fs;
+    use std::collections::HashMap;
     use tempfile::TempDir;
+    use tokio::fs;
 
     fn create_tool_call(id: &str, name: &str, args: serde_json::Value) -> ToolCall {
         let arguments = if let serde_json::Value::Object(map) = args {
@@ -523,15 +528,21 @@ mod tests {
         let notebook_path = temp_dir.path().join("test.ipynb");
 
         // Create test notebook
-        fs::write(&notebook_path, create_test_notebook()).await.unwrap();
+        fs::write(&notebook_path, create_test_notebook())
+            .await
+            .unwrap();
 
         let tool = NotebookEditTool::with_working_directory(temp_dir.path());
-        let call = create_tool_call("test-1", "notebook_edit", json!({
-            "notebook_path": notebook_path.to_str().unwrap(),
-            "cell_id": "cell-1",
-            "new_source": "print('Hello, Rust!')",
-            "edit_mode": "replace"
-        }));
+        let call = create_tool_call(
+            "test-1",
+            "notebook_edit",
+            json!({
+                "notebook_path": notebook_path.to_str().unwrap(),
+                "cell_id": "cell-1",
+                "new_source": "print('Hello, Rust!')",
+                "edit_mode": "replace"
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -550,16 +561,22 @@ mod tests {
         let notebook_path = temp_dir.path().join("test.ipynb");
 
         // Create test notebook
-        fs::write(&notebook_path, create_test_notebook()).await.unwrap();
+        fs::write(&notebook_path, create_test_notebook())
+            .await
+            .unwrap();
 
         let tool = NotebookEditTool::with_working_directory(temp_dir.path());
-        let call = create_tool_call("test-2", "notebook_edit", json!({
-            "notebook_path": notebook_path.to_str().unwrap(),
-            "cell_id": "cell-1",
-            "cell_type": "code",
-            "new_source": "x = 42",
-            "edit_mode": "insert"
-        }));
+        let call = create_tool_call(
+            "test-2",
+            "notebook_edit",
+            json!({
+                "notebook_path": notebook_path.to_str().unwrap(),
+                "cell_id": "cell-1",
+                "cell_type": "code",
+                "new_source": "x = 42",
+                "edit_mode": "insert"
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -578,14 +595,20 @@ mod tests {
         let notebook_path = temp_dir.path().join("test.ipynb");
 
         // Create test notebook
-        fs::write(&notebook_path, create_test_notebook()).await.unwrap();
+        fs::write(&notebook_path, create_test_notebook())
+            .await
+            .unwrap();
 
         let tool = NotebookEditTool::with_working_directory(temp_dir.path());
-        let call = create_tool_call("test-3", "notebook_edit", json!({
-            "notebook_path": notebook_path.to_str().unwrap(),
-            "cell_id": "cell-1",
-            "edit_mode": "delete"
-        }));
+        let call = create_tool_call(
+            "test-3",
+            "notebook_edit",
+            json!({
+                "notebook_path": notebook_path.to_str().unwrap(),
+                "cell_id": "cell-1",
+                "edit_mode": "delete"
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -603,15 +626,21 @@ mod tests {
         let notebook_path = temp_dir.path().join("test.ipynb");
 
         // Create test notebook
-        fs::write(&notebook_path, create_test_notebook()).await.unwrap();
+        fs::write(&notebook_path, create_test_notebook())
+            .await
+            .unwrap();
 
         let tool = NotebookEditTool::with_working_directory(temp_dir.path());
-        let call = create_tool_call("test-4", "notebook_edit", json!({
-            "notebook_path": notebook_path.to_str().unwrap(),
-            "cell_id": "nonexistent",
-            "new_source": "test",
-            "edit_mode": "replace"
-        }));
+        let call = create_tool_call(
+            "test-4",
+            "notebook_edit",
+            json!({
+                "notebook_path": notebook_path.to_str().unwrap(),
+                "cell_id": "nonexistent",
+                "new_source": "test",
+                "edit_mode": "replace"
+            }),
+        );
 
         let result = tool.execute(&call).await;
         assert!(result.is_err());
@@ -624,28 +653,40 @@ mod tests {
         let tool = NotebookEditTool::new();
 
         // Missing notebook_path
-        let call = create_tool_call("test-5a", "notebook_edit", json!({
-            "cell_id": "cell-1",
-            "new_source": "test"
-        }));
+        let call = create_tool_call(
+            "test-5a",
+            "notebook_edit",
+            json!({
+                "cell_id": "cell-1",
+                "new_source": "test"
+            }),
+        );
         let result = tool.execute(&call).await;
         assert!(result.is_err());
 
         // Missing new_source for replace
-        let call = create_tool_call("test-5b", "notebook_edit", json!({
-            "notebook_path": "/tmp/test.ipynb",
-            "cell_id": "cell-1",
-            "edit_mode": "replace"
-        }));
+        let call = create_tool_call(
+            "test-5b",
+            "notebook_edit",
+            json!({
+                "notebook_path": "/tmp/test.ipynb",
+                "cell_id": "cell-1",
+                "edit_mode": "replace"
+            }),
+        );
         let result = tool.validate(&call);
         assert!(result.is_err());
 
         // Missing cell_type for insert
-        let call = create_tool_call("test-5c", "notebook_edit", json!({
-            "notebook_path": "/tmp/test.ipynb",
-            "new_source": "test",
-            "edit_mode": "insert"
-        }));
+        let call = create_tool_call(
+            "test-5c",
+            "notebook_edit",
+            json!({
+                "notebook_path": "/tmp/test.ipynb",
+                "new_source": "test",
+                "edit_mode": "insert"
+            }),
+        );
         let result = tool.validate(&call);
         assert!(result.is_err());
     }
@@ -656,15 +697,21 @@ mod tests {
         let notebook_path = temp_dir.path().join("test.ipynb");
 
         // Create test notebook
-        fs::write(&notebook_path, create_test_notebook()).await.unwrap();
+        fs::write(&notebook_path, create_test_notebook())
+            .await
+            .unwrap();
 
         let tool = NotebookEditTool::with_working_directory(temp_dir.path());
-        let call = create_tool_call("test-6", "notebook_edit", json!({
-            "notebook_path": notebook_path.to_str().unwrap(),
-            "cell_type": "markdown",
-            "new_source": "# First Cell",
-            "edit_mode": "insert"
-        }));
+        let call = create_tool_call(
+            "test-6",
+            "notebook_edit",
+            json!({
+                "notebook_path": notebook_path.to_str().unwrap(),
+                "cell_type": "markdown",
+                "new_source": "# First Cell",
+                "edit_mode": "insert"
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);

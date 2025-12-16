@@ -1,7 +1,7 @@
 //! Display management for user interface
 
-use colored::*;
 use super::markdown::render_markdown;
+use colored::*;
 
 /// Theme colors for consistent UI styling
 pub struct Theme {
@@ -85,7 +85,8 @@ impl DisplayManager {
 
         // Title line with centered text
         let padding = (total_width - title_len - 2) / 2;
-        let title_line = format!("│{}{title}{}│",
+        let title_line = format!(
+            "│{}{title}{}│",
             " ".repeat(padding),
             " ".repeat(total_width - title_len - padding - 2)
         );
@@ -111,7 +112,8 @@ impl DisplayManager {
 
         // Use modern Unicode box drawing characters
         let top_line = "╭".to_string() + &"─".repeat(box_width - 2) + "╮";
-        let title_line = format!("│{}{title}{}│",
+        let title_line = format!(
+            "│{}{title}{}│",
             " ".repeat(padding),
             " ".repeat(box_width - title_len - padding - 2)
         );
@@ -141,13 +143,12 @@ impl DisplayManager {
         let filled = (percentage * bar_width / 100).min(bar_width);
         let empty = bar_width - filled;
 
-        let bar = format!("{}{}",
-            "█".repeat(filled),
-            "░".repeat(empty)
-        );
+        let bar = format!("{}{}", "█".repeat(filled), "░".repeat(empty));
 
-        let progress_line = format!("⚡ {} [{}] {}% ({}/{})",
-            message, bar, percentage, current, total);
+        let progress_line = format!(
+            "⚡ {} [{}] {}% ({}/{})",
+            message, bar, percentage, current, total
+        );
         println!("{}", self.apply_color(&progress_line, "primary"));
     }
 
@@ -170,8 +171,6 @@ impl DisplayManager {
             _ => println!("{}", message),
         }
     }
-
-
 
     /// Clear the current line
     pub fn clear_line() {

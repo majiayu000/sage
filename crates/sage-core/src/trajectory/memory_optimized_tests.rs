@@ -2,7 +2,7 @@
 
 #[cfg(test)]
 mod tests {
-    use super::super::memory_optimized::{MemoryOptimizedRecorder, MemoryOptimizedConfig};
+    use super::super::memory_optimized::{MemoryOptimizedConfig, MemoryOptimizedRecorder};
     use super::super::recorder::TrajectoryRecord;
     use crate::error::SageResult;
     use std::time::Duration;
@@ -98,8 +98,10 @@ mod tests {
 
         // Check statistics
         let stats = recorder.statistics().await;
-        println!("Memory records: {}, Total records: {}, Evictions: {}", 
-            stats.memory_records, stats.total_records, stats.memory_evictions);
+        println!(
+            "Memory records: {}, Total records: {}, Evictions: {}",
+            stats.memory_records, stats.total_records, stats.memory_evictions
+        );
 
         // Should have evicted some records
         assert!(stats.memory_evictions > 0);
@@ -223,8 +225,10 @@ mod tests {
         }
 
         let stats = recorder.statistics().await;
-        println!("Final memory usage: {} bytes, {} records", 
-            stats.memory_bytes, stats.memory_records);
+        println!(
+            "Final memory usage: {} bytes, {} records",
+            stats.memory_bytes, stats.memory_records
+        );
 
         // Should have evicted some records due to memory limit
         assert!(stats.memory_evictions > 0);

@@ -1,6 +1,6 @@
-use sage_core::tools::{Tool, ToolResult, ToolError, ToolCall, ToolSchema, ToolParameter};
-use serde::{Deserialize, Serialize};
 use async_trait::async_trait;
+use sage_core::tools::{Tool, ToolCall, ToolError, ToolParameter, ToolResult, ToolSchema};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone)]
 pub struct WebSearchTool;
@@ -61,25 +61,24 @@ impl Tool for WebSearchTool {
                 ToolParameter::number("num_results", "Number of results to return")
                     .with_default(5)
                     .optional(),
-            ]
+            ],
         )
     }
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
-        let query = call.get_string("query")
+        let query = call
+            .get_string("query")
             .ok_or_else(|| ToolError::InvalidArguments("Missing 'query' parameter".to_string()))?;
 
         let _num_results = call.get_argument::<u32>("num_results").unwrap_or(5);
 
         // TODO: Implement actual web search functionality
         // This is a placeholder implementation
-        let results = vec![
-            SearchResult {
-                url: "https://example.com/1".to_string(),
-                title: format!("Search result for: {}", query),
-                snippet: Some("This is a placeholder search result.".to_string()),
-            }
-        ];
+        let results = vec![SearchResult {
+            url: "https://example.com/1".to_string(),
+            title: format!("Search result for: {}", query),
+            snippet: Some("This is a placeholder search result.".to_string()),
+        }];
 
         let output = WebSearchOutput {
             query: query.clone(),

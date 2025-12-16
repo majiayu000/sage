@@ -9,11 +9,15 @@
 
 pub mod backoff;
 pub mod circuit_breaker;
+pub mod rate_limiter;
 pub mod retry;
 pub mod supervisor;
 
 pub use backoff::{BackoffConfig, BackoffStrategy, ExponentialBackoff};
 pub use circuit_breaker::{CircuitBreaker, CircuitBreakerConfig, CircuitState};
+pub use rate_limiter::{
+    RateLimitError, RateLimitGuard, RateLimiter, RateLimiterConfig, SlidingWindowRateLimiter,
+};
 pub use retry::{RetryConfig, RetryPolicy, RetryResult, Retryable};
 pub use supervisor::{SupervisionPolicy, SupervisionResult, Supervisor, TaskSupervisor};
 
@@ -213,6 +217,18 @@ pub fn classify_error(error: &crate::error::SageError) -> ErrorClass {
         // Agent and cache errors
         SageError::Agent(_) | SageError::Cache(_) => ErrorClass::Unknown,
 
+        // Storage errors are often transient
+        SageError::Storage(msg) => {
+            if msg.contains("permission denied") {
+                ErrorClass::Permanent
+            } else {
+                ErrorClass::Transient
+            }
+        }
+
+        // Not found errors are permanent
+        SageError::NotFound(_) => ErrorClass::Permanent,
+
         // Other errors
         SageError::Other(_) => ErrorClass::Unknown,
     }
@@ -306,6 +322,9 @@ mod tests {
 
         assert_eq!(ctx.component, Some("LLMClient".to_string()));
         assert_eq!(ctx.operation, Some("chat_stream".to_string()));
-        assert_eq!(ctx.metadata.get("model"), Some(&"claude-3-opus".to_string()));
+        assert_eq!(
+            ctx.metadata.get("model"),
+            Some(&"claude-3-opus".to_string())
+        );
     }
 }

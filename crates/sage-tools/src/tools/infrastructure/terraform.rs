@@ -7,9 +7,9 @@
 //! - Multi-cloud deployments
 
 use async_trait::async_trait;
-use tokio::process::Command;
 use tokio::fs;
-use tracing::{info, debug};
+use tokio::process::Command;
+use tracing::{debug, info};
 
 use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
@@ -31,24 +31,32 @@ impl TerraformTool {
     }
 
     /// Execute a terraform command
-    async fn execute_terraform(&self, args: &[&str], working_dir: Option<&str>) -> Result<String, ToolError> {
+    async fn execute_terraform(
+        &self,
+        args: &[&str],
+        working_dir: Option<&str>,
+    ) -> Result<String, ToolError> {
         let mut cmd = Command::new("terraform");
         cmd.args(args);
-        
+
         if let Some(dir) = working_dir {
             cmd.current_dir(dir);
         }
 
         debug!("Executing terraform command: terraform {}", args.join(" "));
-        
-        let output = cmd.output().await
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to execute terraform: {}", e)))?;
+
+        let output = cmd.output().await.map_err(|e| {
+            ToolError::ExecutionFailed(format!("Failed to execute terraform: {}", e))
+        })?;
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
-        
+
         if !output.status.success() {
-            return Err(ToolError::ExecutionFailed(format!("Terraform command failed: {}", stderr)));
+            return Err(ToolError::ExecutionFailed(format!(
+                "Terraform command failed: {}",
+                stderr
+            )));
         }
 
         let mut result = stdout.to_string();
@@ -56,7 +64,7 @@ impl TerraformTool {
             result.push_str("\nWarnings/Info:\n");
             result.push_str(&stderr);
         }
-        
+
         Ok(result)
     }
 
@@ -64,12 +72,16 @@ impl TerraformTool {
     async fn init_terraform(&self, working_dir: &str) -> Result<String, ToolError> {
         // Check if directory exists
         if !tokio::fs::metadata(working_dir).await.is_ok() {
-            tokio::fs::create_dir_all(working_dir).await
-                .map_err(|e| ToolError::ExecutionFailed(format!("Failed to create directory: {}", e)))?;
+            tokio::fs::create_dir_all(working_dir).await.map_err(|e| {
+                ToolError::ExecutionFailed(format!("Failed to create directory: {}", e))
+            })?;
         }
 
         let result = self.execute_terraform(&["init"], Some(working_dir)).await?;
-        Ok(format!("Terraform initialized in {}:\n{}", working_dir, result))
+        Ok(format!(
+            "Terraform initialized in {}:\n{}",
+            working_dir, result
+        ))
     }
 
     /// Plan Terraform changes
@@ -79,25 +91,36 @@ impl TerraformTool {
     }
 
     /// Apply Terraform changes
-    async fn apply_terraform(&self, working_dir: &str, auto_approve: bool) -> Result<String, ToolError> {
+    async fn apply_terraform(
+        &self,
+        working_dir: &str,
+        auto_approve: bool,
+    ) -> Result<String, ToolError> {
         let mut args = vec!["apply"];
         if auto_approve {
             args.push("-auto-approve");
         }
-        
+
         let result = self.execute_terraform(&args, Some(working_dir)).await?;
         Ok(format!("Terraform apply for {}:\n{}", working_dir, result))
     }
 
     /// Destroy Terraform infrastructure
-    async fn destroy_terraform(&self, working_dir: &str, auto_approve: bool) -> Result<String, ToolError> {
+    async fn destroy_terraform(
+        &self,
+        working_dir: &str,
+        auto_approve: bool,
+    ) -> Result<String, ToolError> {
         let mut args = vec!["destroy"];
         if auto_approve {
             args.push("-auto-approve");
         }
-        
+
         let result = self.execute_terraform(&args, Some(working_dir)).await?;
-        Ok(format!("Terraform destroy for {}:\n{}", working_dir, result))
+        Ok(format!(
+            "Terraform destroy for {}:\n{}",
+            working_dir, result
+        ))
     }
 
     /// Show Terraform state
@@ -107,9 +130,14 @@ impl TerraformTool {
     }
 
     /// Generate a basic Terraform configuration
-    async fn generate_config(&self, resource_type: &str, working_dir: &str) -> Result<String, ToolError> {
+    async fn generate_config(
+        &self,
+        resource_type: &str,
+        working_dir: &str,
+    ) -> Result<String, ToolError> {
         let config = match resource_type {
-            "aws_ec2" => r#"
+            "aws_ec2" => {
+                r#"
 terraform {
   required_providers {
     aws = {
@@ -141,8 +169,10 @@ resource "aws_instance" "example" {
 output "instance_ip" {
   value = aws_instance.example.public_ip
 }
-"#,
-            "gcp_vm" => r#"
+"#
+            }
+            "gcp_vm" => {
+                r#"
 terraform {
   required_providers {
     google = {
@@ -188,8 +218,10 @@ resource "google_compute_instance" "example" {
 
   tags = ["terraform-example"]
 }
-"#,
-            "azure_vm" => r#"
+"#
+            }
+            "azure_vm" => {
+                r#"
 terraform {
   required_providers {
     azurerm = {
@@ -221,8 +253,10 @@ resource "azurerm_subnet" "internal" {
   virtual_network_name = azurerm_virtual_network.example.name
   address_prefixes     = ["10.0.2.0/24"]
 }
-"#,
-            "kubernetes" => r#"
+"#
+            }
+            "kubernetes" => {
+                r#"
 terraform {
   required_providers {
     kubernetes = {
@@ -288,29 +322,43 @@ resource "kubernetes_deployment" "example" {
     }
   }
 }
-"#,
-            _ => &format!("# Terraform configuration for {}\n# TODO: Add specific configuration", resource_type),
+"#
+            }
+            _ => &format!(
+                "# Terraform configuration for {}\n# TODO: Add specific configuration",
+                resource_type
+            ),
         };
 
         let config_path = format!("{}/main.tf", working_dir);
-        
+
         // Create directory if it doesn't exist
         if !tokio::fs::metadata(working_dir).await.is_ok() {
-            tokio::fs::create_dir_all(working_dir).await
-                .map_err(|e| ToolError::ExecutionFailed(format!("Failed to create directory: {}", e)))?;
+            tokio::fs::create_dir_all(working_dir).await.map_err(|e| {
+                ToolError::ExecutionFailed(format!("Failed to create directory: {}", e))
+            })?;
         }
-        
-        // Write configuration file
-        fs::write(&config_path, config).await
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to write config file: {}", e)))?;
 
-        Ok(format!("Generated Terraform configuration for {} at {}", resource_type, config_path))
+        // Write configuration file
+        fs::write(&config_path, config).await.map_err(|e| {
+            ToolError::ExecutionFailed(format!("Failed to write config file: {}", e))
+        })?;
+
+        Ok(format!(
+            "Generated Terraform configuration for {} at {}",
+            resource_type, config_path
+        ))
     }
 
     /// Validate Terraform configuration
     async fn validate_config(&self, working_dir: &str) -> Result<String, ToolError> {
-        let result = self.execute_terraform(&["validate"], Some(working_dir)).await?;
-        Ok(format!("Terraform validation for {}:\n{}", working_dir, result))
+        let result = self
+            .execute_terraform(&["validate"], Some(working_dir))
+            .await?;
+        Ok(format!(
+            "Terraform validation for {}:\n{}",
+            working_dir, result
+        ))
     }
 
     /// Format Terraform files
@@ -341,55 +389,65 @@ impl Tool for TerraformTool {
             self.name(),
             self.description(),
             vec![
-                ToolParameter::string("command", "Terraform command (init, plan, apply, destroy, show, generate, validate, format)"),
+                ToolParameter::string(
+                    "command",
+                    "Terraform command (init, plan, apply, destroy, show, generate, validate, format)",
+                ),
                 ToolParameter::string("working_dir", "Working directory path"),
-                ToolParameter::optional_string("resource_type", "Type of resource to generate (aws_ec2, gcp_vm, azure_vm, kubernetes)"),
-                ToolParameter::boolean("auto_approve", "Auto-approve apply/destroy operations").optional(),
+                ToolParameter::optional_string(
+                    "resource_type",
+                    "Type of resource to generate (aws_ec2, gcp_vm, azure_vm, kubernetes)",
+                ),
+                ToolParameter::boolean("auto_approve", "Auto-approve apply/destroy operations")
+                    .optional(),
             ],
         )
     }
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
-        let command = call.get_string("command")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'command' parameter".to_string()))?;
-        
-        let working_dir = call.get_string("working_dir")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'working_dir' parameter".to_string()))?;
-        
-        info!("Executing Terraform command: {} in {}", command, working_dir);
-        
+        let command = call.get_string("command").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'command' parameter".to_string())
+        })?;
+
+        let working_dir = call.get_string("working_dir").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'working_dir' parameter".to_string())
+        })?;
+
+        info!(
+            "Executing Terraform command: {} in {}",
+            command, working_dir
+        );
+
         let result = match command.as_str() {
-            "init" => {
-                self.init_terraform(&working_dir).await?
-            },
-            "plan" => {
-                self.plan_terraform(&working_dir).await?
-            },
+            "init" => self.init_terraform(&working_dir).await?,
+            "plan" => self.plan_terraform(&working_dir).await?,
             "apply" => {
                 let auto_approve = call.get_bool("auto_approve").unwrap_or(false);
                 self.apply_terraform(&working_dir, auto_approve).await?
-            },
+            }
             "destroy" => {
                 let auto_approve = call.get_bool("auto_approve").unwrap_or(false);
                 self.destroy_terraform(&working_dir, auto_approve).await?
-            },
-            "show" => {
-                self.show_state(&working_dir).await?
-            },
+            }
+            "show" => self.show_state(&working_dir).await?,
             "generate" => {
-                let resource_type = call.get_string("resource_type")
-                    .ok_or_else(|| ToolError::InvalidArguments("Missing 'resource_type' parameter for generate".to_string()))?;
+                let resource_type = call.get_string("resource_type").ok_or_else(|| {
+                    ToolError::InvalidArguments(
+                        "Missing 'resource_type' parameter for generate".to_string(),
+                    )
+                })?;
                 self.generate_config(&resource_type, &working_dir).await?
-            },
-            "validate" => {
-                self.validate_config(&working_dir).await?
-            },
-            "format" => {
-                self.format_files(&working_dir).await?
-            },
-            _ => return Err(ToolError::InvalidArguments(format!("Unknown command: {}", command))),
+            }
+            "validate" => self.validate_config(&working_dir).await?,
+            "format" => self.format_files(&working_dir).await?,
+            _ => {
+                return Err(ToolError::InvalidArguments(format!(
+                    "Unknown command: {}",
+                    command
+                )));
+            }
         };
-        
+
         Ok(ToolResult::success(call.id.clone(), self.name(), result))
     }
 }
@@ -409,7 +467,7 @@ mod tests {
     async fn test_terraform_tool_schema() {
         let tool = TerraformTool::new();
         let schema = tool.schema();
-        
+
         assert_eq!(schema.name, "terraform");
         assert!(!schema.description.is_empty());
     }

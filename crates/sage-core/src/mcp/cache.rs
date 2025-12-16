@@ -408,10 +408,7 @@ impl McpCache {
 
     /// Get total number of cached entries
     pub fn total_entries(&self) -> usize {
-        self.tools.len()
-            + self.resources.len()
-            + self.prompts.len()
-            + self.resource_content.len()
+        self.tools.len() + self.resources.len() + self.prompts.len() + self.resource_content.len()
     }
 
     /// Get cache size breakdown

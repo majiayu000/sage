@@ -1,6 +1,6 @@
-use sage_core::tools::{Tool, ToolResult, ToolError, ToolCall, ToolSchema, ToolParameter};
-use serde::{Deserialize, Serialize};
 use async_trait::async_trait;
+use sage_core::tools::{Tool, ToolCall, ToolError, ToolParameter, ToolResult, ToolSchema};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone)]
 pub struct ViewRangeUntruncatedTool;
@@ -39,20 +39,29 @@ impl Tool for ViewRangeUntruncatedTool {
             self.name(),
             self.description(),
             vec![
-                ToolParameter::string("reference_id", "The reference ID of the truncated content (found in the truncation footer)"),
-                ToolParameter::number("start_line", "The starting line number (1-based, inclusive)"),
+                ToolParameter::string(
+                    "reference_id",
+                    "The reference ID of the truncated content (found in the truncation footer)",
+                ),
+                ToolParameter::number(
+                    "start_line",
+                    "The starting line number (1-based, inclusive)",
+                ),
                 ToolParameter::number("end_line", "The ending line number (1-based, inclusive)"),
-            ]
+            ],
         )
     }
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
-        let reference_id = call.get_string("reference_id")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'reference_id' parameter".to_string()))?;
-        let start_line: u32 = call.get_argument("start_line")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'start_line' parameter".to_string()))?;
-        let end_line: u32 = call.get_argument("end_line")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'end_line' parameter".to_string()))?;
+        let reference_id = call.get_string("reference_id").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'reference_id' parameter".to_string())
+        })?;
+        let start_line: u32 = call.get_argument("start_line").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'start_line' parameter".to_string())
+        })?;
+        let end_line: u32 = call.get_argument("end_line").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'end_line' parameter".to_string())
+        })?;
 
         // TODO: Implement actual untruncated content viewing
         let content = format!(
@@ -106,20 +115,28 @@ impl Tool for SearchUntruncatedTool {
             self.name(),
             self.description(),
             vec![
-                ToolParameter::string("reference_id", "The reference ID of the truncated content (found in the truncation footer)"),
+                ToolParameter::string(
+                    "reference_id",
+                    "The reference ID of the truncated content (found in the truncation footer)",
+                ),
                 ToolParameter::string("search_term", "The term to search for within the content"),
-                ToolParameter::number("context_lines", "Number of context lines to include before and after matches (default: 2)")
-                    .with_default(2)
-                    .optional(),
-            ]
+                ToolParameter::number(
+                    "context_lines",
+                    "Number of context lines to include before and after matches (default: 2)",
+                )
+                .with_default(2)
+                .optional(),
+            ],
         )
     }
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
-        let reference_id = call.get_string("reference_id")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'reference_id' parameter".to_string()))?;
-        let search_term = call.get_string("search_term")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'search_term' parameter".to_string()))?;
+        let reference_id = call.get_string("reference_id").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'reference_id' parameter".to_string())
+        })?;
+        let search_term = call.get_string("search_term").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'search_term' parameter".to_string())
+        })?;
         let context_lines: u32 = call.get_argument("context_lines").unwrap_or(2);
 
         // TODO: Implement actual search in untruncated content

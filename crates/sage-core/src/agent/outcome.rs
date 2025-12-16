@@ -258,7 +258,10 @@ impl ExecutionError {
                 ExecutionErrorKind::ToolExecution {
                     tool_name: tool_name.clone(),
                 },
-                Some(format!("Check the {} tool configuration and inputs", tool_name)),
+                Some(format!(
+                    "Check the {} tool configuration and inputs",
+                    tool_name
+                )),
             ),
             SageError::Config(_) => (
                 ExecutionErrorKind::Configuration,
@@ -275,10 +278,7 @@ impl ExecutionError {
                 ExecutionErrorKind::Network,
                 Some("Check your network connection and try again".into()),
             ),
-            SageError::Cancelled => (
-                ExecutionErrorKind::Other,
-                Some("Task was cancelled".into()),
-            ),
+            SageError::Cancelled => (ExecutionErrorKind::Other, Some("Task was cancelled".into())),
             _ => (ExecutionErrorKind::Other, None),
         }
     }

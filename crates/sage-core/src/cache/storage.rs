@@ -16,19 +16,19 @@ use tokio::sync::Mutex;
 pub trait CacheStorage: Send + Sync {
     /// Get a cache entry
     async fn get(&self, key: &CacheKey) -> SageResult<Option<CacheEntry>>;
-    
+
     /// Set a cache entry
     async fn set(&self, key: CacheKey, entry: CacheEntry) -> SageResult<()>;
-    
+
     /// Remove a cache entry
     async fn remove(&self, key: &CacheKey) -> SageResult<()>;
-    
+
     /// Clear all entries
     async fn clear(&self) -> SageResult<()>;
-    
+
     /// Get storage statistics
     async fn statistics(&self) -> SageResult<StorageStatistics>;
-    
+
     /// Cleanup expired entries
     async fn cleanup_expired(&self) -> SageResult<()>;
 }
@@ -59,7 +59,7 @@ impl CacheStorage for MemoryStorage {
     async fn get(&self, key: &CacheKey) -> SageResult<Option<CacheEntry>> {
         let mut cache = self.cache.lock().await;
         let mut stats = self.stats.lock().await;
-        
+
         if let Some(entry) = cache.get(&key.hash).cloned() {
             if entry.is_expired() {
                 // Remove expired entry
@@ -84,7 +84,7 @@ impl CacheStorage for MemoryStorage {
             Ok(None)
         }
     }
-    
+
     async fn set(&self, key: CacheKey, entry: CacheEntry) -> SageResult<()> {
         let mut cache = self.cache.lock().await;
         let mut stats = self.stats.lock().await;
@@ -110,39 +110,39 @@ impl CacheStorage for MemoryStorage {
 
         Ok(())
     }
-    
+
     async fn remove(&self, key: &CacheKey) -> SageResult<()> {
         let mut cache = self.cache.lock().await;
         let mut stats = self.stats.lock().await;
-        
+
         if let Some(entry) = cache.pop(&key.hash) {
             stats.entry_count -= 1;
             stats.size_bytes = stats.size_bytes.saturating_sub(entry.size_bytes as u64);
             stats.evictions += 1;
         }
-        
+
         Ok(())
     }
-    
+
     async fn clear(&self) -> SageResult<()> {
         let mut cache = self.cache.lock().await;
         let mut stats = self.stats.lock().await;
-        
+
         cache.clear();
         *stats = StorageStatistics::default();
-        
+
         Ok(())
     }
-    
+
     async fn statistics(&self) -> SageResult<StorageStatistics> {
         let stats = self.stats.lock().await;
         Ok(stats.clone())
     }
-    
+
     async fn cleanup_expired(&self) -> SageResult<()> {
         let mut cache = self.cache.lock().await;
         let mut stats = self.stats.lock().await;
-        
+
         let now = Utc::now();
         let expired_keys: Vec<u64> = cache
             .iter()
@@ -154,7 +154,7 @@ impl CacheStorage for MemoryStorage {
                 }
             })
             .collect();
-        
+
         for key in expired_keys {
             if let Some(entry) = cache.pop(&key) {
                 stats.entry_count -= 1;
@@ -162,7 +162,7 @@ impl CacheStorage for MemoryStorage {
                 stats.evictions += 1;
             }
         }
-        
+
         Ok(())
     }
 }
@@ -206,63 +206,78 @@ impl DiskStorage {
     pub async fn initialize(&self) -> SageResult<()> {
         self.initialize_index().await
     }
-    
+
     /// Get file path for a cache key
     fn get_file_path(&self, key: &CacheKey) -> PathBuf {
         let filename = format!("{}.json", key.hash);
         let namespace_dir = self.base_dir.join(&key.namespace);
         namespace_dir.join(filename)
     }
-    
+
     /// Initialize the cache index
     async fn initialize_index(&self) -> SageResult<()> {
         let mut index = self.index.lock().await;
         let mut current_size = self.current_size.lock().await;
         let mut stats = self.stats.lock().await;
-        
+
         // Clear existing index
         index.clear();
         *current_size = 0;
         stats.entry_count = 0;
         stats.size_bytes = 0;
-        
+
         // Scan cache directory
         let mut total_size = 0;
         let mut entry_count = 0;
-        
+
         if self.base_dir.exists() {
-            let mut dirs = fs::read_dir(&self.base_dir).await
+            let mut dirs = fs::read_dir(&self.base_dir)
+                .await
                 .map_err(|e| SageError::cache(format!("Failed to read cache directory: {}", e)))?;
 
-            while let Some(dir_entry) = dirs.next_entry().await
-                .map_err(|e| SageError::cache(format!("Failed to read directory entry: {}", e)))? {
-
-                if dir_entry.file_type().await
+            while let Some(dir_entry) = dirs
+                .next_entry()
+                .await
+                .map_err(|e| SageError::cache(format!("Failed to read directory entry: {}", e)))?
+            {
+                if dir_entry
+                    .file_type()
+                    .await
                     .map_err(|e| SageError::cache(format!("Failed to get file type: {}", e)))?
-                    .is_dir() {
-                    
+                    .is_dir()
+                {
                     let _namespace = dir_entry.file_name();
                     let namespace_path = dir_entry.path();
-                    
-                    let mut files = fs::read_dir(&namespace_path).await
-                        .map_err(|e| SageError::cache(format!("Failed to read namespace directory: {}", e)))?;
 
-                    while let Some(file_entry) = files.next_entry().await
-                        .map_err(|e| SageError::cache(format!("Failed to read file entry: {}", e)))? {
+                    let mut files = fs::read_dir(&namespace_path).await.map_err(|e| {
+                        SageError::cache(format!("Failed to read namespace directory: {}", e))
+                    })?;
 
-                        if file_entry.file_type().await
-                            .map_err(|e| SageError::cache(format!("Failed to get file type: {}", e)))?
-                            .is_file() {
-                            
+                    while let Some(file_entry) = files.next_entry().await.map_err(|e| {
+                        SageError::cache(format!("Failed to read file entry: {}", e))
+                    })? {
+                        if file_entry
+                            .file_type()
+                            .await
+                            .map_err(|e| {
+                                SageError::cache(format!("Failed to get file type: {}", e))
+                            })?
+                            .is_file()
+                        {
                             let file_path = file_entry.path();
                             if let Some(filename) = file_path.file_name() {
                                 if let Some(filename_str) = filename.to_str() {
                                     if filename_str.ends_with(".json") {
                                         if let Some(key_str) = filename_str.strip_suffix(".json") {
                                             if let Ok(key_hash) = key_str.parse::<u64>() {
-                                                let metadata = file_entry.metadata().await
-                                                    .map_err(|e| SageError::cache(format!("Failed to get file metadata: {}", e)))?;
-                                                
+                                                let metadata =
+                                                    file_entry.metadata().await.map_err(|e| {
+                                                        SageError::cache(format!(
+                                                            "Failed to get file metadata: {}",
+                                                            e
+                                                        ))
+                                                    })?;
+
                                                 total_size += metadata.len();
                                                 entry_count += 1;
                                                 index.insert(key_hash, file_path);
@@ -276,11 +291,11 @@ impl DiskStorage {
                 }
             }
         }
-        
+
         *current_size = total_size;
         stats.entry_count = entry_count;
         stats.size_bytes = total_size;
-        
+
         Ok(())
     }
 }
@@ -333,8 +348,9 @@ impl CacheStorage for DiskStorage {
 
         // Create namespace directory if it doesn't exist
         if let Some(parent) = file_path.parent() {
-            fs::create_dir_all(parent).await
-                .map_err(|e| SageError::cache(format!("Failed to create namespace directory: {}", e)))?;
+            fs::create_dir_all(parent).await.map_err(|e| {
+                SageError::cache(format!("Failed to create namespace directory: {}", e))
+            })?;
         }
 
         // Serialize entry
@@ -342,7 +358,8 @@ impl CacheStorage for DiskStorage {
             .map_err(|e| SageError::cache(format!("Failed to serialize cache entry: {}", e)))?;
 
         // Write to file
-        fs::write(&file_path, content).await
+        fs::write(&file_path, content)
+            .await
             .map_err(|e| SageError::cache(format!("Failed to write cache file: {}", e)))?;
 
         let entry_size = entry.size_bytes as u64;

@@ -1,11 +1,11 @@
 //! Fast file pattern matching tool using glob patterns
 
 use async_trait::async_trait;
-use std::path::PathBuf;
 use glob::glob as glob_pattern;
 use sage_core::tools::base::{FileSystemTool, Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
 use std::fs;
+use std::path::PathBuf;
 use std::time::SystemTime;
 
 /// Maximum number of files to return
@@ -71,16 +71,16 @@ impl GlobTool {
 
         // Construct the full glob pattern
         let full_pattern = base_path.join(pattern);
-        let pattern_str = full_pattern.to_str().ok_or_else(|| {
-            ToolError::ExecutionFailed("Invalid path encoding".to_string())
-        })?;
+        let pattern_str = full_pattern
+            .to_str()
+            .ok_or_else(|| ToolError::ExecutionFailed("Invalid path encoding".to_string()))?;
 
         // Execute glob pattern matching
         let mut matches: Vec<(PathBuf, SystemTime)> = Vec::new();
 
-        for entry in glob_pattern(pattern_str).map_err(|e| {
-            ToolError::ExecutionFailed(format!("Invalid glob pattern: {}", e))
-        })? {
+        for entry in glob_pattern(pattern_str)
+            .map_err(|e| ToolError::ExecutionFailed(format!("Invalid glob pattern: {}", e)))?
+        {
             match entry {
                 Ok(path) => {
                     // Security check for each matched file
@@ -157,11 +157,7 @@ impl GlobTool {
             output = format!("Search directory: {}\n\n{}", path_str, output);
         }
 
-        Ok(ToolResult::success(
-            "",
-            self.name(),
-            output,
-        ))
+        Ok(ToolResult::success("", self.name(), output))
     }
 }
 
@@ -207,16 +203,22 @@ File paths are returned relative to the working directory when possible."
             self.name(),
             self.description(),
             vec![
-                ToolParameter::string("pattern", "Glob pattern to match files (e.g., \"**/*.rs\", \"src/**/*.ts\")"),
-                ToolParameter::optional_string("path", "Directory to search in (default: current working directory)"),
+                ToolParameter::string(
+                    "pattern",
+                    "Glob pattern to match files (e.g., \"**/*.rs\", \"src/**/*.ts\")",
+                ),
+                ToolParameter::optional_string(
+                    "path",
+                    "Directory to search in (default: current working directory)",
+                ),
             ],
         )
     }
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
-        let pattern = call
-            .get_string("pattern")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'pattern' parameter".to_string()))?;
+        let pattern = call.get_string("pattern").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'pattern' parameter".to_string())
+        })?;
 
         let path = call.get_string("path");
         let path_ref = path.as_deref();
@@ -227,9 +229,9 @@ File paths are returned relative to the working directory when possible."
     }
 
     fn validate(&self, call: &ToolCall) -> Result<(), ToolError> {
-        let _pattern = call
-            .get_string("pattern")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'pattern' parameter".to_string()))?;
+        let _pattern = call.get_string("pattern").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'pattern' parameter".to_string())
+        })?;
 
         // Validate path if provided
         if let Some(path) = call.get_string("path") {
@@ -265,10 +267,10 @@ impl FileSystemTool for GlobTool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
     use serde_json::json;
-    use tokio::fs;
+    use std::collections::HashMap;
     use tempfile::TempDir;
+    use tokio::fs;
 
     fn create_tool_call(id: &str, name: &str, args: serde_json::Value) -> ToolCall {
         let arguments = if let serde_json::Value::Object(map) = args {
@@ -290,14 +292,24 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         // Create test files
-        fs::write(temp_dir.path().join("main.rs"), "fn main() {}").await.unwrap();
-        fs::write(temp_dir.path().join("lib.rs"), "pub mod test;").await.unwrap();
-        fs::write(temp_dir.path().join("test.txt"), "test").await.unwrap();
+        fs::write(temp_dir.path().join("main.rs"), "fn main() {}")
+            .await
+            .unwrap();
+        fs::write(temp_dir.path().join("lib.rs"), "pub mod test;")
+            .await
+            .unwrap();
+        fs::write(temp_dir.path().join("test.txt"), "test")
+            .await
+            .unwrap();
 
         let tool = GlobTool::with_working_directory(temp_dir.path());
-        let call = create_tool_call("test-1", "Glob", json!({
-            "pattern": "*.rs"
-        }));
+        let call = create_tool_call(
+            "test-1",
+            "Glob",
+            json!({
+                "pattern": "*.rs"
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -315,16 +327,24 @@ mod tests {
         // Create nested directory structure
         let src_dir = temp_dir.path().join("src");
         fs::create_dir(&src_dir).await.unwrap();
-        fs::write(src_dir.join("main.rs"), "fn main() {}").await.unwrap();
+        fs::write(src_dir.join("main.rs"), "fn main() {}")
+            .await
+            .unwrap();
 
         let module_dir = src_dir.join("module");
         fs::create_dir(&module_dir).await.unwrap();
-        fs::write(module_dir.join("lib.rs"), "pub mod test;").await.unwrap();
+        fs::write(module_dir.join("lib.rs"), "pub mod test;")
+            .await
+            .unwrap();
 
         let tool = GlobTool::with_working_directory(temp_dir.path());
-        let call = create_tool_call("test-2", "Glob", json!({
-            "pattern": "**/*.rs"
-        }));
+        let call = create_tool_call(
+            "test-2",
+            "Glob",
+            json!({
+                "pattern": "**/*.rs"
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -342,14 +362,22 @@ mod tests {
         // Create subdirectory
         let sub_dir = temp_dir.path().join("subdir");
         fs::create_dir(&sub_dir).await.unwrap();
-        fs::write(sub_dir.join("file.txt"), "content").await.unwrap();
-        fs::write(temp_dir.path().join("root.txt"), "root").await.unwrap();
+        fs::write(sub_dir.join("file.txt"), "content")
+            .await
+            .unwrap();
+        fs::write(temp_dir.path().join("root.txt"), "root")
+            .await
+            .unwrap();
 
         let tool = GlobTool::with_working_directory(temp_dir.path());
-        let call = create_tool_call("test-3", "Glob", json!({
-            "pattern": "*.txt",
-            "path": "subdir"
-        }));
+        let call = create_tool_call(
+            "test-3",
+            "Glob",
+            json!({
+                "pattern": "*.txt",
+                "path": "subdir"
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -363,12 +391,18 @@ mod tests {
     #[tokio::test]
     async fn test_glob_tool_no_matches() {
         let temp_dir = TempDir::new().unwrap();
-        fs::write(temp_dir.path().join("test.txt"), "test").await.unwrap();
+        fs::write(temp_dir.path().join("test.txt"), "test")
+            .await
+            .unwrap();
 
         let tool = GlobTool::with_working_directory(temp_dir.path());
-        let call = create_tool_call("test-4", "Glob", json!({
-            "pattern": "*.rs"
-        }));
+        let call = create_tool_call(
+            "test-4",
+            "Glob",
+            json!({
+                "pattern": "*.rs"
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -382,16 +416,26 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         // Create files with different extensions
-        fs::write(temp_dir.path().join("file1.js"), "js content").await.unwrap();
-        fs::write(temp_dir.path().join("file2.ts"), "ts content").await.unwrap();
-        fs::write(temp_dir.path().join("file3.py"), "py content").await.unwrap();
+        fs::write(temp_dir.path().join("file1.js"), "js content")
+            .await
+            .unwrap();
+        fs::write(temp_dir.path().join("file2.ts"), "ts content")
+            .await
+            .unwrap();
+        fs::write(temp_dir.path().join("file3.py"), "py content")
+            .await
+            .unwrap();
 
         let tool = GlobTool::with_working_directory(temp_dir.path());
         // Note: brace expansion {js,ts} may not be supported by all glob implementations
         // so we test with just .js files
-        let call = create_tool_call("test-5", "Glob", json!({
-            "pattern": "*.js"
-        }));
+        let call = create_tool_call(
+            "test-5",
+            "Glob",
+            json!({
+                "pattern": "*.js"
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -421,10 +465,14 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         let tool = GlobTool::with_working_directory(temp_dir.path());
-        let call = create_tool_call("test-7", "Glob", json!({
-            "pattern": "*.txt",
-            "path": "nonexistent_directory"
-        }));
+        let call = create_tool_call(
+            "test-7",
+            "Glob",
+            json!({
+                "pattern": "*.txt",
+                "path": "nonexistent_directory"
+            }),
+        );
 
         let result = tool.execute(&call).await;
         assert!(result.is_err());
@@ -439,14 +487,24 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         // Create files with different starting characters
-        fs::write(temp_dir.path().join("Apple.txt"), "a").await.unwrap();
-        fs::write(temp_dir.path().join("Banana.txt"), "b").await.unwrap();
-        fs::write(temp_dir.path().join("cherry.txt"), "c").await.unwrap();
+        fs::write(temp_dir.path().join("Apple.txt"), "a")
+            .await
+            .unwrap();
+        fs::write(temp_dir.path().join("Banana.txt"), "b")
+            .await
+            .unwrap();
+        fs::write(temp_dir.path().join("cherry.txt"), "c")
+            .await
+            .unwrap();
 
         let tool = GlobTool::with_working_directory(temp_dir.path());
-        let call = create_tool_call("test-8", "Glob", json!({
-            "pattern": "[A-Z]*.txt"
-        }));
+        let call = create_tool_call(
+            "test-8",
+            "Glob",
+            json!({
+                "pattern": "[A-Z]*.txt"
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -462,14 +520,24 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         // Create files with patterns
-        fs::write(temp_dir.path().join("test1.txt"), "1").await.unwrap();
-        fs::write(temp_dir.path().join("test2.txt"), "2").await.unwrap();
-        fs::write(temp_dir.path().join("test10.txt"), "10").await.unwrap();
+        fs::write(temp_dir.path().join("test1.txt"), "1")
+            .await
+            .unwrap();
+        fs::write(temp_dir.path().join("test2.txt"), "2")
+            .await
+            .unwrap();
+        fs::write(temp_dir.path().join("test10.txt"), "10")
+            .await
+            .unwrap();
 
         let tool = GlobTool::with_working_directory(temp_dir.path());
-        let call = create_tool_call("test-9", "Glob", json!({
-            "pattern": "test?.txt"
-        }));
+        let call = create_tool_call(
+            "test-9",
+            "Glob",
+            json!({
+                "pattern": "test?.txt"
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -494,9 +562,13 @@ mod tests {
         let tool = GlobTool::new();
 
         // Valid call with pattern
-        let call = create_tool_call("test-10", "Glob", json!({
-            "pattern": "*.rs"
-        }));
+        let call = create_tool_call(
+            "test-10",
+            "Glob",
+            json!({
+                "pattern": "*.rs"
+            }),
+        );
         assert!(tool.validate(&call).is_ok());
 
         // Invalid call without pattern
@@ -504,10 +576,14 @@ mod tests {
         assert!(tool.validate(&call).is_err());
 
         // Invalid call with empty path
-        let call = create_tool_call("test-12", "Glob", json!({
-            "pattern": "*.rs",
-            "path": ""
-        }));
+        let call = create_tool_call(
+            "test-12",
+            "Glob",
+            json!({
+                "pattern": "*.rs",
+                "path": ""
+            }),
+        );
         assert!(tool.validate(&call).is_err());
     }
 

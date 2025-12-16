@@ -19,27 +19,27 @@ impl SimpleInterruptManager {
             cancellation_token: CancellationToken::new(),
         }
     }
-    
+
     /// Get the current cancellation token
     pub fn cancellation_token(&self) -> CancellationToken {
         self.cancellation_token.clone()
     }
-    
+
     /// Cancel the current operation
     pub fn cancel(&self) {
         self.cancellation_token.cancel();
     }
-    
+
     /// Check if cancelled
     pub fn is_cancelled(&self) -> bool {
         self.cancellation_token.is_cancelled()
     }
-    
+
     /// Reset for a new operation
     pub fn reset(&mut self) {
         self.cancellation_token = CancellationToken::new();
     }
-    
+
     /// Create a child token for scoped operations
     pub fn child_token(&self) -> CancellationToken {
         self.cancellation_token.child_token()
@@ -60,9 +60,7 @@ thread_local! {
 
 /// Get the thread-local interrupt manager
 pub fn local_interrupt_manager() -> SimpleInterruptManager {
-    LOCAL_INTERRUPT_MANAGER.with(|manager| {
-        manager.borrow().clone()
-    })
+    LOCAL_INTERRUPT_MANAGER.with(|manager| manager.borrow().clone())
 }
 
 /// Cancel the current thread-local operation
@@ -74,9 +72,7 @@ pub fn cancel_current_operation() {
 
 /// Check if the current operation is cancelled
 pub fn is_current_operation_cancelled() -> bool {
-    LOCAL_INTERRUPT_MANAGER.with(|manager| {
-        manager.borrow().is_cancelled()
-    })
+    LOCAL_INTERRUPT_MANAGER.with(|manager| manager.borrow().is_cancelled())
 }
 
 /// Reset the thread-local interrupt manager
@@ -88,7 +84,5 @@ pub fn reset_local_interrupt_manager() {
 
 /// Get a cancellation token for the current operation
 pub fn current_operation_token() -> CancellationToken {
-    LOCAL_INTERRUPT_MANAGER.with(|manager| {
-        manager.borrow().cancellation_token()
-    })
+    LOCAL_INTERRUPT_MANAGER.with(|manager| manager.borrow().cancellation_token())
 }

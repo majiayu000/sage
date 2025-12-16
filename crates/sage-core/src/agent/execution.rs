@@ -27,7 +27,6 @@ pub struct AgentExecution {
     pub completed_at: Option<DateTime<Utc>>,
     /// Additional metadata
     pub metadata: HashMap<String, serde_json::Value>,
-
     // TODO: Add error recovery mechanism
     // - Track failed steps and retry attempts
     // - Implement intelligent retry strategies
@@ -66,7 +65,7 @@ impl AgentExecution {
         if let Some(usage) = &step.llm_usage {
             self.total_usage.add(usage);
         }
-        
+
         self.steps.push(step);
     }
 
@@ -107,10 +106,11 @@ impl AgentExecution {
     /// Get a summary of the execution
     pub fn summary(&self) -> String {
         let status = if self.success { "SUCCESS" } else { "FAILED" };
-        let duration = self.duration()
+        let duration = self
+            .duration()
             .map(|d| format!(" in {:.2}s", d.num_milliseconds() as f64 / 1000.0))
             .unwrap_or_default();
-        
+
         format!(
             "Execution {}: {} ({} steps, {} tokens{})",
             status,
@@ -155,9 +155,7 @@ impl AgentExecution {
 
     /// Check if any step indicates task completion
     pub fn indicates_completion(&self) -> bool {
-        self.steps
-            .iter()
-            .any(|step| step.indicates_completion())
+        self.steps.iter().any(|step| step.indicates_completion())
     }
 
     /// Add metadata to the execution
@@ -173,21 +171,21 @@ impl AgentExecution {
     /// Get execution statistics
     pub fn statistics(&self) -> ExecutionStatistics {
         let mut stats = ExecutionStatistics::default();
-        
+
         stats.total_steps = self.steps.len();
         stats.successful_steps = self.steps.iter().filter(|s| s.error.is_none()).count();
         stats.failed_steps = self.steps.iter().filter(|s| s.error.is_some()).count();
         stats.tool_calls = self.all_tool_calls().len();
         stats.total_tokens = self.total_usage.total_tokens;
         stats.execution_time = self.duration();
-        
+
         // Count tool usage
         for step in &self.steps {
             for tool_call in &step.tool_calls {
                 *stats.tool_usage.entry(tool_call.name.clone()).or_insert(0) += 1;
             }
         }
-        
+
         stats
     }
 }

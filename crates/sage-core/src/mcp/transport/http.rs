@@ -9,8 +9,8 @@ use crate::mcp::protocol::McpMessage;
 use async_trait::async_trait;
 use reqwest::{Client, StatusCode};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::mpsc;
 use tracing::{debug, error, warn};
 
@@ -85,8 +85,8 @@ pub struct HttpTransport {
 impl HttpTransport {
     /// Create a new HTTP transport
     pub fn new(config: HttpTransportConfig) -> Result<Self, McpError> {
-        let mut client_builder = Client::builder()
-            .timeout(std::time::Duration::from_secs(config.timeout_secs));
+        let mut client_builder =
+            Client::builder().timeout(std::time::Duration::from_secs(config.timeout_secs));
 
         // Build headers
         let mut header_map = reqwest::header::HeaderMap::new();

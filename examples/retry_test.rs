@@ -2,8 +2,8 @@ use sage_core::{
     config::provider::ProviderConfig,
     llm::{
         client::LLMClient,
-        providers::{LLMProvider, ModelParameters},
         messages::LLMMessage,
+        providers::{LLMProvider, ModelParameters},
     },
 };
 use tracing_subscriber::fmt::init;
@@ -25,19 +25,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_temperature(0.7);
 
     // Create LLM client
-    let client = LLMClient::new(
-        LLMProvider::Google,
-        provider_config,
-        model_params,
-    )?;
+    let client = LLMClient::new(LLMProvider::Google, provider_config, model_params)?;
 
     // Create a simple message using the helper method
-    let messages = vec![
-        LLMMessage::user("Hello, how are you?")
-    ];
+    let messages = vec![LLMMessage::user("Hello, how are you?")];
 
     println!("Testing LLM client with retry mechanism...");
-    
+
     // Make the request - this should automatically retry on failure
     match client.chat(&messages, None).await {
         Ok(response) => {

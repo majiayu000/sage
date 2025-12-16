@@ -310,14 +310,8 @@ mod tests {
     #[test]
     fn test_validation_schema() {
         let mut schema = ValidationSchema::new();
-        schema.add_field(
-            "name",
-            FieldSchema::new(FieldType::String).required(true),
-        );
-        schema.add_field(
-            "age",
-            FieldSchema::new(FieldType::Integer).required(false),
-        );
+        schema.add_field("name", FieldSchema::new(FieldType::String).required(true));
+        schema.add_field("age", FieldSchema::new(FieldType::Integer).required(false));
 
         assert!(schema.is_field_required("name"));
         assert!(!schema.is_field_required("age"));
@@ -334,8 +328,8 @@ mod tests {
 
     #[test]
     fn test_enum_values() {
-        let field = FieldSchema::new(FieldType::String)
-            .enum_of(vec!["active", "inactive", "pending"]);
+        let field =
+            FieldSchema::new(FieldType::String).enum_of(vec!["active", "inactive", "pending"]);
 
         assert!(field.enum_values.is_some());
         assert_eq!(field.enum_values.as_ref().unwrap().len(), 3);

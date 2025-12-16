@@ -37,9 +37,9 @@ pub struct ResourceLimits {
 impl Default for ResourceLimits {
     fn default() -> Self {
         Self {
-            max_memory_bytes: Some(512 * 1024 * 1024), // 512 MB
-            max_cpu_seconds: Some(60),                  // 60 seconds
-            max_output_bytes: Some(10 * 1024 * 1024),   // 10 MB
+            max_memory_bytes: Some(512 * 1024 * 1024),   // 512 MB
+            max_cpu_seconds: Some(60),                   // 60 seconds
+            max_output_bytes: Some(10 * 1024 * 1024),    // 10 MB
             max_file_size_bytes: Some(50 * 1024 * 1024), // 50 MB
             max_processes: Some(10),
             max_open_files: Some(100),
@@ -55,9 +55,9 @@ impl ResourceLimits {
     pub fn permissive() -> Self {
         Self {
             max_memory_bytes: Some(4 * 1024 * 1024 * 1024), // 4 GB
-            max_cpu_seconds: Some(300),                      // 5 minutes
-            max_output_bytes: Some(100 * 1024 * 1024),       // 100 MB
-            max_file_size_bytes: Some(1024 * 1024 * 1024),   // 1 GB
+            max_cpu_seconds: Some(300),                     // 5 minutes
+            max_output_bytes: Some(100 * 1024 * 1024),      // 100 MB
+            max_file_size_bytes: Some(1024 * 1024 * 1024),  // 1 GB
             max_processes: Some(100),
             max_open_files: Some(1000),
             max_stack_bytes: Some(64 * 1024 * 1024), // 64 MB
@@ -69,9 +69,9 @@ impl ResourceLimits {
     /// Create strict resource limits
     pub fn strict() -> Self {
         Self {
-            max_memory_bytes: Some(128 * 1024 * 1024), // 128 MB
-            max_cpu_seconds: Some(10),                  // 10 seconds
-            max_output_bytes: Some(1024 * 1024),        // 1 MB
+            max_memory_bytes: Some(128 * 1024 * 1024),   // 128 MB
+            max_cpu_seconds: Some(10),                   // 10 seconds
+            max_output_bytes: Some(1024 * 1024),         // 1 MB
             max_file_size_bytes: Some(10 * 1024 * 1024), // 10 MB
             max_processes: Some(1),
             max_open_files: Some(20),

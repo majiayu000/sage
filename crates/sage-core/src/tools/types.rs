@@ -18,7 +18,11 @@ pub struct ToolCall {
 
 impl ToolCall {
     /// Create a new tool call
-    pub fn new<S: Into<String>>(id: S, name: S, arguments: HashMap<String, serde_json::Value>) -> Self {
+    pub fn new<S: Into<String>>(
+        id: S,
+        name: S,
+        arguments: HashMap<String, serde_json::Value>,
+    ) -> Self {
         Self {
             id: id.into(),
             name: name.into(),
@@ -82,7 +86,11 @@ pub struct ToolResult {
 
 impl ToolResult {
     /// Create a successful tool result
-    pub fn success(call_id: impl Into<String>, tool_name: impl Into<String>, output: impl Into<String>) -> Self {
+    pub fn success(
+        call_id: impl Into<String>,
+        tool_name: impl Into<String>,
+        output: impl Into<String>,
+    ) -> Self {
         Self {
             call_id: call_id.into(),
             tool_name: tool_name.into(),
@@ -96,7 +104,11 @@ impl ToolResult {
     }
 
     /// Create a failed tool result
-    pub fn error(call_id: impl Into<String>, tool_name: impl Into<String>, error: impl Into<String>) -> Self {
+    pub fn error(
+        call_id: impl Into<String>,
+        tool_name: impl Into<String>,
+        error: impl Into<String>,
+    ) -> Self {
         Self {
             call_id: call_id.into(),
             tool_name: tool_name.into(),

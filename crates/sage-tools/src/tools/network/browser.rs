@@ -1,7 +1,7 @@
-use sage_core::tools::{Tool, ToolResult, ToolError, ToolCall, ToolSchema, ToolParameter};
+use async_trait::async_trait;
+use sage_core::tools::{Tool, ToolCall, ToolError, ToolParameter, ToolResult, ToolSchema};
 use serde::{Deserialize, Serialize};
 use std::process::Command;
-use async_trait::async_trait;
 
 #[derive(Debug, Clone)]
 pub struct BrowserTool;
@@ -37,14 +37,16 @@ impl Tool for BrowserTool {
         ToolSchema::new(
             self.name(),
             self.description(),
-            vec![
-                ToolParameter::string("url", "The URL to open in the browser."),
-            ]
+            vec![ToolParameter::string(
+                "url",
+                "The URL to open in the browser.",
+            )],
         )
     }
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
-        let url = call.get_string("url")
+        let url = call
+            .get_string("url")
             .ok_or_else(|| ToolError::InvalidArguments("Missing 'url' parameter".to_string()))?;
 
         // Open URL in default browser
@@ -59,13 +61,23 @@ impl Tool for BrowserTool {
         match result {
             Ok(output) => {
                 if output.status.success() {
-                    Ok(ToolResult::success(&call.id, self.name(), format!("Opened {} in default browser", url)))
+                    Ok(ToolResult::success(
+                        &call.id,
+                        self.name(),
+                        format!("Opened {} in default browser", url),
+                    ))
                 } else {
                     let error = String::from_utf8_lossy(&output.stderr);
-                    Err(ToolError::ExecutionFailed(format!("Failed to open browser: {}", error)))
+                    Err(ToolError::ExecutionFailed(format!(
+                        "Failed to open browser: {}",
+                        error
+                    )))
                 }
             }
-            Err(e) => Err(ToolError::ExecutionFailed(format!("Failed to execute browser command: {}", e))),
+            Err(e) => Err(ToolError::ExecutionFailed(format!(
+                "Failed to execute browser command: {}",
+                e
+            ))),
         }
     }
 }

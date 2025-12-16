@@ -1,6 +1,6 @@
-use sage_core::tools::{Tool, ToolResult, ToolError, ToolCall, ToolSchema, ToolParameter};
-use serde::{Deserialize, Serialize};
 use async_trait::async_trait;
+use sage_core::tools::{Tool, ToolCall, ToolError, ToolParameter, ToolResult, ToolSchema};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone)]
 pub struct WebFetchTool;
@@ -36,14 +36,13 @@ impl Tool for WebFetchTool {
         ToolSchema::new(
             self.name(),
             self.description(),
-            vec![
-                ToolParameter::string("url", "The URL to fetch."),
-            ]
+            vec![ToolParameter::string("url", "The URL to fetch.")],
         )
     }
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
-        let url = call.get_string("url")
+        let url = call
+            .get_string("url")
             .ok_or_else(|| ToolError::InvalidArguments("Missing 'url' parameter".to_string()))?;
 
         // TODO: Implement actual web fetching functionality

@@ -13,7 +13,6 @@ pub struct ToolExecutor {
     tools: HashMap<String, Arc<dyn Tool>>,
     max_execution_time: Duration,
     allow_parallel_execution: bool,
-
     // TODO: Add tool dependency management
     // - Track tool dependencies and execution order
     // - Implement dependency resolution algorithm
@@ -123,12 +122,12 @@ impl ToolExecutor {
     /// Execute tools sequentially
     async fn execute_tools_sequential(&self, calls: &[ToolCall]) -> Vec<ToolResult> {
         let mut results = Vec::with_capacity(calls.len());
-        
+
         for call in calls {
             let result = self.execute_tool(call).await;
             results.push(result);
         }
-        
+
         results
     }
 
@@ -147,10 +146,7 @@ impl ToolExecutor {
         }
 
         // Execute in parallel
-        let futures: Vec<_> = calls
-            .iter()
-            .map(|call| self.execute_tool(call))
-            .collect();
+        let futures: Vec<_> = calls.iter().map(|call| self.execute_tool(call)).collect();
 
         futures::future::join_all(futures).await
     }
@@ -159,14 +155,14 @@ impl ToolExecutor {
     pub fn validate_calls(&self, calls: &[ToolCall]) -> SageResult<()> {
         for call in calls {
             // Check if tool exists
-            let tool = self.tools.get(&call.name).ok_or_else(|| {
-                SageError::tool(&call.name, "Tool not found")
-            })?;
+            let tool = self
+                .tools
+                .get(&call.name)
+                .ok_or_else(|| SageError::tool(&call.name, "Tool not found"))?;
 
             // Validate the call
-            tool.validate(call).map_err(|e| {
-                SageError::tool(&call.name, e.to_string())
-            })?;
+            tool.validate(call)
+                .map_err(|e| SageError::tool(&call.name, e.to_string()))?;
         }
 
         Ok(())
@@ -174,14 +170,14 @@ impl ToolExecutor {
 
     /// Get tool schemas for all registered tools
     pub fn get_tool_schemas(&self) -> Vec<crate::tools::types::ToolSchema> {
-        self.tools
-            .values()
-            .map(|tool| tool.schema())
-            .collect()
+        self.tools.values().map(|tool| tool.schema()).collect()
     }
 
     /// Get tool schemas for specific tools
-    pub fn get_schemas_for_tools(&self, tool_names: &[String]) -> Vec<crate::tools::types::ToolSchema> {
+    pub fn get_schemas_for_tools(
+        &self,
+        tool_names: &[String],
+    ) -> Vec<crate::tools::types::ToolSchema> {
         tool_names
             .iter()
             .filter_map(|name| self.tools.get(name))
@@ -272,10 +268,8 @@ impl ToolExecutorBuilder {
 
     /// Build the tool executor
     pub fn build(self) -> ToolExecutor {
-        let mut executor = ToolExecutor::with_settings(
-            self.max_execution_time,
-            self.allow_parallel_execution,
-        );
+        let mut executor =
+            ToolExecutor::with_settings(self.max_execution_time, self.allow_parallel_execution);
 
         for tool in self.tools {
             executor.register_tool(tool);

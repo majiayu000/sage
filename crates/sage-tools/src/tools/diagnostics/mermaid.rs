@@ -1,6 +1,6 @@
-use sage_core::tools::{Tool, ToolResult, ToolError, ToolCall, ToolSchema, ToolParameter};
-use serde::{Deserialize, Serialize};
 use async_trait::async_trait;
+use sage_core::tools::{Tool, ToolCall, ToolError, ToolParameter, ToolResult, ToolSchema};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone)]
 pub struct RenderMermaidTool;
@@ -43,17 +43,25 @@ impl Tool for RenderMermaidTool {
             self.name(),
             self.description(),
             vec![
-                ToolParameter::string("diagram_definition", "The Mermaid diagram definition code to render"),
-                ToolParameter::string("title", "Optional title for the diagram").with_default("Mermaid Diagram".to_string()).optional(),
-            ]
+                ToolParameter::string(
+                    "diagram_definition",
+                    "The Mermaid diagram definition code to render",
+                ),
+                ToolParameter::string("title", "Optional title for the diagram")
+                    .with_default("Mermaid Diagram".to_string())
+                    .optional(),
+            ],
         )
     }
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
-        let diagram_definition = call.get_string("diagram_definition")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'diagram_definition' parameter".to_string()))?;
-        
-        let title = call.get_string("title").unwrap_or_else(|| "Mermaid Diagram".to_string());
+        let diagram_definition = call.get_string("diagram_definition").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'diagram_definition' parameter".to_string())
+        })?;
+
+        let title = call
+            .get_string("title")
+            .unwrap_or_else(|| "Mermaid Diagram".to_string());
 
         // TODO: Implement actual Mermaid rendering
         // This is a placeholder implementation

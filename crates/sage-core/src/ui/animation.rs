@@ -2,8 +2,8 @@
 
 use colored::*;
 use std::io::Write;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::Mutex;
 
 /// Animation states for different operations
@@ -106,13 +106,27 @@ impl AnimationManager {
 
             // Enhanced color scheme with bold and bright colors
             let colored_message = match color {
-                "blue" => format!("{} {}", frame, message_with_timer).bright_blue().bold(),
-                "green" => format!("{} {}", frame, message_with_timer).bright_green().bold(),
-                "yellow" => format!("{} {}", frame, message_with_timer).bright_yellow().bold(),
-                "red" => format!("{} {}", frame, message_with_timer).bright_red().bold(),
-                "cyan" => format!("{} {}", frame, message_with_timer).bright_cyan().bold(),
-                "magenta" => format!("{} {}", frame, message_with_timer).bright_magenta().bold(),
-                _ => format!("{} {}", frame, message_with_timer).bright_white().bold(),
+                "blue" => format!("{} {}", frame, message_with_timer)
+                    .bright_blue()
+                    .bold(),
+                "green" => format!("{} {}", frame, message_with_timer)
+                    .bright_green()
+                    .bold(),
+                "yellow" => format!("{} {}", frame, message_with_timer)
+                    .bright_yellow()
+                    .bold(),
+                "red" => format!("{} {}", frame, message_with_timer)
+                    .bright_red()
+                    .bold(),
+                "cyan" => format!("{} {}", frame, message_with_timer)
+                    .bright_cyan()
+                    .bold(),
+                "magenta" => format!("{} {}", frame, message_with_timer)
+                    .bright_magenta()
+                    .bold(),
+                _ => format!("{} {}", frame, message_with_timer)
+                    .bright_white()
+                    .bold(),
             };
 
             print!("\r{} ", colored_message);

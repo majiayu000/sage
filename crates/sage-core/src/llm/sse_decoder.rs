@@ -230,7 +230,10 @@ mod tests {
         // Second chunk - completes the event
         let events2 = decoder.feed(b"pe\": \"delta\"}\n\n");
         assert_eq!(events2.len(), 1);
-        assert_eq!(events2[0].event_type, Some("content_block_delta".to_string()));
+        assert_eq!(
+            events2[0].event_type,
+            Some("content_block_delta".to_string())
+        );
         assert_eq!(events2[0].data, "{\"type\": \"delta\"}");
     }
 
@@ -267,8 +270,14 @@ mod tests {
 
         assert_eq!(events.len(), 3);
         assert_eq!(events[0].event_type, Some("message_start".to_string()));
-        assert_eq!(events[1].event_type, Some("content_block_start".to_string()));
-        assert_eq!(events[2].event_type, Some("content_block_delta".to_string()));
+        assert_eq!(
+            events[1].event_type,
+            Some("content_block_start".to_string())
+        );
+        assert_eq!(
+            events[2].event_type,
+            Some("content_block_delta".to_string())
+        );
     }
 
     #[test]

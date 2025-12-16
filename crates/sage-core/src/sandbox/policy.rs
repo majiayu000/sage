@@ -1,7 +1,7 @@
 //! Sandbox policies for access control
 
-use super::config::SandboxConfig;
 use super::SandboxError;
+use super::config::SandboxConfig;
 use regex::Regex;
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -188,10 +188,8 @@ pub struct CommandPolicy {
 impl CommandPolicy {
     /// Create command policy from configuration
     pub fn from_config(config: &SandboxConfig) -> Result<Self, SandboxError> {
-        let allowed_commands: HashSet<String> =
-            config.allowed_commands.iter().cloned().collect();
-        let blocked_commands: HashSet<String> =
-            config.blocked_commands.iter().cloned().collect();
+        let allowed_commands: HashSet<String> = config.allowed_commands.iter().cloned().collect();
+        let blocked_commands: HashSet<String> = config.blocked_commands.iter().cloned().collect();
 
         let allow_all = allowed_commands.is_empty();
 
@@ -309,15 +307,15 @@ impl NetworkPolicy {
     /// Default blocked ports (dangerous services)
     fn default_blocked_ports() -> HashSet<u16> {
         vec![
-            22,   // SSH
-            23,   // Telnet
-            25,   // SMTP
-            110,  // POP3
-            143,  // IMAP
-            445,  // SMB
-            3306, // MySQL
-            5432, // PostgreSQL
-            6379, // Redis
+            22,    // SSH
+            23,    // Telnet
+            25,    // SMTP
+            110,   // POP3
+            143,   // IMAP
+            445,   // SMB
+            3306,  // MySQL
+            5432,  // PostgreSQL
+            6379,  // Redis
             27017, // MongoDB
         ]
         .into_iter()
@@ -388,7 +386,11 @@ mod tests {
         assert!(policy.check_path(&test_path, false).is_ok());
 
         // Denied read (not in allowed paths)
-        assert!(policy.check_path(&PathBuf::from("/var/test.txt"), false).is_err());
+        assert!(
+            policy
+                .check_path(&PathBuf::from("/var/test.txt"), false)
+                .is_err()
+        );
     }
 
     #[test]
@@ -405,7 +407,11 @@ mod tests {
         assert!(policy.check_path(&test_path, true).is_ok());
 
         // Denied write
-        assert!(policy.check_path(&PathBuf::from("/var/test.txt"), true).is_err());
+        assert!(
+            policy
+                .check_path(&PathBuf::from("/var/test.txt"), true)
+                .is_err()
+        );
     }
 
     #[test]
@@ -417,8 +423,16 @@ mod tests {
         let policy = PathPolicy::from_config(&config).unwrap();
 
         // System paths are always denied
-        assert!(policy.check_path(&PathBuf::from("/etc/shadow"), false).is_err());
-        assert!(policy.check_path(&PathBuf::from("/proc/1/status"), false).is_err());
+        assert!(
+            policy
+                .check_path(&PathBuf::from("/etc/shadow"), false)
+                .is_err()
+        );
+        assert!(
+            policy
+                .check_path(&PathBuf::from("/proc/1/status"), false)
+                .is_err()
+        );
     }
 
     #[test]

@@ -122,9 +122,12 @@ impl FieldError {
 
     /// Create "type_mismatch" error
     pub fn type_mismatch(expected: &str, actual: &str) -> Self {
-        Self::new("type_mismatch", format!("Expected {}, got {}", expected, actual))
-            .expected(expected)
-            .actual(actual)
+        Self::new(
+            "type_mismatch",
+            format!("Expected {}, got {}", expected, actual),
+        )
+        .expected(expected)
+        .actual(actual)
     }
 
     /// Create "invalid_format" error
@@ -260,10 +263,7 @@ impl Validator {
         // Apply validation rules
         for rule in &schema.rules {
             if let Err(msg) = rule.validate(value) {
-                errors.add_field_error(
-                    field_name,
-                    FieldError::new(rule.rule_name(), msg),
-                );
+                errors.add_field_error(field_name, FieldError::new(rule.rule_name(), msg));
             }
         }
 
@@ -312,15 +312,12 @@ impl Default for Validator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::validation::schema::FieldType;
     use crate::validation::SchemaBuilder;
+    use crate::validation::schema::FieldType;
 
     #[test]
     fn test_validate_required_fields() {
-        let schema = SchemaBuilder::new()
-            .string("name")
-            .integer("age")
-            .build();
+        let schema = SchemaBuilder::new().string("name").integer("age").build();
 
         let validator = Validator::new();
 
@@ -343,9 +340,7 @@ mod tests {
 
     #[test]
     fn test_validate_type_mismatch() {
-        let schema = SchemaBuilder::new()
-            .integer("count")
-            .build();
+        let schema = SchemaBuilder::new().integer("count").build();
 
         let validator = Validator::new();
 
@@ -413,9 +408,7 @@ mod tests {
 
     #[test]
     fn test_validate_unknown_fields() {
-        let schema = SchemaBuilder::new()
-            .string("name")
-            .build();
+        let schema = SchemaBuilder::new().string("name").build();
 
         let validator = Validator::new();
 
@@ -442,10 +435,7 @@ mod tests {
     fn test_nested_validation() {
         use super::super::schema::FieldSchema;
 
-        let address_schema = SchemaBuilder::new()
-            .string("street")
-            .string("city")
-            .build();
+        let address_schema = SchemaBuilder::new().string("street").string("city").build();
 
         let mut schema = ValidationSchema::new();
         schema.add_field(
@@ -485,13 +475,11 @@ mod tests {
         let mut schema = ValidationSchema::new();
         schema.add_field(
             "scores",
-            FieldSchema::new(FieldType::Array)
-                .required(true)
-                .items(
-                    FieldSchema::new(FieldType::Integer)
-                        .min_value(0.0)
-                        .max_value(100.0),
-                ),
+            FieldSchema::new(FieldType::Array).required(true).items(
+                FieldSchema::new(FieldType::Integer)
+                    .min_value(0.0)
+                    .max_value(100.0),
+            ),
         );
 
         let validator = Validator::new();

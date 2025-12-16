@@ -3,12 +3,13 @@
 use async_trait::async_trait;
 use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
+use sage_core::tools::BACKGROUND_REGISTRY;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-/// Shared registry for tracking background shells
-/// In a real implementation, this would be managed by the agent runtime
+/// Legacy shell registry for backwards compatibility
+/// New code should use BACKGROUND_REGISTRY from sage-core
 static SHELL_REGISTRY: once_cell::sync::Lazy<Arc<Mutex<HashMap<String, u32>>>> =
     once_cell::sync::Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
 
@@ -36,15 +37,40 @@ impl KillShellTool {
 
     /// Get the shell registry
     fn get_registry(&self) -> Arc<Mutex<HashMap<String, u32>>> {
-        self.shell_registry.clone().unwrap_or_else(|| SHELL_REGISTRY.clone())
+        self.shell_registry
+            .clone()
+            .unwrap_or_else(|| SHELL_REGISTRY.clone())
     }
 
     /// Kill a background shell process by ID
     async fn kill_shell(&self, shell_id: &str) -> Result<ToolResult, ToolError> {
+        // First, check the new BACKGROUND_REGISTRY
+        if let Some(task) = BACKGROUND_REGISTRY.get(shell_id) {
+            let pid = task.pid;
+
+            // Kill the task
+            task.kill().await.map_err(|e| {
+                ToolError::ExecutionFailed(format!("Failed to kill shell {}: {}", shell_id, e))
+            })?;
+
+            // Remove from registry
+            BACKGROUND_REGISTRY.remove(shell_id);
+
+            return Ok(ToolResult::success(
+                "",
+                self.name(),
+                format!(
+                    "Successfully terminated background shell '{}' (PID {:?})",
+                    shell_id, pid
+                ),
+            ));
+        }
+
+        // Fall back to legacy registry for backwards compatibility
         let registry = self.get_registry();
         let mut shells = registry.lock().await;
 
-        // Check if shell exists
+        // Check if shell exists in legacy registry
         let pid = shells.remove(shell_id).ok_or_else(|| {
             ToolError::NotFound(format!("Background shell '{}' not found", shell_id))
         })?;
@@ -52,7 +78,7 @@ impl KillShellTool {
         // Attempt to kill the process
         #[cfg(unix)]
         {
-            use nix::sys::signal::{kill, Signal};
+            use nix::sys::signal::{Signal, kill};
             use nix::unistd::Pid;
 
             let pid_val = Pid::from_raw(pid as i32);
@@ -99,10 +125,7 @@ impl KillShellTool {
                 .args(&["/PID", &pid.to_string(), "/F"])
                 .output()
                 .map_err(|e| {
-                    ToolError::ExecutionFailed(format!(
-                        "Failed to execute taskkill: {}",
-                        e
-                    ))
+                    ToolError::ExecutionFailed(format!("Failed to execute taskkill: {}", e))
                 })?;
 
             if !output.status.success() {
@@ -117,7 +140,10 @@ impl KillShellTool {
         Ok(ToolResult::success(
             "",
             self.name(),
-            format!("Successfully terminated background shell '{}' (PID {})", shell_id, pid),
+            format!(
+                "Successfully terminated background shell '{}' (PID {})",
+                shell_id, pid
+            ),
         ))
     }
 }
@@ -420,7 +446,12 @@ mod tests {
 
         let tool_result = result.unwrap();
         assert!(tool_result.success);
-        assert!(tool_result.output.unwrap().contains("Successfully terminated"));
+        assert!(
+            tool_result
+                .output
+                .unwrap()
+                .contains("Successfully terminated")
+        );
 
         // Verify the shell was removed from registry
         let shells = registry.lock().await;

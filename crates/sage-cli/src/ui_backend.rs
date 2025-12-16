@@ -1,11 +1,11 @@
 //! UI Backend Interface - Gemini CLI style architecture
 
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use chrono::Utc;
 use sage_core::error::SageResult;
 use sage_sdk::SageAgentSDK;
 use serde::{Deserialize, Serialize};
-use chrono::Utc;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatRequest {
@@ -58,18 +58,18 @@ impl SageUIBackend {
 
     async fn get_or_create_sdk(&self, config_file: &str) -> SageResult<()> {
         let mut sdk_guard = self.sdk.lock().await;
-        
+
         if sdk_guard.is_none() {
             let sdk = SageAgentSDK::with_config_file(config_file)?;
             *sdk_guard = Some(sdk);
         }
-        
+
         Ok(())
     }
 
     pub async fn chat(&self, request: ChatRequest) -> SageResult<ChatResponse> {
         self.get_or_create_sdk(&request.config_file).await?;
-        
+
         let sdk_guard = self.sdk.lock().await;
         let sdk = sdk_guard.as_ref().unwrap();
 
@@ -77,26 +77,35 @@ impl SageUIBackend {
         match sdk.run(&request.message).await {
             Ok(result) => {
                 // Extract the response content from the final result or last step
-                let response_content = result.final_result()
-                    .map(|s| s.to_string())
-                    .unwrap_or_else(|| {
-                        // If no final result, try to get content from the last step
-                        result.execution().steps
-                            .last()
-                            .and_then(|step| step.llm_response.as_ref())
-                            .map(|response| response.content.clone())
-                            .unwrap_or_else(|| "No response from agent".to_string())
-                    });
+                let response_content =
+                    result
+                        .final_result()
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| {
+                            // If no final result, try to get content from the last step
+                            result
+                                .execution()
+                                .steps
+                                .last()
+                                .and_then(|step| step.llm_response.as_ref())
+                                .map(|response| response.content.clone())
+                                .unwrap_or_else(|| "No response from agent".to_string())
+                        });
 
                 // Convert tool execution results to UI format
-                let tool_calls = result.tool_results()
+                let tool_calls = result
+                    .tool_results()
                     .iter()
                     .enumerate()
                     .map(|(i, tool_result)| ToolCallStatus {
                         id: (i + 1).to_string(),
                         name: tool_result.tool_name.clone(),
                         args: serde_json::json!({}), // TODO: Extract actual args from tool calls
-                        status: if tool_result.success { "completed".to_string() } else { "failed".to_string() },
+                        status: if tool_result.success {
+                            "completed".to_string()
+                        } else {
+                            "failed".to_string()
+                        },
                         start_time: Some(Utc::now().timestamp_millis() as u64 - 2000), // Mock timing
                         end_time: Some(Utc::now().timestamp_millis() as u64),
                         result: tool_result.output.clone(),
@@ -120,16 +129,17 @@ impl SageUIBackend {
                 success: false,
                 error: Some(e.to_string()),
                 tool_calls: vec![],
-            })
+            }),
         }
     }
 
     pub async fn get_config(&self, config_file: &str) -> SageResult<ConfigInfo> {
         // Load config and return basic info
         let config = sage_core::config::loader::load_config_from_file(config_file)?;
-        
+
         // Get model parameters from the default provider
-        let default_params = config.model_providers
+        let default_params = config
+            .model_providers
             .get(&config.default_provider)
             .cloned()
             .unwrap_or_default();
@@ -161,7 +171,9 @@ use std::sync::OnceLock;
 static GLOBAL_BACKEND: OnceLock<Arc<SageUIBackend>> = OnceLock::new();
 
 pub fn get_global_backend() -> Arc<SageUIBackend> {
-    GLOBAL_BACKEND.get_or_init(|| Arc::new(SageUIBackend::new())).clone()
+    GLOBAL_BACKEND
+        .get_or_init(|| Arc::new(SageUIBackend::new()))
+        .clone()
 }
 
 /// Initialize the global backend for UI communication

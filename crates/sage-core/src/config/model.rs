@@ -53,7 +53,8 @@ impl Default for ModelParameters {
 impl ModelParameters {
     /// Get API key from environment or config
     pub fn get_api_key(&self) -> Option<String> {
-        self.api_key.clone()
+        self.api_key
+            .clone()
             .or_else(|| std::env::var("OPENAI_API_KEY").ok())
             .or_else(|| std::env::var("ANTHROPIC_API_KEY").ok())
             .or_else(|| std::env::var("GOOGLE_API_KEY").ok())
@@ -373,7 +374,10 @@ impl Config {
         // Validate all model parameters
         for (provider, params) in &self.model_providers {
             params.validate().map_err(|e| {
-                SageError::config(format!("Invalid parameters for provider '{}': {}", provider, e))
+                SageError::config(format!(
+                    "Invalid parameters for provider '{}': {}",
+                    provider, e
+                ))
             })?;
         }
 

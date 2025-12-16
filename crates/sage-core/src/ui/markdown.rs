@@ -3,10 +3,10 @@
 use colored::*;
 use pulldown_cmark::{Event, Parser, Tag};
 use syntect::easy::HighlightLines;
-use syntect::highlighting::{ThemeSet, Style};
+use syntect::highlighting::{Style, ThemeSet};
 use syntect::parsing::SyntaxSet;
-use syntect::util::{as_24_bit_terminal_escaped, LinesWithEndings};
-use textwrap::{wrap, Options};
+use syntect::util::{LinesWithEndings, as_24_bit_terminal_escaped};
+use textwrap::{Options, wrap};
 
 /// Markdown renderer for terminal output
 pub struct MarkdownRenderer {
@@ -47,87 +47,83 @@ impl MarkdownRenderer {
 
         for event in parser {
             match event {
-                Event::Start(tag) => {
-                    match tag {
-                        Tag::Heading(level, _, _) => {
-                            in_heading = true;
-                            heading_level = level as usize;
-                            output.push('\n');
-                        }
-                        Tag::Paragraph => {
-                            _in_paragraph = true;
-                            if !output.is_empty() && !output.ends_with('\n') {
-                                output.push('\n');
-                            }
-                        }
-                        Tag::List(_) => {
-                            list_depth += 1;
-                            output.push('\n');
-                        }
-                        Tag::Item => {
-                            let indent = "  ".repeat(list_depth.saturating_sub(1));
-                            output.push_str(&format!("{}• ", indent));
-                        }
-                        Tag::CodeBlock(kind) => {
-                            in_code_block = true;
-                            if let pulldown_cmark::CodeBlockKind::Fenced(lang) = kind {
-                                code_lang = lang.to_string();
-                            }
-                            output.push('\n');
-                        }
-                        Tag::Emphasis => {
-                            in_emphasis = true;
-                        }
-                        Tag::Strong => {
-                            in_strong = true;
-                        }
-                        Tag::Link(_, dest_url, _) => {
-                            output.push_str(&format!("{}", dest_url.blue().underline()));
-                        }
-                        Tag::BlockQuote => {
-                            output.push_str(&"│ ".bright_black());
-                        }
-                        _ => {}
+                Event::Start(tag) => match tag {
+                    Tag::Heading(level, _, _) => {
+                        in_heading = true;
+                        heading_level = level as usize;
+                        output.push('\n');
                     }
-                }
-                Event::End(tag) => {
-                    match tag {
-                        Tag::Heading(_, _, _) => {
-                            in_heading = false;
+                    Tag::Paragraph => {
+                        _in_paragraph = true;
+                        if !output.is_empty() && !output.ends_with('\n') {
                             output.push('\n');
                         }
-                        Tag::Paragraph => {
-                            _in_paragraph = false;
-                            output.push('\n');
-                        }
-                        Tag::List(_) => {
-                            list_depth = list_depth.saturating_sub(1);
-                            if list_depth == 0 {
-                                output.push('\n');
-                            }
-                        }
-                        Tag::Item => {
-                            output.push('\n');
-                        }
-                        Tag::CodeBlock(_) => {
-                            if in_code_block {
-                                let highlighted = self.highlight_code(&code_content, &code_lang);
-                                output.push_str(&highlighted);
-                                output.push('\n');
-                                in_code_block = false;
-                                code_content.clear();
-                                code_lang.clear();
-                            }
-                        }
-                        Tag::Emphasis => {
-                            in_emphasis = false;
-                        }
-                        Tag::Strong => {
-                            in_strong = false;
-                        }
-                        _ => {}
                     }
-                }
+                    Tag::List(_) => {
+                        list_depth += 1;
+                        output.push('\n');
+                    }
+                    Tag::Item => {
+                        let indent = "  ".repeat(list_depth.saturating_sub(1));
+                        output.push_str(&format!("{}• ", indent));
+                    }
+                    Tag::CodeBlock(kind) => {
+                        in_code_block = true;
+                        if let pulldown_cmark::CodeBlockKind::Fenced(lang) = kind {
+                            code_lang = lang.to_string();
+                        }
+                        output.push('\n');
+                    }
+                    Tag::Emphasis => {
+                        in_emphasis = true;
+                    }
+                    Tag::Strong => {
+                        in_strong = true;
+                    }
+                    Tag::Link(_, dest_url, _) => {
+                        output.push_str(&format!("{}", dest_url.blue().underline()));
+                    }
+                    Tag::BlockQuote => {
+                        output.push_str(&"│ ".bright_black());
+                    }
+                    _ => {}
+                },
+                Event::End(tag) => match tag {
+                    Tag::Heading(_, _, _) => {
+                        in_heading = false;
+                        output.push('\n');
+                    }
+                    Tag::Paragraph => {
+                        _in_paragraph = false;
+                        output.push('\n');
+                    }
+                    Tag::List(_) => {
+                        list_depth = list_depth.saturating_sub(1);
+                        if list_depth == 0 {
+                            output.push('\n');
+                        }
+                    }
+                    Tag::Item => {
+                        output.push('\n');
+                    }
+                    Tag::CodeBlock(_) => {
+                        if in_code_block {
+                            let highlighted = self.highlight_code(&code_content, &code_lang);
+                            output.push_str(&highlighted);
+                            output.push('\n');
+                            in_code_block = false;
+                            code_content.clear();
+                            code_lang.clear();
+                        }
+                    }
+                    Tag::Emphasis => {
+                        in_emphasis = false;
+                    }
+                    Tag::Strong => {
+                        in_strong = false;
+                    }
+                    _ => {}
+                },
                 Event::Text(text) => {
                     if in_code_block {
                         code_content.push_str(&text);
@@ -171,8 +167,16 @@ impl MarkdownRenderer {
     /// Format heading text with appropriate styling
     fn format_heading(&self, text: &str, level: usize) -> String {
         match level {
-            1 => format!("{}\n{}", text.bright_blue().bold(), "=".repeat(text.len()).bright_blue()),
-            2 => format!("{}\n{}", text.bright_green().bold(), "-".repeat(text.len()).bright_green()),
+            1 => format!(
+                "{}\n{}",
+                text.bright_blue().bold(),
+                "=".repeat(text.len()).bright_blue()
+            ),
+            2 => format!(
+                "{}\n{}",
+                text.bright_green().bold(),
+                "-".repeat(text.len()).bright_green()
+            ),
             3 => format!("{}", text.bright_yellow().bold()),
             4 => format!("{}", text.bright_magenta().bold()),
             5 => format!("{}", text.bright_cyan().bold()),
@@ -185,15 +189,16 @@ impl MarkdownRenderer {
         let options = Options::new(self.width)
             .initial_indent("")
             .subsequent_indent("");
-        
+
         wrap(text, &options).join("\n")
     }
 
     /// Highlight code with syntax highlighting
     fn highlight_code(&self, code: &str, lang: &str) -> String {
         let theme = &self.theme_set.themes["base16-ocean.dark"];
-        
-        let syntax = self.syntax_set
+
+        let syntax = self
+            .syntax_set
             .find_syntax_by_extension(lang)
             .or_else(|| self.syntax_set.find_syntax_by_name(lang))
             .unwrap_or_else(|| self.syntax_set.find_syntax_plain_text());
@@ -203,18 +208,23 @@ impl MarkdownRenderer {
 
         // Add code block border
         output.push_str(&"┌".bright_black().to_string());
-        output.push_str(&"─".repeat(self.width.saturating_sub(2)).bright_black().to_string());
+        output.push_str(
+            &"─"
+                .repeat(self.width.saturating_sub(2))
+                .bright_black()
+                .to_string(),
+        );
         output.push_str(&"┐\n".bright_black().to_string());
 
         for line in LinesWithEndings::from(code) {
             let ranges: Vec<(Style, &str)> = highlighter
                 .highlight_line(line, &self.syntax_set)
                 .unwrap_or_default();
-            
+
             output.push_str(&"│ ".bright_black().to_string());
             let highlighted = as_24_bit_terminal_escaped(&ranges[..], false);
             output.push_str(&highlighted);
-            
+
             if !line.ends_with('\n') {
                 output.push('\n');
             }
@@ -222,7 +232,12 @@ impl MarkdownRenderer {
 
         // Add bottom border
         output.push_str(&"└".bright_black().to_string());
-        output.push_str(&"─".repeat(self.width.saturating_sub(2)).bright_black().to_string());
+        output.push_str(
+            &"─"
+                .repeat(self.width.saturating_sub(2))
+                .bright_black()
+                .to_string(),
+        );
         output.push_str(&"┘".bright_black().to_string());
 
         output

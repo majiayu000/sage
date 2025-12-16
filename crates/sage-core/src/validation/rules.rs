@@ -44,10 +44,7 @@ pub enum ValidationRule {
     UniqueItems,
 
     /// Custom validation with name and predicate
-    Custom {
-        name: String,
-        message: String,
-    },
+    Custom { name: String, message: String },
 }
 
 impl ValidationRule {
@@ -70,11 +67,7 @@ impl ValidationRule {
             ValidationRule::MaxLength(max) => {
                 if let Some(s) = value.as_str() {
                     if s.len() > *max {
-                        return Err(format!(
-                            "String length {} exceeds maximum {}",
-                            s.len(),
-                            max
-                        ));
+                        return Err(format!("String length {} exceeds maximum {}", s.len(), max));
                     }
                 }
                 Ok(())
@@ -120,9 +113,8 @@ impl ValidationRule {
             ValidationRule::Email => {
                 if let Some(s) = value.as_str() {
                     // Basic email validation
-                    let email_re = Regex::new(
-                        r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
-                    ).unwrap();
+                    let email_re =
+                        Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$").unwrap();
                     if !email_re.is_match(s) {
                         return Err(format!("'{}' is not a valid email address", s));
                     }
@@ -133,9 +125,7 @@ impl ValidationRule {
             ValidationRule::Url => {
                 if let Some(s) = value.as_str() {
                     // Basic URL validation
-                    let url_re = Regex::new(
-                        r"^https?://[^\s/$.?#].[^\s]*$"
-                    ).unwrap();
+                    let url_re = Regex::new(r"^https?://[^\s/$.?#].[^\s]*$").unwrap();
                     if !url_re.is_match(s) {
                         return Err(format!("'{}' is not a valid URL", s));
                     }
@@ -160,29 +150,17 @@ impl ValidationRule {
                 Ok(())
             }
 
-            ValidationRule::NonEmpty => {
-                match value {
-                    Value::String(s) if s.is_empty() => {
-                        Err("String cannot be empty".to_string())
-                    }
-                    Value::Array(arr) if arr.is_empty() => {
-                        Err("Array cannot be empty".to_string())
-                    }
-                    Value::Object(obj) if obj.is_empty() => {
-                        Err("Object cannot be empty".to_string())
-                    }
-                    _ => Ok(()),
-                }
-            }
+            ValidationRule::NonEmpty => match value {
+                Value::String(s) if s.is_empty() => Err("String cannot be empty".to_string()),
+                Value::Array(arr) if arr.is_empty() => Err("Array cannot be empty".to_string()),
+                Value::Object(obj) if obj.is_empty() => Err("Object cannot be empty".to_string()),
+                _ => Ok(()),
+            },
 
             ValidationRule::MinItems(min) => {
                 if let Some(arr) = value.as_array() {
                     if arr.len() < *min {
-                        return Err(format!(
-                            "Array has {} items, minimum is {}",
-                            arr.len(),
-                            min
-                        ));
+                        return Err(format!("Array has {} items, minimum is {}", arr.len(), min));
                     }
                 }
                 Ok(())
@@ -191,11 +169,7 @@ impl ValidationRule {
             ValidationRule::MaxItems(max) => {
                 if let Some(arr) = value.as_array() {
                     if arr.len() > *max {
-                        return Err(format!(
-                            "Array has {} items, maximum is {}",
-                            arr.len(),
-                            max
-                        ));
+                        return Err(format!("Array has {} items, maximum is {}", arr.len(), max));
                     }
                 }
                 Ok(())
@@ -264,10 +238,7 @@ impl RuleSet {
 
     /// Rules for a number in range
     pub fn number_range(min: f64, max: f64) -> Vec<ValidationRule> {
-        vec![
-            ValidationRule::MinValue(min),
-            ValidationRule::MaxValue(max),
-        ]
+        vec![ValidationRule::MinValue(min), ValidationRule::MaxValue(max)]
     }
 
     /// Rules for a positive number
@@ -384,21 +355,30 @@ mod tests {
     #[test]
     fn test_email() {
         let rule = ValidationRule::Email;
-        assert!(rule.validate(&serde_json::json!("test@example.com")).is_ok());
+        assert!(
+            rule.validate(&serde_json::json!("test@example.com"))
+                .is_ok()
+        );
         assert!(rule.validate(&serde_json::json!("invalid-email")).is_err());
     }
 
     #[test]
     fn test_url() {
         let rule = ValidationRule::Url;
-        assert!(rule.validate(&serde_json::json!("https://example.com")).is_ok());
+        assert!(
+            rule.validate(&serde_json::json!("https://example.com"))
+                .is_ok()
+        );
         assert!(rule.validate(&serde_json::json!("not-a-url")).is_err());
     }
 
     #[test]
     fn test_path() {
         let rule = ValidationRule::Path;
-        assert!(rule.validate(&serde_json::json!("/home/user/file.txt")).is_ok());
+        assert!(
+            rule.validate(&serde_json::json!("/home/user/file.txt"))
+                .is_ok()
+        );
         assert!(rule.validate(&serde_json::json!("")).is_err());
     }
 

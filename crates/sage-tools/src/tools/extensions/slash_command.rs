@@ -5,7 +5,7 @@
 
 use async_trait::async_trait;
 use sage_core::tools::base::{Tool, ToolError};
-use sage_core::tools::types::{ToolCall, ToolResult, ToolSchema, ToolParameter};
+use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
 use std::path::PathBuf;
 
 /// Tool for executing slash commands
@@ -33,9 +33,7 @@ impl Default for SlashCommandTool {
 impl SlashCommandTool {
     /// Create a new SlashCommandTool instance
     pub fn new() -> Self {
-        Self {
-            command_dir: None,
-        }
+        Self { command_dir: None }
     }
 
     /// Create a SlashCommandTool with a specific command directory
@@ -57,14 +55,14 @@ impl SlashCommandTool {
     fn parse_command(&self, command: &str) -> Result<(String, Vec<String>), ToolError> {
         if !command.starts_with('/') {
             return Err(ToolError::InvalidArguments(
-                "Slash command must start with '/'".to_string()
+                "Slash command must start with '/'".to_string(),
             ));
         }
 
         let parts: Vec<&str> = command[1..].split_whitespace().collect();
         if parts.is_empty() {
             return Err(ToolError::InvalidArguments(
-                "Invalid slash command format".to_string()
+                "Invalid slash command format".to_string(),
             ));
         }
 
@@ -75,7 +73,11 @@ impl SlashCommandTool {
     }
 
     /// Execute the slash command
-    async fn execute_command(&self, command_name: &str, args: &[String]) -> Result<String, ToolError> {
+    async fn execute_command(
+        &self,
+        command_name: &str,
+        args: &[String],
+    ) -> Result<String, ToolError> {
         // In a real implementation, this would:
         // 1. Look up the command file in .claude/commands/
         // 2. Read and expand the command template
@@ -107,13 +109,13 @@ impl SlashCommandTool {
     fn validate_command(&self, command: &str) -> Result<(), ToolError> {
         if command.is_empty() {
             return Err(ToolError::InvalidArguments(
-                "Command cannot be empty".to_string()
+                "Command cannot be empty".to_string(),
             ));
         }
 
         if !command.starts_with('/') {
             return Err(ToolError::InvalidArguments(
-                "Slash command must start with '/'".to_string()
+                "Slash command must start with '/'".to_string(),
             ));
         }
 
@@ -140,21 +142,18 @@ impl Tool for SlashCommandTool {
         ToolSchema::new(
             self.name(),
             self.description(),
-            vec![
-                ToolParameter::string(
-                    "command",
-                    "The slash command to execute with its arguments (e.g., '/review-pr 123', '/test', '/deploy production')"
-                ),
-            ],
+            vec![ToolParameter::string(
+                "command",
+                "The slash command to execute with its arguments (e.g., '/review-pr 123', '/test', '/deploy production')",
+            )],
         )
     }
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
         // Extract command parameter
-        let command = call.get_string("command")
-            .ok_or_else(|| ToolError::InvalidArguments(
-                "Missing required parameter: command".to_string()
-            ))?;
+        let command = call.get_string("command").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing required parameter: command".to_string())
+        })?;
 
         // Validate command format
         self.validate_command(&command)?;
@@ -169,10 +168,9 @@ impl Tool for SlashCommandTool {
     }
 
     fn validate(&self, call: &ToolCall) -> Result<(), ToolError> {
-        let command = call.get_string("command")
-            .ok_or_else(|| ToolError::InvalidArguments(
-                "Missing required parameter: command".to_string()
-            ))?;
+        let command = call.get_string("command").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing required parameter: command".to_string())
+        })?;
 
         self.validate_command(&command)?;
         Ok(())
@@ -259,7 +257,11 @@ mod tests {
 
         for cmd in valid_commands {
             let call = create_tool_call(&format!("test-{}", cmd), "slash_command", cmd);
-            assert!(tool.validate(&call).is_ok(), "Command should be valid: {}", cmd);
+            assert!(
+                tool.validate(&call).is_ok(),
+                "Command should be valid: {}",
+                cmd
+            );
         }
     }
 
@@ -275,7 +277,12 @@ mod tests {
 
         let result = tool.execute(&call).await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Missing required parameter"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Missing required parameter")
+        );
     }
 
     #[tokio::test]

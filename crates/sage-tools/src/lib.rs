@@ -1,7 +1,7 @@
 //! Tool implementations for Sage Agent
 
-pub mod tools;
 pub mod config;
+pub mod tools;
 
 // TODO: Add MCP-compatible tools
 // pub mod mcp_tools;  // MCP protocol compatible tools
@@ -37,8 +37,8 @@ pub mod config;
 // Re-export tools from the organized structure
 pub use tools::*;
 
-use std::sync::Arc;
 use sage_core::tools::Tool;
+use std::sync::Arc;
 
 /// Get all default tools
 pub fn get_default_tools() -> Vec<Arc<dyn Tool>> {

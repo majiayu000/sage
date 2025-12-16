@@ -5,10 +5,10 @@
 
 use async_trait::async_trait;
 use jsonpath_rust::JsonPathFinder;
-use std::path::PathBuf;
-use tokio::fs;
 use sage_core::tools::base::{FileSystemTool, Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
+use std::path::PathBuf;
+use tokio::fs;
 
 /// Tool for editing JSON files using JSONPath
 pub struct JsonEditTool {
@@ -50,11 +50,7 @@ impl JsonEditTool {
     }
 
     /// Write JSON to file
-    async fn write_json(
-        &self,
-        file_path: &str,
-        json: &serde_json::Value,
-    ) -> Result<(), ToolError> {
+    async fn write_json(&self, file_path: &str, json: &serde_json::Value) -> Result<(), ToolError> {
         let path = self.resolve_path(file_path);
 
         // Security check
@@ -65,23 +61,16 @@ impl JsonEditTool {
             )));
         }
 
-        let content = serde_json::to_string_pretty(json).map_err(|e| {
-            ToolError::ExecutionFailed(format!("Failed to serialize JSON: {}", e))
-        })?;
+        let content = serde_json::to_string_pretty(json)
+            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to serialize JSON: {}", e)))?;
 
-        fs::write(&path, content)
-            .await
-            .map_err(ToolError::Io)?;
+        fs::write(&path, content).await.map_err(ToolError::Io)?;
 
         Ok(())
     }
 
     /// Query JSON using JSONPath
-    async fn query_json(
-        &self,
-        file_path: &str,
-        json_path: &str,
-    ) -> Result<ToolResult, ToolError> {
+    async fn query_json(&self, file_path: &str, json_path: &str) -> Result<ToolResult, ToolError> {
         let json = self.read_json(file_path).await?;
 
         let finder = JsonPathFinder::from_str(&json.to_string(), json_path).map_err(|e| {
@@ -190,7 +179,10 @@ impl JsonEditTool {
             if let serde_json::Value::Object(map) = json {
                 let key = path_parts[0];
                 if !map.contains_key(key) {
-                    map.insert(key.to_string(), serde_json::Value::Object(serde_json::Map::new()));
+                    map.insert(
+                        key.to_string(),
+                        serde_json::Value::Object(serde_json::Map::new()),
+                    );
                 }
                 if let Some(sub_value) = map.get_mut(key) {
                     self.set_json_value(sub_value, &path_parts[1..], new_value)?;
@@ -227,18 +219,24 @@ impl Tool for JsonEditTool {
             self.name(),
             self.description(),
             vec![
-                ToolParameter::string("command", "The command to execute: 'read', 'query', or 'edit'"),
+                ToolParameter::string(
+                    "command",
+                    "The command to execute: 'read', 'query', or 'edit'",
+                ),
                 ToolParameter::string("path", "Path to the JSON file"),
-                ToolParameter::optional_string("json_path", "JSONPath expression (for query and edit commands)"),
+                ToolParameter::optional_string(
+                    "json_path",
+                    "JSONPath expression (for query and edit commands)",
+                ),
                 ToolParameter::optional_string("new_value", "New value to set (for edit command)"),
             ],
         )
     }
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
-        let command = call
-            .get_string("command")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'command' parameter".to_string()))?;
+        let command = call.get_string("command").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'command' parameter".to_string())
+        })?;
 
         let path = call
             .get_string("path")
@@ -259,16 +257,22 @@ impl Tool for JsonEditTool {
             }
             "query" => {
                 let json_path = call.get_string("json_path").ok_or_else(|| {
-                    ToolError::InvalidArguments("Missing 'json_path' parameter for query".to_string())
+                    ToolError::InvalidArguments(
+                        "Missing 'json_path' parameter for query".to_string(),
+                    )
                 })?;
                 self.query_json(&path, &json_path).await?
             }
             "edit" => {
                 let json_path = call.get_string("json_path").ok_or_else(|| {
-                    ToolError::InvalidArguments("Missing 'json_path' parameter for edit".to_string())
+                    ToolError::InvalidArguments(
+                        "Missing 'json_path' parameter for edit".to_string(),
+                    )
                 })?;
                 let new_value = call.get_string("new_value").ok_or_else(|| {
-                    ToolError::InvalidArguments("Missing 'new_value' parameter for edit".to_string())
+                    ToolError::InvalidArguments(
+                        "Missing 'new_value' parameter for edit".to_string(),
+                    )
                 })?;
                 self.edit_json(&path, &json_path, &new_value).await?
             }
@@ -285,9 +289,9 @@ impl Tool for JsonEditTool {
     }
 
     fn validate(&self, call: &ToolCall) -> Result<(), ToolError> {
-        let command = call
-            .get_string("command")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'command' parameter".to_string()))?;
+        let command = call.get_string("command").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'command' parameter".to_string())
+        })?;
 
         let _path = call
             .get_string("path")
@@ -345,10 +349,10 @@ impl FileSystemTool for JsonEditTool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
     use serde_json::json;
-    use tokio::fs;
+    use std::collections::HashMap;
     use tempfile::TempDir;
+    use tokio::fs;
 
     fn create_tool_call(id: &str, name: &str, args: serde_json::Value) -> ToolCall {
         let arguments = if let serde_json::Value::Object(map) = args {
@@ -380,11 +384,15 @@ mod tests {
 
         let tool = JsonEditTool::with_working_directory(temp_dir.path());
         // Use correct command 'query' instead of 'get'
-        let call = create_tool_call("test-1", "json_edit_tool", json!({
-            "command": "query",
-            "path": "test.json",
-            "json_path": "$.name"
-        }));
+        let call = create_tool_call(
+            "test-1",
+            "json_edit_tool",
+            json!({
+                "command": "query",
+                "path": "test.json",
+                "json_path": "$.name"
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -405,12 +413,16 @@ mod tests {
 
         let tool = JsonEditTool::with_working_directory(temp_dir.path());
         // Use correct command 'edit' and parameter 'new_value'
-        let call = create_tool_call("test-2", "json_edit_tool", json!({
-            "command": "edit",
-            "path": "test.json",
-            "json_path": "$.age",
-            "new_value": "35"
-        }));
+        let call = create_tool_call(
+            "test-2",
+            "json_edit_tool",
+            json!({
+                "command": "edit",
+                "path": "test.json",
+                "json_path": "$.age",
+                "new_value": "35"
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -436,12 +448,16 @@ mod tests {
 
         let tool = JsonEditTool::with_working_directory(temp_dir.path());
         // There's no 'delete' command - use 'edit' with null value instead
-        let call = create_tool_call("test-3", "json_edit_tool", json!({
-            "command": "edit",
-            "path": "test.json",
-            "json_path": "$.city",
-            "new_value": "null"
-        }));
+        let call = create_tool_call(
+            "test-3",
+            "json_edit_tool",
+            json!({
+                "command": "edit",
+                "path": "test.json",
+                "json_path": "$.city",
+                "new_value": "null"
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -463,11 +479,15 @@ mod tests {
         fs::write(&file_path, test_json.to_string()).await.unwrap();
 
         let tool = JsonEditTool::with_working_directory(temp_dir.path());
-        let call = create_tool_call("test-4", "json_edit_tool", json!({
-            "command": "query",
-            "path": "test.json",
-            "json_path": "$.nonexistent"
-        }));
+        let call = create_tool_call(
+            "test-4",
+            "json_edit_tool",
+            json!({
+                "command": "query",
+                "path": "test.json",
+                "json_path": "$.nonexistent"
+            }),
+        );
 
         // For nonexistent path, the implementation may return Ok or Err depending on implementation
         let result = tool.execute(&call).await;
@@ -478,11 +498,15 @@ mod tests {
     #[tokio::test]
     async fn test_json_edit_invalid_command() {
         let tool = JsonEditTool::new();
-        let call = create_tool_call("test-5", "json_edit_tool", json!({
-            "command": "invalid_command",
-            "path": "test.json",
-            "json_path": "$.name"
-        }));
+        let call = create_tool_call(
+            "test-5",
+            "json_edit_tool",
+            json!({
+                "command": "invalid_command",
+                "path": "test.json",
+                "json_path": "$.name"
+            }),
+        );
 
         // Invalid command returns Err
         let result = tool.execute(&call).await;
@@ -496,18 +520,26 @@ mod tests {
         let tool = JsonEditTool::new();
 
         // Missing command - returns Err
-        let call = create_tool_call("test-6a", "json_edit_tool", json!({
-            "path": "test.json",
-            "json_path": "$.name"
-        }));
+        let call = create_tool_call(
+            "test-6a",
+            "json_edit_tool",
+            json!({
+                "path": "test.json",
+                "json_path": "$.name"
+            }),
+        );
         let result = tool.execute(&call).await;
         assert!(result.is_err());
 
         // Missing path - returns Err
-        let call = create_tool_call("test-6b", "json_edit_tool", json!({
-            "command": "query",
-            "json_path": "$.name"
-        }));
+        let call = create_tool_call(
+            "test-6b",
+            "json_edit_tool",
+            json!({
+                "command": "query",
+                "json_path": "$.name"
+            }),
+        );
         let result = tool.execute(&call).await;
         assert!(result.is_err());
     }

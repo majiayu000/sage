@@ -45,13 +45,19 @@ pub mod types;
 
 pub use cache::{CacheConfig, CacheStats, McpCache};
 pub use client::McpClient;
-pub use discovery::{DiscoverySource, McpServerManager, McpServerManagerBuilder, ServerHealth, ServerStatus};
+pub use discovery::{
+    DiscoverySource, McpServerManager, McpServerManagerBuilder, ServerHealth, ServerStatus,
+};
 pub use error::McpError;
-pub use notifications::{NotificationDispatcher, NotificationDispatcherBuilder, NotificationEvent, NotificationHandler};
+pub use notifications::{
+    NotificationDispatcher, NotificationDispatcherBuilder, NotificationEvent, NotificationHandler,
+};
 pub use protocol::{McpMessage, McpNotification, McpRequest, McpResponse};
 pub use registry::McpRegistry;
 pub use schema_translator::SchemaTranslator;
-pub use transport::{HttpTransport, HttpTransportConfig, McpTransport, StdioTransport, TransportConfig};
+pub use transport::{
+    HttpTransport, HttpTransportConfig, McpTransport, StdioTransport, TransportConfig,
+};
 pub use types::{
     McpCapabilities, McpPrompt, McpResource, McpResourceContent, McpServerInfo, McpTool,
     McpToolResult,

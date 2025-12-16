@@ -1,6 +1,6 @@
 //! Base agent implementation
 
-use crate::agent::{AgentExecution, AgentStep, AgentState, ExecutionOutcome, ExecutionError};
+use crate::agent::{AgentExecution, AgentState, AgentStep, ExecutionError, ExecutionOutcome};
 use crate::config::model::Config;
 use crate::error::{SageError, SageResult};
 use crate::interrupt::{global_interrupt_manager, reset_global_interrupt_manager};
@@ -11,13 +11,13 @@ use crate::tools::executor::ToolExecutor;
 use crate::tools::types::ToolSchema;
 use crate::trajectory::recorder::TrajectoryRecorder;
 use crate::types::{Id, TaskMetadata};
-use crate::ui::{AnimationManager, DisplayManager};
 use crate::ui::animation::AnimationState;
+use crate::ui::{AnimationManager, DisplayManager};
 use async_trait::async_trait;
 use colored::*;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use tokio::select;
+use tokio::sync::Mutex;
 
 /// Model identity information for system prompt
 #[derive(Debug, Clone)]
@@ -36,7 +36,11 @@ pub trait Agent: Send + Sync {
     async fn execute_task(&mut self, task: TaskMetadata) -> SageResult<ExecutionOutcome>;
 
     /// Continue an existing execution with new user message
-    async fn continue_execution(&mut self, execution: &mut AgentExecution, user_message: &str) -> SageResult<()>;
+    async fn continue_execution(
+        &mut self,
+        execution: &mut AgentExecution,
+        user_message: &str,
+    ) -> SageResult<()>;
 
     /// Get the agent's configuration
     fn config(&self) -> &Config;
@@ -71,7 +75,7 @@ impl BaseAgent {
         content.contains("*") ||            // Italic
         content.contains("[") && content.contains("](") || // Links
         content.contains("> ") ||           // Blockquotes
-        content.lines().count() > 3         // Multi-line content is likely markdown
+        content.lines().count() > 3 // Multi-line content is likely markdown
     }
 
     /// Create a new base agent
@@ -86,11 +90,12 @@ impl BaseAgent {
         tracing::info!("API key set: {}", default_params.api_key.is_some());
 
         // Parse provider
-        let provider: LLMProvider = provider_name.parse()
+        let provider: LLMProvider = provider_name
+            .parse()
             .map_err(|_| SageError::config(format!("Invalid provider: {}", provider_name)))?;
 
         tracing::info!("Parsed provider: {:?}", provider);
-        
+
         // Create provider config
         let mut provider_config = crate::config::provider::ProviderConfig::new(provider_name)
             .with_api_key(default_params.get_api_key().unwrap_or_default())
@@ -101,16 +106,16 @@ impl BaseAgent {
         if let Some(base_url) = &default_params.base_url {
             provider_config = provider_config.with_base_url(base_url.clone());
         }
-        
+
         // Create model parameters
         let model_params = default_params.to_llm_parameters();
-        
+
         // Create LLM client
         let llm_client = LLMClient::new(provider, provider_config, model_params)?;
-        
+
         // Create tool executor
         let tool_executor = ToolExecutor::new();
-        
+
         Ok(Self {
             id: uuid::Uuid::new_v4(),
             config,
@@ -121,17 +126,17 @@ impl BaseAgent {
             animation_manager: AnimationManager::new(),
         })
     }
-    
+
     /// Set trajectory recorder
     pub fn set_trajectory_recorder(&mut self, recorder: Arc<Mutex<TrajectoryRecorder>>) {
         self.trajectory_recorder = Some(recorder);
     }
-    
+
     /// Set tool executor
     pub fn set_tool_executor(&mut self, executor: ToolExecutor) {
         self.tool_executor = executor;
     }
-    
+
     /// Set max steps
     pub fn set_max_steps(&mut self, max_steps: u32) {
         self.max_steps = max_steps;
@@ -143,7 +148,10 @@ impl BaseAgent {
     fn get_model_identity(&self) -> ModelIdentity {
         let default_provider = self.config.get_default_provider();
         let default_params = crate::config::model::ModelParameters::default();
-        let model_params = self.config.default_model_parameters().unwrap_or(&default_params);
+        let model_params = self
+            .config
+            .default_model_parameters()
+            .unwrap_or(&default_params);
 
         match default_provider {
             "anthropic" => {
@@ -158,7 +166,7 @@ impl BaseAgent {
                     base_model_info: base_model_info.to_string(),
                     model_name: format!("{} by Anthropic", model_params.model),
                 }
-            },
+            }
             "openai" => {
                 let base_model_info = match model_params.model.as_str() {
                     "gpt-4" => "The base model is GPT-4 by OpenAI.",
@@ -170,7 +178,7 @@ impl BaseAgent {
                     base_model_info: base_model_info.to_string(),
                     model_name: format!("{} by OpenAI", model_params.model),
                 }
-            },
+            }
             "google" => {
                 let base_model_info = match model_params.model.as_str() {
                     "gemini-2.5-pro" => "The base model is Gemini 2.5 Pro by Google.",
@@ -182,13 +190,11 @@ impl BaseAgent {
                     base_model_info: base_model_info.to_string(),
                     model_name: format!("{} by Google", model_params.model),
                 }
-            },
-            _ => {
-                ModelIdentity {
-                    base_model_info: "The base model information is not available.".to_string(),
-                    model_name: model_params.model.clone(),
-                }
             }
+            _ => ModelIdentity {
+                base_model_info: "The base model information is not available.".to_string(),
+                model_name: model_params.model.clone(),
+            },
         }
     }
 
@@ -342,7 +348,7 @@ Remember: Respond appropriately to the type of request. Simple questions don't n
 
         LLMMessage::system(system_prompt)
     }
-    
+
     /// Get description of available tools
     fn get_tools_description(&self) -> String {
         let schemas = self.tool_executor.get_tool_schemas();
@@ -352,7 +358,7 @@ Remember: Respond appropriately to the type of request. Simple questions don't n
             .collect::<Vec<_>>()
             .join("\n")
     }
-    
+
     /// Execute a single step
     async fn execute_step(
         &mut self,
@@ -369,11 +375,9 @@ Remember: Respond appropriately to the type of request. Simple questions don't n
         let start_time = std::time::Instant::now();
 
         // Start thinking animation
-        self.animation_manager.start_animation(
-            AnimationState::Thinking,
-            "🤖 Thinking",
-            "blue"
-        ).await;
+        self.animation_manager
+            .start_animation(AnimationState::Thinking, "🤖 Thinking", "blue")
+            .await;
 
         // Get cancellation token for interrupt handling
         let cancellation_token = global_interrupt_manager()
@@ -412,17 +416,25 @@ Remember: Respond appropriately to the type of request. Simple questions don't n
                 content: llm_response.content.clone(),
                 model: llm_response.model.clone(),
                 finish_reason: llm_response.finish_reason.clone(),
-                usage: llm_response.usage.as_ref().map(|u| crate::trajectory::recorder::TokenUsageRecord {
-                    input_tokens: u.prompt_tokens,
-                    output_tokens: u.completion_tokens,
-                    cache_creation_input_tokens: None,
-                    cache_read_input_tokens: None,
-                    reasoning_tokens: None,
+                usage: llm_response.usage.as_ref().map(|u| {
+                    crate::trajectory::recorder::TokenUsageRecord {
+                        input_tokens: u.prompt_tokens,
+                        output_tokens: u.completion_tokens,
+                        cache_creation_input_tokens: None,
+                        cache_read_input_tokens: None,
+                        reasoning_tokens: None,
+                    }
                 }),
                 tool_calls: if llm_response.tool_calls.is_empty() {
                     None
                 } else {
-                    Some(llm_response.tool_calls.iter().map(|tc| serde_json::to_value(tc).unwrap_or_default()).collect())
+                    Some(
+                        llm_response
+                            .tool_calls
+                            .iter()
+                            .map(|tc| serde_json::to_value(tc).unwrap_or_default())
+                            .collect(),
+                    )
                 },
             };
 
@@ -432,13 +444,17 @@ Remember: Respond appropriately to the type of request. Simple questions don't n
 
             // Clone the recorder to avoid holding the reference across await
             let recorder_clone = recorder.clone();
-            recorder_clone.lock().await.record_llm_interaction(
-                provider,
-                model,
-                input_messages,
-                response_record,
-                Some(tools_available),
-            ).await?;
+            recorder_clone
+                .lock()
+                .await
+                .record_llm_interaction(
+                    provider,
+                    model,
+                    input_messages,
+                    response_record,
+                    Some(tools_available),
+                )
+                .await?;
         }
 
         // Show AI response with markdown rendering
@@ -450,7 +466,7 @@ Remember: Respond appropriately to the type of request. Simple questions don't n
                 println!("\n🤖 {}", llm_response.content.trim());
             }
         }
-        
+
         // Check if there are tool calls
         if !llm_response.tool_calls.is_empty() {
             step.state = AgentState::ToolExecution;
@@ -474,7 +490,7 @@ Remember: Respond appropriately to the type of request. Simple questions don't n
                         } else {
                             "🖥️  Running command".to_string()
                         }
-                    },
+                    }
                     "str_replace_based_edit_tool" => {
                         if let Some(action) = tool_call.arguments.get("action") {
                             match action.as_str().unwrap_or("") {
@@ -484,10 +500,12 @@ Remember: Respond appropriately to the type of request. Simple questions don't n
                                     } else {
                                         "📖 Reading file".to_string()
                                     }
-                                },
+                                }
                                 "create" => {
                                     if let Some(path) = tool_call.arguments.get("path") {
-                                        let content_preview = if let Some(content) = tool_call.arguments.get("file_text") {
+                                        let content_preview = if let Some(content) =
+                                            tool_call.arguments.get("file_text")
+                                        {
                                             let content_str = content.as_str().unwrap_or("");
                                             if content_str.len() > 50 {
                                                 format!(" ({}...)", &content_str[..47])
@@ -499,18 +517,22 @@ Remember: Respond appropriately to the type of request. Simple questions don't n
                                         } else {
                                             "".to_string()
                                         };
-                                        format!("📝 Creating: {}{}", path.as_str().unwrap_or(""), content_preview)
+                                        format!(
+                                            "📝 Creating: {}{}",
+                                            path.as_str().unwrap_or(""),
+                                            content_preview
+                                        )
                                     } else {
                                         "📝 Creating file".to_string()
                                     }
-                                },
+                                }
                                 "str_replace" => {
                                     if let Some(path) = tool_call.arguments.get("path") {
                                         format!("✏️ Editing: {}", path.as_str().unwrap_or(""))
                                     } else {
                                         "✏️ Editing file".to_string()
                                     }
-                                },
+                                }
                                 _ => {
                                     if let Some(path) = tool_call.arguments.get("path") {
                                         format!("📄 File op: {}", path.as_str().unwrap_or(""))
@@ -522,7 +544,7 @@ Remember: Respond appropriately to the type of request. Simple questions don't n
                         } else {
                             "📄 File operation".to_string()
                         }
-                    },
+                    }
                     "task_done" => {
                         if let Some(summary) = tool_call.arguments.get("summary") {
                             let summary_str = summary.as_str().unwrap_or("");
@@ -535,7 +557,7 @@ Remember: Respond appropriately to the type of request. Simple questions don't n
                         } else {
                             "✅ Task completed".to_string()
                         }
-                    },
+                    }
                     "sequentialthinking" => {
                         if let Some(thought) = tool_call.arguments.get("thought") {
                             let thought_str = thought.as_str().unwrap_or("");
@@ -548,15 +570,15 @@ Remember: Respond appropriately to the type of request. Simple questions don't n
                         } else {
                             "🧠 Thinking step by step".to_string()
                         }
-                    },
+                    }
                     "json_edit_tool" => {
                         if let Some(path) = tool_call.arguments.get("path") {
                             format!("📝 JSON edit: {}", path.as_str().unwrap_or(""))
                         } else {
                             "📝 JSON operation".to_string()
                         }
-                    },
-                    _ => format!("🔧 Using {}", tool_call.name)
+                    }
+                    _ => format!("🔧 Using {}", tool_call.name),
                 };
                 println!("{}", action.blue());
             }
@@ -565,11 +587,9 @@ Remember: Respond appropriately to the type of request. Simple questions don't n
             let tool_start_time = std::time::Instant::now();
 
             // Start tool execution animation
-            self.animation_manager.start_animation(
-                AnimationState::ExecutingTools,
-                "⚡ Executing tools",
-                "cyan"
-            ).await;
+            self.animation_manager
+                .start_animation(AnimationState::ExecutingTools, "⚡ Executing tools", "cyan")
+                .await;
 
             // Execute tools with interrupt support
             let tool_results = select! {
@@ -594,7 +614,10 @@ Remember: Respond appropriately to the type of request. Simple questions don't n
             // Show tool results briefly
             for result in &tool_results {
                 if !result.success {
-                    println!("❌ Error: {}", result.error.as_deref().unwrap_or("Unknown error"));
+                    println!(
+                        "❌ Error: {}",
+                        result.error.as_deref().unwrap_or("Unknown error")
+                    );
                 } else if let Some(output) = &result.output {
                     // Only show output for certain tools or if it's short
                     if result.tool_name == "task_done" || output.len() < 100 {
@@ -605,24 +628,30 @@ Remember: Respond appropriately to the type of request. Simple questions don't n
 
             step = step.with_tool_results(tool_results);
         }
-        
+
         // Check if task is completed
         if llm_response.indicates_completion() {
             step.state = AgentState::Completed;
             DisplayManager::print_separator("Task Completed", "green");
         }
-        
+
         step.complete();
         Ok(step)
     }
-    
+
     /// Build conversation messages from execution history
-    fn build_messages(&self, execution: &AgentExecution, system_message: &LLMMessage) -> Vec<LLMMessage> {
+    fn build_messages(
+        &self,
+        execution: &AgentExecution,
+        system_message: &LLMMessage,
+    ) -> Vec<LLMMessage> {
         let mut messages = vec![system_message.clone()];
 
         // If this is the first step (no previous steps), add an initial user message
         if execution.steps.is_empty() {
-            let initial_user_message = LLMMessage::user("Please start working on the task described in the system message.");
+            let initial_user_message = LLMMessage::user(
+                "Please start working on the task described in the system message.",
+            );
             messages.push(initial_user_message);
         }
 
@@ -640,7 +669,10 @@ Remember: Respond appropriately to the type of request. Simple questions don't n
                     let content = if result.success {
                         result.output.as_deref().unwrap_or("")
                     } else {
-                        &format!("Error: {}", result.error.as_deref().unwrap_or("Unknown error"))
+                        &format!(
+                            "Error: {}",
+                            result.error.as_deref().unwrap_or("Unknown error")
+                        )
                     };
                     let user_msg = LLMMessage::user(content);
                     messages.push(user_msg);
@@ -670,12 +702,11 @@ impl Agent for BaseAgent {
         if let Some(recorder) = &self.trajectory_recorder {
             let provider = self.config.get_default_provider().to_string();
             let model = self.config.default_model_parameters()?.model.clone();
-            recorder.lock().await.start_recording(
-                task.clone(),
-                provider,
-                model,
-                self.config.max_steps
-            ).await?;
+            recorder
+                .lock()
+                .await
+                .start_recording(task.clone(), provider, model, self.config.max_steps)
+                .await?;
         }
 
         let system_message = self.create_system_message(&task);
@@ -700,7 +731,11 @@ impl Agent for BaseAgent {
 
                     // Record interrupt step
                     if let Some(recorder) = &self.trajectory_recorder {
-                        recorder.lock().await.record_step(interrupt_step.clone()).await?;
+                        recorder
+                            .lock()
+                            .await
+                            .record_step(interrupt_step.clone())
+                            .await?;
                     }
 
                     execution.add_step(interrupt_step);
@@ -710,7 +745,10 @@ impl Agent for BaseAgent {
 
                 let messages = self.build_messages(&execution, &system_message);
 
-                match self.execute_step(step_number, &messages, &tool_schemas).await {
+                match self
+                    .execute_step(step_number, &messages, &tool_schemas)
+                    .await
+                {
                     Ok(step) => {
                         let is_completed = step.state == AgentState::Completed;
 
@@ -722,7 +760,8 @@ impl Agent for BaseAgent {
                         execution.add_step(step);
 
                         if is_completed {
-                            execution.complete(true, Some("Task completed successfully".to_string()));
+                            execution
+                                .complete(true, Some("Task completed successfully".to_string()));
                             break 'execution_loop ExecutionOutcome::Success(execution);
                         }
                     }
@@ -735,47 +774,63 @@ impl Agent for BaseAgent {
 
                         // Record error step
                         if let Some(recorder) = &self.trajectory_recorder {
-                            recorder.lock().await.record_step(error_step.clone()).await?;
+                            recorder
+                                .lock()
+                                .await
+                                .record_step(error_step.clone())
+                                .await?;
                         }
 
                         execution.add_step(error_step);
                         execution.complete(false, Some(format!("Task failed: {}", e)));
 
                         // Create structured error with classification and suggestions
-                        let exec_error = ExecutionError::from_sage_error(&e, Some(provider_name.clone()));
+                        let exec_error =
+                            ExecutionError::from_sage_error(&e, Some(provider_name.clone()));
                         break 'execution_loop ExecutionOutcome::Failed {
                             execution,
-                            error: exec_error
+                            error: exec_error,
                         };
                     }
                 }
             }
 
             // Max steps reached without completion
-            execution.complete(false, Some("Task execution reached maximum steps".to_string()));
+            execution.complete(
+                false,
+                Some("Task execution reached maximum steps".to_string()),
+            );
             ExecutionOutcome::MaxStepsReached { execution }
         };
 
         // Finalize trajectory recording
         if let Some(recorder) = &self.trajectory_recorder {
-            recorder.lock().await.finalize_recording(
-                final_outcome.is_success(),
-                final_outcome.execution().final_result.clone(),
-            ).await?;
+            recorder
+                .lock()
+                .await
+                .finalize_recording(
+                    final_outcome.is_success(),
+                    final_outcome.execution().final_result.clone(),
+                )
+                .await?;
         }
 
         Ok(final_outcome)
     }
-    
+
     fn config(&self) -> &Config {
         &self.config
     }
-    
+
     fn id(&self) -> Id {
         self.id
     }
 
-    async fn continue_execution(&mut self, execution: &mut AgentExecution, user_message: &str) -> SageResult<()> {
+    async fn continue_execution(
+        &mut self,
+        execution: &mut AgentExecution,
+        user_message: &str,
+    ) -> SageResult<()> {
         // Add user message to the execution context
         let system_message = self.create_system_message(&execution.task);
         let tool_schemas = self.tool_executor.get_tool_schemas();
@@ -789,7 +844,10 @@ impl Agent for BaseAgent {
         let max_step = start_step + self.max_steps - 1;
 
         for step_number in start_step..=max_step {
-            match self.execute_step(step_number, &messages, &tool_schemas).await {
+            match self
+                .execute_step(step_number, &messages, &tool_schemas)
+                .await
+            {
                 Ok(step) => {
                     let is_completed = step.state == AgentState::Completed;
 
@@ -801,7 +859,10 @@ impl Agent for BaseAgent {
                     execution.add_step(step);
 
                     if is_completed {
-                        execution.complete(true, Some("Conversation continued successfully".to_string()));
+                        execution.complete(
+                            true,
+                            Some("Conversation continued successfully".to_string()),
+                        );
                         break;
                     }
 
@@ -814,16 +875,23 @@ impl Agent for BaseAgent {
                     // Stop animation on error
                     self.animation_manager.stop_animation().await;
 
-                    let error_step = AgentStep::new(step_number, AgentState::Error)
-                        .with_error(e.to_string());
+                    let error_step =
+                        AgentStep::new(step_number, AgentState::Error).with_error(e.to_string());
 
                     // Record error step
                     if let Some(recorder) = &self.trajectory_recorder {
-                        recorder.lock().await.record_step(error_step.clone()).await?;
+                        recorder
+                            .lock()
+                            .await
+                            .record_step(error_step.clone())
+                            .await?;
                     }
 
                     execution.add_step(error_step);
-                    execution.complete(false, Some(format!("Conversation continuation failed: {}", e)));
+                    execution.complete(
+                        false,
+                        Some(format!("Conversation continuation failed: {}", e)),
+                    );
                     return Err(e);
                 }
             }
@@ -831,7 +899,10 @@ impl Agent for BaseAgent {
 
         // If we reached max steps without completion
         if !execution.is_completed() {
-            execution.complete(false, Some("Conversation continuation reached maximum steps".to_string()));
+            execution.complete(
+                false,
+                Some("Conversation continuation reached maximum steps".to_string()),
+            );
         }
 
         Ok(())

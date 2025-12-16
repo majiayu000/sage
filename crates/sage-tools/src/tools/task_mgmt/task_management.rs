@@ -1,12 +1,12 @@
 //! Task management tools for organizing complex work
 
 use async_trait::async_trait;
+use sage_core::tools::base::{Tool, ToolError};
+use sage_core::tools::types::{ToolCall, ToolResult, ToolSchema};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use sage_core::tools::base::{Tool, ToolError};
-use sage_core::tools::types::{ToolCall, ToolResult, ToolSchema};
 use uuid::Uuid;
 
 /// Task state enumeration
@@ -83,7 +83,12 @@ impl TaskList {
         }
     }
 
-    pub fn add_task(&self, mut task: Task, parent_id: Option<String>, after_task_id: Option<String>) -> Result<String, ToolError> {
+    pub fn add_task(
+        &self,
+        mut task: Task,
+        parent_id: Option<String>,
+        after_task_id: Option<String>,
+    ) -> Result<String, ToolError> {
         let mut tasks = self.tasks.lock().unwrap();
         let mut root_tasks = self.root_tasks.lock().unwrap();
 
@@ -95,7 +100,10 @@ impl TaskList {
             if let Some(parent) = tasks.get_mut(parent_id) {
                 parent.children.push(task_id.clone());
             } else {
-                return Err(ToolError::InvalidArguments(format!("Parent task not found: {}", parent_id)));
+                return Err(ToolError::InvalidArguments(format!(
+                    "Parent task not found: {}",
+                    parent_id
+                )));
             }
         } else {
             // Add as root task
@@ -114,9 +122,15 @@ impl TaskList {
         Ok(task_id)
     }
 
-    pub fn update_task(&self, task_id: &str, name: Option<String>, description: Option<String>, state: Option<TaskState>) -> Result<(), ToolError> {
+    pub fn update_task(
+        &self,
+        task_id: &str,
+        name: Option<String>,
+        description: Option<String>,
+        state: Option<TaskState>,
+    ) -> Result<(), ToolError> {
         let mut tasks = self.tasks.lock().unwrap();
-        
+
         if let Some(task) = tasks.get_mut(task_id) {
             if let Some(name) = name {
                 task.name = name;
@@ -130,7 +144,10 @@ impl TaskList {
             task.updated_at = chrono::Utc::now();
             Ok(())
         } else {
-            Err(ToolError::InvalidArguments(format!("Task not found: {}", task_id)))
+            Err(ToolError::InvalidArguments(format!(
+                "Task not found: {}",
+                task_id
+            )))
         }
     }
 
@@ -189,15 +206,17 @@ impl TaskList {
     }
 
     #[allow(clippy::only_used_in_recursion)]
-    fn format_task(&self, tasks: &HashMap<String, Task>, task: &Task, indent: usize, output: &mut String) {
+    fn format_task(
+        &self,
+        tasks: &HashMap<String, Task>,
+        task: &Task,
+        indent: usize,
+        output: &mut String,
+    ) {
         let indent_str = "  ".repeat(indent);
         output.push_str(&format!(
             "{}- {} UUID:{} NAME:{} DESCRIPTION:{}\n",
-            indent_str,
-            task.state,
-            task.id,
-            task.name,
-            task.description
+            indent_str, task.state, task.id, task.name, task.description
         ));
 
         // Format children
@@ -283,32 +302,40 @@ impl Tool for AddTasksTool {
     }
 
     async fn execute(&self, tool_call: &ToolCall) -> Result<ToolResult, ToolError> {
-        let tasks_value = tool_call.arguments
-            .get("tasks")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing required parameter: tasks".to_string()))?;
+        let tasks_value = tool_call.arguments.get("tasks").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing required parameter: tasks".to_string())
+        })?;
 
-        let tasks_array = tasks_value.as_array()
-            .ok_or_else(|| ToolError::InvalidArguments("Tasks parameter must be an array".to_string()))?;
+        let tasks_array = tasks_value.as_array().ok_or_else(|| {
+            ToolError::InvalidArguments("Tasks parameter must be an array".to_string())
+        })?;
 
         let mut created_tasks = Vec::new();
 
         for task_value in tasks_array {
-            let task_obj = task_value.as_object()
-                .ok_or_else(|| ToolError::InvalidArguments("Each task must be an object".to_string()))?;
+            let task_obj = task_value.as_object().ok_or_else(|| {
+                ToolError::InvalidArguments("Each task must be an object".to_string())
+            })?;
 
-            let name = task_obj.get("name")
+            let name = task_obj
+                .get("name")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| ToolError::InvalidArguments("Task name is required".to_string()))?;
 
-            let description = task_obj.get("description")
+            let description = task_obj
+                .get("description")
                 .and_then(|v| v.as_str())
-                .ok_or_else(|| ToolError::InvalidArguments("Task description is required".to_string()))?;
+                .ok_or_else(|| {
+                    ToolError::InvalidArguments("Task description is required".to_string())
+                })?;
 
-            let parent_task_id = task_obj.get("parent_task_id")
+            let parent_task_id = task_obj
+                .get("parent_task_id")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());
 
-            let after_task_id = task_obj.get("after_task_id")
+            let after_task_id = task_obj
+                .get("after_task_id")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());
 
@@ -328,11 +355,15 @@ impl Tool for AddTasksTool {
             created_tasks.push(task_id);
         }
 
-        Ok(ToolResult::success(&tool_call.id, self.name(), format!(
-            "Successfully created {} task(s): {}",
-            created_tasks.len(),
-            created_tasks.join(", ")
-        )))
+        Ok(ToolResult::success(
+            &tool_call.id,
+            self.name(),
+            format!(
+                "Successfully created {} task(s): {}",
+                created_tasks.len(),
+                created_tasks.join(", ")
+            ),
+        ))
     }
 
     fn schema(&self) -> ToolSchema {
@@ -406,33 +437,41 @@ impl Tool for UpdateTasksTool {
     }
 
     async fn execute(&self, tool_call: &ToolCall) -> Result<ToolResult, ToolError> {
-        let tasks_value = tool_call.arguments
-            .get("tasks")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing required parameter: tasks".to_string()))?;
+        let tasks_value = tool_call.arguments.get("tasks").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing required parameter: tasks".to_string())
+        })?;
 
-        let tasks_array = tasks_value.as_array()
-            .ok_or_else(|| ToolError::InvalidArguments("Tasks parameter must be an array".to_string()))?;
+        let tasks_array = tasks_value.as_array().ok_or_else(|| {
+            ToolError::InvalidArguments("Tasks parameter must be an array".to_string())
+        })?;
 
         let mut updated_tasks = Vec::new();
         let mut errors = Vec::new();
 
         for task_value in tasks_array {
-            let task_obj = task_value.as_object()
-                .ok_or_else(|| ToolError::InvalidArguments("Each task must be an object".to_string()))?;
+            let task_obj = task_value.as_object().ok_or_else(|| {
+                ToolError::InvalidArguments("Each task must be an object".to_string())
+            })?;
 
-            let task_id = task_obj.get("task_id")
+            let task_id = task_obj
+                .get("task_id")
                 .and_then(|v| v.as_str())
-                .ok_or_else(|| ToolError::InvalidArguments("Task task_id is required".to_string()))?;
+                .ok_or_else(|| {
+                    ToolError::InvalidArguments("Task task_id is required".to_string())
+                })?;
 
-            let name = task_obj.get("name")
+            let name = task_obj
+                .get("name")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());
 
-            let description = task_obj.get("description")
+            let description = task_obj
+                .get("description")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());
 
-            let state = task_obj.get("state")
+            let state = task_obj
+                .get("state")
                 .and_then(|v| v.as_str())
                 .map(|state_str| match state_str {
                     "NOT_STARTED" => TaskState::NotStarted,
@@ -448,7 +487,10 @@ impl Tool for UpdateTasksTool {
             }
         }
 
-        let mut result = format!("Task list updated successfully. Created: 0, Updated: {}, Deleted: 0.", updated_tasks.len());
+        let mut result = format!(
+            "Task list updated successfully. Created: 0, Updated: {}, Deleted: 0.",
+            updated_tasks.len()
+        );
 
         if !updated_tasks.is_empty() {
             result.push_str("\n\n# Task Changes\n\n## Updated Tasks\n\n");
@@ -518,10 +560,10 @@ impl Tool for UpdateTasksTool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
     use sage_core::tools::types::ToolCall;
-    use std::collections::HashMap;
+    use serde_json::json;
     use serial_test::serial;
+    use std::collections::HashMap;
 
     fn create_tool_call(id: &str, name: &str, args: serde_json::Value) -> ToolCall {
         let arguments = if let serde_json::Value::Object(map) = args {
@@ -571,23 +613,39 @@ mod tests {
         clear_global_task_list();
 
         let tool = AddTasksTool::new();
-        let call = create_tool_call("test-2", "add_tasks", json!({
-            "tasks": [{
-                "name": "Test Task",
-                "description": "This is a test task",
-                "state": "NOT_STARTED"
-            }]
-        }));
+        let call = create_tool_call(
+            "test-2",
+            "add_tasks",
+            json!({
+                "tasks": [{
+                    "name": "Test Task",
+                    "description": "This is a test task",
+                    "state": "NOT_STARTED"
+                }]
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
-        assert!(result.output.as_ref().unwrap().contains("Successfully created 1 task(s)"));
+        assert!(
+            result
+                .output
+                .as_ref()
+                .unwrap()
+                .contains("Successfully created 1 task(s)")
+        );
 
         // Verify task was added
         let view_tool = ViewTasklistTool::new();
         let view_call = create_tool_call("test-view", "view_tasklist", json!({}));
         let view_result = view_tool.execute(&view_call).await.unwrap();
         assert!(view_result.output.as_ref().unwrap().contains("Test Task"));
-        assert!(view_result.output.as_ref().unwrap().contains("This is a test task"));
+        assert!(
+            view_result
+                .output
+                .as_ref()
+                .unwrap()
+                .contains("This is a test task")
+        );
     }
 
     #[tokio::test]
@@ -596,23 +654,33 @@ mod tests {
         clear_global_task_list();
 
         let tool = AddTasksTool::new();
-        let call = create_tool_call("test-3", "add_tasks", json!({
-            "tasks": [
-                {
-                    "name": "Task 1",
-                    "description": "First task",
-                    "state": "NOT_STARTED"
-                },
-                {
-                    "name": "Task 2",
-                    "description": "Second task",
-                    "state": "IN_PROGRESS"
-                }
-            ]
-        }));
+        let call = create_tool_call(
+            "test-3",
+            "add_tasks",
+            json!({
+                "tasks": [
+                    {
+                        "name": "Task 1",
+                        "description": "First task",
+                        "state": "NOT_STARTED"
+                    },
+                    {
+                        "name": "Task 2",
+                        "description": "Second task",
+                        "state": "IN_PROGRESS"
+                    }
+                ]
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
-        assert!(result.output.as_ref().unwrap().contains("Successfully created 2 task(s)"));
+        assert!(
+            result
+                .output
+                .as_ref()
+                .unwrap()
+                .contains("Successfully created 2 task(s)")
+        );
 
         // Verify both tasks were added
         let view_tool = ViewTasklistTool::new();
@@ -631,13 +699,17 @@ mod tests {
 
         // Add a task first
         let add_tool = AddTasksTool::new();
-        let add_call = create_tool_call("test-add", "add_tasks", json!({
-            "tasks": [{
-                "name": "Update Test Task",
-                "description": "Task to be updated",
-                "state": "NOT_STARTED"
-            }]
-        }));
+        let add_call = create_tool_call(
+            "test-add",
+            "add_tasks",
+            json!({
+                "tasks": [{
+                    "name": "Update Test Task",
+                    "description": "Task to be updated",
+                    "state": "NOT_STARTED"
+                }]
+            }),
+        );
         add_tool.execute(&add_call).await.unwrap();
 
         // Get the task ID - handle potential poison errors
@@ -650,17 +722,24 @@ mod tests {
                 Ok(guard) => guard,
                 Err(poisoned) => poisoned.into_inner(),
             };
-            root_tasks.first().expect("Task list should not be empty after adding a task").clone()
+            root_tasks
+                .first()
+                .expect("Task list should not be empty after adding a task")
+                .clone()
         };
 
         // Update the task
         let update_tool = UpdateTasksTool::new();
-        let update_call = create_tool_call("test-update", "update_tasks", json!({
-            "tasks": [{
-                "task_id": task_id,
-                "state": "COMPLETE"
-            }]
-        }));
+        let update_call = create_tool_call(
+            "test-update",
+            "update_tasks",
+            json!({
+                "tasks": [{
+                    "task_id": task_id,
+                    "state": "COMPLETE"
+                }]
+            }),
+        );
 
         let result = update_tool.execute(&update_call).await.unwrap();
         assert!(result.output.as_ref().unwrap().contains("Updated: 1"));
@@ -679,20 +758,24 @@ mod tests {
 
         // Add multiple tasks
         let add_tool = AddTasksTool::new();
-        let add_call = create_tool_call("test-add", "add_tasks", json!({
-            "tasks": [
-                {
-                    "name": "Task A",
-                    "description": "First task",
-                    "state": "NOT_STARTED"
-                },
-                {
-                    "name": "Task B",
-                    "description": "Second task",
-                    "state": "NOT_STARTED"
-                }
-            ]
-        }));
+        let add_call = create_tool_call(
+            "test-add",
+            "add_tasks",
+            json!({
+                "tasks": [
+                    {
+                        "name": "Task A",
+                        "description": "First task",
+                        "state": "NOT_STARTED"
+                    },
+                    {
+                        "name": "Task B",
+                        "description": "Second task",
+                        "state": "NOT_STARTED"
+                    }
+                ]
+            }),
+        );
         add_tool.execute(&add_call).await.unwrap();
 
         // Get task IDs - handle poison errors
@@ -706,18 +789,22 @@ mod tests {
 
         // Update both tasks
         let update_tool = UpdateTasksTool::new();
-        let update_call = create_tool_call("test-update", "update_tasks", json!({
-            "tasks": [
-                {
-                    "task_id": task_id_1,
-                    "state": "COMPLETE"
-                },
-                {
-                    "task_id": task_id_2,
-                    "state": "IN_PROGRESS"
-                }
-            ]
-        }));
+        let update_call = create_tool_call(
+            "test-update",
+            "update_tasks",
+            json!({
+                "tasks": [
+                    {
+                        "task_id": task_id_1,
+                        "state": "COMPLETE"
+                    },
+                    {
+                        "task_id": task_id_2,
+                        "state": "IN_PROGRESS"
+                    }
+                ]
+            }),
+        );
 
         let result = update_tool.execute(&update_call).await.unwrap();
         assert!(result.output.as_ref().unwrap().contains("Updated: 2"));
@@ -734,12 +821,16 @@ mod tests {
     #[serial]
     async fn test_update_nonexistent_task() {
         let update_tool = UpdateTasksTool::new();
-        let update_call = create_tool_call("test-update", "update_tasks", json!({
-            "tasks": [{
-                "task_id": "nonexistent-id",
-                "state": "COMPLETE"
-            }]
-        }));
+        let update_call = create_tool_call(
+            "test-update",
+            "update_tasks",
+            json!({
+                "tasks": [{
+                    "task_id": "nonexistent-id",
+                    "state": "COMPLETE"
+                }]
+            }),
+        );
 
         let result = update_tool.execute(&update_call).await.unwrap();
         assert!(result.output.as_ref().unwrap().contains("Errors:"));
@@ -764,31 +855,47 @@ mod tests {
         let view_tool = ViewTasklistTool::new();
         let view_call = create_tool_call("view-1", "view_tasklist", json!({}));
         let result = view_tool.execute(&view_call).await.unwrap();
-        assert!(result.output.as_ref().unwrap().contains("No tasks in the current task list"));
+        assert!(
+            result
+                .output
+                .as_ref()
+                .unwrap()
+                .contains("No tasks in the current task list")
+        );
 
         // Step 2: Add some tasks
         let add_tool = AddTasksTool::new();
-        let add_call = create_tool_call("add-1", "add_tasks", json!({
-            "tasks": [
-                {
-                    "name": "Setup Project",
-                    "description": "Initialize the project structure",
-                    "state": "NOT_STARTED"
-                },
-                {
-                    "name": "Implement Core Features",
-                    "description": "Build the main functionality",
-                    "state": "NOT_STARTED"
-                },
-                {
-                    "name": "Write Tests",
-                    "description": "Create comprehensive test suite",
-                    "state": "NOT_STARTED"
-                }
-            ]
-        }));
+        let add_call = create_tool_call(
+            "add-1",
+            "add_tasks",
+            json!({
+                "tasks": [
+                    {
+                        "name": "Setup Project",
+                        "description": "Initialize the project structure",
+                        "state": "NOT_STARTED"
+                    },
+                    {
+                        "name": "Implement Core Features",
+                        "description": "Build the main functionality",
+                        "state": "NOT_STARTED"
+                    },
+                    {
+                        "name": "Write Tests",
+                        "description": "Create comprehensive test suite",
+                        "state": "NOT_STARTED"
+                    }
+                ]
+            }),
+        );
         let result = add_tool.execute(&add_call).await.unwrap();
-        assert!(result.output.as_ref().unwrap().contains("Successfully created 3 task(s)"));
+        assert!(
+            result
+                .output
+                .as_ref()
+                .unwrap()
+                .contains("Successfully created 3 task(s)")
+        );
 
         // Step 3: View the task list with tasks
         let view_call = create_tool_call("view-2", "view_tasklist", json!({}));
@@ -809,28 +916,36 @@ mod tests {
         };
 
         let update_tool = UpdateTasksTool::new();
-        let update_call = create_tool_call("update-1", "update_tasks", json!({
-            "tasks": [{
-                "task_id": task_ids[0],
-                "state": "IN_PROGRESS"
-            }]
-        }));
+        let update_call = create_tool_call(
+            "update-1",
+            "update_tasks",
+            json!({
+                "tasks": [{
+                    "task_id": task_ids[0],
+                    "state": "IN_PROGRESS"
+                }]
+            }),
+        );
         let result = update_tool.execute(&update_call).await.unwrap();
         assert!(result.output.as_ref().unwrap().contains("Updated: 1"));
 
         // Step 5: Complete first task and start second
-        let update_call = create_tool_call("update-2", "update_tasks", json!({
-            "tasks": [
-                {
-                    "task_id": task_ids[0],
-                    "state": "COMPLETE"
-                },
-                {
-                    "task_id": task_ids[1],
-                    "state": "IN_PROGRESS"
-                }
-            ]
-        }));
+        let update_call = create_tool_call(
+            "update-2",
+            "update_tasks",
+            json!({
+                "tasks": [
+                    {
+                        "task_id": task_ids[0],
+                        "state": "COMPLETE"
+                    },
+                    {
+                        "task_id": task_ids[1],
+                        "state": "IN_PROGRESS"
+                    }
+                ]
+            }),
+        );
         let result = update_tool.execute(&update_call).await.unwrap();
         assert!(result.output.as_ref().unwrap().contains("Updated: 2"));
 

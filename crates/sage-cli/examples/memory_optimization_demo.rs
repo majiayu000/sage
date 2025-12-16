@@ -1,17 +1,17 @@
 //! Memory optimization demonstration
-//! 
+//!
 //! This example shows the memory optimization improvements:
 //! - Fixed LRU cache eviction
 //! - Memory-optimized trajectory recording
 //! - Efficient memory usage tracking
 
 use sage_core::{
-    cache::{CacheManager, CacheConfig, LLMCache},
-    trajectory::memory_optimized::{MemoryOptimizedRecorder, MemoryOptimizedConfig},
-    trajectory::recorder::TrajectoryRecord,
-    llm::{LLMMessage, LLMResponse, MessageRole},
-    types::LLMUsage,
+    cache::{CacheConfig, CacheManager, LLMCache},
     error::SageResult,
+    llm::{LLMMessage, LLMResponse, MessageRole},
+    trajectory::memory_optimized::{MemoryOptimizedConfig, MemoryOptimizedRecorder},
+    trajectory::recorder::TrajectoryRecord,
+    types::LLMUsage,
 };
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -58,16 +58,14 @@ async fn test_lru_cache_eviction() -> SageResult<()> {
 
     // Add more entries than capacity
     for i in 1..=10 {
-        let messages = vec![
-            LLMMessage {
-                role: MessageRole::User,
-                content: format!("Query {}", i),
-                tool_calls: None,
-                tool_call_id: None,
-                name: None,
-                metadata: HashMap::new(),
-            }
-        ];
+        let messages = vec![LLMMessage {
+            role: MessageRole::User,
+            content: format!("Query {}", i),
+            tool_calls: None,
+            tool_call_id: None,
+            name: None,
+            metadata: HashMap::new(),
+        }];
 
         let response = LLMResponse {
             content: format!("Response to query {}", i),
@@ -84,37 +82,47 @@ async fn test_lru_cache_eviction() -> SageResult<()> {
             metadata: HashMap::new(),
         };
 
-        llm_cache.cache_response("test", "model", &messages, None, &response, None).await?;
+        llm_cache
+            .cache_response("test", "model", &messages, None, &response, None)
+            .await?;
 
         if i % 2 == 0 {
             let stats = llm_cache.statistics().await?;
-            println!("   After {} entries: {} cached, {} evictions", 
-                i, stats.memory_stats.entry_count, stats.memory_stats.evictions);
+            println!(
+                "   After {} entries: {} cached, {} evictions",
+                i, stats.memory_stats.entry_count, stats.memory_stats.evictions
+            );
         }
     }
 
     let final_stats = llm_cache.statistics().await?;
     println!("📊 Final cache statistics:");
-    println!("   Entries: {} (should be ≤ 5)", final_stats.memory_stats.entry_count);
+    println!(
+        "   Entries: {} (should be ≤ 5)",
+        final_stats.memory_stats.entry_count
+    );
     println!("   Evictions: {}", final_stats.memory_stats.evictions);
-    println!("   Memory size: {} bytes", final_stats.memory_stats.size_bytes);
+    println!(
+        "   Memory size: {} bytes",
+        final_stats.memory_stats.size_bytes
+    );
     println!("   Hit rate: {:.1}%", final_stats.hit_rate() * 100.0);
 
     // Test that recent entries are still accessible
     println!("\n🔍 Testing access to recent entries...");
     for i in 6..=10 {
-        let messages = vec![
-            LLMMessage {
-                role: MessageRole::User,
-                content: format!("Query {}", i),
-                tool_calls: None,
-                tool_call_id: None,
-                name: None,
-                metadata: HashMap::new(),
-            }
-        ];
+        let messages = vec![LLMMessage {
+            role: MessageRole::User,
+            content: format!("Query {}", i),
+            tool_calls: None,
+            tool_call_id: None,
+            name: None,
+            metadata: HashMap::new(),
+        }];
 
-        let cached = llm_cache.get_response("test", "model", &messages, None).await?;
+        let cached = llm_cache
+            .get_response("test", "model", &messages, None)
+            .await?;
         if cached.is_some() {
             print!("✅ ");
         } else {
@@ -132,7 +140,7 @@ async fn test_memory_optimized_trajectory() -> SageResult<()> {
     println!("================================================");
 
     let config = MemoryOptimizedConfig {
-        max_memory_records: 3, // Small capacity to demonstrate eviction
+        max_memory_records: 3,       // Small capacity to demonstrate eviction
         max_memory_bytes: 10 * 1024, // 10KB limit
         storage_dir: "memory_demo_trajectories".into(),
         flush_interval: Duration::from_secs(1),
@@ -161,7 +169,11 @@ async fn test_memory_optimized_trajectory() -> SageResult<()> {
             llm_interactions: vec![],
             agent_steps: vec![],
             success: true,
-            final_result: Some(format!("Large result data for task {}: {}", i, "x".repeat(1000))),
+            final_result: Some(format!(
+                "Large result data for task {}: {}",
+                i,
+                "x".repeat(1000)
+            )),
             execution_time: 2.5,
         };
 
@@ -170,18 +182,24 @@ async fn test_memory_optimized_trajectory() -> SageResult<()> {
 
         if i % 2 == 0 {
             let stats = recorder.statistics().await;
-            println!("   After {} records: {} in memory, {} evictions, {} bytes", 
-                i, stats.memory_records, stats.memory_evictions, stats.memory_bytes);
+            println!(
+                "   After {} records: {} in memory, {} evictions, {} bytes",
+                i, stats.memory_records, stats.memory_evictions, stats.memory_bytes
+            );
         }
     }
 
     let add_duration = start.elapsed();
-    println!("⏱️  Added {} records in {:?}", record_ids.len(), add_duration);
+    println!(
+        "⏱️  Added {} records in {:?}",
+        record_ids.len(),
+        add_duration
+    );
 
     // Test retrieval of evicted records (should load from disk)
     println!("\n🔍 Testing retrieval of evicted records...");
     let start = Instant::now();
-    
+
     for (i, record_id) in record_ids.iter().enumerate() {
         let retrieved = recorder.get_record(record_id).await?;
         if retrieved.is_some() {
@@ -189,14 +207,18 @@ async fn test_memory_optimized_trajectory() -> SageResult<()> {
         } else {
             print!("❌ ");
         }
-        
+
         if (i + 1) % 4 == 0 {
             println!();
         }
     }
-    
+
     let retrieval_duration = start.elapsed();
-    println!("\n⏱️  Retrieved {} records in {:?}", record_ids.len(), retrieval_duration);
+    println!(
+        "\n⏱️  Retrieved {} records in {:?}",
+        record_ids.len(),
+        retrieval_duration
+    );
 
     // Show final statistics
     let final_stats = recorder.statistics().await;
@@ -213,7 +235,7 @@ async fn test_memory_optimized_trajectory() -> SageResult<()> {
 
     // Cleanup
     let _ = tokio::fs::remove_dir_all("memory_demo_trajectories").await;
-    
+
     println!("✅ Memory-optimized trajectory test completed!\n");
     Ok(())
 }
@@ -242,20 +264,21 @@ async fn test_memory_usage_monitoring() -> SageResult<()> {
     // Simulate high-load scenario
     for batch in 0..5 {
         println!("\n🔄 Batch {} - Adding 10 large entries...", batch + 1);
-        
+
         for i in 1..=10 {
             let entry_id = batch * 10 + i;
-            let messages = vec![
-                LLMMessage {
-                    role: MessageRole::User,
-                    content: format!("Large query {} with lots of context: {}", 
-                        entry_id, "context ".repeat(100)),
-                    tool_calls: None,
-                    tool_call_id: None,
-                    name: None,
-                    metadata: HashMap::new(),
-                }
-            ];
+            let messages = vec![LLMMessage {
+                role: MessageRole::User,
+                content: format!(
+                    "Large query {} with lots of context: {}",
+                    entry_id,
+                    "context ".repeat(100)
+                ),
+                tool_calls: None,
+                tool_call_id: None,
+                name: None,
+                metadata: HashMap::new(),
+            }];
 
             let response = LLMResponse {
                 content: format!("Large response {}: {}", entry_id, "data ".repeat(200)),
@@ -272,7 +295,9 @@ async fn test_memory_usage_monitoring() -> SageResult<()> {
                 metadata: HashMap::new(),
             };
 
-            llm_cache.cache_response("test", "model", &messages, None, &response, None).await?;
+            llm_cache
+                .cache_response("test", "model", &messages, None, &response, None)
+                .await?;
         }
 
         // Take memory snapshot
@@ -284,7 +309,8 @@ async fn test_memory_usage_monitoring() -> SageResult<()> {
             stats.memory_stats.evictions,
         ));
 
-        println!("   Entries: {}, Memory: {} bytes, Evictions: {}", 
+        println!(
+            "   Entries: {}, Memory: {} bytes, Evictions: {}",
             stats.memory_stats.entry_count,
             stats.memory_stats.size_bytes,
             stats.memory_stats.evictions
@@ -302,15 +328,30 @@ async fn test_memory_usage_monitoring() -> SageResult<()> {
     println!("Batch | Entries | Memory (bytes) | Evictions");
     println!("------|---------|----------------|----------");
     for (batch, entries, memory, evictions) in memory_snapshots {
-        println!("{:5} | {:7} | {:14} | {:9}", batch, entries, memory, evictions);
+        println!(
+            "{:5} | {:7} | {:14} | {:9}",
+            batch, entries, memory, evictions
+        );
     }
 
     let final_stats = llm_cache.statistics().await?;
     println!("\n📈 Final memory statistics:");
-    println!("   Peak entries: {} (stayed within limits)", final_stats.memory_stats.entry_count);
-    println!("   Total evictions: {} (prevented memory overflow)", final_stats.memory_stats.evictions);
-    println!("   Final memory usage: {} bytes", final_stats.memory_stats.size_bytes);
-    println!("   Cache efficiency: {:.1}% hit rate", final_stats.hit_rate() * 100.0);
+    println!(
+        "   Peak entries: {} (stayed within limits)",
+        final_stats.memory_stats.entry_count
+    );
+    println!(
+        "   Total evictions: {} (prevented memory overflow)",
+        final_stats.memory_stats.evictions
+    );
+    println!(
+        "   Final memory usage: {} bytes",
+        final_stats.memory_stats.size_bytes
+    );
+    println!(
+        "   Cache efficiency: {:.1}% hit rate",
+        final_stats.hit_rate() * 100.0
+    );
 
     println!("✅ Memory usage monitoring test completed!\n");
     Ok(())

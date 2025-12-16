@@ -1,9 +1,9 @@
 //! CLI console utilities
 
 use colored::*;
+use console::{Key, Term};
 use indicatif::{ProgressBar, ProgressStyle};
 use std::io::{self, Write};
-use console::{Term, Key};
 
 /// CLI console for formatted output
 pub struct CLIConsole {
@@ -119,19 +119,16 @@ impl CLIConsole {
     #[allow(dead_code)] // May be used in future features
     pub fn print_tool_result(&self, tool_name: &str, success: bool, output: &str) {
         if self.verbose {
-            let status = if success {
-                "✓".green()
-            } else {
-                "✗".red()
-            };
-            
+            let status = if success { "✓".green() } else { "✗".red() };
+
             println!("  {} {} result:", status, tool_name.magenta());
-            
+
             // Print output with indentation
-            for line in output.lines().take(10) { // Limit output lines
+            for line in output.lines().take(10) {
+                // Limit output lines
                 println!("    {}", line.dimmed());
             }
-            
+
             if output.lines().count() > 10 {
                 println!("    {} (output truncated)", "...".dimmed());
             }
@@ -143,10 +140,10 @@ impl CLIConsole {
     pub fn confirm(&self, message: &str) -> io::Result<bool> {
         print!("{} {} [y/N]: ", "?".yellow().bold(), message);
         io::stdout().flush()?;
-        
+
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
-        
+
         Ok(matches!(input.trim().to_lowercase().as_str(), "y" | "yes"))
     }
 
@@ -179,7 +176,8 @@ impl CLIConsole {
                     }
                     Key::Char(c) => {
                         // 处理 Ctrl+U (清除整行)
-                        if c == '\u{15}' { // Ctrl+U 的 ASCII 码
+                        if c == '\u{15}' {
+                            // Ctrl+U 的 ASCII 码
                             input.clear();
                             print!("\r\x1B[2K{} {}: ", "?".blue().bold(), prompt);
                             io::stdout().flush()?;
@@ -224,10 +222,6 @@ impl CLIConsole {
         }
     }
 
-
-
-
-
     /// Print a table header
     pub fn print_table_header(&self, headers: &[&str]) {
         if self.verbose {
@@ -236,7 +230,7 @@ impl CLIConsole {
                 .map(|h| format!("{:15}", h.bold()))
                 .collect::<Vec<_>>()
                 .join(" | ");
-            
+
             println!("{header_line}");
             println!("{}", "-".repeat(header_line.len()).dimmed());
         }
@@ -250,7 +244,7 @@ impl CLIConsole {
                 .map(|c| format!("{:15}", c))
                 .collect::<Vec<_>>()
                 .join(" | ");
-            
+
             println!("{row_line}");
         }
     }
@@ -324,7 +318,9 @@ pub mod format {
     /// Format a duration
     #[allow(dead_code)] // May be used in future features
     pub fn duration(duration: std::time::Duration) -> String {
-        format!("{:.2}s", duration.as_secs_f64()).yellow().to_string()
+        format!("{:.2}s", duration.as_secs_f64())
+            .yellow()
+            .to_string()
     }
 
     /// Format a number with commas
@@ -332,14 +328,14 @@ pub mod format {
     pub fn number(n: u64) -> String {
         let s = n.to_string();
         let mut result = String::new();
-        
+
         for (i, c) in s.chars().rev().enumerate() {
             if i > 0 && i % 3 == 0 {
                 result.push(',');
             }
             result.push(c);
         }
-        
+
         result.chars().rev().collect::<String>().green().to_string()
     }
 
@@ -355,6 +351,8 @@ pub mod format {
             unit_index += 1;
         }
 
-        format!("{:.1} {}", size, UNITS[unit_index]).magenta().to_string()
+        format!("{:.1} {}", size, UNITS[unit_index])
+            .magenta()
+            .to_string()
     }
 }

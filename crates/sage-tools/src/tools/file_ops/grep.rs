@@ -132,9 +132,9 @@ impl GrepTool {
             regex_builder.dot_matches_new_line(true);
         }
 
-        let regex = regex_builder.build().map_err(|e| {
-            ToolError::InvalidArguments(format!("Invalid regex pattern: {}", e))
-        })?;
+        let regex = regex_builder
+            .build()
+            .map_err(|e| ToolError::InvalidArguments(format!("Invalid regex pattern: {}", e)))?;
 
         // Resolve search path
         let base_path = if let Some(path) = search_path {
@@ -243,11 +243,7 @@ impl GrepTool {
                     )
                 }
                 GrepOutputMode::Count => {
-                    format!(
-                        "{}\n\nTotal matches: {}",
-                        results.join("\n"),
-                        total_matches
-                    )
+                    format!("{}\n\nTotal matches: {}", results.join("\n"), total_matches)
                 }
             }
         };
@@ -325,13 +321,15 @@ impl GrepTool {
             return Ok(None);
         }
 
-        let relative_path = path
-            .strip_prefix(&self.working_directory)
-            .unwrap_or(path);
+        let relative_path = path.strip_prefix(&self.working_directory).unwrap_or(path);
 
         let result = match output_mode {
             GrepOutputMode::Content => {
-                format!("{}:\n{}", relative_path.display(), matching_lines.join("\n"))
+                format!(
+                    "{}:\n{}",
+                    relative_path.display(),
+                    matching_lines.join("\n")
+                )
             }
             GrepOutputMode::FilesWithMatches => relative_path.display().to_string(),
             GrepOutputMode::Count => {
@@ -374,10 +372,39 @@ impl GrepTool {
             if let Some(ext) = Self::get_extension(path) {
                 if matches!(
                     ext.as_str(),
-                    "exe" | "dll" | "so" | "dylib" | "a" | "o" | "obj" | "bin" | "dat" | "db"
-                        | "sqlite" | "png" | "jpg" | "jpeg" | "gif" | "ico" | "svg" | "pdf"
-                        | "zip" | "tar" | "gz" | "bz2" | "xz" | "rar" | "7z" | "mp3" | "mp4"
-                        | "avi" | "mov" | "woff" | "woff2" | "ttf" | "eot"
+                    "exe"
+                        | "dll"
+                        | "so"
+                        | "dylib"
+                        | "a"
+                        | "o"
+                        | "obj"
+                        | "bin"
+                        | "dat"
+                        | "db"
+                        | "sqlite"
+                        | "png"
+                        | "jpg"
+                        | "jpeg"
+                        | "gif"
+                        | "ico"
+                        | "svg"
+                        | "pdf"
+                        | "zip"
+                        | "tar"
+                        | "gz"
+                        | "bz2"
+                        | "xz"
+                        | "rar"
+                        | "7z"
+                        | "mp3"
+                        | "mp4"
+                        | "avi"
+                        | "mov"
+                        | "woff"
+                        | "woff2"
+                        | "ttf"
+                        | "eot"
                 ) {
                     return true;
                 }
@@ -525,9 +552,9 @@ Automatically skips:
     }
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
-        let pattern = call
-            .get_string("pattern")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'pattern' parameter".to_string()))?;
+        let pattern = call.get_string("pattern").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'pattern' parameter".to_string())
+        })?;
 
         let path = call.get_string("path");
         let glob_filter = call.get_string("glob");

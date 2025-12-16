@@ -1,20 +1,20 @@
 //! SDK client implementation
 
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::sync::Arc;
-use tokio::sync::Mutex;
 use sage_core::{
-    agent::{base::BaseAgent, Agent, AgentExecution},
+    agent::{Agent, AgentExecution, base::BaseAgent},
     config::{loader::load_config_with_overrides, model::Config},
     error::SageResult,
     tools::executor::ToolExecutorBuilder,
     trajectory::recorder::TrajectoryRecorder,
     types::TaskMetadata,
 };
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 // Import and re-export outcome types
-pub use sage_core::agent::{ExecutionOutcome, ExecutionError, ExecutionErrorKind};
+pub use sage_core::agent::{ExecutionError, ExecutionErrorKind, ExecutionOutcome};
 use sage_tools::get_default_tools;
 
 /// SDK client for Sage Agent
@@ -51,9 +51,14 @@ impl SageAgentSDK {
             HashMap::new(),
         )?;
 
-        tracing::info!("SDK config loaded - provider: {}, model: {}",
-                      config.get_default_provider(),
-                      config.default_model_parameters().map(|p| p.model.clone()).unwrap_or_else(|_| "unknown".to_string()));
+        tracing::info!(
+            "SDK config loaded - provider: {}, model: {}",
+            config.get_default_provider(),
+            config
+                .default_model_parameters()
+                .map(|p| p.model.clone())
+                .unwrap_or_else(|_| "unknown".to_string())
+        );
 
         Ok(Self {
             config,
@@ -86,7 +91,9 @@ impl SageAgentSDK {
             if let Some(key) = api_key {
                 params.api_key = Some(key.to_string());
             }
-            self.config.model_providers.insert(provider.to_string(), params);
+            self.config
+                .model_providers
+                .insert(provider.to_string(), params);
         }
 
         self.config.default_provider = provider.to_string();
@@ -107,7 +114,8 @@ impl SageAgentSDK {
 
     /// Run a task
     pub async fn run(&self, task_description: &str) -> SageResult<ExecutionResult> {
-        self.run_with_options(task_description, RunOptions::default()).await
+        self.run_with_options(task_description, RunOptions::default())
+            .await
     }
 
     /// Run a task with options
@@ -146,7 +154,10 @@ impl SageAgentSDK {
                 .or_else(|| self.trajectory_path.clone())
                 .unwrap_or_else(|| {
                     let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
-                    self.config.trajectory.directory.join(format!("sage_{}.json", timestamp))
+                    self.config
+                        .trajectory
+                        .directory
+                        .join(format!("sage_{}.json", timestamp))
                 });
 
             let recorder = TrajectoryRecorder::new(&path)?;
@@ -198,7 +209,9 @@ impl SageAgentSDK {
 
         // Set up trajectory recording if enabled
         if let Some(trajectory_path) = &self.trajectory_path {
-            let recorder = Arc::new(Mutex::new(TrajectoryRecorder::new(trajectory_path.clone())?));
+            let recorder = Arc::new(Mutex::new(TrajectoryRecorder::new(
+                trajectory_path.clone(),
+            )?));
             agent.set_trajectory_recorder(recorder);
         }
 
@@ -360,4 +373,3 @@ impl ExecutionResult {
         self.outcome.status_icon()
     }
 }
-

@@ -12,10 +12,10 @@ mod sanitizer;
 mod schema;
 mod validator;
 
-pub use rules::{ValidationRule, RuleSet, CommonRules};
+pub use rules::{CommonRules, RuleSet, ValidationRule};
 pub use sanitizer::{InputSanitizer, SanitizeOptions};
-pub use schema::{ValidationSchema, FieldSchema, FieldType};
-pub use validator::{Validator, ValidationResult, ValidationError, FieldError};
+pub use schema::{FieldSchema, FieldType, ValidationSchema};
+pub use validator::{FieldError, ValidationError, ValidationResult, Validator};
 
 use serde_json::Value;
 use std::collections::HashMap;
@@ -61,10 +61,8 @@ impl SchemaBuilder {
     /// Add an optional string field
     pub fn optional_string(mut self, name: impl Into<String>) -> Self {
         let name = name.into();
-        self.fields.insert(
-            name,
-            FieldSchema::new(FieldType::String).required(false),
-        );
+        self.fields
+            .insert(name, FieldSchema::new(FieldType::String).required(false));
         self
     }
 
@@ -82,10 +80,8 @@ impl SchemaBuilder {
     /// Add an optional integer field
     pub fn optional_integer(mut self, name: impl Into<String>) -> Self {
         let name = name.into();
-        self.fields.insert(
-            name,
-            FieldSchema::new(FieldType::Integer).required(false),
-        );
+        self.fields
+            .insert(name, FieldSchema::new(FieldType::Integer).required(false));
         self
     }
 
@@ -114,10 +110,8 @@ impl SchemaBuilder {
     /// Add an optional boolean field
     pub fn optional_boolean(mut self, name: impl Into<String>) -> Self {
         let name = name.into();
-        self.fields.insert(
-            name,
-            FieldSchema::new(FieldType::Boolean).required(false),
-        );
+        self.fields
+            .insert(name, FieldSchema::new(FieldType::Boolean).required(false));
         self
     }
 
@@ -193,10 +187,7 @@ mod tests {
 
     #[test]
     fn test_quick_validate() {
-        let schema = SchemaBuilder::new()
-            .string("name")
-            .integer("age")
-            .build();
+        let schema = SchemaBuilder::new().string("name").integer("age").build();
 
         let valid_input = serde_json::json!({
             "name": "Alice",
@@ -209,10 +200,7 @@ mod tests {
 
     #[test]
     fn test_quick_validate_missing_field() {
-        let schema = SchemaBuilder::new()
-            .string("name")
-            .integer("age")
-            .build();
+        let schema = SchemaBuilder::new().string("name").integer("age").build();
 
         let invalid_input = serde_json::json!({
             "name": "Alice"
@@ -224,9 +212,7 @@ mod tests {
 
     #[test]
     fn test_quick_validate_wrong_type() {
-        let schema = SchemaBuilder::new()
-            .integer("age")
-            .build();
+        let schema = SchemaBuilder::new().integer("age").build();
 
         let invalid_input = serde_json::json!({
             "age": "not a number"

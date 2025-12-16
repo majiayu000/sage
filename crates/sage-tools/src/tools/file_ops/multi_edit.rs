@@ -8,12 +8,12 @@
 //! in one atomic operation.
 
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
-use tokio::fs;
 use sage_core::tools::base::{FileSystemTool, Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
+use tokio::fs;
 
 /// A single edit operation
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -49,7 +49,9 @@ impl MultiEditTool {
     pub fn new() -> Self {
         Self {
             working_directory: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
-            read_files: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
+            read_files: std::sync::Arc::new(
+                std::sync::Mutex::new(std::collections::HashSet::new()),
+            ),
         }
     }
 
@@ -57,7 +59,9 @@ impl MultiEditTool {
     pub fn with_working_directory<P: Into<PathBuf>>(working_dir: P) -> Self {
         Self {
             working_directory: working_dir.into(),
-            read_files: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
+            read_files: std::sync::Arc::new(
+                std::sync::Mutex::new(std::collections::HashSet::new()),
+            ),
         }
     }
 
@@ -79,7 +83,9 @@ impl MultiEditTool {
 
     /// Parse edit operations from the tool call
     fn parse_edits(&self, call: &ToolCall) -> Result<Vec<EditOperation>, ToolError> {
-        let edits_value = call.arguments.get("edits")
+        let edits_value = call
+            .arguments
+            .get("edits")
             .ok_or_else(|| ToolError::InvalidArguments("Missing 'edits' parameter".to_string()))?;
 
         // Try to parse as array of edit operations
@@ -91,7 +97,7 @@ impl MultiEditTool {
 
         if edits.is_empty() {
             return Err(ToolError::InvalidArguments(
-                "The 'edits' array must contain at least one edit operation".to_string()
+                "The 'edits' array must contain at least one edit operation".to_string(),
             ));
         }
 
@@ -287,7 +293,10 @@ Notes:
             self.name(),
             self.description(),
             vec![
-                ToolParameter::string("file_path", "The absolute path to the file to edit (must be absolute, not relative)"),
+                ToolParameter::string(
+                    "file_path",
+                    "The absolute path to the file to edit (must be absolute, not relative)",
+                ),
                 ToolParameter {
                     name: "edits".to_string(),
                     description: "Array of edit operations".to_string(),
@@ -302,9 +311,9 @@ Notes:
     }
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
-        let file_path = call
-            .get_string("file_path")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'file_path' parameter".to_string()))?;
+        let file_path = call.get_string("file_path").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'file_path' parameter".to_string())
+        })?;
 
         let edits = self.parse_edits(call)?;
 
@@ -316,7 +325,9 @@ Notes:
     fn validate(&self, call: &ToolCall) -> Result<(), ToolError> {
         // Check required parameters
         if call.get_string("file_path").is_none() {
-            return Err(ToolError::InvalidArguments("Missing 'file_path' parameter".to_string()));
+            return Err(ToolError::InvalidArguments(
+                "Missing 'file_path' parameter".to_string(),
+            ));
         }
 
         // Validate edits can be parsed
@@ -366,17 +377,23 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("test.txt");
 
-        fs::write(&file_path, "Hello, World!\nThis is a test file.\n").await.unwrap();
+        fs::write(&file_path, "Hello, World!\nThis is a test file.\n")
+            .await
+            .unwrap();
 
         let tool = MultiEditTool::with_working_directory(temp_dir.path());
         tool.mark_file_as_read(file_path.clone());
 
-        let call = create_tool_call("test-1", "MultiEdit", json!({
-            "file_path": "test.txt",
-            "edits": [
-                {"old_string": "World", "new_string": "Rust"}
-            ]
-        }));
+        let call = create_tool_call(
+            "test-1",
+            "MultiEdit",
+            json!({
+                "file_path": "test.txt",
+                "edits": [
+                    {"old_string": "World", "new_string": "Rust"}
+                ]
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -391,19 +408,25 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("test.txt");
 
-        fs::write(&file_path, "Hello, World!\nGoodbye, World!\nTest line.\n").await.unwrap();
+        fs::write(&file_path, "Hello, World!\nGoodbye, World!\nTest line.\n")
+            .await
+            .unwrap();
 
         let tool = MultiEditTool::with_working_directory(temp_dir.path());
         tool.mark_file_as_read(file_path.clone());
 
-        let call = create_tool_call("test-2", "MultiEdit", json!({
-            "file_path": "test.txt",
-            "edits": [
-                {"old_string": "Hello, World!", "new_string": "Hello, Rust!"},
-                {"old_string": "Goodbye, World!", "new_string": "Goodbye, Rust!"},
-                {"old_string": "Test line.", "new_string": "Modified line."}
-            ]
-        }));
+        let call = create_tool_call(
+            "test-2",
+            "MultiEdit",
+            json!({
+                "file_path": "test.txt",
+                "edits": [
+                    {"old_string": "Hello, World!", "new_string": "Hello, Rust!"},
+                    {"old_string": "Goodbye, World!", "new_string": "Goodbye, Rust!"},
+                    {"old_string": "Test line.", "new_string": "Modified line."}
+                ]
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -420,17 +443,23 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("test.txt");
 
-        fs::write(&file_path, "foo bar foo baz foo\n").await.unwrap();
+        fs::write(&file_path, "foo bar foo baz foo\n")
+            .await
+            .unwrap();
 
         let tool = MultiEditTool::with_working_directory(temp_dir.path());
         tool.mark_file_as_read(file_path.clone());
 
-        let call = create_tool_call("test-3", "MultiEdit", json!({
-            "file_path": "test.txt",
-            "edits": [
-                {"old_string": "foo", "new_string": "qux", "replace_all": true}
-            ]
-        }));
+        let call = create_tool_call(
+            "test-3",
+            "MultiEdit",
+            json!({
+                "file_path": "test.txt",
+                "edits": [
+                    {"old_string": "foo", "new_string": "qux", "replace_all": true}
+                ]
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -450,12 +479,16 @@ mod tests {
         let tool = MultiEditTool::with_working_directory(temp_dir.path());
         tool.mark_file_as_read(file_path.clone());
 
-        let call = create_tool_call("test-4", "MultiEdit", json!({
-            "file_path": "test.txt",
-            "edits": [
-                {"old_string": "test", "new_string": "replaced"}
-            ]
-        }));
+        let call = create_tool_call(
+            "test-4",
+            "MultiEdit",
+            json!({
+                "file_path": "test.txt",
+                "edits": [
+                    {"old_string": "test", "new_string": "replaced"}
+                ]
+            }),
+        );
 
         let result = tool.execute(&call).await;
         assert!(result.is_err());
@@ -475,12 +508,16 @@ mod tests {
         let tool = MultiEditTool::with_working_directory(temp_dir.path());
         tool.mark_file_as_read(file_path.clone());
 
-        let call = create_tool_call("test-5", "MultiEdit", json!({
-            "file_path": "test.txt",
-            "edits": [
-                {"old_string": "nonexistent", "new_string": "replacement"}
-            ]
-        }));
+        let call = create_tool_call(
+            "test-5",
+            "MultiEdit",
+            json!({
+                "file_path": "test.txt",
+                "edits": [
+                    {"old_string": "nonexistent", "new_string": "replacement"}
+                ]
+            }),
+        );
 
         let result = tool.execute(&call).await;
         assert!(result.is_err());
@@ -500,12 +537,16 @@ mod tests {
         let tool = MultiEditTool::with_working_directory(temp_dir.path());
         // Intentionally NOT marking the file as read
 
-        let call = create_tool_call("test-6", "MultiEdit", json!({
-            "file_path": "test.txt",
-            "edits": [
-                {"old_string": "World", "new_string": "Rust"}
-            ]
-        }));
+        let call = create_tool_call(
+            "test-6",
+            "MultiEdit",
+            json!({
+                "file_path": "test.txt",
+                "edits": [
+                    {"old_string": "World", "new_string": "Rust"}
+                ]
+            }),
+        );
 
         let result = tool.execute(&call).await;
         assert!(result.is_err());
@@ -525,12 +566,16 @@ mod tests {
         let tool = MultiEditTool::with_working_directory(temp_dir.path());
         tool.mark_file_as_read(file_path.clone());
 
-        let call = create_tool_call("test-7", "MultiEdit", json!({
-            "file_path": "test.txt",
-            "edits": [
-                {"old_string": "", "new_string": "replacement"}
-            ]
-        }));
+        let call = create_tool_call(
+            "test-7",
+            "MultiEdit",
+            json!({
+                "file_path": "test.txt",
+                "edits": [
+                    {"old_string": "", "new_string": "replacement"}
+                ]
+            }),
+        );
 
         let result = tool.execute(&call).await;
         assert!(result.is_err());
@@ -550,12 +595,16 @@ mod tests {
         let tool = MultiEditTool::with_working_directory(temp_dir.path());
         tool.mark_file_as_read(file_path.clone());
 
-        let call = create_tool_call("test-8", "MultiEdit", json!({
-            "file_path": "test.txt",
-            "edits": [
-                {"old_string": "World", "new_string": "World"}
-            ]
-        }));
+        let call = create_tool_call(
+            "test-8",
+            "MultiEdit",
+            json!({
+                "file_path": "test.txt",
+                "edits": [
+                    {"old_string": "World", "new_string": "World"}
+                ]
+            }),
+        );
 
         let result = tool.execute(&call).await;
         assert!(result.is_err());
@@ -576,13 +625,17 @@ mod tests {
         tool.mark_file_as_read(file_path.clone());
 
         // First edit changes "World" to "Rust", second edit changes "Rust" to "Universe"
-        let call = create_tool_call("test-9", "MultiEdit", json!({
-            "file_path": "test.txt",
-            "edits": [
-                {"old_string": "World", "new_string": "Rust"},
-                {"old_string": "Rust", "new_string": "Universe"}
-            ]
-        }));
+        let call = create_tool_call(
+            "test-9",
+            "MultiEdit",
+            json!({
+                "file_path": "test.txt",
+                "edits": [
+                    {"old_string": "World", "new_string": "Rust"},
+                    {"old_string": "Rust", "new_string": "Universe"}
+                ]
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -602,12 +655,16 @@ mod tests {
         tool.mark_file_as_read(file_path.clone());
 
         // Delete ", World" by replacing with empty string
-        let call = create_tool_call("test-10", "MultiEdit", json!({
-            "file_path": "test.txt",
-            "edits": [
-                {"old_string": ", World", "new_string": ""}
-            ]
-        }));
+        let call = create_tool_call(
+            "test-10",
+            "MultiEdit",
+            json!({
+                "file_path": "test.txt",
+                "edits": [
+                    {"old_string": ", World", "new_string": ""}
+                ]
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -620,11 +677,15 @@ mod tests {
     async fn test_multi_edit_missing_file_path() {
         let tool = MultiEditTool::new();
 
-        let call = create_tool_call("test-11", "MultiEdit", json!({
-            "edits": [
-                {"old_string": "test", "new_string": "replacement"}
-            ]
-        }));
+        let call = create_tool_call(
+            "test-11",
+            "MultiEdit",
+            json!({
+                "edits": [
+                    {"old_string": "test", "new_string": "replacement"}
+                ]
+            }),
+        );
 
         let result = tool.execute(&call).await;
         assert!(result.is_err());
@@ -638,9 +699,13 @@ mod tests {
     async fn test_multi_edit_missing_edits() {
         let tool = MultiEditTool::new();
 
-        let call = create_tool_call("test-12", "MultiEdit", json!({
-            "file_path": "test.txt"
-        }));
+        let call = create_tool_call(
+            "test-12",
+            "MultiEdit",
+            json!({
+                "file_path": "test.txt"
+            }),
+        );
 
         let result = tool.execute(&call).await;
         assert!(result.is_err());
@@ -660,10 +725,14 @@ mod tests {
         let tool = MultiEditTool::with_working_directory(temp_dir.path());
         tool.mark_file_as_read(file_path.clone());
 
-        let call = create_tool_call("test-13", "MultiEdit", json!({
-            "file_path": "test.txt",
-            "edits": []
-        }));
+        let call = create_tool_call(
+            "test-13",
+            "MultiEdit",
+            json!({
+                "file_path": "test.txt",
+                "edits": []
+            }),
+        );
 
         let result = tool.execute(&call).await;
         assert!(result.is_err());
@@ -686,33 +755,48 @@ mod tests {
         let tool = MultiEditTool::new();
 
         // Valid call
-        let call = create_tool_call("test-14", "MultiEdit", json!({
-            "file_path": "/path/to/file.txt",
-            "edits": [
-                {"old_string": "test", "new_string": "replacement"}
-            ]
-        }));
+        let call = create_tool_call(
+            "test-14",
+            "MultiEdit",
+            json!({
+                "file_path": "/path/to/file.txt",
+                "edits": [
+                    {"old_string": "test", "new_string": "replacement"}
+                ]
+            }),
+        );
         assert!(tool.validate(&call).is_ok());
 
         // Invalid - missing file_path
-        let call = create_tool_call("test-15", "MultiEdit", json!({
-            "edits": [
-                {"old_string": "test", "new_string": "replacement"}
-            ]
-        }));
+        let call = create_tool_call(
+            "test-15",
+            "MultiEdit",
+            json!({
+                "edits": [
+                    {"old_string": "test", "new_string": "replacement"}
+                ]
+            }),
+        );
         assert!(tool.validate(&call).is_err());
 
         // Invalid - missing edits
-        let call = create_tool_call("test-16", "MultiEdit", json!({
-            "file_path": "/path/to/file.txt"
-        }));
+        let call = create_tool_call(
+            "test-16",
+            "MultiEdit",
+            json!({
+                "file_path": "/path/to/file.txt"
+            }),
+        );
         assert!(tool.validate(&call).is_err());
     }
 
     #[test]
     fn test_truncate_for_display() {
         assert_eq!(truncate_for_display("short", 10), "short");
-        assert_eq!(truncate_for_display("this is a longer string", 10), "this is a ...");
+        assert_eq!(
+            truncate_for_display("this is a longer string", 10),
+            "this is a ..."
+        );
         assert_eq!(truncate_for_display("exact", 5), "exact");
     }
 }

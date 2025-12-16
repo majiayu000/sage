@@ -5,10 +5,10 @@
 //! proper validation and security checks.
 
 use async_trait::async_trait;
-use std::path::PathBuf;
-use tokio::fs;
 use sage_core::tools::base::{FileSystemTool, Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
+use std::path::PathBuf;
+use tokio::fs;
 
 /// Tool for writing files to the filesystem
 ///
@@ -33,7 +33,9 @@ impl WriteTool {
     pub fn new() -> Self {
         Self {
             working_directory: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
-            read_files: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
+            read_files: std::sync::Arc::new(
+                std::sync::Mutex::new(std::collections::HashSet::new()),
+            ),
         }
     }
 
@@ -41,7 +43,9 @@ impl WriteTool {
     pub fn with_working_directory<P: Into<PathBuf>>(working_dir: P) -> Self {
         Self {
             working_directory: working_dir.into(),
-            read_files: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
+            read_files: std::sync::Arc::new(
+                std::sync::Mutex::new(std::collections::HashSet::new()),
+            ),
         }
     }
 
@@ -64,11 +68,7 @@ impl WriteTool {
     }
 
     /// Write content to a file
-    async fn write_file(
-        &self,
-        file_path: &str,
-        content: &str,
-    ) -> Result<ToolResult, ToolError> {
+    async fn write_file(&self, file_path: &str, content: &str) -> Result<ToolResult, ToolError> {
         let path = self.resolve_path(file_path);
 
         // Security check
@@ -90,20 +90,24 @@ impl WriteTool {
 
         // Create parent directories if needed
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).await.map_err(|e| {
-                ToolError::Io(e)
-            })?;
+            fs::create_dir_all(parent)
+                .await
+                .map_err(|e| ToolError::Io(e))?;
         }
 
         // Write the file
-        fs::write(&path, content).await.map_err(|e| {
-            ToolError::Io(e)
-        })?;
+        fs::write(&path, content)
+            .await
+            .map_err(|e| ToolError::Io(e))?;
 
         // Mark as read for future operations
         self.mark_file_as_read(path.clone());
 
-        let action = if file_exists { "overwritten" } else { "created" };
+        let action = if file_exists {
+            "overwritten"
+        } else {
+            "created"
+        };
         Ok(ToolResult::success(
             "",
             self.name(),
@@ -154,20 +158,23 @@ Security:
             self.name(),
             self.description(),
             vec![
-                ToolParameter::string("file_path", "The absolute path to the file to write (must be absolute, not relative)"),
+                ToolParameter::string(
+                    "file_path",
+                    "The absolute path to the file to write (must be absolute, not relative)",
+                ),
                 ToolParameter::string("content", "The content to write to the file"),
             ],
         )
     }
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
-        let file_path = call
-            .get_string("file_path")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'file_path' parameter".to_string()))?;
+        let file_path = call.get_string("file_path").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'file_path' parameter".to_string())
+        })?;
 
-        let content = call
-            .get_string("content")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'content' parameter".to_string()))?;
+        let content = call.get_string("content").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'content' parameter".to_string())
+        })?;
 
         let mut result = self.write_file(&file_path, &content).await?;
         result.call_id = call.id.clone();
@@ -176,13 +183,13 @@ Security:
 
     fn validate(&self, call: &ToolCall) -> Result<(), ToolError> {
         // Check required parameters
-        let file_path = call
-            .get_string("file_path")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'file_path' parameter".to_string()))?;
+        let file_path = call.get_string("file_path").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'file_path' parameter".to_string())
+        })?;
 
-        let _content = call
-            .get_string("content")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'content' parameter".to_string()))?;
+        let _content = call.get_string("content").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'content' parameter".to_string())
+        })?;
 
         // Validate that the path looks like an absolute path
         let path = std::path::Path::new(&file_path);
@@ -212,10 +219,10 @@ impl FileSystemTool for WriteTool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
     use serde_json::json;
-    use tokio::fs;
+    use std::collections::HashMap;
     use tempfile::TempDir;
+    use tokio::fs;
 
     fn create_tool_call(id: &str, name: &str, args: serde_json::Value) -> ToolCall {
         let arguments = if let serde_json::Value::Object(map) = args {
@@ -237,10 +244,14 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let tool = WriteTool::with_working_directory(temp_dir.path());
 
-        let call = create_tool_call("test-1", "Write", json!({
-            "file_path": "test.txt",
-            "content": "Hello, World!"
-        }));
+        let call = create_tool_call(
+            "test-1",
+            "Write",
+            json!({
+                "file_path": "test.txt",
+                "content": "Hello, World!"
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -257,10 +268,14 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let tool = WriteTool::with_working_directory(temp_dir.path());
 
-        let call = create_tool_call("test-2", "Write", json!({
-            "file_path": "subdir/nested/test.txt",
-            "content": "Nested file content"
-        }));
+        let call = create_tool_call(
+            "test-2",
+            "Write",
+            json!({
+                "file_path": "subdir/nested/test.txt",
+                "content": "Nested file content"
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -285,10 +300,14 @@ mod tests {
         // Mark file as read
         tool.mark_file_as_read(file_path.clone());
 
-        let call = create_tool_call("test-3", "Write", json!({
-            "file_path": "test.txt",
-            "content": "Updated content"
-        }));
+        let call = create_tool_call(
+            "test-3",
+            "Write",
+            json!({
+                "file_path": "test.txt",
+                "content": "Updated content"
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -309,10 +328,14 @@ mod tests {
 
         let tool = WriteTool::with_working_directory(temp_dir.path());
 
-        let call = create_tool_call("test-4", "Write", json!({
-            "file_path": "test.txt",
-            "content": "Attempting to overwrite"
-        }));
+        let call = create_tool_call(
+            "test-4",
+            "Write",
+            json!({
+                "file_path": "test.txt",
+                "content": "Attempting to overwrite"
+            }),
+        );
 
         // Should fail because file exists but hasn't been read
         let result = tool.execute(&call).await;
@@ -335,16 +358,24 @@ mod tests {
         let tool = WriteTool::new();
 
         // Missing file_path
-        let call = create_tool_call("test-5a", "Write", json!({
-            "content": "Some content"
-        }));
+        let call = create_tool_call(
+            "test-5a",
+            "Write",
+            json!({
+                "content": "Some content"
+            }),
+        );
         let result = tool.execute(&call).await;
         assert!(result.is_err());
 
         // Missing content
-        let call = create_tool_call("test-5b", "Write", json!({
-            "file_path": "test.txt"
-        }));
+        let call = create_tool_call(
+            "test-5b",
+            "Write",
+            json!({
+                "file_path": "test.txt"
+            }),
+        );
         let result = tool.execute(&call).await;
         assert!(result.is_err());
     }
@@ -354,10 +385,14 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let tool = WriteTool::with_working_directory(temp_dir.path());
 
-        let call = create_tool_call("test-6", "Write", json!({
-            "file_path": "empty.txt",
-            "content": ""
-        }));
+        let call = create_tool_call(
+            "test-6",
+            "Write",
+            json!({
+                "file_path": "empty.txt",
+                "content": ""
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -374,10 +409,14 @@ mod tests {
         let tool = WriteTool::with_working_directory(temp_dir.path());
 
         let multiline_content = "Line 1\nLine 2\nLine 3\n";
-        let call = create_tool_call("test-7", "Write", json!({
-            "file_path": "multiline.txt",
-            "content": multiline_content
-        }));
+        let call = create_tool_call(
+            "test-7",
+            "Write",
+            json!({
+                "file_path": "multiline.txt",
+                "content": multiline_content
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -395,10 +434,14 @@ mod tests {
 
         // Content with special characters
         let content = "Special chars: \t\r\n\0";
-        let call = create_tool_call("test-8", "Write", json!({
-            "file_path": "special.txt",
-            "content": content
-        }));
+        let call = create_tool_call(
+            "test-8",
+            "Write",
+            json!({
+                "file_path": "special.txt",
+                "content": content
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -430,16 +473,24 @@ mod tests {
         let tool = WriteTool::new();
 
         // Valid call
-        let call = create_tool_call("test-9", "Write", json!({
-            "file_path": "/absolute/path/test.txt",
-            "content": "Valid content"
-        }));
+        let call = create_tool_call(
+            "test-9",
+            "Write",
+            json!({
+                "file_path": "/absolute/path/test.txt",
+                "content": "Valid content"
+            }),
+        );
         assert!(tool.validate(&call).is_ok());
 
         // Invalid - missing parameters
-        let call = create_tool_call("test-10", "Write", json!({
-            "file_path": "/path/test.txt"
-        }));
+        let call = create_tool_call(
+            "test-10",
+            "Write",
+            json!({
+                "file_path": "/path/test.txt"
+            }),
+        );
         assert!(tool.validate(&call).is_err());
     }
 }

@@ -1,14 +1,10 @@
 //! Streaming response demonstration
-//! 
+//!
 //! This example shows how to use the streaming LLM response feature
 //! to provide real-time feedback to users.
 
-use sage_core::{
-    llm::{StreamChunk},
-    llm::streaming::stream_utils,
-    error::SageResult,
-};
 use futures::StreamExt;
+use sage_core::{error::SageResult, llm::StreamChunk, llm::streaming::stream_utils};
 use std::io::{self, Write};
 
 #[tokio::main]
@@ -22,10 +18,10 @@ async fn main() -> SageResult<()> {
     // Note: This is a demonstration of the streaming API structure
     // In a real implementation, you would need valid API credentials
     println!("📋 1. Setting up streaming client");
-    
+
     // Create a mock streaming demonstration
     demonstrate_streaming_concepts().await?;
-    
+
     println!("\n🎉 Streaming demo completed!");
     println!("💡 Key benefits of streaming:");
     println!("   • Real-time user feedback");
@@ -39,7 +35,7 @@ async fn main() -> SageResult<()> {
 /// Demonstrate streaming concepts with mock data
 async fn demonstrate_streaming_concepts() -> SageResult<()> {
     println!("🔄 2. Demonstrating streaming concepts");
-    
+
     // Create a mock stream of chunks
     let mock_chunks = vec![
         StreamChunk::content("Hello"),
@@ -60,7 +56,7 @@ async fn demonstrate_streaming_concepts() -> SageResult<()> {
                 total_tokens: 35,
                 cost_usd: Some(0.001),
             }),
-            Some("stop".to_string())
+            Some("stop".to_string()),
         ),
     ];
 
@@ -73,16 +69,17 @@ async fn demonstrate_streaming_concepts() -> SageResult<()> {
         if let Some(content) = &chunk.content {
             print!("{}", content);
             io::stdout().flush().unwrap();
-            
+
             // Simulate network delay
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         }
-        
+
         if chunk.is_final {
             println!("\n");
             if let Some(usage) = chunk.usage {
-                println!("📊 Final usage: {} tokens (${:.4})", 
-                    usage.total_tokens, 
+                println!(
+                    "📊 Final usage: {} tokens (${:.4})",
+                    usage.total_tokens,
                     usage.cost_usd.unwrap_or(0.0)
                 );
             }
@@ -117,12 +114,12 @@ async fn demonstrate_stream_utilities() -> SageResult<()> {
     ];
 
     let stream = Box::pin(stream::iter(chunks));
-    
+
     // Collect stream into complete response
     println!("🔄 Collecting stream into complete response...");
     let complete_response = stream_utils::collect_stream(stream).await?;
     println!("✅ Complete response: {}", complete_response.content);
-    
+
     // Demonstrate content filtering
     let chunks2 = vec![
         Ok(StreamChunk::content("Content chunk")),
@@ -130,10 +127,10 @@ async fn demonstrate_stream_utilities() -> SageResult<()> {
         Ok(StreamChunk::content(" more content")),
         Ok(StreamChunk::final_chunk(None, Some("stop".to_string()))),
     ];
-    
+
     let stream2 = Box::pin(stream::iter(chunks2));
     let content_stream = stream_utils::content_only(stream2);
-    
+
     println!("🔍 Content-only stream:");
     let mut content_stream = content_stream;
     while let Some(chunk_result) = content_stream.next().await {
@@ -153,13 +150,13 @@ async fn demonstrate_stream_utilities() -> SageResult<()> {
 /// Demonstrate SSE conversion
 async fn demonstrate_sse_conversion() -> SageResult<()> {
     use sage_core::llm::streaming::sse;
-    
+
     let chunks = vec![
         StreamChunk::content("Hello "),
         StreamChunk::content("world!"),
         StreamChunk::final_chunk(None, Some("stop".to_string())),
     ];
-    
+
     println!("📡 Converting chunks to SSE format:");
     for (i, chunk) in chunks.iter().enumerate() {
         let sse_event = sse::chunk_to_sse(chunk.clone())?;
@@ -175,7 +172,7 @@ async fn demonstrate_sse_conversion() -> SageResult<()> {
 async fn example_real_usage() -> SageResult<()> {
     // This is how you would use streaming in a real application
     // (requires valid API credentials)
-    
+
     /*
     let config = Config::load_from_file("config.json")?;
     let client = LLMClient::new(
@@ -183,7 +180,7 @@ async fn example_real_usage() -> SageResult<()> {
         config.get_provider_config("openai")?,
         config.model_parameters.clone(),
     )?;
-    
+
     let messages = vec![
         LLMMessage {
             role: MessageRole::User,
@@ -194,13 +191,13 @@ async fn example_real_usage() -> SageResult<()> {
             metadata: HashMap::new(),
         }
     ];
-    
+
     // Start streaming
     let mut stream = client.chat_stream(&messages, None).await?;
-    
+
     print!("🤖 AI: ");
     io::stdout().flush().unwrap();
-    
+
     // Process stream chunks
     while let Some(chunk_result) = stream.next().await {
         match chunk_result {
@@ -209,7 +206,7 @@ async fn example_real_usage() -> SageResult<()> {
                     print!("{}", content);
                     io::stdout().flush().unwrap();
                 }
-                
+
                 if chunk.is_final {
                     println!("\n");
                     if let Some(usage) = chunk.usage {
@@ -225,7 +222,7 @@ async fn example_real_usage() -> SageResult<()> {
         }
     }
     */
-    
+
     Ok(())
 }
 
@@ -234,12 +231,12 @@ async fn example_real_usage() -> SageResult<()> {
 async fn example_streaming_with_cache() -> SageResult<()> {
     /*
     use sage_core::cache::{CacheManager, CacheConfig, LLMCache};
-    
+
     // Set up cache
     let cache_config = CacheConfig::default();
     let cache_manager = CacheManager::new(cache_config)?;
     let llm_cache = LLMCache::new(cache_manager, None);
-    
+
     // Set up client
     let config = Config::load_from_file("config.json")?;
     let client = LLMClient::new(
@@ -247,7 +244,7 @@ async fn example_streaming_with_cache() -> SageResult<()> {
         config.get_provider_config("openai")?,
         config.model_parameters.clone(),
     )?;
-    
+
     let messages = vec![
         LLMMessage {
             role: MessageRole::User,
@@ -258,25 +255,25 @@ async fn example_streaming_with_cache() -> SageResult<()> {
             metadata: HashMap::new(),
         }
     ];
-    
+
     // Check cache first
     if let Some(cached_response) = llm_cache.get_response(
-        "openai", 
-        &client.model(), 
-        &messages, 
+        "openai",
+        &client.model(),
+        &messages,
         None
     ).await? {
         println!("📦 Using cached response: {}", cached_response.content);
         return Ok(());
     }
-    
+
     // Stream if not cached
     let mut stream = client.chat_stream(&messages, None).await?;
     let mut full_content = String::new();
-    
+
     print!("🤖 AI: ");
     io::stdout().flush().unwrap();
-    
+
     while let Some(chunk_result) = stream.next().await {
         match chunk_result {
             Ok(chunk) => {
@@ -285,10 +282,10 @@ async fn example_streaming_with_cache() -> SageResult<()> {
                     io::stdout().flush().unwrap();
                     full_content.push_str(content);
                 }
-                
+
                 if chunk.is_final {
                     println!("\n");
-                    
+
                     // Cache the complete response
                     let complete_response = sage_core::llm::LLMResponse {
                         content: full_content,
@@ -299,7 +296,7 @@ async fn example_streaming_with_cache() -> SageResult<()> {
                         id: None,
                         metadata: HashMap::new(),
                     };
-                    
+
                     llm_cache.cache_response(
                         "openai",
                         &client.model(),
@@ -308,7 +305,7 @@ async fn example_streaming_with_cache() -> SageResult<()> {
                         &complete_response,
                         None,
                     ).await?;
-                    
+
                     println!("💾 Response cached for future use");
                     break;
                 }
@@ -320,6 +317,6 @@ async fn example_streaming_with_cache() -> SageResult<()> {
         }
     }
     */
-    
+
     Ok(())
 }

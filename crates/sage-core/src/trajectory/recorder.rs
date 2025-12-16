@@ -192,12 +192,22 @@ impl TrajectoryRecorder {
                 tool_calls: if step.tool_calls.is_empty() {
                     None
                 } else {
-                    Some(step.tool_calls.iter().map(|call| serde_json::to_value(call).unwrap_or_default()).collect())
+                    Some(
+                        step.tool_calls
+                            .iter()
+                            .map(|call| serde_json::to_value(call).unwrap_or_default())
+                            .collect(),
+                    )
                 },
                 tool_results: if step.tool_results.is_empty() {
                     None
                 } else {
-                    Some(step.tool_results.iter().map(|result| serde_json::to_value(result).unwrap_or_default()).collect())
+                    Some(
+                        step.tool_results
+                            .iter()
+                            .map(|result| serde_json::to_value(result).unwrap_or_default())
+                            .collect(),
+                    )
                 },
                 reflection: None,
                 error: step.error.as_ref().map(|e| e.to_string()),
@@ -331,7 +341,7 @@ impl TrajectoryRecorder {
     ) -> SageResult<Vec<TrajectoryRecord>> {
         let all_ids = self.storage.list().await?;
         let mut results = Vec::new();
-        
+
         for id in all_ids {
             if let Some(record) = self.storage.load(id).await? {
                 if criteria.matches(&record) {
@@ -339,7 +349,7 @@ impl TrajectoryRecorder {
                 }
             }
         }
-        
+
         Ok(results)
     }
 

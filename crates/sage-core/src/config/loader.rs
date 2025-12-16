@@ -67,7 +67,10 @@ impl ConfigLoader {
 
         for source in &self.sources {
             let source_config = self.load_from_source(source)?;
-            tracing::debug!("Before merge - config provider: {}", config.default_provider);
+            tracing::debug!(
+                "Before merge - config provider: {}",
+                config.default_provider
+            );
             config.merge(source_config);
             tracing::debug!("After merge - config provider: {}", config.default_provider);
         }
@@ -84,23 +87,23 @@ impl ConfigLoader {
                 let config = self.load_from_file(path)?;
                 tracing::debug!("File config provider: {}", config.default_provider);
                 Ok(config)
-            },
+            }
             ConfigSource::Environment => {
                 tracing::debug!("Loading config from environment");
                 let config = self.load_from_env()?;
                 tracing::debug!("Env config provider: {}", config.default_provider);
                 Ok(config)
-            },
+            }
             ConfigSource::CommandLine(args) => {
                 tracing::debug!("Loading config from command line");
                 self.load_from_args(args)
-            },
+            }
             ConfigSource::Default => {
                 tracing::debug!("Loading default config");
                 let config = Config::default();
                 tracing::debug!("Default config provider: {}", config.default_provider);
                 Ok(config)
-            },
+            }
         }
     }
 
@@ -114,18 +117,12 @@ impl ConfigLoader {
             .map_err(|e| SageError::config(format!("Failed to read config file: {}", e)))?;
 
         let config: Config = match path.extension().and_then(|s| s.to_str()) {
-            Some("toml") => {
-                toml::from_str(&content)
-                    .map_err(|e| SageError::config(format!("Failed to parse TOML config: {}", e)))?
-            }
-            Some("yaml") | Some("yml") => {
-                serde_yaml::from_str(&content)
-                    .map_err(|e| SageError::config(format!("Failed to parse YAML config: {}", e)))?
-            }
-            _ => {
-                serde_json::from_str(&content)
-                    .map_err(|e| SageError::config(format!("Failed to parse JSON config: {}", e)))?
-            }
+            Some("toml") => toml::from_str(&content)
+                .map_err(|e| SageError::config(format!("Failed to parse TOML config: {}", e)))?,
+            Some("yaml") | Some("yml") => serde_yaml::from_str(&content)
+                .map_err(|e| SageError::config(format!("Failed to parse YAML config: {}", e)))?,
+            _ => serde_json::from_str(&content)
+                .map_err(|e| SageError::config(format!("Failed to parse JSON config: {}", e)))?,
         };
 
         Ok(config)
@@ -135,7 +132,7 @@ impl ConfigLoader {
     fn load_from_env(&self) -> SageResult<Config> {
         let mut config = Config {
             default_provider: String::new(), // Don't set default here
-            max_steps: 0, // Don't set default here
+            max_steps: 0,                    // Don't set default here
             total_token_budget: None,
             model_providers: HashMap::new(),
             lakeview_config: None,
@@ -158,7 +155,8 @@ impl ConfigLoader {
         }
 
         if let Ok(max_steps) = env::var("SAGE_MAX_STEPS") {
-            config.max_steps = max_steps.parse()
+            config.max_steps = max_steps
+                .parse()
                 .map_err(|_| SageError::config("Invalid SAGE_MAX_STEPS value"))?;
         }
 
@@ -175,8 +173,7 @@ impl ConfigLoader {
 
         // Load Lakeview settings
         if let Ok(enable_lakeview) = env::var("SAGE_ENABLE_LAKEVIEW") {
-            config.enable_lakeview = enable_lakeview.parse()
-                .unwrap_or(false);
+            config.enable_lakeview = enable_lakeview.parse().unwrap_or(false);
         }
 
         Ok(config)
@@ -212,15 +209,17 @@ impl ConfigLoader {
 
         // Temperature
         if let Ok(temp) = env::var(format!("{}_TEMPERATURE", env_prefix)) {
-            params.temperature = Some(temp.parse()
-                .map_err(|_| SageError::config(format!("Invalid {}_TEMPERATURE value", env_prefix)))?);
+            params.temperature = Some(temp.parse().map_err(|_| {
+                SageError::config(format!("Invalid {}_TEMPERATURE value", env_prefix))
+            })?);
             has_config = true;
         }
 
         // Max tokens
         if let Ok(max_tokens) = env::var(format!("{}_MAX_TOKENS", env_prefix)) {
-            params.max_tokens = Some(max_tokens.parse()
-                .map_err(|_| SageError::config(format!("Invalid {}_MAX_TOKENS value", env_prefix)))?);
+            params.max_tokens = Some(max_tokens.parse().map_err(|_| {
+                SageError::config(format!("Invalid {}_MAX_TOKENS value", env_prefix))
+            })?);
             has_config = true;
         }
 
@@ -235,7 +234,7 @@ impl ConfigLoader {
     fn load_from_args(&self, args: &HashMap<String, String>) -> SageResult<Config> {
         let mut config = Config {
             default_provider: String::new(), // Don't set default here
-            max_steps: 0, // Don't set default here
+            max_steps: 0,                    // Don't set default here
             total_token_budget: None,
             model_providers: HashMap::new(),
             lakeview_config: None,
@@ -259,7 +258,8 @@ impl ConfigLoader {
         if let Some(model) = args.get("model") {
             // Update the model for the current provider
             let provider = config.default_provider.clone();
-            let mut params = config.model_providers
+            let mut params = config
+                .model_providers
                 .get(&provider)
                 .cloned()
                 .unwrap_or_default();
@@ -269,7 +269,8 @@ impl ConfigLoader {
 
         if let Some(api_key) = args.get("api_key") {
             let provider = config.default_provider.clone();
-            let mut params = config.model_providers
+            let mut params = config
+                .model_providers
                 .get(&provider)
                 .cloned()
                 .unwrap_or_default();
@@ -279,7 +280,8 @@ impl ConfigLoader {
 
         if let Some(base_url) = args.get("model_base_url") {
             let provider = config.default_provider.clone();
-            let mut params = config.model_providers
+            let mut params = config
+                .model_providers
                 .get(&provider)
                 .cloned()
                 .unwrap_or_default();
@@ -288,7 +290,8 @@ impl ConfigLoader {
         }
 
         if let Some(max_steps) = args.get("max_steps") {
-            config.max_steps = max_steps.parse()
+            config.max_steps = max_steps
+                .parse()
                 .map_err(|_| SageError::config("Invalid max_steps value"))?;
         }
 
@@ -330,9 +333,7 @@ pub fn load_config_with_overrides(
     config_file: Option<&str>,
     overrides: HashMap<String, String>,
 ) -> SageResult<Config> {
-    let mut loader = ConfigLoader::new()
-        .with_defaults()
-        .with_env();
+    let mut loader = ConfigLoader::new().with_defaults().with_env();
 
     if let Some(file) = config_file {
         loader = loader.with_file(file);
@@ -342,7 +343,5 @@ pub fn load_config_with_overrides(
             .with_file("sage_config.toml");
     }
 
-    loader
-        .with_args(overrides)
-        .load()
+    loader.with_args(overrides).load()
 }

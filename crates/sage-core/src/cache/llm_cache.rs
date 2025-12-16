@@ -1,6 +1,6 @@
 //! LLM response caching implementation
 
-use super::{CacheManager, CacheKey, types::hash_utils};
+use super::{CacheKey, CacheManager, types::hash_utils};
 use crate::error::SageResult;
 use crate::llm::{LLMMessage, LLMResponse};
 use crate::tools::ToolSchema;
@@ -99,7 +99,7 @@ impl LLMCache {
     ) -> CacheKey {
         let messages_hash = hash_utils::hash_messages(messages);
         let tools_hash = tools.map(|t| hash_utils::hash_tools(t));
-        
+
         CacheKey::llm_response(provider, model, messages_hash, tools_hash)
     }
 }
@@ -202,7 +202,8 @@ impl CachedLLMClient<crate::llm::LLMClient> {
 
         // Try to get from cache first
         if self.enable_read_cache {
-            if let Some(cached_response) = self.cache
+            if let Some(cached_response) = self
+                .cache
                 .get_response(&provider, &model, messages, tools)
                 .await?
             {
@@ -235,7 +236,10 @@ pub mod warming {
     ) -> SageResult<()> {
         for (provider, model, messages, tools) in requests {
             // Check if already cached
-            if !cache.is_cached(provider, model, messages, tools.as_deref()).await? {
+            if !cache
+                .is_cached(provider, model, messages, tools.as_deref())
+                .await?
+            {
                 // This would typically involve making actual LLM calls
                 // For now, we just mark the cache as ready for these requests
                 tracing::info!(
@@ -252,7 +256,13 @@ pub mod warming {
     /// Preload frequently used responses
     pub async fn preload_responses(
         cache: &LLMCache,
-        responses: &[(String, String, Vec<LLMMessage>, Option<Vec<ToolSchema>>, LLMResponse)],
+        responses: &[(
+            String,
+            String,
+            Vec<LLMMessage>,
+            Option<Vec<ToolSchema>>,
+            LLMResponse,
+        )],
     ) -> SageResult<()> {
         for (provider, model, messages, tools, response) in responses {
             cache

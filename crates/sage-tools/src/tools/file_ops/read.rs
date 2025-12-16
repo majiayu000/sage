@@ -1,10 +1,10 @@
 //! File reading tool with line numbers and pagination
 
 use async_trait::async_trait;
-use std::path::PathBuf;
-use tokio::fs;
 use sage_core::tools::base::{FileSystemTool, Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
+use std::path::PathBuf;
+use tokio::fs;
 
 /// Maximum line length before truncation
 const MAX_LINE_LENGTH: usize = 2000;
@@ -153,17 +153,16 @@ impl ReadTool {
         // Handle empty file or offset beyond content
         if total_lines == 0 {
             // Empty file - return success with empty output
-            let result = ToolResult::success(
-                "",
-                self.name(),
-                "",
-            )
-            .with_metadata("file_path", serde_json::Value::String(file_path.to_string()))
-            .with_metadata("total_lines", serde_json::Value::Number(0.into()))
-            .with_metadata("lines_read", serde_json::Value::Number(0.into()))
-            .with_metadata("start_line", serde_json::Value::Number(0.into()))
-            .with_metadata("end_line", serde_json::Value::Number(0.into()))
-            .with_metadata("truncated", serde_json::Value::Bool(false));
+            let result = ToolResult::success("", self.name(), "")
+                .with_metadata(
+                    "file_path",
+                    serde_json::Value::String(file_path.to_string()),
+                )
+                .with_metadata("total_lines", serde_json::Value::Number(0.into()))
+                .with_metadata("lines_read", serde_json::Value::Number(0.into()))
+                .with_metadata("start_line", serde_json::Value::Number(0.into()))
+                .with_metadata("end_line", serde_json::Value::Number(0.into()))
+                .with_metadata("truncated", serde_json::Value::Bool(false));
 
             return Ok(result);
         }
@@ -171,8 +170,7 @@ impl ReadTool {
         if start_line >= total_lines {
             return Err(ToolError::InvalidArguments(format!(
                 "Offset {} exceeds total lines {} in file",
-                start_line,
-                total_lines
+                start_line, total_lines
             )));
         }
 
@@ -186,7 +184,11 @@ impl ReadTool {
             .map(|(idx, line)| {
                 let line_num = start_line + idx + 1; // 1-indexed
                 let truncated_line = if line.len() > MAX_LINE_LENGTH {
-                    format!("{}... [line truncated, {} chars total]", &line[..MAX_LINE_LENGTH], line.len())
+                    format!(
+                        "{}... [line truncated, {} chars total]",
+                        &line[..MAX_LINE_LENGTH],
+                        line.len()
+                    )
                 } else {
                     line.to_string()
                 };
@@ -198,17 +200,22 @@ impl ReadTool {
 
         // Build metadata about the read operation
         let truncated = end_line < total_lines;
-        let mut result = ToolResult::success(
-            "",
-            self.name(),
-            output,
-        );
+        let mut result = ToolResult::success("", self.name(), output);
 
         result = result
-            .with_metadata("file_path", serde_json::Value::String(file_path.to_string()))
+            .with_metadata(
+                "file_path",
+                serde_json::Value::String(file_path.to_string()),
+            )
             .with_metadata("total_lines", serde_json::Value::Number(total_lines.into()))
-            .with_metadata("lines_read", serde_json::Value::Number((end_line - start_line).into()))
-            .with_metadata("start_line", serde_json::Value::Number((start_line + 1).into()))
+            .with_metadata(
+                "lines_read",
+                serde_json::Value::Number((end_line - start_line).into()),
+            )
+            .with_metadata(
+                "start_line",
+                serde_json::Value::Number((start_line + 1).into()),
+            )
             .with_metadata("end_line", serde_json::Value::Number(end_line.into()))
             .with_metadata("truncated", serde_json::Value::Bool(truncated));
 
@@ -269,16 +276,21 @@ Notes:
             self.description(),
             vec![
                 ToolParameter::string("file_path", "Absolute path to the file to read"),
-                ToolParameter::number("offset", "Line number to start reading from (0-indexed, default: 0)").optional(),
-                ToolParameter::number("limit", "Maximum number of lines to read (default: 2000)").optional(),
+                ToolParameter::number(
+                    "offset",
+                    "Line number to start reading from (0-indexed, default: 0)",
+                )
+                .optional(),
+                ToolParameter::number("limit", "Maximum number of lines to read (default: 2000)")
+                    .optional(),
             ],
         )
     }
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
-        let file_path = call
-            .get_string("file_path")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'file_path' parameter".to_string()))?;
+        let file_path = call.get_string("file_path").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'file_path' parameter".to_string())
+        })?;
 
         let offset = call.get_number("offset").map(|n| n as usize);
         let limit = call.get_number("limit").map(|n| n as usize);
@@ -289,9 +301,9 @@ Notes:
     }
 
     fn validate(&self, call: &ToolCall) -> Result<(), ToolError> {
-        let _file_path = call
-            .get_string("file_path")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'file_path' parameter".to_string()))?;
+        let _file_path = call.get_string("file_path").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'file_path' parameter".to_string())
+        })?;
 
         // Validate offset if provided
         if let Some(offset) = call.get_number("offset") {
@@ -341,8 +353,8 @@ impl FileSystemTool for ReadTool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
     use serde_json::json;
+    use std::collections::HashMap;
     use tempfile::TempDir;
 
     fn create_tool_call(id: &str, name: &str, args: serde_json::Value) -> ToolCall {
@@ -370,9 +382,13 @@ mod tests {
         fs::write(&file_path, content).await.unwrap();
 
         let tool = ReadTool::with_working_directory(temp_dir.path());
-        let call = create_tool_call("test-1", "Read", json!({
-            "file_path": "test.txt",
-        }));
+        let call = create_tool_call(
+            "test-1",
+            "Read",
+            json!({
+                "file_path": "test.txt",
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -392,10 +408,14 @@ mod tests {
         fs::write(&file_path, lines.join("\n")).await.unwrap();
 
         let tool = ReadTool::with_working_directory(temp_dir.path());
-        let call = create_tool_call("test-2", "Read", json!({
-            "file_path": "test.txt",
-            "offset": 5,
-        }));
+        let call = create_tool_call(
+            "test-2",
+            "Read",
+            json!({
+                "file_path": "test.txt",
+                "offset": 5,
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -414,10 +434,14 @@ mod tests {
         fs::write(&file_path, lines.join("\n")).await.unwrap();
 
         let tool = ReadTool::with_working_directory(temp_dir.path());
-        let call = create_tool_call("test-3", "Read", json!({
-            "file_path": "test.txt",
-            "limit": 3,
-        }));
+        let call = create_tool_call(
+            "test-3",
+            "Read",
+            json!({
+                "file_path": "test.txt",
+                "limit": 3,
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -439,11 +463,15 @@ mod tests {
         fs::write(&file_path, lines.join("\n")).await.unwrap();
 
         let tool = ReadTool::with_working_directory(temp_dir.path());
-        let call = create_tool_call("test-4", "Read", json!({
-            "file_path": "test.txt",
-            "offset": 10,
-            "limit": 5,
-        }));
+        let call = create_tool_call(
+            "test-4",
+            "Read",
+            json!({
+                "file_path": "test.txt",
+                "offset": 10,
+                "limit": 5,
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -464,9 +492,13 @@ mod tests {
         fs::write(&file_path, &long_line).await.unwrap();
 
         let tool = ReadTool::with_working_directory(temp_dir.path());
-        let call = create_tool_call("test-5", "Read", json!({
-            "file_path": "test.txt",
-        }));
+        let call = create_tool_call(
+            "test-5",
+            "Read",
+            json!({
+                "file_path": "test.txt",
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -480,9 +512,13 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let tool = ReadTool::with_working_directory(temp_dir.path());
 
-        let call = create_tool_call("test-6", "Read", json!({
-            "file_path": "nonexistent.txt",
-        }));
+        let call = create_tool_call(
+            "test-6",
+            "Read",
+            json!({
+                "file_path": "nonexistent.txt",
+            }),
+        );
 
         let result = tool.execute(&call).await;
         assert!(result.is_err());
@@ -497,9 +533,13 @@ mod tests {
         fs::create_dir(&sub_dir).await.unwrap();
 
         let tool = ReadTool::with_working_directory(temp_dir.path());
-        let call = create_tool_call("test-7", "Read", json!({
-            "file_path": "subdir",
-        }));
+        let call = create_tool_call(
+            "test-7",
+            "Read",
+            json!({
+                "file_path": "subdir",
+            }),
+        );
 
         let result = tool.execute(&call).await;
         assert!(result.is_err());
@@ -517,28 +557,51 @@ mod tests {
         fs::write(&file_path, lines.join("\n")).await.unwrap();
 
         let tool = ReadTool::with_working_directory(temp_dir.path());
-        let call = create_tool_call("test-8", "Read", json!({
-            "file_path": "test.txt",
-        }));
+        let call = create_tool_call(
+            "test-8",
+            "Read",
+            json!({
+                "file_path": "test.txt",
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
 
         // Check metadata
-        assert_eq!(result.metadata.get("total_lines").and_then(|v| v.as_u64()), Some(5));
-        assert_eq!(result.metadata.get("lines_read").and_then(|v| v.as_u64()), Some(5));
-        assert_eq!(result.metadata.get("start_line").and_then(|v| v.as_u64()), Some(1));
-        assert_eq!(result.metadata.get("end_line").and_then(|v| v.as_u64()), Some(5));
-        assert_eq!(result.metadata.get("truncated").and_then(|v| v.as_bool()), Some(false));
+        assert_eq!(
+            result.metadata.get("total_lines").and_then(|v| v.as_u64()),
+            Some(5)
+        );
+        assert_eq!(
+            result.metadata.get("lines_read").and_then(|v| v.as_u64()),
+            Some(5)
+        );
+        assert_eq!(
+            result.metadata.get("start_line").and_then(|v| v.as_u64()),
+            Some(1)
+        );
+        assert_eq!(
+            result.metadata.get("end_line").and_then(|v| v.as_u64()),
+            Some(5)
+        );
+        assert_eq!(
+            result.metadata.get("truncated").and_then(|v| v.as_bool()),
+            Some(false)
+        );
     }
 
     #[tokio::test]
     async fn test_read_tool_validation_negative_offset() {
         let tool = ReadTool::new();
-        let call = create_tool_call("test-9", "Read", json!({
-            "file_path": "test.txt",
-            "offset": -1,
-        }));
+        let call = create_tool_call(
+            "test-9",
+            "Read",
+            json!({
+                "file_path": "test.txt",
+                "offset": -1,
+            }),
+        );
 
         let result = tool.validate(&call);
         assert!(result.is_err());
@@ -547,10 +610,14 @@ mod tests {
     #[tokio::test]
     async fn test_read_tool_validation_zero_limit() {
         let tool = ReadTool::new();
-        let call = create_tool_call("test-10", "Read", json!({
-            "file_path": "test.txt",
-            "limit": 0,
-        }));
+        let call = create_tool_call(
+            "test-10",
+            "Read",
+            json!({
+                "file_path": "test.txt",
+                "limit": 0,
+            }),
+        );
 
         let result = tool.validate(&call);
         assert!(result.is_err());
@@ -559,10 +626,14 @@ mod tests {
     #[tokio::test]
     async fn test_read_tool_validation_excessive_limit() {
         let tool = ReadTool::new();
-        let call = create_tool_call("test-11", "Read", json!({
-            "file_path": "test.txt",
-            "limit": 20000,
-        }));
+        let call = create_tool_call(
+            "test-11",
+            "Read",
+            json!({
+                "file_path": "test.txt",
+                "limit": 20000,
+            }),
+        );
 
         let result = tool.validate(&call);
         assert!(result.is_err());

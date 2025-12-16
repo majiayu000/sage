@@ -84,8 +84,8 @@ tool to transition back to implementation mode.
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
     use serde_json::json;
+    use std::collections::HashMap;
 
     fn create_tool_call(id: &str, name: &str, args: serde_json::Value) -> ToolCall {
         let arguments = if let serde_json::Value::Object(map) = args {
@@ -129,9 +129,13 @@ mod tests {
     async fn test_enter_plan_mode_with_extra_params() {
         let tool = EnterPlanModeTool::new();
         // Extra parameters should be ignored
-        let call = create_tool_call("test-3", "enter_plan_mode", json!({
-            "extra_param": "should be ignored"
-        }));
+        let call = create_tool_call(
+            "test-3",
+            "enter_plan_mode",
+            json!({
+                "extra_param": "should be ignored"
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);

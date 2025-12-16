@@ -1,11 +1,11 @@
-use sage_core::interrupt::{global_interrupt_manager, InterruptReason};
+use futures::stream::StreamExt;
+use sage_core::interrupt::{InterruptReason, global_interrupt_manager};
 use signal_hook::consts::SIGINT;
 use signal_hook_tokio::Signals;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
-use tokio::task::JoinHandle;
-use futures::stream::StreamExt;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::{Duration, Instant};
+use tokio::task::JoinHandle;
 
 /// Application state for signal handling
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -75,7 +75,8 @@ impl SignalHandler {
                                         if let Ok(mut last_time) = last_ctrl_c_time.lock() {
                                             if let Some(last) = *last_time {
                                                 // Check if this is within 2 seconds of the last Ctrl+C
-                                                if now.duration_since(last) < Duration::from_secs(2) {
+                                                if now.duration_since(last) < Duration::from_secs(2)
+                                                {
                                                     // Second Ctrl+C within 2 seconds - exit
                                                     should_exit = true;
                                                 } else {
@@ -93,7 +94,9 @@ impl SignalHandler {
                                             eprintln!("\nGoodbye!");
                                             std::process::exit(0);
                                         } else {
-                                            eprintln!("\n💡 Press Ctrl+C again within 2 seconds to exit, or continue typing...");
+                                            eprintln!(
+                                                "\n💡 Press Ctrl+C again within 2 seconds to exit, or continue typing..."
+                                            );
                                         }
                                     }
                                     AppState::ExecutingTask => {
@@ -161,7 +164,10 @@ impl SignalHandler {
     /// Get the current application state
     #[allow(dead_code)]
     pub fn get_app_state(&self) -> AppState {
-        self.app_state.lock().map(|state| *state).unwrap_or(AppState::WaitingForInput)
+        self.app_state
+            .lock()
+            .map(|state| *state)
+            .unwrap_or(AppState::WaitingForInput)
     }
 }
 
@@ -181,17 +187,17 @@ impl Drop for SignalHandler {
 }
 
 /// Global signal handler instance
-static GLOBAL_SIGNAL_HANDLER: std::sync::OnceLock<std::sync::Mutex<SignalHandler>> = std::sync::OnceLock::new();
+static GLOBAL_SIGNAL_HANDLER: std::sync::OnceLock<std::sync::Mutex<SignalHandler>> =
+    std::sync::OnceLock::new();
 
 /// Get the global signal handler
 pub fn global_signal_handler() -> &'static std::sync::Mutex<SignalHandler> {
-    GLOBAL_SIGNAL_HANDLER.get_or_init(|| {
-        std::sync::Mutex::new(SignalHandler::new())
-    })
+    GLOBAL_SIGNAL_HANDLER.get_or_init(|| std::sync::Mutex::new(SignalHandler::new()))
 }
 
 /// Start global signal handling
-pub async fn start_global_signal_handling() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+pub async fn start_global_signal_handling() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
+{
     if let Ok(mut handler) = global_signal_handler().lock() {
         handler.start().await
     } else {
@@ -252,7 +258,6 @@ pub fn get_global_app_state() -> AppState {
 mod tests {
     use super::*;
 
-
     #[tokio::test]
     async fn test_signal_handler_creation() {
         let handler = SignalHandler::new();
@@ -262,11 +267,11 @@ mod tests {
     #[tokio::test]
     async fn test_signal_handler_start_stop() {
         let mut handler = SignalHandler::new();
-        
+
         // Start signal handling
         assert!(handler.start().await.is_ok());
         assert!(handler.is_active());
-        
+
         // Stop signal handling
         handler.stop().await;
         assert!(!handler.is_active());
@@ -277,13 +282,13 @@ mod tests {
         // Test global signal handler functions
         assert!(start_global_signal_handling().await.is_ok());
         assert!(is_global_signal_handling_active());
-        
+
         disable_global_signal_handling();
         assert!(!is_global_signal_handling_active());
-        
+
         enable_global_signal_handling();
         assert!(is_global_signal_handling_active());
-        
+
         stop_global_signal_handling().await;
         assert!(!is_global_signal_handling_active());
     }

@@ -92,11 +92,19 @@ pub struct ReactiveResponse {
 #[async_trait]
 pub trait ReactiveAgent: Send + Sync {
     /// Process a user request and return a response
-    async fn process_request(&mut self, request: &str, context: Option<TaskMetadata>) -> SageResult<ReactiveResponse>;
-    
+    async fn process_request(
+        &mut self,
+        request: &str,
+        context: Option<TaskMetadata>,
+    ) -> SageResult<ReactiveResponse>;
+
     /// Continue a conversation with additional context
-    async fn continue_conversation(&mut self, previous: &ReactiveResponse, additional_input: &str) -> SageResult<ReactiveResponse>;
-    
+    async fn continue_conversation(
+        &mut self,
+        previous: &ReactiveResponse,
+        additional_input: &str,
+    ) -> SageResult<ReactiveResponse>;
+
     /// Get agent configuration
     fn config(&self) -> &Config;
 }
@@ -121,10 +129,11 @@ impl ClaudeStyleAgent {
         // Initialize LLM client
         let default_params = config.default_model_parameters()?;
         let provider_name = config.get_default_provider();
-        
-        let provider: LLMProvider = provider_name.parse()
+
+        let provider: LLMProvider = provider_name
+            .parse()
             .map_err(|_| SageError::config(format!("Invalid provider: {}", provider_name)))?;
-            
+
         let mut provider_config = crate::config::provider::ProviderConfig::new(provider_name)
             .with_api_key(default_params.get_api_key().unwrap_or_default())
             .with_timeout(60)
@@ -134,13 +143,13 @@ impl ClaudeStyleAgent {
         if let Some(base_url) = &default_params.base_url {
             provider_config = provider_config.with_base_url(base_url.clone());
         }
-            
+
         let model_params = default_params.to_llm_parameters();
         let llm_client = LLMClient::new(provider, provider_config, model_params)?;
-        
+
         // Initialize batch tool executor
         let batch_executor = BatchToolExecutor::new();
-        
+
         Ok(Self {
             id: Uuid::new_v4(),
             config,
@@ -151,19 +160,18 @@ impl ClaudeStyleAgent {
             current_step: 0,
         })
     }
-    
+
     /// Create system message for Claude Code style interaction
     fn create_system_message(&self, context: Option<&TaskMetadata>) -> LLMMessage {
         let context_info = if let Some(ctx) = context {
             format!(
                 "\n# Current Task Context\n{}\n# Working Directory\n{}\n",
-                ctx.description,
-                ctx.working_dir
+                ctx.description, ctx.working_dir
             )
         } else {
             String::new()
         };
-        
+
         let system_prompt = format!(
             r#"# Role
 You are Sage Agent, an agentic coding AI assistant with access to the developer's codebase.
@@ -195,10 +203,10 @@ sequential requests."#,
             context_info,
             self.get_tools_description()
         );
-        
+
         LLMMessage::system(system_prompt)
     }
-    
+
     /// Get description of available tools
     fn get_tools_description(&self) -> String {
         let schemas = self.batch_executor.get_tool_schemas();
@@ -223,7 +231,10 @@ sequential requests."#,
         }
 
         // Check token budget
-        if self.token_usage.is_budget_exceeded(self.config.total_token_budget) {
+        if self
+            .token_usage
+            .is_budget_exceeded(self.config.total_token_budget)
+        {
             return Err(SageError::agent(format!(
                 "Token budget ({}) exceeded. Total tokens used: {} (input: {}, output: {})",
                 self.config.total_token_budget.unwrap_or(0),
@@ -254,9 +265,13 @@ sequential requests."#,
     pub fn get_current_step(&self) -> u32 {
         self.current_step
     }
-    
+
     /// Execute a single request-response cycle
-    async fn execute_single_turn(&mut self, request: &str, context: Option<&TaskMetadata>) -> SageResult<ReactiveResponse> {
+    async fn execute_single_turn(
+        &mut self,
+        request: &str,
+        context: Option<&TaskMetadata>,
+    ) -> SageResult<ReactiveResponse> {
         // Check if we can continue (step and budget limits)
         self.can_continue()?;
 
@@ -279,12 +294,10 @@ sequential requests."#,
 
         // Track token usage from LLM response
         if let Some(usage) = &llm_response.usage {
-            self.token_usage.add(
-                usage.prompt_tokens as u64,
-                usage.completion_tokens as u64,
-            );
+            self.token_usage
+                .add(usage.prompt_tokens as u64, usage.completion_tokens as u64);
         }
-        
+
         // Update conversation history
         let mut assistant_msg = LLMMessage::assistant(&llm_response.content);
         if !llm_response.tool_calls.is_empty() {
@@ -292,37 +305,42 @@ sequential requests."#,
         }
         self.conversation_history.push(LLMMessage::user(request));
         self.conversation_history.push(assistant_msg);
-        
+
         // Execute tools if present (batch execution)
         let tool_results = if !llm_response.tool_calls.is_empty() {
-            self.batch_executor.execute_batch(&llm_response.tool_calls).await
+            self.batch_executor
+                .execute_batch(&llm_response.tool_calls)
+                .await
         } else {
             Vec::new()
         };
-        
+
         // Add tool results to conversation history
         if !tool_results.is_empty() {
             for result in &tool_results {
                 let content = if result.success {
                     result.output.as_deref().unwrap_or("")
                 } else {
-                    &format!("Error: {}", result.error.as_deref().unwrap_or("Unknown error"))
+                    &format!(
+                        "Error: {}",
+                        result.error.as_deref().unwrap_or("Unknown error")
+                    )
                 };
                 self.conversation_history.push(LLMMessage::user(content));
             }
         }
-        
+
         // Determine if task is completed
-        let completed = llm_response.indicates_completion() || 
-                      tool_results.iter().any(|r| r.tool_name == "task_done");
-        
+        let completed = llm_response.indicates_completion()
+            || tool_results.iter().any(|r| r.tool_name == "task_done");
+
         // Generate continuation prompt if needed
         let continuation_prompt = if !completed && !tool_results.is_empty() {
             Some("Continue with the next step based on the tool results.".to_string())
         } else {
             None
         };
-        
+
         Ok(ReactiveResponse {
             id: response_id,
             request: request.to_string(),
@@ -334,11 +352,11 @@ sequential requests."#,
             continuation_prompt,
         })
     }
-    
+
     /// Keep conversation history manageable
     fn trim_conversation_history(&mut self) {
         const MAX_HISTORY_LENGTH: usize = 20; // Keep last 20 messages
-        
+
         if self.conversation_history.len() > MAX_HISTORY_LENGTH {
             let keep_from = self.conversation_history.len() - MAX_HISTORY_LENGTH;
             self.conversation_history = self.conversation_history[keep_from..].to_vec();
@@ -348,22 +366,30 @@ sequential requests."#,
 
 #[async_trait]
 impl ReactiveAgent for ClaudeStyleAgent {
-    async fn process_request(&mut self, request: &str, context: Option<TaskMetadata>) -> SageResult<ReactiveResponse> {
+    async fn process_request(
+        &mut self,
+        request: &str,
+        context: Option<TaskMetadata>,
+    ) -> SageResult<ReactiveResponse> {
         // Clear history for new request if context indicates new task
         if context.is_some() {
             self.conversation_history.clear();
         }
-        
+
         self.execute_single_turn(request, context.as_ref()).await
     }
-    
-    async fn continue_conversation(&mut self, _previous: &ReactiveResponse, additional_input: &str) -> SageResult<ReactiveResponse> {
+
+    async fn continue_conversation(
+        &mut self,
+        _previous: &ReactiveResponse,
+        additional_input: &str,
+    ) -> SageResult<ReactiveResponse> {
         // Trim history to prevent context overflow
         self.trim_conversation_history();
-        
+
         self.execute_single_turn(additional_input, None).await
     }
-    
+
     fn config(&self) -> &Config {
         &self.config
     }
@@ -380,34 +406,43 @@ impl ReactiveExecutionManager {
         let agent = ClaudeStyleAgent::new(config)?;
         Ok(Self { agent })
     }
-    
+
     /// Execute a task using Claude Code style workflow
     pub async fn execute_task(&mut self, task: TaskMetadata) -> SageResult<Vec<ReactiveResponse>> {
         let mut responses = Vec::new();
         let current_request = task.description.clone();
         let mut context = Some(task);
-        
+
         // Initial request processing
-        let response = self.agent.process_request(&current_request, context.take()).await?;
+        let response = self
+            .agent
+            .process_request(&current_request, context.take())
+            .await?;
         let completed = response.completed;
         responses.push(response);
-        
+
         // Continue if not completed and there's a continuation prompt
         if !completed {
             if let Some(continuation) = &responses.last().unwrap().continuation_prompt {
-                let follow_up = self.agent.continue_conversation(responses.last().unwrap(), continuation).await?;
+                let follow_up = self
+                    .agent
+                    .continue_conversation(responses.last().unwrap(), continuation)
+                    .await?;
                 responses.push(follow_up);
             }
         }
-        
+
         Ok(responses)
     }
-    
+
     /// Interactive conversation mode
-    pub async fn interactive_mode(&mut self, initial_request: &str) -> SageResult<ReactiveResponse> {
+    pub async fn interactive_mode(
+        &mut self,
+        initial_request: &str,
+    ) -> SageResult<ReactiveResponse> {
         self.agent.process_request(initial_request, None).await
     }
-    
+
     /// Continue interactive conversation
     pub async fn continue_interactive(&mut self, user_input: &str) -> SageResult<ReactiveResponse> {
         // Create a dummy previous response for the interface
@@ -421,7 +456,9 @@ impl ReactiveExecutionManager {
             completed: false,
             continuation_prompt: None,
         };
-        
-        self.agent.continue_conversation(&dummy_previous, user_input).await
+
+        self.agent
+            .continue_conversation(&dummy_previous, user_input)
+            .await
     }
 }

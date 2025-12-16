@@ -1,8 +1,8 @@
 //! Agent step representation
 
+use crate::agent::state::AgentState;
 use crate::llm::LLMResponse;
 use crate::tools::{ToolCall, ToolResult};
-use crate::agent::state::AgentState;
 use crate::types::{Id, LLMUsage};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -74,12 +74,12 @@ impl AgentStep {
     pub fn with_llm_response(mut self, response: LLMResponse) -> Self {
         // Extract tool calls from the response
         self.tool_calls = response.tool_calls.clone();
-        
+
         // Extract usage information
         if let Some(usage) = &response.usage {
             self.llm_usage = Some(usage.clone());
         }
-        
+
         self.llm_response = Some(response);
         self
     }
@@ -128,42 +128,50 @@ impl AgentStep {
         if self.tool_calls.is_empty() {
             return true;
         }
-        
-        let call_ids: std::collections::HashSet<_> = 
+
+        let call_ids: std::collections::HashSet<_> =
             self.tool_calls.iter().map(|call| &call.id).collect();
-        let result_ids: std::collections::HashSet<_> = 
-            self.tool_results.iter().map(|result| &result.call_id).collect();
-        
+        let result_ids: std::collections::HashSet<_> = self
+            .tool_results
+            .iter()
+            .map(|result| &result.call_id)
+            .collect();
+
         call_ids == result_ids
     }
 
     /// Check if this step indicates task completion
     pub fn indicates_completion(&self) -> bool {
-        self.tool_calls
-            .iter()
-            .any(|call| call.name == "task_done")
+        self.tool_calls.iter().any(|call| call.name == "task_done")
             || self.state == AgentState::Completed
     }
 
     /// Get a summary of this step
     pub fn summary(&self) -> String {
         let mut parts = Vec::new();
-        
+
         parts.push(format!("Step {}: {}", self.step_number, self.state));
-        
+
         if let Some(thought) = &self.thought {
-            parts.push(format!("Thought: {}", thought.chars().take(100).collect::<String>()));
+            parts.push(format!(
+                "Thought: {}",
+                thought.chars().take(100).collect::<String>()
+            ));
         }
-        
+
         if !self.tool_calls.is_empty() {
-            let tool_names: Vec<_> = self.tool_calls.iter().map(|call| call.name.as_str()).collect();
+            let tool_names: Vec<_> = self
+                .tool_calls
+                .iter()
+                .map(|call| call.name.as_str())
+                .collect();
             parts.push(format!("Tools: {}", tool_names.join(", ")));
         }
-        
+
         if let Some(error) = &self.error {
             parts.push(format!("Error: {}", error));
         }
-        
+
         parts.join(" | ")
     }
 }

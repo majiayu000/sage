@@ -21,22 +21,13 @@ async fn main() -> anyhow::Result<()> {
     println!("Example 1: Search for 'async fn' in Rust files");
     println!("================================================");
     let mut args = HashMap::new();
-    args.insert(
-        "pattern".to_string(),
-        serde_json::json!("async fn"),
-    );
-    args.insert(
-        "type".to_string(),
-        serde_json::json!("rust"),
-    );
+    args.insert("pattern".to_string(), serde_json::json!("async fn"));
+    args.insert("type".to_string(), serde_json::json!("rust"));
     args.insert(
         "output_mode".to_string(),
         serde_json::json!("files_with_matches"),
     );
-    args.insert(
-        "head_limit".to_string(),
-        serde_json::json!(5),
-    );
+    args.insert("head_limit".to_string(), serde_json::json!(5));
 
     let call = ToolCall {
         id: "example-1".to_string(),
@@ -62,30 +53,12 @@ async fn main() -> anyhow::Result<()> {
     println!("Example 2: Search for 'TODO' with content and line numbers");
     println!("===========================================================");
     let mut args = HashMap::new();
-    args.insert(
-        "pattern".to_string(),
-        serde_json::json!("TODO"),
-    );
-    args.insert(
-        "type".to_string(),
-        serde_json::json!("rust"),
-    );
-    args.insert(
-        "output_mode".to_string(),
-        serde_json::json!("content"),
-    );
-    args.insert(
-        "-n".to_string(),
-        serde_json::json!(true),
-    );
-    args.insert(
-        "-A".to_string(),
-        serde_json::json!(1),
-    );
-    args.insert(
-        "head_limit".to_string(),
-        serde_json::json!(3),
-    );
+    args.insert("pattern".to_string(), serde_json::json!("TODO"));
+    args.insert("type".to_string(), serde_json::json!("rust"));
+    args.insert("output_mode".to_string(), serde_json::json!("content"));
+    args.insert("-n".to_string(), serde_json::json!(true));
+    args.insert("-A".to_string(), serde_json::json!(1));
+    args.insert("head_limit".to_string(), serde_json::json!(3));
 
     let call = ToolCall {
         id: "example-2".to_string(),
@@ -111,26 +84,11 @@ async fn main() -> anyhow::Result<()> {
     println!("Example 3: Case-insensitive search for 'error'");
     println!("===============================================");
     let mut args = HashMap::new();
-    args.insert(
-        "pattern".to_string(),
-        serde_json::json!("error"),
-    );
-    args.insert(
-        "-i".to_string(),
-        serde_json::json!(true),
-    );
-    args.insert(
-        "output_mode".to_string(),
-        serde_json::json!("count"),
-    );
-    args.insert(
-        "type".to_string(),
-        serde_json::json!("rust"),
-    );
-    args.insert(
-        "head_limit".to_string(),
-        serde_json::json!(10),
-    );
+    args.insert("pattern".to_string(), serde_json::json!("error"));
+    args.insert("-i".to_string(), serde_json::json!(true));
+    args.insert("output_mode".to_string(), serde_json::json!("count"));
+    args.insert("type".to_string(), serde_json::json!("rust"));
+    args.insert("head_limit".to_string(), serde_json::json!(10));
 
     let call = ToolCall {
         id: "example-3".to_string(),
@@ -156,14 +114,8 @@ async fn main() -> anyhow::Result<()> {
     println!("Example 4: Search in Cargo.toml files");
     println!("======================================");
     let mut args = HashMap::new();
-    args.insert(
-        "pattern".to_string(),
-        serde_json::json!("version"),
-    );
-    args.insert(
-        "glob".to_string(),
-        serde_json::json!("Cargo.toml"),
-    );
+    args.insert("pattern".to_string(), serde_json::json!("version"));
+    args.insert("glob".to_string(), serde_json::json!("Cargo.toml"));
     args.insert(
         "output_mode".to_string(),
         serde_json::json!("files_with_matches"),
@@ -193,26 +145,11 @@ async fn main() -> anyhow::Result<()> {
     println!("Example 5: Regex pattern search for function definitions");
     println!("=========================================================");
     let mut args = HashMap::new();
-    args.insert(
-        "pattern".to_string(),
-        serde_json::json!(r"pub fn \w+\("),
-    );
-    args.insert(
-        "type".to_string(),
-        serde_json::json!("rust"),
-    );
-    args.insert(
-        "output_mode".to_string(),
-        serde_json::json!("content"),
-    );
-    args.insert(
-        "-n".to_string(),
-        serde_json::json!(true),
-    );
-    args.insert(
-        "head_limit".to_string(),
-        serde_json::json!(5),
-    );
+    args.insert("pattern".to_string(), serde_json::json!(r"pub fn \w+\("));
+    args.insert("type".to_string(), serde_json::json!("rust"));
+    args.insert("output_mode".to_string(), serde_json::json!("content"));
+    args.insert("-n".to_string(), serde_json::json!(true));
+    args.insert("head_limit".to_string(), serde_json::json!(5));
 
     let call = ToolCall {
         id: "example-5".to_string(),

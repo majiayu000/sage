@@ -142,10 +142,11 @@ impl Default for ExponentialBackoff {
 
 impl BackoffStrategy for ExponentialBackoff {
     fn delay_for_attempt(&self, attempt: u32) -> Duration {
-        let base_delay = self.config.initial_delay.as_secs_f64()
-            * self.config.multiplier.powi(attempt as i32);
+        let base_delay =
+            self.config.initial_delay.as_secs_f64() * self.config.multiplier.powi(attempt as i32);
 
-        let capped_delay = Duration::from_secs_f64(base_delay.min(self.config.max_delay.as_secs_f64()));
+        let capped_delay =
+            Duration::from_secs_f64(base_delay.min(self.config.max_delay.as_secs_f64()));
 
         self.add_jitter(capped_delay)
     }

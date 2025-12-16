@@ -20,13 +20,19 @@ pub enum LifecycleError {
     /// Initialization failed
     InitFailed(String),
     /// Hook execution failed
-    HookFailed { hook: LifecyclePhase, message: String },
+    HookFailed {
+        hook: LifecyclePhase,
+        message: String,
+    },
     /// State transition not allowed
     InvalidTransition { from: AgentState, to: AgentState },
     /// Shutdown failed
     ShutdownFailed(String),
     /// Hook aborted the operation
-    Aborted { phase: LifecyclePhase, reason: String },
+    Aborted {
+        phase: LifecyclePhase,
+        reason: String,
+    },
     /// Wrapped sage error
     Internal(String),
 }
@@ -661,8 +667,8 @@ impl LifecycleManager {
     /// Shutdown the lifecycle manager
     pub async fn shutdown(&self, agent_id: crate::types::Id) -> LifecycleResult<()> {
         let current_state = *self.state.read().await;
-        let context = LifecycleContext::new(LifecyclePhase::Shutdown, current_state)
-            .with_agent_id(agent_id);
+        let context =
+            LifecycleContext::new(LifecyclePhase::Shutdown, current_state).with_agent_id(agent_id);
 
         self.registry
             .execute_hooks(LifecyclePhase::Shutdown, context)
@@ -851,9 +857,7 @@ mod tests {
         registry.register(Arc::new(AbortHook)).await;
 
         let context = LifecycleContext::new(LifecyclePhase::Init, AgentState::Initializing);
-        let result = registry
-            .execute_hooks(LifecyclePhase::Init, context)
-            .await;
+        let result = registry.execute_hooks(LifecyclePhase::Init, context).await;
 
         assert!(result.is_err());
         match result {

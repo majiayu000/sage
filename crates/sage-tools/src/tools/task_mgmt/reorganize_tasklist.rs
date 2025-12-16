@@ -1,10 +1,10 @@
 //! Reorganize tasklist tool for complex restructuring
 
+use crate::tools::task_mgmt::task_management::{GLOBAL_TASK_LIST, Task, TaskState};
 use async_trait::async_trait;
-use serde_json::json;
 use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolResult, ToolSchema};
-use crate::tools::task_mgmt::task_management::{GLOBAL_TASK_LIST, Task, TaskState};
+use serde_json::json;
 use uuid::Uuid;
 
 /// Tool for reorganizing the task list structure
@@ -29,7 +29,7 @@ impl ReorganizeTasklistTool {
 
         for line in markdown.lines() {
             let trimmed = line.trim();
-            
+
             // Skip empty lines and headers
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
@@ -38,21 +38,21 @@ impl ReorganizeTasklistTool {
             // Parse task line: "- [x] UUID:abc NAME:task DESCRIPTION:desc"
             if let Some(task) = self.parse_task_line(line)? {
                 let line_indent = line.len() - line.trim_start().len();
-                
+
                 // Adjust parent stack based on indentation
                 while parent_stack.len() > (line_indent / 2) {
                     parent_stack.pop();
                 }
 
                 let parent_id = parent_stack.last().cloned();
-                
+
                 let mut parsed_task = task;
                 parsed_task.parent_id = parent_id;
                 parsed_task.indent_level = line_indent / 2;
 
                 // Add to parent stack if this could be a parent
                 parent_stack.push(parsed_task.id.clone());
-                
+
                 tasks.push(parsed_task);
             }
         }
@@ -63,7 +63,7 @@ impl ReorganizeTasklistTool {
     /// Parse a single task line
     fn parse_task_line(&self, line: &str) -> Result<Option<ParsedTask>, ToolError> {
         let trimmed = line.trim();
-        
+
         // Check if it's a task line (starts with "- ")
         if !trimmed.starts_with("- ") {
             return Ok(None);
@@ -79,17 +79,26 @@ impl ReorganizeTasklistTool {
         } else if trimmed.starts_with("- [x]") {
             TaskState::Complete
         } else {
-            return Err(ToolError::InvalidArguments("Invalid task state format".to_string()));
+            return Err(ToolError::InvalidArguments(
+                "Invalid task state format".to_string(),
+            ));
         };
 
         // Remove state prefix
-        let content = trimmed.strip_prefix("- [").unwrap()
-            .strip_prefix(&format!("{}]", match state {
-                TaskState::NotStarted => " ",
-                TaskState::InProgress => "/",
-                TaskState::Cancelled => "-",
-                TaskState::Complete => "x",
-            })).unwrap().trim();
+        let content = trimmed
+            .strip_prefix("- [")
+            .unwrap()
+            .strip_prefix(&format!(
+                "{}]",
+                match state {
+                    TaskState::NotStarted => " ",
+                    TaskState::InProgress => "/",
+                    TaskState::Cancelled => "-",
+                    TaskState::Complete => "x",
+                }
+            ))
+            .unwrap()
+            .trim();
 
         // Parse UUID, NAME, DESCRIPTION
         let mut uuid = String::new();
@@ -163,16 +172,23 @@ impl Tool for ReorganizeTasklistTool {
     }
 
     async fn execute(&self, tool_call: &ToolCall) -> Result<ToolResult, ToolError> {
-        let markdown = tool_call.arguments
+        let markdown = tool_call
+            .arguments
             .get("markdown")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| ToolError::InvalidArguments("Missing required parameter: markdown".to_string()))?;
+            .ok_or_else(|| {
+                ToolError::InvalidArguments("Missing required parameter: markdown".to_string())
+            })?;
 
         // Parse the markdown
         let parsed_tasks = self.parse_markdown_tasklist(markdown)?;
 
         if parsed_tasks.is_empty() {
-            return Ok(ToolResult::error(&tool_call.id, self.name(), "No valid tasks found in markdown"));
+            return Ok(ToolResult::error(
+                &tool_call.id,
+                self.name(),
+                "No valid tasks found in markdown",
+            ));
         }
 
         // Convert parsed tasks to Task objects
@@ -188,10 +204,14 @@ impl Tool for ReorganizeTasklistTool {
         // Clear existing tasks and rebuild
         GLOBAL_TASK_LIST.clear_and_rebuild(new_tasks)?;
 
-        Ok(ToolResult::success(&tool_call.id, self.name(), format!(
-            "Task list reorganized successfully. {} tasks processed.",
-            parsed_tasks.len()
-        )))
+        Ok(ToolResult::success(
+            &tool_call.id,
+            self.name(),
+            format!(
+                "Task list reorganized successfully. {} tasks processed.",
+                parsed_tasks.len()
+            ),
+        ))
     }
 
     fn schema(&self) -> ToolSchema {
@@ -215,8 +235,8 @@ impl Tool for ReorganizeTasklistTool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
     use crate::tools::task_mgmt::task_management::GLOBAL_TASK_LIST;
+    use std::collections::HashMap;
 
     fn create_tool_call(id: &str, name: &str, args: serde_json::Value) -> ToolCall {
         let arguments = if let serde_json::Value::Object(map) = args {
@@ -253,12 +273,22 @@ mod tests {
 "#;
 
         let tool = ReorganizeTasklistTool::new();
-        let call = create_tool_call("test-1", "reorganize_tasklist", json!({
-            "markdown": markdown
-        }));
+        let call = create_tool_call(
+            "test-1",
+            "reorganize_tasklist",
+            json!({
+                "markdown": markdown
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
-        assert!(result.output.as_ref().unwrap().contains("Task list reorganized successfully"));
+        assert!(
+            result
+                .output
+                .as_ref()
+                .unwrap()
+                .contains("Task list reorganized successfully")
+        );
 
         // Verify the task list structure
         let root_tasks = GLOBAL_TASK_LIST.get_root_task_ids();

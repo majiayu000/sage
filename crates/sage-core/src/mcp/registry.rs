@@ -52,15 +52,17 @@ impl McpRegistry {
             }
             TransportConfig::Http { base_url, headers } => {
                 let http_config = HttpTransportConfig::new(&base_url);
-                let http_config = headers.into_iter().fold(http_config, |cfg, (k, v)| {
-                    cfg.with_header(k, v)
-                });
+                let http_config = headers
+                    .into_iter()
+                    .fold(http_config, |cfg, (k, v)| cfg.with_header(k, v));
                 let mut transport = HttpTransport::new(http_config)?;
                 transport.connect().await?;
                 Box::new(transport)
             }
             TransportConfig::WebSocket { .. } => {
-                return Err(McpError::Transport("WebSocket transport not yet implemented".into()));
+                return Err(McpError::Transport(
+                    "WebSocket transport not yet implemented".into(),
+                ));
             }
         };
 
@@ -86,7 +88,8 @@ impl McpRegistry {
         // Get tools
         if let Ok(tools) = client.list_tools().await {
             for tool in tools {
-                self.tool_mapping.insert(tool.name.clone(), name.to_string());
+                self.tool_mapping
+                    .insert(tool.name.clone(), name.to_string());
             }
         }
 
@@ -320,7 +323,9 @@ impl Tool for McpToolAdapter {
                     Ok(ToolResult::success(&call.id, &self.tool.name, text))
                 }
             }
-            Err(e) => Err(crate::tools::base::ToolError::ExecutionFailed(e.to_string())),
+            Err(e) => Err(crate::tools::base::ToolError::ExecutionFailed(
+                e.to_string(),
+            )),
         }
     }
 }

@@ -40,11 +40,7 @@ impl PluginEntry {
 
     /// Get plugin info
     pub fn info(&self) -> PluginInfo {
-        PluginInfo::from_plugin(
-            self.plugin.as_ref(),
-            self.lifecycle.state(),
-            self.enabled,
-        )
+        PluginInfo::from_plugin(self.plugin.as_ref(), self.lifecycle.state(), self.enabled)
     }
 }
 
@@ -69,10 +65,7 @@ impl PluginRegistry {
         Self {
             plugins: DashMap::new(),
             load_order: std::sync::atomic::AtomicUsize::new(0),
-            default_permissions: vec![
-                PluginPermission::ReadFiles,
-                PluginPermission::ConfigAccess,
-            ],
+            default_permissions: vec![PluginPermission::ReadFiles, PluginPermission::ConfigAccess],
             require_permission_approval: false,
         }
     }
@@ -205,9 +198,7 @@ impl PluginRegistry {
 
         // Use raw pointer to avoid double borrow
         let plugin_ptr = &mut *entry.plugin as *mut dyn Plugin;
-        unsafe {
-            entry.lifecycle.initialize(&mut *plugin_ptr, &ctx).await
-        }
+        unsafe { entry.lifecycle.initialize(&mut *plugin_ptr, &ctx).await }
     }
 
     /// Initialize all registered plugins
@@ -239,9 +230,7 @@ impl PluginRegistry {
 
         let mut entry = entry.write().await;
         let plugin_ptr = &mut *entry.plugin as *mut dyn Plugin;
-        unsafe {
-            entry.lifecycle.shutdown(&mut *plugin_ptr).await
-        }
+        unsafe { entry.lifecycle.shutdown(&mut *plugin_ptr).await }
     }
 
     /// Shutdown all plugins

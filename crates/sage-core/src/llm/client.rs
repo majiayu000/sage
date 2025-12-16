@@ -1,15 +1,15 @@
 //! LLM client implementation
 
+use crate::config::provider::ProviderConfig;
 use crate::error::{SageError, SageResult};
 use crate::llm::messages::{LLMMessage, LLMResponse};
 use crate::llm::providers::{LLMProvider, ModelParameters};
-use crate::llm::streaming::{StreamChunk, LLMStream, StreamingLLMClient};
-use crate::config::provider::ProviderConfig;
+use crate::llm::streaming::{LLMStream, StreamChunk, StreamingLLMClient};
 use crate::tools::types::ToolSchema;
 use crate::types::LLMUsage;
 use async_trait::async_trait;
 use reqwest::Client;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio::time::sleep;
@@ -31,12 +31,13 @@ impl LLMClient {
         model_params: ModelParameters,
     ) -> SageResult<Self> {
         // Validate configuration
-        config.validate()
+        config
+            .validate()
             .map_err(|e| SageError::config(format!("Invalid provider config: {}", e)))?;
 
         // Create HTTP client
-        let mut client_builder = Client::builder()
-            .timeout(Duration::from_secs(config.timeout.unwrap_or(60)));
+        let mut client_builder =
+            Client::builder().timeout(Duration::from_secs(config.timeout.unwrap_or(60)));
 
         // Add custom headers
         let mut headers = reqwest::header::HeaderMap::new();
@@ -145,7 +146,7 @@ impl LLMClient {
                 msg_lower.contains("connection") ||
                 msg_lower.contains("network")
             }
-            SageError::Http(_) => true,  // HTTP errors are generally retryable
+            SageError::Http(_) => true, // HTTP errors are generally retryable
             _ => false,
         }
     }
@@ -174,32 +175,41 @@ impl LLMClient {
         // Execute the request with retry logic
         match &self.provider {
             LLMProvider::OpenAI => {
-                self.execute_with_retry(|| self.openai_chat(messages, tools)).await
+                self.execute_with_retry(|| self.openai_chat(messages, tools))
+                    .await
             }
             LLMProvider::Anthropic => {
-                self.execute_with_retry(|| self.anthropic_chat(messages, tools)).await
+                self.execute_with_retry(|| self.anthropic_chat(messages, tools))
+                    .await
             }
             LLMProvider::Google => {
-                self.execute_with_retry(|| self.google_chat(messages, tools)).await
+                self.execute_with_retry(|| self.google_chat(messages, tools))
+                    .await
             }
             LLMProvider::Azure => {
-                self.execute_with_retry(|| self.azure_chat(messages, tools)).await
+                self.execute_with_retry(|| self.azure_chat(messages, tools))
+                    .await
             }
             LLMProvider::OpenRouter => {
-                self.execute_with_retry(|| self.openrouter_chat(messages, tools)).await
+                self.execute_with_retry(|| self.openrouter_chat(messages, tools))
+                    .await
             }
             LLMProvider::Doubao => {
-                self.execute_with_retry(|| self.doubao_chat(messages, tools)).await
+                self.execute_with_retry(|| self.doubao_chat(messages, tools))
+                    .await
             }
             LLMProvider::Ollama => {
-                self.execute_with_retry(|| self.ollama_chat(messages, tools)).await
+                self.execute_with_retry(|| self.ollama_chat(messages, tools))
+                    .await
             }
             LLMProvider::Custom(name) => {
                 // TODO: Implement plugin system for custom providers
                 // - Add provider plugin API
                 // - Support dynamic provider loading
                 // - Implement provider validation and security
-                Err(SageError::llm(format!("Custom provider '{name}' not implemented")))
+                Err(SageError::llm(format!(
+                    "Custom provider '{name}' not implemented"
+                )))
             }
         }
     }
@@ -211,7 +221,7 @@ impl LLMClient {
         tools: Option<&[ToolSchema]>,
     ) -> SageResult<LLMResponse> {
         let url = format!("{}/chat/completions", self.config.get_base_url());
-        
+
         let mut request_body = json!({
             "model": self.model_params.model,
             "messages": self.convert_messages_for_openai(messages)?,
@@ -241,9 +251,7 @@ impl LLMClient {
             }
         }
 
-        let mut request = self.http_client
-            .post(&url)
-            .json(&request_body);
+        let mut request = self.http_client.post(&url).json(&request_body);
 
         // Add authentication
         if let Some(api_key) = self.config.get_api_key() {
@@ -280,9 +288,9 @@ impl LLMClient {
         tools: Option<&[ToolSchema]>,
     ) -> SageResult<LLMResponse> {
         let url = format!("{}/v1/messages", self.config.get_base_url());
-        
+
         let (system_message, user_messages) = self.extract_system_message(messages);
-        
+
         let mut request_body = json!({
             "model": self.model_params.model,
             "messages": self.convert_messages_for_anthropic(&user_messages)?,
@@ -313,9 +321,7 @@ impl LLMClient {
             }
         }
 
-        let mut request = self.http_client
-            .post(&url)
-            .json(&request_body);
+        let mut request = self.http_client.post(&url).json(&request_body);
 
         // Add authentication
         if let Some(api_key) = self.config.get_api_key() {
@@ -334,7 +340,10 @@ impl LLMClient {
 
         if !response.status().is_success() {
             let error_text = response.text().await.unwrap_or_default();
-            return Err(SageError::llm(format!("Anthropic API error: {}", error_text)));
+            return Err(SageError::llm(format!(
+                "Anthropic API error: {}",
+                error_text
+            )));
         }
 
         let response_json: Value = response
@@ -351,10 +360,14 @@ impl LLMClient {
         messages: &[LLMMessage],
         tools: Option<&[ToolSchema]>,
     ) -> SageResult<LLMResponse> {
-        let url = format!("{}/openai/deployments/{}/chat/completions?api-version={}",
+        let url = format!(
+            "{}/openai/deployments/{}/chat/completions?api-version={}",
             self.config.get_base_url(),
             self.model_params.model,
-            self.config.api_version.as_deref().unwrap_or("2025-02-15-preview")
+            self.config
+                .api_version
+                .as_deref()
+                .unwrap_or("2025-02-15-preview")
         );
 
         let mut request_body = json!({
@@ -374,28 +387,37 @@ impl LLMClient {
 
         // Add tools if provided
         if let Some(tools) = tools {
-            let tool_schemas: Vec<Value> = tools.iter()
-                .map(|tool| json!({
-                    "type": "function",
-                    "function": {
-                        "name": tool.name,
-                        "description": tool.description,
-                        "parameters": tool.parameters
-                    }
-                }))
+            let tool_schemas: Vec<Value> = tools
+                .iter()
+                .map(|tool| {
+                    json!({
+                        "type": "function",
+                        "function": {
+                            "name": tool.name,
+                            "description": tool.description,
+                            "parameters": tool.parameters
+                        }
+                    })
+                })
                 .collect();
             request_body["tools"] = json!(tool_schemas);
         }
 
-        let request = self.http_client
+        let request = self
+            .http_client
             .post(&url)
             .header("api-key", self.config.get_api_key().unwrap_or_default())
             .header("Content-Type", "application/json")
             .json(&request_body);
 
-        tracing::debug!("Azure API request: {}", serde_json::to_string_pretty(&request_body).unwrap_or_default());
+        tracing::debug!(
+            "Azure API request: {}",
+            serde_json::to_string_pretty(&request_body).unwrap_or_default()
+        );
 
-        let response = request.send().await
+        let response = request
+            .send()
+            .await
             .map_err(|e| SageError::llm(format!("Azure API request failed: {}", e)))?;
 
         if !response.status().is_success() {
@@ -403,10 +425,15 @@ impl LLMClient {
             return Err(SageError::llm(format!("Azure API error: {}", error_text)));
         }
 
-        let response_json: Value = response.json().await
+        let response_json: Value = response
+            .json()
+            .await
             .map_err(|e| SageError::llm(format!("Failed to parse Azure response: {}", e)))?;
 
-        tracing::debug!("Azure API response: {}", serde_json::to_string_pretty(&response_json).unwrap_or_default());
+        tracing::debug!(
+            "Azure API response: {}",
+            serde_json::to_string_pretty(&response_json).unwrap_or_default()
+        );
 
         self.parse_openai_response(response_json)
     }
@@ -437,39 +464,59 @@ impl LLMClient {
 
         // Add tools if provided
         if let Some(tools) = tools {
-            let tool_schemas: Vec<Value> = tools.iter()
-                .map(|tool| json!({
-                    "type": "function",
-                    "function": {
-                        "name": tool.name,
-                        "description": tool.description,
-                        "parameters": tool.parameters
-                    }
-                }))
+            let tool_schemas: Vec<Value> = tools
+                .iter()
+                .map(|tool| {
+                    json!({
+                        "type": "function",
+                        "function": {
+                            "name": tool.name,
+                            "description": tool.description,
+                            "parameters": tool.parameters
+                        }
+                    })
+                })
                 .collect();
             request_body["tools"] = json!(tool_schemas);
         }
 
-        let request = self.http_client
+        let request = self
+            .http_client
             .post(&url)
-            .header("Authorization", format!("Bearer {}", self.config.get_api_key().unwrap_or_default()))
+            .header(
+                "Authorization",
+                format!("Bearer {}", self.config.get_api_key().unwrap_or_default()),
+            )
             .header("Content-Type", "application/json")
             .json(&request_body);
 
-        tracing::debug!("OpenRouter API request: {}", serde_json::to_string_pretty(&request_body).unwrap_or_default());
+        tracing::debug!(
+            "OpenRouter API request: {}",
+            serde_json::to_string_pretty(&request_body).unwrap_or_default()
+        );
 
-        let response = request.send().await
+        let response = request
+            .send()
+            .await
             .map_err(|e| SageError::llm(format!("OpenRouter API request failed: {}", e)))?;
 
         if !response.status().is_success() {
             let error_text = response.text().await.unwrap_or_default();
-            return Err(SageError::llm(format!("OpenRouter API error: {}", error_text)));
+            return Err(SageError::llm(format!(
+                "OpenRouter API error: {}",
+                error_text
+            )));
         }
 
-        let response_json: Value = response.json().await
+        let response_json: Value = response
+            .json()
+            .await
             .map_err(|e| SageError::llm(format!("Failed to parse OpenRouter response: {}", e)))?;
 
-        tracing::debug!("OpenRouter API response: {}", serde_json::to_string_pretty(&response_json).unwrap_or_default());
+        tracing::debug!(
+            "OpenRouter API response: {}",
+            serde_json::to_string_pretty(&response_json).unwrap_or_default()
+        );
 
         self.parse_openai_response(response_json)
     }
@@ -500,28 +547,40 @@ impl LLMClient {
 
         // Add tools if provided
         if let Some(tools) = tools {
-            let tool_schemas: Vec<Value> = tools.iter()
-                .map(|tool| json!({
-                    "type": "function",
-                    "function": {
-                        "name": tool.name,
-                        "description": tool.description,
-                        "parameters": tool.parameters
-                    }
-                }))
+            let tool_schemas: Vec<Value> = tools
+                .iter()
+                .map(|tool| {
+                    json!({
+                        "type": "function",
+                        "function": {
+                            "name": tool.name,
+                            "description": tool.description,
+                            "parameters": tool.parameters
+                        }
+                    })
+                })
                 .collect();
             request_body["tools"] = json!(tool_schemas);
         }
 
-        let request = self.http_client
+        let request = self
+            .http_client
             .post(&url)
-            .header("Authorization", format!("Bearer {}", self.config.get_api_key().unwrap_or_default()))
+            .header(
+                "Authorization",
+                format!("Bearer {}", self.config.get_api_key().unwrap_or_default()),
+            )
             .header("Content-Type", "application/json")
             .json(&request_body);
 
-        tracing::debug!("Doubao API request: {}", serde_json::to_string_pretty(&request_body).unwrap_or_default());
+        tracing::debug!(
+            "Doubao API request: {}",
+            serde_json::to_string_pretty(&request_body).unwrap_or_default()
+        );
 
-        let response = request.send().await
+        let response = request
+            .send()
+            .await
             .map_err(|e| SageError::llm(format!("Doubao API request failed: {}", e)))?;
 
         if !response.status().is_success() {
@@ -529,10 +588,15 @@ impl LLMClient {
             return Err(SageError::llm(format!("Doubao API error: {}", error_text)));
         }
 
-        let response_json: Value = response.json().await
+        let response_json: Value = response
+            .json()
+            .await
             .map_err(|e| SageError::llm(format!("Failed to parse Doubao response: {}", e)))?;
 
-        tracing::debug!("Doubao API response: {}", serde_json::to_string_pretty(&response_json).unwrap_or_default());
+        tracing::debug!(
+            "Doubao API response: {}",
+            serde_json::to_string_pretty(&response_json).unwrap_or_default()
+        );
 
         self.parse_openai_response(response_json)
     }
@@ -543,7 +607,9 @@ impl LLMClient {
         messages: &[LLMMessage],
         tools: Option<&[ToolSchema]>,
     ) -> SageResult<LLMResponse> {
-        let api_key = self.config.get_api_key()
+        let api_key = self
+            .config
+            .get_api_key()
             .ok_or_else(|| SageError::llm("Google API key not provided"))?;
 
         let url = format!(
@@ -591,7 +657,8 @@ impl LLMClient {
             }
         }
 
-        let response = self.http_client
+        let response = self
+            .http_client
             .post(&url)
             .json(&request_body)
             .send()
@@ -608,7 +675,11 @@ impl LLMClient {
             .await
             .map_err(|e| SageError::llm(format!("Failed to parse Google response: {}", e)))?;
 
-        tracing::debug!("Google API response: {}", serde_json::to_string_pretty(&response_json).unwrap_or_else(|_| "Failed to serialize".to_string()));
+        tracing::debug!(
+            "Google API response: {}",
+            serde_json::to_string_pretty(&response_json)
+                .unwrap_or_else(|_| "Failed to serialize".to_string())
+        );
 
         self.parse_google_response(response_json)
     }
@@ -636,28 +707,45 @@ impl LLMClient {
 
         // Add tools if provided (Ollama has limited tool support)
         if let Some(tools) = tools {
-            let tool_schemas: Vec<Value> = tools.iter()
-                .map(|tool| json!({
-                    "type": "function",
-                    "function": {
-                        "name": tool.name,
-                        "description": tool.description,
-                        "parameters": tool.parameters
-                    }
-                }))
+            let tool_schemas: Vec<Value> = tools
+                .iter()
+                .map(|tool| {
+                    json!({
+                        "type": "function",
+                        "function": {
+                            "name": tool.name,
+                            "description": tool.description,
+                            "parameters": tool.parameters
+                        }
+                    })
+                })
                 .collect();
             request_body["tools"] = json!(tool_schemas);
         }
 
-        let request = self.http_client
+        let request = self
+            .http_client
             .post(&url)
-            .header("Authorization", format!("Bearer {}", self.config.get_api_key().unwrap_or_else(|| "ollama".to_string())))
+            .header(
+                "Authorization",
+                format!(
+                    "Bearer {}",
+                    self.config
+                        .get_api_key()
+                        .unwrap_or_else(|| "ollama".to_string())
+                ),
+            )
             .header("Content-Type", "application/json")
             .json(&request_body);
 
-        tracing::debug!("Ollama API request: {}", serde_json::to_string_pretty(&request_body).unwrap_or_default());
+        tracing::debug!(
+            "Ollama API request: {}",
+            serde_json::to_string_pretty(&request_body).unwrap_or_default()
+        );
 
-        let response = request.send().await
+        let response = request
+            .send()
+            .await
             .map_err(|e| SageError::llm(format!("Ollama API request failed: {}", e)))?;
 
         if !response.status().is_success() {
@@ -665,10 +753,15 @@ impl LLMClient {
             return Err(SageError::llm(format!("Ollama API error: {}", error_text)));
         }
 
-        let response_json: Value = response.json().await
+        let response_json: Value = response
+            .json()
+            .await
             .map_err(|e| SageError::llm(format!("Failed to parse Ollama response: {}", e)))?;
 
-        tracing::debug!("Ollama API response: {}", serde_json::to_string_pretty(&response_json).unwrap_or_default());
+        tracing::debug!(
+            "Ollama API response: {}",
+            serde_json::to_string_pretty(&response_json).unwrap_or_default()
+        );
 
         self.parse_openai_response(response_json)
     }
@@ -676,7 +769,7 @@ impl LLMClient {
     /// Convert messages for OpenAI format
     fn convert_messages_for_openai(&self, messages: &[LLMMessage]) -> SageResult<Vec<Value>> {
         let mut converted = Vec::new();
-        
+
         for message in messages {
             let mut msg = json!({
                 "role": message.role.to_string(),
@@ -697,14 +790,14 @@ impl LLMClient {
 
             converted.push(msg);
         }
-        
+
         Ok(converted)
     }
 
     /// Convert messages for Anthropic format
     fn convert_messages_for_anthropic(&self, messages: &[LLMMessage]) -> SageResult<Vec<Value>> {
         let mut converted = Vec::new();
-        
+
         for message in messages {
             // Skip system messages (handled separately)
             if message.role == crate::llm::messages::MessageRole::System {
@@ -718,7 +811,7 @@ impl LLMClient {
 
             converted.push(msg);
         }
-        
+
         Ok(converted)
     }
 
@@ -741,7 +834,7 @@ impl LLMClient {
     /// Convert tools for OpenAI format
     fn convert_tools_for_openai(&self, tools: &[ToolSchema]) -> SageResult<Vec<Value>> {
         let mut converted = Vec::new();
-        
+
         for tool in tools {
             let tool_def = json!({
                 "type": "function",
@@ -753,14 +846,14 @@ impl LLMClient {
             });
             converted.push(tool_def);
         }
-        
+
         Ok(converted)
     }
 
     /// Convert tools for Anthropic format
     fn convert_tools_for_anthropic(&self, tools: &[ToolSchema]) -> SageResult<Vec<Value>> {
         let mut converted = Vec::new();
-        
+
         for tool in tools {
             let tool_def = json!({
                 "name": tool.name,
@@ -769,7 +862,7 @@ impl LLMClient {
             });
             converted.push(tool_def);
         }
-        
+
         Ok(converted)
     }
 
@@ -777,11 +870,8 @@ impl LLMClient {
     fn parse_openai_response(&self, response: Value) -> SageResult<LLMResponse> {
         let choice = response["choices"][0].clone();
         let message = &choice["message"];
-        
-        let content = message["content"]
-            .as_str()
-            .unwrap_or("")
-            .to_string();
+
+        let content = message["content"].as_str().unwrap_or("").to_string();
 
         let mut tool_calls = Vec::new();
         if let Some(calls) = message["tool_calls"].as_array() {
@@ -791,8 +881,9 @@ impl LLMClient {
                         id: call["id"].as_str().unwrap_or("").to_string(),
                         name: function["name"].as_str().unwrap_or("").to_string(),
                         arguments: serde_json::from_str(
-                            function["arguments"].as_str().unwrap_or("{}")
-                        ).unwrap_or_default(),
+                            function["arguments"].as_str().unwrap_or("{}"),
+                        )
+                        .unwrap_or_default(),
                         call_id: None,
                     };
                     tool_calls.push(tool_call);
@@ -852,9 +943,7 @@ impl LLMClient {
                             arguments: block["input"]
                                 .as_object()
                                 .map(|obj| {
-                                    obj.iter()
-                                        .map(|(k, v)| (k.clone(), v.clone()))
-                                        .collect()
+                                    obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
                                 })
                                 .unwrap_or_default(),
                             call_id: None,
@@ -896,7 +985,12 @@ impl LLMClient {
     fn convert_messages_for_google(&self, messages: &[LLMMessage]) -> SageResult<Vec<Value>> {
         tracing::debug!("Converting {} messages for Google", messages.len());
         for (i, msg) in messages.iter().enumerate() {
-            tracing::debug!("Message {}: role={:?}, content_len={}", i, msg.role, msg.content.len());
+            tracing::debug!(
+                "Message {}: role={:?}, content_len={}",
+                i,
+                msg.role,
+                msg.content.len()
+            );
         }
 
         let mut converted = Vec::new();
@@ -910,7 +1004,7 @@ impl LLMClient {
                         system_message.push_str("\n\n");
                     }
                     system_message.push_str(&message.content);
-                },
+                }
                 crate::llm::messages::MessageRole::User => {
                     let mut content = message.content.clone();
                     if !system_message.is_empty() {
@@ -922,7 +1016,7 @@ impl LLMClient {
                         "role": "user",
                         "parts": [{"text": content}]
                     }));
-                },
+                }
                 crate::llm::messages::MessageRole::Assistant => {
                     let mut parts = Vec::new();
 
@@ -947,7 +1041,7 @@ impl LLMClient {
                         "role": "model",
                         "parts": parts
                     }));
-                },
+                }
                 crate::llm::messages::MessageRole::Tool => {
                     // Convert tool messages to user messages for Google
                     // Google doesn't support tool role, so we treat tool results as user input
@@ -955,7 +1049,7 @@ impl LLMClient {
                         "role": "user",
                         "parts": [{"text": message.content}]
                     }));
-                },
+                }
             }
         }
 
@@ -999,7 +1093,8 @@ impl LLMClient {
 
     /// Parse Google response
     fn parse_google_response(&self, response: Value) -> SageResult<LLMResponse> {
-        let candidates = response["candidates"].as_array()
+        let candidates = response["candidates"]
+            .as_array()
             .ok_or_else(|| SageError::llm("No candidates in Google response"))?;
 
         if candidates.is_empty() {
@@ -1007,7 +1102,8 @@ impl LLMClient {
         }
 
         let candidate = &candidates[0];
-        let content_parts = candidate["content"]["parts"].as_array()
+        let content_parts = candidate["content"]["parts"]
+            .as_array()
             .ok_or_else(|| SageError::llm("No content parts in Google response"))?;
 
         let mut content = String::new();
@@ -1021,7 +1117,8 @@ impl LLMClient {
                 let tool_call = crate::tools::types::ToolCall {
                     id: format!("call_{}", uuid::Uuid::new_v4()),
                     name: tool_name.clone(),
-                    arguments: function_call["args"].as_object()
+                    arguments: function_call["args"]
+                        .as_object()
                         .map(|args| {
                             let mut map = std::collections::HashMap::new();
                             for (k, v) in args {
@@ -1042,15 +1139,19 @@ impl LLMClient {
         }
 
         let usage = if let Some(usage_metadata) = response["usageMetadata"].as_object() {
-            let prompt_tokens = usage_metadata.get("promptTokenCount")
+            let prompt_tokens = usage_metadata
+                .get("promptTokenCount")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(0) as u32;
-            let completion_tokens = usage_metadata.get("candidatesTokenCount")
+            let completion_tokens = usage_metadata
+                .get("candidatesTokenCount")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(0) as u32;
-            let total_tokens = usage_metadata.get("totalTokenCount")
+            let total_tokens = usage_metadata
+                .get("totalTokenCount")
                 .and_then(|v| v.as_u64())
-                .unwrap_or((prompt_tokens + completion_tokens) as u64) as u32;
+                .unwrap_or((prompt_tokens + completion_tokens) as u64)
+                as u32;
 
             Some(LLMUsage {
                 prompt_tokens,
@@ -1091,9 +1192,9 @@ impl StreamingLLMClient for LLMClient {
             LLMProvider::OpenRouter => self.openrouter_chat_stream(messages, tools).await,
             LLMProvider::Doubao => self.doubao_chat_stream(messages, tools).await,
             LLMProvider::Ollama => self.ollama_chat_stream(messages, tools).await,
-            LLMProvider::Custom(name) => {
-                Err(SageError::llm(format!("Streaming not supported for custom provider '{name}'")))
-            }
+            LLMProvider::Custom(name) => Err(SageError::llm(format!(
+                "Streaming not supported for custom provider '{name}'"
+            ))),
         }
     }
 }
@@ -1133,9 +1234,7 @@ impl LLMClient {
             }
         }
 
-        let mut request = self.http_client
-            .post(&url)
-            .json(&request_body);
+        let mut request = self.http_client.post(&url).json(&request_body);
 
         // Add authentication
         if let Some(api_key) = self.config.get_api_key() {
@@ -1149,7 +1248,10 @@ impl LLMClient {
 
         if !response.status().is_success() {
             let error_text = response.text().await.unwrap_or_default();
-            return Err(SageError::llm(format!("OpenAI streaming API error: {}", error_text)));
+            return Err(SageError::llm(format!(
+                "OpenAI streaming API error: {}",
+                error_text
+            )));
         }
 
         // Convert response to stream
@@ -1164,7 +1266,10 @@ impl LLMClient {
                         if line.starts_with("data: ") {
                             let data = &line[6..]; // Remove "data: " prefix
                             if data == "[DONE]" {
-                                return Some(Ok(StreamChunk::final_chunk(None, Some("stop".to_string()))));
+                                return Some(Ok(StreamChunk::final_chunk(
+                                    None,
+                                    Some("stop".to_string()),
+                                )));
                             }
 
                             if let Ok(json_data) = serde_json::from_str::<Value>(data) {
@@ -1248,11 +1353,7 @@ impl LLMClient {
         }
 
         // Add API version (required for Anthropic)
-        let api_version = self
-            .config
-            .api_version
-            .as_deref()
-            .unwrap_or("2023-06-01");
+        let api_version = self.config.api_version.as_deref().unwrap_or("2023-06-01");
         request = request.header("anthropic-version", api_version);
 
         let response = request
@@ -1327,9 +1428,8 @@ impl LLMClient {
                                     state.current_block_type = block_type.map(String::from);
 
                                     if block_type == Some("tool_use") {
-                                        state.current_block_id = data["content_block"]["id"]
-                                            .as_str()
-                                            .map(String::from);
+                                        state.current_block_id =
+                                            data["content_block"]["id"].as_str().map(String::from);
                                         state.current_tool_name = data["content_block"]["name"]
                                             .as_str()
                                             .map(String::from);
@@ -1365,10 +1465,7 @@ impl LLMClient {
                                                 .unwrap_or_default();
 
                                         let tool_call = crate::tools::types::ToolCall {
-                                            id: state
-                                                .current_block_id
-                                                .take()
-                                                .unwrap_or_default(),
+                                            id: state.current_block_id.take().unwrap_or_default(),
                                             name: state
                                                 .current_tool_name
                                                 .take()

@@ -15,16 +15,16 @@
 //! - `monitoring`: Monitoring tools (log_analyzer, test_generator)
 //! - `infrastructure`: Infrastructure tools (kubernetes, terraform, cloud)
 
+pub mod diagnostics;
+pub mod extensions;
 pub mod file_ops;
+pub mod infrastructure;
+pub mod interaction;
+pub mod monitoring;
+pub mod planning;
 pub mod process;
 pub mod task_mgmt;
-pub mod planning;
-pub mod interaction;
-pub mod extensions;
 pub mod utils;
-pub mod diagnostics;
-pub mod monitoring;
-pub mod infrastructure;
 
 // VCS module with only updated git_simple
 pub mod vcs {
@@ -34,32 +34,37 @@ pub mod vcs {
 
 // Network module with only working tools
 pub mod network {
-    pub mod web_search;
-    pub mod web_fetch;
     pub mod browser;
+    pub mod web_fetch;
+    pub mod web_search;
 
-    pub use web_search::WebSearchTool;
-    pub use web_fetch::WebFetchTool;
     pub use browser::BrowserTool;
+    pub use web_fetch::WebFetchTool;
+    pub use web_search::WebSearchTool;
 }
 
 // Re-export all tools for easy access
 // Note: JsonEditTool, CodebaseRetrievalTool, MultiEditTool are Sage-specific and currently disabled
-pub use file_ops::{EditTool, ReadTool, WriteTool, GlobTool, GrepTool, NotebookEditTool};
-pub use process::{BashTool, KillShellTool};
-pub use task_mgmt::{ViewTasklistTool, AddTasksTool, UpdateTasksTool, ReorganizeTasklistTool, TaskDoneTool};
-pub use planning::{EnterPlanModeTool, ExitPlanModeTool};
-pub use interaction::AskUserQuestionTool;
+pub use diagnostics::{
+    DiagnosticsTool, RememberTool, RenderMermaidTool, SearchUntruncatedTool,
+    ViewRangeUntruncatedTool,
+};
 pub use extensions::{SkillTool, SlashCommandTool};
-pub use utils::SequentialThinkingTool;
-pub use network::{WebSearchTool, WebFetchTool, BrowserTool};
-pub use diagnostics::{DiagnosticsTool, ViewRangeUntruncatedTool, SearchUntruncatedTool, RememberTool, RenderMermaidTool};
-pub use vcs::GitTool;
+pub use file_ops::{EditTool, GlobTool, GrepTool, NotebookEditTool, ReadTool, WriteTool};
+pub use infrastructure::{CloudTool, KubernetesTool, TerraformTool};
+pub use interaction::AskUserQuestionTool;
 pub use monitoring::{LogAnalyzerTool, TestGeneratorTool};
-pub use infrastructure::{KubernetesTool, TerraformTool, CloudTool};
+pub use network::{BrowserTool, WebFetchTool, WebSearchTool};
+pub use planning::{EnterPlanModeTool, ExitPlanModeTool};
+pub use process::{BashTool, KillShellTool, TaskOutputTool};
+pub use task_mgmt::{
+    AddTasksTool, ReorganizeTasklistTool, TaskDoneTool, UpdateTasksTool, ViewTasklistTool,
+};
+pub use utils::SequentialThinkingTool;
+pub use vcs::GitTool;
 
-use std::sync::Arc;
 use sage_core::tools::Tool;
+use std::sync::Arc;
 
 /// Get all default tools organized by category
 pub fn get_default_tools() -> Vec<Arc<dyn Tool>> {
@@ -76,47 +81,38 @@ pub fn get_default_tools() -> Vec<Arc<dyn Tool>> {
         // Process tools
         Arc::new(BashTool::new()),
         Arc::new(KillShellTool::new()),
-
+        Arc::new(TaskOutputTool::new()),
         // Task management
         Arc::new(ViewTasklistTool::new()),
         Arc::new(AddTasksTool::new()),
         Arc::new(UpdateTasksTool::new()),
         Arc::new(ReorganizeTasklistTool::new()),
         Arc::new(TaskDoneTool::new()),
-
         // Planning mode
         Arc::new(EnterPlanModeTool::new()),
         Arc::new(ExitPlanModeTool::new()),
-
         // User interaction
         Arc::new(AskUserQuestionTool::new()),
-
         // Extensions
         Arc::new(SkillTool::new()),
         Arc::new(SlashCommandTool::new()),
-
         // Utilities
         Arc::new(SequentialThinkingTool::new()),
-
         // Network tools
         Arc::new(WebSearchTool::new()),
         Arc::new(WebFetchTool::new()),
         Arc::new(BrowserTool::new()),
-
         // Diagnostics
         Arc::new(DiagnosticsTool::new()),
         Arc::new(ViewRangeUntruncatedTool::new()),
         Arc::new(SearchUntruncatedTool::new()),
         Arc::new(RememberTool::new()),
         Arc::new(RenderMermaidTool::new()),
-
         // VCS
         Arc::new(GitTool::new()),
-
         // Monitoring
         Arc::new(LogAnalyzerTool::new()),
         Arc::new(TestGeneratorTool::new()),
-
         // Infrastructure
         Arc::new(KubernetesTool::new()),
         Arc::new(TerraformTool::new()),
@@ -141,6 +137,7 @@ pub fn get_process_tools() -> Vec<Arc<dyn Tool>> {
     vec![
         Arc::new(BashTool::new()),
         Arc::new(KillShellTool::new()),
+        Arc::new(TaskOutputTool::new()),
     ]
 }
 
@@ -162,9 +159,7 @@ pub fn get_planning_tools() -> Vec<Arc<dyn Tool>> {
 }
 
 pub fn get_interaction_tools() -> Vec<Arc<dyn Tool>> {
-    vec![
-        Arc::new(AskUserQuestionTool::new()),
-    ]
+    vec![Arc::new(AskUserQuestionTool::new())]
 }
 
 pub fn get_extension_tools() -> Vec<Arc<dyn Tool>> {
@@ -193,9 +188,7 @@ pub fn get_diagnostics_tools() -> Vec<Arc<dyn Tool>> {
 }
 
 pub fn get_vcs_tools() -> Vec<Arc<dyn Tool>> {
-    vec![
-        Arc::new(GitTool::new()),
-    ]
+    vec![Arc::new(GitTool::new())]
 }
 
 pub fn get_monitoring_tools() -> Vec<Arc<dyn Tool>> {

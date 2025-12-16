@@ -140,13 +140,13 @@ impl EnhancedToolError {
     /// Generate user-friendly error message
     pub fn user_friendly_message(&self) -> String {
         let mut message = String::new();
-        
+
         // Add main error message
         message.push_str(&format!("❌ {}\n", self.original_error_message));
-        
+
         // Add category information
         message.push_str(&format!("📂 Category: {:?}\n", self.category));
-        
+
         // Add context if available
         if !self.context.is_empty() {
             message.push_str("\n📋 Context:\n");
@@ -154,7 +154,7 @@ impl EnhancedToolError {
                 message.push_str(&format!("  • {}: {}\n", key, value));
             }
         }
-        
+
         // Add suggestions if available
         if !self.suggestions.is_empty() {
             message.push_str("\n💡 Suggestions:\n");
@@ -162,14 +162,16 @@ impl EnhancedToolError {
                 message.push_str(&format!("  {}. {}\n", i + 1, suggestion));
             }
         }
-        
+
         // Add recovery information
         if self.recoverable {
-            message.push_str("\n🔄 This error may be recoverable. Please try the suggestions above.\n");
+            message.push_str(
+                "\n🔄 This error may be recoverable. Please try the suggestions above.\n",
+            );
         } else {
             message.push_str("\n⚠️  This error requires manual intervention to resolve.\n");
         }
-        
+
         message
     }
 
@@ -211,38 +213,46 @@ pub mod helpers {
 
     /// Create an enhanced file not found error
     pub fn file_not_found(file_path: &str) -> EnhancedToolError {
-        EnhancedToolError::new(ToolError::NotFound(format!("File not found: {}", file_path)))
-            .with_context("file_path", file_path)
-            .with_suggestion("Check if the file path is correct")
-            .with_suggestion("Ensure the file exists in the specified location")
-            .with_suggestion("Verify you have read permissions for the file")
-            .with_category(ErrorCategory::FileSystem)
+        EnhancedToolError::new(ToolError::NotFound(format!(
+            "File not found: {}",
+            file_path
+        )))
+        .with_context("file_path", file_path)
+        .with_suggestion("Check if the file path is correct")
+        .with_suggestion("Ensure the file exists in the specified location")
+        .with_suggestion("Verify you have read permissions for the file")
+        .with_category(ErrorCategory::FileSystem)
     }
 
     /// Create an enhanced permission denied error
     pub fn permission_denied(operation: &str, resource: &str) -> EnhancedToolError {
         EnhancedToolError::new(ToolError::PermissionDenied(format!(
-            "Permission denied: cannot {} {}", operation, resource
+            "Permission denied: cannot {} {}",
+            operation, resource
         )))
-            .with_context("operation", operation)
-            .with_context("resource", resource)
-            .with_suggestion("Check file/directory permissions")
-            .with_suggestion("Run with appropriate user privileges")
-            .with_suggestion("Contact system administrator if needed")
-            .with_category(ErrorCategory::Permission)
+        .with_context("operation", operation)
+        .with_context("resource", resource)
+        .with_suggestion("Check file/directory permissions")
+        .with_suggestion("Run with appropriate user privileges")
+        .with_suggestion("Contact system administrator if needed")
+        .with_category(ErrorCategory::Permission)
     }
 
     /// Create an enhanced invalid argument error
     pub fn invalid_argument(parameter: &str, value: &str, expected: &str) -> EnhancedToolError {
         EnhancedToolError::new(ToolError::InvalidArguments(format!(
-            "Invalid argument '{}': got '{}', expected {}", parameter, value, expected
+            "Invalid argument '{}': got '{}', expected {}",
+            parameter, value, expected
         )))
-            .with_context("parameter", parameter)
-            .with_context("provided_value", value)
-            .with_context("expected_format", expected)
-            .with_suggestion(format!("Provide a valid value for parameter '{}'", parameter))
-            .with_suggestion(format!("Expected format: {}", expected))
-            .with_category(ErrorCategory::UserInput)
+        .with_context("parameter", parameter)
+        .with_context("provided_value", value)
+        .with_context("expected_format", expected)
+        .with_suggestion(format!(
+            "Provide a valid value for parameter '{}'",
+            parameter
+        ))
+        .with_suggestion(format!("Expected format: {}", expected))
+        .with_category(ErrorCategory::UserInput)
     }
 
     /// Create an enhanced timeout error
@@ -259,13 +269,14 @@ pub mod helpers {
     /// Create an enhanced configuration error
     pub fn configuration_error(config_key: &str, issue: &str) -> EnhancedToolError {
         EnhancedToolError::new(ToolError::Other(format!(
-            "Configuration error for '{}': {}", config_key, issue
+            "Configuration error for '{}': {}",
+            config_key, issue
         )))
-            .with_context("config_key", config_key)
-            .with_context("issue", issue)
-            .with_suggestion("Check the configuration file")
-            .with_suggestion("Verify the configuration value format")
-            .with_suggestion("Reset to default configuration if needed")
-            .with_category(ErrorCategory::Configuration)
+        .with_context("config_key", config_key)
+        .with_context("issue", issue)
+        .with_suggestion("Check the configuration file")
+        .with_suggestion("Verify the configuration value format")
+        .with_suggestion("Reset to default configuration if needed")
+        .with_category(ErrorCategory::Configuration)
     }
 }

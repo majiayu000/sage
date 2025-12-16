@@ -4,12 +4,14 @@
 
 pub mod client;
 
-pub use client::{SageAgentSDK, RunOptions, ExecutionResult, ExecutionOutcome, ExecutionError, ExecutionErrorKind};
+pub use client::{
+    ExecutionError, ExecutionErrorKind, ExecutionOutcome, ExecutionResult, RunOptions, SageAgentSDK,
+};
 
 // Re-export commonly used types from core
 pub use sage_core::{
-    agent::{AgentExecution, AgentStep, AgentState},
+    agent::{AgentExecution, AgentState, AgentStep},
     config::{Config, ModelParameters},
     error::{SageError, SageResult},
-    types::{TaskMetadata, LLMUsage},
+    types::{LLMUsage, TaskMetadata},
 };

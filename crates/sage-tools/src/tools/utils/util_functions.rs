@@ -43,12 +43,19 @@ pub fn check_command_efficiency(command: &str) -> Option<String> {
         return Some("Consider using 'str_replace_based_edit_tool' with view action for directory structure instead of 'ls -R'".to_string());
     }
 
-    if cmd.starts_with("find .") && !cmd.contains("head") && !cmd.contains("tail") && !cmd.contains("-maxdepth") {
+    if cmd.starts_with("find .")
+        && !cmd.contains("head")
+        && !cmd.contains("tail")
+        && !cmd.contains("-maxdepth")
+    {
         return Some("Consider adding '| head -20' to limit find output, or use '-maxdepth 2' to limit depth".to_string());
     }
 
     if cmd.starts_with("grep -r") && !cmd.contains("head") && !cmd.contains("tail") {
-        return Some("Consider adding '| head -10' to limit grep output and specify target directories".to_string());
+        return Some(
+            "Consider adding '| head -10' to limit grep output and specify target directories"
+                .to_string(),
+        );
     }
 
     if cmd.starts_with("cat ") && !cmd.contains("head") && !cmd.contains("tail") {
@@ -63,14 +70,17 @@ pub fn suggest_efficient_alternative(command: &str) -> Option<String> {
     let cmd = command.trim().to_lowercase();
 
     match cmd.as_str() {
-        "ls -r" | "ls -r ." => Some("Use: str_replace_based_edit_tool with view action on '.' for directory structure".to_string()),
+        "ls -r" | "ls -r ." => Some(
+            "Use: str_replace_based_edit_tool with view action on '.' for directory structure"
+                .to_string(),
+        ),
         cmd if cmd.starts_with("find . -name") && !cmd.contains("head") => {
             Some(format!("{} | head -20", command))
-        },
+        }
         cmd if cmd.starts_with("grep -r") && !cmd.contains("head") => {
             Some(format!("{} | head -10", command))
-        },
-        _ => None
+        }
+        _ => None,
     }
 }
 

@@ -21,7 +21,10 @@ impl ConfigValidator {
     /// Validate provider configuration
     fn validate_providers(config: &Config) -> SageResult<()> {
         // Check that default provider exists
-        if !config.model_providers.contains_key(&config.default_provider) {
+        if !config
+            .model_providers
+            .contains_key(&config.default_provider)
+        {
             return Err(SageError::config(format!(
                 "Default provider '{}' not found in model_providers",
                 config.default_provider
@@ -29,8 +32,10 @@ impl ConfigValidator {
         }
 
         // Validate provider names
-        let valid_providers: HashSet<&str> = 
-            ["openai", "anthropic", "google", "ollama"].iter().cloned().collect();
+        let valid_providers: HashSet<&str> = ["openai", "anthropic", "google", "ollama"]
+            .iter()
+            .cloned()
+            .collect();
 
         for provider in config.model_providers.keys() {
             if !valid_providers.contains(provider.as_str()) && !provider.starts_with("custom_") {
@@ -150,7 +155,9 @@ impl ConfigValidator {
 
         // Validate tool execution time
         if config.tools.max_execution_time == 0 {
-            return Err(SageError::config("Tool max execution time must be greater than 0"));
+            return Err(SageError::config(
+                "Tool max execution time must be greater than 0",
+            ));
         }
         if config.tools.max_execution_time > 3600 {
             return Err(SageError::config(format!(
@@ -204,7 +211,10 @@ impl ConfigValidator {
             "json_edit_tool",
             "task_done",
             "bash",
-        ].iter().cloned().collect();
+        ]
+        .iter()
+        .cloned()
+        .collect();
 
         for tool in &config.tools.enabled_tools {
             if !valid_tools.contains(tool.as_str()) && !tool.starts_with("custom_") {
@@ -216,9 +226,13 @@ impl ConfigValidator {
         }
 
         // Ensure task_done tool is always enabled
-        if !config.tools.enabled_tools.contains(&"task_done".to_string()) {
+        if !config
+            .tools
+            .enabled_tools
+            .contains(&"task_done".to_string())
+        {
             return Err(SageError::config(
-                "The 'task_done' tool must be enabled for proper agent operation"
+                "The 'task_done' tool must be enabled for proper agent operation",
             ));
         }
 
@@ -228,9 +242,11 @@ impl ConfigValidator {
     /// Validate logging configuration
     pub fn validate_logging(config: &Config) -> SageResult<()> {
         // Validate log level
-        let valid_levels: HashSet<&str> = 
-            ["trace", "debug", "info", "warn", "error"].iter().cloned().collect();
-        
+        let valid_levels: HashSet<&str> = ["trace", "debug", "info", "warn", "error"]
+            .iter()
+            .cloned()
+            .collect();
+
         if !valid_levels.contains(config.logging.level.as_str()) {
             return Err(SageError::config(format!(
                 "Invalid log level '{}'. Valid levels are: {:?}",
@@ -239,9 +255,8 @@ impl ConfigValidator {
         }
 
         // Validate log format
-        let valid_formats: HashSet<&str> = 
-            ["json", "pretty", "compact"].iter().cloned().collect();
-        
+        let valid_formats: HashSet<&str> = ["json", "pretty", "compact"].iter().cloned().collect();
+
         if !valid_formats.contains(config.logging.format.as_str()) {
             return Err(SageError::config(format!(
                 "Invalid log format '{}'. Valid formats are: {:?}",
@@ -252,7 +267,7 @@ impl ConfigValidator {
         // Ensure at least one output is enabled
         if !config.logging.log_to_console && !config.logging.log_to_file {
             return Err(SageError::config(
-                "At least one of log_to_console or log_to_file must be enabled"
+                "At least one of log_to_console or log_to_file must be enabled",
             ));
         }
 

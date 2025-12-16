@@ -3,8 +3,8 @@
 //! Provides a convenient builder pattern for creating fully configured agents
 //! with all necessary components.
 
-use crate::agent::lifecycle::{LifecycleHook, LifecycleHookRegistry, LifecycleManager};
 use crate::agent::ClaudeStyleAgent;
+use crate::agent::lifecycle::{LifecycleHook, LifecycleHookRegistry, LifecycleManager};
 use crate::cache::CacheConfig;
 use crate::concurrency::CancellationHierarchy;
 use crate::config::model::{Config, ModelParameters};
@@ -13,8 +13,8 @@ use crate::error::{SageError, SageResult};
 use crate::events::EventBus;
 use crate::llm::client::LLMClient;
 use crate::llm::providers::LLMProvider;
-use crate::mcp::transport::TransportConfig;
 use crate::mcp::McpRegistry;
+use crate::mcp::transport::TransportConfig;
 use crate::tools::base::Tool;
 use crate::tools::batch_executor::BatchToolExecutor;
 use crate::tools::executor::ToolExecutor;
@@ -356,9 +356,9 @@ impl SageBuilder {
             .ok_or_else(|| BuilderError::ProviderNotConfigured(provider_name.clone()))?;
 
         // Parse provider
-        let provider: LLMProvider = provider_name
-            .parse()
-            .map_err(|_| BuilderError::InvalidConfig(format!("Invalid provider: {}", provider_name)))?;
+        let provider: LLMProvider = provider_name.parse().map_err(|_| {
+            BuilderError::InvalidConfig(format!("Invalid provider: {}", provider_name))
+        })?;
 
         // Get model parameters
         let model_params = if let Some(params) = &self.model_params {
@@ -517,7 +517,7 @@ impl SageBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::lifecycle::{LifecyclePhase, LifecycleResult, HookResult, LifecycleContext};
+    use crate::agent::lifecycle::{HookResult, LifecycleContext, LifecyclePhase, LifecycleResult};
     use async_trait::async_trait;
 
     struct TestTool {
@@ -535,11 +535,7 @@ mod tests {
         }
 
         fn schema(&self) -> crate::tools::types::ToolSchema {
-            crate::tools::types::ToolSchema::new(
-                self.name.clone(),
-                "Test tool".to_string(),
-                vec![],
-            )
+            crate::tools::types::ToolSchema::new(self.name.clone(), "Test tool".to_string(), vec![])
         }
 
         async fn execute(
@@ -547,9 +543,7 @@ mod tests {
             _call: &crate::tools::types::ToolCall,
         ) -> Result<crate::tools::types::ToolResult, crate::tools::base::ToolError> {
             Ok(crate::tools::types::ToolResult::success(
-                "test-id",
-                &self.name,
-                "success",
+                "test-id", &self.name, "success",
             ))
         }
     }
@@ -628,7 +622,8 @@ mod tests {
 
     #[test]
     fn test_builder_with_mcp_server() {
-        let builder = SageBuilder::new().with_mcp_stdio_server("test", "echo", vec!["hello".to_string()]);
+        let builder =
+            SageBuilder::new().with_mcp_stdio_server("test", "echo", vec!["hello".to_string()]);
         assert_eq!(builder.mcp_servers.len(), 1);
     }
 

@@ -1,11 +1,11 @@
 //! String replacement based file editing tool
 
+use crate::utils::maybe_truncate;
 use async_trait::async_trait;
-use std::path::PathBuf;
-use tokio::fs;
 use sage_core::tools::base::{FileSystemTool, Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
-use crate::utils::maybe_truncate;
+use std::path::PathBuf;
+use tokio::fs;
 
 /// Tool for editing files using string replacement
 pub struct EditTool {
@@ -45,9 +45,9 @@ impl EditTool {
         }
 
         // Read the file
-        let content = fs::read_to_string(&path).await.map_err(|e| {
-            ToolError::Io(e)
-        })?;
+        let content = fs::read_to_string(&path)
+            .await
+            .map_err(|e| ToolError::Io(e))?;
 
         // Check if old_str exists
         if !content.contains(old_str) {
@@ -70,18 +70,16 @@ impl EditTool {
         let new_content = content.replace(old_str, new_str);
 
         // Write back to file
-        fs::write(&path, new_content).await.map_err(|e| {
-            ToolError::Io(e)
-        })?;
+        fs::write(&path, new_content)
+            .await
+            .map_err(|e| ToolError::Io(e))?;
 
         Ok(ToolResult::success(
             "",
             self.name(),
             format!(
                 "Successfully replaced '{}' with '{}' in {}",
-                old_str,
-                new_str,
-                file_path
+                old_str, new_str, file_path
             ),
         ))
     }
@@ -108,15 +106,15 @@ impl EditTool {
 
         // Create parent directories if needed
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).await.map_err(|e| {
-                ToolError::Io(e)
-            })?;
+            fs::create_dir_all(parent)
+                .await
+                .map_err(|e| ToolError::Io(e))?;
         }
 
         // Write file
-        fs::write(&path, content).await.map_err(|e| {
-            ToolError::Io(e)
-        })?;
+        fs::write(&path, content)
+            .await
+            .map_err(|e| ToolError::Io(e))?;
 
         Ok(ToolResult::success(
             "",
@@ -138,9 +136,9 @@ impl EditTool {
         }
 
         // Read the file
-        let content = fs::read_to_string(&path).await.map_err(|e| {
-            ToolError::Io(e)
-        })?;
+        let content = fs::read_to_string(&path)
+            .await
+            .map_err(|e| ToolError::Io(e))?;
 
         Ok(ToolResult::success(
             "",
@@ -179,19 +177,31 @@ For project exploration: Start with viewing root directory, then README files, t
             self.name(),
             self.description(),
             vec![
-                ToolParameter::string("command", "The command to execute: 'str_replace', 'create', or 'view'"),
+                ToolParameter::string(
+                    "command",
+                    "The command to execute: 'str_replace', 'create', or 'view'",
+                ),
                 ToolParameter::string("path", "Path to the file"),
-                ToolParameter::optional_string("old_str", "String to replace (for str_replace command)"),
-                ToolParameter::optional_string("new_str", "Replacement string (for str_replace command)"),
-                ToolParameter::optional_string("file_text", "Content for new file (for create command)"),
+                ToolParameter::optional_string(
+                    "old_str",
+                    "String to replace (for str_replace command)",
+                ),
+                ToolParameter::optional_string(
+                    "new_str",
+                    "Replacement string (for str_replace command)",
+                ),
+                ToolParameter::optional_string(
+                    "file_text",
+                    "Content for new file (for create command)",
+                ),
             ],
         )
     }
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
-        let command = call
-            .get_string("command")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'command' parameter".to_string()))?;
+        let command = call.get_string("command").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'command' parameter".to_string())
+        })?;
 
         let path = call
             .get_string("path")
@@ -200,16 +210,22 @@ For project exploration: Start with viewing root directory, then README files, t
         let mut result = match command.as_str() {
             "str_replace" => {
                 let old_str = call.get_string("old_str").ok_or_else(|| {
-                    ToolError::InvalidArguments("Missing 'old_str' parameter for str_replace".to_string())
+                    ToolError::InvalidArguments(
+                        "Missing 'old_str' parameter for str_replace".to_string(),
+                    )
                 })?;
                 let new_str = call.get_string("new_str").ok_or_else(|| {
-                    ToolError::InvalidArguments("Missing 'new_str' parameter for str_replace".to_string())
+                    ToolError::InvalidArguments(
+                        "Missing 'new_str' parameter for str_replace".to_string(),
+                    )
                 })?;
                 self.replace_in_file(&path, &old_str, &new_str).await?
             }
             "create" => {
                 let content = call.get_string("file_text").ok_or_else(|| {
-                    ToolError::InvalidArguments("Missing 'file_text' parameter for create".to_string())
+                    ToolError::InvalidArguments(
+                        "Missing 'file_text' parameter for create".to_string(),
+                    )
                 })?;
                 self.create_file(&path, &content).await?
             }
@@ -227,9 +243,9 @@ For project exploration: Start with viewing root directory, then README files, t
     }
 
     fn validate(&self, call: &ToolCall) -> Result<(), ToolError> {
-        let command = call
-            .get_string("command")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'command' parameter".to_string()))?;
+        let command = call.get_string("command").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'command' parameter".to_string())
+        })?;
 
         let _path = call
             .get_string("path")
@@ -287,10 +303,10 @@ impl FileSystemTool for EditTool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
     use serde_json::json;
-    use tokio::fs;
+    use std::collections::HashMap;
     use tempfile::TempDir;
+    use tokio::fs;
 
     fn create_tool_call(id: &str, name: &str, args: serde_json::Value) -> ToolCall {
         let arguments = if let serde_json::Value::Object(map) = args {
@@ -313,15 +329,21 @@ mod tests {
         let file_path = temp_dir.path().join("test.txt");
 
         // Create test file
-        fs::write(&file_path, "Hello, World!\nThis is a test file.\n").await.unwrap();
+        fs::write(&file_path, "Hello, World!\nThis is a test file.\n")
+            .await
+            .unwrap();
 
         let tool = EditTool::with_working_directory(temp_dir.path());
-        let call = create_tool_call("test-1", "str_replace_based_edit_tool", json!({
-            "command": "str_replace",
-            "path": "test.txt",
-            "old_str": "World",
-            "new_str": "Rust"
-        }));
+        let call = create_tool_call(
+            "test-1",
+            "str_replace_based_edit_tool",
+            json!({
+                "command": "str_replace",
+                "path": "test.txt",
+                "old_str": "World",
+                "new_str": "Rust"
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -337,11 +359,15 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let tool = EditTool::with_working_directory(temp_dir.path());
 
-        let call = create_tool_call("test-2", "str_replace_based_edit_tool", json!({
-            "command": "create",
-            "path": "new_file.txt",
-            "file_text": "This is a new file content."
-        }));
+        let call = create_tool_call(
+            "test-2",
+            "str_replace_based_edit_tool",
+            json!({
+                "command": "create",
+                "path": "new_file.txt",
+                "file_text": "This is a new file content."
+            }),
+        );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -361,12 +387,16 @@ mod tests {
         fs::write(&file_path, "Hello, World!\n").await.unwrap();
 
         let tool = EditTool::with_working_directory(temp_dir.path());
-        let call = create_tool_call("test-3", "str_replace_based_edit_tool", json!({
-            "command": "str_replace",
-            "path": "test.txt",
-            "old_str": "NonexistentString",
-            "new_str": "replacement"
-        }));
+        let call = create_tool_call(
+            "test-3",
+            "str_replace_based_edit_tool",
+            json!({
+                "command": "str_replace",
+                "path": "test.txt",
+                "old_str": "NonexistentString",
+                "new_str": "replacement"
+            }),
+        );
 
         // Implementation returns Err for string not found
         let result = tool.execute(&call).await;
@@ -384,12 +414,16 @@ mod tests {
         fs::write(&file_path, "test test test\n").await.unwrap();
 
         let tool = EditTool::with_working_directory(temp_dir.path());
-        let call = create_tool_call("test-4", "str_replace_based_edit_tool", json!({
-            "command": "str_replace",
-            "path": "test.txt",
-            "old_str": "test",
-            "new_str": "replaced"
-        }));
+        let call = create_tool_call(
+            "test-4",
+            "str_replace_based_edit_tool",
+            json!({
+                "command": "str_replace",
+                "path": "test.txt",
+                "old_str": "test",
+                "new_str": "replaced"
+            }),
+        );
 
         // Implementation returns Err for multiple occurrences (requires more specificity)
         let result = tool.execute(&call).await;
@@ -403,29 +437,41 @@ mod tests {
         let tool = EditTool::new();
 
         // Missing command - returns Err
-        let call = create_tool_call("test-5a", "str_replace_based_edit_tool", json!({
-            "path": "test.txt",
-            "old_str": "test",
-            "new_str": "replacement"
-        }));
+        let call = create_tool_call(
+            "test-5a",
+            "str_replace_based_edit_tool",
+            json!({
+                "path": "test.txt",
+                "old_str": "test",
+                "new_str": "replacement"
+            }),
+        );
         let result = tool.execute(&call).await;
         assert!(result.is_err());
 
         // Missing path - returns Err
-        let call = create_tool_call("test-5b", "str_replace_based_edit_tool", json!({
-            "command": "str_replace",
-            "old_str": "test",
-            "new_str": "replacement"
-        }));
+        let call = create_tool_call(
+            "test-5b",
+            "str_replace_based_edit_tool",
+            json!({
+                "command": "str_replace",
+                "old_str": "test",
+                "new_str": "replacement"
+            }),
+        );
         let result = tool.execute(&call).await;
         assert!(result.is_err());
 
         // Missing old_str for str_replace - returns Err
-        let call = create_tool_call("test-5c", "str_replace_based_edit_tool", json!({
-            "command": "str_replace",
-            "path": "test.txt",
-            "new_str": "replacement"
-        }));
+        let call = create_tool_call(
+            "test-5c",
+            "str_replace_based_edit_tool",
+            json!({
+                "command": "str_replace",
+                "path": "test.txt",
+                "new_str": "replacement"
+            }),
+        );
         let result = tool.execute(&call).await;
         assert!(result.is_err());
     }

@@ -2,10 +2,10 @@
 
 use crate::console::CLIConsole;
 use crate::signal_handler::start_global_signal_handling;
+use sage_core::error::{SageError, SageResult};
+use sage_sdk::{ExecutionErrorKind, ExecutionOutcome, RunOptions, SageAgentSDK};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use sage_core::error::{SageError, SageResult};
-use sage_sdk::{RunOptions, SageAgentSDK, ExecutionOutcome, ExecutionErrorKind};
 
 /// Arguments for the run command
 pub struct RunArgs {
@@ -64,7 +64,10 @@ pub async fn execute(args: RunArgs) -> SageResult<()> {
         overrides.insert("max_steps".to_string(), max_steps.to_string());
     }
     if let Some(working_dir) = &args.working_dir {
-        overrides.insert("working_dir".to_string(), working_dir.to_string_lossy().to_string());
+        overrides.insert(
+            "working_dir".to_string(),
+            working_dir.to_string_lossy().to_string(),
+        );
     }
 
     // Create SDK instance
@@ -72,7 +75,10 @@ pub async fn execute(args: RunArgs) -> SageResult<()> {
         console.info(&format!("Loading configuration from: {}", args.config_file));
         SageAgentSDK::with_config_file(&args.config_file)?
     } else {
-        console.warn(&format!("Configuration file not found: {}, using defaults", args.config_file));
+        console.warn(&format!(
+            "Configuration file not found: {}, using defaults",
+            args.config_file
+        ));
         SageAgentSDK::new()?
     };
 
@@ -102,28 +108,28 @@ pub async fn execute(args: RunArgs) -> SageResult<()> {
     console.print_header("Task Execution");
     console.info(&format!("Task: {}", task_description));
     console.info(&format!("Provider: {}", sdk.config().default_provider));
-    
+
     if let Ok(params) = sdk.config().default_model_parameters() {
         console.info(&format!("Model: {}", params.model));
     }
-    
+
     console.info(&format!("Max Steps: {}", sdk.config().max_steps));
-    
+
     if let Some(working_dir) = &sdk.config().working_directory {
         console.info(&format!("Working Directory: {}", working_dir.display()));
     }
 
     // Set up run options
     let mut run_options = RunOptions::new();
-    
+
     if let Some(working_dir) = &args.working_dir {
         run_options = run_options.with_working_directory(working_dir);
     }
-    
+
     if let Some(max_steps) = args.max_steps {
         run_options = run_options.with_max_steps(max_steps);
     }
-    
+
     if args.trajectory_file.is_some() {
         run_options = run_options.with_trajectory(true);
         if let Some(path) = &args.trajectory_file {
@@ -134,9 +140,9 @@ pub async fn execute(args: RunArgs) -> SageResult<()> {
     // Execute the task
     console.print_separator();
     console.info("Starting task execution...");
-    
+
     let start_time = std::time::Instant::now();
-    
+
     match sdk.run_with_options(&task_description, run_options).await {
         Ok(result) => {
             let duration = start_time.elapsed();
@@ -202,8 +208,14 @@ pub async fn execute(args: RunArgs) -> SageResult<()> {
             }
 
             console.info(&format!("Execution time: {:.2}s", duration.as_secs_f64()));
-            console.info(&format!("Steps executed: {}", result.execution().steps.len()));
-            console.info(&format!("Total tokens: {}", result.execution().total_usage.total_tokens));
+            console.info(&format!(
+                "Steps executed: {}",
+                result.execution().steps.len()
+            ));
+            console.info(&format!(
+                "Total tokens: {}",
+                result.execution().total_usage.total_tokens
+            ));
 
             if let Some(final_result) = result.final_result() {
                 console.print_header("Final Result");
@@ -211,7 +223,10 @@ pub async fn execute(args: RunArgs) -> SageResult<()> {
             }
 
             if let Some(trajectory_path) = result.trajectory_path() {
-                console.info(&format!("Trajectory saved to: {}", trajectory_path.display()));
+                console.info(&format!(
+                    "Trajectory saved to: {}",
+                    trajectory_path.display()
+                ));
             }
 
             // Handle patch creation

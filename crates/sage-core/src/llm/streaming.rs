@@ -135,9 +135,7 @@ pub mod stream_utils {
     where
         F: Fn(StreamChunk) -> StreamChunk + Send + 'static,
     {
-        Box::pin(stream.map(move |chunk_result| {
-            chunk_result.map(|chunk| f(chunk))
-        }))
+        Box::pin(stream.map(move |chunk_result| chunk_result.map(|chunk| f(chunk))))
     }
 
     /// Filter chunks in the stream
@@ -198,8 +196,16 @@ pub mod stream_utils {
             }
 
             Ok(StreamChunk {
-                content: if combined_content.is_empty() { None } else { Some(combined_content) },
-                tool_calls: if combined_tool_calls.is_empty() { None } else { Some(combined_tool_calls) },
+                content: if combined_content.is_empty() {
+                    None
+                } else {
+                    Some(combined_content)
+                },
+                tool_calls: if combined_tool_calls.is_empty() {
+                    None
+                } else {
+                    Some(combined_tool_calls)
+                },
                 usage: final_usage,
                 is_final,
                 finish_reason: final_finish_reason,
@@ -292,7 +298,7 @@ pub mod sse {
     /// Convert a stream chunk to SSE event
     pub fn chunk_to_sse(chunk: StreamChunk) -> SageResult<SSEEvent> {
         let data = serde_json::to_string(&chunk)?;
-        
+
         let event_type = if chunk.is_final {
             "complete"
         } else if chunk.tool_calls.is_some() {
@@ -305,9 +311,9 @@ pub mod sse {
     }
 
     /// Convert a stream to SSE events
-    pub fn stream_to_sse(stream: LLMStream) -> Pin<Box<dyn Stream<Item = SageResult<SSEEvent>> + Send>> {
-        Box::pin(stream.map(|chunk_result| {
-            chunk_result.and_then(chunk_to_sse)
-        }))
+    pub fn stream_to_sse(
+        stream: LLMStream,
+    ) -> Pin<Box<dyn Stream<Item = SageResult<SSEEvent>> + Send>> {
+        Box::pin(stream.map(|chunk_result| chunk_result.and_then(chunk_to_sse)))
     }
 }
