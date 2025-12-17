@@ -287,14 +287,21 @@ impl BranchManager {
 
     /// Delete a branch
     pub async fn delete(&self, branch_id: &BranchId) -> Option<BranchSnapshot> {
-        let mut branches = self.branches.write().await;
-        let removed = branches.remove(branch_id);
+        // First, remove from branches and drop the lock
+        let removed = {
+            let mut branches = self.branches.write().await;
+            branches.remove(branch_id)
+        };
 
-        // If deleting current branch, clear current
-        if let Some(ref current) = *self.current_branch.read().await {
-            if current == branch_id {
-                *self.current_branch.write().await = None;
-            }
+        // Then, check and update current_branch (separate lock acquisition)
+        // Clone the current value to avoid holding the read lock while acquiring write lock
+        let should_clear = {
+            let current = self.current_branch.read().await;
+            current.as_ref() == Some(branch_id)
+        };
+
+        if should_clear {
+            *self.current_branch.write().await = None;
         }
 
         removed
