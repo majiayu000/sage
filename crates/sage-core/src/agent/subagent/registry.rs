@@ -33,7 +33,7 @@ impl AgentRegistry {
         let id = agent.id();
         self.definitions
             .write()
-            .expect("Failed to acquire write lock")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .insert(id, agent);
     }
 
@@ -41,7 +41,7 @@ impl AgentRegistry {
     pub fn get(&self, agent_type: &AgentType) -> Option<AgentDefinition> {
         self.definitions
             .read()
-            .expect("Failed to acquire read lock")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .get(agent_type.as_str())
             .cloned()
     }
@@ -50,7 +50,7 @@ impl AgentRegistry {
     pub fn get_by_name(&self, name: &str) -> Option<AgentDefinition> {
         self.definitions
             .read()
-            .expect("Failed to acquire read lock")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .get(name)
             .cloned()
     }
@@ -59,7 +59,7 @@ impl AgentRegistry {
     pub fn list_definitions(&self) -> Vec<AgentDefinition> {
         self.definitions
             .read()
-            .expect("Failed to acquire read lock")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .values()
             .cloned()
             .collect()
@@ -69,7 +69,7 @@ impl AgentRegistry {
     pub fn contains(&self, agent_type: &AgentType) -> bool {
         self.definitions
             .read()
-            .expect("Failed to acquire read lock")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .contains_key(agent_type.as_str())
     }
 
@@ -83,7 +83,7 @@ impl AgentRegistry {
 
         self.running
             .write()
-            .expect("Failed to acquire write lock")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .insert(agent_id.clone(), agent);
 
         agent_id
@@ -94,7 +94,7 @@ impl AgentRegistry {
         if let Some(agent) = self
             .running
             .write()
-            .expect("Failed to acquire write lock")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .get_mut(agent_id)
         {
             agent.status = status;
@@ -106,7 +106,7 @@ impl AgentRegistry {
         if let Some(agent) = self
             .running
             .write()
-            .expect("Failed to acquire write lock")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .get_mut(agent_id)
         {
             agent.status = AgentStatus::Running(progress);
@@ -117,7 +117,7 @@ impl AgentRegistry {
     pub fn get_status(&self, agent_id: &str) -> Option<AgentStatus> {
         self.running
             .read()
-            .expect("Failed to acquire read lock")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .get(agent_id)
             .map(|agent| agent.status.clone())
     }
@@ -126,7 +126,7 @@ impl AgentRegistry {
     pub fn get_progress(&self, agent_id: &str) -> Option<AgentProgress> {
         self.running
             .read()
-            .expect("Failed to acquire read lock")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .get(agent_id)
             .and_then(|agent| match &agent.status {
                 AgentStatus::Running(progress) => Some(progress.clone()),
@@ -136,7 +136,7 @@ impl AgentRegistry {
 
     /// Kill a running agent by cancelling it
     pub fn kill(&self, agent_id: &str) -> SageResult<()> {
-        let running = self.running.read().expect("Failed to acquire read lock");
+        let running = self.running.read().unwrap_or_else(|poisoned| poisoned.into_inner());
 
         if let Some(agent) = running.get(agent_id) {
             agent.cancel_token.cancel();
@@ -153,7 +153,7 @@ impl AgentRegistry {
     pub fn list_running(&self) -> Vec<(String, AgentType, AgentStatus)> {
         self.running
             .read()
-            .expect("Failed to acquire read lock")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .iter()
             .map(|(id, agent)| (id.clone(), agent.agent_type, agent.status.clone()))
             .collect()
@@ -163,7 +163,7 @@ impl AgentRegistry {
     pub fn remove(&self, agent_id: &str) {
         self.running
             .write()
-            .expect("Failed to acquire write lock")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .remove(agent_id);
     }
 
@@ -171,7 +171,7 @@ impl AgentRegistry {
     pub fn get_cancel_token(&self, agent_id: &str) -> Option<CancellationToken> {
         self.running
             .read()
-            .expect("Failed to acquire read lock")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .get(agent_id)
             .map(|agent| agent.cancel_token.clone())
     }
@@ -180,7 +180,7 @@ impl AgentRegistry {
     pub fn len(&self) -> usize {
         self.definitions
             .read()
-            .expect("Failed to acquire read lock")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .len()
     }
 
@@ -188,7 +188,7 @@ impl AgentRegistry {
     pub fn is_empty(&self) -> bool {
         self.definitions
             .read()
-            .expect("Failed to acquire read lock")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .is_empty()
     }
 
@@ -196,7 +196,7 @@ impl AgentRegistry {
     pub fn running_count(&self) -> usize {
         self.running
             .read()
-            .expect("Failed to acquire read lock")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .len()
     }
 
@@ -204,7 +204,7 @@ impl AgentRegistry {
     pub fn clear_definitions(&self) {
         self.definitions
             .write()
-            .expect("Failed to acquire write lock")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .clear();
     }
 
@@ -212,7 +212,7 @@ impl AgentRegistry {
     pub fn clear_running(&self) {
         self.running
             .write()
-            .expect("Failed to acquire write lock")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .clear();
     }
 }

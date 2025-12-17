@@ -57,6 +57,7 @@ impl HookExecutionResult {
 /// Hook executor
 pub struct HookExecutor {
     registry: HookRegistry,
+    #[allow(dead_code)]
     default_timeout: Duration,
 }
 
@@ -209,20 +210,28 @@ impl HookExecutor {
         };
 
         // Take stdout and stderr before using them in futures
-        let mut stdout_handle = child.stdout.take().expect("stdout not captured");
-        let mut stderr_handle = child.stderr.take().expect("stderr not captured");
+        let stdout_handle = child.stdout.take();
+        let stderr_handle = child.stderr.take();
 
         // Read output asynchronously
         let stdout_future = async move {
-            let mut output = String::new();
-            stdout_handle.read_to_string(&mut output).await.ok();
-            output
+            if let Some(mut handle) = stdout_handle {
+                let mut output = String::new();
+                handle.read_to_string(&mut output).await.ok();
+                output
+            } else {
+                String::new()
+            }
         };
 
         let stderr_future = async move {
-            let mut output = String::new();
-            stderr_handle.read_to_string(&mut output).await.ok();
-            output
+            if let Some(mut handle) = stderr_handle {
+                let mut output = String::new();
+                handle.read_to_string(&mut output).await.ok();
+                output
+            } else {
+                String::new()
+            }
         };
 
         // Wait for completion or cancellation

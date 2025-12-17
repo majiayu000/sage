@@ -644,7 +644,10 @@ impl LLMClient {
             generation_config["stopSequences"] = json!(stop);
         }
 
-        if !generation_config.as_object().unwrap().is_empty() {
+        if generation_config
+            .as_object()
+            .map_or(false, |obj| !obj.is_empty())
+        {
             request_body["generationConfig"] = generation_config;
         }
 
@@ -879,9 +882,16 @@ impl LLMClient {
                 if let Some(function) = call["function"].as_object() {
                     let tool_call = crate::tools::types::ToolCall {
                         id: call["id"].as_str().unwrap_or("").to_string(),
-                        name: function["name"].as_str().unwrap_or("").to_string(),
+                        name: function
+                            .get("name")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
                         arguments: serde_json::from_str(
-                            function["arguments"].as_str().unwrap_or("{}"),
+                            function
+                                .get("arguments")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("{}"),
                         )
                         .unwrap_or_default(),
                         call_id: None,
@@ -893,9 +903,18 @@ impl LLMClient {
 
         let usage = if let Some(usage_data) = response["usage"].as_object() {
             Some(LLMUsage {
-                prompt_tokens: usage_data["prompt_tokens"].as_u64().unwrap_or(0) as u32,
-                completion_tokens: usage_data["completion_tokens"].as_u64().unwrap_or(0) as u32,
-                total_tokens: usage_data["total_tokens"].as_u64().unwrap_or(0) as u32,
+                prompt_tokens: usage_data
+                    .get("prompt_tokens")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0) as u32,
+                completion_tokens: usage_data
+                    .get("completion_tokens")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0) as u32,
+                total_tokens: usage_data
+                    .get("total_tokens")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0) as u32,
                 cost_usd: None,
             })
         } else {
@@ -958,12 +977,18 @@ impl LLMClient {
         }
 
         let usage = if let Some(usage_data) = response["usage"].as_object() {
+            let input_tokens = usage_data
+                .get("input_tokens")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            let output_tokens = usage_data
+                .get("output_tokens")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
             Some(LLMUsage {
-                prompt_tokens: usage_data["input_tokens"].as_u64().unwrap_or(0) as u32,
-                completion_tokens: usage_data["output_tokens"].as_u64().unwrap_or(0) as u32,
-                total_tokens: (usage_data["input_tokens"].as_u64().unwrap_or(0)
-                    + usage_data["output_tokens"].as_u64().unwrap_or(0))
-                    as u32,
+                prompt_tokens: input_tokens as u32,
+                completion_tokens: output_tokens as u32,
+                total_tokens: (input_tokens + output_tokens) as u32,
                 cost_usd: None,
             })
         } else {
@@ -1113,12 +1138,17 @@ impl LLMClient {
             if let Some(text) = part["text"].as_str() {
                 content.push_str(text);
             } else if let Some(function_call) = part["functionCall"].as_object() {
-                let tool_name = function_call["name"].as_str().unwrap_or("").to_string();
+                let tool_name = function_call
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
                 let tool_call = crate::tools::types::ToolCall {
                     id: format!("call_{}", uuid::Uuid::new_v4()),
                     name: tool_name.clone(),
-                    arguments: function_call["args"]
-                        .as_object()
+                    arguments: function_call
+                        .get("args")
+                        .and_then(|v| v.as_object())
                         .map(|args| {
                             let mut map = std::collections::HashMap::new();
                             for (k, v) in args {
@@ -1126,7 +1156,7 @@ impl LLMClient {
                             }
                             map
                         })
-                        .unwrap_or_else(|| std::collections::HashMap::new()),
+                        .unwrap_or_else(std::collections::HashMap::new),
                     call_id: None,
                 };
                 tool_calls.push(tool_call);
@@ -1276,7 +1306,9 @@ impl LLMClient {
                                 if let Some(choices) = json_data["choices"].as_array() {
                                     if let Some(choice) = choices.first() {
                                         if let Some(delta) = choice["delta"].as_object() {
-                                            if let Some(content) = delta["content"].as_str() {
+                                            if let Some(content) =
+                                                delta.get("content").and_then(|v| v.as_str())
+                                            {
                                                 return Some(Ok(StreamChunk::content(content)));
                                             }
                                         }
@@ -1488,16 +1520,14 @@ impl LLMClient {
 
                                     // Extract usage from message_delta
                                     if let Some(usage_data) = data["usage"].as_object() {
+                                        let output_tokens = usage_data
+                                            .get("output_tokens")
+                                            .and_then(|v| v.as_u64())
+                                            .unwrap_or(0);
                                         state.usage = Some(LLMUsage {
                                             prompt_tokens: 0, // Not provided in delta
-                                            completion_tokens: usage_data["output_tokens"]
-                                                .as_u64()
-                                                .unwrap_or(0)
-                                                as u32,
-                                            total_tokens: usage_data["output_tokens"]
-                                                .as_u64()
-                                                .unwrap_or(0)
-                                                as u32,
+                                            completion_tokens: output_tokens as u32,
+                                            total_tokens: output_tokens as u32,
                                             cost_usd: None,
                                         });
                                     }
