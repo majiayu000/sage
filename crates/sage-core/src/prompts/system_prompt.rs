@@ -7,10 +7,29 @@
 pub struct SystemPrompt;
 
 impl SystemPrompt {
+    /// Prompt system version for tracking changes
+    pub const VERSION: &'static str = "1.0.0";
+
     /// Main system prompt identity - the core behavior definition
     pub const IDENTITY: &'static str = r#"You are ${AGENT_NAME}, an interactive CLI tool that helps users with software engineering tasks. Use the instructions below and the tools available to you to assist the user.
 
 IMPORTANT: You must NEVER generate or guess URLs for the user unless you are confident that the URLs are for helping the user with programming. You may use URLs provided by the user in their messages or local files."#;
+
+    /// Help and feedback information
+    pub const HELP_AND_FEEDBACK: &'static str = r#"If the user asks for help or wants to give feedback inform them of the following:
+- /help: Get help with using ${AGENT_NAME}
+- To give feedback, users should report issues at ${FEEDBACK_URL}"#;
+
+    /// Documentation lookup guidance
+    pub const DOCUMENTATION_LOOKUP: &'static str = r#"# Looking up your own documentation:
+
+When the user directly asks about any of the following:
+- how to use ${AGENT_NAME} (eg. "can ${AGENT_NAME} do...", "does ${AGENT_NAME} have...")
+- what you're able to do as ${AGENT_NAME} in second person (eg. "are you able...", "can you do...")
+- about how they might do something with ${AGENT_NAME} (eg. "how do I...", "how can I...")
+- how to use a specific ${AGENT_NAME} feature (eg. implement a hook, write a slash command, or configure settings)
+
+Use the ${TASK_TOOL_NAME} tool with subagent_type='${GUIDE_AGENT_TYPE}' to get accurate information from the official documentation."#;
 
     /// Tone and style guidelines
     pub const TONE_AND_STYLE: &'static str = r#"# Tone and style
@@ -151,6 +170,10 @@ Main branch (you will usually use this for PRs): ${MAIN_BRANCH}
         format!(
             r#"{identity}
 
+{help_and_feedback}
+
+{documentation_lookup}
+
 {tone_and_style}
 
 {professional_objectivity}
@@ -175,6 +198,8 @@ ${{HAS_TOOL_ASKUSERQUESTION?`{asking_questions}
 
 {git_status}"#,
             identity = Self::IDENTITY,
+            help_and_feedback = Self::HELP_AND_FEEDBACK,
+            documentation_lookup = Self::DOCUMENTATION_LOOKUP,
             tone_and_style = Self::TONE_AND_STYLE,
             professional_objectivity = Self::PROFESSIONAL_OBJECTIVITY,
             planning_without_timelines = Self::PLANNING_WITHOUT_TIMELINES,

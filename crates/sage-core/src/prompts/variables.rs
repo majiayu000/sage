@@ -29,6 +29,14 @@ pub struct PromptVariables {
     pub explore_agent_type: String,
     pub plan_agent_type: String,
     pub code_review_agent_type: String,
+    pub guide_agent_type: String,
+
+    /// Feedback and docs
+    pub feedback_url: String,
+    pub docs_url: String,
+
+    /// Version tracking
+    pub prompt_version: String,
 
     /// Environment info
     pub working_dir: String,
@@ -78,6 +86,12 @@ impl PromptVariables {
             explore_agent_type: "Explore".to_string(),
             plan_agent_type: "Plan".to_string(),
             code_review_agent_type: "code-review".to_string(),
+            guide_agent_type: "guide".to_string(),
+
+            feedback_url: "https://github.com/anthropics/sage/issues".to_string(),
+            docs_url: "https://docs.sage-agent.dev".to_string(),
+
+            prompt_version: "1.0.0".to_string(),
 
             working_dir: ".".to_string(),
             platform: std::env::consts::OS.to_string(),
@@ -135,6 +149,12 @@ impl PromptVariables {
             "EXPLORE_AGENT_TYPE" => Some(self.explore_agent_type.clone()),
             "PLAN_AGENT_TYPE" => Some(self.plan_agent_type.clone()),
             "CODE_REVIEW_AGENT_TYPE" => Some(self.code_review_agent_type.clone()),
+            "GUIDE_AGENT_TYPE" => Some(self.guide_agent_type.clone()),
+
+            "FEEDBACK_URL" => Some(self.feedback_url.clone()),
+            "DOCS_URL" => Some(self.docs_url.clone()),
+
+            "PROMPT_VERSION" => Some(self.prompt_version.clone()),
 
             "WORKING_DIR" => Some(self.working_dir.clone()),
             "PLATFORM" => Some(self.platform.clone()),
@@ -323,7 +343,8 @@ impl TemplateRenderer {
             "GLOB_TOOL_NAME", "GREP_TOOL_NAME", "TASK_TOOL_NAME", "TODO_TOOL_NAME",
             "ASK_USER_QUESTION_TOOL_NAME", "WEB_FETCH_TOOL_NAME",
             "ENTER_PLAN_MODE_TOOL_NAME", "EXIT_PLAN_MODE_TOOL_NAME",
-            "EXPLORE_AGENT_TYPE", "PLAN_AGENT_TYPE", "CODE_REVIEW_AGENT_TYPE",
+            "EXPLORE_AGENT_TYPE", "PLAN_AGENT_TYPE", "CODE_REVIEW_AGENT_TYPE", "GUIDE_AGENT_TYPE",
+            "FEEDBACK_URL", "DOCS_URL", "PROMPT_VERSION",
             "WORKING_DIR", "PLATFORM", "OS_VERSION", "CURRENT_DATE",
             "GIT_BRANCH", "MAIN_BRANCH",
             "AGENT_NAME", "AGENT_VERSION", "MODEL_NAME",
