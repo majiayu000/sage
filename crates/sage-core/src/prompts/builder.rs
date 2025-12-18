@@ -1,56 +1,103 @@
 //! System prompt builder
 //!
-//! Provides a fluent API for constructing system prompts dynamically.
+//! Provides a fluent API for constructing system prompts dynamically,
+//! following Claude Code's design pattern with template variables.
 
-use super::system_prompt::SystemPrompt;
+use super::system_prompt::{GitPrompts, SecurityPolicy, SystemPrompt};
 use super::system_reminders::SystemReminder;
+use super::tool_descriptions::ToolDescriptions;
+use super::variables::{PromptVariables, TemplateRenderer};
 use crate::tools::types::ToolSchema;
 
 /// Builder for constructing system prompts
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct SystemPromptBuilder {
-    /// Identity information (model name, provider)
-    identity_info: Option<String>,
-    /// Task description
-    task_description: Option<String>,
-    /// Working directory
-    working_dir: Option<String>,
+    /// Variables for template rendering
+    variables: PromptVariables,
     /// Tool schemas for description
     tools: Vec<ToolSchema>,
     /// System reminders to include
     reminders: Vec<SystemReminder>,
     /// Whether in plan mode
     in_plan_mode: bool,
+    /// Plan file path (for plan mode)
+    plan_file_path: Option<String>,
+    /// Whether plan file exists
+    plan_exists: bool,
+    /// Include Git instructions
+    include_git_instructions: bool,
+    /// Include security policy
+    include_security_policy: bool,
     /// Custom sections to add
     custom_sections: Vec<(String, String)>,
 }
 
+impl Default for SystemPromptBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SystemPromptBuilder {
-    /// Create a new builder
+    /// Create a new builder with default variables
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            variables: PromptVariables::new(),
+            tools: Vec::new(),
+            reminders: Vec::new(),
+            in_plan_mode: false,
+            plan_file_path: None,
+            plan_exists: false,
+            include_git_instructions: true,
+            include_security_policy: true,
+            custom_sections: Vec::new(),
+        }
     }
 
-    /// Set identity information
-    pub fn with_identity(mut self, identity: impl Into<String>) -> Self {
-        self.identity_info = Some(identity.into());
+    /// Set the agent name
+    pub fn with_agent_name(mut self, name: impl Into<String>) -> Self {
+        self.variables.agent_name = name.into();
+        self
+    }
+
+    /// Set the agent version
+    pub fn with_agent_version(mut self, version: impl Into<String>) -> Self {
+        self.variables.agent_version = version.into();
+        self
+    }
+
+    /// Set the model name
+    pub fn with_model_name(mut self, model: impl Into<String>) -> Self {
+        self.variables.model_name = model.into();
         self
     }
 
     /// Set task description
     pub fn with_task(mut self, description: impl Into<String>) -> Self {
-        self.task_description = Some(description.into());
+        self.variables.task_description = description.into();
         self
     }
 
     /// Set working directory
     pub fn with_working_dir(mut self, dir: impl Into<String>) -> Self {
-        self.working_dir = Some(dir.into());
+        self.variables.working_dir = dir.into();
         self
     }
 
-    /// Add tools for description
+    /// Set Git information
+    pub fn with_git_info(mut self, is_repo: bool, branch: impl Into<String>, main_branch: impl Into<String>) -> Self {
+        self.variables.is_git_repo = is_repo;
+        self.variables.git_branch = branch.into();
+        self.variables.main_branch = main_branch.into();
+        self
+    }
+
+    /// Add tools for description and register them as available
     pub fn with_tools(mut self, tools: Vec<ToolSchema>) -> Self {
+        // Register each tool as available
+        for tool in &tools {
+            self.variables.add_tool(&tool.name);
+        }
         self.tools = tools;
         self
     }
@@ -70,6 +117,29 @@ impl SystemPromptBuilder {
     /// Enable plan mode
     pub fn in_plan_mode(mut self, enabled: bool) -> Self {
         self.in_plan_mode = enabled;
+        self.variables.in_plan_mode = enabled;
+        self
+    }
+
+    /// Set plan file path
+    pub fn with_plan_file(mut self, path: impl Into<String>, exists: bool) -> Self {
+        let path = path.into();
+        self.plan_file_path = Some(path.clone());
+        self.plan_exists = exists;
+        self.variables.plan_file_path = path;
+        self.variables.plan_exists = exists;
+        self
+    }
+
+    /// Include Git instructions
+    pub fn with_git_instructions(mut self, include: bool) -> Self {
+        self.include_git_instructions = include;
+        self
+    }
+
+    /// Include security policy
+    pub fn with_security_policy(mut self, include: bool) -> Self {
+        self.include_security_policy = include;
         self
     }
 
@@ -79,7 +149,20 @@ impl SystemPromptBuilder {
         self
     }
 
-    /// Build the tools description string
+    /// Set a custom variable
+    pub fn with_variable(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.variables.set(key, value);
+        self
+    }
+
+    /// Set platform info
+    pub fn with_platform(mut self, platform: impl Into<String>, os_version: impl Into<String>) -> Self {
+        self.variables.platform = platform.into();
+        self.variables.os_version = os_version.into();
+        self
+    }
+
+    /// Build the tools description string with detailed descriptions
     fn build_tools_description(&self) -> String {
         if self.tools.is_empty() {
             return "No tools available.".to_string();
@@ -87,20 +170,36 @@ impl SystemPromptBuilder {
 
         self.tools
             .iter()
-            .map(|schema| format!("- {}: {}", schema.name, schema.description))
+            .map(|schema| {
+                // Try to get detailed description from ToolDescriptions
+                let description = ToolDescriptions::for_tool(&schema.name)
+                    .map(|d| TemplateRenderer::render(d, &self.variables))
+                    .unwrap_or_else(|| schema.description.clone());
+
+                format!("## {}\n{}", schema.name, description)
+            })
             .collect::<Vec<_>>()
-            .join("\n")
+            .join("\n\n")
     }
 
     /// Build the reminders section
     fn build_reminders(&self) -> String {
-        if self.reminders.is_empty() {
+        let mut reminders = self.reminders.clone();
+
+        // Add plan mode reminder if in plan mode
+        if self.in_plan_mode {
+            if let Some(plan_path) = &self.plan_file_path {
+                reminders.insert(0, SystemReminder::plan_mode_active(plan_path, self.plan_exists));
+            }
+        }
+
+        if reminders.is_empty() {
             return String::new();
         }
 
-        self.reminders
+        reminders
             .iter()
-            .map(|r| r.to_prompt_string())
+            .map(|r| TemplateRenderer::render(&r.to_prompt_string(), &self.variables))
             .collect::<Vec<_>>()
             .join("\n\n")
     }
@@ -118,48 +217,50 @@ impl SystemPromptBuilder {
             .join("\n\n")
     }
 
-    /// Build the plan mode section if enabled
-    fn build_plan_mode_section(&self) -> String {
-        if !self.in_plan_mode {
+    /// Build the security and Git sections
+    fn build_additional_sections(&self) -> String {
+        let mut sections = Vec::new();
+
+        if self.include_security_policy {
+            sections.push(SecurityPolicy::MAIN.to_string());
+        }
+
+        if self.include_git_instructions && self.variables.is_git_repo {
+            sections.push(GitPrompts::SAFETY_PROTOCOL.to_string());
+            sections.push(GitPrompts::PR_CREATION.to_string());
+        }
+
+        if sections.is_empty() {
             return String::new();
         }
 
-        r#"
-# PLAN MODE ACTIVE
-
-You are in plan mode. Follow these guidelines:
-1. Focus on understanding and designing, NOT implementing yet
-2. Use Explore and Plan agents to gather information
-3. Write your plan to the plan file
-4. Call ExitPlanMode when ready for user approval
-5. Keep planning brief (< 2 minutes) - you'll implement after approval
-
-DO NOT:
-- Write code files in plan mode
-- Call task_done in plan mode
-- Skip directly to implementation
-"#.to_string()
+        sections
+            .iter()
+            .map(|s| TemplateRenderer::render(s, &self.variables))
+            .collect::<Vec<_>>()
+            .join("\n\n")
     }
 
     /// Build the complete system prompt
     pub fn build(&self) -> String {
-        let identity = self.identity_info.as_deref().unwrap_or("Sage Agent");
-        let task = self.task_description.as_deref().unwrap_or("No task specified");
-        let working_dir = self.working_dir.as_deref().unwrap_or(".");
+        // Start with the main system prompt template
+        let main_prompt = SystemPrompt::build_main_prompt();
+
+        // Render with variables
+        let mut prompt = TemplateRenderer::render(&main_prompt, &self.variables);
+
+        // Add tools section
         let tools_desc = self.build_tools_description();
+        if !tools_desc.is_empty() {
+            prompt.push_str("\n\n# Available Tools\n\n");
+            prompt.push_str(&tools_desc);
+        }
 
-        let mut prompt = SystemPrompt::build_full_prompt(
-            identity,
-            task,
-            working_dir,
-            &tools_desc,
-        );
-
-        // Add plan mode section if active
-        let plan_mode_section = self.build_plan_mode_section();
-        if !plan_mode_section.is_empty() {
+        // Add Git and security sections
+        let additional = self.build_additional_sections();
+        if !additional.is_empty() {
             prompt.push_str("\n\n");
-            prompt.push_str(&plan_mode_section);
+            prompt.push_str(&additional);
         }
 
         // Add custom sections
@@ -178,6 +279,44 @@ DO NOT:
 
         prompt
     }
+
+    /// Build a prompt for a specific agent type
+    pub fn build_for_agent(&self, agent_type: &str) -> String {
+        use super::agent_prompts::AgentPrompts;
+
+        let agent_prompt = AgentPrompts::for_agent_type(agent_type)
+            .unwrap_or(AgentPrompts::GENERAL_PURPOSE);
+
+        let mut prompt = TemplateRenderer::render(agent_prompt, &self.variables);
+
+        // Add tools if not a read-only agent
+        if !AgentPrompts::is_read_only(agent_type) {
+            let tools_desc = self.build_tools_description();
+            if !tools_desc.is_empty() {
+                prompt.push_str("\n\n# Available Tools\n\n");
+                prompt.push_str(&tools_desc);
+            }
+        }
+
+        // Add reminders
+        let reminders = self.build_reminders();
+        if !reminders.is_empty() {
+            prompt.push_str("\n\n");
+            prompt.push_str(&reminders);
+        }
+
+        prompt
+    }
+
+    /// Get a reference to the variables
+    pub fn variables(&self) -> &PromptVariables {
+        &self.variables
+    }
+
+    /// Get a mutable reference to the variables
+    pub fn variables_mut(&mut self) -> &mut PromptVariables {
+        &mut self.variables
+    }
 }
 
 #[cfg(test)]
@@ -187,31 +326,39 @@ mod tests {
     #[test]
     fn test_builder_basic() {
         let prompt = SystemPromptBuilder::new()
-            .with_identity("Test Agent")
+            .with_agent_name("Test Agent")
             .with_task("Test task")
             .with_working_dir("/test")
             .build();
 
         assert!(prompt.contains("Test Agent"));
-        assert!(prompt.contains("Test task"));
-        assert!(prompt.contains("/test"));
-        assert!(prompt.contains("CODE-FIRST"));
+        assert!(prompt.contains("Tone and style"));
+        assert!(prompt.contains("Professional objectivity"));
     }
 
     #[test]
     fn test_builder_with_tools() {
         let tools = vec![
-            ToolSchema::new("tool1", "Description 1", vec![]),
-            ToolSchema::new("tool2", "Description 2", vec![]),
+            ToolSchema::new("Read", "Reads files", vec![]),
+            ToolSchema::new("Write", "Writes files", vec![]),
         ];
 
         let prompt = SystemPromptBuilder::new()
             .with_tools(tools)
             .build();
 
-        assert!(prompt.contains("tool1"));
-        assert!(prompt.contains("tool2"));
-        assert!(prompt.contains("Description 1"));
+        assert!(prompt.contains("Read"));
+        assert!(prompt.contains("Write"));
+        assert!(prompt.contains("Available Tools"));
+    }
+
+    #[test]
+    fn test_builder_with_git_info() {
+        let prompt = SystemPromptBuilder::new()
+            .with_git_info(true, "feature-branch", "main")
+            .build();
+
+        assert!(prompt.contains("Yes")); // Is git repo
     }
 
     #[test]
@@ -228,10 +375,11 @@ mod tests {
     fn test_builder_plan_mode() {
         let prompt = SystemPromptBuilder::new()
             .in_plan_mode(true)
+            .with_plan_file("/tmp/plan.md", false)
             .build();
 
-        assert!(prompt.contains("PLAN MODE ACTIVE"));
-        assert!(prompt.contains("ExitPlanMode"));
+        assert!(prompt.contains("Plan mode is active"));
+        assert!(prompt.contains("Phase 1: Initial Understanding"));
     }
 
     #[test]
@@ -242,5 +390,54 @@ mod tests {
 
         assert!(prompt.contains("Custom Rules"));
         assert!(prompt.contains("Follow these custom rules"));
+    }
+
+    #[test]
+    fn test_builder_agent_prompt() {
+        let builder = SystemPromptBuilder::new()
+            .with_agent_name("Sage Agent");
+
+        let explore_prompt = builder.build_for_agent("explore");
+        assert!(explore_prompt.contains("file search specialist"));
+        assert!(explore_prompt.contains("READ-ONLY"));
+        assert!(explore_prompt.contains("Sage Agent"));
+
+        let general_prompt = builder.build_for_agent("general");
+        assert!(general_prompt.contains("general-purpose agent"));
+    }
+
+    #[test]
+    fn test_builder_variable_rendering() {
+        let prompt = SystemPromptBuilder::new()
+            .with_agent_name("MyAgent")
+            .with_model_name("claude-3")
+            .with_working_dir("/home/user/project")
+            .build();
+
+        assert!(prompt.contains("MyAgent"));
+        assert!(prompt.contains("/home/user/project"));
+    }
+
+    #[test]
+    fn test_builder_with_security_policy() {
+        let prompt = SystemPromptBuilder::new()
+            .with_security_policy(true)
+            .build();
+
+        assert!(prompt.contains("security"));
+    }
+
+    #[test]
+    fn test_builder_tools_registered_as_available() {
+        let tools = vec![
+            ToolSchema::new("Bash", "Execute commands", vec![]),
+            ToolSchema::new("TodoWrite", "Manage tasks", vec![]),
+        ];
+
+        let builder = SystemPromptBuilder::new()
+            .with_tools(tools);
+
+        assert!(builder.variables.has_tool("Bash"));
+        assert!(builder.variables.has_tool("TodoWrite"));
     }
 }
