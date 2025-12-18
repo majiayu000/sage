@@ -46,8 +46,9 @@ pub mod network {
 // Re-export all tools for easy access
 // Note: JsonEditTool, CodebaseRetrievalTool, MultiEditTool are Sage-specific and currently disabled
 pub use diagnostics::{
+    get_global_memory_manager, get_memories_for_context, init_global_memory_manager,
     DiagnosticsTool, RememberTool, RenderMermaidTool, SearchUntruncatedTool,
-    ViewRangeUntruncatedTool,
+    SessionNotesTool, ViewRangeUntruncatedTool,
 };
 pub use extensions::{SkillTool, SlashCommandTool};
 pub use file_ops::{EditTool, GlobTool, GrepTool, NotebookEditTool, ReadTool, WriteTool};
@@ -110,6 +111,7 @@ pub fn get_default_tools() -> Vec<Arc<dyn Tool>> {
         Arc::new(ViewRangeUntruncatedTool::new()),
         Arc::new(SearchUntruncatedTool::new()),
         Arc::new(RememberTool::new()),
+        Arc::new(SessionNotesTool::new()),
         Arc::new(RenderMermaidTool::new()),
         // VCS
         Arc::new(GitTool::new()),
@@ -186,6 +188,7 @@ pub fn get_diagnostics_tools() -> Vec<Arc<dyn Tool>> {
         Arc::new(ViewRangeUntruncatedTool::new()),
         Arc::new(SearchUntruncatedTool::new()),
         Arc::new(RememberTool::new()),
+        Arc::new(SessionNotesTool::new()),
         Arc::new(RenderMermaidTool::new()),
     ]
 }

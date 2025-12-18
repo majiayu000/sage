@@ -9,4 +9,9 @@ pub mod util_functions;
 pub use sequential_thinking::SequentialThinkingTool;
 
 // Re-export utility functions
-pub use util_functions::{check_command_efficiency, maybe_truncate, suggest_efficient_alternative};
+pub use util_functions::{
+    check_command_efficiency, estimate_tokens, maybe_truncate, maybe_truncate_by_tokens,
+    maybe_truncate_with_limit, suggest_efficient_alternative, truncate_output,
+    truncate_output_with_limit, TruncatedOutput, MAX_LINE_LENGTH, MAX_RESPONSE_LEN,
+    TRUNCATED_MESSAGE,
+};

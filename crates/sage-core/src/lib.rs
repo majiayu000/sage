@@ -61,8 +61,9 @@ pub use context::{
 pub use error::{SageError, SageResult};
 pub use events::{Event, EventBus, SharedEventBus};
 pub use hooks::{
-    CommandHook, HookConfig, HookEvent, HookExecutionResult, HookExecutor, HookImplementation,
-    HookInput, HookOutput, HookRegistry, HookType, PromptHook,
+    CallbackHook, CommandHook, HookConfig, HookEvent, HookExecutionResult, HookExecutor,
+    HookImplementation, HookInput, HookMatcher, HookOutput, HookRegistry, HookType, HookVariant,
+    HooksConfig, PermissionDecision, PromptHook,
 };
 pub use interrupt::{InterruptManager, InterruptReason, TaskScope};
 pub use llm::{LLMClient, LLMMessage, LLMProvider, LLMResponse};

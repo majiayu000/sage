@@ -123,6 +123,18 @@ impl HookRegistry {
         for matcher in &config.permission_request {
             let _ = registry.register(HookEvent::PermissionRequest, matcher.clone());
         }
+        for matcher in &config.pre_compact {
+            let _ = registry.register(HookEvent::PreCompact, matcher.clone());
+        }
+        for matcher in &config.notification {
+            let _ = registry.register(HookEvent::Notification, matcher.clone());
+        }
+        for matcher in &config.stop {
+            let _ = registry.register(HookEvent::Stop, matcher.clone());
+        }
+        for matcher in &config.status_line {
+            let _ = registry.register(HookEvent::StatusLine, matcher.clone());
+        }
 
         registry
     }
@@ -166,6 +178,22 @@ pub struct HooksConfig {
     /// Hooks for permission requests
     #[serde(default)]
     pub permission_request: Vec<HookMatcher>,
+
+    /// Hooks for before context compaction
+    #[serde(default)]
+    pub pre_compact: Vec<HookMatcher>,
+
+    /// Hooks for notifications
+    #[serde(default)]
+    pub notification: Vec<HookMatcher>,
+
+    /// Hooks for agent stop
+    #[serde(default)]
+    pub stop: Vec<HookMatcher>,
+
+    /// Hooks for status line updates
+    #[serde(default)]
+    pub status_line: Vec<HookMatcher>,
 }
 
 impl Default for HookRegistry {
@@ -337,6 +365,10 @@ mod tests {
             subagent_start: vec![],
             subagent_stop: vec![],
             permission_request: vec![],
+            pre_compact: vec![],
+            notification: vec![],
+            stop: vec![],
+            status_line: vec![],
         };
 
         let registry = HookRegistry::from_config(&config);
@@ -391,6 +423,10 @@ mod tests {
             subagent_start: vec![],
             subagent_stop: vec![],
             permission_request: vec![],
+            pre_compact: vec![],
+            notification: vec![],
+            stop: vec![],
+            status_line: vec![],
         };
 
         let json = serde_json::to_string(&config).unwrap();

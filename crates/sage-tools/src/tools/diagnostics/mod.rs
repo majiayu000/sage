@@ -8,5 +8,8 @@ pub mod mermaid;
 // Re-export tools
 pub use content_processing::{SearchUntruncatedTool, ViewRangeUntruncatedTool};
 pub use ide_diagnostics::DiagnosticsTool;
-pub use memory::RememberTool;
+pub use memory::{
+    get_global_memory_manager, get_memories_for_context, init_global_memory_manager,
+    RememberTool, SessionNotesTool,
+};
 pub use mermaid::RenderMermaidTool;

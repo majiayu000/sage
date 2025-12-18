@@ -26,6 +26,14 @@ pub enum HookEvent {
     SubagentStop,
     /// Permission request
     PermissionRequest,
+    /// Before context compaction
+    PreCompact,
+    /// Notification event
+    Notification,
+    /// Agent is stopping (main agent)
+    Stop,
+    /// Status line update
+    StatusLine,
 }
 
 impl HookEvent {
@@ -40,6 +48,10 @@ impl HookEvent {
             HookEvent::SubagentStart | HookEvent::SubagentStop => "agent_type",
             HookEvent::UserPromptSubmit => "prompt",
             HookEvent::PermissionRequest => "tool_name",
+            HookEvent::PreCompact => "trigger",
+            HookEvent::Notification => "notification_type",
+            HookEvent::Stop => "stop_reason",
+            HookEvent::StatusLine => "status",
         }
     }
 
@@ -55,6 +67,10 @@ impl HookEvent {
             HookEvent::SubagentStart => "Sub-agent starts",
             HookEvent::SubagentStop => "Sub-agent stops",
             HookEvent::PermissionRequest => "Permission request",
+            HookEvent::PreCompact => "Before context compaction",
+            HookEvent::Notification => "Notification event",
+            HookEvent::Stop => "Agent is stopping",
+            HookEvent::StatusLine => "Status line update",
         }
     }
 
@@ -70,6 +86,10 @@ impl HookEvent {
             HookEvent::SubagentStart,
             HookEvent::SubagentStop,
             HookEvent::PermissionRequest,
+            HookEvent::PreCompact,
+            HookEvent::Notification,
+            HookEvent::Stop,
+            HookEvent::StatusLine,
         ]
     }
 }
@@ -86,6 +106,10 @@ impl fmt::Display for HookEvent {
             HookEvent::SubagentStart => write!(f, "SubagentStart"),
             HookEvent::SubagentStop => write!(f, "SubagentStop"),
             HookEvent::PermissionRequest => write!(f, "PermissionRequest"),
+            HookEvent::PreCompact => write!(f, "PreCompact"),
+            HookEvent::Notification => write!(f, "Notification"),
+            HookEvent::Stop => write!(f, "Stop"),
+            HookEvent::StatusLine => write!(f, "StatusLine"),
         }
     }
 }
@@ -111,6 +135,10 @@ mod tests {
         assert_eq!(HookEvent::SubagentStart.match_field(), "agent_type");
         assert_eq!(HookEvent::SubagentStop.match_field(), "agent_type");
         assert_eq!(HookEvent::PermissionRequest.match_field(), "tool_name");
+        assert_eq!(HookEvent::PreCompact.match_field(), "trigger");
+        assert_eq!(HookEvent::Notification.match_field(), "notification_type");
+        assert_eq!(HookEvent::Stop.match_field(), "stop_reason");
+        assert_eq!(HookEvent::StatusLine.match_field(), "status");
     }
 
     #[test]
@@ -136,12 +164,16 @@ mod tests {
             HookEvent::PermissionRequest.description(),
             "Permission request"
         );
+        assert_eq!(HookEvent::PreCompact.description(), "Before context compaction");
+        assert_eq!(HookEvent::Notification.description(), "Notification event");
+        assert_eq!(HookEvent::Stop.description(), "Agent is stopping");
+        assert_eq!(HookEvent::StatusLine.description(), "Status line update");
     }
 
     #[test]
     fn test_hook_event_all() {
         let all_events = HookEvent::all();
-        assert_eq!(all_events.len(), 9);
+        assert_eq!(all_events.len(), 13);
         assert!(all_events.contains(&HookEvent::PreToolUse));
         assert!(all_events.contains(&HookEvent::PostToolUse));
         assert!(all_events.contains(&HookEvent::PostToolUseFailure));
@@ -151,6 +183,10 @@ mod tests {
         assert!(all_events.contains(&HookEvent::SubagentStart));
         assert!(all_events.contains(&HookEvent::SubagentStop));
         assert!(all_events.contains(&HookEvent::PermissionRequest));
+        assert!(all_events.contains(&HookEvent::PreCompact));
+        assert!(all_events.contains(&HookEvent::Notification));
+        assert!(all_events.contains(&HookEvent::Stop));
+        assert!(all_events.contains(&HookEvent::StatusLine));
     }
 
     #[test]
@@ -173,6 +209,10 @@ mod tests {
             format!("{}", HookEvent::PermissionRequest),
             "PermissionRequest"
         );
+        assert_eq!(format!("{}", HookEvent::PreCompact), "PreCompact");
+        assert_eq!(format!("{}", HookEvent::Notification), "Notification");
+        assert_eq!(format!("{}", HookEvent::Stop), "Stop");
+        assert_eq!(format!("{}", HookEvent::StatusLine), "StatusLine");
     }
 
     #[test]

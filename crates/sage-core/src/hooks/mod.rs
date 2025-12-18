@@ -60,6 +60,6 @@ pub use executor::{HookExecutionResult, HookExecutor};
 pub use matcher::{matches, PatternMatcher};
 pub use registry::{HookRegistry, HooksConfig};
 pub use types::{
-    CommandHook, HookConfig, HookImplementation, HookInput, HookMatcher, HookOutput, HookType,
-    PromptHook,
+    CallbackHook, CommandHook, HookConfig, HookImplementation, HookInput, HookMatcher,
+    HookOutput, HookType, HookVariant, PermissionDecision, PromptHook,
 };
