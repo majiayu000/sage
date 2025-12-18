@@ -16,6 +16,7 @@ pub mod error;
 pub mod events;
 pub mod hooks;
 pub mod interrupt;
+pub mod learning;
 pub mod llm;
 pub mod mcp;
 pub mod memory;
@@ -152,6 +153,12 @@ pub use memory::{
     FileMemoryStorage, Memory, MemoryCategory, MemoryConfig, MemoryId, MemoryManager,
     MemoryMetadata, MemoryQuery, MemoryScore, MemorySource, MemoryStats, MemoryStorage,
     MemoryStorageError, MemoryType, RelevanceScore, SharedMemoryManager, create_memory_manager,
+};
+pub use learning::{
+    Confidence, CorrectionRecord, CorrectionStats, LearningConfig, LearningEngine, LearningError,
+    LearningEvent, LearningEventType, LearningStats, Pattern, PatternDetector, PatternId,
+    PatternSource, PatternType, PreferenceIndicator, SharedLearningEngine, StylePattern,
+    analyze_user_message, create_learning_engine, create_learning_engine_with_memory,
 };
 pub use storage::{
     BackendType, ConnectionPool, ConnectionStatus, DatabaseBackend, DatabaseError, DatabaseRow,

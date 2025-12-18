@@ -59,6 +59,6 @@ pub use transport::{
     HttpTransport, HttpTransportConfig, McpTransport, StdioTransport, TransportConfig,
 };
 pub use types::{
-    McpCapabilities, McpPrompt, McpResource, McpResourceContent, McpServerInfo, McpTool,
+    McpCapabilities, McpContent, McpPrompt, McpResource, McpResourceContent, McpServerInfo, McpTool,
     McpToolResult,
 };

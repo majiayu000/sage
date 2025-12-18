@@ -1,10 +1,8 @@
 //! Tool implementations for Sage Agent
 
 pub mod config;
+pub mod mcp_tools;
 pub mod tools;
-
-// TODO: Add MCP-compatible tools
-// pub mod mcp_tools;  // MCP protocol compatible tools
 
 // TODO: Add development tools
 // pub mod git;         // Advanced Git operations
