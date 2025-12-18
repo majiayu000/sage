@@ -131,6 +131,12 @@ pub use cost::{
     TrackResult, UsageRecord, UsageStats,
 };
 pub use prompts::{BuiltinPrompts, PromptRegistry, PromptTemplate, PromptVariable, RenderError};
+// New modular prompt system (Claude Code style)
+pub use prompts::{
+    SystemPromptBuilder, SystemPrompt, SystemReminder, PlanPhase,
+    PromptVariables, TemplateRenderer, ToolDescriptions, AgentPrompts,
+    GitPrompts, SecurityPolicy,
+};
 pub use telemetry::{
     Counter, Gauge, Histogram, HistogramData, HistogramTimer, LabeledCounter, Metric, MetricType,
     MetricValue, MetricsCollector, MetricsSnapshot, SharedMetricsCollector, create_metrics_collector,

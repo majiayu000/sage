@@ -8,6 +8,7 @@ use crate::error::{SageError, SageResult};
 use crate::llm::client::LLMClient;
 use crate::llm::messages::LLMMessage;
 use crate::llm::providers::LLMProvider;
+use crate::prompts::SystemPromptBuilder;
 use crate::tools::batch_executor::BatchToolExecutor;
 use crate::tools::types::{ToolCall, ToolResult};
 use crate::types::{Id, TaskMetadata};
@@ -212,78 +213,67 @@ impl ClaudeStyleAgent {
         })
     }
 
-    /// Create system message for Claude Code style interaction
+    /// Create system message for Claude Code style interaction using modular prompt system
     fn create_system_message(&self, context: Option<&TaskMetadata>) -> LLMMessage {
-        let context_info = if let Some(ctx) = context {
-            format!(
-                "\n# Current Task Context\n{}\n# Working Directory\n{}\n",
-                ctx.description, ctx.working_dir
-            )
+        // Get tool schemas
+        let tool_schemas = self.batch_executor.get_tool_schemas();
+
+        // Extract context info
+        let (task_desc, working_dir) = if let Some(ctx) = context {
+            (ctx.description.clone(), ctx.working_dir.clone())
         } else {
-            String::new()
+            ("General assistance".to_string(), ".".to_string())
         };
 
-        let system_prompt = format!(
-            r#"# Role
-You are Sage Agent, an agentic coding AI assistant with access to the developer's codebase.
-You can read from and write to the codebase using the provided tools.
+        // Check if working directory is a git repo
+        let is_git_repo = std::path::Path::new(&working_dir)
+            .join(".git")
+            .exists();
 
-# Identity
-You are Sage Agent developed by Sage Code, based on advanced language models.
-{}
-# Task Understanding Rules
-CRITICAL: When users ask you to "design", "create", "implement", or "build" something:
-- This means WRITE WORKING CODE, not documentation
-- This means CREATE ACTUAL IMPLEMENTATIONS, not plans or designs
-- Documentation should only be created when EXPLICITLY requested
-- Always prioritize executable code over explanatory text
+        // Get current git branch if in a git repo
+        let (git_branch, main_branch) = if is_git_repo {
+            let branch = std::process::Command::new("git")
+                .args(["rev-parse", "--abbrev-ref", "HEAD"])
+                .current_dir(&working_dir)
+                .output()
+                .ok()
+                .and_then(|o| String::from_utf8(o.stdout).ok())
+                .map(|s| s.trim().to_string())
+                .unwrap_or_else(|| "main".to_string());
+            (branch, "main".to_string())
+        } else {
+            ("main".to_string(), "main".to_string())
+        };
 
-# Completion Criteria
-A task is only complete when:
-- All code is implemented and can be executed
-- All requested functionality is working
-- Tests pass (if applicable)
-- The implementation is verified to work
-DO NOT mark tasks complete if you've only written plans, designs, or documentation.
+        // Get platform info
+        let platform = std::env::consts::OS.to_string();
+        let os_version = std::process::Command::new("uname")
+            .arg("-r")
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default();
 
-# Response Style
-- Be concise and direct
-- Provide actionable responses
-- Use batch tool calls for efficiency
-- Avoid unnecessary explanations unless requested
-- Focus on solving the immediate problem
-- Prioritize execution over planning
-
-# Tool Usage Strategy
-- Use multiple tools concurrently when possible
-- Perform speculative searches to gather comprehensive information
-- Batch related operations for efficiency
-- Prefer reading multiple relevant files simultaneously
-- Write code immediately rather than planning first
-
-# Available Tools
-{}
-
-# Execution Philosophy
-Execute tools intelligently and concurrently. When you need information,
-gather it comprehensively in a single response rather than making multiple
-sequential requests. Favor action over deliberation - implement solutions
-directly rather than describing what you would do."#,
-            context_info,
-            self.get_tools_description()
-        );
+        // Build system prompt using the new modular system
+        let system_prompt = SystemPromptBuilder::new()
+            .with_agent_name("Sage Agent")
+            .with_agent_version(env!("CARGO_PKG_VERSION"))
+            .with_task(&task_desc)
+            .with_working_dir(&working_dir)
+            .with_git_info(is_git_repo, &git_branch, &main_branch)
+            .with_platform(&platform, &os_version)
+            .with_tools(tool_schemas)
+            .with_git_instructions(is_git_repo)
+            .with_security_policy(true)
+            .build();
 
         LLMMessage::system(system_prompt)
     }
 
-    /// Get description of available tools
-    fn get_tools_description(&self) -> String {
-        let schemas = self.batch_executor.get_tool_schemas();
-        schemas
-            .iter()
-            .map(|schema| format!("- {}: {}", schema.name, schema.description))
-            .collect::<Vec<_>>()
-            .join("\n")
+    /// Get tool schemas from the batch executor
+    pub fn get_tool_schemas(&self) -> Vec<crate::tools::types::ToolSchema> {
+        self.batch_executor.get_tool_schemas()
     }
 
     /// Check if we can continue execution (budget and step limits)

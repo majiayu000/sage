@@ -2,6 +2,7 @@
 
 use super::registry::AgentRegistry;
 use super::types::{AgentDefinition, AgentType, ToolAccessControl};
+use crate::prompts::AgentPrompts;
 
 /// Get all built-in agent definitions
 pub fn get_builtin_agents() -> Vec<AgentDefinition> {
@@ -22,7 +23,7 @@ pub fn general_purpose_agent() -> AgentDefinition {
         description: "General-purpose agent for researching complex questions, searching for code, and executing multi-step tasks.".to_string(),
         available_tools: ToolAccessControl::All,
         model: None, // Inherit from parent
-        system_prompt: GENERAL_PURPOSE_PROMPT.to_string(),
+        system_prompt: AgentPrompts::GENERAL_PURPOSE.to_string(),
     }
 }
 
@@ -39,12 +40,13 @@ pub fn explore_agent() -> AgentDefinition {
         name: "Explore".to_string(),
         description: "Fast agent specialized for exploring codebases. Use for quickly finding files, searching code, or answering questions about the codebase.".to_string(),
         available_tools: ToolAccessControl::Specific(vec![
-            "glob".to_string(),
-            "grep".to_string(),
-            "read".to_string(),
+            "Glob".to_string(),
+            "Grep".to_string(),
+            "Read".to_string(),
+            "Bash".to_string(), // Read-only commands only
         ]),
         model: Some("haiku".to_string()), // Use faster model
-        system_prompt: EXPLORE_PROMPT.to_string(),
+        system_prompt: AgentPrompts::EXPLORE.to_string(),
     }
 }
 
@@ -62,86 +64,12 @@ pub fn plan_agent() -> AgentDefinition {
         description: "Software architect agent for designing implementation plans. Returns step-by-step plans, identifies critical files, and considers architectural trade-offs.".to_string(),
         available_tools: ToolAccessControl::All,
         model: None, // Inherit from parent
-        system_prompt: PLAN_PROMPT.to_string(),
+        system_prompt: AgentPrompts::PLAN.to_string(),
     }
 }
 
-const GENERAL_PURPOSE_PROMPT: &str = r#"You are a general-purpose agent with full access to all available tools.
-
-Your goal is to help complete complex, multi-step tasks autonomously. You can:
-- Search and read files in the codebase
-- Execute commands and scripts
-- Make code changes when needed
-- Research information online
-
-Guidelines:
-1. Break down complex tasks into manageable steps
-2. Use the most appropriate tool for each step
-3. Verify your work as you go
-4. Provide clear summaries of what you accomplished
-5. Ask for clarification if the task is ambiguous
-
-Remember: You have full tool access, so use whatever tools are necessary to complete the task effectively.
-"#;
-
-const EXPLORE_PROMPT: &str = r#"You are a fast exploration agent optimized for quickly finding information in codebases.
-
-You have access to: Glob (file pattern matching), Grep (content search), Read (file reading)
-
-Your goal is to efficiently locate and understand code. Focus on:
-1. Finding files matching patterns
-2. Searching for keywords, functions, or patterns
-3. Reading relevant code sections
-4. Providing concise summaries
-
-Be quick and focused. Return findings as soon as you have enough information.
-
-Limitations:
-- You cannot modify files (read-only access)
-- You cannot execute commands
-- You cannot access external resources
-
-Strategy:
-- Start broad with Glob to find candidate files
-- Use Grep to search for specific content
-- Read files to understand context
-- Synthesize findings into clear, actionable insights
-"#;
-
-const PLAN_PROMPT: &str = r#"You are a software architect agent specialized in designing implementation plans.
-
-Your goal is to create clear, actionable implementation plans. For each task:
-
-1. Understand the requirements thoroughly
-   - Clarify ambiguities
-   - Identify constraints and dependencies
-   - Consider edge cases
-
-2. Explore the existing codebase
-   - Understand current patterns and conventions
-   - Identify similar implementations
-   - Review relevant documentation
-
-3. Design the approach
-   - Consider multiple implementation strategies
-   - Evaluate trade-offs (complexity, performance, maintainability)
-   - Choose the best approach with clear reasoning
-
-4. Create the implementation plan
-   - List all files to modify/create
-   - Break down into concrete, ordered steps
-   - Specify testing requirements
-   - Identify potential risks
-
-Your output should include:
-- **Summary**: High-level description of the approach
-- **Files**: List of files to modify/create with justification
-- **Implementation Steps**: Detailed, numbered steps
-- **Testing Strategy**: How to verify correctness
-- **Risks & Considerations**: Potential challenges and mitigation strategies
-
-Focus on clarity and completeness. A good plan should be executable by another engineer.
-"#;
+// Note: Prompt constants have been moved to crate::prompts::AgentPrompts
+// for centralized management following Claude Code's modular prompt architecture.
 
 /// Register all builtin agents with the registry
 ///
@@ -186,20 +114,21 @@ mod tests {
         assert!(!agent.description.is_empty());
         assert_eq!(agent.model, Some("haiku".to_string())); // Should use fast model
 
-        // Should only have access to read-only tools
-        assert!(agent.can_use_tool("glob"));
-        assert!(agent.can_use_tool("grep"));
-        assert!(agent.can_use_tool("read"));
-        assert!(!agent.can_use_tool("write"));
-        assert!(!agent.can_use_tool("bash"));
-        assert!(!agent.can_use_tool("edit"));
+        // Should only have access to read-only tools (Bash for read-only commands)
+        assert!(agent.can_use_tool("Glob"));
+        assert!(agent.can_use_tool("Grep"));
+        assert!(agent.can_use_tool("Read"));
+        assert!(agent.can_use_tool("Bash")); // For read-only commands only
+        assert!(!agent.can_use_tool("Write"));
+        assert!(!agent.can_use_tool("Edit"));
 
         // Check specific tool list
         if let ToolAccessControl::Specific(tools) = &agent.available_tools {
-            assert_eq!(tools.len(), 3);
-            assert!(tools.contains(&"glob".to_string()));
-            assert!(tools.contains(&"grep".to_string()));
-            assert!(tools.contains(&"read".to_string()));
+            assert_eq!(tools.len(), 4);
+            assert!(tools.contains(&"Glob".to_string()));
+            assert!(tools.contains(&"Grep".to_string()));
+            assert!(tools.contains(&"Read".to_string()));
+            assert!(tools.contains(&"Bash".to_string()));
         } else {
             panic!("Expected Specific tool access control");
         }
@@ -281,17 +210,15 @@ mod tests {
 
     #[test]
     fn test_system_prompts_contain_key_information() {
-        // General purpose should mention full access
+        // General purpose should mention access to all tools
         let general = general_purpose_agent();
-        assert!(general.system_prompt.contains("full access"));
+        assert!(general.system_prompt.contains("all tools") || general.system_prompt.contains("full access"));
         assert!(general.system_prompt.contains("tools"));
 
         // Explore should mention read-only and speed
         let explore = explore_agent();
-        assert!(explore.system_prompt.contains("Glob"));
-        assert!(explore.system_prompt.contains("Grep"));
-        assert!(explore.system_prompt.contains("Read"));
-        assert!(explore.system_prompt.contains("quick") || explore.system_prompt.contains("fast"));
+        assert!(explore.system_prompt.contains("READ-ONLY"));
+        assert!(explore.system_prompt.contains("fast") || explore.system_prompt.contains("quickly"));
 
         // Plan should mention architecture and implementation
         let plan = plan_agent();
