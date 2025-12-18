@@ -27,7 +27,11 @@ impl Tool for TaskDoneTool {
     }
 
     fn description(&self) -> &str {
-        "Use this tool when you have completed the assigned task. Provide a summary of what was accomplished."
+        "Use this tool ONLY when you have FULLY completed the assigned task with WORKING CODE. \
+         DO NOT call this if you have only written plans, designs, or documentation. \
+         A task is complete ONLY when: (1) Code files have been created or modified, \
+         (2) The implementation is functional, (3) Tests pass (if applicable). \
+         Provide a summary of what code was written and how it works."
     }
 
     fn schema(&self) -> ToolSchema {

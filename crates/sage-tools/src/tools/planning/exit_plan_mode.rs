@@ -27,7 +27,9 @@ impl Tool for ExitPlanModeTool {
     }
 
     fn description(&self) -> &str {
-        "Exit plan mode after completing the planning phase. Optionally launch a swarm of teammates to implement the plan collaboratively. Use this when you've finished designing your implementation approach and are ready to move to execution."
+        "Exit plan mode and IMMEDIATELY start writing code. You MUST begin implementation right after calling this. \
+         Do NOT call task_done until you have actually created or modified code files. \
+         Optionally launch a swarm of teammates to implement collaboratively."
     }
 
     fn schema(&self) -> ToolSchema {
@@ -94,17 +96,21 @@ Ready to begin implementation!
         } else {
             confirmation_message.push_str(
                 r#"
-Transitioning to IMPLEMENTATION MODE
+⚡ IMPLEMENTATION MODE ACTIVATED ⚡
 
-You can now begin implementing the plan. Focus on:
+🚨 YOU MUST NOW START WRITING CODE IMMEDIATELY! 🚨
 
-✓ Following the designed architecture
-✓ Implementing features step-by-step
-✓ Writing tests as you go
-✓ Documenting code and decisions
-✓ Validating against the plan
+Do NOT:
+  ✗ Call task_done without creating/modifying files
+  ✗ Write more documentation
+  ✗ Continue planning
 
-Good luck with the implementation!
+START NOW:
+  ✓ Create project structure
+  ✓ Write actual code files
+  ✓ Implement core functionality
+
+NO MORE PLANNING - EXECUTE!
 "#,
             );
         }

@@ -109,6 +109,54 @@ pub trait ReactiveAgent: Send + Sync {
     fn config(&self) -> &Config;
 }
 
+/// Tracks file operations for task completion verification
+#[derive(Debug, Default, Clone)]
+struct FileOperationTracker {
+    /// Files created via Write tool
+    pub created_files: Vec<String>,
+    /// Files modified via Edit tool
+    pub modified_files: Vec<String>,
+}
+
+impl FileOperationTracker {
+    fn new() -> Self {
+        Self::default()
+    }
+
+    fn track_tool_call(&mut self, tool_name: &str, result: &ToolResult) {
+        if !result.success {
+            return;
+        }
+
+        match tool_name {
+            "Write" => {
+                if let Some(file_path) = result.metadata.get("file_path") {
+                    if let Some(path) = file_path.as_str() {
+                        self.created_files.push(path.to_string());
+                    }
+                }
+            }
+            "Edit" => {
+                if let Some(file_path) = result.metadata.get("file_path") {
+                    if let Some(path) = file_path.as_str() {
+                        self.modified_files.push(path.to_string());
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn has_file_operations(&self) -> bool {
+        !self.created_files.is_empty() || !self.modified_files.is_empty()
+    }
+
+    fn reset(&mut self) {
+        self.created_files.clear();
+        self.modified_files.clear();
+    }
+}
+
 /// Claude Code style reactive agent implementation
 pub struct ClaudeStyleAgent {
     #[allow(dead_code)]
@@ -121,6 +169,8 @@ pub struct ClaudeStyleAgent {
     token_usage: TokenUsage,
     /// Current step count
     current_step: u32,
+    /// File operation tracker for completion verification
+    file_tracker: FileOperationTracker,
 }
 
 impl ClaudeStyleAgent {
@@ -158,6 +208,7 @@ impl ClaudeStyleAgent {
             conversation_history: Vec::new(),
             token_usage: TokenUsage::new(),
             current_step: 0,
+            file_tracker: FileOperationTracker::new(),
         })
     }
 
@@ -177,29 +228,47 @@ impl ClaudeStyleAgent {
 You are Sage Agent, an agentic coding AI assistant with access to the developer's codebase.
 You can read from and write to the codebase using the provided tools.
 
-# Identity  
+# Identity
 You are Sage Agent developed by Sage Code, based on advanced language models.
 {}
+# Task Understanding Rules
+CRITICAL: When users ask you to "design", "create", "implement", or "build" something:
+- This means WRITE WORKING CODE, not documentation
+- This means CREATE ACTUAL IMPLEMENTATIONS, not plans or designs
+- Documentation should only be created when EXPLICITLY requested
+- Always prioritize executable code over explanatory text
+
+# Completion Criteria
+A task is only complete when:
+- All code is implemented and can be executed
+- All requested functionality is working
+- Tests pass (if applicable)
+- The implementation is verified to work
+DO NOT mark tasks complete if you've only written plans, designs, or documentation.
+
 # Response Style
 - Be concise and direct
 - Provide actionable responses
 - Use batch tool calls for efficiency
 - Avoid unnecessary explanations unless requested
 - Focus on solving the immediate problem
+- Prioritize execution over planning
 
 # Tool Usage Strategy
 - Use multiple tools concurrently when possible
 - Perform speculative searches to gather comprehensive information
 - Batch related operations for efficiency
 - Prefer reading multiple relevant files simultaneously
+- Write code immediately rather than planning first
 
 # Available Tools
 {}
 
 # Execution Philosophy
-Execute tools intelligently and concurrently. When you need information, 
-gather it comprehensively in a single response rather than making multiple 
-sequential requests."#,
+Execute tools intelligently and concurrently. When you need information,
+gather it comprehensively in a single response rather than making multiple
+sequential requests. Favor action over deliberation - implement solutions
+directly rather than describing what you would do."#,
             context_info,
             self.get_tools_description()
         );
@@ -315,9 +384,12 @@ sequential requests."#,
             Vec::new()
         };
 
-        // Add tool results to conversation history
+        // Add tool results to conversation history and track file operations
         if !tool_results.is_empty() {
             for result in &tool_results {
+                // Track file operations for completion verification
+                self.file_tracker.track_tool_call(&result.tool_name, result);
+
                 let content = if result.success {
                     result.output.as_deref().unwrap_or("")
                 } else {
@@ -331,8 +403,29 @@ sequential requests."#,
         }
 
         // Determine if task is completed
-        let completed = llm_response.indicates_completion()
+        // Check if task_done was called
+        let task_done_called = llm_response.indicates_completion()
             || tool_results.iter().any(|r| r.tool_name == "task_done");
+
+        // If task_done is called but no file operations were performed,
+        // check if this looks like a documentation-only completion
+        let completed = if task_done_called {
+            // Allow completion if there were file operations OR
+            // if the task explicitly doesn't require code (research/analysis tasks)
+            // For now, we log a warning but allow completion
+            // TODO: Add stricter validation based on task type
+            if !self.file_tracker.has_file_operations() {
+                tracing::warn!(
+                    "Task marked as complete but no file operations were performed. \
+                     Created files: {:?}, Modified files: {:?}",
+                    self.file_tracker.created_files,
+                    self.file_tracker.modified_files
+                );
+            }
+            true
+        } else {
+            false
+        };
 
         // Generate continuation prompt if needed
         let continuation_prompt = if !completed && !tool_results.is_empty() {

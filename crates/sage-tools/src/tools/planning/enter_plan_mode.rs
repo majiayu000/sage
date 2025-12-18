@@ -27,7 +27,9 @@ impl Tool for EnterPlanModeTool {
     }
 
     fn description(&self) -> &str {
-        "Enter plan mode to design and document implementation approaches. Use this tool when you need to create a detailed plan before implementing features or solving complex problems. In plan mode, focus on architecture, design decisions, and step-by-step implementation strategies."
+        "Enter QUICK plan mode for brief analysis before coding. Use sparingly - most tasks should start with code immediately. \
+         Plan mode is ONLY for complex multi-component tasks. Keep planning under 2 minutes, then exit and START WRITING CODE. \
+         Do NOT use plan mode for simple features or bug fixes."
     }
 
     fn schema(&self) -> ToolSchema {
@@ -43,21 +45,22 @@ impl Tool for EnterPlanModeTool {
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
         let confirmation_message = r#"
 ╔══════════════════════════════════════════════════════════════╗
-║                  PLAN MODE ACTIVATED                         ║
+║              QUICK PLAN MODE - 2 MIN MAX                      ║
 ╚══════════════════════════════════════════════════════════════╝
 
-You are now in PLAN MODE. Focus on:
+⚠️  CRITICAL: This is for QUICK planning only. Do NOT:
+  ✗ Spend more than 2 minutes planning
+  ✗ Write detailed documentation
+  ✗ Call task_done after planning without writing code
 
-✓ Analyzing requirements and constraints
-✓ Designing architecture and system components
-✓ Identifying key design decisions and trade-offs
-✓ Creating step-by-step implementation strategies
-✓ Documenting dependencies and prerequisites
-✓ Planning testing and validation approaches
+✓ Quickly identify key components (30 seconds)
+✓ Note any critical dependencies (30 seconds)
+✓ EXIT PLAN MODE and START CODING (immediately!)
 
-Take your time to think through the problem thoroughly before
-implementing. When ready to exit plan mode, use the exit_plan_mode
-tool to transition back to implementation mode.
+REMEMBER: Plans without code are WORTHLESS.
+Your job is to WRITE CODE, not documentation.
+
+Use exit_plan_mode NOW and begin implementation.
 "#;
 
         Ok(ToolResult::success(
@@ -110,8 +113,8 @@ mod tests {
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
         let output = result.output.as_ref().unwrap();
-        assert!(output.contains("PLAN MODE ACTIVATED"));
-        assert!(output.contains("Analyzing requirements"));
+        assert!(output.contains("QUICK PLAN MODE"));
+        assert!(output.contains("WRITE CODE"));
         assert!(output.contains("exit_plan_mode"));
     }
 
@@ -140,7 +143,7 @@ mod tests {
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
         let output = result.output.as_ref().unwrap();
-        assert!(output.contains("PLAN MODE ACTIVATED"));
+        assert!(output.contains("QUICK PLAN MODE"));
     }
 
     #[test]

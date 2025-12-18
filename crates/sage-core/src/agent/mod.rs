@@ -1,6 +1,7 @@
 //! Agent system for Sage Agent
 
 pub mod base;
+pub mod completion;
 pub mod execution;
 pub mod lifecycle;
 pub mod outcome;
@@ -10,6 +11,9 @@ pub mod step;
 pub mod subagent;
 
 pub use base::Agent;
+pub use completion::{
+    CompletionChecker, CompletionStatus, FileOperationTracker, LimitType, TaskType,
+};
 pub use execution::AgentExecution;
 pub use lifecycle::{
     AgentLifecycle, HookResult, LifecycleContext, LifecycleError, LifecycleHook,
