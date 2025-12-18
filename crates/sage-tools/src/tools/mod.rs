@@ -56,9 +56,10 @@ pub use interaction::AskUserQuestionTool;
 pub use monitoring::{LogAnalyzerTool, TestGeneratorTool};
 pub use network::{BrowserTool, WebFetchTool, WebSearchTool};
 pub use planning::{EnterPlanModeTool, ExitPlanModeTool};
-pub use process::{BashTool, KillShellTool, TaskOutputTool};
+pub use process::{BashTool, KillShellTool, TaskTool, TaskOutputTool, TaskRequest, TaskStatus, get_pending_tasks, update_task_status, get_task};
 pub use task_mgmt::{
-    AddTasksTool, ReorganizeTasklistTool, TaskDoneTool, UpdateTasksTool, ViewTasklistTool,
+    AddTasksTool, ReorganizeTasklistTool, TaskDoneTool, TodoWriteTool, UpdateTasksTool, ViewTasklistTool,
+    TodoItem, TodoStatus, get_current_todos, get_todo_display, get_current_task,
 };
 pub use utils::SequentialThinkingTool;
 pub use vcs::GitTool;
@@ -81,8 +82,10 @@ pub fn get_default_tools() -> Vec<Arc<dyn Tool>> {
         // Process tools
         Arc::new(BashTool::new()),
         Arc::new(KillShellTool::new()),
+        Arc::new(TaskTool::new()),  // Claude Code compatible subagent spawning
         Arc::new(TaskOutputTool::new()),
         // Task management
+        Arc::new(TodoWriteTool::new()),  // Claude Code compatible
         Arc::new(ViewTasklistTool::new()),
         Arc::new(AddTasksTool::new()),
         Arc::new(UpdateTasksTool::new()),

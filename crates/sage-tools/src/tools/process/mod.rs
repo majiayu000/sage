@@ -2,9 +2,11 @@
 
 pub mod bash;
 pub mod kill_shell;
+pub mod task;
 pub mod task_output;
 
 // Re-export tools
 pub use bash::BashTool;
 pub use kill_shell::KillShellTool;
+pub use task::{TaskTool, TaskRequest, TaskStatus, TaskRegistry, get_pending_tasks, update_task_status, get_task};
 pub use task_output::TaskOutputTool;
