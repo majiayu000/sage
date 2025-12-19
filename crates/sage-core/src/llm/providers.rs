@@ -147,7 +147,8 @@ impl ModelParameters {
     }
 
     /// Check if prompt caching is enabled
+    /// Defaults to true for cost savings (90% reduction on cache reads)
     pub fn is_prompt_caching_enabled(&self) -> bool {
-        self.enable_prompt_caching.unwrap_or(false)
+        self.enable_prompt_caching.unwrap_or(true)
     }
 }

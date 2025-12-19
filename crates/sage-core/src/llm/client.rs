@@ -824,7 +824,12 @@ impl LLMClient {
     }
 
     /// Convert messages for Anthropic format
+    ///
+    /// When caching is enabled, adds `cache_control` to the last content block
+    /// of each message (Claude Code style). This allows efficient caching of
+    /// conversation history with 90% cost savings on cache reads.
     fn convert_messages_for_anthropic(&self, messages: &[LLMMessage]) -> SageResult<Vec<Value>> {
+        let enable_caching = self.model_params.is_prompt_caching_enabled();
         let mut converted = Vec::new();
 
         for message in messages {
@@ -833,12 +838,25 @@ impl LLMClient {
                 continue;
             }
 
-            let msg = json!({
-                "role": message.role.to_string(),
-                "content": message.content
-            });
-
-            converted.push(msg);
+            // When caching is enabled, use content array format with cache_control
+            // on the last content block (Claude Code style)
+            if enable_caching {
+                let msg = json!({
+                    "role": message.role.to_string(),
+                    "content": [{
+                        "type": "text",
+                        "text": message.content,
+                        "cache_control": {"type": "ephemeral"}
+                    }]
+                });
+                converted.push(msg);
+            } else {
+                let msg = json!({
+                    "role": message.role.to_string(),
+                    "content": message.content
+                });
+                converted.push(msg);
+            }
         }
 
         Ok(converted)
