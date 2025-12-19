@@ -127,16 +127,17 @@ impl OutputFormatter for TextFormatter {
             OutputEvent::Result(e) => {
                 let mut output = format!("{}{}", prefix, e.content);
                 if let Some(ref cost) = e.cost {
-                    output.push_str(&format!(
-                        "\n{}",
-                        self.colorize(
-                            &format!(
-                                "Tokens: {} in / {} out = {} total",
-                                cost.input_tokens, cost.output_tokens, cost.total_tokens
-                            ),
-                            "90"
-                        )
-                    ));
+                    let mut token_info = format!(
+                        "Tokens: {} in / {} out = {} total",
+                        cost.input_tokens, cost.output_tokens, cost.total_tokens
+                    );
+
+                    // Add cache metrics if available
+                    if let Some(cache_summary) = cost.cache_summary() {
+                        token_info.push_str(&format!(" ({})", cache_summary));
+                    }
+
+                    output.push_str(&format!("\n{}", self.colorize(&token_info, "90")));
                 }
                 output
             }
@@ -164,16 +165,17 @@ impl OutputFormatter for TextFormatter {
         }
 
         if let Some(ref cost) = output.cost {
-            result.push_str(&format!(
-                "\n{}",
-                self.colorize(
-                    &format!(
-                        "Tokens: {} total ({}ms)",
-                        cost.total_tokens, output.duration_ms
-                    ),
-                    "90"
-                )
-            ));
+            let mut token_info = format!(
+                "Tokens: {} total ({}ms)",
+                cost.total_tokens, output.duration_ms
+            );
+
+            // Add cache metrics if available
+            if let Some(cache_summary) = cost.cache_summary() {
+                token_info.push_str(&format!(" - {}", cache_summary));
+            }
+
+            result.push_str(&format!("\n{}", self.colorize(&token_info, "90")));
         }
 
         result

@@ -111,12 +111,35 @@ impl AgentExecution {
             .map(|d| format!(" in {:.2}s", d.num_milliseconds() as f64 / 1000.0))
             .unwrap_or_default();
 
+        // Build cache info if available
+        let cache_info = if self.total_usage.has_cache_metrics() {
+            let mut parts = Vec::new();
+            if let Some(created) = self.total_usage.cache_creation_input_tokens {
+                if created > 0 {
+                    parts.push(format!("{} cache created", created));
+                }
+            }
+            if let Some(read) = self.total_usage.cache_read_input_tokens {
+                if read > 0 {
+                    parts.push(format!("{} cache read", read));
+                }
+            }
+            if !parts.is_empty() {
+                format!(", {}", parts.join(", "))
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        };
+
         format!(
-            "Execution {}: {} ({} steps, {} tokens{})",
+            "Execution {}: {} ({} steps, {} tokens{}{})",
             status,
             self.task.description,
             self.steps.len(),
             self.total_usage.total_tokens,
+            cache_info,
             duration
         )
     }
@@ -177,6 +200,8 @@ impl AgentExecution {
         stats.failed_steps = self.steps.iter().filter(|s| s.error.is_some()).count();
         stats.tool_calls = self.all_tool_calls().len();
         stats.total_tokens = self.total_usage.total_tokens;
+        stats.cache_creation_tokens = self.total_usage.cache_creation_input_tokens;
+        stats.cache_read_tokens = self.total_usage.cache_read_input_tokens;
         stats.execution_time = self.duration();
 
         // Count tool usage
@@ -203,6 +228,10 @@ pub struct ExecutionStatistics {
     pub tool_calls: usize,
     /// Total tokens used
     pub total_tokens: u32,
+    /// Tokens written to cache (Anthropic prompt caching)
+    pub cache_creation_tokens: Option<u32>,
+    /// Tokens read from cache (Anthropic prompt caching)
+    pub cache_read_tokens: Option<u32>,
     /// Execution time
     pub execution_time: Option<chrono::Duration>,
     /// Tool usage count by tool name

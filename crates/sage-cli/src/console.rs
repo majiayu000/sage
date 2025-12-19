@@ -275,6 +275,20 @@ impl CLIConsole {
         tokens: u32,
         duration: std::time::Duration,
     ) {
+        self.print_execution_summary_with_cache(success, steps, tokens, None, None, duration);
+    }
+
+    /// Print execution summary with cache token info
+    #[allow(dead_code)] // May be used in future features
+    pub fn print_execution_summary_with_cache(
+        &self,
+        success: bool,
+        steps: usize,
+        tokens: u32,
+        cache_created: Option<u32>,
+        cache_read: Option<u32>,
+        duration: std::time::Duration,
+    ) {
         self.print_header("Execution Summary");
 
         let status = if success {
@@ -286,6 +300,26 @@ impl CLIConsole {
         println!("Status: {status}");
         println!("Steps: {steps}");
         println!("Tokens: {tokens}");
+
+        // Print cache info if available
+        let has_cache = cache_created.is_some() || cache_read.is_some();
+        if has_cache {
+            let mut cache_parts = Vec::new();
+            if let Some(created) = cache_created {
+                if created > 0 {
+                    cache_parts.push(format!("{} created", created.to_string().cyan()));
+                }
+            }
+            if let Some(read) = cache_read {
+                if read > 0 {
+                    cache_parts.push(format!("{} read", read.to_string().green()));
+                }
+            }
+            if !cache_parts.is_empty() {
+                println!("Cache: {}", cache_parts.join(", "));
+            }
+        }
+
         println!("Duration: {:.2}s", duration.as_secs_f64());
     }
 

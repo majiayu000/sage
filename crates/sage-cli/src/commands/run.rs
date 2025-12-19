@@ -212,10 +212,29 @@ pub async fn execute(args: RunArgs) -> SageResult<()> {
                 "Steps executed: {}",
                 result.execution().steps.len()
             ));
-            console.info(&format!(
-                "Total tokens: {}",
-                result.execution().total_usage.total_tokens
-            ));
+
+            // Show token usage with cache info
+            let usage = &result.execution().total_usage;
+            let mut token_info = format!("Total tokens: {}", usage.total_tokens);
+
+            // Add cache metrics if available
+            if usage.has_cache_metrics() {
+                let mut cache_parts = Vec::new();
+                if let Some(created) = usage.cache_creation_input_tokens {
+                    if created > 0 {
+                        cache_parts.push(format!("{} created", created));
+                    }
+                }
+                if let Some(read) = usage.cache_read_input_tokens {
+                    if read > 0 {
+                        cache_parts.push(format!("{} read", read));
+                    }
+                }
+                if !cache_parts.is_empty() {
+                    token_info.push_str(&format!(" (cache: {})", cache_parts.join(", ")));
+                }
+            }
+            console.info(&token_info);
 
             if let Some(final_result) = result.final_result() {
                 console.print_header("Final Result");
@@ -243,6 +262,19 @@ pub async fn execute(args: RunArgs) -> SageResult<()> {
                 console.info(&format!("Successful steps: {}", stats.successful_steps));
                 console.info(&format!("Failed steps: {}", stats.failed_steps));
                 console.info(&format!("Tool calls: {}", stats.tool_calls));
+                console.info(&format!("Total tokens: {}", stats.total_tokens));
+
+                // Show cache statistics
+                if stats.cache_creation_tokens.is_some() || stats.cache_read_tokens.is_some() {
+                    let mut cache_parts = Vec::new();
+                    if let Some(created) = stats.cache_creation_tokens {
+                        cache_parts.push(format!("{} created", created));
+                    }
+                    if let Some(read) = stats.cache_read_tokens {
+                        cache_parts.push(format!("{} read", read));
+                    }
+                    console.info(&format!("Cache tokens: {}", cache_parts.join(", ")));
+                }
 
                 if !stats.tool_usage.is_empty() {
                     console.info("Tool usage:");
