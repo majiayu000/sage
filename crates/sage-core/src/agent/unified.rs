@@ -325,9 +325,13 @@ impl UnifiedExecutor {
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(|| ".".to_string());
 
+        // Get tool schemas to include in prompt - CRITICAL for AI to know what tools are available
+        let tool_schemas = self.tool_executor.get_tool_schemas();
+
         let prompt = SystemPromptBuilder::new()
             .with_model_name(&model_name)
             .with_working_dir(&working_dir)
+            .with_tools(tool_schemas)  // Include tool descriptions in prompt
             .build();
 
         Ok(prompt)
