@@ -46,9 +46,10 @@ pub mod network {
 // Re-export all tools for easy access
 // Note: JsonEditTool, CodebaseRetrievalTool, MultiEditTool are Sage-specific and currently disabled
 pub use diagnostics::{
-    get_global_memory_manager, get_memories_for_context, init_global_memory_manager,
-    DiagnosticsTool, RememberTool, RenderMermaidTool, SearchUntruncatedTool,
-    SessionNotesTool, ViewRangeUntruncatedTool,
+    get_global_learning_engine, get_global_memory_manager, get_learning_patterns_for_context,
+    get_memories_for_context, init_global_learning_engine, init_global_memory_manager,
+    DiagnosticsTool, LearnTool, LearningPatternsTool, RememberTool, RenderMermaidTool,
+    SearchUntruncatedTool, SessionNotesTool, ViewRangeUntruncatedTool,
 };
 pub use extensions::{SkillTool, SlashCommandTool};
 pub use file_ops::{EditTool, GlobTool, GrepTool, NotebookEditTool, ReadTool, WriteTool};
@@ -64,6 +65,12 @@ pub use task_mgmt::{
 };
 pub use utils::SequentialThinkingTool;
 pub use vcs::GitTool;
+
+// Re-export MCP tools
+pub use crate::mcp_tools::{
+    get_global_mcp_registry, get_mcp_tools, init_global_mcp_registry, create_mcp_registry,
+    McpServersTool, McpToolAdapter, McpToolRegistry, SharedMcpToolRegistry,
+};
 
 use sage_core::tools::Tool;
 use std::sync::Arc;
@@ -113,6 +120,11 @@ pub fn get_default_tools() -> Vec<Arc<dyn Tool>> {
         Arc::new(RememberTool::new()),
         Arc::new(SessionNotesTool::new()),
         Arc::new(RenderMermaidTool::new()),
+        // Learning mode
+        Arc::new(LearnTool::new()),
+        Arc::new(LearningPatternsTool::new()),
+        // MCP server management
+        Arc::new(McpServersTool::new()),
         // VCS
         Arc::new(GitTool::new()),
         // Monitoring
@@ -190,6 +202,8 @@ pub fn get_diagnostics_tools() -> Vec<Arc<dyn Tool>> {
         Arc::new(RememberTool::new()),
         Arc::new(SessionNotesTool::new()),
         Arc::new(RenderMermaidTool::new()),
+        Arc::new(LearnTool::new()),
+        Arc::new(LearningPatternsTool::new()),
     ]
 }
 
