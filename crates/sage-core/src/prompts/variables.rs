@@ -68,10 +68,10 @@ impl PromptVariables {
     /// Create with default tool names
     pub fn new() -> Self {
         Self {
-            bash_tool_name: "Bash".to_string(),
-            read_tool_name: "Read".to_string(),
-            edit_tool_name: "Edit".to_string(),
-            write_tool_name: "Write".to_string(),
+            bash_tool_name: "bash".to_string(),
+            read_tool_name: "str_replace_based_edit_tool".to_string(),
+            edit_tool_name: "str_replace_based_edit_tool".to_string(),
+            write_tool_name: "str_replace_based_edit_tool".to_string(),
             glob_tool_name: "Glob".to_string(),
             grep_tool_name: "Grep".to_string(),
             task_tool_name: "Task".to_string(),
