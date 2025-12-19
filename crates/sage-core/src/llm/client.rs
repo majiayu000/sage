@@ -825,22 +825,31 @@ impl LLMClient {
 
     /// Convert messages for Anthropic format
     ///
-    /// When caching is enabled, adds `cache_control` to the last content block
-    /// of each message (Claude Code style). This allows efficient caching of
-    /// conversation history with 90% cost savings on cache reads.
+    /// When caching is enabled, adds `cache_control` to ONLY the last 2 messages
+    /// (Claude Code style). Anthropic API allows max 4 cache_control blocks total:
+    /// - 1 for system prompt
+    /// - 1 for tools (last tool)
+    /// - 2 for messages (last 2 messages only)
+    ///
+    /// This allows efficient caching with 90% cost savings on cache reads.
     fn convert_messages_for_anthropic(&self, messages: &[LLMMessage]) -> SageResult<Vec<Value>> {
         let enable_caching = self.model_params.is_prompt_caching_enabled();
         let mut converted = Vec::new();
 
-        for message in messages {
-            // Skip system messages (handled separately)
-            if message.role == crate::llm::messages::MessageRole::System {
-                continue;
-            }
+        // Filter out system messages first to get accurate count
+        let non_system_messages: Vec<_> = messages
+            .iter()
+            .filter(|m| m.role != crate::llm::messages::MessageRole::System)
+            .collect();
 
-            // When caching is enabled, use content array format with cache_control
-            // on the last content block (Claude Code style)
-            if enable_caching {
+        let total_count = non_system_messages.len();
+
+        for (index, message) in non_system_messages.into_iter().enumerate() {
+            // Only add cache_control to the last 2 messages (index >= total_count - 2)
+            // This keeps us within Anthropic's 4 cache_control block limit
+            let should_cache = enable_caching && index >= total_count.saturating_sub(2);
+
+            if should_cache {
                 let msg = json!({
                     "role": message.role.to_string(),
                     "content": [{
