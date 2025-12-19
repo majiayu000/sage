@@ -847,7 +847,10 @@ impl LLMClient {
         for (index, message) in non_system_messages.into_iter().enumerate() {
             // Only add cache_control to the last 2 messages (index >= total_count - 2)
             // This keeps us within Anthropic's 4 cache_control block limit
-            let should_cache = enable_caching && index >= total_count.saturating_sub(2);
+            // Also: cache_control cannot be set on empty text blocks!
+            let should_cache = enable_caching
+                && index >= total_count.saturating_sub(2)
+                && !message.content.is_empty();
 
             if should_cache {
                 let msg = json!({
