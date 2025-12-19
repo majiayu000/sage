@@ -81,6 +81,19 @@ pub struct ModelParameters {
     pub presence_penalty: Option<f32>,
     /// Seed for deterministic generation
     pub seed: Option<u32>,
+    /// Enable prompt caching (Anthropic only)
+    ///
+    /// When enabled, system prompts and tools will be cached for faster
+    /// subsequent requests. Cache has a 5-minute TTL that refreshes on use.
+    ///
+    /// Pricing:
+    /// - Cache writes: 25% more than base input tokens
+    /// - Cache reads: 10% of base input tokens (90% savings!)
+    ///
+    /// Minimum token requirements:
+    /// - Claude 3.5 Sonnet & Claude Opus: 1,024 tokens
+    /// - Claude Haiku: 2,048 tokens
+    pub enable_prompt_caching: Option<bool>,
 }
 
 impl ModelParameters {
@@ -97,6 +110,7 @@ impl ModelParameters {
             frequency_penalty: None,
             presence_penalty: None,
             seed: None,
+            enable_prompt_caching: None,
         }
     }
 
@@ -122,5 +136,18 @@ impl ModelParameters {
     pub fn with_parallel_tool_calls(mut self, enabled: bool) -> Self {
         self.parallel_tool_calls = Some(enabled);
         self
+    }
+
+    /// Enable or disable prompt caching (Anthropic only)
+    ///
+    /// When enabled, system prompts and tools will be cached.
+    pub fn with_prompt_caching(mut self, enabled: bool) -> Self {
+        self.enable_prompt_caching = Some(enabled);
+        self
+    }
+
+    /// Check if prompt caching is enabled
+    pub fn is_prompt_caching_enabled(&self) -> bool {
+        self.enable_prompt_caching.unwrap_or(false)
     }
 }

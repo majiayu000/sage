@@ -547,11 +547,10 @@ impl BaseAgent {
     ) -> Vec<LLMMessage> {
         let mut messages = vec![system_message.clone()];
 
-        // If this is the first step (no previous steps), add an initial user message
+        // If this is the first step (no previous steps), add the actual user task as the first message
         if execution.steps.is_empty() {
-            let initial_user_message = LLMMessage::user(
-                "Please start working on the task described in the system message.",
-            );
+            // Use the actual task description from the user, not a placeholder message
+            let initial_user_message = LLMMessage::user(&execution.task.description);
             messages.push(initial_user_message);
         }
 

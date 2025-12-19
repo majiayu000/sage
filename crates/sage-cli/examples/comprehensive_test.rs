@@ -84,6 +84,7 @@ async fn test_caching_performance() -> SageResult<()> {
             content: query.to_string(),
             tool_calls: None,
             tool_call_id: None,
+            cache_control: None,
             name: None,
             metadata: HashMap::new(),
         }];
@@ -105,6 +106,8 @@ async fn test_caching_performance() -> SageResult<()> {
                     completion_tokens: 100 + (i * 10) as u32,
                     total_tokens: 120 + (i * 15) as u32,
                     cost_usd: Some(0.002 + (i as f64 * 0.001)),
+                cache_creation_input_tokens: None,
+                cache_read_input_tokens: None,
                 }),
                 model: Some("gpt-4".to_string()),
                 finish_reason: Some("stop".to_string()),
@@ -143,6 +146,7 @@ async fn test_caching_performance() -> SageResult<()> {
             content: query.to_string(),
             tool_calls: None,
             tool_call_id: None,
+            cache_control: None,
             name: None,
             metadata: HashMap::new(),
         }];
@@ -229,6 +233,8 @@ async fn test_streaming_experience() -> SageResult<()> {
             completion_tokens: 85,
             total_tokens: 100,
             cost_usd: Some(0.003),
+                cache_creation_input_tokens: None,
+                cache_read_input_tokens: None,
         }),
         Some("stop".to_string()),
     )));
@@ -302,6 +308,7 @@ async fn test_cache_streaming_combo() -> SageResult<()> {
         content: "Explain quantum computing in simple terms".to_string(),
         tool_calls: None,
         tool_call_id: None,
+            cache_control: None,
         name: None,
         metadata: HashMap::new(),
     }];
@@ -318,6 +325,8 @@ async fn test_cache_streaming_combo() -> SageResult<()> {
                 completion_tokens: 25,
                 total_tokens: 37,
                 cost_usd: Some(0.002),
+                cache_creation_input_tokens: None,
+                cache_read_input_tokens: None,
             }),
             Some("stop".to_string()),
         ),
@@ -399,6 +408,7 @@ async fn test_memory_efficiency() -> SageResult<()> {
             content: format!("Query number {}", i),
             tool_calls: None,
             tool_call_id: None,
+            cache_control: None,
             name: None,
             metadata: HashMap::new(),
         }];
@@ -411,6 +421,8 @@ async fn test_memory_efficiency() -> SageResult<()> {
                 completion_tokens: 20,
                 total_tokens: 30,
                 cost_usd: Some(0.001),
+                cache_creation_input_tokens: None,
+                cache_read_input_tokens: None,
             }),
             model: Some("test".to_string()),
             finish_reason: Some("stop".to_string()),

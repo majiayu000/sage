@@ -1,7 +1,7 @@
 //! Context window management for LLM conversations
 //!
 //! This module provides functionality for managing the context window of LLM conversations,
-//! including token estimation, message pruning, and automatic summarization.
+//! including token estimation, message pruning, automatic summarization, and auto-compaction.
 //!
 //! # Overview
 //!
@@ -12,11 +12,12 @@
 //! - Prune old messages while preserving important context
 //! - Automatically summarize conversation history
 //! - Configure overflow strategies per provider/model
+//! - Auto-compact when context exceeds threshold (like Claude Code)
 //!
 //! # Example
 //!
 //! ```rust,ignore
-//! use sage_core::context::{ContextConfig, ContextManager, OverflowStrategy};
+//! use sage_core::context::{ContextConfig, ContextManager, OverflowStrategy, AutoCompact};
 //! use sage_core::llm::LLMMessage;
 //!
 //! // Create context manager with default config
@@ -31,8 +32,13 @@
 //! ];
 //!
 //! let managed_messages = manager.prepare_messages(messages, None, "claude-3.5-sonnet").await?;
+//!
+//! // Or use auto-compact for automatic context management
+//! let mut auto_compact = AutoCompact::default();
+//! let result = auto_compact.check_and_compact(&mut messages).await?;
 //! ```
 
+pub mod auto_compact;
 pub mod config;
 pub mod estimator;
 pub mod manager;
@@ -40,6 +46,7 @@ pub mod pruner;
 pub mod streaming;
 pub mod summarizer;
 
+pub use auto_compact::{AutoCompact, AutoCompactConfig, AutoCompactStats, CompactResult};
 pub use config::{ContextConfig, OverflowStrategy};
 pub use estimator::TokenEstimator;
 pub use manager::{ContextManager, ContextUsageStats, PrepareResult};

@@ -178,12 +178,14 @@ impl ClaudeMode {
     }
 
     /// Run in single command mode
+    #[allow(dead_code)]
     pub async fn run_single_command(&mut self, command: &str) -> SageResult<()> {
         self.execute_command(command).await
     }
 }
 
 /// Claude Code style configuration for the CLI
+#[allow(dead_code)]
 pub struct ClaudeModeConfig {
     pub max_response_length: usize,
     pub show_timing: bool,
@@ -203,6 +205,7 @@ impl Default for ClaudeModeConfig {
 }
 
 /// Extensions for better Claude Code style experience
+#[allow(dead_code)]
 impl ClaudeMode {
     /// Set Claude mode configuration
     pub fn with_config(self, _config: ClaudeModeConfig) -> Self {

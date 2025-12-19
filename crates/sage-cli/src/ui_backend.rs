@@ -45,10 +45,12 @@ pub struct ConfigInfo {
 }
 
 /// UI Backend - similar to Gemini CLI's core package
+#[allow(dead_code)]
 pub struct SageUIBackend {
     sdk: Arc<Mutex<Option<SageAgentSDK>>>,
 }
 
+#[allow(dead_code)]
 impl SageUIBackend {
     pub fn new() -> Self {
         Self {

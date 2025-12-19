@@ -2,7 +2,7 @@
 
 use super::storage::{FileMemoryStorage, InMemoryStorage, MemoryStorage, MemoryStorageError};
 use super::types::{Memory, MemoryCategory, MemoryId, MemoryMetadata, MemoryQuery, MemoryScore, MemorySource, MemoryType};
-use chrono::{DateTime, Duration, Utc};
+use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

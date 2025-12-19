@@ -99,6 +99,7 @@ impl ModelParameters {
             frequency_penalty: None,
             presence_penalty: None,
             seed: None,
+            enable_prompt_caching: None,
         }
     }
 

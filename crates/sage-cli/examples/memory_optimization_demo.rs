@@ -63,6 +63,7 @@ async fn test_lru_cache_eviction() -> SageResult<()> {
             content: format!("Query {}", i),
             tool_calls: None,
             tool_call_id: None,
+            cache_control: None,
             name: None,
             metadata: HashMap::new(),
         }];
@@ -75,6 +76,8 @@ async fn test_lru_cache_eviction() -> SageResult<()> {
                 completion_tokens: 20,
                 total_tokens: 30,
                 cost_usd: Some(0.001),
+                cache_creation_input_tokens: None,
+                cache_read_input_tokens: None,
             }),
             model: Some("test-model".to_string()),
             finish_reason: Some("stop".to_string()),
@@ -116,6 +119,7 @@ async fn test_lru_cache_eviction() -> SageResult<()> {
             content: format!("Query {}", i),
             tool_calls: None,
             tool_call_id: None,
+            cache_control: None,
             name: None,
             metadata: HashMap::new(),
         }];
@@ -276,6 +280,7 @@ async fn test_memory_usage_monitoring() -> SageResult<()> {
                 ),
                 tool_calls: None,
                 tool_call_id: None,
+            cache_control: None,
                 name: None,
                 metadata: HashMap::new(),
             }];
@@ -288,6 +293,8 @@ async fn test_memory_usage_monitoring() -> SageResult<()> {
                     completion_tokens: 800,
                     total_tokens: 1300,
                     cost_usd: Some(0.05),
+                cache_creation_input_tokens: None,
+                cache_read_input_tokens: None,
                 }),
                 model: Some("gpt-4".to_string()),
                 finish_reason: Some("stop".to_string()),

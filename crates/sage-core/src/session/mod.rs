@@ -10,6 +10,7 @@
 //! - Token usage statistics
 //! - Session state management (active, paused, completed, failed)
 //! - File-based and in-memory storage backends
+//! - Session caching for persistent state (like Claude Code's ~/.claude.json)
 //!
 //! # Example
 //!
@@ -44,6 +45,7 @@
 
 pub mod branching;
 pub mod manager;
+pub mod session_cache;
 pub mod storage;
 pub mod types;
 
@@ -53,6 +55,10 @@ pub use branching::{
     SharedBranchManager, create_branch_manager,
 };
 pub use manager::SessionManager;
+pub use session_cache::{
+    MCPServerCache, MCPServerConfig, RecentSession, SessionCache, SessionCacheConfig,
+    SessionCacheData, SessionCacheStats, ToolTrustSettings, UserPreferences,
+};
 pub use storage::{BoxedSessionStorage, FileSessionStorage, MemorySessionStorage, SessionStorage};
 pub use types::{
     ConversationMessage, MessageRole, Session, SessionConfig, SessionState,

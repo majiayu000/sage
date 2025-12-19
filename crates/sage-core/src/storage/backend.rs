@@ -321,6 +321,7 @@ pub struct SqliteBackend {
     // For now, we use an in-memory simulation
     data: Arc<RwLock<HashMap<String, Vec<DatabaseRow>>>>,
     // Store table column definitions
+    #[allow(dead_code)]
     schemas: Arc<RwLock<HashMap<String, Vec<String>>>>,
     connected: Arc<RwLock<bool>>,
 }

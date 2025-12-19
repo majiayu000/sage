@@ -343,7 +343,7 @@ impl StorageManager {
             }
         };
 
-        drop(backend); // Release read lock before execute
+        let _ = backend; // Release read lock before execute
 
         self.execute(
             sql,

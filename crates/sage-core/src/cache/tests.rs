@@ -46,6 +46,7 @@ mod tests {
             content: "Test message".to_string(),
             tool_calls: None,
             tool_call_id: None,
+            cache_control: None,
             name: None,
             metadata: std::collections::HashMap::new(),
         }];
@@ -58,6 +59,8 @@ mod tests {
                 completion_tokens: 5,
                 total_tokens: 15,
                 cost_usd: Some(0.001),
+                cache_creation_input_tokens: None,
+                cache_read_input_tokens: None,
             }),
             model: Some("test-model".to_string()),
             finish_reason: Some("stop".to_string()),
@@ -175,6 +178,7 @@ mod tests {
             content: "Test message".to_string(),
             tool_calls: None,
             tool_call_id: None,
+            cache_control: None,
             name: None,
             metadata: std::collections::HashMap::new(),
         }];

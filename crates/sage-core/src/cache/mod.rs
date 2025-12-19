@@ -2,7 +2,14 @@
 //!
 //! This module provides intelligent caching for LLM responses and tool results
 //! to improve performance and reduce API costs.
+//!
+//! ## Caching Strategies
+//!
+//! - **LLM Response Cache**: Caches complete LLM responses keyed by messages + model
+//! - **Conversation Cache**: Incremental caching of conversation prefixes for multi-turn efficiency
+//! - **Tool Result Cache**: Caches expensive tool execution results
 
+pub mod conversation_cache;
 pub mod llm_cache;
 pub mod storage;
 pub mod types;
@@ -10,6 +17,10 @@ pub mod types;
 #[cfg(test)]
 mod tests;
 
+pub use conversation_cache::{
+    CacheLookupResult, CacheCheckpoint, CachedConversation, ConversationCache,
+    ConversationCacheConfig, ConversationCacheStats,
+};
 pub use llm_cache::LLMCache;
 pub use storage::{CacheStorage, DiskStorage, MemoryStorage};
 pub use types::{CacheConfig, CacheEntry, CacheKey, CacheStatistics};

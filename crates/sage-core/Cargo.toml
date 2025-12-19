@@ -65,6 +65,7 @@ dotenv = { workspace = true }
 # Sandbox
 regex = { workspace = true }
 humantime-serde = { workspace = true }
+sha2 = "0.10.9"
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }

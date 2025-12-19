@@ -282,12 +282,16 @@ impl LLMClient {
     }
 
     /// Anthropic chat completion
+    ///
+    /// Supports prompt caching when `enable_prompt_caching` is set in ModelParameters.
+    /// When enabled, system prompts and tools are cached for faster subsequent requests.
     async fn anthropic_chat(
         &self,
         messages: &[LLMMessage],
         tools: Option<&[ToolSchema]>,
     ) -> SageResult<LLMResponse> {
         let url = format!("{}/v1/messages", self.config.get_base_url());
+        let enable_caching = self.model_params.is_prompt_caching_enabled();
 
         let (system_message, user_messages) = self.extract_system_message(messages);
 
@@ -296,8 +300,18 @@ impl LLMClient {
             "messages": self.convert_messages_for_anthropic(&user_messages)?,
         });
 
+        // Add system message with optional cache_control
         if let Some(system) = system_message {
-            request_body["system"] = json!(system);
+            if enable_caching {
+                // Use array format with cache_control for caching
+                request_body["system"] = json!([{
+                    "type": "text",
+                    "text": system,
+                    "cache_control": {"type": "ephemeral"}
+                }]);
+            } else {
+                request_body["system"] = json!(system);
+            }
         }
 
         // Add optional parameters
@@ -314,10 +328,22 @@ impl LLMClient {
             request_body["stop_sequences"] = json!(stop);
         }
 
-        // Add tools if provided
+        // Add tools if provided, with optional cache_control on the last tool
         if let Some(tools) = tools {
             if !tools.is_empty() {
-                request_body["tools"] = json!(self.convert_tools_for_anthropic(tools)?);
+                let mut tool_defs = self.convert_tools_for_anthropic(tools)?;
+
+                // Add cache_control to the last tool when caching is enabled
+                // This caches all tools as a single cache breakpoint
+                if enable_caching {
+                    if let Some(last_tool) = tool_defs.last_mut() {
+                        if let Some(obj) = last_tool.as_object_mut() {
+                            obj.insert("cache_control".to_string(), json!({"type": "ephemeral"}));
+                        }
+                    }
+                }
+
+                request_body["tools"] = json!(tool_defs);
             }
         }
 
@@ -916,6 +942,8 @@ impl LLMClient {
                     .and_then(|v| v.as_u64())
                     .unwrap_or(0) as u32,
                 cost_usd: None,
+                cache_creation_input_tokens: None,
+                cache_read_input_tokens: None,
             })
         } else {
             None
@@ -937,6 +965,10 @@ impl LLMClient {
     /// Anthropic responses have a content array that may contain:
     /// - {"type": "text", "text": "..."} - Text content
     /// - {"type": "tool_use", "id": "...", "name": "...", "input": {...}} - Tool calls
+    ///
+    /// When prompt caching is enabled, the usage object may also contain:
+    /// - cache_creation_input_tokens: Tokens written to cache
+    /// - cache_read_input_tokens: Tokens read from cache
     fn parse_anthropic_response(&self, response: Value) -> SageResult<LLMResponse> {
         let mut content = String::new();
         let mut tool_calls = Vec::new();
@@ -985,11 +1017,33 @@ impl LLMClient {
                 .get("output_tokens")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(0);
+
+            // Parse cache-related tokens (Anthropic prompt caching)
+            let cache_creation_input_tokens = usage_data
+                .get("cache_creation_input_tokens")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as u32);
+            let cache_read_input_tokens = usage_data
+                .get("cache_read_input_tokens")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as u32);
+
+            // Log cache metrics if present
+            if cache_creation_input_tokens.is_some() || cache_read_input_tokens.is_some() {
+                tracing::debug!(
+                    "Anthropic cache metrics - created: {:?}, read: {:?}",
+                    cache_creation_input_tokens,
+                    cache_read_input_tokens
+                );
+            }
+
             Some(LLMUsage {
                 prompt_tokens: input_tokens as u32,
                 completion_tokens: output_tokens as u32,
                 total_tokens: (input_tokens + output_tokens) as u32,
                 cost_usd: None,
+                cache_creation_input_tokens,
+                cache_read_input_tokens,
             })
         } else {
             None
@@ -1188,6 +1242,8 @@ impl LLMClient {
                 completion_tokens,
                 total_tokens,
                 cost_usd: None,
+                cache_creation_input_tokens: None,
+                cache_read_input_tokens: None,
             })
         } else {
             None
@@ -1335,6 +1391,8 @@ impl LLMClient {
     /// - content_block_stop: End of a content block
     /// - message_delta: Final message metadata (stop_reason, usage)
     /// - message_stop: Stream end marker
+    ///
+    /// Supports prompt caching when `enable_prompt_caching` is set in ModelParameters.
     async fn anthropic_chat_stream(
         &self,
         messages: &[LLMMessage],
@@ -1344,6 +1402,7 @@ impl LLMClient {
         use futures::StreamExt;
 
         let url = format!("{}/v1/messages", self.config.get_base_url());
+        let enable_caching = self.model_params.is_prompt_caching_enabled();
 
         let (system_message, user_messages) = self.extract_system_message(messages);
 
@@ -1353,8 +1412,17 @@ impl LLMClient {
             "stream": true,
         });
 
+        // Add system message with optional cache_control
         if let Some(system) = system_message {
-            request_body["system"] = json!(system);
+            if enable_caching {
+                request_body["system"] = json!([{
+                    "type": "text",
+                    "text": system,
+                    "cache_control": {"type": "ephemeral"}
+                }]);
+            } else {
+                request_body["system"] = json!(system);
+            }
         }
 
         // Add optional parameters - max_tokens is required for Anthropic
@@ -1370,10 +1438,20 @@ impl LLMClient {
             request_body["stop_sequences"] = json!(stop);
         }
 
-        // Add tools if provided
+        // Add tools if provided, with optional cache_control
         if let Some(tools) = tools {
             if !tools.is_empty() {
-                request_body["tools"] = json!(self.convert_tools_for_anthropic(tools)?);
+                let mut tool_defs = self.convert_tools_for_anthropic(tools)?;
+
+                if enable_caching {
+                    if let Some(last_tool) = tool_defs.last_mut() {
+                        if let Some(obj) = last_tool.as_object_mut() {
+                            obj.insert("cache_control".to_string(), json!({"type": "ephemeral"}));
+                        }
+                    }
+                }
+
+                request_body["tools"] = json!(tool_defs);
             }
         }
 
@@ -1518,17 +1596,30 @@ impl LLMClient {
                                         state.stop_reason = Some(stop_reason.to_string());
                                     }
 
-                                    // Extract usage from message_delta
+                                    // Extract usage from message_delta (includes cache metrics)
                                     if let Some(usage_data) = data["usage"].as_object() {
                                         let output_tokens = usage_data
                                             .get("output_tokens")
                                             .and_then(|v| v.as_u64())
                                             .unwrap_or(0);
+
+                                        // Parse cache metrics
+                                        let cache_creation_input_tokens = usage_data
+                                            .get("cache_creation_input_tokens")
+                                            .and_then(|v| v.as_u64())
+                                            .map(|v| v as u32);
+                                        let cache_read_input_tokens = usage_data
+                                            .get("cache_read_input_tokens")
+                                            .and_then(|v| v.as_u64())
+                                            .map(|v| v as u32);
+
                                         state.usage = Some(LLMUsage {
                                             prompt_tokens: 0, // Not provided in delta
                                             completion_tokens: output_tokens as u32,
                                             total_tokens: output_tokens as u32,
                                             cost_usd: None,
+                                            cache_creation_input_tokens,
+                                            cache_read_input_tokens,
                                         });
                                     }
                                 }

@@ -55,6 +55,8 @@ async fn demonstrate_streaming_concepts() -> SageResult<()> {
                 completion_tokens: 15,
                 total_tokens: 35,
                 cost_usd: Some(0.001),
+                cache_creation_input_tokens: None,
+                cache_read_input_tokens: None,
             }),
             Some("stop".to_string()),
         ),
@@ -187,6 +189,7 @@ async fn example_real_usage() -> SageResult<()> {
             content: "Write a short story about a robot learning to paint.".to_string(),
             tool_calls: None,
             tool_call_id: None,
+            cache_control: None,
             name: None,
             metadata: HashMap::new(),
         }
@@ -251,6 +254,7 @@ async fn example_streaming_with_cache() -> SageResult<()> {
             content: "Explain quantum computing".to_string(),
             tool_calls: None,
             tool_call_id: None,
+            cache_control: None,
             name: None,
             metadata: HashMap::new(),
         }

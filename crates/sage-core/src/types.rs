@@ -19,6 +19,12 @@ pub struct LLMUsage {
     pub total_tokens: u32,
     /// Cost in USD (if available)
     pub cost_usd: Option<f64>,
+    /// Number of tokens written to cache (Anthropic prompt caching)
+    /// Cache writes cost 25% more than base input tokens
+    pub cache_creation_input_tokens: Option<u32>,
+    /// Number of tokens read from cache (Anthropic prompt caching)
+    /// Cache reads cost only 10% of base input tokens
+    pub cache_read_input_tokens: Option<u32>,
 }
 
 impl LLMUsage {
@@ -29,6 +35,8 @@ impl LLMUsage {
             completion_tokens,
             total_tokens: prompt_tokens + completion_tokens,
             cost_usd: None,
+            cache_creation_input_tokens: None,
+            cache_read_input_tokens: None,
         }
     }
 
@@ -40,6 +48,30 @@ impl LLMUsage {
         if let (Some(cost1), Some(cost2)) = (self.cost_usd, other.cost_usd) {
             self.cost_usd = Some(cost1 + cost2);
         }
+        // Add cache tokens
+        match (self.cache_creation_input_tokens, other.cache_creation_input_tokens) {
+            (Some(t1), Some(t2)) => self.cache_creation_input_tokens = Some(t1 + t2),
+            (None, Some(t)) => self.cache_creation_input_tokens = Some(t),
+            _ => {}
+        }
+        match (self.cache_read_input_tokens, other.cache_read_input_tokens) {
+            (Some(t1), Some(t2)) => self.cache_read_input_tokens = Some(t1 + t2),
+            (None, Some(t)) => self.cache_read_input_tokens = Some(t),
+            _ => {}
+        }
+    }
+
+    /// Check if this usage contains cache metrics
+    pub fn has_cache_metrics(&self) -> bool {
+        self.cache_creation_input_tokens.is_some() || self.cache_read_input_tokens.is_some()
+    }
+
+    /// Get the effective input tokens (accounting for cache)
+    /// Returns (regular_tokens, cached_tokens)
+    pub fn get_cache_breakdown(&self) -> (u32, u32) {
+        let cached = self.cache_read_input_tokens.unwrap_or(0);
+        let regular = self.prompt_tokens.saturating_sub(cached);
+        (regular, cached)
     }
 }
 

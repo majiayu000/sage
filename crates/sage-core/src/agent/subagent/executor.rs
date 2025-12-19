@@ -326,6 +326,7 @@ impl SubAgentExecutor {
                 content: response.content.clone(),
                 tool_calls: Some(response.tool_calls.clone()),
                 tool_call_id: None,
+            cache_control: None,
                 name: None,
                 metadata: Default::default(),
             };

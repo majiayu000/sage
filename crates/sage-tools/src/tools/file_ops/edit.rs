@@ -123,7 +123,7 @@ impl EditTool {
         ))
     }
 
-    /// View file content
+    /// View file or directory content
     async fn view_file(&self, file_path: &str) -> Result<ToolResult, ToolError> {
         let path = self.resolve_path(file_path);
 
@@ -133,6 +133,47 @@ impl EditTool {
                 "Access denied to path: {}",
                 path.display()
             )));
+        }
+
+        // Check if path exists
+        if !path.exists() {
+            return Err(ToolError::ExecutionFailed(format!(
+                "Path not found: {}",
+                file_path
+            )));
+        }
+
+        // Handle directory
+        if path.is_dir() {
+            let mut entries = Vec::new();
+            let mut dir_entries = fs::read_dir(&path)
+                .await
+                .map_err(|e| ToolError::Io(e))?;
+
+            while let Some(entry) = dir_entries.next_entry().await.map_err(|e| ToolError::Io(e))? {
+                let entry_path = entry.path();
+                let name = entry.file_name().to_string_lossy().to_string();
+                let is_dir = entry_path.is_dir();
+                entries.push(if is_dir {
+                    format!("  {}/", name)
+                } else {
+                    format!("  {}", name)
+                });
+            }
+
+            entries.sort();
+            let output = format!(
+                "Directory: {}\n\n{}\n\n({} items)",
+                file_path,
+                if entries.is_empty() {
+                    "  (empty)".to_string()
+                } else {
+                    entries.join("\n")
+                },
+                entries.len()
+            );
+
+            return Ok(ToolResult::success("", self.name(), output));
         }
 
         // Read the file

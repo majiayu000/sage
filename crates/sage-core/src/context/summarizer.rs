@@ -78,6 +78,7 @@ impl ConversationSummarizer {
             name: None,
             tool_calls: None,
             tool_call_id: None,
+            cache_control: None,
             metadata: HashMap::new(),
         }];
 
@@ -93,6 +94,7 @@ impl ConversationSummarizer {
             name: None,
             tool_calls: None,
             tool_call_id: None,
+            cache_control: None,
             metadata: HashMap::new(),
         })
     }
@@ -216,6 +218,7 @@ Provide a structured summary:"#,
             name: None,
             tool_calls: None,
             tool_call_id: None,
+            cache_control: None,
             metadata: HashMap::new(),
         }
     }
@@ -229,6 +232,7 @@ Provide a structured summary:"#,
             name: None,
             tool_calls: None,
             tool_call_id: None,
+            cache_control: None,
             metadata: HashMap::new(),
         }
     }
@@ -252,6 +256,7 @@ mod tests {
                 name: None,
                 tool_calls: None,
                 tool_call_id: None,
+                cache_control: None,
                 metadata: HashMap::new(),
             },
             LLMMessage {
@@ -260,6 +265,7 @@ mod tests {
                 name: None,
                 tool_calls: None,
                 tool_call_id: None,
+                cache_control: None,
                 metadata: HashMap::new(),
             },
             LLMMessage {
@@ -268,6 +274,7 @@ mod tests {
                 name: None,
                 tool_calls: None,
                 tool_call_id: None,
+                cache_control: None,
                 metadata: HashMap::new(),
             },
             LLMMessage {
@@ -276,6 +283,7 @@ mod tests {
                 name: None,
                 tool_calls: None,
                 tool_call_id: None,
+                cache_control: None,
                 metadata: HashMap::new(),
             },
         ]

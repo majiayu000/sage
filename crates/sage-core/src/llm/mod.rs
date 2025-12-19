@@ -12,7 +12,7 @@ pub use fallback::{
     FallbackChain, FallbackChainBuilder, FallbackEvent, FallbackReason, ModelConfig,
     ModelStats as FallbackModelStats, anthropic_fallback_chain, openai_fallback_chain,
 };
-pub use messages::{LLMMessage, LLMResponse, MessageRole};
+pub use messages::{CacheControl, LLMMessage, LLMResponse, MessageRole};
 pub use providers::LLMProvider;
 pub use sse_decoder::{SSEDecoder, SSEEvent};
 pub use streaming::{LLMStream, StreamChunk, StreamingLLMClient};

@@ -3,7 +3,6 @@
 //! This module provides automatic fallback to alternative models
 //! when the primary model fails or is rate limited.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
@@ -278,7 +277,7 @@ impl FallbackChain {
     pub async fn force_fallback(&self, reason: FallbackReason) -> Option<String> {
         let current = self.current_model().await?;
 
-        let mut current_index = self.current_index.write().await;
+        let current_index = self.current_index.write().await;
         let models = self.models.read().await;
 
         // Find next available model after current

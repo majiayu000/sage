@@ -273,7 +273,7 @@ impl Histogram {
     }
 
     /// Time an operation
-    pub fn start_timer(&self) -> HistogramTimer {
+    pub fn start_timer(&self) -> HistogramTimer<'_> {
         HistogramTimer {
             histogram: self,
             start: Instant::now(),

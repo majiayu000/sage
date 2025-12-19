@@ -257,6 +257,7 @@ mod tests {
             name: None,
             tool_calls: None,
             tool_call_id: None,
+            cache_control: None,
             metadata: HashMap::new(),
         }];
 
@@ -271,6 +272,7 @@ mod tests {
                 name: None,
                 tool_calls: None,
                 tool_call_id: None,
+            cache_control: None,
                 metadata: HashMap::new(),
             });
         }
@@ -366,6 +368,7 @@ mod tests {
             name: None,
             tool_calls: None,
             tool_call_id: None,
+            cache_control: None,
             metadata: HashMap::new(),
         };
 
@@ -375,6 +378,7 @@ mod tests {
             name: None,
             tool_calls: None,
             tool_call_id: None,
+            cache_control: None,
             metadata: HashMap::new(),
         };
 
@@ -384,6 +388,7 @@ mod tests {
             name: None,
             tool_calls: None,
             tool_call_id: Some("call_123".to_string()),
+            cache_control: None,
             metadata: HashMap::new(),
         };
 

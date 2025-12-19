@@ -5,6 +5,41 @@ use crate::types::LLMUsage;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// Cache control for Anthropic prompt caching
+///
+/// When added to a content block, tells Anthropic to cache that content.
+/// Cache has a minimum 5-minute TTL, refreshed each time the cached content is used.
+///
+/// Pricing:
+/// - Cache writes: 25% more than base input tokens
+/// - Cache reads: 10% of base input tokens (90% savings!)
+///
+/// Minimum token requirements:
+/// - Claude 3.5 Sonnet & Claude Opus: 1,024 tokens
+/// - Claude Haiku: 2,048 tokens
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CacheControl {
+    /// Cache type - currently only "ephemeral" is supported
+    #[serde(rename = "type")]
+    pub control_type: String,
+}
+
+impl CacheControl {
+    /// Create a new ephemeral cache control
+    /// This is the standard cache type with 5-minute TTL
+    pub fn ephemeral() -> Self {
+        Self {
+            control_type: "ephemeral".to_string(),
+        }
+    }
+}
+
+impl Default for CacheControl {
+    fn default() -> Self {
+        Self::ephemeral()
+    }
+}
+
 /// Role of a message in the conversation
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -43,6 +78,9 @@ pub struct LLMMessage {
     pub tool_call_id: Option<String>,
     /// Optional name (for function/tool messages)
     pub name: Option<String>,
+    /// Cache control for Anthropic prompt caching
+    /// When set, this message's content will be cached
+    pub cache_control: Option<CacheControl>,
     /// Additional metadata
     pub metadata: HashMap<String, serde_json::Value>,
 }
@@ -56,6 +94,7 @@ impl LLMMessage {
             tool_calls: None,
             tool_call_id: None,
             name: None,
+            cache_control: None,
             metadata: HashMap::new(),
         }
     }
@@ -68,6 +107,7 @@ impl LLMMessage {
             tool_calls: None,
             tool_call_id: None,
             name: None,
+            cache_control: None,
             metadata: HashMap::new(),
         }
     }
@@ -80,6 +120,7 @@ impl LLMMessage {
             tool_calls: None,
             tool_call_id: None,
             name: None,
+            cache_control: None,
             metadata: HashMap::new(),
         }
     }
@@ -92,6 +133,7 @@ impl LLMMessage {
             tool_calls: Some(tool_calls),
             tool_call_id: None,
             name: None,
+            cache_control: None,
             metadata: HashMap::new(),
         }
     }
@@ -104,6 +146,7 @@ impl LLMMessage {
             tool_calls: None,
             tool_call_id: Some(tool_call_id.into()),
             name: name.map(|n| n.into()),
+            cache_control: None,
             metadata: HashMap::new(),
         }
     }
@@ -116,6 +159,25 @@ impl LLMMessage {
     {
         self.metadata.insert(key.into(), value.into());
         self
+    }
+
+    /// Enable caching for this message (Anthropic prompt caching)
+    ///
+    /// When enabled, this message's content will be cached by Anthropic.
+    /// Subsequent requests using the same cached content will be faster
+    /// and cost only 10% of normal input token price.
+    ///
+    /// Note: Minimum token requirements apply:
+    /// - Claude 3.5 Sonnet & Claude Opus: 1,024 tokens
+    /// - Claude Haiku: 2,048 tokens
+    pub fn with_cache(mut self) -> Self {
+        self.cache_control = Some(CacheControl::ephemeral());
+        self
+    }
+
+    /// Check if caching is enabled for this message
+    pub fn is_cached(&self) -> bool {
+        self.cache_control.is_some()
     }
 
     /// Check if this message has tool calls
