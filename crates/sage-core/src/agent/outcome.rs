@@ -56,12 +56,12 @@ pub enum ExecutionOutcome {
         execution: AgentExecution,
     },
 
-    /// Task is waiting for user input (ask_user_question was called)
-    WaitingForInput {
-        /// The execution state at the point of waiting
+    /// Task was cancelled by user (during input prompt)
+    UserCancelled {
+        /// The execution state when cancelled
         execution: AgentExecution,
-        /// The formatted question to display to user
-        question_output: String,
+        /// The pending question that was cancelled (if any)
+        pending_question: Option<String>,
     },
 }
 
@@ -120,15 +120,15 @@ impl ExecutionOutcome {
         matches!(self, Self::Interrupted { .. })
     }
 
-    /// Check if the outcome is waiting for user input
-    pub fn is_waiting_for_input(&self) -> bool {
-        matches!(self, Self::WaitingForInput { .. })
+    /// Check if the outcome was user cancelled
+    pub fn is_user_cancelled(&self) -> bool {
+        matches!(self, Self::UserCancelled { .. })
     }
 
-    /// Get the question output if waiting for input
-    pub fn question_output(&self) -> Option<&str> {
+    /// Get the pending question if user cancelled during a prompt
+    pub fn pending_question(&self) -> Option<&str> {
         match self {
-            Self::WaitingForInput { question_output, .. } => Some(question_output),
+            Self::UserCancelled { pending_question, .. } => pending_question.as_deref(),
             _ => None,
         }
     }
@@ -140,7 +140,7 @@ impl ExecutionOutcome {
             Self::Failed { execution, .. } => execution,
             Self::Interrupted { execution } => execution,
             Self::MaxStepsReached { execution } => execution,
-            Self::WaitingForInput { execution, .. } => execution,
+            Self::UserCancelled { execution, .. } => execution,
         }
     }
 
@@ -151,7 +151,7 @@ impl ExecutionOutcome {
             Self::Failed { execution, .. } => execution,
             Self::Interrupted { execution } => execution,
             Self::MaxStepsReached { execution } => execution,
-            Self::WaitingForInput { execution, .. } => execution,
+            Self::UserCancelled { execution, .. } => execution,
         }
     }
 
@@ -170,7 +170,7 @@ impl ExecutionOutcome {
             Self::Failed { .. } => "Task failed",
             Self::Interrupted { .. } => "Task interrupted by user",
             Self::MaxStepsReached { .. } => "Task reached maximum steps",
-            Self::WaitingForInput { .. } => "Waiting for user input",
+            Self::UserCancelled { .. } => "Task cancelled by user",
         }
     }
 
@@ -181,7 +181,7 @@ impl ExecutionOutcome {
             Self::Failed { .. } => "✗",
             Self::Interrupted { .. } => "🛑",
             Self::MaxStepsReached { .. } => "⚠",
-            Self::WaitingForInput { .. } => "❓",
+            Self::UserCancelled { .. } => "⊘",
         }
     }
 
@@ -195,9 +195,9 @@ impl ExecutionOutcome {
                 // Return Ok with the execution, as max steps is not necessarily an error
                 Ok(execution)
             }
-            Self::WaitingForInput { execution, .. } => {
-                // Return the execution, as waiting for input is not an error
-                Ok(execution)
+            Self::UserCancelled { .. } => {
+                // User cancelled during input - treat as cancellation
+                Err(SageError::Cancelled)
             }
         }
     }

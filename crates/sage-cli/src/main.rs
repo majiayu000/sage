@@ -138,6 +138,36 @@ enum Commands {
 
     /// Show available tools and their descriptions
     Tools,
+
+    /// Run task with unified execution loop (Claude Code style)
+    Unified {
+        /// The task description (omit for interactive prompt)
+        task: Option<String>,
+
+        /// Path to configuration file
+        #[arg(long, default_value = "sage_config.json")]
+        config_file: String,
+
+        /// Path to save trajectory file
+        #[arg(long)]
+        trajectory_file: Option<PathBuf>,
+
+        /// Working directory for the agent
+        #[arg(long)]
+        working_dir: Option<PathBuf>,
+
+        /// Maximum number of execution steps
+        #[arg(long)]
+        max_steps: Option<u32>,
+
+        /// Enable verbose output
+        #[arg(long, short)]
+        verbose: bool,
+
+        /// Non-interactive mode (auto-respond to user questions)
+        #[arg(long)]
+        non_interactive: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -206,7 +236,7 @@ async fn main() -> SageResult<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        // If no subcommand is provided, default to interactive mode
+        // If no subcommand is provided, default to unified mode (Claude Code style)
         None => {
             if cli.modern_ui {
                 ui_launcher::launch_modern_ui(
@@ -216,10 +246,15 @@ async fn main() -> SageResult<()> {
                 )
                 .await
             } else {
-                commands::interactive::execute(commands::interactive::InteractiveArgs {
+                // Use unified mode by default for proper user input handling
+                commands::unified_execute(commands::UnifiedArgs {
+                    task: None, // Will prompt for task
                     config_file: cli.config_file,
                     trajectory_file: cli.trajectory_file,
                     working_dir: cli.working_dir,
+                    max_steps: None,
+                    verbose: cli.verbose,
+                    non_interactive: false,
                 })
                 .await
             }
@@ -305,5 +340,26 @@ async fn main() -> SageResult<()> {
         },
 
         Some(Commands::Tools) => commands::tools::show_tools().await,
+
+        Some(Commands::Unified {
+            task,
+            config_file,
+            trajectory_file,
+            working_dir,
+            max_steps,
+            verbose,
+            non_interactive,
+        }) => {
+            commands::unified_execute(commands::UnifiedArgs {
+                task,
+                config_file,
+                trajectory_file,
+                working_dir,
+                max_steps,
+                verbose,
+                non_interactive,
+            })
+            .await
+        }
     }
 }

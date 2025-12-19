@@ -651,11 +651,6 @@ impl Agent for BaseAgent {
                     Ok(step) => {
                         let is_completed = step.state == AgentState::Completed;
 
-                        // Check if ask_user_question tool was called and extract output before moving step
-                        let ask_user_question_output = step.tool_results.iter()
-                            .find(|r| r.tool_name == "ask_user_question" && r.success)
-                            .and_then(|r| r.output.clone());
-
                         // Record step in trajectory
                         if let Some(recorder) = &self.trajectory_recorder {
                             recorder.lock().await.record_step(step.clone()).await?;
@@ -663,14 +658,9 @@ impl Agent for BaseAgent {
 
                         execution.add_step(step);
 
-                        // If ask_user_question was called, pause and wait for user input
-                        if let Some(question_output) = ask_user_question_output {
-                            // Don't mark as complete, just pause for input
-                            break 'execution_loop ExecutionOutcome::WaitingForInput {
-                                execution,
-                                question_output,
-                            };
-                        }
+                        // Note: In the unified loop architecture, ask_user_question tool
+                        // blocks internally on InputChannel instead of exiting the loop.
+                        // The WaitingForInput outcome has been removed.
 
                         if is_completed {
                             execution

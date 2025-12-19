@@ -205,11 +205,11 @@ pub async fn execute(args: RunArgs) -> SageResult<()> {
                     console.warn("⚠ Task reached maximum steps without completion");
                     console.info("Consider breaking down the task or increasing max_steps");
                 }
-                ExecutionOutcome::WaitingForInput { question_output, .. } => {
-                    console.print_header("User Input Required");
-                    println!("{}", question_output);
-                    console.warn("⚠ Task is waiting for user input");
-                    console.info("Use interactive mode (sage -i) to provide input and continue");
+                ExecutionOutcome::UserCancelled { pending_question, .. } => {
+                    console.warn("⊘ Task cancelled by user");
+                    if let Some(question) = pending_question {
+                        console.info(&format!("Pending question: {}", question));
+                    }
                 }
             }
 

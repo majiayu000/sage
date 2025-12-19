@@ -543,12 +543,12 @@ async fn execute_conversation_task(
                             console
                                 .info("ℹ Consider breaking down the task or increasing max_steps");
                         }
-                        ExecutionOutcome::WaitingForInput { question_output, .. } => {
-                            // Display the question and prompt for user input
-                            console.print_header("User Input Required");
-                            println!("{}", question_output);
-                            console.info("ℹ Please provide your response to continue the task.");
-                            // The next user input will continue the conversation
+                        ExecutionOutcome::UserCancelled { pending_question, .. } => {
+                            // User cancelled during input prompt
+                            console.warn("⊘ Task cancelled by user");
+                            if let Some(question) = pending_question {
+                                console.info(&format!("ℹ Pending question: {}", question));
+                            }
                         }
                     }
 

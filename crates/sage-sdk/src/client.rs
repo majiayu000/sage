@@ -1,9 +1,10 @@
 //! SDK client implementation
 
 use sage_core::{
-    agent::{Agent, AgentExecution, base::BaseAgent},
+    agent::{Agent, AgentExecution, ExecutionMode, ExecutionOptions, UnifiedExecutor, base::BaseAgent},
     config::{loader::load_config_with_overrides, model::Config},
     error::SageResult,
+    input::{InputChannel, InputChannelHandle},
     tools::executor::ToolExecutorBuilder,
     trajectory::recorder::TrajectoryRecorder,
     types::TaskMetadata,
@@ -15,6 +16,7 @@ use tokio::sync::Mutex;
 
 // Import and re-export outcome types
 pub use sage_core::agent::{ExecutionError, ExecutionErrorKind, ExecutionOutcome};
+pub use sage_core::input::{InputRequest, InputResponse};
 use sage_tools::get_default_tools;
 
 /// SDK client for Sage Agent
@@ -188,6 +190,13 @@ impl SageAgentSDK {
     }
 
     /// Continue an existing execution with a new user message
+    ///
+    /// **Deprecated**: This method uses the old exit-resume pattern.
+    /// Consider using `execute_unified` with an InputChannel instead.
+    #[deprecated(
+        since = "0.2.0",
+        note = "Use execute_unified with InputChannel for better user interaction handling"
+    )]
     pub async fn continue_execution(
         &self,
         execution: &mut AgentExecution,
@@ -217,6 +226,125 @@ impl SageAgentSDK {
 
         // Continue the execution
         agent.continue_execution(execution, user_message).await
+    }
+
+    /// Execute a task using the unified execution loop (Claude Code style)
+    ///
+    /// This method uses a unified execution model where:
+    /// - The execution loop never exits for user input
+    /// - User questions block inline via InputChannel
+    /// - Returns an InputChannelHandle for handling user prompts
+    ///
+    /// # Example
+    /// ```ignore
+    /// let sdk = SageAgentSDK::new()?;
+    /// let (result_future, input_handle) = sdk.execute_unified("Create a web server", UnifiedRunOptions::default())?;
+    ///
+    /// // Handle user input in another task
+    /// tokio::spawn(async move {
+    ///     while let Some(request) = input_handle.request_rx.recv().await {
+    ///         let response = InputResponse::text(request.id, "user input here");
+    ///         input_handle.respond(response).await.unwrap();
+    ///     }
+    /// });
+    ///
+    /// let result = result_future.await;
+    /// ```
+    pub fn execute_unified(
+        &self,
+        task_description: &str,
+        options: UnifiedRunOptions,
+    ) -> SageResult<(
+        impl std::future::Future<Output = SageResult<ExecutionResult>>,
+        Option<InputChannelHandle>,
+    )> {
+        // Create task metadata
+        let working_dir = options
+            .working_directory
+            .clone()
+            .or_else(|| self.config.working_directory.clone())
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+
+        let task = TaskMetadata::new(task_description, &working_dir.to_string_lossy());
+
+        // Set up execution options
+        let mode = if options.non_interactive {
+            ExecutionMode::non_interactive()
+        } else {
+            ExecutionMode::interactive()
+        };
+
+        let mut exec_options = ExecutionOptions::default()
+            .with_mode(mode)
+            .with_max_steps(options.max_steps.unwrap_or(self.config.max_steps));
+
+        if let Some(dir) = &options.working_directory {
+            exec_options = exec_options.with_working_directory(dir);
+        }
+
+        // Create the unified executor
+        let mut executor = UnifiedExecutor::with_options(self.config.clone(), exec_options)?;
+
+        // Set up input channel if interactive
+        let input_handle = if !options.non_interactive {
+            let (input_channel, handle) = InputChannel::new(16);
+            executor.set_input_channel(input_channel);
+            Some(handle)
+        } else {
+            None
+        };
+
+        // Set up trajectory recording if requested
+        let trajectory_path = if options.enable_trajectory || self.trajectory_path.is_some() {
+            let path = options
+                .trajectory_path
+                .clone()
+                .or_else(|| self.trajectory_path.clone())
+                .unwrap_or_else(|| {
+                    let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+                    self.config
+                        .trajectory
+                        .directory
+                        .join(format!("sage_{}.json", timestamp))
+                });
+
+            let recorder = TrajectoryRecorder::new(&path)?;
+            executor.set_trajectory_recorder(Arc::new(Mutex::new(recorder)));
+            Some(path)
+        } else {
+            None
+        };
+
+        let config_used = self.config.clone();
+
+        // Create the future that will execute the task
+        let execution_future = async move {
+            let outcome = executor.execute(task).await?;
+            Ok(ExecutionResult {
+                outcome,
+                trajectory_path,
+                config_used,
+            })
+        };
+
+        Ok((execution_future, input_handle))
+    }
+
+    /// Execute a task in non-interactive mode using the unified executor
+    ///
+    /// This is a simpler API for cases where no user interaction is needed.
+    /// For interactive execution, use `execute_unified` instead.
+    pub async fn execute_non_interactive(
+        &self,
+        task_description: &str,
+        options: UnifiedRunOptions,
+    ) -> SageResult<ExecutionResult> {
+        let opts = UnifiedRunOptions {
+            non_interactive: true,
+            ..options
+        };
+        let (future, _) = self.execute_unified(task_description, opts)?;
+        future.await
     }
 }
 
@@ -272,6 +400,71 @@ impl RunOptions {
     pub fn with_trajectory_path<P: Into<PathBuf>>(mut self, path: P) -> Self {
         self.trajectory_path = Some(path.into());
         self.enable_trajectory = true;
+        self
+    }
+
+    /// Add metadata
+    pub fn with_metadata<K, V>(mut self, key: K, value: V) -> Self
+    where
+        K: Into<String>,
+        V: Into<serde_json::Value>,
+    {
+        self.metadata.insert(key.into(), value.into());
+        self
+    }
+}
+
+/// Options for running tasks with the unified executor
+#[derive(Debug, Clone, Default)]
+pub struct UnifiedRunOptions {
+    /// Working directory for the task
+    pub working_directory: Option<PathBuf>,
+    /// Maximum number of steps
+    pub max_steps: Option<u32>,
+    /// Enable trajectory recording
+    pub enable_trajectory: bool,
+    /// Custom trajectory file path
+    pub trajectory_path: Option<PathBuf>,
+    /// Non-interactive mode (auto-respond to user questions)
+    pub non_interactive: bool,
+    /// Additional metadata
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+impl UnifiedRunOptions {
+    /// Create new unified run options
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set working directory
+    pub fn with_working_directory<P: Into<PathBuf>>(mut self, working_dir: P) -> Self {
+        self.working_directory = Some(working_dir.into());
+        self
+    }
+
+    /// Set maximum steps
+    pub fn with_max_steps(mut self, max_steps: u32) -> Self {
+        self.max_steps = Some(max_steps);
+        self
+    }
+
+    /// Enable trajectory recording
+    pub fn with_trajectory(mut self, enabled: bool) -> Self {
+        self.enable_trajectory = enabled;
+        self
+    }
+
+    /// Set trajectory file path
+    pub fn with_trajectory_path<P: Into<PathBuf>>(mut self, path: P) -> Self {
+        self.trajectory_path = Some(path.into());
+        self.enable_trajectory = true;
+        self
+    }
+
+    /// Set non-interactive mode
+    pub fn with_non_interactive(mut self, non_interactive: bool) -> Self {
+        self.non_interactive = non_interactive;
         self
     }
 

@@ -15,6 +15,7 @@ pub mod cost;
 pub mod error;
 pub mod events;
 pub mod hooks;
+pub mod input;
 pub mod interrupt;
 pub mod learning;
 pub mod llm;
@@ -43,10 +44,13 @@ pub mod workspace;
 
 // Re-export commonly used types
 pub use agent::{
-    Agent, AgentExecution, AgentLifecycle, AgentState, AgentStep, ClaudeStyleAgent, HookResult,
-    LifecycleContext, LifecycleError, LifecycleHook, LifecycleHookRegistry, LifecycleManager,
-    LifecyclePhase, LifecycleResult, LoggingHook, MetricsHook, ReactiveAgent,
-    ReactiveExecutionManager, ReactiveResponse,
+    Agent, AgentExecution, AgentLifecycle, AgentState, AgentStep, AutoResponse, ClaudeStyleAgent,
+    ExecutionMode, ExecutionOptions, HookResult, LifecycleContext, LifecycleError, LifecycleHook,
+    LifecycleHookRegistry, LifecycleManager, LifecyclePhase, LifecycleResult, LoggingHook,
+    MetricsHook, ReactiveAgent, ReactiveExecutionManager, ReactiveResponse,
+};
+pub use input::{
+    InputChannel, InputChannelHandle, InputContext, InputOption, InputRequest, InputResponse,
 };
 pub use builder::{BuilderError, SageBuilder, SageComponents};
 pub use cache::{CacheConfig, CacheEntry, CacheKey, CacheManager, LLMCache};
