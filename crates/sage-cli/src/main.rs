@@ -236,7 +236,7 @@ async fn main() -> SageResult<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        // If no subcommand is provided, default to unified mode (Claude Code style)
+        // If no subcommand is provided, default to interactive mode
         None => {
             if cli.modern_ui {
                 ui_launcher::launch_modern_ui(
@@ -246,15 +246,10 @@ async fn main() -> SageResult<()> {
                 )
                 .await
             } else {
-                // Use unified mode by default for proper user input handling
-                commands::unified_execute(commands::UnifiedArgs {
-                    task: None, // Will prompt for task
+                commands::interactive::execute(commands::interactive::InteractiveArgs {
                     config_file: cli.config_file,
                     trajectory_file: cli.trajectory_file,
                     working_dir: cli.working_dir,
-                    max_steps: None,
-                    verbose: cli.verbose,
-                    non_interactive: false,
                 })
                 .await
             }

@@ -4,11 +4,12 @@ use sage_core::{
     agent::{Agent, AgentExecution, ExecutionMode, ExecutionOptions, UnifiedExecutor, base::BaseAgent},
     config::{loader::load_config_with_overrides, model::Config},
     error::SageResult,
-    input::{InputChannel, InputChannelHandle},
+    input::{InputChannel, InputChannelHandle, InputResponse},
     tools::executor::ToolExecutorBuilder,
     trajectory::recorder::TrajectoryRecorder,
     types::TaskMetadata,
 };
+use sage_tools::get_default_tools;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -16,8 +17,7 @@ use tokio::sync::Mutex;
 
 // Import and re-export outcome types
 pub use sage_core::agent::{ExecutionError, ExecutionErrorKind, ExecutionOutcome};
-pub use sage_core::input::{InputRequest, InputResponse};
-use sage_tools::get_default_tools;
+pub use sage_core::input::InputRequest;
 
 /// SDK client for Sage Agent
 pub struct SageAgentSDK {
@@ -121,6 +121,9 @@ impl SageAgentSDK {
     }
 
     /// Run a task with options
+    ///
+    /// This method now uses the unified execution loop internally, which properly
+    /// blocks on user input when ask_user_question is called.
     pub async fn run_with_options(
         &self,
         task_description: &str,
@@ -134,20 +137,61 @@ impl SageAgentSDK {
 
         let task = TaskMetadata::new(task_description, &working_dir.to_string_lossy());
 
-        // Create agent
-        let mut agent = BaseAgent::new(self.config.clone())?;
+        // Set up execution options for unified executor
+        let exec_options = ExecutionOptions::default()
+            .with_mode(ExecutionMode::interactive())
+            .with_max_steps(options.max_steps.unwrap_or(self.config.max_steps));
 
-        // Set up tool executor with default tools
-        let tool_executor = ToolExecutorBuilder::new()
-            .with_tools(get_default_tools())
-            .with_max_execution_time(std::time::Duration::from_secs(
-                self.config.tools.max_execution_time,
-            ))
-            .with_parallel_execution(self.config.tools.allow_parallel_execution)
-            .build();
+        // Create unified executor
+        let mut executor = UnifiedExecutor::with_options(self.config.clone(), exec_options)?;
 
-        agent.set_tool_executor(tool_executor);
-        agent.set_max_steps(options.max_steps.unwrap_or(self.config.max_steps));
+        // Set up input channel for interactive mode - handles ask_user_question
+        let (input_channel, mut input_handle) = InputChannel::new(16);
+        executor.set_input_channel(input_channel);
+
+        // Spawn background task to handle user input from stdin
+        let input_task = tokio::spawn(async move {
+            use std::io::Write;
+            while let Some(request) = input_handle.request_rx.recv().await {
+                // The question is already printed by UnifiedExecutor
+                // Just show a prompt and read input
+                print!("> ");
+                let _ = std::io::stdout().flush();
+
+                // Use blocking task for stdin
+                let input_result = tokio::task::spawn_blocking(|| {
+                    let mut input = String::new();
+                    match std::io::stdin().read_line(&mut input) {
+                        Ok(_) => Some(input),
+                        Err(_) => None,
+                    }
+                })
+                .await;
+
+                match input_result {
+                    Ok(Some(input)) => {
+                        let content = input.trim().to_string();
+                        let cancelled = content.to_lowercase() == "cancel"
+                            || content.to_lowercase() == "quit"
+                            || content.to_lowercase() == "exit";
+
+                        let response = if cancelled {
+                            InputResponse::cancelled(request.id)
+                        } else {
+                            InputResponse::text(request.id, content)
+                        };
+
+                        if input_handle.respond(response).await.is_err() {
+                            break;
+                        }
+                    }
+                    _ => {
+                        let _ = input_handle.respond(InputResponse::cancelled(request.id)).await;
+                        break;
+                    }
+                }
+            }
+        });
 
         // Set up trajectory recording if requested
         let trajectory_path = if options.enable_trajectory || self.trajectory_path.is_some() {
@@ -163,14 +207,17 @@ impl SageAgentSDK {
                 });
 
             let recorder = TrajectoryRecorder::new(&path)?;
-            agent.set_trajectory_recorder(Arc::new(Mutex::new(recorder)));
+            executor.set_trajectory_recorder(Arc::new(Mutex::new(recorder)));
             Some(path)
         } else {
             None
         };
 
-        // Execute the task - now returns ExecutionOutcome
-        let outcome = agent.execute_task(task).await?;
+        // Execute the task using unified executor
+        let outcome = executor.execute(task).await?;
+
+        // Clean up input task
+        input_task.abort();
 
         Ok(ExecutionResult {
             outcome,
