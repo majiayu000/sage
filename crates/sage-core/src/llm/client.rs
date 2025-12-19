@@ -1064,12 +1064,16 @@ impl LLMClient {
                 );
             }
 
-            // Total tokens should include cache-read tokens for accurate reporting
-            // When cache is hit, input_tokens is low but cache_read_input_tokens is high
-            let total_input = input_tokens + cache_read_input_tokens.unwrap_or(0) as u64;
+            // Total tokens should include ALL cache-related tokens for accurate reporting:
+            // - cache_creation_input_tokens: tokens written to cache (first request)
+            // - cache_read_input_tokens: tokens read from cache (subsequent requests)
+            // Both represent actual tokens processed by the model
+            let cache_tokens = cache_creation_input_tokens.unwrap_or(0) as u64
+                + cache_read_input_tokens.unwrap_or(0) as u64;
+            let total_input = input_tokens + cache_tokens;
 
             Some(LLMUsage {
-                prompt_tokens: total_input as u32,  // Include cache-read tokens
+                prompt_tokens: total_input as u32,  // Include all cache tokens
                 completion_tokens: output_tokens as u32,
                 total_tokens: (total_input + output_tokens) as u32,
                 cost_usd: None,
