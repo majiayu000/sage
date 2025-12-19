@@ -543,6 +543,13 @@ async fn execute_conversation_task(
                             console
                                 .info("ℹ Consider breaking down the task or increasing max_steps");
                         }
+                        ExecutionOutcome::WaitingForInput { question_output, .. } => {
+                            // Display the question and prompt for user input
+                            console.print_header("User Input Required");
+                            println!("{}", question_output);
+                            console.info("ℹ Please provide your response to continue the task.");
+                            // The next user input will continue the conversation
+                        }
                     }
 
                     console.info(&format!("ℹ Execution time: {:.2}s", duration.as_secs_f64()));

@@ -55,6 +55,14 @@ pub enum ExecutionOutcome {
         /// The execution state at max steps
         execution: AgentExecution,
     },
+
+    /// Task is waiting for user input (ask_user_question was called)
+    WaitingForInput {
+        /// The execution state at the point of waiting
+        execution: AgentExecution,
+        /// The formatted question to display to user
+        question_output: String,
+    },
 }
 
 /// Structured error information for failed executions
@@ -112,6 +120,19 @@ impl ExecutionOutcome {
         matches!(self, Self::Interrupted { .. })
     }
 
+    /// Check if the outcome is waiting for user input
+    pub fn is_waiting_for_input(&self) -> bool {
+        matches!(self, Self::WaitingForInput { .. })
+    }
+
+    /// Get the question output if waiting for input
+    pub fn question_output(&self) -> Option<&str> {
+        match self {
+            Self::WaitingForInput { question_output, .. } => Some(question_output),
+            _ => None,
+        }
+    }
+
     /// Get the execution regardless of outcome
     pub fn execution(&self) -> &AgentExecution {
         match self {
@@ -119,6 +140,7 @@ impl ExecutionOutcome {
             Self::Failed { execution, .. } => execution,
             Self::Interrupted { execution } => execution,
             Self::MaxStepsReached { execution } => execution,
+            Self::WaitingForInput { execution, .. } => execution,
         }
     }
 
@@ -129,6 +151,7 @@ impl ExecutionOutcome {
             Self::Failed { execution, .. } => execution,
             Self::Interrupted { execution } => execution,
             Self::MaxStepsReached { execution } => execution,
+            Self::WaitingForInput { execution, .. } => execution,
         }
     }
 
@@ -147,6 +170,7 @@ impl ExecutionOutcome {
             Self::Failed { .. } => "Task failed",
             Self::Interrupted { .. } => "Task interrupted by user",
             Self::MaxStepsReached { .. } => "Task reached maximum steps",
+            Self::WaitingForInput { .. } => "Waiting for user input",
         }
     }
 
@@ -157,6 +181,7 @@ impl ExecutionOutcome {
             Self::Failed { .. } => "✗",
             Self::Interrupted { .. } => "🛑",
             Self::MaxStepsReached { .. } => "⚠",
+            Self::WaitingForInput { .. } => "❓",
         }
     }
 
@@ -168,6 +193,10 @@ impl ExecutionOutcome {
             Self::Interrupted { .. } => Err(SageError::Cancelled),
             Self::MaxStepsReached { execution } => {
                 // Return Ok with the execution, as max steps is not necessarily an error
+                Ok(execution)
+            }
+            Self::WaitingForInput { execution, .. } => {
+                // Return the execution, as waiting for input is not an error
                 Ok(execution)
             }
         }
