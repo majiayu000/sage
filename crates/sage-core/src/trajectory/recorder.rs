@@ -213,7 +213,7 @@ impl TrajectoryRecorder {
                 step_number: step.step_number,
                 timestamp: Utc::now().to_rfc3339(),
                 state: format!("{:?}", step.state),
-                llm_messages: None, // Messages are in the LLM response
+                llm_messages: step.llm_messages.clone(),
                 llm_response,
                 tool_calls: if step.tool_calls.is_empty() {
                     None

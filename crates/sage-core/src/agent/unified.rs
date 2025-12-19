@@ -467,8 +467,16 @@ impl UnifiedExecutor {
         // Stop animation
         self.animation_manager.stop_animation().await;
 
-        // Add LLM response to step
-        step = step.with_llm_response(llm_response.clone());
+        // Convert messages to JSON for recording
+        let messages_json: Vec<serde_json::Value> = messages
+            .iter()
+            .map(|m| serde_json::to_value(m).unwrap_or_default())
+            .collect();
+
+        // Add input messages and LLM response to step
+        step = step
+            .with_llm_messages(messages_json)
+            .with_llm_response(llm_response.clone());
 
         // Process response
         let mut new_messages = messages.to_vec();

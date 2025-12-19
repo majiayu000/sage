@@ -23,6 +23,8 @@ pub struct AgentStep {
     pub completed_at: Option<DateTime<Utc>>,
     /// Agent's thought process (if any)
     pub thought: Option<String>,
+    /// Input messages sent to LLM
+    pub llm_messages: Option<Vec<serde_json::Value>>,
     /// Tool calls made in this step
     pub tool_calls: Vec<ToolCall>,
     /// Results from tool executions
@@ -49,6 +51,7 @@ impl AgentStep {
             started_at: Utc::now(),
             completed_at: None,
             thought: None,
+            llm_messages: None,
             tool_calls: Vec::new(),
             tool_results: Vec::new(),
             llm_response: None,
@@ -67,6 +70,12 @@ impl AgentStep {
     /// Set the agent's thought for this step
     pub fn with_thought<S: Into<String>>(mut self, thought: S) -> Self {
         self.thought = Some(thought.into());
+        self
+    }
+
+    /// Add input messages sent to LLM
+    pub fn with_llm_messages(mut self, messages: Vec<serde_json::Value>) -> Self {
+        self.llm_messages = Some(messages);
         self
     }
 
