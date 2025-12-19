@@ -135,6 +135,18 @@ impl UnifiedExecutor {
         self.trajectory_recorder = Some(recorder);
     }
 
+    /// Register a tool with the executor
+    pub fn register_tool(&mut self, tool: Arc<dyn crate::tools::base::Tool>) {
+        self.tool_executor.register_tool(tool);
+    }
+
+    /// Register multiple tools with the executor
+    pub fn register_tools(&mut self, tools: Vec<Arc<dyn crate::tools::base::Tool>>) {
+        for tool in tools {
+            self.tool_executor.register_tool(tool);
+        }
+    }
+
     /// Get the executor ID
     pub fn id(&self) -> Id {
         self.id.clone()

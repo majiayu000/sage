@@ -145,6 +145,9 @@ impl SageAgentSDK {
         // Create unified executor
         let mut executor = UnifiedExecutor::with_options(self.config.clone(), exec_options)?;
 
+        // Register default tools - CRITICAL: without tools the AI cannot do anything!
+        executor.register_tools(get_default_tools());
+
         // Set up input channel for interactive mode - handles ask_user_question
         let (input_channel, mut input_handle) = InputChannel::new(16);
         executor.set_input_channel(input_channel);
@@ -331,6 +334,9 @@ impl SageAgentSDK {
 
         // Create the unified executor
         let mut executor = UnifiedExecutor::with_options(self.config.clone(), exec_options)?;
+
+        // Register default tools - CRITICAL: without tools the AI cannot do anything!
+        executor.register_tools(get_default_tools());
 
         // Set up input channel if interactive
         let input_handle = if !options.non_interactive {
