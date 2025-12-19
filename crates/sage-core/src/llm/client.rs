@@ -318,10 +318,10 @@ impl LLMClient {
         if let Some(max_tokens) = self.model_params.max_tokens {
             request_body["max_tokens"] = json!(max_tokens);
         }
+        // Anthropic API doesn't allow both temperature and top_p - use temperature if set
         if let Some(temperature) = self.model_params.temperature {
             request_body["temperature"] = json!(temperature);
-        }
-        if let Some(top_p) = self.model_params.top_p {
+        } else if let Some(top_p) = self.model_params.top_p {
             request_body["top_p"] = json!(top_p);
         }
         if let Some(stop) = &self.model_params.stop {
@@ -1428,10 +1428,10 @@ impl LLMClient {
         // Add optional parameters - max_tokens is required for Anthropic
         request_body["max_tokens"] = json!(self.model_params.max_tokens.unwrap_or(4096));
 
+        // Anthropic API doesn't allow both temperature and top_p - use temperature if set
         if let Some(temperature) = self.model_params.temperature {
             request_body["temperature"] = json!(temperature);
-        }
-        if let Some(top_p) = self.model_params.top_p {
+        } else if let Some(top_p) = self.model_params.top_p {
             request_body["top_p"] = json!(top_p);
         }
         if let Some(stop) = &self.model_params.stop {
