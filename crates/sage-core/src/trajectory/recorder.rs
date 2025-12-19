@@ -182,13 +182,39 @@ impl TrajectoryRecorder {
         let mut current = self.current_record.lock().await;
 
         if let Some(record) = current.as_mut() {
+            // Convert LLM response if present
+            let llm_response = step.llm_response.as_ref().map(|resp| {
+                LLMResponseRecord {
+                    content: resp.content.clone(),
+                    model: resp.model.clone(),
+                    finish_reason: resp.finish_reason.clone(),
+                    usage: resp.usage.as_ref().map(|u| TokenUsageRecord {
+                        input_tokens: u.prompt_tokens,
+                        output_tokens: u.completion_tokens,
+                        cache_creation_input_tokens: u.cache_creation_input_tokens,
+                        cache_read_input_tokens: u.cache_read_input_tokens,
+                        reasoning_tokens: None,
+                    }),
+                    tool_calls: if resp.tool_calls.is_empty() {
+                        None
+                    } else {
+                        Some(
+                            resp.tool_calls
+                                .iter()
+                                .map(|call| serde_json::to_value(call).unwrap_or_default())
+                                .collect(),
+                        )
+                    },
+                }
+            });
+
             // Convert AgentStep to AgentStepRecord
             let step_record = AgentStepRecord {
-                step_number: record.agent_steps.len() as u32 + 1,
+                step_number: step.step_number,
                 timestamp: Utc::now().to_rfc3339(),
-                state: "executing".to_string(),
-                llm_messages: None, // Will be filled by record_llm_interaction
-                llm_response: None, // Will be filled by record_llm_interaction
+                state: format!("{:?}", step.state),
+                llm_messages: None, // Messages are in the LLM response
+                llm_response,
                 tool_calls: if step.tool_calls.is_empty() {
                     None
                 } else {
@@ -209,8 +235,8 @@ impl TrajectoryRecorder {
                             .collect(),
                     )
                 },
-                reflection: None,
-                error: step.error.as_ref().map(|e| e.to_string()),
+                reflection: step.reflection.clone(),
+                error: step.error.clone(),
             };
 
             record.agent_steps.push(step_record);
