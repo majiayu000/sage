@@ -1018,15 +1018,25 @@ impl LLMClient {
                     }
                     Some("tool_use") => {
                         // Parse tool_use block
+                        let arguments: HashMap<String, Value> = block["input"]
+                            .as_object()
+                            .map(|obj| {
+                                obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+                            })
+                            .unwrap_or_default();
+
+                        // Warn if input is empty (likely a proxy issue)
+                        if arguments.is_empty() {
+                            tracing::warn!(
+                                "Tool '{}' received empty input - this may indicate a proxy server issue",
+                                block["name"].as_str().unwrap_or("")
+                            );
+                        }
+
                         let tool_call = crate::tools::types::ToolCall {
                             id: block["id"].as_str().unwrap_or("").to_string(),
                             name: block["name"].as_str().unwrap_or("").to_string(),
-                            arguments: block["input"]
-                                .as_object()
-                                .map(|obj| {
-                                    obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
-                                })
-                                .unwrap_or_default(),
+                            arguments,
                             call_id: None,
                         };
                         tool_calls.push(tool_call);
@@ -1611,6 +1621,20 @@ impl LLMClient {
                                         let arguments: HashMap<String, Value> =
                                             serde_json::from_str(&state.tool_input_buffer)
                                                 .unwrap_or_default();
+
+                                        // Warn if input is empty (likely a proxy issue)
+                                        if arguments.is_empty() && !state.tool_input_buffer.is_empty() {
+                                            tracing::warn!(
+                                                "Failed to parse tool input JSON for '{}': buffer was '{}'",
+                                                state.current_tool_name.as_deref().unwrap_or("unknown"),
+                                                &state.tool_input_buffer
+                                            );
+                                        } else if arguments.is_empty() {
+                                            tracing::warn!(
+                                                "Tool '{}' received empty input - this may indicate a proxy server issue",
+                                                state.current_tool_name.as_deref().unwrap_or("unknown")
+                                            );
+                                        }
 
                                         let tool_call = crate::tools::types::ToolCall {
                                             id: state.current_block_id.take().unwrap_or_default(),
