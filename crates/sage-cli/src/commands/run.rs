@@ -211,6 +211,13 @@ pub async fn execute(args: RunArgs) -> SageResult<()> {
                         console.info(&format!("Pending question: {}", question));
                     }
                 }
+                ExecutionOutcome::NeedsUserInput { last_response, .. } => {
+                    console.info("💬 AI is waiting for user input");
+                    if !last_response.is_empty() {
+                        console.info(&format!("Last response: {}", last_response));
+                    }
+                    console.info("ℹ Use interactive mode (sage interactive) for multi-turn conversations");
+                }
             }
 
             console.info(&format!("Execution time: {:.2}s", duration.as_secs_f64()));

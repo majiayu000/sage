@@ -655,6 +655,18 @@ impl Agent for BaseAgent {
                     Ok(step) => {
                         let is_completed = step.state == AgentState::Completed;
 
+                        // Check if model needs user input (output text without tool calls)
+                        let needs_input = step
+                            .llm_response
+                            .as_ref()
+                            .map(|r| r.needs_user_input())
+                            .unwrap_or(false);
+                        let last_response_content = step
+                            .llm_response
+                            .as_ref()
+                            .map(|r| r.content.clone())
+                            .unwrap_or_default();
+
                         // Record step in trajectory
                         if let Some(recorder) = &self.trajectory_recorder {
                             recorder.lock().await.record_step(step.clone()).await?;
@@ -662,14 +674,20 @@ impl Agent for BaseAgent {
 
                         execution.add_step(step);
 
-                        // Note: In the unified loop architecture, ask_user_question tool
-                        // blocks internally on InputChannel instead of exiting the loop.
-                        // The WaitingForInput outcome has been removed.
-
                         if is_completed {
                             execution
                                 .complete(true, Some("Task completed successfully".to_string()));
                             break 'execution_loop ExecutionOutcome::Success(execution);
+                        }
+
+                        // If model needs user input, return NeedsUserInput outcome
+                        // This prevents the loop from continuing without user response
+                        if needs_input {
+                            DisplayManager::print_separator("Waiting for Input", "yellow");
+                            break 'execution_loop ExecutionOutcome::NeedsUserInput {
+                                execution,
+                                last_response: last_response_content,
+                            };
                         }
                     }
                     Err(e) => {

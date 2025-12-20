@@ -10,7 +10,7 @@ use crate::signal_handler::start_global_signal_handling;
 use sage_core::agent::{ExecutionMode, ExecutionOptions, ExecutionOutcome, UnifiedExecutor};
 use sage_core::config::{load_config_from_file, Config};
 use sage_core::error::{SageError, SageResult};
-use sage_core::input::{InputChannel, InputChannelHandle, InputResponse};
+use sage_core::input::{InputChannel, InputChannelHandle, InputRequestKind, InputResponse};
 use sage_core::trajectory::TrajectoryRecorder;
 use sage_core::types::TaskMetadata;
 use std::io::Write;
@@ -164,13 +164,39 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
 async fn handle_user_input(mut handle: InputChannelHandle, verbose: bool) {
     let console = CLIConsole::new(verbose);
     while let Some(request) = handle.request_rx.recv().await {
-        // Display the question
+        // Display the question based on request kind
         console.print_header("User Input Required");
-        println!("{}", request.question);
 
-        if let Some(options) = &request.options {
-            for (idx, opt) in options.iter().enumerate() {
-                println!("  {}. {}: {}", idx + 1, opt.label, opt.description);
+        match &request.kind {
+            InputRequestKind::Questions { questions } => {
+                for question in questions {
+                    println!("{}", question.question);
+                    for (idx, opt) in question.options.iter().enumerate() {
+                        println!("  {}. {}: {}", idx + 1, opt.label, opt.description);
+                    }
+                }
+            }
+            InputRequestKind::Permission {
+                tool_name,
+                description,
+                ..
+            } => {
+                println!("Permission required for tool: {}", tool_name);
+                println!("{}", description);
+                println!("Enter 'yes' or 'y' to allow, 'no' or 'n' to deny:");
+            }
+            InputRequestKind::FreeText { prompt, .. } => {
+                println!("{}", prompt);
+            }
+            InputRequestKind::Simple {
+                question, options, ..
+            } => {
+                println!("{}", question);
+                if let Some(opts) = options {
+                    for (idx, opt) in opts.iter().enumerate() {
+                        println!("  {}. {}: {}", idx + 1, opt.label, opt.description);
+                    }
+                }
             }
         }
 
@@ -185,7 +211,8 @@ async fn handle_user_input(mut handle: InputChannelHandle, verbose: bool) {
                 Ok(_) => Some(input),
                 Err(_) => None,
             }
-        }).await;
+        })
+        .await;
 
         match input_result {
             Ok(Some(input)) => {
@@ -199,7 +226,19 @@ async fn handle_user_input(mut handle: InputChannelHandle, verbose: bool) {
                 let response = if cancelled {
                     InputResponse::cancelled(request.id)
                 } else {
-                    InputResponse::text(request.id, content)
+                    // Handle permission responses specially
+                    if matches!(&request.kind, InputRequestKind::Permission { .. }) {
+                        let lower = content.to_lowercase();
+                        if lower == "yes" || lower == "y" {
+                            InputResponse::permission_granted(request.id)
+                        } else if lower == "no" || lower == "n" {
+                            InputResponse::permission_denied(request.id, Some("User denied".to_string()))
+                        } else {
+                            InputResponse::text(request.id, content)
+                        }
+                    } else {
+                        InputResponse::text(request.id, content)
+                    }
                 };
 
                 if let Err(e) = handle.respond(response).await {
@@ -240,6 +279,12 @@ fn display_outcome(console: &CLIConsole, outcome: &ExecutionOutcome, duration: s
             console.warn("Task cancelled by user");
             if let Some(question) = pending_question {
                 console.info(&format!("Pending question: {}", question));
+            }
+        }
+        ExecutionOutcome::NeedsUserInput { last_response, .. } => {
+            console.info("💬 AI is waiting for user input");
+            if !last_response.is_empty() {
+                console.info(&format!("Last response: {}", last_response));
             }
         }
     }

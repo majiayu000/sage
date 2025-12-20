@@ -284,6 +284,12 @@ impl Tool for AskUserQuestionTool {
         }
         Ok(())
     }
+
+    /// This tool requires user interaction - the execution loop should block
+    /// and wait for user input via the InputChannel when this tool is called.
+    fn requires_user_interaction(&self) -> bool {
+        true
+    }
 }
 
 #[cfg(test)]

@@ -63,6 +63,18 @@ pub enum ExecutionOutcome {
         /// The pending question that was cancelled (if any)
         pending_question: Option<String>,
     },
+
+    /// Agent is waiting for user input to continue
+    ///
+    /// This occurs when the model outputs text without calling any tools,
+    /// typically when it asks a question or needs clarification.
+    /// The caller should prompt for user input and call `continue_execution`.
+    NeedsUserInput {
+        /// The execution state when waiting for input
+        execution: AgentExecution,
+        /// The last response content (often a question or information)
+        last_response: String,
+    },
 }
 
 /// Structured error information for failed executions
@@ -125,10 +137,23 @@ impl ExecutionOutcome {
         matches!(self, Self::UserCancelled { .. })
     }
 
+    /// Check if the outcome is waiting for user input
+    pub fn is_needs_user_input(&self) -> bool {
+        matches!(self, Self::NeedsUserInput { .. })
+    }
+
     /// Get the pending question if user cancelled during a prompt
     pub fn pending_question(&self) -> Option<&str> {
         match self {
             Self::UserCancelled { pending_question, .. } => pending_question.as_deref(),
+            _ => None,
+        }
+    }
+
+    /// Get the last response if waiting for user input
+    pub fn last_response(&self) -> Option<&str> {
+        match self {
+            Self::NeedsUserInput { last_response, .. } => Some(last_response.as_str()),
             _ => None,
         }
     }
@@ -141,6 +166,7 @@ impl ExecutionOutcome {
             Self::Interrupted { execution } => execution,
             Self::MaxStepsReached { execution } => execution,
             Self::UserCancelled { execution, .. } => execution,
+            Self::NeedsUserInput { execution, .. } => execution,
         }
     }
 
@@ -152,6 +178,7 @@ impl ExecutionOutcome {
             Self::Interrupted { execution } => execution,
             Self::MaxStepsReached { execution } => execution,
             Self::UserCancelled { execution, .. } => execution,
+            Self::NeedsUserInput { execution, .. } => execution,
         }
     }
 
@@ -171,6 +198,7 @@ impl ExecutionOutcome {
             Self::Interrupted { .. } => "Task interrupted by user",
             Self::MaxStepsReached { .. } => "Task reached maximum steps",
             Self::UserCancelled { .. } => "Task cancelled by user",
+            Self::NeedsUserInput { .. } => "Waiting for user input",
         }
     }
 
@@ -182,6 +210,7 @@ impl ExecutionOutcome {
             Self::Interrupted { .. } => "🛑",
             Self::MaxStepsReached { .. } => "⚠",
             Self::UserCancelled { .. } => "⊘",
+            Self::NeedsUserInput { .. } => "💬",
         }
     }
 
@@ -198,6 +227,11 @@ impl ExecutionOutcome {
             Self::UserCancelled { .. } => {
                 // User cancelled during input - treat as cancellation
                 Err(SageError::Cancelled)
+            }
+            Self::NeedsUserInput { execution, .. } => {
+                // Return Ok with the execution, as this is not an error
+                // Caller should check is_needs_user_input() and handle appropriately
+                Ok(execution)
             }
         }
     }

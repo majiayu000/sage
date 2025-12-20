@@ -180,6 +180,22 @@ pub trait Tool: Send + Sync {
         }
     }
 
+    /// Whether this tool requires user interaction to complete
+    ///
+    /// When a tool returns `true`, the execution loop will block and wait
+    /// for user input via the InputChannel instead of continuing immediately.
+    /// This is used for tools like `ask_user_question` that need to gather
+    /// information from the user.
+    ///
+    /// When a tool requires user interaction:
+    /// 1. The tool execution prepares an InputRequest
+    /// 2. The execution loop sends it to the InputChannel
+    /// 3. The loop blocks until the user responds
+    /// 4. The response is returned as part of the tool result
+    fn requires_user_interaction(&self) -> bool {
+        false
+    }
+
     /// Execute the tool with timing and error handling
     async fn execute_with_timing(&self, call: &ToolCall) -> ToolResult {
         let start_time = Instant::now();

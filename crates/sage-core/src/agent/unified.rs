@@ -21,7 +21,7 @@ use crate::agent::{
 use crate::config::model::Config;
 use crate::config::provider::ProviderConfig;
 use crate::error::{SageError, SageResult};
-use crate::input::{InputChannel, InputRequest, InputResponse};
+use crate::input::{AutoResponse, InputChannel, InputRequest, InputRequestKind, InputResponse, Question, QuestionOption};
 use crate::interrupt::{global_interrupt_manager, reset_global_interrupt_manager};
 use crate::llm::client::LLMClient;
 use crate::llm::messages::LLMMessage;
@@ -104,8 +104,42 @@ impl UnifiedExecutor {
         let input_channel = match &options.mode {
             ExecutionMode::Interactive => None, // Will be set externally
             ExecutionMode::NonInteractive { auto_response } => {
-                let response = auto_response.get_text_response().to_string();
-                Some(InputChannel::non_interactive(response))
+                // Convert from agent::AutoResponse to input::AutoResponse
+                let input_auto_response = match auto_response {
+                    crate::agent::AutoResponse::Fixed(text) => {
+                        let text = text.clone();
+                        AutoResponse::Custom(std::sync::Arc::new(move |req: &InputRequest| {
+                            InputResponse::text(req.id, text.clone())
+                        }))
+                    }
+                    crate::agent::AutoResponse::FirstOption => AutoResponse::AlwaysAllow,
+                    crate::agent::AutoResponse::LastOption => AutoResponse::AlwaysAllow,
+                    crate::agent::AutoResponse::Cancel => AutoResponse::AlwaysDeny,
+                    crate::agent::AutoResponse::ContextBased { default_text, prefer_first_option } => {
+                        let text = default_text.clone();
+                        let prefer_first = *prefer_first_option;
+                        AutoResponse::Custom(std::sync::Arc::new(move |req: &InputRequest| {
+                            match &req.kind {
+                                InputRequestKind::Questions { questions } if prefer_first => {
+                                    // Select first option for each question
+                                    let answers: std::collections::HashMap<String, String> = questions
+                                        .iter()
+                                        .map(|q| {
+                                            let answer = q.options.first().map(|o| o.label.clone()).unwrap_or_default();
+                                            (q.question.clone(), answer)
+                                        })
+                                        .collect();
+                                    InputResponse::question_answers(req.id, answers)
+                                }
+                                InputRequestKind::Simple { options: Some(_), .. } if prefer_first => {
+                                    InputResponse::selected(req.id, 0, "auto-selected")
+                                }
+                                _ => InputResponse::text(req.id, text.clone()),
+                            }
+                        }))
+                    }
+                };
+                Some(InputChannel::non_interactive(input_auto_response))
             }
             ExecutionMode::Batch => Some(InputChannel::fail_on_input()),
         };
@@ -345,7 +379,6 @@ impl UnifiedExecutor {
         &mut self,
         tool_call: &crate::tools::types::ToolCall,
     ) -> SageResult<crate::tools::types::ToolResult> {
-        use crate::input::{InputContext, InputOption};
         use crate::tools::types::ToolResult;
 
         // Stop animation while waiting for user input
@@ -357,40 +390,42 @@ impl UnifiedExecutor {
         })?;
 
         // Build the input request from the questions
-        let questions: Vec<serde_json::Value> =
+        let raw_questions: Vec<serde_json::Value> =
             serde_json::from_value(questions_value.clone()).map_err(|e| {
                 SageError::agent(format!("Invalid questions format: {}", e))
             })?;
 
-        // Format question display text
+        // Convert to Question structs
+        let mut questions: Vec<Question> = Vec::new();
         let mut question_text = String::from("User Input Required:\n\n");
-        let mut all_options = Vec::new();
 
-        for (idx, q) in questions.iter().enumerate() {
-            if let Some(question_str) = q.get("question").and_then(|v| v.as_str()) {
-                let header = q
-                    .get("header")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("Question");
-                question_text.push_str(&format!("[{}] {}\n", header, question_str));
+        for q in raw_questions.iter() {
+            let question_str = q.get("question").and_then(|v| v.as_str()).unwrap_or("");
+            let header = q.get("header").and_then(|v| v.as_str()).unwrap_or("Question");
+            let multi_select = q.get("multi_select").and_then(|v| v.as_bool()).unwrap_or(false);
 
-                if let Some(options) = q.get("options").and_then(|v| v.as_array()) {
-                    for (opt_idx, opt) in options.iter().enumerate() {
-                        let label = opt.get("label").and_then(|v| v.as_str()).unwrap_or("");
-                        let description =
-                            opt.get("description").and_then(|v| v.as_str()).unwrap_or("");
-                        question_text.push_str(&format!("  {}. {}: {}\n", opt_idx + 1, label, description));
-                        all_options.push(InputOption::new(label, description));
-                    }
+            question_text.push_str(&format!("[{}] {}\n", header, question_str));
+
+            let mut options: Vec<QuestionOption> = Vec::new();
+            if let Some(opts) = q.get("options").and_then(|v| v.as_array()) {
+                for (opt_idx, opt) in opts.iter().enumerate() {
+                    let label = opt.get("label").and_then(|v| v.as_str()).unwrap_or("");
+                    let description = opt.get("description").and_then(|v| v.as_str()).unwrap_or("");
+                    question_text.push_str(&format!("  {}. {}: {}\n", opt_idx + 1, label, description));
+                    options.push(QuestionOption::new(label, description));
                 }
-                question_text.push('\n');
             }
+
+            let mut question = Question::new(question_str, header, options);
+            if multi_select {
+                question = question.with_multi_select();
+            }
+            questions.push(question);
+            question_text.push('\n');
         }
 
-        // Create input request
-        let request = InputRequest::new(&question_text)
-            .with_context(InputContext::Decision)
-            .with_options(all_options);
+        // Create input request with structured questions
+        let request = InputRequest::questions(questions);
 
         // Print the question
         println!("\n{}", question_text);
@@ -399,15 +434,21 @@ impl UnifiedExecutor {
         let response = self.request_user_input(request).await?;
 
         // Check if user cancelled
-        if response.cancelled {
+        if response.is_cancelled() {
             return Err(SageError::Cancelled);
         }
 
         // Format the response for the agent
-        let result_text = if response.selected_indices.is_some() {
-            format!("User Response:\n\nSelected: {}", response.content)
+        let result_text = if let Some(answers) = response.get_answers() {
+            let answers_str: Vec<String> = answers
+                .iter()
+                .map(|(q, a)| format!("Q: {} -> A: {}", q, a))
+                .collect();
+            format!("User answered:\n{}", answers_str.join("\n"))
+        } else if let Some(text) = response.get_text() {
+            format!("User Response:\n\n{}", text)
         } else {
-            format!("User Response:\n\n{}", response.content)
+            "User provided no response".to_string()
         };
 
         Ok(ToolResult::success(
@@ -502,9 +543,21 @@ impl UnifiedExecutor {
                     return Err(SageError::agent("Task interrupted during tool execution"));
                 }
 
-                // Special handling for ask_user_question - this is the key to unified loop
-                let tool_result = if tool_call.name == "ask_user_question" {
+                // Check if this tool requires user interaction (blocking input)
+                let requires_interaction = self
+                    .tool_executor
+                    .get_tool(&tool_call.name)
+                    .map(|t| t.requires_user_interaction())
+                    .unwrap_or(false);
+
+                // Handle tools that require user interaction with blocking input
+                let tool_result = if requires_interaction && tool_call.name == "ask_user_question" {
+                    // Use specialized handler for ask_user_question
                     self.handle_ask_user_question(tool_call).await?
+                } else if requires_interaction {
+                    // Generic handling for other interactive tools
+                    // For now, just execute normally - can be extended later
+                    self.tool_executor.execute_tool(tool_call).await
                 } else {
                     // Normal tool execution
                     self.tool_executor.execute_tool(tool_call).await

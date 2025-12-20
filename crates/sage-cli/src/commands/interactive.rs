@@ -550,6 +550,21 @@ async fn execute_conversation_task(
                                 console.info(&format!("ℹ Pending question: {}", question));
                             }
                         }
+                        ExecutionOutcome::NeedsUserInput { last_response, .. } => {
+                            // Model is waiting for user input
+                            console.info("💬 AI is waiting for your response");
+
+                            // Store the execution for continuation
+                            conversation.execution = Some(execution_result.execution().clone());
+                            conversation.mark_first_message_processed();
+
+                            // Add the AI's response to the conversation
+                            if !last_response.is_empty() {
+                                conversation.add_assistant_message(&last_response);
+                            }
+
+                            console.info("ℹ Type your response to continue the conversation");
+                        }
                     }
 
                     console.info(&format!("ℹ Execution time: {:.2}s", duration.as_secs_f64()));

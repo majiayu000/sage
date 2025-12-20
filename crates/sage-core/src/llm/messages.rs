@@ -255,4 +255,33 @@ impl LLMResponse {
     pub fn indicates_completion(&self) -> bool {
         self.tool_calls.iter().any(|call| call.name == "task_done")
     }
+
+    /// Check if the response indicates the model is waiting for user input
+    ///
+    /// This is true when:
+    /// - The model has output content (text)
+    /// - No tool calls were made
+    /// - The finish reason indicates natural end of turn ("end_turn" or "stop")
+    ///
+    /// This typically happens when the model:
+    /// - Asks the user a question
+    /// - Provides information and waits for feedback
+    /// - Needs clarification before proceeding
+    pub fn needs_user_input(&self) -> bool {
+        // Must have some content output
+        if self.content.trim().is_empty() {
+            return false;
+        }
+
+        // No tool calls
+        if !self.tool_calls.is_empty() {
+            return false;
+        }
+
+        // Check finish reason indicates natural end of turn
+        match self.finish_reason.as_deref() {
+            Some("end_turn") | Some("stop") => true,
+            _ => false,
+        }
+    }
 }
