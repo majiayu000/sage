@@ -526,7 +526,18 @@ impl UnifiedExecutor {
         if !llm_response.content.is_empty() {
             println!("\n AI Response:");
             DisplayManager::print_markdown(&llm_response.content);
-            new_messages.push(LLMMessage::assistant(&llm_response.content));
+        }
+
+        // Add assistant message with tool_calls if present
+        // CRITICAL: The assistant message MUST include tool_calls for the subsequent
+        // tool messages to reference via tool_call_id. OpenRouter/Anthropic API requires
+        // each tool_result to have a corresponding tool_use in the previous message.
+        if !llm_response.tool_calls.is_empty() || !llm_response.content.is_empty() {
+            let mut assistant_msg = LLMMessage::assistant(&llm_response.content);
+            if !llm_response.tool_calls.is_empty() {
+                assistant_msg.tool_calls = Some(llm_response.tool_calls.clone());
+            }
+            new_messages.push(assistant_msg);
         }
 
         // Handle tool calls
