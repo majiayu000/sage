@@ -20,6 +20,8 @@ pub enum LLMProvider {
     Doubao,
     /// Ollama (local models)
     Ollama,
+    /// GLM (Zhipu AI)
+    Glm,
     /// Custom provider
     Custom(String),
 }
@@ -34,6 +36,7 @@ impl std::fmt::Display for LLMProvider {
             LLMProvider::OpenRouter => write!(f, "openrouter"),
             LLMProvider::Doubao => write!(f, "doubao"),
             LLMProvider::Ollama => write!(f, "ollama"),
+            LLMProvider::Glm => write!(f, "glm"),
             LLMProvider::Custom(name) => write!(f, "{}", name),
         }
     }
@@ -51,6 +54,7 @@ impl std::str::FromStr for LLMProvider {
             "openrouter" => Ok(LLMProvider::OpenRouter),
             "doubao" => Ok(LLMProvider::Doubao),
             "ollama" => Ok(LLMProvider::Ollama),
+            "glm" | "zhipu" => Ok(LLMProvider::Glm),
             _ => Ok(LLMProvider::Custom(s.to_string())),
         }
     }

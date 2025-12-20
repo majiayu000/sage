@@ -202,6 +202,10 @@ impl LLMClient {
                 self.execute_with_retry(|| self.ollama_chat(messages, tools))
                     .await
             }
+            LLMProvider::Glm => {
+                self.execute_with_retry(|| self.glm_chat(messages, tools))
+                    .await
+            }
             LLMProvider::Custom(name) => {
                 // TODO: Implement plugin system for custom providers
                 // - Add provider plugin API
@@ -809,6 +813,83 @@ impl LLMClient {
         self.parse_openai_response(response_json)
     }
 
+    /// GLM (Zhipu AI) chat completion - Anthropic compatible format
+    /// Uses https://open.bigmodel.cn/api/anthropic endpoint
+    async fn glm_chat(
+        &self,
+        messages: &[LLMMessage],
+        tools: Option<&[ToolSchema]>,
+    ) -> SageResult<LLMResponse> {
+        let url = format!("{}/v1/messages", self.config.get_base_url());
+
+        let (system_message, user_messages) = self.extract_system_message(messages);
+
+        let mut request_body = json!({
+            "model": self.model_params.model,
+            "messages": self.convert_messages_for_glm(&user_messages)?,
+        });
+
+        // Add system message
+        if let Some(system) = system_message {
+            request_body["system"] = json!(system);
+        }
+
+        // Add optional parameters
+        if let Some(max_tokens) = self.model_params.max_tokens {
+            request_body["max_tokens"] = json!(max_tokens);
+        }
+        if let Some(temperature) = self.model_params.temperature {
+            request_body["temperature"] = json!(temperature);
+        } else if let Some(top_p) = self.model_params.top_p {
+            request_body["top_p"] = json!(top_p);
+        }
+
+        // Add tools if provided (Anthropic format)
+        if let Some(tools) = tools {
+            if !tools.is_empty() {
+                let tool_defs = self.convert_tools_for_anthropic(tools)?;
+                request_body["tools"] = json!(tool_defs);
+            }
+        }
+
+        let mut request = self.http_client.post(&url).json(&request_body);
+
+        // Add authentication (x-api-key header for Anthropic format)
+        if let Some(api_key) = self.config.get_api_key() {
+            request = request.header("x-api-key", api_key);
+        }
+
+        // Add API version header
+        request = request.header("anthropic-version", "2023-06-01");
+
+        tracing::debug!(
+            "GLM API request: {}",
+            serde_json::to_string_pretty(&request_body).unwrap_or_default()
+        );
+
+        let response = request
+            .send()
+            .await
+            .map_err(|e| SageError::llm(format!("GLM API request failed: {}", e)))?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(SageError::llm(format!("GLM API error: {}", error_text)));
+        }
+
+        let response_json: Value = response
+            .json()
+            .await
+            .map_err(|e| SageError::llm(format!("Failed to parse GLM response: {}", e)))?;
+
+        tracing::debug!(
+            "GLM API response: {}",
+            serde_json::to_string_pretty(&response_json).unwrap_or_default()
+        );
+
+        self.parse_anthropic_response(response_json)
+    }
+
     /// Convert messages for OpenAI format
     fn convert_messages_for_openai(&self, messages: &[LLMMessage]) -> SageResult<Vec<Value>> {
         let mut converted = Vec::new();
@@ -953,6 +1034,79 @@ impl LLMClient {
                 });
                 converted.push(msg);
             }
+        }
+
+        Ok(converted)
+    }
+
+    /// Convert messages for GLM (Anthropic-compatible format without cache_control)
+    fn convert_messages_for_glm(&self, messages: &[LLMMessage]) -> SageResult<Vec<Value>> {
+        use crate::llm::messages::MessageRole;
+        let mut converted = Vec::new();
+
+        // Filter out system messages
+        let non_system_messages: Vec<_> = messages
+            .iter()
+            .filter(|m| m.role != MessageRole::System)
+            .collect();
+
+        for message in non_system_messages.into_iter() {
+            // Handle tool result messages specially for Anthropic format
+            if message.role == MessageRole::Tool {
+                if let Some(ref tool_call_id) = message.tool_call_id {
+                    let is_error = message.content.contains("<tool_use_error>");
+                    let msg = json!({
+                        "role": "user",
+                        "content": [{
+                            "type": "tool_result",
+                            "tool_use_id": tool_call_id,
+                            "content": message.content,
+                            "is_error": is_error
+                        }]
+                    });
+                    converted.push(msg);
+                    continue;
+                }
+            }
+
+            // Handle assistant messages with tool_use
+            if message.role == MessageRole::Assistant {
+                if let Some(ref tool_calls) = message.tool_calls {
+                    if !tool_calls.is_empty() {
+                        let mut content_blocks = Vec::new();
+
+                        if !message.content.is_empty() {
+                            content_blocks.push(json!({
+                                "type": "text",
+                                "text": message.content
+                            }));
+                        }
+
+                        for tool_call in tool_calls {
+                            content_blocks.push(json!({
+                                "type": "tool_use",
+                                "id": tool_call.id,
+                                "name": tool_call.name,
+                                "input": tool_call.arguments
+                            }));
+                        }
+
+                        let msg = json!({
+                            "role": "assistant",
+                            "content": content_blocks
+                        });
+                        converted.push(msg);
+                        continue;
+                    }
+                }
+            }
+
+            // Simple message without cache_control (GLM doesn't support it)
+            let msg = json!({
+                "role": message.role.to_string(),
+                "content": message.content
+            });
+            converted.push(msg);
         }
 
         Ok(converted)
@@ -1410,6 +1564,7 @@ impl StreamingLLMClient for LLMClient {
             LLMProvider::OpenRouter => self.openrouter_chat_stream(messages, tools).await,
             LLMProvider::Doubao => self.doubao_chat_stream(messages, tools).await,
             LLMProvider::Ollama => self.ollama_chat_stream(messages, tools).await,
+            LLMProvider::Glm => self.glm_chat_stream(messages, tools).await,
             LLMProvider::Custom(name) => Err(SageError::llm(format!(
                 "Streaming not supported for custom provider '{name}'"
             ))),
@@ -1860,5 +2015,14 @@ impl LLMClient {
     ) -> SageResult<LLMStream> {
         // TODO: Implement Ollama streaming
         Err(SageError::llm("Ollama streaming not yet implemented"))
+    }
+
+    async fn glm_chat_stream(
+        &self,
+        _messages: &[LLMMessage],
+        _tools: Option<&[ToolSchema]>,
+    ) -> SageResult<LLMStream> {
+        // TODO: Implement GLM streaming
+        Err(SageError::llm("GLM streaming not yet implemented"))
     }
 }

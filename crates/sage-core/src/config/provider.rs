@@ -238,6 +238,19 @@ impl ProviderDefaults {
             })
     }
 
+    /// Get default configuration for GLM (Zhipu AI)
+    pub fn glm() -> ProviderConfig {
+        ProviderConfig::new("glm")
+            .with_base_url("https://open.bigmodel.cn/api/paas/v4")
+            .with_timeout(60)
+            .with_max_retries(3)
+            .with_rate_limit(RateLimitConfig {
+                requests_per_minute: Some(60),
+                tokens_per_minute: Some(100_000),
+                max_concurrent_requests: Some(10),
+            })
+    }
+
     /// Get default configuration for a provider by name
     pub fn for_provider(name: &str) -> ProviderConfig {
         match name {
@@ -245,6 +258,7 @@ impl ProviderDefaults {
             "anthropic" => Self::anthropic(),
             "google" => Self::google(),
             "ollama" => Self::ollama(),
+            "glm" | "zhipu" => Self::glm(),
             _ => ProviderConfig::new(name),
         }
     }
