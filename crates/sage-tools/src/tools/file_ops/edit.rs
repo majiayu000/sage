@@ -1,13 +1,13 @@
-//! String replacement based file editing tool
+//! Edit tool - Claude Code style string replacement based file editing
 
-use crate::utils::maybe_truncate;
 use async_trait::async_trait;
 use sage_core::tools::base::{FileSystemTool, Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
 use std::path::PathBuf;
 use tokio::fs;
 
-/// Tool for editing files using string replacement
+/// Edit tool for modifying files using string replacement
+/// Matches Claude Code's Edit tool design
 pub struct EditTool {
     working_directory: PathBuf,
 }
@@ -26,167 +26,6 @@ impl EditTool {
             working_directory: working_dir.into(),
         }
     }
-
-    /// Perform string replacement in a file
-    async fn replace_in_file(
-        &self,
-        file_path: &str,
-        old_str: &str,
-        new_str: &str,
-    ) -> Result<ToolResult, ToolError> {
-        let path = self.resolve_path(file_path);
-
-        // Security check
-        if !self.is_safe_path(&path) {
-            return Err(ToolError::PermissionDenied(format!(
-                "Access denied to path: {}",
-                path.display()
-            )));
-        }
-
-        // Read the file
-        let content = fs::read_to_string(&path)
-            .await
-            .map_err(|e| ToolError::Io(e))?;
-
-        // Check if old_str exists
-        if !content.contains(old_str) {
-            return Err(ToolError::ExecutionFailed(format!(
-                "String '{}' not found in file",
-                old_str
-            )));
-        }
-
-        // Count occurrences
-        let occurrences = content.matches(old_str).count();
-        if occurrences > 1 {
-            return Err(ToolError::ExecutionFailed(format!(
-                "String '{}' appears {} times in file. Please be more specific.",
-                old_str, occurrences
-            )));
-        }
-
-        // Perform replacement
-        let new_content = content.replace(old_str, new_str);
-
-        // Write back to file
-        fs::write(&path, new_content)
-            .await
-            .map_err(|e| ToolError::Io(e))?;
-
-        Ok(ToolResult::success(
-            "",
-            self.name(),
-            format!(
-                "Successfully replaced '{}' with '{}' in {}",
-                old_str, new_str, file_path
-            ),
-        ))
-    }
-
-    /// Create a new file
-    async fn create_file(&self, file_path: &str, content: &str) -> Result<ToolResult, ToolError> {
-        let path = self.resolve_path(file_path);
-
-        // Security check
-        if !self.is_safe_path(&path) {
-            return Err(ToolError::PermissionDenied(format!(
-                "Access denied to path: {}",
-                path.display()
-            )));
-        }
-
-        // Check if file already exists
-        if path.exists() {
-            return Err(ToolError::ExecutionFailed(format!(
-                "File already exists: {}",
-                file_path
-            )));
-        }
-
-        // Create parent directories if needed
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
-                .await
-                .map_err(|e| ToolError::Io(e))?;
-        }
-
-        // Write file
-        fs::write(&path, content)
-            .await
-            .map_err(|e| ToolError::Io(e))?;
-
-        Ok(ToolResult::success(
-            "",
-            self.name(),
-            format!("Successfully created file: {}", file_path),
-        ))
-    }
-
-    /// View file or directory content
-    async fn view_file(&self, file_path: &str) -> Result<ToolResult, ToolError> {
-        let path = self.resolve_path(file_path);
-
-        // Security check
-        if !self.is_safe_path(&path) {
-            return Err(ToolError::PermissionDenied(format!(
-                "Access denied to path: {}",
-                path.display()
-            )));
-        }
-
-        // Check if path exists
-        if !path.exists() {
-            return Err(ToolError::ExecutionFailed(format!(
-                "Path not found: {}",
-                file_path
-            )));
-        }
-
-        // Handle directory
-        if path.is_dir() {
-            let mut entries = Vec::new();
-            let mut dir_entries = fs::read_dir(&path)
-                .await
-                .map_err(|e| ToolError::Io(e))?;
-
-            while let Some(entry) = dir_entries.next_entry().await.map_err(|e| ToolError::Io(e))? {
-                let entry_path = entry.path();
-                let name = entry.file_name().to_string_lossy().to_string();
-                let is_dir = entry_path.is_dir();
-                entries.push(if is_dir {
-                    format!("  {}/", name)
-                } else {
-                    format!("  {}", name)
-                });
-            }
-
-            entries.sort();
-            let output = format!(
-                "Directory: {}\n\n{}\n\n({} items)",
-                file_path,
-                if entries.is_empty() {
-                    "  (empty)".to_string()
-                } else {
-                    entries.join("\n")
-                },
-                entries.len()
-            );
-
-            return Ok(ToolResult::success("", self.name(), output));
-        }
-
-        // Read the file
-        let content = fs::read_to_string(&path)
-            .await
-            .map_err(|e| ToolError::Io(e))?;
-
-        Ok(ToolResult::success(
-            "",
-            self.name(),
-            format!("Content of {}:\n{}", file_path, maybe_truncate(&content)),
-        ))
-    }
 }
 
 impl Default for EditTool {
@@ -198,19 +37,19 @@ impl Default for EditTool {
 #[async_trait]
 impl Tool for EditTool {
     fn name(&self) -> &str {
-        "str_replace_based_edit_tool"
+        "Edit"
     }
 
     fn description(&self) -> &str {
-        "Edit files using string replacement. Can create new files, replace text, or view file contents.
+        r#"Performs exact string replacements in files.
 
-Usage patterns:
-- View files: Use 'view' action to read file contents (automatically truncated if large)
-- View directories: Use 'view' action with directory path to see structure
-- Edit files: Use 'str_replace' action with old_str and new_str
-- Create files: Use 'create' action with file_path and content
-
-For project exploration: Start with viewing root directory, then README files, then configuration files."
+Usage:
+- You must use your `Read` tool at least once in the conversation before editing. This tool will error if you attempt an edit without reading the file.
+- When editing text from Read tool output, ensure you preserve the exact indentation (tabs/spaces) as it appears AFTER the line number prefix. The line number prefix format is: spaces + line number + tab. Everything after that tab is the actual file content to match. Never include any part of the line number prefix in the old_string or new_string.
+- ALWAYS prefer editing existing files in the codebase. NEVER write new files unless explicitly required.
+- Only use emojis if the user explicitly requests it. Avoid adding emojis to files unless asked.
+- The edit will FAIL if `old_string` is not unique in the file. Either provide a larger string with more surrounding context to make it unique or use `replace_all` to change every instance of `old_string`.
+- Use `replace_all` for replacing and renaming strings across the file. This parameter is useful if you want to rename a variable for instance."#
     }
 
     fn schema(&self) -> ToolSchema {
@@ -219,64 +58,121 @@ For project exploration: Start with viewing root directory, then README files, t
             self.description(),
             vec![
                 ToolParameter::string(
-                    "command",
-                    "The command to execute: 'str_replace', 'create', or 'view'",
+                    "file_path",
+                    "The absolute path to the file to modify",
                 ),
-                ToolParameter::string("path", "Path to the file"),
-                ToolParameter::optional_string(
-                    "old_str",
-                    "String to replace (for str_replace command)",
+                ToolParameter::string(
+                    "old_string",
+                    "The text to replace",
                 ),
-                ToolParameter::optional_string(
-                    "new_str",
-                    "Replacement string (for str_replace command)",
+                ToolParameter::string(
+                    "new_string",
+                    "The text to replace it with (must be different from old_string)",
                 ),
-                ToolParameter::optional_string(
-                    "file_text",
-                    "Content for new file (for create command)",
-                ),
+                ToolParameter::boolean("replace_all", "Replace all occurrences of old_string (default false)")
+                    .optional()
+                    .with_default(serde_json::Value::Bool(false)),
             ],
         )
     }
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
-        let command = call.get_string("command").ok_or_else(|| {
-            ToolError::InvalidArguments("Missing 'command' parameter".to_string())
+        let file_path = call.get_string("file_path").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'file_path' parameter".to_string())
         })?;
 
-        let path = call
-            .get_string("path")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'path' parameter".to_string()))?;
+        let old_string = call.get_string("old_string").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'old_string' parameter".to_string())
+        })?;
 
-        let mut result = match command.as_str() {
-            "str_replace" => {
-                let old_str = call.get_string("old_str").ok_or_else(|| {
-                    ToolError::InvalidArguments(
-                        "Missing 'old_str' parameter for str_replace".to_string(),
-                    )
-                })?;
-                let new_str = call.get_string("new_str").ok_or_else(|| {
-                    ToolError::InvalidArguments(
-                        "Missing 'new_str' parameter for str_replace".to_string(),
-                    )
-                })?;
-                self.replace_in_file(&path, &old_str, &new_str).await?
-            }
-            "create" => {
-                let content = call.get_string("file_text").ok_or_else(|| {
-                    ToolError::InvalidArguments(
-                        "Missing 'file_text' parameter for create".to_string(),
-                    )
-                })?;
-                self.create_file(&path, &content).await?
-            }
-            "view" => self.view_file(&path).await?,
-            _ => {
-                return Err(ToolError::InvalidArguments(format!(
-                    "Unknown command: {}. Use 'str_replace', 'create', or 'view'",
-                    command
-                )));
-            }
+        let new_string = call.get_string("new_string").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'new_string' parameter".to_string())
+        })?;
+
+        let replace_all = call.get_bool("replace_all").unwrap_or(false);
+
+        // Validate old_string != new_string
+        if old_string == new_string {
+            return Err(ToolError::InvalidArguments(
+                "No changes to make: old_string and new_string are exactly the same".to_string(),
+            ));
+        }
+
+        // Validate old_string is not empty
+        if old_string.is_empty() {
+            return Err(ToolError::InvalidArguments(
+                "old_string cannot be empty".to_string(),
+            ));
+        }
+
+        let path = self.resolve_path(&file_path);
+
+        // Security check
+        if !self.is_safe_path(&path) {
+            return Err(ToolError::PermissionDenied(format!(
+                "Access denied to path: {}",
+                path.display()
+            )));
+        }
+
+        // Check if file exists
+        if !path.exists() {
+            return Err(ToolError::ExecutionFailed(format!(
+                "File not found: {}",
+                file_path
+            )));
+        }
+
+        // Read the file
+        let content = fs::read_to_string(&path)
+            .await
+            .map_err(|e| ToolError::Io(e))?;
+
+        // Check if old_string exists
+        if !content.contains(&old_string) {
+            return Err(ToolError::ExecutionFailed(format!(
+                "The string to replace was not found in the file. Make sure the old_string matches exactly, including whitespace and indentation."
+            )));
+        }
+
+        // Count occurrences
+        let occurrences = content.matches(&old_string).count();
+
+        // If not replace_all and multiple occurrences, return error
+        if !replace_all && occurrences > 1 {
+            return Err(ToolError::ExecutionFailed(format!(
+                "Found {} occurrences of the string. Use replace_all=true to replace all, or provide more context to make the match unique.",
+                occurrences
+            )));
+        }
+
+        // Perform replacement
+        let new_content = if replace_all {
+            content.replace(&old_string, &new_string)
+        } else {
+            content.replacen(&old_string, &new_string, 1)
+        };
+
+        // Write back to file
+        fs::write(&path, &new_content)
+            .await
+            .map_err(|e| ToolError::Io(e))?;
+
+        let mut result = if replace_all && occurrences > 1 {
+            ToolResult::success(
+                &call.id,
+                self.name(),
+                format!(
+                    "Successfully replaced {} occurrences in {}",
+                    occurrences, file_path
+                ),
+            )
+        } else {
+            ToolResult::success(
+                &call.id,
+                self.name(),
+                format!("Successfully edited {}", file_path),
+            )
         };
 
         result.call_id = call.id.clone();
@@ -284,45 +180,21 @@ For project exploration: Start with viewing root directory, then README files, t
     }
 
     fn validate(&self, call: &ToolCall) -> Result<(), ToolError> {
-        let command = call.get_string("command").ok_or_else(|| {
-            ToolError::InvalidArguments("Missing 'command' parameter".to_string())
-        })?;
-
-        let _path = call
-            .get_string("path")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'path' parameter".to_string()))?;
-
-        match command.as_str() {
-            "str_replace" => {
-                if call.get_string("old_str").is_none() {
-                    return Err(ToolError::InvalidArguments(
-                        "Missing 'old_str' parameter for str_replace".to_string(),
-                    ));
-                }
-                if call.get_string("new_str").is_none() {
-                    return Err(ToolError::InvalidArguments(
-                        "Missing 'new_str' parameter for str_replace".to_string(),
-                    ));
-                }
-            }
-            "create" => {
-                if call.get_string("file_text").is_none() {
-                    return Err(ToolError::InvalidArguments(
-                        "Missing 'file_text' parameter for create".to_string(),
-                    ));
-                }
-            }
-            "view" => {
-                // No additional parameters needed
-            }
-            _ => {
-                return Err(ToolError::InvalidArguments(format!(
-                    "Unknown command: {}. Use 'str_replace', 'create', or 'view'",
-                    command
-                )));
-            }
+        if call.get_string("file_path").is_none() {
+            return Err(ToolError::InvalidArguments(
+                "Missing 'file_path' parameter".to_string(),
+            ));
         }
-
+        if call.get_string("old_string").is_none() {
+            return Err(ToolError::InvalidArguments(
+                "Missing 'old_string' parameter".to_string(),
+            ));
+        }
+        if call.get_string("new_string").is_none() {
+            return Err(ToolError::InvalidArguments(
+                "Missing 'new_string' parameter".to_string(),
+            ));
+        }
         Ok(())
     }
 
@@ -377,12 +249,11 @@ mod tests {
         let tool = EditTool::with_working_directory(temp_dir.path());
         let call = create_tool_call(
             "test-1",
-            "str_replace_based_edit_tool",
+            "Edit",
             json!({
-                "command": "str_replace",
-                "path": "test.txt",
-                "old_str": "World",
-                "new_str": "Rust"
+                "file_path": "test.txt",
+                "old_string": "World",
+                "new_string": "Rust"
             }),
         );
 
@@ -396,27 +267,31 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_edit_tool_create_file() {
+    async fn test_edit_tool_replace_all() {
         let temp_dir = TempDir::new().unwrap();
-        let tool = EditTool::with_working_directory(temp_dir.path());
+        let file_path = temp_dir.path().join("test.txt");
 
+        // Create test file with multiple occurrences
+        fs::write(&file_path, "test test test\n").await.unwrap();
+
+        let tool = EditTool::with_working_directory(temp_dir.path());
         let call = create_tool_call(
             "test-2",
-            "str_replace_based_edit_tool",
+            "Edit",
             json!({
-                "command": "create",
-                "path": "new_file.txt",
-                "file_text": "This is a new file content."
+                "file_path": "test.txt",
+                "old_string": "test",
+                "new_string": "replaced",
+                "replace_all": true
             }),
         );
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
 
-        // Verify the file was created
-        let file_path = temp_dir.path().join("new_file.txt");
+        // Verify all occurrences were replaced
         let content = fs::read_to_string(&file_path).await.unwrap();
-        assert!(content.contains("This is a new file content."));
+        assert_eq!(content, "replaced replaced replaced\n");
     }
 
     #[tokio::test]
@@ -430,24 +305,20 @@ mod tests {
         let tool = EditTool::with_working_directory(temp_dir.path());
         let call = create_tool_call(
             "test-3",
-            "str_replace_based_edit_tool",
+            "Edit",
             json!({
-                "command": "str_replace",
-                "path": "test.txt",
-                "old_str": "NonexistentString",
-                "new_str": "replacement"
+                "file_path": "test.txt",
+                "old_string": "NonexistentString",
+                "new_string": "replacement"
             }),
         );
 
-        // Implementation returns Err for string not found
         let result = tool.execute(&call).await;
         assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(err.to_string().contains("not found"));
     }
 
     #[tokio::test]
-    async fn test_edit_tool_multiple_occurrences() {
+    async fn test_edit_tool_multiple_occurrences_without_replace_all() {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("test.txt");
 
@@ -457,62 +328,36 @@ mod tests {
         let tool = EditTool::with_working_directory(temp_dir.path());
         let call = create_tool_call(
             "test-4",
-            "str_replace_based_edit_tool",
+            "Edit",
             json!({
-                "command": "str_replace",
-                "path": "test.txt",
-                "old_str": "test",
-                "new_str": "replaced"
+                "file_path": "test.txt",
+                "old_string": "test",
+                "new_string": "replaced"
             }),
         );
 
-        // Implementation returns Err for multiple occurrences (requires more specificity)
+        // Should fail because multiple occurrences without replace_all
         let result = tool.execute(&call).await;
         assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(err.to_string().contains("appears") || err.to_string().contains("times"));
     }
 
     #[tokio::test]
-    async fn test_edit_tool_missing_parameters() {
-        let tool = EditTool::new();
+    async fn test_edit_tool_same_old_new_string() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("test.txt");
+        fs::write(&file_path, "Hello, World!\n").await.unwrap();
 
-        // Missing command - returns Err
+        let tool = EditTool::with_working_directory(temp_dir.path());
         let call = create_tool_call(
-            "test-5a",
-            "str_replace_based_edit_tool",
+            "test-5",
+            "Edit",
             json!({
-                "path": "test.txt",
-                "old_str": "test",
-                "new_str": "replacement"
+                "file_path": "test.txt",
+                "old_string": "World",
+                "new_string": "World"
             }),
         );
-        let result = tool.execute(&call).await;
-        assert!(result.is_err());
 
-        // Missing path - returns Err
-        let call = create_tool_call(
-            "test-5b",
-            "str_replace_based_edit_tool",
-            json!({
-                "command": "str_replace",
-                "old_str": "test",
-                "new_str": "replacement"
-            }),
-        );
-        let result = tool.execute(&call).await;
-        assert!(result.is_err());
-
-        // Missing old_str for str_replace - returns Err
-        let call = create_tool_call(
-            "test-5c",
-            "str_replace_based_edit_tool",
-            json!({
-                "command": "str_replace",
-                "path": "test.txt",
-                "new_str": "replacement"
-            }),
-        );
         let result = tool.execute(&call).await;
         assert!(result.is_err());
     }
@@ -521,7 +366,7 @@ mod tests {
     fn test_edit_tool_schema() {
         let tool = EditTool::new();
         let schema = tool.schema();
-        assert_eq!(schema.name, "str_replace_based_edit_tool");
+        assert_eq!(schema.name, "Edit");
         assert!(!schema.description.is_empty());
     }
 }
