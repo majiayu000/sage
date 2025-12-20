@@ -506,6 +506,12 @@ impl LLMClient {
             request_body["tools"] = json!(tool_schemas);
         }
 
+        // Force Google/Bedrock provider to avoid Anthropic 403 errors
+        // OpenRouter sometimes routes to Anthropic which returns "Request not allowed"
+        request_body["provider"] = json!({
+            "order": ["Google", "Amazon Bedrock"]
+        });
+
         let request = self
             .http_client
             .post(&url)
@@ -805,8 +811,22 @@ impl LLMClient {
                 "content": message.content
             });
 
+            // Convert tool_calls to OpenAI format
             if let Some(tool_calls) = &message.tool_calls {
-                msg["tool_calls"] = json!(tool_calls);
+                let openai_tool_calls: Vec<Value> = tool_calls
+                    .iter()
+                    .map(|tc| {
+                        json!({
+                            "id": tc.id,
+                            "type": "function",
+                            "function": {
+                                "name": tc.name,
+                                "arguments": serde_json::to_string(&tc.arguments).unwrap_or_default()
+                            }
+                        })
+                    })
+                    .collect();
+                msg["tool_calls"] = json!(openai_tool_calls);
             }
 
             if let Some(tool_call_id) = &message.tool_call_id {
