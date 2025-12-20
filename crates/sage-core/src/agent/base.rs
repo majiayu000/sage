@@ -561,18 +561,24 @@ impl BaseAgent {
                 }
                 messages.push(assistant_msg);
 
-                // Add tool results as user messages (like Python version)
+                // Add tool results as tool messages with proper tool_call_id
                 for result in &step.tool_results {
                     let content = if result.success {
-                        result.output.as_deref().unwrap_or("")
+                        result.output.clone().unwrap_or_default()
                     } else {
-                        &format!(
-                            "Error: {}",
+                        // Format error in Claude Code style
+                        format!(
+                            "<tool_use_error>{}</tool_use_error>",
                             result.error.as_deref().unwrap_or("Unknown error")
                         )
                     };
-                    let user_msg = LLMMessage::user(content);
-                    messages.push(user_msg);
+                    // Use LLMMessage::tool to properly link to the tool call
+                    let tool_msg = LLMMessage::tool(
+                        content,
+                        result.call_id.clone(),
+                        Some(result.tool_name.clone()),
+                    );
+                    messages.push(tool_msg);
                 }
             }
         }

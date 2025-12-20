@@ -833,18 +833,74 @@ impl LLMClient {
     ///
     /// This allows efficient caching with 90% cost savings on cache reads.
     fn convert_messages_for_anthropic(&self, messages: &[LLMMessage]) -> SageResult<Vec<Value>> {
+        use crate::llm::messages::MessageRole;
         let enable_caching = self.model_params.is_prompt_caching_enabled();
         let mut converted = Vec::new();
 
         // Filter out system messages first to get accurate count
         let non_system_messages: Vec<_> = messages
             .iter()
-            .filter(|m| m.role != crate::llm::messages::MessageRole::System)
+            .filter(|m| m.role != MessageRole::System)
             .collect();
 
         let total_count = non_system_messages.len();
 
         for (index, message) in non_system_messages.into_iter().enumerate() {
+            // Handle tool result messages specially for Anthropic format
+            if message.role == MessageRole::Tool {
+                if let Some(ref tool_call_id) = message.tool_call_id {
+                    // Determine if this is an error result
+                    let is_error = message.content.contains("<tool_use_error>");
+
+                    let msg = json!({
+                        "role": "user",
+                        "content": [{
+                            "type": "tool_result",
+                            "tool_use_id": tool_call_id,
+                            "content": message.content,
+                            "is_error": is_error
+                        }]
+                    });
+                    converted.push(msg);
+                    continue;
+                }
+            }
+
+            // Handle assistant messages with tool_use
+            if message.role == MessageRole::Assistant {
+                if let Some(ref tool_calls) = message.tool_calls {
+                    if !tool_calls.is_empty() {
+                        // Build content array with text and tool_use blocks
+                        let mut content_blocks = Vec::new();
+
+                        // Add text block if there's text content
+                        if !message.content.is_empty() {
+                            content_blocks.push(json!({
+                                "type": "text",
+                                "text": message.content
+                            }));
+                        }
+
+                        // Add tool_use blocks
+                        for tool_call in tool_calls {
+                            content_blocks.push(json!({
+                                "type": "tool_use",
+                                "id": tool_call.id,
+                                "name": tool_call.name,
+                                "input": tool_call.arguments
+                            }));
+                        }
+
+                        let msg = json!({
+                            "role": "assistant",
+                            "content": content_blocks
+                        });
+                        converted.push(msg);
+                        continue;
+                    }
+                }
+            }
+
             // Only add cache_control to the last 2 messages (index >= total_count - 2)
             // This keeps us within Anthropic's 4 cache_control block limit
             // Also: cache_control cannot be set on empty text blocks!
