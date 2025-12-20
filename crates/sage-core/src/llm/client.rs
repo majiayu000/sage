@@ -839,15 +839,18 @@ impl LLMClient {
             request_body["max_tokens"] = json!(max_tokens);
         }
         if let Some(temperature) = self.model_params.temperature {
-            request_body["temperature"] = json!(temperature);
+            // Convert to f64 and round to 2 decimal places to avoid f32 precision issues
+            // f32: 0.7 -> 0.699999988079071, f64: 0.7 -> 0.7
+            let rounded_temp = ((temperature as f64 * 100.0).round() / 100.0) as f64;
+            request_body["temperature"] = json!(rounded_temp);
         } else if let Some(top_p) = self.model_params.top_p {
             request_body["top_p"] = json!(top_p);
         }
 
-        // Add tools if provided (Anthropic format)
+        // Add tools if provided (GLM format - stricter than Anthropic)
         if let Some(tools) = tools {
             if !tools.is_empty() {
-                let tool_defs = self.convert_tools_for_anthropic(tools)?;
+                let tool_defs = self.convert_tools_for_glm(tools)?;
                 request_body["tools"] = json!(tool_defs);
             }
         }
@@ -862,10 +865,16 @@ impl LLMClient {
         // Add API version header
         request = request.header("anthropic-version", "2023-06-01");
 
-        tracing::debug!(
-            "GLM API request: {}",
-            serde_json::to_string_pretty(&request_body).unwrap_or_default()
+        tracing::info!(
+            "GLM API request tools count: {}, first tool: {:?}",
+            request_body["tools"].as_array().map_or(0, |a| a.len()),
+            request_body["tools"].as_array().and_then(|a| a.first()).map(|t| t["name"].as_str())
         );
+
+        // Debug: Write full request to file for debugging
+        if let Ok(json_str) = serde_json::to_string_pretty(&request_body) {
+            let _ = std::fs::write("/tmp/glm_request.json", &json_str);
+        }
 
         let response = request
             .send()
@@ -1156,6 +1165,44 @@ impl LLMClient {
                 "name": tool.name,
                 "description": tool.description,
                 "input_schema": tool.parameters
+            });
+            converted.push(tool_def);
+        }
+
+        Ok(converted)
+    }
+
+    /// Convert tools for GLM format (Anthropic-compatible but stricter)
+    /// GLM doesn't accept empty "required": [] or empty "properties": {}
+    fn convert_tools_for_glm(&self, tools: &[ToolSchema]) -> SageResult<Vec<Value>> {
+        let mut converted = Vec::new();
+
+        for tool in tools {
+            // Clone the parameters and clean up empty arrays/objects
+            let mut schema = tool.parameters.clone();
+
+            // Remove empty "required" array
+            if let Some(required) = schema.get("required") {
+                if required.as_array().map_or(false, |arr| arr.is_empty()) {
+                    schema
+                        .as_object_mut()
+                        .map(|obj| obj.remove("required"));
+                }
+            }
+
+            // Remove empty "properties" object
+            if let Some(properties) = schema.get("properties") {
+                if properties.as_object().map_or(false, |obj| obj.is_empty()) {
+                    schema
+                        .as_object_mut()
+                        .map(|obj| obj.remove("properties"));
+                }
+            }
+
+            let tool_def = json!({
+                "name": tool.name,
+                "description": tool.description,
+                "input_schema": schema
             });
             converted.push(tool_def);
         }
