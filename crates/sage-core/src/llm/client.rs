@@ -506,11 +506,19 @@ impl LLMClient {
             request_body["tools"] = json!(tool_schemas);
         }
 
-        // Force Google/Bedrock provider to avoid Anthropic 403 errors
+        // Force Google provider only to avoid Anthropic 403 errors and Bedrock tool_call format issues
         // OpenRouter sometimes routes to Anthropic which returns "Request not allowed"
+        // Amazon Bedrock has issues with tool_call/tool_result format translation
         request_body["provider"] = json!({
-            "order": ["Google", "Amazon Bedrock"]
+            "order": ["Google"],
+            "allow_fallbacks": false
         });
+
+        // Log the full request body for debugging tool_call issues
+        tracing::info!(
+            "OpenRouter API request messages: {}",
+            serde_json::to_string_pretty(&request_body["messages"]).unwrap_or_default()
+        );
 
         let request = self
             .http_client
