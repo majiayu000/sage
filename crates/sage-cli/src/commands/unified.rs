@@ -8,6 +8,7 @@
 use crate::console::CLIConsole;
 use crate::signal_handler::start_global_signal_handling;
 use sage_core::agent::{ExecutionMode, ExecutionOptions, ExecutionOutcome, UnifiedExecutor};
+use sage_core::commands::{CommandExecutor, CommandRegistry};
 use sage_core::config::{load_config_from_file, Config};
 use sage_core::error::{SageError, SageResult};
 use sage_core::input::{InputChannel, InputChannelHandle, InputRequestKind, InputResponse};
@@ -90,6 +91,42 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
     if task_description.is_empty() {
         return Err(SageError::config("No task provided"));
     }
+
+    // Process slash commands if the task starts with /
+    let task_description = if CommandExecutor::is_command(&task_description) {
+        let working_dir = args
+            .working_dir
+            .as_ref()
+            .cloned()
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
+        let mut registry = CommandRegistry::new(&working_dir);
+        registry.register_builtins();
+        if let Err(e) = registry.discover().await {
+            console.warn(&format!("Failed to discover commands: {}", e));
+        }
+
+        let cmd_executor = CommandExecutor::new(Arc::new(tokio::sync::RwLock::new(registry)));
+
+        match cmd_executor.process(&task_description).await {
+            Ok(Some(result)) => {
+                if result.show_expansion {
+                    console.info(&format!("Command expanded: {}", &result.expanded_prompt[..result.expanded_prompt.len().min(100)]));
+                }
+                if let Some(status) = &result.status_message {
+                    console.info(status);
+                }
+                result.expanded_prompt
+            }
+            Ok(None) => task_description, // Not a command, use as-is
+            Err(e) => {
+                console.error(&format!("Command error: {}", e));
+                return Err(e);
+            }
+        }
+    } else {
+        task_description
+    };
 
     // Set up execution options
     let mode = if args.non_interactive {
