@@ -6,605 +6,329 @@
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg)]()
 [![Version](https://img.shields.io/badge/Version-0.1.0-blue.svg)]()
-[![Status](https://img.shields.io/badge/Status-Archived-red.svg)]()
-
-</div>
-
-> **📦 ARCHIVED PROJECT**
-> This project has been archived and is no longer actively maintained. While the code remains available for reference and learning purposes, no new features will be added and issues will not be addressed. Feel free to fork this repository if you'd like to continue development.
-
-
 
 **🌐 Language / 语言**
 
 [![English](https://img.shields.io/badge/English-4285F4?style=for-the-badge&logo=google-translate&logoColor=white)](README.md) [![中文](https://img.shields.io/badge/中文-FF6B6B?style=for-the-badge&logo=google-translate&logoColor=white)](README_zh.md)
 
-
+</div>
 
 ---
 
-🤖 **Sage Agent** is a powerful LLM-based agent system for general-purpose software engineering tasks, built in Rust with modern async architecture and clean design patterns.
-
-## 📦 Archive Notice
-
-**This project has been archived as of July 2025.**
-
-### Why Archived?
-
-After extensive development and experimentation, we've decided to archive this Rust-based implementation in favor of a **TypeScript-based approach**. Our analysis revealed that:
-
-- **🌐 Ecosystem Advantage**: TypeScript/Node.js has a significantly richer AI/LLM ecosystem with official SDKs from all major providers
-- **⚡ Development Velocity**: Single-language stack dramatically improves development speed and team collaboration
-- **🔧 Maintenance Simplicity**: Unified toolchain reduces complexity and deployment overhead
-- **📊 Performance Reality**: In AI agent scenarios, network I/O (LLM API calls) is the bottleneck, not CPU performance
-
-### What's Available
-
-This repository contains a **fully functional Rust implementation** with:
-- ✅ Complete concurrent tool execution system
-- ✅ Modern terminal UI with React + Ink
-- ✅ Multi-LLM provider support
-- ✅ Comprehensive tool ecosystem
-- ✅ Advanced trajectory recording
-
-### For Future Development
-
-If you're interested in continuing this project:
-1. **Fork this repository** - All code is MIT licensed and ready to use
-2. **Check the TypeScript migration insights** - See our analysis in the commit history
-3. **Consider hybrid approaches** - The UI components and architecture patterns are valuable
-
-We believe this codebase serves as an excellent **reference implementation** for Rust-based AI agents and demonstrates advanced patterns in concurrent tool execution.
-
-
-
-## 🔄 Project Origin
-
-This project is a **Rust rewrite** of the original [**Trae Agent**](https://github.com/bytedance/trae-agent) by ByteDance. While maintaining the core functionality and philosophy of the original Python-based agent, Sage Agent brings:
-
-- **🚀 Performance**: Rust's zero-cost abstractions and memory safety
-- **⚡ Concurrency**: Modern async/await patterns with Tokio
-- **🛡️ Type Safety**: Compile-time guarantees and robust error handling
-- **🏗️ Modularity**: Clean architecture with well-defined service boundaries
-
-We extend our gratitude to the ByteDance team and the open-source community for creating the foundational Trae Agent project that inspired this implementation.
-
-## 📋 Table of Contents
-
-- [📦 Archive Notice](#-archive-notice)
-- [✨ Features](#-features)
-- [🏗️ Architecture](#️-architecture)
-- [🚀 Quick Start](#-quick-start)
-  - [System Requirements](#system-requirements)
-  - [Installation](#installation)
-  - [Configuration](#configuration)
-  - [Basic Usage](#basic-usage)
-- [🛠️ Available Tools](#️-available-tools)
-- [📖 Examples](#-examples)
-- [📊 Trajectory Recording](#-trajectory-recording)
-- [🎨 Advanced Features](#-advanced-features)
-- [⚡ Performance Optimization](#-performance-optimization)
-- [🔧 Development](#-development)
-- [📚 Documentation](#-documentation)
-- [🔄 Migration Insights](#-migration-insights)
-- [🤝 Contributing](#-contributing)
-- [📄 License](#-license)
+🤖 **Sage Agent** is a powerful LLM-based agent system for software engineering tasks, inspired by Claude Code's design patterns. Built in Rust with modern async architecture, it provides a comprehensive CLI, SDK, and extensible tool system.
 
 ## ✨ Features
 
-<div align="center">
-
-| 🤖 **AI Integration** | 🛠️ **Developer Tools** | 🎨 **User Experience** |
+| 🤖 **AI Integration** | 🛠️ **Developer Tools** | 💬 **User Experience** |
 |:---:|:---:|:---:|
-| Multi-LLM Support<br/>*(OpenAI, Anthropic, Google)* | Rich Tool Ecosystem<br/>*(Code editing, Bash, Retrieval)* | Interactive CLI<br/>*(Animations, Progress indicators)* |
-| Smart Context Handling | Task Management System | Terminal Markdown Rendering |
-| Trajectory Recording | SDK Integration | Beautiful UI Components |
+| 8 LLM Providers | 40+ Built-in Tools | Interactive Chat Mode |
+| Prompt Caching | Slash Commands | Session Resume |
+| Streaming Responses | File Edit/Read/Write | Trajectory Recording |
+| Cost Tracking | Glob/Grep Search | Terminal UI |
 
-</div>
+### Key Highlights
 
-### 🔥 Key Highlights
-
-- **🌐 Multi-LLM Support**: Compatible with OpenAI, Anthropic, Google, and other LLM providers
-- **🛠️ Rich Tool Ecosystem**: Built-in tools for code editing, bash execution, codebase retrieval, and task management
-- **💻 Interactive CLI**: Beautiful terminal interface with animations and progress indicators
-- **📦 SDK Integration**: High-level SDK for programmatic usage
-- **📊 Trajectory Recording**: Complete execution tracking and replay capabilities
-- **📝 Markdown Rendering**: Terminal-based markdown display with syntax highlighting
-- **📋 Task Management**: Built-in task planning and progress tracking
-- **🏗️ Clean Architecture**: Modular design with clear separation of concerns
-
-## 🏗️ Architecture
-
-The project is organized as a Rust workspace with four main crates:
-
-- **`sage-core`**: Core library with agent execution, LLM integration, and tool management
-- **`sage-cli`**: Command-line interface with interactive mode and rich UI
-- **`sage-sdk`**: High-level SDK for programmatic integration
-- **`sage-tools`**: Collection of built-in tools for various tasks
+- **Multi-LLM Support**: OpenAI, Anthropic, Google, Azure, OpenRouter, Ollama, Doubao, GLM
+- **Claude Code-style Commands**: 16 slash commands (`/resume`, `/undo`, `/cost`, `/plan`, etc.)
+- **Rich Tool Ecosystem**: Bash, file operations, web search, task management, and more
+- **Interactive Chat Mode**: Continuous conversation with context preservation
+- **Session Management**: Resume previous sessions with interactive selection
+- **Trajectory Recording**: Complete execution tracking for debugging and replay
 
 ## 🚀 Quick Start
 
-> **💡 TL;DR**: `cargo install sage-cli && sage` - Get started in seconds!
-
-
-
 ```bash
-# 🚀 One-line installation
-cargo install --git https://github.com/majiayu000/sage sage-cli
-
-# 🎯 Start interactive mode
-sage
-
-# ✨ Or run a specific task
-sage run "Create a Python script that calculates fibonacci numbers"
-```
-
-
-
-### System Requirements
-
-- **Rust**: 1.85+ (latest stable recommended)
-- **Operating System**: Linux, macOS, Windows
-- **Memory**: Minimum 4GB RAM (8GB+ recommended)
-- **API Keys**: API keys for your chosen LLM providers
-
-### Installation
-
-#### Method 1: Build from Source
-
-```bash
-# Clone the repository
+# Install from source
 git clone https://github.com/majiayu000/sage
-cd sage-agent
-
-# Build the project
-cargo build --release
-
-# Install the CLI
+cd sage
 cargo install --path crates/sage-cli
-```
 
-#### Method 2: Install via Cargo
+# Start interactive mode
+sage interactive
 
-```bash
-# Install from crates.io (if published)
-cargo install sage-cli
+# Run a one-shot task
+sage run "Create a Python fibonacci script"
 
-# Or install from Git repository
-cargo install --git https://github.com/majiayu000/sage sage-cli
-```
-
-#### Verify Installation
-
-```bash
-# Check version
-sage --version
-
-# Show help
-sage --help
+# Use unified mode (Claude Code style)
+sage unified "Review this codebase"
 ```
 
 ### Configuration
 
-Create a configuration file `sage_config.json`:
+Create `sage_config.json`:
 
 ```json
 {
-  "providers": {
+  "default_provider": "anthropic",
+  "model_providers": {
+    "anthropic": {
+      "model": "claude-sonnet-4-20250514",
+      "api_key": "${ANTHROPIC_API_KEY}",
+      "enable_prompt_caching": true
+    },
     "openai": {
-      "api_key": "${OPENAI_API_KEY}",
-      "base_url": "https://api.openai.com/v1"
+      "model": "gpt-4",
+      "api_key": "${OPENAI_API_KEY}"
     }
-  },
-  "default_provider": "openai",
-  "model_parameters": {
-    "model": "gpt-4",
-    "temperature": 0.7,
-    "max_tokens": 4000
   },
   "max_steps": 20,
   "working_directory": "."
 }
 ```
 
-### Basic Usage
+## 📜 Slash Commands
 
-#### CLI Mode
+Use slash commands in both `run` and `interactive` modes:
 
-```bash
-# Interactive mode (default)
-sage
+| Command | Description | Type |
+|---------|-------------|------|
+| `/resume` | Resume a previous session (interactive selection) | Interactive |
+| `/resume <id>` | Resume a specific session by ID | Interactive |
+| `/resume --all` | Show sessions from all projects | Interactive |
+| `/commands` | List all available slash commands | Local |
+| `/cost` | Show session cost and token usage | Local |
+| `/context` | Show context window usage | Local |
+| `/status` | Show agent status and version | Local |
+| `/help` | Show AI help information | Prompt |
+| `/undo` | Undo last file changes (git restore) | Prompt |
+| `/clear` | Clear conversation history | Special |
+| `/compact` | Summarize and compact context | Prompt |
+| `/checkpoint [name]` | Create a state checkpoint | Prompt |
+| `/restore [id]` | Restore to a checkpoint | Prompt |
+| `/init` | Initialize .sage directory | Prompt |
+| `/config` | Show/modify configuration | Prompt |
+| `/plan [open\|clear\|create]` | View/manage execution plan | Prompt |
+| `/tasks` | List background tasks | Prompt |
 
-# Run a specific task
-sage run "Create a Python script that calculates fibonacci numbers"
+### Custom Commands
 
-# With custom configuration
-sage --config-file my_config.json run "Analyze this codebase structure"
+Create custom slash commands in `.sage/commands/` or `~/.config/sage/commands/`:
+
+```markdown
+---
+name: review
+description: Review code changes
+---
+
+Please review the following code changes:
+$ARGUMENTS
+
+Focus on:
+1. Code quality
+2. Potential bugs
+3. Performance issues
 ```
 
-#### SDK Usage
+## 🛠️ Available Tools
+
+### File Operations
+| Tool | Description |
+|------|-------------|
+| `Read` | Read files with line numbers and pagination |
+| `Write` | Create/overwrite files |
+| `Edit` | Claude Code-style string replacement editing |
+| `Glob` | Fast file pattern matching (`**/*.rs`, `src/**/*.ts`) |
+| `Grep` | Regex search with context (`-A`, `-B`, `-C` flags) |
+| `NotebookEdit` | Edit Jupyter notebooks |
+
+### Process/Shell
+| Tool | Description |
+|------|-------------|
+| `Bash` | Execute shell commands with background support |
+| `KillShell` | Kill background shell processes |
+| `Task` | Launch specialized agents (Explore, Plan) |
+| `TaskOutput` | Retrieve background task output |
+
+### Task Management
+| Tool | Description |
+|------|-------------|
+| `TodoWrite` | Create/manage structured task lists |
+| `ViewTasklist` | Display current tasks |
+| `AddTasks` | Add new tasks |
+| `UpdateTasks` | Update task status |
+| `TaskDone` | Mark tasks completed |
+
+### Web & Network
+| Tool | Description |
+|------|-------------|
+| `WebSearch` | Search the web |
+| `WebFetch` | Fetch webpage content as markdown |
+| `Browser` | Open URLs in default browser |
+
+### Planning & Interaction
+| Tool | Description |
+|------|-------------|
+| `EnterPlanMode` | Enter read-only planning mode |
+| `ExitPlanMode` | Exit with plan approval |
+| `AskUserQuestion` | Prompt user for input |
+
+## 💬 Interactive Mode
+
+```bash
+sage interactive
+```
+
+**Built-in Commands:**
+- `help` - Show help and slash commands
+- `config` - Show configuration
+- `status` - Show system status
+- `new` - Start new conversation
+- `clear` - Clear screen
+- `exit` - Exit interactive mode
+
+**Example Session:**
+```
+> Create a hello world Python script
+[Agent creates script]
+
+> Now add error handling to it
+[Agent modifies script with context from previous turn]
+
+> /cost
+Session Cost & Usage
+====================
+[Shows token usage and estimated cost]
+
+> /resume
+[Interactive session selector appears]
+```
+
+## 📦 SDK Usage
 
 ```rust
 use sage_sdk::{SageAgentSDK, RunOptions};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create SDK instance
-    let sdk = SageAgentSDK::new()?
-        .with_provider_and_model("openai", "gpt-4", None)?
+    let sdk = SageAgentSDK::with_config_file("sage_config.json")?
         .with_working_directory("./my-project")
         .with_max_steps(10);
 
-    // Execute a task
-    let result = sdk.run("Create a README file for this project").await?;
-    
+    // Simple execution
+    let result = sdk.run("Create a README file").await?;
+
+    // With options
+    let options = RunOptions::new()
+        .with_trajectory(true)
+        .with_trajectory_path("./debug.jsonl");
+    let result = sdk.run_with_options("Analyze codebase", options).await?;
+
     if result.is_success() {
-        println!("✅ Task completed successfully!");
-        println!("📊 Used {} tokens in {} steps", 
-                 result.statistics().total_tokens,
-                 result.statistics().total_steps);
+        println!("✅ Completed in {} steps", result.statistics().total_steps);
     }
-    
+
     Ok(())
 }
 ```
 
-## 🛠️ Available Tools
+### Non-Interactive Execution
 
-Sage Agent comes with a comprehensive set of built-in tools:
+```rust
+use sage_sdk::{SageAgentSDK, UnifiedRunOptions};
 
-- **`bash`**: Execute shell commands and scripts
-- **`edit`**: Create and modify files with precise editing capabilities
-- **`json_edit`**: Specialized JSON file editing
-- **`codebase_retrieval`**: Intelligent code search and context retrieval
-- **`sequential_thinking`**: Step-by-step reasoning and planning
-- **`task_done`**: Mark tasks as completed
-- **Task Management**: `view_tasklist`, `add_tasks`, `update_tasks`, `reorganize_tasklist`
+let sdk = SageAgentSDK::new()?;
+let options = UnifiedRunOptions::new().non_interactive(true);
+let result = sdk.execute_non_interactive("Task description", options).await?;
+```
 
-## 📖 Examples
+## 🔄 Session Management
 
-The `examples/` directory contains various usage examples:
+### JSONL Session Storage
+Sessions are stored in `~/.sage/sessions/` as JSONL files with:
+- Message history with tool calls
+- Token usage statistics
+- File change tracking
+- Git branch context
 
-- **`basic_usage.rs`**: Simple SDK usage patterns
-- **`custom_tool.rs`**: Creating custom tools
-- **`markdown_demo.rs`**: Terminal markdown rendering
-- **`ui_demo.rs`**: Interactive UI components
+### Resume Sessions
+```bash
+# Interactive selection
+sage run "/resume"
 
-Run examples with:
+# Resume specific session
+sage run "/resume abc123-session-id"
+
+# Show all projects
+sage run "/resume --all"
+```
+
+### Trajectory Recording
+```bash
+# Auto-generated trajectory
+sage run "Debug auth module"
+# Saved to: trajectories/trajectory_YYYYMMDD_HHMMSS.jsonl
+
+# Custom path
+sage run "Task" --trajectory-file debug.jsonl
+```
+
+## 🔧 CLI Commands
 
 ```bash
-cargo run --example basic_usage
-cargo run --example markdown_demo
-cargo run --example trajectory_demo
+sage run <task>              # One-shot task execution
+sage interactive             # Interactive chat mode
+sage unified [task]          # Claude Code-style unified execution
+sage config show|validate|init  # Configuration management
+sage trajectory list|show|stats # Trajectory management
+sage tools                   # List available tools
 ```
 
-## 📊 Trajectory Recording
-
-Sage Agent automatically records detailed execution trajectories for debugging and analysis:
-
+### Common Options
 ```bash
-# Automatically generate trajectory files
-sage run "Debug authentication module"
-# Saved to: trajectories/trajectory_20250612_220546.json
-
-# Custom trajectory file
-sage run "Optimize database queries" --trajectory-file optimization_debug.json
+--provider <name>      # LLM provider (anthropic, openai, google, etc.)
+--model <name>         # Model to use
+--api-key <key>        # API key
+--max-steps <n>        # Maximum execution steps
+--working-dir <path>   # Working directory
+--config-file <path>   # Configuration file
+--trajectory-file <path> # Trajectory output file
+--verbose              # Verbose output
 ```
 
-Trajectory files contain:
+## 🌐 LLM Providers
 
-- **LLM Interactions**: All messages, responses, and tool calls
-- **Agent Steps**: State transitions and decision points
-- **Tool Usage**: Which tools were called and their results
-- **Metadata**: Timestamps, token usage, and execution metrics
+| Provider | Default Model | Features |
+|----------|---------------|----------|
+| Anthropic | claude-sonnet-4-20250514 | Prompt caching, 10 max retries |
+| OpenAI | gpt-4 | Parallel tool calls |
+| Google | gemini-1.5-pro | - |
+| Azure OpenAI | gpt-4 | API version 2024-02-15 |
+| OpenRouter | anthropic/claude-3.5-sonnet | Multi-model routing |
+| Ollama | llama2 | Local models |
+| Doubao | doubao-pro-4k | ByteDance |
+| GLM/Zhipu | - | Custom provider |
 
-## 🎨 Advanced Features
-
-### Interactive Mode
-
-In interactive mode, you can:
-
-- Enter any task description to execute
-- Use `status` to view agent information
-- Use `help` to get available commands
-- Use `clear` to clear the screen
-- Use `exit` or `quit` to end the session
-
-### Multi-Provider Support
-
-```bash
-# Use OpenAI
-sage run "Create Python script" --provider openai --model gpt-4
-
-# Use Anthropic
-sage run "Code review" --provider anthropic --model claude-3-5-sonnet
-
-# Use custom working directory
-sage run "Add unit tests" --working-dir /path/to/project
-```
-
-### Configuration Priority
-
-1. Command line arguments (highest priority)
-2. Configuration file values
-3. Environment variables
-4. Default values (lowest priority)
-
-## ⚡ Performance Optimization
-
-### Best Practices
-
-- **Concurrent Processing**: Sage Agent uses Tokio async runtime for efficient concurrent operations
-- **Memory Management**: Rust's zero-cost abstractions ensure minimal runtime overhead
-- **Caching Strategy**: Intelligent caching of LLM responses and tool results for improved performance
-- **Streaming Processing**: Support for streaming LLM responses for better user experience
-
-### Configuration Tuning
-
-```json
-{
-  "model_parameters": {
-    "temperature": 0.1,        // Lower randomness for more consistent results
-    "max_tokens": 2000,        // Adjust based on task complexity
-    "stream": true             // Enable streaming responses
-  },
-  "max_steps": 15,             // Limit max steps to control costs
-  "timeout_seconds": 300       // Set reasonable timeout
-}
-```
-
-### Monitoring and Logging
-
-```bash
-# Enable verbose logging
-RUST_LOG=sage_core=debug,sage_cli=info cargo run
-
-# Monitor token usage
-sage run "Task description" --show-stats
-
-# Performance profiling
-RUST_LOG=trace cargo run --release
-```
-
-## 🔧 Development
-
-### Building
-
-```bash
-# Build all crates
-cargo build
-
-# Build with optimizations
-cargo build --release
-
-# Run tests
-cargo test
-
-# Run with logging
-RUST_LOG=debug cargo run
-```
-
-### Project Structure
+## 🏗️ Architecture
 
 ```
-sage-agent/
+sage/
 ├── crates/
-│   ├── sage-core/          # Core library
-│   │   ├── src/agent/      # Agent execution logic
-│   │   ├── src/llm/        # LLM client implementations
-│   │   ├── src/tools/      # Tool system
-│   │   └── src/ui/         # Terminal UI components
-│   ├── sage-cli/           # Command-line interface
-│   ├── sage-sdk/           # High-level SDK
-│   └── sage-tools/         # Built-in tools collection
-├── docs/                   # Comprehensive documentation
-│   ├── user-guide/         # User documentation
-│   ├── development/        # Developer documentation
-│   ├── architecture/       # System architecture docs
-│   ├── api/                # API reference
-│   └── planning/           # Project planning and roadmap
-├── examples/               # Usage examples
-├── trajectories/           # Execution trajectory files (gitignored)
-├── configs/                # Configuration templates and examples
-└── Cargo.toml             # Workspace configuration
+│   ├── sage-core/      # Core library
+│   │   ├── agent/      # Agent execution
+│   │   ├── commands/   # Slash command system
+│   │   ├── llm/        # LLM providers
+│   │   ├── session/    # Session management
+│   │   ├── tools/      # Tool registry
+│   │   └── ui/         # Terminal UI
+│   ├── sage-cli/       # Command-line interface
+│   ├── sage-sdk/       # High-level SDK
+│   └── sage-tools/     # Built-in tools
+├── examples/           # Usage examples
+├── docs/               # Documentation
+└── configs/            # Configuration templates
 ```
 
-## 🎯 Use Cases
+## 🔄 Project Origin
 
-- **Code Generation**: Create files, functions, and entire modules
-- **Code Analysis**: Understand and document existing codebases
-- **Refactoring**: Modernize and improve code structure
-- **Testing**: Generate and run test suites
-- **Documentation**: Create comprehensive project documentation
-- **Automation**: Automate repetitive development tasks
-
-## 📝 Configuration
-
-Sage Agent supports flexible configuration through JSON files and environment variables:
-
-```json
-{
-  "providers": {
-    "openai": {
-      "api_key": "${OPENAI_API_KEY}",
-      "base_url": "https://api.openai.com/v1"
-    },
-    "anthropic": {
-      "api_key": "${ANTHROPIC_API_KEY}",
-      "base_url": "https://api.anthropic.com"
-    }
-  },
-  "default_provider": "openai",
-  "model_parameters": {
-    "model": "gpt-4",
-    "temperature": 0.7,
-    "max_tokens": 4000
-  },
-  "max_steps": 20,
-  "working_directory": ".",
-  "ui": {
-    "enable_animations": true,
-    "markdown_rendering": true
-  },
-  "trajectory": {
-    "enabled": false,
-    "directory": "trajectories",
-    "auto_save": true,
-    "save_interval_steps": 5
-  }
-}
-```
-
-## 📚 Documentation
-
-Comprehensive documentation is available in the [`docs/`](docs/) directory:
-
-- **[User Guide](docs/user-guide/)** - Installation, configuration, and usage
-- **[Development Guide](docs/development/)** - Contributing and development setup
-- **[Architecture Documentation](docs/architecture/)** - System design and architecture
-- **[API Reference](docs/api/)** - Detailed API documentation
-- **[Planning & Roadmap](docs/planning/)** - Project roadmap and TODO lists
-
-### Quick Links
-- [Getting Started](docs/user-guide/getting-started.md) - New user guide
-- [Contributing Guide](docs/development/contributing.md) - How to contribute
-- [TODO Lists](docs/planning/) - Current development priorities
-- [MCP Integration Plan](docs/development/MCP_INTEGRATION_PLAN.md) - Model Context Protocol support
-- [Documentation Consistency](docs/DOC_CONSISTENCY_GUIDE.md) - Maintaining doc consistency
-
-## 🔧 Troubleshooting
-
-### Common Issues
-
-**Import Errors:**
-```bash
-# Try setting RUST_LOG
-RUST_LOG=debug cargo run
-```
-
-**API Key Issues:**
-```bash
-# Verify API keys are set
-echo $OPENAI_API_KEY
-echo $ANTHROPIC_API_KEY
-
-# Check configuration
-sage --show-config
-```
-
-**Permission Errors:**
-```bash
-# Ensure proper permissions for file operations
-chmod +x /path/to/your/project
-```
-
-### Environment Variables
-
-- `OPENAI_API_KEY` - OpenAI API key
-- `ANTHROPIC_API_KEY` - Anthropic API key
-- `GOOGLE_API_KEY` - Google Gemini API key
-- `OPENROUTER_API_KEY` - OpenRouter API key
-
-### Development Guidelines
-
-- Follow Rust official code style guidelines
-- Add tests for new features
-- Update documentation as needed
-- Use appropriate type hints
-- Ensure all tests pass before committing
-
-## 🔄 Migration Insights
-
-During our development process, we conducted extensive analysis comparing Rust vs TypeScript for AI agent development. Here are our key findings:
-
-### 🎯 Performance Analysis
-
-| Aspect | Rust | TypeScript | Winner |
-|--------|------|------------|---------|
-| **Concurrent Tool Execution** | ~120ms | ~150ms | Rust (+25%) |
-| **LLM API Calls** | 1-5 seconds | 1-5 seconds | Tie |
-| **Overall Agent Response** | 1.12-5.15s | 1.15-5.15s | **Negligible difference** |
-
-**Key Insight**: In AI agent scenarios, network I/O dominates performance, making language choice less critical.
-
-### 🛠️ Development Experience
-
-| Factor | Rust | TypeScript |
-|--------|------|------------|
-| **Ecosystem Richness** | Limited AI libraries | Rich AI/LLM ecosystem |
-| **Development Speed** | Slower (compile times) | Faster (hot reload) |
-| **Team Onboarding** | Steep learning curve | Familiar to most devs |
-| **Debugging** | Complex (async + FFI) | Straightforward |
-| **Deployment** | Complex (cross-platform) | Simple (Node.js) |
-
-### 🏗️ Architecture Lessons
-
-**What Worked Well in Rust:**
-- ✅ **Concurrent tool execution**: Excellent async/await patterns
-- ✅ **Type safety**: Compile-time guarantees prevented many bugs
-- ✅ **Memory efficiency**: Zero-cost abstractions
-- ✅ **Clean architecture**: Forced good design patterns
-
-**What Was Challenging:**
-- ❌ **UI Integration**: Complex FFI for terminal UI
-- ❌ **Ecosystem gaps**: Missing AI-specific libraries
-- ❌ **Build complexity**: Cross-platform compilation issues
-- ❌ **Development velocity**: Slower iteration cycles
-
-### 📊 Recommended Approach
-
-For **AI Agent development**, we recommend:
-
-1. **TypeScript/Node.js** for rapid prototyping and rich AI ecosystem
-2. **Rust** for performance-critical components (if needed)
-3. **Hybrid approach** for the best of both worlds
-
-### 🎓 Learning Value
-
-This Rust implementation demonstrates:
-- Advanced concurrent programming patterns
-- Clean architecture in systems programming
-- Modern async Rust techniques
-- Terminal UI development with React + Ink
-
-## 🤝 Contributing
-
-**Note**: While this project is archived, we welcome discussions and learning exchanges! Please see our [contributing guidelines](docs/development/contributing.md) for historical context on:
-
-- [Development setup](docs/development/setup.md)
-- [Code style and conventions](docs/development/code-style.md)
-- [Testing requirements](docs/development/testing.md)
-- [Pull request process](docs/development/contributing.md#pull-requests)
+This project is inspired by:
+- **[Trae Agent](https://github.com/bytedance/trae-agent)** - ByteDance's Python-based LLM agent
+- **[Claude Code](https://claude.ai/code)** - Anthropic's CLI tool design patterns
+- **[Augment Code](https://www.augmentcode.com/)** - AI code assistant patterns
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-**Note**: This Rust implementation maintains compatibility with the MIT License of the original [Trae Agent](https://github.com/bytedance/trae-agent) project.
-
-## 🙏 Acknowledgments
-
-- **Original Inspiration**: This project is based on [Trae Agent](https://github.com/bytedance/trae-agent) by ByteDance - a pioneering LLM-based agent for software engineering tasks
-- **Partial Inspiration**: [Augment Code](https://www.augmentcode.com/) - Advanced AI code assistant and context engine, providing valuable reference for agent tool system design
-- **Architecture Insights**: [Gemini CLI](https://github.com/google-gemini/gemini-cli) - Excellent reference for TypeScript-based AI agent architecture
-- Built with [Rust](https://rust-lang.org/) and modern async patterns
-- Powered by leading LLM providers (Google、Anthropic、OpenAI, etc.)
-- Inspired by the open-source community's commitment to intelligent development automation
-- Special thanks to the Trae Agent contributors and maintainers for their foundational work
-- Appreciation to the Augment Code team for their innovative work in AI-assisted development
-- Gratitude to the Rust community for excellent async programming patterns and tools
-
-### 🎓 Educational Value
-
-This archived project serves as a comprehensive example of:
-- **Modern Rust development** with async/await patterns
-- **Concurrent tool execution** in AI agent systems
-- **Terminal UI development** with React + Ink integration
-- **Clean architecture** principles in systems programming
-- **LLM integration** patterns and best practices
+MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
-**Sage Agent** - A learning journey in AI agent architecture. 📚✨
-
-*"Every archived project teaches us something valuable for the next one."*
+**Sage Agent** - AI-powered software engineering in Rust. 🦀✨
