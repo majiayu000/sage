@@ -1,8 +1,11 @@
 //! Interactive mode implementation
 
+use crate::commands::session_resume::{print_session_details, SessionSelector};
 use crate::console::CLIConsole;
 use crate::signal_handler::{AppState, set_global_app_state, start_global_signal_handling};
 use sage_core::agent::AgentExecution;
+use sage_core::commands::types::InteractiveCommand;
+use sage_core::commands::{CommandExecutor, CommandRegistry};
 use sage_core::error::{SageError, SageResult};
 use sage_core::llm::messages::LLMMessage;
 use sage_core::types::TaskMetadata;
@@ -11,6 +14,8 @@ use sage_sdk::{ExecutionErrorKind, ExecutionOutcome, RunOptions, SageAgentSDK};
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 /// Conversation session manager for interactive mode
 struct ConversationSession {
@@ -189,6 +194,23 @@ pub async fn execute(args: InteractiveArgs) -> SageResult<()> {
                         ));
                     }
                     _ => {
+                        // Check if this is a slash command
+                        if input.starts_with('/') {
+                            match handle_slash_command(&console, &sdk, &mut conversation, input).await {
+                                Ok(true) => {
+                                    // Slash command handled, continue to next iteration
+                                    continue;
+                                }
+                                Ok(false) => {
+                                    // Not a valid slash command, treat as conversation
+                                }
+                                Err(e) => {
+                                    console.error(&format!("Command error: {e}"));
+                                    continue;
+                                }
+                            }
+                        }
+
                         // Set state to executing task
                         set_global_app_state(AppState::ExecutingTask);
 
@@ -295,6 +317,18 @@ fn print_help(console: &CLIConsole) {
     console.info("  AI: [Creates the script]");
     console.info("  You: Now add error handling to it");
     console.info("  AI: [Modifies the existing script with error handling]");
+    console.info("");
+    console.info("📜 Slash Commands:");
+    console.info("  /help           - Show AI help information");
+    console.info("  /commands       - List all available slash commands");
+    console.info("  /resume         - Resume a previous session (interactive)");
+    console.info("  /resume <id>    - Resume a specific session by ID");
+    console.info("  /cost           - Show session cost and usage");
+    console.info("  /context        - Show context window usage");
+    console.info("  /status         - Show agent status");
+    console.info("  /undo           - Undo last file changes");
+    console.info("  /checkpoint     - Create a checkpoint");
+    console.info("  /plan           - View/manage execution plan");
 }
 
 /// Print input troubleshooting help
@@ -694,5 +728,183 @@ async fn execute_conversation_continuation(
         Err(SageError::InvalidInput(
             "No existing execution to continue".to_string(),
         ))
+    }
+}
+
+/// Handle slash commands in interactive mode
+/// Returns Ok(true) if the command was handled, Ok(false) if it should be treated as conversation
+async fn handle_slash_command(
+    console: &CLIConsole,
+    sdk: &SageAgentSDK,
+    conversation: &mut ConversationSession,
+    input: &str,
+) -> SageResult<bool> {
+    let working_dir = std::env::current_dir().unwrap_or_default();
+
+    // Create command registry and executor
+    let mut registry = CommandRegistry::new(&working_dir);
+    registry.register_builtins();
+    if let Err(e) = registry.discover().await {
+        console.warn(&format!("Failed to discover commands: {}", e));
+    }
+
+    let cmd_executor = CommandExecutor::new(Arc::new(RwLock::new(registry)));
+
+    // Process the command
+    match cmd_executor.process(input).await {
+        Ok(Some(result)) => {
+            // Handle interactive commands (like /resume)
+            if let Some(interactive_cmd) = &result.interactive {
+                handle_interactive_command(interactive_cmd, console).await?;
+                return Ok(true);
+            }
+
+            // Handle local commands - display directly
+            if result.is_local {
+                if let Some(status) = &result.status_message {
+                    console.info(status);
+                }
+                if let Some(output) = &result.local_output {
+                    println!("{}", output);
+                }
+                return Ok(true);
+            }
+
+            // Handle prompt commands - send to conversation
+            if result.show_expansion {
+                console.info(&format!(
+                    "Command expanded: {}",
+                    &result.expanded_prompt[..result.expanded_prompt.len().min(100)]
+                ));
+            }
+            if let Some(status) = &result.status_message {
+                console.info(status);
+            }
+
+            // Special handling for /clear command
+            if result.expanded_prompt.contains("__CLEAR_CONVERSATION__") {
+                conversation.reset();
+                console.success("Conversation cleared!");
+                return Ok(true);
+            }
+
+            // Send the expanded prompt to the conversation
+            set_global_app_state(AppState::ExecutingTask);
+            handle_conversation(console, sdk, conversation, &result.expanded_prompt).await?;
+            Ok(true)
+        }
+        Ok(None) => {
+            // Not a valid slash command
+            Ok(false)
+        }
+        Err(e) => Err(e),
+    }
+}
+
+/// Handle interactive commands that require CLI interaction
+async fn handle_interactive_command(
+    cmd: &InteractiveCommand,
+    console: &CLIConsole,
+) -> SageResult<()> {
+    match cmd {
+        InteractiveCommand::Resume { session_id, show_all } => {
+            handle_resume_command(session_id.clone(), *show_all, console).await
+        }
+    }
+}
+
+/// Handle the /resume command with interactive session selection
+async fn handle_resume_command(
+    session_id: Option<String>,
+    show_all: bool,
+    console: &CLIConsole,
+) -> SageResult<()> {
+    let selector = SessionSelector::new()?.show_all_projects(show_all);
+
+    // If session ID is provided, resume directly
+    if let Some(id) = session_id {
+        // Filter out --all flag from session ID
+        let clean_id = if id == "--all" || id == "-a" {
+            None
+        } else {
+            Some(id)
+        };
+
+        if let Some(id) = clean_id {
+            match selector.resume_by_id(&id).await? {
+                Some(result) => {
+                    console.success(&format!("Resuming session: {}", result.session_id));
+                    print_session_details(&result.metadata);
+
+                    // Load and display recent messages
+                    let messages = selector.storage().load_messages(&result.session_id).await?;
+                    if !messages.is_empty() {
+                        console.info(&format!(
+                            "Session has {} messages. Ready to continue.",
+                            messages.len()
+                        ));
+
+                        // Show last few messages as context
+                        let recent: Vec<_> = messages.iter().rev().take(3).collect();
+                        if !recent.is_empty() {
+                            console.info("Recent conversation:");
+                            for msg in recent.iter().rev() {
+                                let role = if msg.is_user() {
+                                    "You"
+                                } else if msg.is_assistant() {
+                                    "Assistant"
+                                } else {
+                                    "System"
+                                };
+                                let content = &msg.message.content;
+                                let content_preview = if content.len() > 100 {
+                                    format!("{}...", &content[..100])
+                                } else {
+                                    content.clone()
+                                };
+                                console.info(&format!("  {}: {}", role, content_preview));
+                            }
+                        }
+                    }
+
+                    console.info("\nSession loaded. You can continue the conversation now.");
+                    return Ok(());
+                }
+                None => {
+                    return Err(SageError::NotFound(format!(
+                        "Session '{}' not found",
+                        id
+                    )));
+                }
+            }
+        }
+    }
+
+    // Interactive session selection
+    match selector.select_session().await? {
+        Some(result) => {
+            console.success(&format!("Selected session: {}", result.session_id));
+            print_session_details(&result.metadata);
+
+            // Check if we need to change directory
+            let current_dir = std::env::current_dir().unwrap_or_default();
+            if result.working_directory != current_dir {
+                console.warn("This session is from a different directory.");
+                console.info(&format!(
+                    "Session directory: {}",
+                    result.working_directory.display()
+                ));
+                console.info(&format!("Current directory: {}", current_dir.display()));
+                console.info("\nYou may need to restart sage in that directory to fully resume.");
+            } else {
+                console.info("\nSession loaded. You can continue the conversation now.");
+            }
+
+            Ok(())
+        }
+        None => {
+            // User cancelled or no sessions
+            Ok(())
+        }
     }
 }
