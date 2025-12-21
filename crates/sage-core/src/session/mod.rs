@@ -44,6 +44,7 @@
 //! ```
 
 pub mod branching;
+pub mod jsonl_storage;
 pub mod manager;
 pub mod session_cache;
 pub mod storage;
@@ -54,6 +55,7 @@ pub use branching::{
     BranchId, BranchManager, BranchNode, BranchSnapshot, SerializedMessage, SerializedToolCall,
     SharedBranchManager, create_branch_manager,
 };
+pub use jsonl_storage::{JsonlSessionStorage, MessageChainTracker, SessionMetadata};
 pub use manager::SessionManager;
 pub use session_cache::{
     MCPServerCache, MCPServerConfig, RecentSession, SessionCache, SessionCacheConfig,
@@ -63,6 +65,10 @@ pub use storage::{BoxedSessionStorage, FileSessionStorage, MemorySessionStorage,
 pub use types::{
     ConversationMessage, MessageRole, Session, SessionConfig, SessionState,
     SessionSummary, SessionToolCall, SessionToolResult, TokenUsage,
+    // Enhanced types (Claude Code-inspired)
+    EnhancedMessage, EnhancedMessageType, EnhancedTokenUsage, EnhancedToolCall, EnhancedToolResult,
+    FileBackupInfo, FileHistorySnapshot, MessageContent, SessionContext,
+    ThinkingLevel, ThinkingMetadata, TodoItem, TodoStatus, TrackedFileState, TrackedFilesSnapshot,
 };
 // Note: SessionId is defined as String type alias in types.rs
 // and is re-exported from concurrency module at crate level
