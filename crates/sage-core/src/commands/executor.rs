@@ -8,7 +8,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use super::registry::CommandRegistry;
-use super::types::{CommandInvocation, CommandResult, SlashCommand};
+use super::types::{CommandInvocation, CommandResult, InteractiveCommand, SlashCommand};
 
 /// Command executor for processing slash commands
 pub struct CommandExecutor {
@@ -343,35 +343,14 @@ Use /doctor to diagnose any connection issues.
     /// Execute /resume command - resume previous session
     async fn execute_resume(&self, invocation: &CommandInvocation) -> SageResult<CommandResult> {
         let session_id = invocation.arguments.first().cloned();
+        let show_all = invocation.arguments.iter().any(|a| a == "--all" || a == "-a");
 
-        match session_id {
-            Some(id) => {
-                let prompt = format!(
-                    r#"Resume the conversation session with ID '{}'.
-
-Steps:
-1. Load the session history from ~/.sage/sessions/{}.jsonl
-2. Display a summary of the previous conversation
-3. Continue from where we left off
-
-If the session file doesn't exist, list available sessions instead."#,
-                    id, id
-                );
-                Ok(CommandResult::prompt(prompt).with_status("Resuming session..."))
-            }
-            None => {
-                let prompt = r#"List all available conversation sessions that can be resumed.
-
-Look in ~/.sage/sessions/ for JSONL session files.
-For each session, show:
-- Session ID (filename)
-- Last activity timestamp
-- Brief summary of the conversation topic
-
-Format the list clearly so the user can choose which session to resume with /resume <session-id>."#.to_string();
-                Ok(CommandResult::prompt(prompt).with_status("Listing sessions..."))
-            }
-        }
+        // Return an interactive command that the CLI will handle
+        Ok(CommandResult::interactive(InteractiveCommand::Resume {
+            session_id,
+            show_all,
+        })
+        .with_status("Opening session selector..."))
     }
 
     /// Execute /plan command - view/manage execution plan

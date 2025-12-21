@@ -24,6 +24,7 @@ clap = { workspace = true }
 console = { workspace = true }
 indicatif = { workspace = true }
 colored = { workspace = true }
+dialoguer = { workspace = true }
 
 # Async runtime
 tokio = { workspace = true }

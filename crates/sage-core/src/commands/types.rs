@@ -224,6 +224,13 @@ impl CommandInvocation {
     }
 }
 
+/// Interactive command type
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InteractiveCommand {
+    /// Resume a session (optionally with a specific session ID)
+    Resume { session_id: Option<String>, show_all: bool },
+}
+
 /// Command execution result
 #[derive(Debug, Clone)]
 pub struct CommandResult {
@@ -244,6 +251,9 @@ pub struct CommandResult {
 
     /// Local output to display (for local commands)
     pub local_output: Option<String>,
+
+    /// Interactive command that needs CLI handling
+    pub interactive: Option<InteractiveCommand>,
 }
 
 impl CommandResult {
@@ -256,6 +266,7 @@ impl CommandResult {
             status_message: None,
             is_local: false,
             local_output: None,
+            interactive: None,
         }
     }
 
@@ -268,6 +279,20 @@ impl CommandResult {
             status_message: None,
             is_local: true,
             local_output: Some(output.into()),
+            interactive: None,
+        }
+    }
+
+    /// Create an interactive command result
+    pub fn interactive(cmd: InteractiveCommand) -> Self {
+        Self {
+            expanded_prompt: String::new(),
+            show_expansion: false,
+            context_messages: Vec::new(),
+            status_message: None,
+            is_local: true,
+            local_output: None,
+            interactive: Some(cmd),
         }
     }
 
@@ -287,6 +312,11 @@ impl CommandResult {
     pub fn with_status(mut self, status: impl Into<String>) -> Self {
         self.status_message = Some(status.into());
         self
+    }
+
+    /// Check if this is an interactive command
+    pub fn is_interactive(&self) -> bool {
+        self.interactive.is_some()
     }
 }
 
