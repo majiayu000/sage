@@ -195,17 +195,16 @@ impl CommandExecutor {
     }
 
     /// Execute /undo command
-    async fn execute_undo(&self, invocation: &CommandInvocation) -> SageResult<CommandResult> {
-        let message_id = invocation.arguments.first().cloned();
-        let prompt = match message_id {
-            Some(id) => format!(
-                "Restore files to their state before message '{}'. List the files that will be restored and their changes, then proceed with the restoration.",
-                id
-            ),
-            None => {
-                "Restore files to their state before the last assistant message that modified files. List the files that will be restored and their changes, then proceed with the restoration.".to_string()
-            }
-        };
+    async fn execute_undo(&self, _invocation: &CommandInvocation) -> SageResult<CommandResult> {
+        let prompt = r#"Undo the last file changes in the CURRENT WORKING DIRECTORY ONLY. Follow these steps:
+
+1. Run `git status` to see what files have uncommitted changes in this directory
+2. Run `git diff` to see the specific changes
+3. For each modified file, use `git restore <filename>` to revert it
+4. Verify the restoration by checking the file contents
+
+IMPORTANT: Only operate on files in the current working directory. Do NOT touch files outside this directory."#.to_string();
+
         Ok(CommandResult::prompt(prompt).with_status("Preparing undo..."))
     }
 
