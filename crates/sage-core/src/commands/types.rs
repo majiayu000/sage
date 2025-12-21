@@ -238,6 +238,12 @@ pub struct CommandResult {
 
     /// Status message to display
     pub status_message: Option<String>,
+
+    /// Whether this is a local command (output directly, don't send to LLM)
+    pub is_local: bool,
+
+    /// Local output to display (for local commands)
+    pub local_output: Option<String>,
 }
 
 impl CommandResult {
@@ -248,6 +254,20 @@ impl CommandResult {
             show_expansion: false,
             context_messages: Vec::new(),
             status_message: None,
+            is_local: false,
+            local_output: None,
+        }
+    }
+
+    /// Create a local command result (displayed directly, not sent to LLM)
+    pub fn local(output: impl Into<String>) -> Self {
+        Self {
+            expanded_prompt: String::new(),
+            show_expansion: false,
+            context_messages: Vec::new(),
+            status_message: None,
+            is_local: true,
+            local_output: Some(output.into()),
         }
     }
 

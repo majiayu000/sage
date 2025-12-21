@@ -67,6 +67,17 @@ pub async fn execute(args: RunArgs) -> SageResult<()> {
 
         match cmd_executor.process(&task_description).await {
             Ok(Some(result)) => {
+                // Handle local commands - display directly and return
+                if result.is_local {
+                    if let Some(status) = &result.status_message {
+                        console.info(status);
+                    }
+                    if let Some(output) = &result.local_output {
+                        println!("{}", output);
+                    }
+                    return Ok(());
+                }
+
                 if result.show_expansion {
                     console.info(&format!(
                         "Command expanded: {}",

@@ -188,6 +188,61 @@ impl CommandRegistry {
             .builtin(),
             CommandSource::Builtin,
         );
+
+        // Cost command - show session cost and token usage
+        self.register(
+            SlashCommand::new(
+                "cost",
+                "Show the total cost and token usage for the current session.",
+            )
+            .with_description("Show session cost and usage")
+            .builtin(),
+            CommandSource::Builtin,
+        );
+
+        // Context command - show context/token breakdown
+        self.register(
+            SlashCommand::new(
+                "context",
+                "Show the current context window usage and token breakdown.",
+            )
+            .with_description("Show context usage")
+            .builtin(),
+            CommandSource::Builtin,
+        );
+
+        // Status command - show agent status
+        self.register(
+            SlashCommand::new(
+                "status",
+                "Show Sage status including version, provider, model, and connection status.",
+            )
+            .with_description("Show agent status")
+            .builtin(),
+            CommandSource::Builtin,
+        );
+
+        // Resume command - resume previous session
+        self.register(
+            SlashCommand::new(
+                "resume",
+                "Resume a previous conversation session. Usage: /resume [session-id]",
+            )
+            .with_description("Resume a conversation")
+            .builtin(),
+            CommandSource::Builtin,
+        );
+
+        // Plan command - view/manage execution plan
+        self.register(
+            SlashCommand::new(
+                "plan",
+                "View or manage the current execution plan. Usage: /plan [open|clear]",
+            )
+            .with_description("View execution plan")
+            .builtin(),
+            CommandSource::Builtin,
+        );
     }
 
     /// Discover commands from file system
