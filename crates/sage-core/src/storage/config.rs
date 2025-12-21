@@ -378,7 +378,10 @@ mod tests {
             .without_auto_migrate();
 
         assert!(config.has_postgres());
-        assert_eq!(config.fallback_strategy, FallbackStrategy::RetryThenFallback);
+        assert_eq!(
+            config.fallback_strategy,
+            FallbackStrategy::RetryThenFallback
+        );
         assert!(!config.auto_migrate);
     }
 }

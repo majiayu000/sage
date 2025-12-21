@@ -212,13 +212,18 @@ mod tests {
     fn test_system_prompts_contain_key_information() {
         // General purpose should mention access to all tools
         let general = general_purpose_agent();
-        assert!(general.system_prompt.contains("all tools") || general.system_prompt.contains("full access"));
+        assert!(
+            general.system_prompt.contains("all tools")
+                || general.system_prompt.contains("full access")
+        );
         assert!(general.system_prompt.contains("tools"));
 
         // Explore should mention read-only and speed
         let explore = explore_agent();
         assert!(explore.system_prompt.contains("READ-ONLY"));
-        assert!(explore.system_prompt.contains("fast") || explore.system_prompt.contains("quickly"));
+        assert!(
+            explore.system_prompt.contains("fast") || explore.system_prompt.contains("quickly")
+        );
 
         // Plan should mention architecture and implementation
         let plan = plan_agent();

@@ -2,9 +2,9 @@
 //!
 //! Manages MCP server connections and provides tools to the Sage agent.
 
-use super::adapter::{create_adapters_from_client, McpToolAdapter};
+use super::adapter::{McpToolAdapter, create_adapters_from_client};
 use sage_core::config::{McpConfig, McpServerConfig};
-use sage_core::mcp::{McpClient, StdioTransport, HttpTransport, HttpTransportConfig};
+use sage_core::mcp::{HttpTransport, HttpTransportConfig, McpClient, StdioTransport};
 use sage_core::tools::Tool;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -150,8 +150,8 @@ impl McpToolRegistry {
             .as_ref()
             .ok_or_else(|| "http transport requires 'url' field".to_string())?;
 
-        let mut http_config = HttpTransportConfig::new(url)
-            .with_timeout(config.timeout_secs.unwrap_or(300));
+        let mut http_config =
+            HttpTransportConfig::new(url).with_timeout(config.timeout_secs.unwrap_or(300));
 
         // Add configured headers
         for (key, value) in &config.headers {

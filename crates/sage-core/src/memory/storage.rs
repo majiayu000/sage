@@ -132,7 +132,10 @@ impl MemoryStorage for InMemoryStorage {
 
         // Sort by score
         results.sort_by(|a, b| {
-            b.score.total.partial_cmp(&a.score.total).unwrap_or(std::cmp::Ordering::Equal)
+            b.score
+                .total
+                .partial_cmp(&a.score.total)
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
 
         // Apply limit
@@ -210,7 +213,11 @@ impl FileMemoryStorage {
     async fn load_from_file(path: &Path) -> Result<HashMap<MemoryId, Memory>, MemoryStorageError> {
         let content = tokio::fs::read_to_string(path).await?;
         let file: MemoryFile = serde_json::from_str(&content)?;
-        Ok(file.memories.into_iter().map(|m| (m.id.clone(), m)).collect())
+        Ok(file
+            .memories
+            .into_iter()
+            .map(|m| (m.id.clone(), m))
+            .collect())
     }
 
     async fn save_to_file(&self) -> Result<(), MemoryStorageError> {
@@ -304,7 +311,10 @@ impl MemoryStorage for FileMemoryStorage {
             .collect();
 
         results.sort_by(|a, b| {
-            b.score.total.partial_cmp(&a.score.total).unwrap_or(std::cmp::Ordering::Equal)
+            b.score
+                .total
+                .partial_cmp(&a.score.total)
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
 
         if let Some(limit) = query.limit {
@@ -344,9 +354,9 @@ fn matches_query(memory: &Memory, query: &MemoryQuery) -> bool {
             let query_words: Vec<&str> = text_lower.split_whitespace().collect();
             let content_words: Vec<&str> = content_lower.split_whitespace().collect();
 
-            let has_match = query_words.iter().any(|qw| {
-                content_words.iter().any(|cw| cw.contains(qw))
-            });
+            let has_match = query_words
+                .iter()
+                .any(|qw| content_words.iter().any(|cw| cw.contains(qw)));
 
             if !has_match {
                 return false;
@@ -475,8 +485,14 @@ mod tests {
     async fn test_in_memory_search_by_text() {
         let storage = InMemoryStorage::new();
 
-        storage.store(Memory::fact("Rust is a systems language")).await.unwrap();
-        storage.store(Memory::fact("Python is interpreted")).await.unwrap();
+        storage
+            .store(Memory::fact("Rust is a systems language"))
+            .await
+            .unwrap();
+        storage
+            .store(Memory::fact("Python is interpreted"))
+            .await
+            .unwrap();
 
         let query = MemoryQuery::new().text("Rust");
         let results = storage.search(&query).await.unwrap();
@@ -490,7 +506,10 @@ mod tests {
         let storage = InMemoryStorage::new();
 
         storage.store(Memory::fact("A fact")).await.unwrap();
-        storage.store(Memory::preference("A preference")).await.unwrap();
+        storage
+            .store(Memory::preference("A preference"))
+            .await
+            .unwrap();
 
         let query = MemoryQuery::new().memory_type(MemoryType::Fact);
         let results = storage.search(&query).await.unwrap();
@@ -503,8 +522,14 @@ mod tests {
     async fn test_in_memory_search_by_category() {
         let storage = InMemoryStorage::new();
 
-        storage.store(Memory::fact("Project fact").with_category(MemoryCategory::Project)).await.unwrap();
-        storage.store(Memory::fact("Global fact").with_category(MemoryCategory::Global)).await.unwrap();
+        storage
+            .store(Memory::fact("Project fact").with_category(MemoryCategory::Project))
+            .await
+            .unwrap();
+        storage
+            .store(Memory::fact("Global fact").with_category(MemoryCategory::Global))
+            .await
+            .unwrap();
 
         let query = MemoryQuery::new().category(MemoryCategory::Project);
         let results = storage.search(&query).await.unwrap();
@@ -535,7 +560,10 @@ mod tests {
         let storage = InMemoryStorage::new();
 
         for i in 0..10 {
-            storage.store(Memory::fact(format!("Fact {}", i))).await.unwrap();
+            storage
+                .store(Memory::fact(format!("Fact {}", i)))
+                .await
+                .unwrap();
         }
 
         let query = MemoryQuery::new().limit(5);
@@ -549,7 +577,10 @@ mod tests {
         let storage = InMemoryStorage::new();
 
         for i in 0..5 {
-            storage.store(Memory::fact(format!("Fact {}", i))).await.unwrap();
+            storage
+                .store(Memory::fact(format!("Fact {}", i)))
+                .await
+                .unwrap();
         }
 
         let all = storage.list(0, 100).await.unwrap();
@@ -564,7 +595,10 @@ mod tests {
         let storage = InMemoryStorage::new();
 
         for i in 0..3 {
-            storage.store(Memory::fact(format!("Fact {}", i))).await.unwrap();
+            storage
+                .store(Memory::fact(format!("Fact {}", i)))
+                .await
+                .unwrap();
         }
 
         assert_eq!(storage.count().await.unwrap(), 3);
@@ -605,7 +639,10 @@ mod tests {
         // Store memory
         {
             let storage = FileMemoryStorage::new(&path).await.unwrap();
-            storage.store(Memory::fact("Persistent fact")).await.unwrap();
+            storage
+                .store(Memory::fact("Persistent fact"))
+                .await
+                .unwrap();
         }
 
         // Load in new instance
@@ -622,7 +659,10 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let path = temp.path().join("memories.json");
 
-        let storage = FileMemoryStorage::new(&path).await.unwrap().with_max_memories(2);
+        let storage = FileMemoryStorage::new(&path)
+            .await
+            .unwrap()
+            .with_max_memories(2);
 
         storage.store(Memory::fact("First")).await.unwrap();
         storage.store(Memory::fact("Second")).await.unwrap();

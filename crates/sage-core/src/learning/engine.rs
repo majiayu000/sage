@@ -51,7 +51,10 @@ impl LearningEngine {
     }
 
     /// Create with memory manager for persistence
-    pub fn with_memory_manager(config: LearningConfig, memory_manager: SharedMemoryManager) -> Self {
+    pub fn with_memory_manager(
+        config: LearningConfig,
+        memory_manager: SharedMemoryManager,
+    ) -> Self {
         Self {
             config,
             patterns: RwLock::new(HashMap::new()),
@@ -194,8 +197,8 @@ impl LearningEngine {
             return Err(LearningError::Disabled);
         }
 
-        let mut pattern = Pattern::correction(what_was_wrong, correct_behavior)
-            .with_confidence(0.7); // Corrections start with higher confidence
+        let mut pattern =
+            Pattern::correction(what_was_wrong, correct_behavior).with_confidence(0.7); // Corrections start with higher confidence
 
         if let Some(ctx) = context {
             for c in ctx {
@@ -251,8 +254,7 @@ impl LearningEngine {
             .filter(|p| {
                 p.is_valid()
                     && p.confidence.value() >= self.config.apply_threshold
-                    && (p.context.is_empty()
-                        || p.context.iter().any(|c| context.contains(c)))
+                    && (p.context.is_empty() || p.context.iter().any(|c| context.contains(c)))
             })
             .cloned()
             .collect();
@@ -369,9 +371,8 @@ impl LearningEngine {
         for pattern in patterns.values_mut() {
             let age = now - pattern.last_reinforced;
             if age > decay_threshold {
-                let decay_factor = (age.num_days() as f32 - self.config.decay_after_days as f32)
-                    / 30.0
-                    * 0.1;
+                let decay_factor =
+                    (age.num_days() as f32 - self.config.decay_after_days as f32) / 30.0 * 0.1;
                 pattern.confidence.decay(decay_factor.min(0.1));
             }
         }

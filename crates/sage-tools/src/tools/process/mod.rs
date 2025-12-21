@@ -8,5 +8,8 @@ pub mod task_output;
 // Re-export tools
 pub use bash::BashTool;
 pub use kill_shell::KillShellTool;
-pub use task::{TaskTool, TaskRequest, TaskStatus, TaskRegistry, get_pending_tasks, update_task_status, get_task};
+pub use task::{
+    TaskRegistry, TaskRequest, TaskStatus, TaskTool, get_pending_tasks, get_task,
+    update_task_status,
+};
 pub use task_output::TaskOutputTool;

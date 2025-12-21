@@ -394,11 +394,7 @@ impl BranchManager {
     }
 
     /// Merge two branches (combine their messages)
-    pub async fn merge(
-        &self,
-        source_id: &BranchId,
-        target_id: &BranchId,
-    ) -> Option<BranchId> {
+    pub async fn merge(&self, source_id: &BranchId, target_id: &BranchId) -> Option<BranchId> {
         let (merged_messages, merged_history, merge_name) = {
             let branches = self.branches.read().await;
 
@@ -567,7 +563,9 @@ mod tests {
     async fn test_branch_manager_delete() {
         let manager = BranchManager::new();
 
-        let id = manager.create_branch(Some("to-delete"), vec![], vec![]).await;
+        let id = manager
+            .create_branch(Some("to-delete"), vec![], vec![])
+            .await;
         assert_eq!(manager.count().await, 1);
 
         let deleted = manager.delete(&id).await;
@@ -579,7 +577,9 @@ mod tests {
     async fn test_branch_manager_rename() {
         let manager = BranchManager::new();
 
-        let id = manager.create_branch(Some("old-name"), vec![], vec![]).await;
+        let id = manager
+            .create_branch(Some("old-name"), vec![], vec![])
+            .await;
         manager.rename(&id, "new-name").await;
 
         let branch = manager.get(&id).await.unwrap();
@@ -605,7 +605,9 @@ mod tests {
 
         let id1 = manager.create_branch(Some("root"), vec![], vec![]).await;
         let id2 = manager.create_branch(Some("child"), vec![], vec![]).await;
-        let id3 = manager.create_branch(Some("grandchild"), vec![], vec![]).await;
+        let id3 = manager
+            .create_branch(Some("grandchild"), vec![], vec![])
+            .await;
 
         let ancestry = manager.get_ancestry(&id3).await;
         assert_eq!(ancestry.len(), 3);
@@ -694,11 +696,15 @@ mod tests {
             timestamp: Utc::now(),
         };
 
-        let id1 = manager.create_branch(Some("branch1"), vec![msg1], vec![]).await;
+        let id1 = manager
+            .create_branch(Some("branch1"), vec![msg1], vec![])
+            .await;
 
         // Create independent branch
         *manager.current_branch.write().await = None;
-        let id2 = manager.create_branch(Some("branch2"), vec![msg2], vec![]).await;
+        let id2 = manager
+            .create_branch(Some("branch2"), vec![msg2], vec![])
+            .await;
 
         let merged_id = manager.merge(&id1, &id2).await.unwrap();
         let merged = manager.get(&merged_id).await.unwrap();

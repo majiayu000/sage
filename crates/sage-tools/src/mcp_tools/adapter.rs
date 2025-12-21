@@ -78,7 +78,9 @@ impl McpToolAdapter {
                 // so we treat numbers/booleans as regular parameters
                 let param = match (is_required, param_type) {
                     (true, "string") => ToolParameter::string(name, &description),
-                    (true, "integer") | (true, "number") => ToolParameter::number(name, &description),
+                    (true, "integer") | (true, "number") => {
+                        ToolParameter::number(name, &description)
+                    }
                     (true, "boolean") => ToolParameter::boolean(name, &description),
                     (true, _) => ToolParameter::string(name, &description), // Default to string
                     (false, "string") => ToolParameter::optional_string(name, &description),
@@ -151,10 +153,7 @@ impl Tool for McpToolAdapter {
     }
 
     fn description(&self) -> &str {
-        self.mcp_tool
-            .description
-            .as_deref()
-            .unwrap_or("MCP tool")
+        self.mcp_tool.description.as_deref().unwrap_or("MCP tool")
     }
 
     fn schema(&self) -> ToolSchema {
@@ -163,8 +162,9 @@ impl Tool for McpToolAdapter {
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
         // Convert ToolCall arguments to JSON Value
-        let arguments: Value = serde_json::to_value(&call.arguments)
-            .map_err(|e| ToolError::InvalidArguments(format!("Failed to serialize arguments: {}", e)))?;
+        let arguments: Value = serde_json::to_value(&call.arguments).map_err(|e| {
+            ToolError::InvalidArguments(format!("Failed to serialize arguments: {}", e))
+        })?;
 
         // Get the client
         let client = self.client.read().await;

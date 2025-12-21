@@ -236,8 +236,15 @@ Keep responses focused and actionable. Users are typically looking for quick ans
     pub fn is_read_only(agent_type: &str) -> bool {
         matches!(
             agent_type.to_lowercase().as_str(),
-            "explore" | "plan" | "code_review" | "code-review" | "codereview" |
-            "claude_guide" | "claude-guide" | "claudeguide" | "guide"
+            "explore"
+                | "plan"
+                | "code_review"
+                | "code-review"
+                | "codereview"
+                | "claude_guide"
+                | "claude-guide"
+                | "claudeguide"
+                | "guide"
         )
     }
 }

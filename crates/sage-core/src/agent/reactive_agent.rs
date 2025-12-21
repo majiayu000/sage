@@ -226,9 +226,7 @@ impl ClaudeStyleAgent {
         };
 
         // Check if working directory is a git repo
-        let is_git_repo = std::path::Path::new(&working_dir)
-            .join(".git")
-            .exists();
+        let is_git_repo = std::path::Path::new(&working_dir).join(".git").exists();
 
         // Get current git branch if in a git repo
         let (git_branch, main_branch) = if is_git_repo {

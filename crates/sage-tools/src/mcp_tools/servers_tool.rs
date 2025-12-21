@@ -75,7 +75,10 @@ Example:
                     "action",
                     "Action to perform: list, tools, connect, disconnect, refresh, status",
                 ),
-                ToolParameter::optional_string("server", "Server name (for connect/disconnect/tools/status actions)"),
+                ToolParameter::optional_string(
+                    "server",
+                    "Server name (for connect/disconnect/tools/status actions)",
+                ),
             ],
         )
     }
@@ -92,7 +95,10 @@ Example:
                     call_id: call.id.clone(),
                     tool_name: self.name().to_string(),
                     success: true,
-                    output: Some("MCP integration is not initialized. No MCP servers are configured.".to_string()),
+                    output: Some(
+                        "MCP integration is not initialized. No MCP servers are configured."
+                            .to_string(),
+                    ),
                     error: None,
                     exit_code: None,
                     execution_time_ms: None,
@@ -160,9 +166,11 @@ Example:
             }
 
             "status" => {
-                let server_name = call
-                    .get_string("server")
-                    .ok_or_else(|| ToolError::InvalidArguments("Missing 'server' parameter for status action".to_string()))?;
+                let server_name = call.get_string("server").ok_or_else(|| {
+                    ToolError::InvalidArguments(
+                        "Missing 'server' parameter for status action".to_string(),
+                    )
+                })?;
 
                 let statuses = registry.server_statuses().await;
 
@@ -194,8 +202,7 @@ Example:
                     "MCP registry refreshed.\n\
                      Connected servers: {}\n\
                      Available tools: {}",
-                    server_count,
-                    tool_count
+                    server_count, tool_count
                 )
             }
 

@@ -238,17 +238,11 @@ impl FallbackChain {
     }
 
     /// Record a failed request and potentially trigger fallback
-    pub async fn record_failure(
-        &self,
-        model_id: &str,
-        reason: FallbackReason,
-    ) -> Option<String> {
+    pub async fn record_failure(&self, model_id: &str, reason: FallbackReason) -> Option<String> {
         let mut models = self.models.write().await;
 
         // Find and update the failed model
-        let failed_index = models
-            .iter()
-            .position(|m| m.config.model_id == model_id);
+        let failed_index = models.iter().position(|m| m.config.model_id == model_id);
 
         if let Some(index) = failed_index {
             models[index].record_failure();
@@ -535,7 +529,9 @@ mod tests {
     #[tokio::test]
     async fn test_add_model() {
         let chain = FallbackChain::new();
-        chain.add_model(ModelConfig::new("model1", "provider1")).await;
+        chain
+            .add_model(ModelConfig::new("model1", "provider1"))
+            .await;
 
         assert_eq!(chain.model_count().await, 1);
         assert_eq!(chain.current_model().await, Some("model1".to_string()));
@@ -545,9 +541,15 @@ mod tests {
     async fn test_priority_ordering() {
         let chain = FallbackChain::new();
 
-        chain.add_model(ModelConfig::new("low", "p").with_priority(10)).await;
-        chain.add_model(ModelConfig::new("high", "p").with_priority(1)).await;
-        chain.add_model(ModelConfig::new("medium", "p").with_priority(5)).await;
+        chain
+            .add_model(ModelConfig::new("low", "p").with_priority(10))
+            .await;
+        chain
+            .add_model(ModelConfig::new("high", "p").with_priority(1))
+            .await;
+        chain
+            .add_model(ModelConfig::new("medium", "p").with_priority(5))
+            .await;
 
         let models = chain.list_models().await;
         assert_eq!(models, vec!["high", "medium", "low"]);
@@ -556,7 +558,9 @@ mod tests {
     #[tokio::test]
     async fn test_record_success() {
         let chain = FallbackChain::new();
-        chain.add_model(ModelConfig::new("model1", "provider1")).await;
+        chain
+            .add_model(ModelConfig::new("model1", "provider1"))
+            .await;
 
         chain.record_success("model1").await;
 
@@ -568,11 +572,15 @@ mod tests {
     #[tokio::test]
     async fn test_record_failure_triggers_fallback() {
         let chain = FallbackChain::new();
-        chain.add_model(ModelConfig::new("model1", "p").with_max_retries(1)).await;
+        chain
+            .add_model(ModelConfig::new("model1", "p").with_max_retries(1))
+            .await;
         chain.add_model(ModelConfig::new("model2", "p")).await;
 
         // First failure
-        let next = chain.record_failure("model1", FallbackReason::RateLimited).await;
+        let next = chain
+            .record_failure("model1", FallbackReason::RateLimited)
+            .await;
         assert_eq!(next, Some("model2".to_string()));
     }
 
@@ -592,7 +600,9 @@ mod tests {
         let chain = FallbackChain::new();
         chain.add_model(ModelConfig::new("model1", "p")).await;
 
-        chain.record_failure("model1", FallbackReason::Error("test".into())).await;
+        chain
+            .record_failure("model1", FallbackReason::Error("test".into()))
+            .await;
         chain.reset_model("model1").await;
 
         let stats = chain.get_stats().await;
@@ -614,8 +624,12 @@ mod tests {
     #[tokio::test]
     async fn test_context_size_filtering() {
         let chain = FallbackChain::new();
-        chain.add_model(ModelConfig::new("small", "p").with_max_context(1000)).await;
-        chain.add_model(ModelConfig::new("large", "p").with_max_context(100000)).await;
+        chain
+            .add_model(ModelConfig::new("small", "p").with_max_context(1000))
+            .await;
+        chain
+            .add_model(ModelConfig::new("large", "p").with_max_context(100000))
+            .await;
 
         // Request too large for first model
         let model = chain.next_available(Some(50000)).await;
@@ -625,10 +639,14 @@ mod tests {
     #[tokio::test]
     async fn test_fallback_history() {
         let chain = FallbackChain::new();
-        chain.add_model(ModelConfig::new("model1", "p").with_max_retries(0)).await;
+        chain
+            .add_model(ModelConfig::new("model1", "p").with_max_retries(0))
+            .await;
         chain.add_model(ModelConfig::new("model2", "p")).await;
 
-        chain.record_failure("model1", FallbackReason::Timeout).await;
+        chain
+            .record_failure("model1", FallbackReason::Timeout)
+            .await;
 
         let history = chain.get_history().await;
         assert_eq!(history.len(), 1);
@@ -664,11 +682,15 @@ mod tests {
     #[tokio::test]
     async fn test_model_stats() {
         let chain = FallbackChain::new();
-        chain.add_model(ModelConfig::new("model1", "provider1")).await;
+        chain
+            .add_model(ModelConfig::new("model1", "provider1"))
+            .await;
 
         chain.record_success("model1").await;
         chain.record_success("model1").await;
-        chain.record_failure("model1", FallbackReason::Timeout).await;
+        chain
+            .record_failure("model1", FallbackReason::Timeout)
+            .await;
 
         let stats = chain.get_stats().await;
         assert_eq!(stats[0].total_requests, 3);
@@ -680,7 +702,11 @@ mod tests {
     fn test_fallback_reason_display() {
         assert_eq!(FallbackReason::RateLimited.to_string(), "rate limited");
         assert_eq!(FallbackReason::Timeout.to_string(), "timeout");
-        assert!(FallbackReason::Error("test".into()).to_string().contains("test"));
+        assert!(
+            FallbackReason::Error("test".into())
+                .to_string()
+                .contains("test")
+        );
     }
 
     #[test]

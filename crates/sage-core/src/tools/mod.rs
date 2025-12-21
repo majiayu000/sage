@@ -12,7 +12,7 @@ pub mod tool_cache;
 pub mod types;
 
 pub use background_registry::{
-    global_registry, BackgroundTaskRegistry, BackgroundTaskSummary, BACKGROUND_REGISTRY,
+    BACKGROUND_REGISTRY, BackgroundTaskRegistry, BackgroundTaskSummary, global_registry,
 };
 pub use background_task::{BackgroundShellTask, BackgroundTaskStatus};
 pub use base::{ConcurrencyMode, Tool, ToolError};

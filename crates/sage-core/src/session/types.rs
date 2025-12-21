@@ -93,7 +93,11 @@ pub struct SessionToolCall {
 
 impl SessionToolCall {
     /// Create a new tool call
-    pub fn new(id: impl Into<String>, name: impl Into<String>, arguments: HashMap<String, Value>) -> Self {
+    pub fn new(
+        id: impl Into<String>,
+        name: impl Into<String>,
+        arguments: HashMap<String, Value>,
+    ) -> Self {
         Self {
             id: id.into(),
             name: name.into(),
@@ -122,7 +126,11 @@ pub struct SessionToolResult {
 
 impl SessionToolResult {
     /// Create a successful tool result
-    pub fn success(tool_call_id: impl Into<String>, tool_name: impl Into<String>, content: impl Into<String>) -> Self {
+    pub fn success(
+        tool_call_id: impl Into<String>,
+        tool_name: impl Into<String>,
+        content: impl Into<String>,
+    ) -> Self {
         Self {
             tool_call_id: tool_call_id.into(),
             tool_name: tool_name.into(),
@@ -134,7 +142,11 @@ impl SessionToolResult {
     }
 
     /// Create a failed tool result
-    pub fn failure(tool_call_id: impl Into<String>, tool_name: impl Into<String>, error: impl Into<String>) -> Self {
+    pub fn failure(
+        tool_call_id: impl Into<String>,
+        tool_name: impl Into<String>,
+        error: impl Into<String>,
+    ) -> Self {
         Self {
             tool_call_id: tool_call_id.into(),
             tool_name: tool_name.into(),
@@ -192,7 +204,10 @@ impl ConversationMessage {
     }
 
     /// Create a new assistant message with tool calls
-    pub fn assistant_with_tools(content: impl Into<String>, tool_calls: Vec<SessionToolCall>) -> Self {
+    pub fn assistant_with_tools(
+        content: impl Into<String>,
+        tool_calls: Vec<SessionToolCall>,
+    ) -> Self {
         Self {
             role: MessageRole::Assistant,
             content: content.into(),
@@ -1211,8 +1226,7 @@ mod tests {
 
     #[test]
     fn test_session_serialization() {
-        let session = Session::new(PathBuf::from("/tmp"))
-            .with_name("Test");
+        let session = Session::new(PathBuf::from("/tmp")).with_name("Test");
 
         let json = serde_json::to_string(&session).unwrap();
         let deserialized: Session = serde_json::from_str(&json).unwrap();

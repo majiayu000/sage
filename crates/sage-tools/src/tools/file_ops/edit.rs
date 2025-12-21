@@ -57,21 +57,18 @@ Usage:
             self.name(),
             self.description(),
             vec![
-                ToolParameter::string(
-                    "file_path",
-                    "The absolute path to the file to modify",
-                ),
-                ToolParameter::string(
-                    "old_string",
-                    "The text to replace",
-                ),
+                ToolParameter::string("file_path", "The absolute path to the file to modify"),
+                ToolParameter::string("old_string", "The text to replace"),
                 ToolParameter::string(
                     "new_string",
                     "The text to replace it with (must be different from old_string)",
                 ),
-                ToolParameter::boolean("replace_all", "Replace all occurrences of old_string (default false)")
-                    .optional()
-                    .with_default(serde_json::Value::Bool(false)),
+                ToolParameter::boolean(
+                    "replace_all",
+                    "Replace all occurrences of old_string (default false)",
+                )
+                .optional()
+                .with_default(serde_json::Value::Bool(false)),
             ],
         )
     }

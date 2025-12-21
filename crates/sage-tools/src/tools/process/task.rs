@@ -4,7 +4,7 @@
 //! Now with actual execution support via SubAgentRunner.
 
 use async_trait::async_trait;
-use sage_core::agent::subagent::{execute_subagent, AgentType, SubAgentConfig};
+use sage_core::agent::subagent::{AgentType, SubAgentConfig, execute_subagent};
 use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolResult, ToolSchema};
 use serde::{Deserialize, Serialize};
@@ -96,7 +96,8 @@ impl TaskRegistry {
     /// Get all pending tasks
     pub fn get_pending_tasks(&self) -> Vec<TaskRequest> {
         let tasks = self.tasks.read().unwrap();
-        tasks.values()
+        tasks
+            .values()
             .filter(|t| t.status == TaskStatus::Pending)
             .cloned()
             .collect()
@@ -206,35 +207,53 @@ Usage notes:
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
         // Parse parameters
-        let description = call.arguments.get("description")
+        let description = call
+            .arguments
+            .get("description")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'description' parameter".to_string()))?
+            .ok_or_else(|| {
+                ToolError::InvalidArguments("Missing 'description' parameter".to_string())
+            })?
             .to_string();
 
-        let prompt = call.arguments.get("prompt")
+        let prompt = call
+            .arguments
+            .get("prompt")
             .and_then(|v| v.as_str())
             .ok_or_else(|| ToolError::InvalidArguments("Missing 'prompt' parameter".to_string()))?
             .to_string();
 
-        let subagent_type_str = call.arguments.get("subagent_type")
+        let subagent_type_str = call
+            .arguments
+            .get("subagent_type")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'subagent_type' parameter".to_string()))?
+            .ok_or_else(|| {
+                ToolError::InvalidArguments("Missing 'subagent_type' parameter".to_string())
+            })?
             .to_string();
 
-        let model = call.arguments.get("model")
+        let model = call
+            .arguments
+            .get("model")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
-        let run_in_background = call.arguments.get("run_in_background")
+        let run_in_background = call
+            .arguments
+            .get("run_in_background")
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
 
-        let resume = call.arguments.get("resume")
+        let resume = call
+            .arguments
+            .get("resume")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
         // Generate task ID
-        let task_id = resume.clone().unwrap_or_else(|| format!("task_{}", Uuid::new_v4()));
+        let task_id = resume
+            .clone()
+            .unwrap_or_else(|| format!("task_{}", Uuid::new_v4()));
 
         // Parse agent type
         let agent_type = match subagent_type_str.to_lowercase().as_str() {
@@ -273,7 +292,8 @@ Usage notes:
 
             // TODO: Spawn background task here
             // For now, update status to pending for background processing
-            self.registry.update_status(&task_id, TaskStatus::Pending, None);
+            self.registry
+                .update_status(&task_id, TaskStatus::Pending, None);
 
             Ok(ToolResult {
                 call_id: call.id.clone(),
@@ -333,19 +353,22 @@ Usage notes:
                             meta.insert("task_id".to_string(), json!(task_id));
                             meta.insert("agent_id".to_string(), json!(result.agent_id));
                             meta.insert("subagent_type".to_string(), json!(subagent_type_str));
-                            meta.insert("tools_used".to_string(), json!(result.metadata.tools_used));
-                            meta.insert("total_tool_uses".to_string(), json!(result.metadata.total_tool_uses));
+                            meta.insert(
+                                "tools_used".to_string(),
+                                json!(result.metadata.tools_used),
+                            );
+                            meta.insert(
+                                "total_tool_uses".to_string(),
+                                json!(result.metadata.total_tool_uses),
+                            );
                             meta
                         },
                     })
                 }
                 Err(e) => {
                     // Update task status to failed
-                    self.registry.update_status(
-                        &task_id,
-                        TaskStatus::Failed,
-                        Some(e.to_string()),
-                    );
+                    self.registry
+                        .update_status(&task_id, TaskStatus::Failed, Some(e.to_string()));
 
                     // Check if runner is not initialized
                     let error_msg = if e.to_string().contains("not initialized") {
@@ -411,7 +434,13 @@ mod tests {
                 "description": "Search codebase",
                 "prompt": "Find all files related to authentication",
                 "subagent_type": "Explore"
-            }).as_object().unwrap().clone().into_iter().map(|(k, v)| (k, v)).collect(),
+            })
+            .as_object()
+            .unwrap()
+            .clone()
+            .into_iter()
+            .map(|(k, v)| (k, v))
+            .collect(),
             call_id: None,
         };
 
@@ -423,14 +452,18 @@ mod tests {
             let error = result.error.unwrap();
             assert!(
                 error.contains("not initialized") || error.contains("Runner not initialized"),
-                "Expected 'not initialized' error, got: {}", error
+                "Expected 'not initialized' error, got: {}",
+                error
             );
 
             // Get task_id from metadata
             if let Some(task_id) = result.metadata.get("task_id").and_then(|v| v.as_str()) {
                 // Verify task was registered and marked as failed
                 let task = registry.get_task(task_id);
-                assert!(task.map(|t| t.status == TaskStatus::Failed).unwrap_or(false));
+                assert!(
+                    task.map(|t| t.status == TaskStatus::Failed)
+                        .unwrap_or(false)
+                );
             }
         } else {
             // If runner is initialized, verify successful execution
@@ -452,7 +485,13 @@ mod tests {
                 "subagent_type": "Plan",
                 "run_in_background": true,
                 "model": "opus"
-            }).as_object().unwrap().clone().into_iter().map(|(k, v)| (k, v)).collect(),
+            })
+            .as_object()
+            .unwrap()
+            .clone()
+            .into_iter()
+            .map(|(k, v)| (k, v))
+            .collect(),
             call_id: None,
         };
 

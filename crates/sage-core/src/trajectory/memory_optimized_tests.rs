@@ -17,7 +17,7 @@ mod tests {
             end_time: chrono::Utc::now().to_rfc3339(),
             provider: "test_provider".to_string(),
             model: "test_model".to_string(),
-            max_steps: 10,
+            max_steps: Some(10),
             llm_interactions: vec![],
             agent_steps: vec![],
             success: true,

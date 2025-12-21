@@ -499,7 +499,9 @@ mod tests {
     async fn test_custom_counter() {
         let collector = MetricsCollector::new();
 
-        collector.register_counter("custom_events", "Custom events").await;
+        collector
+            .register_counter("custom_events", "Custom events")
+            .await;
         collector.inc_counter("custom_events").await;
         collector.inc_counter_by("custom_events", 5).await;
 
@@ -522,7 +524,9 @@ mod tests {
     async fn test_custom_histogram() {
         let collector = MetricsCollector::new();
 
-        collector.register_histogram("custom_duration", "Custom duration").await;
+        collector
+            .register_histogram("custom_duration", "Custom duration")
+            .await;
         collector.observe_histogram("custom_duration", 0.5).await;
 
         let histograms = collector.custom_histograms.read().await;

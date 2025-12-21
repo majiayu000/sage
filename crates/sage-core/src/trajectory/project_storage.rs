@@ -1,7 +1,7 @@
 //! Project-based trajectory storage following Claude Code pattern
 //!
 //! Storage structure:
-//! ```
+//! ```text
 //! ~/.sage/projects/{escaped-cwd}/
 //! ├── {session-id}.jsonl
 //! └── ...
@@ -399,7 +399,9 @@ mod tests {
         let working_dir = temp_dir.path().to_path_buf();
 
         // Override home dir for testing
-        std::env::set_var("HOME", temp_dir.path());
+        unsafe {
+            std::env::set_var("HOME", temp_dir.path());
+        }
 
         let mut storage = ProjectStorage::new(&working_dir).unwrap();
         storage.init().await.unwrap();
@@ -409,20 +411,25 @@ mod tests {
         assert!(!uuid1.is_nil());
 
         // Record an assistant response
-        let uuid2 = storage.record_assistant_response(
-            "Hi there!",
-            Some("gpt-4".to_string()),
-            Some("openai".to_string()),
-            None,
-            None,
-        ).await.unwrap();
+        let uuid2 = storage
+            .record_assistant_response(
+                "Hi there!",
+                Some("gpt-4".to_string()),
+                Some("openai".to_string()),
+                None,
+                None,
+            )
+            .await
+            .unwrap();
         assert!(!uuid2.is_nil());
 
         // Verify file exists
         assert!(storage.file_path().exists());
 
         // Load and verify entries
-        let entries = ProjectStorage::load_entries(storage.file_path()).await.unwrap();
+        let entries = ProjectStorage::load_entries(storage.file_path())
+            .await
+            .unwrap();
         assert_eq!(entries.len(), 2);
         assert_eq!(entries[0].entry_type, "user");
         assert_eq!(entries[1].entry_type, "assistant");

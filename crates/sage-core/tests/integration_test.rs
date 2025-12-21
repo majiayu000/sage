@@ -133,7 +133,7 @@ async fn test_cache_streaming_integration() -> SageResult<()> {
         content: "What is Python?".to_string(),
         tool_calls: None,
         tool_call_id: None,
-            cache_control: None,
+        cache_control: None,
         name: None,
         metadata: HashMap::new(),
     }];

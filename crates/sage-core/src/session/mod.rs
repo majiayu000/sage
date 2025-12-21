@@ -65,12 +65,31 @@ pub use session_cache::{
 };
 pub use storage::{BoxedSessionStorage, FileSessionStorage, MemorySessionStorage, SessionStorage};
 pub use types::{
-    ConversationMessage, MessageRole, Session, SessionConfig, SessionState,
-    SessionSummary, SessionToolCall, SessionToolResult, TokenUsage,
+    ConversationMessage,
     // Enhanced types (Claude Code-inspired)
-    EnhancedMessage, EnhancedMessageType, EnhancedTokenUsage, EnhancedToolCall, EnhancedToolResult,
-    FileBackupInfo, FileHistorySnapshot, MessageContent, SessionContext,
-    ThinkingLevel, ThinkingMetadata, TodoItem, TodoStatus, TrackedFileState, TrackedFilesSnapshot,
+    EnhancedMessage,
+    EnhancedMessageType,
+    EnhancedTokenUsage,
+    EnhancedToolCall,
+    EnhancedToolResult,
+    FileBackupInfo,
+    FileHistorySnapshot,
+    MessageContent,
+    MessageRole,
+    Session,
+    SessionConfig,
+    SessionContext,
+    SessionState,
+    SessionSummary,
+    SessionToolCall,
+    SessionToolResult,
+    ThinkingLevel,
+    ThinkingMetadata,
+    TodoItem,
+    TodoStatus,
+    TokenUsage,
+    TrackedFileState,
+    TrackedFilesSnapshot,
 };
 // Note: SessionId is defined as String type alias in types.rs
 // and is re-exported from concurrency module at crate level

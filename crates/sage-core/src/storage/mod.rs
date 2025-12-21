@@ -26,17 +26,13 @@ pub mod manager;
 pub mod schema;
 
 pub use backend::{
-    DatabaseBackend, DatabaseError, DatabaseRow, DatabaseValue, QueryResult,
-    SqliteBackend, PostgresBackend, BackendType,
+    BackendType, DatabaseBackend, DatabaseError, DatabaseRow, DatabaseValue, PostgresBackend,
+    QueryResult, SqliteBackend,
 };
 pub use config::{
-    StorageConfig, PostgresConfig, SqliteConfig, FallbackStrategy,
-    ConnectionPool, RetryConfig,
+    ConnectionPool, FallbackStrategy, PostgresConfig, RetryConfig, SqliteConfig, StorageConfig,
 };
 pub use manager::{
-    StorageManager, SharedStorageManager, ConnectionStatus, StorageStats,
-    create_storage_manager,
+    ConnectionStatus, SharedStorageManager, StorageManager, StorageStats, create_storage_manager,
 };
-pub use schema::{
-    Migration, MigrationRunner, SchemaVersion,
-};
+pub use schema::{Migration, MigrationRunner, SchemaVersion};

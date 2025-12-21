@@ -63,7 +63,9 @@ pub mod types;
 
 pub use diff::{ChangeDetector, DiffHunk, DiffLine, FileChange, TextDiff};
 pub use manager::{CheckpointManager, CheckpointManagerConfig, RestorePreview};
-pub use storage::{CheckpointStorage, CheckpointSummary, FileCheckpointStorage, MemoryCheckpointStorage};
+pub use storage::{
+    CheckpointStorage, CheckpointSummary, FileCheckpointStorage, MemoryCheckpointStorage,
+};
 pub use types::{
     Checkpoint, CheckpointId, CheckpointType, ConversationSnapshot, FileSnapshot, FileState,
     RestoreOptions, RestoreResult, TokenUsageSnapshot, ToolExecutionRecord,

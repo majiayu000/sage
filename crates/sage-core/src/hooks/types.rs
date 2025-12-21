@@ -337,9 +337,7 @@ impl fmt::Display for HookConfig {
         write!(
             f,
             "Hook '{}' ({}, {})",
-            self.name,
-            self.hook_type,
-            self.implementation
+            self.name, self.hook_type, self.implementation
         )
     }
 }
@@ -411,11 +409,7 @@ impl HookInput {
     }
 
     /// Add metadata
-    pub fn with_metadata(
-        mut self,
-        key: impl Into<String>,
-        value: serde_json::Value,
-    ) -> Self {
+    pub fn with_metadata(mut self, key: impl Into<String>, value: serde_json::Value) -> Self {
         self.metadata.insert(key.into(), value);
         self
     }
@@ -698,8 +692,7 @@ mod tests {
 
     #[test]
     fn test_callback_hook_with_timeout() {
-        let hook = CallbackHook::new(|_| HookOutput::allow())
-            .with_timeout(Duration::from_secs(30));
+        let hook = CallbackHook::new(|_| HookOutput::allow()).with_timeout(Duration::from_secs(30));
         assert_eq!(hook.timeout, Duration::from_secs(30));
     }
 
@@ -824,8 +817,7 @@ mod tests {
 
     #[test]
     fn test_hook_input_display() {
-        let input = HookInput::new(HookEvent::PreToolUse, "test-session")
-            .with_tool_name("bash");
+        let input = HookInput::new(HookEvent::PreToolUse, "test-session").with_tool_name("bash");
         let display = format!("{}", input);
         assert!(display.contains("PreToolUse"));
         assert!(display.contains("test-session"));
@@ -842,8 +834,7 @@ mod tests {
 
     #[test]
     fn test_hook_input_serialization() {
-        let input = HookInput::new(HookEvent::PreToolUse, "test-session")
-            .with_tool_name("bash");
+        let input = HookInput::new(HookEvent::PreToolUse, "test-session").with_tool_name("bash");
         let json = serde_json::to_string(&input).unwrap();
         let deserialized: HookInput = serde_json::from_str(&json).unwrap();
         assert_eq!(input, deserialized);
@@ -929,7 +920,10 @@ mod tests {
     fn test_hook_type_display() {
         assert_eq!(format!("{}", HookType::PreStart), "pre_start");
         assert_eq!(format!("{}", HookType::PostComplete), "post_complete");
-        assert_eq!(format!("{}", HookType::PreToolExecution), "pre_tool_execution");
+        assert_eq!(
+            format!("{}", HookType::PreToolExecution),
+            "pre_tool_execution"
+        );
     }
 
     #[test]

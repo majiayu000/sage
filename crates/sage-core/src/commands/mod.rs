@@ -77,6 +77,4 @@ pub mod types;
 
 pub use executor::CommandExecutor;
 pub use registry::CommandRegistry;
-pub use types::{
-    CommandArgument, CommandInvocation, CommandResult, CommandSource, SlashCommand,
-};
+pub use types::{CommandArgument, CommandInvocation, CommandResult, CommandSource, SlashCommand};

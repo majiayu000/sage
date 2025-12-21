@@ -314,7 +314,9 @@ impl WorkspaceAnalyzer {
                 // Track file size
                 if let Ok(metadata) = path.metadata() {
                     let size = metadata.len();
-                    if stats.largest_files.len() < 10 || size > stats.largest_files.last().map(|f| f.1).unwrap_or(0) {
+                    if stats.largest_files.len() < 10
+                        || size > stats.largest_files.last().map(|f| f.1).unwrap_or(0)
+                    {
                         let relative = path.strip_prefix(&self.root).unwrap_or(&path).to_path_buf();
                         stats.largest_files.push((relative, size));
                     }
@@ -331,7 +333,9 @@ impl WorkspaceAnalyzer {
     fn should_exclude(&self, name: &str) -> bool {
         self.config.exclude_patterns.iter().any(|p| {
             if p.contains('*') {
-                glob::Pattern::new(p).map(|pat| pat.matches(name)).unwrap_or(false)
+                glob::Pattern::new(p)
+                    .map(|pat| pat.matches(name))
+                    .unwrap_or(false)
             } else {
                 name == p
             }
@@ -366,7 +370,11 @@ impl WorkspaceAnalyzer {
         }
     }
 
-    fn find_entry_points(&self, important_files: &[ImportantFile], project: &ProjectType) -> Vec<EntryPoint> {
+    fn find_entry_points(
+        &self,
+        important_files: &[ImportantFile],
+        project: &ProjectType,
+    ) -> Vec<EntryPoint> {
         important_files
             .iter()
             .filter(|f| f.file_type == ImportantFileType::EntryPoint)
@@ -536,12 +544,18 @@ impl WorkspaceAnalyzer {
                 let mut in_deps = false;
                 for line in content.lines() {
                     let line = line.trim();
-                    if line.starts_with("dependencies") || line.contains("[tool.poetry.dependencies]") {
+                    if line.starts_with("dependencies")
+                        || line.contains("[tool.poetry.dependencies]")
+                    {
                         in_deps = true;
                     } else if line.starts_with('[') && !line.contains("dependencies") {
                         in_deps = false;
                     } else if in_deps && !line.is_empty() && !line.starts_with('#') {
-                        if let Some(name) = line.split('=').next().map(|s| s.trim().trim_matches('"').to_string()) {
+                        if let Some(name) = line
+                            .split('=')
+                            .next()
+                            .map(|s| s.trim().trim_matches('"').to_string())
+                        {
                             if !name.starts_with('[') && name != "python" {
                                 info.dependencies.push(name);
                             }
@@ -558,7 +572,8 @@ impl WorkspaceAnalyzer {
                 for line in content.lines() {
                     let line = line.trim();
                     if !line.is_empty() && !line.starts_with('#') && !line.starts_with('-') {
-                        let name = line.split(|c| c == '=' || c == '<' || c == '>' || c == '[')
+                        let name = line
+                            .split(|c| c == '=' || c == '<' || c == '>' || c == '[')
                             .next()
                             .map(|s| s.trim().to_string())
                             .unwrap_or_default();
@@ -621,7 +636,9 @@ impl WorkspaceAnalyzer {
         // Common source directories
         let source_candidates: Vec<&str> = match project.primary_language {
             LanguageType::Rust => vec!["src", "crates"],
-            LanguageType::TypeScript | LanguageType::JavaScript => vec!["src", "lib", "app", "pages", "components"],
+            LanguageType::TypeScript | LanguageType::JavaScript => {
+                vec!["src", "lib", "app", "pages", "components"]
+            }
             LanguageType::Python => vec!["src", "lib"],
             LanguageType::Go => vec!["cmd", "pkg", "internal"],
             LanguageType::Java => vec!["src/main/java", "src/main/kotlin"],
@@ -638,7 +655,9 @@ impl WorkspaceAnalyzer {
         // Test directories
         let test_candidates = match project.primary_language {
             LanguageType::Rust => vec!["tests"],
-            LanguageType::TypeScript | LanguageType::JavaScript => vec!["tests", "test", "__tests__", "spec"],
+            LanguageType::TypeScript | LanguageType::JavaScript => {
+                vec!["tests", "test", "__tests__", "spec"]
+            }
             LanguageType::Python => vec!["tests", "test"],
             LanguageType::Go => vec![], // Go tests are in same dir
             LanguageType::Java => vec!["src/test/java", "src/test/kotlin"],
@@ -663,7 +682,9 @@ impl WorkspaceAnalyzer {
         // Build directories (usually gitignored)
         let build_candidates = match project.primary_language {
             LanguageType::Rust => vec!["target"],
-            LanguageType::TypeScript | LanguageType::JavaScript => vec!["dist", "build", ".next", ".nuxt", "out"],
+            LanguageType::TypeScript | LanguageType::JavaScript => {
+                vec!["dist", "build", ".next", ".nuxt", "out"]
+            }
             LanguageType::Python => vec!["dist", "build", "__pycache__"],
             LanguageType::Go => vec!["bin"],
             LanguageType::Java => vec!["target", "build", "out"],
@@ -742,12 +763,22 @@ impl AnalysisResult {
         ));
 
         if !self.project_type.frameworks.is_empty() {
-            let frameworks: Vec<_> = self.project_type.frameworks.iter().map(|f| f.name()).collect();
+            let frameworks: Vec<_> = self
+                .project_type
+                .frameworks
+                .iter()
+                .map(|f| f.name())
+                .collect();
             lines.push(format!("Frameworks: {}", frameworks.join(", ")));
         }
 
         if !self.project_type.build_systems.is_empty() {
-            let build: Vec<_> = self.project_type.build_systems.iter().map(|b| b.name()).collect();
+            let build: Vec<_> = self
+                .project_type
+                .build_systems
+                .iter()
+                .map(|b| b.name())
+                .collect();
             lines.push(format!("Build: {}", build.join(", ")));
         }
 
@@ -872,7 +903,10 @@ tempfile = "3.0"
         let analyzer = WorkspaceAnalyzer::new(temp.path());
         let result = analyzer.analyze().unwrap();
 
-        assert_eq!(result.project_type.primary_language, LanguageType::TypeScript);
+        assert_eq!(
+            result.project_type.primary_language,
+            LanguageType::TypeScript
+        );
 
         let deps = result.dependencies.unwrap();
         assert!(deps.dependencies.contains(&"react".to_string()));
@@ -972,7 +1006,10 @@ tempfile = "3.0"
         let result = analyzer.analyze();
 
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), WorkspaceError::DirectoryNotFound(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            WorkspaceError::DirectoryNotFound(_)
+        ));
     }
 
     #[test]

@@ -68,10 +68,10 @@ impl PromptVariables {
     /// Create with default tool names
     pub fn new() -> Self {
         Self {
-            bash_tool_name: "bash".to_string(),
-            read_tool_name: "str_replace_based_edit_tool".to_string(),
-            edit_tool_name: "str_replace_based_edit_tool".to_string(),
-            write_tool_name: "str_replace_based_edit_tool".to_string(),
+            bash_tool_name: "Bash".to_string(),
+            read_tool_name: "Read".to_string(),
+            edit_tool_name: "Edit".to_string(),
+            write_tool_name: "Write".to_string(),
             glob_tool_name: "Glob".to_string(),
             grep_tool_name: "Grep".to_string(),
             task_tool_name: "Task".to_string(),
@@ -204,8 +204,20 @@ impl TemplateRenderer {
         // Simple implementation - can be enhanced with regex
 
         // Handle HAS_TOOL conditions
-        for tool in &["Bash", "Read", "Edit", "Write", "Glob", "Grep", "Task", "TodoWrite",
-                      "AskUserQuestion", "WebFetch", "EnterPlanMode", "ExitPlanMode"] {
+        for tool in &[
+            "Bash",
+            "Read",
+            "Edit",
+            "Write",
+            "Glob",
+            "Grep",
+            "Task",
+            "TodoWrite",
+            "AskUserQuestion",
+            "WebFetch",
+            "EnterPlanMode",
+            "ExitPlanMode",
+        ] {
             let has_tool = vars.has_tool(tool);
             let pattern = format!("${{HAS_TOOL_{}?`", tool.to_uppercase());
 
@@ -270,7 +282,10 @@ impl TemplateRenderer {
                         break;
                     }
                 }
-            } else if chars[true_end] == '$' && true_end + 1 < chars.len() && chars[true_end + 1] == '{' {
+            } else if chars[true_end] == '$'
+                && true_end + 1 < chars.len()
+                && chars[true_end + 1] == '{'
+            {
                 // Skip nested conditionals
                 if let Some(nested_end) = s[true_end..].find('}') {
                     true_end += nested_end;
@@ -284,7 +299,11 @@ impl TemplateRenderer {
         // Find false content after `:`
         let false_marker = true_end + 2; // Skip `:`
         if false_marker >= chars.len() || chars[false_marker] != '`' {
-            return if condition { Some(true_content) } else { Some(String::new()) };
+            return if condition {
+                Some(true_content)
+            } else {
+                Some(String::new())
+            };
         }
 
         let false_start = false_marker + 1;
@@ -339,16 +358,36 @@ impl TemplateRenderer {
 
         // Replace all ${VAR_NAME} patterns
         let var_names = [
-            "BASH_TOOL_NAME", "READ_TOOL_NAME", "EDIT_TOOL_NAME", "WRITE_TOOL_NAME",
-            "GLOB_TOOL_NAME", "GREP_TOOL_NAME", "TASK_TOOL_NAME", "TODO_TOOL_NAME",
-            "ASK_USER_QUESTION_TOOL_NAME", "WEB_FETCH_TOOL_NAME",
-            "ENTER_PLAN_MODE_TOOL_NAME", "EXIT_PLAN_MODE_TOOL_NAME",
-            "EXPLORE_AGENT_TYPE", "PLAN_AGENT_TYPE", "CODE_REVIEW_AGENT_TYPE", "GUIDE_AGENT_TYPE",
-            "FEEDBACK_URL", "DOCS_URL", "PROMPT_VERSION",
-            "WORKING_DIR", "PLATFORM", "OS_VERSION", "CURRENT_DATE",
-            "GIT_BRANCH", "MAIN_BRANCH",
-            "AGENT_NAME", "AGENT_VERSION", "MODEL_NAME",
-            "TASK_DESCRIPTION", "PLAN_FILE_PATH",
+            "BASH_TOOL_NAME",
+            "READ_TOOL_NAME",
+            "EDIT_TOOL_NAME",
+            "WRITE_TOOL_NAME",
+            "GLOB_TOOL_NAME",
+            "GREP_TOOL_NAME",
+            "TASK_TOOL_NAME",
+            "TODO_TOOL_NAME",
+            "ASK_USER_QUESTION_TOOL_NAME",
+            "WEB_FETCH_TOOL_NAME",
+            "ENTER_PLAN_MODE_TOOL_NAME",
+            "EXIT_PLAN_MODE_TOOL_NAME",
+            "EXPLORE_AGENT_TYPE",
+            "PLAN_AGENT_TYPE",
+            "CODE_REVIEW_AGENT_TYPE",
+            "GUIDE_AGENT_TYPE",
+            "FEEDBACK_URL",
+            "DOCS_URL",
+            "PROMPT_VERSION",
+            "WORKING_DIR",
+            "PLATFORM",
+            "OS_VERSION",
+            "CURRENT_DATE",
+            "GIT_BRANCH",
+            "MAIN_BRANCH",
+            "AGENT_NAME",
+            "AGENT_VERSION",
+            "MODEL_NAME",
+            "TASK_DESCRIPTION",
+            "PLAN_FILE_PATH",
         ];
 
         for var_name in var_names {

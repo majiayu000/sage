@@ -78,7 +78,10 @@ impl SessionManager {
         self.storage.save(&session).await?;
 
         // Cache the active session
-        self.active_sessions.write().await.insert(id.clone(), session);
+        self.active_sessions
+            .write()
+            .await
+            .insert(id.clone(), session);
 
         info!("Created new session: {}", id);
         Ok(id)
@@ -98,9 +101,11 @@ impl SessionManager {
         }
 
         // Load from storage
-        let session = self.storage.load(id).await?.ok_or_else(|| {
-            SageError::InvalidInput(format!("Session not found: {}", id))
-        })?;
+        let session = self
+            .storage
+            .load(id)
+            .await?
+            .ok_or_else(|| SageError::InvalidInput(format!("Session not found: {}", id)))?;
 
         // Update state if paused
         let mut session = session;
@@ -175,9 +180,10 @@ impl SessionManager {
 
     /// Mark a session as completed
     pub async fn complete(&self, id: &SessionId) -> SageResult<()> {
-        let mut session = self.get(id).await?.ok_or_else(|| {
-            SageError::InvalidInput(format!("Session not found: {}", id))
-        })?;
+        let mut session = self
+            .get(id)
+            .await?
+            .ok_or_else(|| SageError::InvalidInput(format!("Session not found: {}", id)))?;
 
         session.complete();
         self.save(&session).await?;
@@ -191,9 +197,10 @@ impl SessionManager {
 
     /// Mark a session as failed
     pub async fn fail(&self, id: &SessionId, error: impl Into<String>) -> SageResult<()> {
-        let mut session = self.get(id).await?.ok_or_else(|| {
-            SageError::InvalidInput(format!("Session not found: {}", id))
-        })?;
+        let mut session = self
+            .get(id)
+            .await?
+            .ok_or_else(|| SageError::InvalidInput(format!("Session not found: {}", id)))?;
 
         session.fail(error);
         self.save(&session).await?;
@@ -207,9 +214,10 @@ impl SessionManager {
 
     /// Pause a session (keep in storage but mark as paused)
     pub async fn pause(&self, id: &SessionId) -> SageResult<()> {
-        let mut session = self.get(id).await?.ok_or_else(|| {
-            SageError::InvalidInput(format!("Session not found: {}", id))
-        })?;
+        let mut session = self
+            .get(id)
+            .await?
+            .ok_or_else(|| SageError::InvalidInput(format!("Session not found: {}", id)))?;
 
         session.pause();
         self.save(&session).await?;
@@ -222,10 +230,15 @@ impl SessionManager {
     }
 
     /// Add a message to a session
-    pub async fn add_message(&self, id: &SessionId, message: ConversationMessage) -> SageResult<()> {
-        let mut session = self.get(id).await?.ok_or_else(|| {
-            SageError::InvalidInput(format!("Session not found: {}", id))
-        })?;
+    pub async fn add_message(
+        &self,
+        id: &SessionId,
+        message: ConversationMessage,
+    ) -> SageResult<()> {
+        let mut session = self
+            .get(id)
+            .await?
+            .ok_or_else(|| SageError::InvalidInput(format!("Session not found: {}", id)))?;
 
         session.add_message(message);
         self.save(&session).await?;
@@ -275,14 +288,16 @@ mod tests {
     #[tokio::test]
     async fn test_create_session_with_system_prompt() {
         let manager = SessionManager::in_memory();
-        let config = SessionConfig::new()
-            .with_system_prompt("You are a helpful assistant");
+        let config = SessionConfig::new().with_system_prompt("You are a helpful assistant");
 
         let id = manager.create(config).await.unwrap();
         let session = manager.get(&id).await.unwrap().unwrap();
 
         assert_eq!(session.messages.len(), 1);
-        assert_eq!(session.messages[0].role, super::super::types::MessageRole::System);
+        assert_eq!(
+            session.messages[0].role,
+            super::super::types::MessageRole::System
+        );
     }
 
     #[tokio::test]
@@ -343,7 +358,10 @@ mod tests {
         let config = SessionConfig::new();
 
         let id = manager.create(config).await.unwrap();
-        manager.add_message(&id, ConversationMessage::user("Hello")).await.unwrap();
+        manager
+            .add_message(&id, ConversationMessage::user("Hello"))
+            .await
+            .unwrap();
 
         let session = manager.get(&id).await.unwrap().unwrap();
         assert_eq!(session.messages.len(), 1);
@@ -354,8 +372,14 @@ mod tests {
     async fn test_list_sessions() {
         let manager = SessionManager::in_memory();
 
-        manager.create(SessionConfig::new().with_name("Session 1")).await.unwrap();
-        manager.create(SessionConfig::new().with_name("Session 2")).await.unwrap();
+        manager
+            .create(SessionConfig::new().with_name("Session 1"))
+            .await
+            .unwrap();
+        manager
+            .create(SessionConfig::new().with_name("Session 2"))
+            .await
+            .unwrap();
 
         let list = manager.list().await.unwrap();
         assert_eq!(list.len(), 2);
@@ -365,8 +389,14 @@ mod tests {
     async fn test_list_active_sessions() {
         let manager = SessionManager::in_memory();
 
-        let id1 = manager.create(SessionConfig::new().with_name("Active")).await.unwrap();
-        let id2 = manager.create(SessionConfig::new().with_name("Completed")).await.unwrap();
+        let id1 = manager
+            .create(SessionConfig::new().with_name("Active"))
+            .await
+            .unwrap();
+        let id2 = manager
+            .create(SessionConfig::new().with_name("Completed"))
+            .await
+            .unwrap();
 
         manager.complete(&id2).await.unwrap();
 

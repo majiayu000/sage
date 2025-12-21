@@ -433,8 +433,8 @@ mod tests {
 
     #[test]
     fn test_checkpoint_creation() {
-        let checkpoint = Checkpoint::new("Test checkpoint", CheckpointType::Manual)
-            .with_name("My Checkpoint");
+        let checkpoint =
+            Checkpoint::new("Test checkpoint", CheckpointType::Manual).with_name("My Checkpoint");
 
         assert_eq!(checkpoint.description, "Test checkpoint");
         assert_eq!(checkpoint.name, Some("My Checkpoint".to_string()));
@@ -443,13 +443,15 @@ mod tests {
 
     #[test]
     fn test_checkpoint_with_files() {
-        let file = FileSnapshot::new("src/main.rs", FileState::Exists {
-            content: Some("fn main() {}".to_string()),
-            content_ref: None,
-        });
+        let file = FileSnapshot::new(
+            "src/main.rs",
+            FileState::Exists {
+                content: Some("fn main() {}".to_string()),
+                content_ref: None,
+            },
+        );
 
-        let checkpoint = Checkpoint::new("With files", CheckpointType::Auto)
-            .with_file(file);
+        let checkpoint = Checkpoint::new("With files", CheckpointType::Auto).with_file(file);
 
         assert_eq!(checkpoint.file_count(), 1);
     }

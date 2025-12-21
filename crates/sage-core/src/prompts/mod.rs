@@ -30,27 +30,27 @@
 //! ```
 
 // Core prompt modules (Claude Code style)
+pub mod agent_prompts;
+pub mod builder;
 pub mod system_prompt;
 pub mod system_reminders;
-pub mod builder;
 pub mod tool_descriptions;
-pub mod agent_prompts;
 pub mod variables;
 
 // Legacy template system
-pub mod template;
-pub mod registry;
 pub mod builtin;
+pub mod registry;
+pub mod template;
 
 // Re-exports for new modular system
+pub use agent_prompts::AgentPrompts;
+pub use builder::SystemPromptBuilder;
 pub use system_prompt::{GitPrompts, SecurityPolicy, SystemPrompt};
 pub use system_reminders::{PlanPhase, SystemReminder};
-pub use builder::SystemPromptBuilder;
 pub use tool_descriptions::ToolDescriptions;
-pub use agent_prompts::AgentPrompts;
 pub use variables::{PromptVariables, TemplateRenderer};
 
 // Re-exports for legacy template system
-pub use template::{PromptTemplate, PromptVariable, RenderError};
-pub use registry::PromptRegistry;
 pub use builtin::BuiltinPrompts;
+pub use registry::PromptRegistry;
+pub use template::{PromptTemplate, PromptVariable, RenderError};

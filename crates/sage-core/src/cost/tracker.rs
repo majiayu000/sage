@@ -93,20 +93,14 @@ impl UsageStats {
         self.call_count += 1;
 
         // Update model stats
-        let model_stats = self
-            .by_model
-            .entry(record.model_id.clone())
-            .or_default();
+        let model_stats = self.by_model.entry(record.model_id.clone()).or_default();
         model_stats.input_tokens += record.input_tokens;
         model_stats.output_tokens += record.output_tokens;
         model_stats.cost += record.cost;
         model_stats.call_count += 1;
 
         // Update provider stats
-        let provider_stats = self
-            .by_provider
-            .entry(record.provider.clone())
-            .or_default();
+        let provider_stats = self.by_provider.entry(record.provider.clone()).or_default();
         provider_stats.input_tokens += record.input_tokens;
         provider_stats.output_tokens += record.output_tokens;
         provider_stats.cost += record.cost;
@@ -543,7 +537,9 @@ mod tests {
         let tracker = CostTracker::new();
 
         tracker.track("gpt-4o", 1000, 500).await;
-        tracker.track("claude-3-5-sonnet-20241022", 2000, 1000).await;
+        tracker
+            .track("claude-3-5-sonnet-20241022", 2000, 1000)
+            .await;
 
         let stats = tracker.get_stats().await;
 

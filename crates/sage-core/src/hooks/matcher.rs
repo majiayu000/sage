@@ -7,9 +7,12 @@ use regex::Regex;
 
 /// Check if a pattern contains regex metacharacters
 fn contains_regex_metacharacters(pattern: &str) -> bool {
-    pattern
-        .chars()
-        .any(|c| matches!(c, '^' | '$' | '.' | '*' | '+' | '?' | '[' | ']' | '(' | ')' | '{' | '}' | '\\'))
+    pattern.chars().any(|c| {
+        matches!(
+            c,
+            '^' | '$' | '.' | '*' | '+' | '?' | '[' | ']' | '(' | ')' | '{' | '}' | '\\'
+        )
+    })
 }
 
 /// Match a value against a pattern
@@ -55,11 +58,10 @@ pub fn matches(pattern: Option<&str>, value: &str) -> bool {
         Some("*") => true,
 
         // Pipe-separated alternatives
-        Some(p) if p.contains('|') => {
-            p.split('|')
-                .map(|s| s.trim())
-                .any(|segment| value == segment || value.contains(segment))
-        }
+        Some(p) if p.contains('|') => p
+            .split('|')
+            .map(|s| s.trim())
+            .any(|segment| value == segment || value.contains(segment)),
 
         // Pattern with regex metacharacters - use regex matching
         Some(p) if contains_regex_metacharacters(p) => {
@@ -68,9 +70,7 @@ pub fn matches(pattern: Option<&str>, value: &str) -> bool {
                 return true;
             }
             // Try regex match
-            Regex::new(p)
-                .map(|re| re.is_match(value))
-                .unwrap_or(false)
+            Regex::new(p).map(|re| re.is_match(value)).unwrap_or(false)
         }
 
         // Simple pattern without metacharacters - exact match only

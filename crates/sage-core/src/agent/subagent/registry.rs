@@ -136,7 +136,10 @@ impl AgentRegistry {
 
     /// Kill a running agent by cancelling it
     pub fn kill(&self, agent_id: &str) -> SageResult<()> {
-        let running = self.running.read().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let running = self
+            .running
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
 
         if let Some(agent) = running.get(agent_id) {
             agent.cancel_token.cancel();

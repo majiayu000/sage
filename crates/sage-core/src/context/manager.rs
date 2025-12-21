@@ -309,10 +309,7 @@ impl ContextManager {
     }
 
     /// Force summarization of messages (useful for manual context management)
-    pub async fn force_summarize(
-        &self,
-        messages: &[LLMMessage],
-    ) -> SageResult<LLMMessage> {
+    pub async fn force_summarize(&self, messages: &[LLMMessage]) -> SageResult<LLMMessage> {
         self.summarizer.summarize(messages).await
     }
 
@@ -497,7 +494,10 @@ mod tests {
         let manager = ContextManager::new(config);
 
         let messages = create_test_messages(5);
-        let result = manager.prepare_messages(messages.clone(), None).await.unwrap();
+        let result = manager
+            .prepare_messages(messages.clone(), None)
+            .await
+            .unwrap();
 
         // Should return unchanged when under threshold
         assert!(!result.was_pruned);

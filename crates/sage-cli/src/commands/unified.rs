@@ -9,12 +9,12 @@ use crate::console::CLIConsole;
 use crate::signal_handler::start_global_signal_handling;
 use sage_core::agent::{ExecutionMode, ExecutionOptions, ExecutionOutcome, UnifiedExecutor};
 use sage_core::commands::{CommandExecutor, CommandRegistry};
-use sage_core::config::{load_config_from_file, Config};
-use sage_tools::get_default_tools;
+use sage_core::config::{Config, load_config_from_file};
 use sage_core::error::{SageError, SageResult};
 use sage_core::input::{InputChannel, InputChannelHandle, InputRequestKind, InputResponse};
 use sage_core::trajectory::TrajectoryRecorder;
 use sage_core::types::TaskMetadata;
+use sage_tools::get_default_tools;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -112,7 +112,10 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
         match cmd_executor.process(&task_description).await {
             Ok(Some(result)) => {
                 if result.show_expansion {
-                    console.info(&format!("Command expanded: {}", &result.expanded_prompt[..result.expanded_prompt.len().min(100)]));
+                    console.info(&format!(
+                        "Command expanded: {}",
+                        &result.expanded_prompt[..result.expanded_prompt.len().min(100)]
+                    ));
                 }
                 if let Some(status) = &result.status_message {
                     console.info(status);
@@ -283,7 +286,10 @@ async fn handle_user_input(mut handle: InputChannelHandle, verbose: bool) {
                         if lower == "yes" || lower == "y" {
                             InputResponse::permission_granted(request.id)
                         } else if lower == "no" || lower == "n" {
-                            InputResponse::permission_denied(request.id, Some("User denied".to_string()))
+                            InputResponse::permission_denied(
+                                request.id,
+                                Some("User denied".to_string()),
+                            )
                         } else {
                             InputResponse::text(request.id, content)
                         }
@@ -307,7 +313,11 @@ async fn handle_user_input(mut handle: InputChannelHandle, verbose: bool) {
 }
 
 /// Display execution outcome
-fn display_outcome(console: &CLIConsole, outcome: &ExecutionOutcome, duration: std::time::Duration) {
+fn display_outcome(
+    console: &CLIConsole,
+    outcome: &ExecutionOutcome,
+    duration: std::time::Duration,
+) {
     match outcome {
         ExecutionOutcome::Success(_) => {
             console.success("Task completed successfully!");
@@ -326,7 +336,9 @@ fn display_outcome(console: &CLIConsole, outcome: &ExecutionOutcome, duration: s
             console.warn("Task reached maximum steps without completion");
             console.info("Consider breaking down the task or increasing max_steps");
         }
-        ExecutionOutcome::UserCancelled { pending_question, .. } => {
+        ExecutionOutcome::UserCancelled {
+            pending_question, ..
+        } => {
             console.warn("Task cancelled by user");
             if let Some(question) = pending_question {
                 console.info(&format!("Pending question: {}", question));

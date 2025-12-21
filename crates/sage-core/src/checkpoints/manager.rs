@@ -38,11 +38,7 @@ impl Default for CheckpointManagerConfig {
             project_root: PathBuf::from("."),
             max_checkpoints: 50,
             auto_checkpoint_before_tools: true,
-            checkpoint_tools: vec![
-                "Write".to_string(),
-                "Edit".to_string(),
-                "Bash".to_string(),
-            ],
+            checkpoint_tools: vec!["Write".to_string(), "Edit".to_string(), "Bash".to_string()],
         }
     }
 }
@@ -101,7 +97,10 @@ impl CheckpointManager {
     }
 
     /// Create with custom storage
-    pub fn with_storage(config: CheckpointManagerConfig, storage: Arc<dyn CheckpointStorage>) -> Self {
+    pub fn with_storage(
+        config: CheckpointManagerConfig,
+        storage: Arc<dyn CheckpointStorage>,
+    ) -> Self {
         let change_detector = ChangeDetector::new(&config.project_root);
 
         Self {
@@ -141,8 +140,7 @@ impl CheckpointManager {
         let snapshots = self.change_detector.capture_files(&files).await?;
 
         // Create checkpoint
-        let checkpoint = Checkpoint::new(&description, checkpoint_type)
-            .with_files(snapshots);
+        let checkpoint = Checkpoint::new(&description, checkpoint_type).with_files(snapshots);
 
         // Save checkpoint
         self.storage.save(&checkpoint).await?;
@@ -172,7 +170,11 @@ impl CheckpointManager {
         checkpoint_type: CheckpointType,
     ) -> SageResult<Checkpoint> {
         let description = description.into();
-        tracing::info!("Creating full {} checkpoint: {}", checkpoint_type, description);
+        tracing::info!(
+            "Creating full {} checkpoint: {}",
+            checkpoint_type,
+            description
+        );
 
         // Scan entire project
         let snapshots = self
@@ -181,8 +183,7 @@ impl CheckpointManager {
             .await?;
 
         // Create checkpoint
-        let checkpoint = Checkpoint::new(&description, checkpoint_type)
-            .with_files(snapshots);
+        let checkpoint = Checkpoint::new(&description, checkpoint_type).with_files(snapshots);
 
         // Save
         self.storage.save(&checkpoint).await?;
@@ -236,8 +237,8 @@ impl CheckpointManager {
         let change_snapshots = ChangeDetector::changes_to_snapshots(&changes);
 
         // Create checkpoint
-        let checkpoint = Checkpoint::new(&description, checkpoint_type)
-            .with_files(change_snapshots);
+        let checkpoint =
+            Checkpoint::new(&description, checkpoint_type).with_files(change_snapshots);
 
         // Save
         self.storage.save(&checkpoint).await?;
@@ -268,12 +269,19 @@ impl CheckpointManager {
     ) -> SageResult<Checkpoint> {
         let description = format!("Pre-{} checkpoint", tool_name);
 
-        self.create_checkpoint(description, CheckpointType::PreTool, affected_files.to_vec())
-            .await
+        self.create_checkpoint(
+            description,
+            CheckpointType::PreTool,
+            affected_files.to_vec(),
+        )
+        .await
     }
 
     /// Create session start checkpoint
-    pub async fn create_session_start_checkpoint(&self, session_id: &str) -> SageResult<Checkpoint> {
+    pub async fn create_session_start_checkpoint(
+        &self,
+        session_id: &str,
+    ) -> SageResult<Checkpoint> {
         let description = format!("Session start: {}", &session_id[..8.min(session_id.len())]);
 
         self.create_full_checkpoint(description, CheckpointType::SessionStart)
@@ -286,11 +294,9 @@ impl CheckpointManager {
         checkpoint_id: &CheckpointId,
         conversation: ConversationSnapshot,
     ) -> SageResult<()> {
-        let mut checkpoint = self
-            .storage
-            .load(checkpoint_id)
-            .await?
-            .ok_or_else(|| SageError::NotFound(format!("Checkpoint {} not found", checkpoint_id)))?;
+        let mut checkpoint = self.storage.load(checkpoint_id).await?.ok_or_else(|| {
+            SageError::NotFound(format!("Checkpoint {} not found", checkpoint_id))
+        })?;
 
         checkpoint.conversation = Some(conversation);
         self.storage.save(&checkpoint).await?;
@@ -304,11 +310,9 @@ impl CheckpointManager {
         checkpoint_id: &CheckpointId,
         record: ToolExecutionRecord,
     ) -> SageResult<()> {
-        let mut checkpoint = self
-            .storage
-            .load(checkpoint_id)
-            .await?
-            .ok_or_else(|| SageError::NotFound(format!("Checkpoint {} not found", checkpoint_id)))?;
+        let mut checkpoint = self.storage.load(checkpoint_id).await?.ok_or_else(|| {
+            SageError::NotFound(format!("Checkpoint {} not found", checkpoint_id))
+        })?;
 
         checkpoint.tool_history.push(record);
         self.storage.save(&checkpoint).await?;
@@ -317,12 +321,14 @@ impl CheckpointManager {
     }
 
     /// Restore to a checkpoint
-    pub async fn restore(&self, checkpoint_id: &CheckpointId, options: RestoreOptions) -> SageResult<RestoreResult> {
-        let checkpoint = self
-            .storage
-            .load(checkpoint_id)
-            .await?
-            .ok_or_else(|| SageError::NotFound(format!("Checkpoint {} not found", checkpoint_id)))?;
+    pub async fn restore(
+        &self,
+        checkpoint_id: &CheckpointId,
+        options: RestoreOptions,
+    ) -> SageResult<RestoreResult> {
+        let checkpoint = self.storage.load(checkpoint_id).await?.ok_or_else(|| {
+            SageError::NotFound(format!("Checkpoint {} not found", checkpoint_id))
+        })?;
 
         tracing::info!("Restoring to checkpoint {}", checkpoint.short_id());
 
@@ -399,12 +405,12 @@ impl CheckpointManager {
                     }
 
                     // Write content
-                    let mut file = fs::File::create(&full_path).await.map_err(|e| {
-                        SageError::Storage(format!("Failed to create file: {}", e))
-                    })?;
-                    file.write_all(content.as_bytes()).await.map_err(|e| {
-                        SageError::Storage(format!("Failed to write file: {}", e))
-                    })?;
+                    let mut file = fs::File::create(&full_path)
+                        .await
+                        .map_err(|e| SageError::Storage(format!("Failed to create file: {}", e)))?;
+                    file.write_all(content.as_bytes())
+                        .await
+                        .map_err(|e| SageError::Storage(format!("Failed to write file: {}", e)))?;
 
                     // Restore permissions
                     #[cfg(unix)]
@@ -422,21 +428,21 @@ impl CheckpointManager {
             } => {
                 // Restore to original content
                 if let Some(content) = original_content {
-                    let mut file = fs::File::create(&full_path).await.map_err(|e| {
-                        SageError::Storage(format!("Failed to create file: {}", e))
-                    })?;
-                    file.write_all(content.as_bytes()).await.map_err(|e| {
-                        SageError::Storage(format!("Failed to write file: {}", e))
-                    })?;
+                    let mut file = fs::File::create(&full_path)
+                        .await
+                        .map_err(|e| SageError::Storage(format!("Failed to create file: {}", e)))?;
+                    file.write_all(content.as_bytes())
+                        .await
+                        .map_err(|e| SageError::Storage(format!("Failed to write file: {}", e)))?;
                 }
             }
             FileState::Deleted => {
                 // File was deleted in this snapshot, so restore means... nothing?
                 // Or we could delete if it exists now
                 if full_path.exists() {
-                    fs::remove_file(&full_path).await.map_err(|e| {
-                        SageError::Storage(format!("Failed to delete file: {}", e))
-                    })?;
+                    fs::remove_file(&full_path)
+                        .await
+                        .map_err(|e| SageError::Storage(format!("Failed to delete file: {}", e)))?;
                 }
             }
         }
@@ -516,7 +522,10 @@ impl CheckpointManager {
             .await?;
 
         let last_states = self.last_states.read().await;
-        Ok(ChangeDetector::compare_snapshots(&last_states, &current_snapshots))
+        Ok(ChangeDetector::compare_snapshots(
+            &last_states,
+            &current_snapshots,
+        ))
     }
 
     /// Preview what would be restored
@@ -524,11 +533,9 @@ impl CheckpointManager {
         &self,
         checkpoint_id: &CheckpointId,
     ) -> SageResult<Vec<RestorePreview>> {
-        let checkpoint = self
-            .storage
-            .load(checkpoint_id)
-            .await?
-            .ok_or_else(|| SageError::NotFound(format!("Checkpoint {} not found", checkpoint_id)))?;
+        let checkpoint = self.storage.load(checkpoint_id).await?.ok_or_else(|| {
+            SageError::NotFound(format!("Checkpoint {} not found", checkpoint_id))
+        })?;
 
         let mut previews = Vec::new();
 
@@ -544,9 +551,7 @@ impl CheckpointManager {
                         RestorePreview::WillCreate(snapshot.path.clone())
                     }
                 }
-                FileState::Modified { .. } => {
-                    RestorePreview::WillRevert(snapshot.path.clone())
-                }
+                FileState::Modified { .. } => RestorePreview::WillRevert(snapshot.path.clone()),
                 FileState::Deleted => {
                     if current_exists {
                         RestorePreview::WillDelete(snapshot.path.clone())
@@ -601,8 +606,7 @@ mod tests {
     async fn setup_test_project() -> (TempDir, CheckpointManager) {
         let temp_dir = TempDir::new().unwrap();
 
-        let config = CheckpointManagerConfig::new(temp_dir.path())
-            .with_max_checkpoints(10);
+        let config = CheckpointManagerConfig::new(temp_dir.path()).with_max_checkpoints(10);
 
         let manager = CheckpointManager::new(config);
 
@@ -611,7 +615,9 @@ mod tests {
         fs::create_dir_all(&src_dir).await.unwrap();
 
         let mut main = File::create(src_dir.join("main.rs")).await.unwrap();
-        main.write_all(b"fn main() { println!(\"Hello\"); }").await.unwrap();
+        main.write_all(b"fn main() { println!(\"Hello\"); }")
+            .await
+            .unwrap();
 
         let mut lib = File::create(src_dir.join("lib.rs")).await.unwrap();
         lib.write_all(b"pub mod utils;").await.unwrap();
@@ -684,7 +690,10 @@ mod tests {
 
         // Restore
         let result = manager
-            .restore(&checkpoint.id, RestoreOptions::files_only().without_backup())
+            .restore(
+                &checkpoint.id,
+                RestoreOptions::files_only().without_backup(),
+            )
             .await
             .unwrap();
 

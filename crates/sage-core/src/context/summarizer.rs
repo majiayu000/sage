@@ -167,12 +167,18 @@ Provide a structured summary:"#,
 
     /// Create a simple summary without LLM
     fn create_simple_summary(&self, messages: &[LLMMessage]) -> LLMMessage {
-        let user_count = messages.iter().filter(|m| m.role == MessageRole::User).count();
+        let user_count = messages
+            .iter()
+            .filter(|m| m.role == MessageRole::User)
+            .count();
         let assistant_count = messages
             .iter()
             .filter(|m| m.role == MessageRole::Assistant)
             .count();
-        let tool_count = messages.iter().filter(|m| m.role == MessageRole::Tool).count();
+        let tool_count = messages
+            .iter()
+            .filter(|m| m.role == MessageRole::Tool)
+            .count();
 
         // Extract first and last non-system messages
         let first_msg = messages

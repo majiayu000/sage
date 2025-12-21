@@ -141,9 +141,9 @@ impl Default for ToolCacheConfig {
             default_ttl: Duration::from_secs(120),
             tool_ttls,
             excluded_tools: vec![
-                "Bash".to_string(),    // Commands have side effects
-                "Write".to_string(),   // Writes have side effects
-                "Edit".to_string(),    // Edits have side effects
+                "Bash".to_string(),  // Commands have side effects
+                "Write".to_string(), // Writes have side effects
+                "Edit".to_string(),  // Edits have side effects
             ],
             max_result_size: 1024 * 1024, // 1MB
         }
@@ -190,12 +190,18 @@ impl ToolCacheConfig {
 
     /// Get TTL for a tool
     pub fn ttl_for_tool(&self, tool: &str) -> Duration {
-        self.tool_ttls.get(tool).cloned().unwrap_or(self.default_ttl)
+        self.tool_ttls
+            .get(tool)
+            .cloned()
+            .unwrap_or(self.default_ttl)
     }
 
     /// Check if a tool should be cached
     pub fn should_cache(&self, tool: &str) -> bool {
-        !self.excluded_tools.iter().any(|t| t.eq_ignore_ascii_case(tool))
+        !self
+            .excluded_tools
+            .iter()
+            .any(|t| t.eq_ignore_ascii_case(tool))
     }
 }
 
@@ -486,9 +492,27 @@ mod tests {
     async fn test_cache_invalidate_tool() {
         let cache = ToolCache::with_defaults();
 
-        cache.set(ToolCacheKey::new("Read", &json!({"path": "a"})), "a".to_string(), true).await;
-        cache.set(ToolCacheKey::new("Read", &json!({"path": "b"})), "b".to_string(), true).await;
-        cache.set(ToolCacheKey::new("Glob", &json!({"pattern": "*"})), "glob".to_string(), true).await;
+        cache
+            .set(
+                ToolCacheKey::new("Read", &json!({"path": "a"})),
+                "a".to_string(),
+                true,
+            )
+            .await;
+        cache
+            .set(
+                ToolCacheKey::new("Read", &json!({"path": "b"})),
+                "b".to_string(),
+                true,
+            )
+            .await;
+        cache
+            .set(
+                ToolCacheKey::new("Glob", &json!({"pattern": "*"})),
+                "glob".to_string(),
+                true,
+            )
+            .await;
 
         assert_eq!(cache.len().await, 3);
 
@@ -536,8 +560,20 @@ mod tests {
         let config = ToolCacheConfig::default().with_default_ttl(Duration::from_millis(50));
         let cache = ToolCache::new(config);
 
-        cache.set(ToolCacheKey::new("Test", &json!({"a": 1})), "1".to_string(), true).await;
-        cache.set(ToolCacheKey::new("Test", &json!({"a": 2})), "2".to_string(), true).await;
+        cache
+            .set(
+                ToolCacheKey::new("Test", &json!({"a": 1})),
+                "1".to_string(),
+                true,
+            )
+            .await;
+        cache
+            .set(
+                ToolCacheKey::new("Test", &json!({"a": 2})),
+                "2".to_string(),
+                true,
+            )
+            .await;
 
         assert_eq!(cache.len().await, 2);
 
@@ -556,9 +592,27 @@ mod tests {
         };
         let cache = ToolCache::new(config);
 
-        cache.set(ToolCacheKey::new("Read", &json!({"a": 1})), "1".to_string(), true).await;
-        cache.set(ToolCacheKey::new("Read", &json!({"a": 2})), "2".to_string(), true).await;
-        cache.set(ToolCacheKey::new("Read", &json!({"a": 3})), "3".to_string(), true).await;
+        cache
+            .set(
+                ToolCacheKey::new("Read", &json!({"a": 1})),
+                "1".to_string(),
+                true,
+            )
+            .await;
+        cache
+            .set(
+                ToolCacheKey::new("Read", &json!({"a": 2})),
+                "2".to_string(),
+                true,
+            )
+            .await;
+        cache
+            .set(
+                ToolCacheKey::new("Read", &json!({"a": 3})),
+                "3".to_string(),
+                true,
+            )
+            .await;
 
         // Should only keep max_entries
         assert_eq!(cache.len().await, 2);
@@ -573,11 +627,23 @@ mod tests {
         let cache = ToolCache::new(config);
 
         // Small result should be cached
-        cache.set(ToolCacheKey::new("Read", &json!({"a": 1})), "small".to_string(), true).await;
+        cache
+            .set(
+                ToolCacheKey::new("Read", &json!({"a": 1})),
+                "small".to_string(),
+                true,
+            )
+            .await;
         assert_eq!(cache.len().await, 1);
 
         // Large result should not be cached
-        cache.set(ToolCacheKey::new("Read", &json!({"a": 2})), "this is a very large result".to_string(), true).await;
+        cache
+            .set(
+                ToolCacheKey::new("Read", &json!({"a": 2})),
+                "this is a very large result".to_string(),
+                true,
+            )
+            .await;
         assert_eq!(cache.len().await, 1);
     }
 

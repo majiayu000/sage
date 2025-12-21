@@ -125,13 +125,16 @@ impl SkillRegistry {
 
         // Testing skill
         self.register(
-            Skill::new("comprehensive-testing", "Test-driven development and testing best practices")
-                .with_prompt(include_str!("builtin_prompts/testing.txt"))
-                .with_trigger(SkillTrigger::TaskType(TaskType::Testing))
-                .with_trigger(SkillTrigger::Keyword("test".to_string()))
-                .with_trigger(SkillTrigger::Keyword("spec".to_string()))
-                .with_priority(8)
-                .with_source(SkillSource::Builtin),
+            Skill::new(
+                "comprehensive-testing",
+                "Test-driven development and testing best practices",
+            )
+            .with_prompt(include_str!("builtin_prompts/testing.txt"))
+            .with_trigger(SkillTrigger::TaskType(TaskType::Testing))
+            .with_trigger(SkillTrigger::Keyword("test".to_string()))
+            .with_trigger(SkillTrigger::Keyword("spec".to_string()))
+            .with_priority(8)
+            .with_source(SkillSource::Builtin),
         );
 
         // Debugging skill
@@ -171,14 +174,17 @@ impl SkillRegistry {
 
         // Security skill
         self.register(
-            Skill::new("security-analysis", "Security analysis and vulnerability detection")
-                .with_prompt(include_str!("builtin_prompts/security.txt"))
-                .with_trigger(SkillTrigger::TaskType(TaskType::Security))
-                .with_trigger(SkillTrigger::Keyword("security".to_string()))
-                .with_trigger(SkillTrigger::Keyword("vulnerability".to_string()))
-                .with_trigger(SkillTrigger::Keyword("cve".to_string()))
-                .with_priority(9)
-                .with_source(SkillSource::Builtin),
+            Skill::new(
+                "security-analysis",
+                "Security analysis and vulnerability detection",
+            )
+            .with_prompt(include_str!("builtin_prompts/security.txt"))
+            .with_trigger(SkillTrigger::TaskType(TaskType::Security))
+            .with_trigger(SkillTrigger::Keyword("security".to_string()))
+            .with_trigger(SkillTrigger::Keyword("vulnerability".to_string()))
+            .with_trigger(SkillTrigger::Keyword("cve".to_string()))
+            .with_priority(9)
+            .with_source(SkillSource::Builtin),
         );
 
         // Git/Commit skill
@@ -214,13 +220,15 @@ impl SkillRegistry {
         }
 
         let mut count = 0;
-        let mut entries = fs::read_dir(dir).await.map_err(|e| {
-            SageError::Storage(format!("Failed to read skills directory: {}", e))
-        })?;
+        let mut entries = fs::read_dir(dir)
+            .await
+            .map_err(|e| SageError::Storage(format!("Failed to read skills directory: {}", e)))?;
 
-        while let Some(entry) = entries.next_entry().await.map_err(|e| {
-            SageError::Storage(format!("Failed to read directory entry: {}", e))
-        })? {
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .map_err(|e| SageError::Storage(format!("Failed to read directory entry: {}", e)))?
+        {
             let path = entry.path();
 
             // Process .md files
@@ -244,21 +252,25 @@ impl SkillRegistry {
     }
 
     /// Load a skill from a markdown file
-    async fn load_skill_from_file(&self, path: &Path, is_project: bool) -> SageResult<Option<Skill>> {
+    async fn load_skill_from_file(
+        &self,
+        path: &Path,
+        is_project: bool,
+    ) -> SageResult<Option<Skill>> {
         let name = path
             .file_stem()
             .and_then(|s| s.to_str())
             .ok_or_else(|| SageError::InvalidInput("Invalid skill file name".to_string()))?
             .to_string();
 
-        let mut file = fs::File::open(path).await.map_err(|e| {
-            SageError::Storage(format!("Failed to open skill file: {}", e))
-        })?;
+        let mut file = fs::File::open(path)
+            .await
+            .map_err(|e| SageError::Storage(format!("Failed to open skill file: {}", e)))?;
 
         let mut content = String::new();
-        file.read_to_string(&mut content).await.map_err(|e| {
-            SageError::Storage(format!("Failed to read skill file: {}", e))
-        })?;
+        file.read_to_string(&mut content)
+            .await
+            .map_err(|e| SageError::Storage(format!("Failed to read skill file: {}", e)))?;
 
         let (metadata, prompt) = self.parse_skill_file(&content);
 
@@ -268,9 +280,12 @@ impl SkillRegistry {
             SkillSource::User(path.to_path_buf())
         };
 
-        let mut skill = Skill::new(name, metadata.get("description").cloned().unwrap_or_default())
-            .with_prompt(prompt)
-            .with_source(source);
+        let mut skill = Skill::new(
+            name,
+            metadata.get("description").cloned().unwrap_or_default(),
+        )
+        .with_prompt(prompt)
+        .with_source(source);
 
         // Parse triggers from metadata
         if let Some(triggers) = metadata.get("triggers") {
@@ -504,7 +519,8 @@ mod tests {
     fn test_parse_skill_file() {
         let registry = SkillRegistry::new("/project");
 
-        let content = "---\ndescription: Test\ntriggers: keyword:test\npriority: 5\n---\nPrompt here";
+        let content =
+            "---\ndescription: Test\ntriggers: keyword:test\npriority: 5\n---\nPrompt here";
         let (metadata, prompt) = registry.parse_skill_file(content);
 
         assert_eq!(metadata.get("description"), Some(&"Test".to_string()));

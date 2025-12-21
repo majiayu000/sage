@@ -4,11 +4,11 @@
 //! connection failures and falls back to SQLite when PostgreSQL is unavailable.
 
 use super::backend::{
-    BackendType, DatabaseBackend, DatabaseError, DatabaseValue, PostgresBackend,
-    QueryResult, SqliteBackend,
+    BackendType, DatabaseBackend, DatabaseError, DatabaseValue, PostgresBackend, QueryResult,
+    SqliteBackend,
 };
 use super::config::{FallbackStrategy, StorageConfig};
-use super::schema::{default_migrations, MigrationRunner};
+use super::schema::{MigrationRunner, default_migrations};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -116,9 +116,7 @@ impl StorageManager {
     /// Establish database connection with fallback logic
     async fn establish_connection(&self) -> Result<(), DatabaseError> {
         match self.config.fallback_strategy {
-            FallbackStrategy::SqliteOnly => {
-                self.connect_sqlite().await
-            }
+            FallbackStrategy::SqliteOnly => self.connect_sqlite().await,
             FallbackStrategy::FailFast => {
                 if self.config.should_try_postgres() {
                     self.connect_postgres().await
@@ -165,9 +163,10 @@ impl StorageManager {
 
     /// Connect to PostgreSQL
     async fn connect_postgres(&self) -> Result<(), DatabaseError> {
-        let pg_config = self.config.postgres.as_ref().ok_or_else(|| {
-            DatabaseError::Connection("PostgreSQL not configured".to_string())
-        })?;
+        let pg_config =
+            self.config.postgres.as_ref().ok_or_else(|| {
+                DatabaseError::Connection("PostgreSQL not configured".to_string())
+            })?;
 
         tracing::info!("Attempting PostgreSQL connection...");
 
@@ -190,7 +189,11 @@ impl StorageManager {
         let mut last_error = None;
 
         for attempt in 1..=self.config.retry.max_retries {
-            tracing::info!("PostgreSQL connection attempt {}/{}", attempt, self.config.retry.max_retries);
+            tracing::info!(
+                "PostgreSQL connection attempt {}/{}",
+                attempt,
+                self.config.retry.max_retries
+            );
 
             match self.connect_postgres().await {
                 Ok(()) => return Ok(()),
@@ -211,9 +214,8 @@ impl StorageManager {
             }
         }
 
-        Err(last_error.unwrap_or_else(|| {
-            DatabaseError::Connection("Max retries exceeded".to_string())
-        }))
+        Err(last_error
+            .unwrap_or_else(|| DatabaseError::Connection("Max retries exceeded".to_string())))
     }
 
     /// Connect to SQLite
@@ -237,9 +239,9 @@ impl StorageManager {
     /// Run database migrations
     pub async fn run_migrations(&self) -> Result<usize, DatabaseError> {
         let backend = self.backend.read().await;
-        let backend = backend.as_ref().ok_or_else(|| {
-            DatabaseError::Connection("Not connected".to_string())
-        })?;
+        let backend = backend
+            .as_ref()
+            .ok_or_else(|| DatabaseError::Connection("Not connected".to_string()))?;
 
         self.migration_runner.migrate(backend.as_ref()).await
     }
@@ -251,9 +253,9 @@ impl StorageManager {
         params: &[DatabaseValue],
     ) -> Result<QueryResult, DatabaseError> {
         let backend = self.backend.read().await;
-        let backend = backend.as_ref().ok_or_else(|| {
-            DatabaseError::Connection("Not connected".to_string())
-        })?;
+        let backend = backend
+            .as_ref()
+            .ok_or_else(|| DatabaseError::Connection("Not connected".to_string()))?;
 
         let result = backend.query(sql, params).await;
 
@@ -277,9 +279,9 @@ impl StorageManager {
         params: &[DatabaseValue],
     ) -> Result<QueryResult, DatabaseError> {
         let backend = self.backend.read().await;
-        let backend = backend.as_ref().ok_or_else(|| {
-            DatabaseError::Connection("Not connected".to_string())
-        })?;
+        let backend = backend
+            .as_ref()
+            .ok_or_else(|| DatabaseError::Connection("Not connected".to_string()))?;
 
         let result = backend.execute(sql, params).await;
 
@@ -302,9 +304,9 @@ impl StorageManager {
         statements: Vec<(&str, Vec<DatabaseValue>)>,
     ) -> Result<(), DatabaseError> {
         let backend = self.backend.read().await;
-        let backend = backend.as_ref().ok_or_else(|| {
-            DatabaseError::Connection("Not connected".to_string())
-        })?;
+        let backend = backend
+            .as_ref()
+            .ok_or_else(|| DatabaseError::Connection("Not connected".to_string()))?;
 
         backend.transaction(statements).await
     }
@@ -318,7 +320,9 @@ impl StorageManager {
             )
             .await?;
 
-        Ok(result.first().and_then(|row| row.get_str("value").map(|s| s.to_string())))
+        Ok(result
+            .first()
+            .and_then(|row| row.get_str("value").map(|s| s.to_string())))
     }
 
     /// Set a value in key-value store
@@ -327,9 +331,9 @@ impl StorageManager {
 
         // Try INSERT OR REPLACE for SQLite, or upsert for PostgreSQL
         let backend = self.backend.read().await;
-        let backend = backend.as_ref().ok_or_else(|| {
-            DatabaseError::Connection("Not connected".to_string())
-        })?;
+        let backend = backend
+            .as_ref()
+            .ok_or_else(|| DatabaseError::Connection("Not connected".to_string()))?;
 
         let sql = match backend.backend_type() {
             BackendType::PostgreSQL => {
@@ -405,9 +409,9 @@ impl StorageManager {
     /// Ping the database
     pub async fn ping(&self) -> Result<(), DatabaseError> {
         let backend = self.backend.read().await;
-        let backend = backend.as_ref().ok_or_else(|| {
-            DatabaseError::Connection("Not connected".to_string())
-        })?;
+        let backend = backend
+            .as_ref()
+            .ok_or_else(|| DatabaseError::Connection("Not connected".to_string()))?;
         backend.ping().await
     }
 
@@ -430,9 +434,9 @@ impl StorageManager {
     /// Get database version
     pub async fn version(&self) -> Result<String, DatabaseError> {
         let backend = self.backend.read().await;
-        let backend = backend.as_ref().ok_or_else(|| {
-            DatabaseError::Connection("Not connected".to_string())
-        })?;
+        let backend = backend
+            .as_ref()
+            .ok_or_else(|| DatabaseError::Connection("Not connected".to_string()))?;
         backend.version().await
     }
 
@@ -632,15 +636,17 @@ mod tests {
 
     #[tokio::test]
     async fn test_connection_status_display() {
-        assert_eq!(ConnectionStatus::Primary.to_string(), "Primary (PostgreSQL)");
+        assert_eq!(
+            ConnectionStatus::Primary.to_string(),
+            "Primary (PostgreSQL)"
+        );
         assert_eq!(ConnectionStatus::Fallback.to_string(), "Fallback (SQLite)");
     }
 
     #[tokio::test]
     async fn test_fail_fast_strategy() {
         // With FailFast and no PostgreSQL configured, should connect to SQLite
-        let config = StorageConfig::default()
-            .with_fallback_strategy(FallbackStrategy::FailFast);
+        let config = StorageConfig::default().with_fallback_strategy(FallbackStrategy::FailFast);
 
         let manager = StorageManager::connect(config).await.unwrap();
         assert!(manager.is_connected().await);

@@ -117,7 +117,11 @@ impl MigrationRunner {
         &self,
         backend: &dyn DatabaseBackend,
     ) -> Result<Vec<&Migration>, DatabaseError> {
-        let current = self.current_version(backend).await?.map(|v| v.0).unwrap_or(0);
+        let current = self
+            .current_version(backend)
+            .await?
+            .map(|v| v.0)
+            .unwrap_or(0);
 
         Ok(self
             .migrations
@@ -352,8 +356,16 @@ mod tests {
         let backend = SqliteBackend::in_memory().await.unwrap();
 
         let runner = MigrationRunner::new().with_migrations(vec![
-            Migration::new(1, "create_users", "CREATE TABLE users (id INTEGER, name TEXT)"),
-            Migration::new(2, "create_posts", "CREATE TABLE posts (id INTEGER, title TEXT)"),
+            Migration::new(
+                1,
+                "create_users",
+                "CREATE TABLE users (id INTEGER, name TEXT)",
+            ),
+            Migration::new(
+                2,
+                "create_posts",
+                "CREATE TABLE posts (id INTEGER, title TEXT)",
+            ),
         ]);
 
         let count = runner.migrate(&backend).await.unwrap();
@@ -368,9 +380,11 @@ mod tests {
     async fn test_migration_history() {
         let backend = SqliteBackend::in_memory().await.unwrap();
 
-        let runner = MigrationRunner::new().with_migrations(vec![
-            Migration::new(1, "test_one", "CREATE TABLE test1 (id INTEGER)"),
-        ]);
+        let runner = MigrationRunner::new().with_migrations(vec![Migration::new(
+            1,
+            "test_one",
+            "CREATE TABLE test1 (id INTEGER)",
+        )]);
 
         runner.migrate(&backend).await.unwrap();
 

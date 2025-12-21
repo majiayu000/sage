@@ -61,8 +61,7 @@ impl ReadTool {
         if path.is_dir() {
             return Err(ToolError::ExecutionFailed(format!(
                 "Path is a directory, not a file: {}. To list directory contents, use the Bash tool with 'ls -la {}' command.",
-                file_path,
-                file_path
+                file_path, file_path
             )));
         }
 

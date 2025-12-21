@@ -2,8 +2,8 @@
 //!
 //! This module provides a global registry for tracking and managing background shell tasks.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use dashmap::DashMap;
@@ -412,7 +412,10 @@ mod tests {
 
         let status = registry.get_status("test_status_1").await;
         assert!(status.is_some());
-        assert!(matches!(status.unwrap(), BackgroundTaskStatus::Completed { exit_code: 0 }));
+        assert!(matches!(
+            status.unwrap(),
+            BackgroundTaskStatus::Completed { exit_code: 0 }
+        ));
 
         // Nonexistent task
         let status = registry.get_status("nonexistent").await;

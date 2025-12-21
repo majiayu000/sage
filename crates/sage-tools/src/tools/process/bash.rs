@@ -4,7 +4,7 @@ use crate::utils::{check_command_efficiency, maybe_truncate, suggest_efficient_a
 use async_trait::async_trait;
 use sage_core::tools::base::{CommandTool, Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
-use sage_core::tools::{BackgroundShellTask, BACKGROUND_REGISTRY};
+use sage_core::tools::{BACKGROUND_REGISTRY, BackgroundShellTask};
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
@@ -68,7 +68,9 @@ impl BashTool {
             cancel_token,
         )
         .await
-        .map_err(|e| ToolError::ExecutionFailed(format!("Failed to spawn background task: {}", e)))?;
+        .map_err(|e| {
+            ToolError::ExecutionFailed(format!("Failed to spawn background task: {}", e))
+        })?;
 
         let pid = task.pid;
 
@@ -85,7 +87,12 @@ impl BashTool {
                 Working directory: {}\n\n\
                 Use task_output(shell_id=\"{}\") to retrieve output.\n\
                 Use kill_shell(shell_id=\"{}\") to terminate.",
-                shell_id, pid, command, self.working_directory.display(), shell_id, shell_id
+                shell_id,
+                pid,
+                command,
+                self.working_directory.display(),
+                shell_id,
+                shell_id
             )),
             error: None,
             exit_code: None,

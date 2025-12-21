@@ -182,9 +182,9 @@ impl JsonlSessionStorage {
     async fn ensure_session_dir(&self, id: &SessionId) -> SageResult<()> {
         let dir = self.session_dir(id);
         if !dir.exists() {
-            fs::create_dir_all(&dir).await.map_err(|e| {
-                SageError::Io(format!("Failed to create session directory: {}", e))
-            })?;
+            fs::create_dir_all(&dir)
+                .await
+                .map_err(|e| SageError::Io(format!("Failed to create session directory: {}", e)))?;
         }
         Ok(())
     }
@@ -306,7 +306,10 @@ impl JsonlSessionStorage {
             .await
             .map_err(|e| SageError::Io(format!("Failed to write newline: {}", e)))?;
 
-        debug!("Appended snapshot for message {} to session {}", snapshot.message_id, id);
+        debug!(
+            "Appended snapshot for message {} to session {}",
+            snapshot.message_id, id
+        );
         Ok(())
     }
 
@@ -338,7 +341,11 @@ impl JsonlSessionStorage {
             match serde_json::from_str::<EnhancedMessage>(&line) {
                 Ok(msg) => messages.push(msg),
                 Err(e) => {
-                    warn!("Failed to parse message: {} - line: {}", e, &line[..50.min(line.len())]);
+                    warn!(
+                        "Failed to parse message: {} - line: {}",
+                        e,
+                        &line[..50.min(line.len())]
+                    );
                 }
             }
         }
@@ -375,7 +382,11 @@ impl JsonlSessionStorage {
             match serde_json::from_str::<FileHistorySnapshot>(&line) {
                 Ok(snapshot) => snapshots.push(snapshot),
                 Err(e) => {
-                    warn!("Failed to parse snapshot: {} - line: {}", e, &line[..50.min(line.len())]);
+                    warn!(
+                        "Failed to parse snapshot: {} - line: {}",
+                        e,
+                        &line[..50.min(line.len())]
+                    );
                 }
             }
         }
@@ -389,9 +400,9 @@ impl JsonlSessionStorage {
         let dir = self.session_dir(id);
 
         if dir.exists() {
-            fs::remove_dir_all(&dir).await.map_err(|e| {
-                SageError::Io(format!("Failed to delete session directory: {}", e))
-            })?;
+            fs::remove_dir_all(&dir)
+                .await
+                .map_err(|e| SageError::Io(format!("Failed to delete session directory: {}", e)))?;
             info!("Deleted session {}", id);
         } else {
             warn!("Session {} not found", id);
@@ -407,13 +418,15 @@ impl JsonlSessionStorage {
         }
 
         let mut sessions = Vec::new();
-        let mut entries = fs::read_dir(&self.base_path).await.map_err(|e| {
-            SageError::Io(format!("Failed to read sessions directory: {}", e))
-        })?;
+        let mut entries = fs::read_dir(&self.base_path)
+            .await
+            .map_err(|e| SageError::Io(format!("Failed to read sessions directory: {}", e)))?;
 
-        while let Some(entry) = entries.next_entry().await.map_err(|e| {
-            SageError::Io(format!("Failed to read directory entry: {}", e))
-        })? {
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .map_err(|e| SageError::Io(format!("Failed to read directory entry: {}", e)))?
+        {
             let path = entry.path();
             if path.is_dir() {
                 if let Some(name) = path.file_name() {
@@ -561,13 +574,17 @@ impl MessageChainTracker {
 
     /// Create a user message
     pub fn create_user_message(&mut self, content: impl Into<String>) -> EnhancedMessage {
-        let session_id = self.session_id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-        let context = self.context.clone().unwrap_or_else(|| {
-            SessionContext::new(std::env::current_dir().unwrap_or_default())
-        });
+        let session_id = self
+            .session_id
+            .clone()
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let context = self
+            .context
+            .clone()
+            .unwrap_or_else(|| SessionContext::new(std::env::current_dir().unwrap_or_default()));
 
-        let mut msg = EnhancedMessage::user(content, &session_id, context)
-            .with_todos(self.todos.clone());
+        let mut msg =
+            EnhancedMessage::user(content, &session_id, context).with_todos(self.todos.clone());
 
         if let Some(parent) = &self.last_uuid {
             msg = msg.with_parent(parent);
@@ -583,13 +600,18 @@ impl MessageChainTracker {
 
     /// Create an assistant message
     pub fn create_assistant_message(&mut self, content: impl Into<String>) -> EnhancedMessage {
-        let session_id = self.session_id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-        let context = self.context.clone().unwrap_or_else(|| {
-            SessionContext::new(std::env::current_dir().unwrap_or_default())
-        });
+        let session_id = self
+            .session_id
+            .clone()
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let context = self
+            .context
+            .clone()
+            .unwrap_or_else(|| SessionContext::new(std::env::current_dir().unwrap_or_default()));
 
-        let mut msg = EnhancedMessage::assistant(content, &session_id, context, self.last_uuid.clone())
-            .with_todos(self.todos.clone());
+        let mut msg =
+            EnhancedMessage::assistant(content, &session_id, context, self.last_uuid.clone())
+                .with_todos(self.todos.clone());
 
         if let Some(thinking) = &self.thinking {
             msg = msg.with_thinking(thinking.clone());
@@ -656,15 +678,22 @@ mod tests {
 
         let context = SessionContext::new(PathBuf::from("/tmp"));
         let msg1 = EnhancedMessage::user("First", &session_id, context.clone());
-        let msg2 = EnhancedMessage::assistant("Second", &session_id, context.clone(), Some(msg1.uuid.clone()));
-        let msg3 = EnhancedMessage::user("Third", &session_id, context)
-            .with_parent(&msg2.uuid);
+        let msg2 = EnhancedMessage::assistant(
+            "Second",
+            &session_id,
+            context.clone(),
+            Some(msg1.uuid.clone()),
+        );
+        let msg3 = EnhancedMessage::user("Third", &session_id, context).with_parent(&msg2.uuid);
 
         storage.append_message(&session_id, &msg1).await.unwrap();
         storage.append_message(&session_id, &msg2).await.unwrap();
         storage.append_message(&session_id, &msg3).await.unwrap();
 
-        let chain = storage.get_message_chain(&session_id, &msg3.uuid).await.unwrap();
+        let chain = storage
+            .get_message_chain(&session_id, &msg3.uuid)
+            .await
+            .unwrap();
         assert_eq!(chain.len(), 3);
         assert_eq!(chain[0].uuid, msg1.uuid);
         assert_eq!(chain[1].uuid, msg2.uuid);

@@ -98,8 +98,7 @@ impl SlashCommand {
 
     /// Check if this command requires arguments
     pub fn requires_arguments(&self) -> bool {
-        self.prompt_template.contains("$ARGUMENTS")
-            || self.prompt_template.contains("$ARG1")
+        self.prompt_template.contains("$ARGUMENTS") || self.prompt_template.contains("$ARG1")
     }
 
     /// Get minimum required argument count
@@ -201,9 +200,8 @@ impl CommandInvocation {
         }
 
         let arguments = if parts.len() > 1 {
-            shell_words::split(parts[1]).unwrap_or_else(|_| {
-                parts[1].split_whitespace().map(String::from).collect()
-            })
+            shell_words::split(parts[1])
+                .unwrap_or_else(|_| parts[1].split_whitespace().map(String::from).collect())
         } else {
             Vec::new()
         };
@@ -228,7 +226,10 @@ impl CommandInvocation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InteractiveCommand {
     /// Resume a session (optionally with a specific session ID)
-    Resume { session_id: Option<String>, show_all: bool },
+    Resume {
+        session_id: Option<String>,
+        show_all: bool,
+    },
 }
 
 /// Command execution result
@@ -347,8 +348,7 @@ mod tests {
 
     #[test]
     fn test_command_creation() {
-        let cmd = SlashCommand::new("test", "Run tests")
-            .with_description("Run all tests");
+        let cmd = SlashCommand::new("test", "Run tests").with_description("Run all tests");
 
         assert_eq!(cmd.name, "test");
         assert_eq!(cmd.description, Some("Run all tests".to_string()));
@@ -446,15 +446,13 @@ mod tests {
 
     #[test]
     fn test_command_argument() {
-        let arg = CommandArgument::required("file")
-            .with_description("The file to process");
+        let arg = CommandArgument::required("file").with_description("The file to process");
 
         assert_eq!(arg.name, "file");
         assert!(arg.required);
         assert!(arg.default.is_none());
 
-        let opt = CommandArgument::optional("format")
-            .with_default("json");
+        let opt = CommandArgument::optional("format").with_default("json");
 
         assert!(!opt.required);
         assert_eq!(opt.default, Some("json".to_string()));

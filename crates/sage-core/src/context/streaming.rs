@@ -2,8 +2,8 @@
 //!
 //! This module provides real-time token counting during streaming LLM responses.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 
@@ -500,7 +500,9 @@ mod tests {
         for i in 0..3 {
             let counter = StreamingTokenCounter::new();
             counter.start().await;
-            counter.process_chunk(&format!("Session {} content", i)).await;
+            counter
+                .process_chunk(&format!("Session {} content", i))
+                .await;
             metrics.record(&counter).await;
         }
 

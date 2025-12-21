@@ -188,7 +188,11 @@ impl PatternDetector {
 
     /// Get most used tools
     pub fn most_used_tools(&self, limit: usize) -> Vec<(String, u32)> {
-        let mut tools: Vec<_> = self.tool_usage.iter().map(|(k, v)| (k.clone(), *v)).collect();
+        let mut tools: Vec<_> = self
+            .tool_usage
+            .iter()
+            .map(|(k, v)| (k.clone(), *v))
+            .collect();
         tools.sort_by(|a, b| b.1.cmp(&a.1));
         tools.truncate(limit);
         tools
@@ -229,7 +233,10 @@ pub struct CorrectionStats {
 
 /// Detect indentation style from code
 fn detect_indentation_style(code: &str) -> Option<String> {
-    let lines: Vec<&str> = code.lines().filter(|l| l.starts_with(' ') || l.starts_with('\t')).collect();
+    let lines: Vec<&str> = code
+        .lines()
+        .filter(|l| l.starts_with(' ') || l.starts_with('\t'))
+        .collect();
 
     if lines.is_empty() {
         return None;
@@ -380,7 +387,9 @@ pub fn analyze_user_message(message: &str) -> Vec<PreferenceIndicator> {
     }
 
     // Explicit preference statements
-    if lower.contains("remember") && (lower.contains("prefer") || lower.contains("always") || lower.contains("never")) {
+    if lower.contains("remember")
+        && (lower.contains("prefer") || lower.contains("always") || lower.contains("never"))
+    {
         indicators.push(PreferenceIndicator {
             phrase: "explicit preference".to_string(),
             pattern_type: PatternType::Custom,
@@ -458,28 +467,47 @@ mod tests {
     #[test]
     fn test_detect_indentation_style() {
         let tabs_code = "\tfn main() {\n\t\tprintln!(\"hello\");\n\t}";
-        assert_eq!(detect_indentation_style(tabs_code), Some("tabs".to_string()));
+        assert_eq!(
+            detect_indentation_style(tabs_code),
+            Some("tabs".to_string())
+        );
 
         let spaces_code = "    fn main() {\n        println!(\"hello\");\n    }";
-        assert!(detect_indentation_style(spaces_code).unwrap().contains("spaces"));
+        assert!(
+            detect_indentation_style(spaces_code)
+                .unwrap()
+                .contains("spaces")
+        );
     }
 
     #[test]
     fn test_detect_quote_style() {
         let single = "let a = 'hello'; let b = 'world'; let c = 'test'";
-        assert_eq!(detect_quote_style(single), Some("single quotes".to_string()));
+        assert_eq!(
+            detect_quote_style(single),
+            Some("single quotes".to_string())
+        );
 
         let double = r#"let a = "hello"; let b = "world"; let c = "test""#;
-        assert_eq!(detect_quote_style(double), Some("double quotes".to_string()));
+        assert_eq!(
+            detect_quote_style(double),
+            Some("double quotes".to_string())
+        );
     }
 
     #[test]
     fn test_detect_naming_convention() {
         let snake_code = "let my_var = 1; let another_var = 2; let third_var = 3; let more_vars = 4; let yet_another = 5;";
-        assert_eq!(detect_naming_convention(snake_code), Some("snake_case".to_string()));
+        assert_eq!(
+            detect_naming_convention(snake_code),
+            Some("snake_case".to_string())
+        );
 
         let camel_code = "let myVar = 1; let anotherVar = 2; let thirdVar = 3; let moreVars = 4; let yetAnother = 5;";
-        assert_eq!(detect_naming_convention(camel_code), Some("camelCase".to_string()));
+        assert_eq!(
+            detect_naming_convention(camel_code),
+            Some("camelCase".to_string())
+        );
     }
 
     #[test]
@@ -508,9 +536,13 @@ mod tests {
         let patterns = detector.extract_patterns(1);
         // Should detect 4-space indentation (check aspect field instead)
         assert!(
-            patterns.iter().any(|p| p.description.contains("indentation") || p.description.contains("indent"))
-            || patterns.iter().any(|p| p.rule.contains("spaces") || p.rule.contains("4"))
-            || !detector.style_patterns.is_empty() // At least detected something
+            patterns
+                .iter()
+                .any(|p| p.description.contains("indentation") || p.description.contains("indent"))
+                || patterns
+                    .iter()
+                    .any(|p| p.rule.contains("spaces") || p.rule.contains("4"))
+                || !detector.style_patterns.is_empty() // At least detected something
         );
     }
 }

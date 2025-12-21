@@ -183,29 +183,27 @@ impl TrajectoryRecorder {
 
         if let Some(record) = current.as_mut() {
             // Convert LLM response if present
-            let llm_response = step.llm_response.as_ref().map(|resp| {
-                LLMResponseRecord {
-                    content: resp.content.clone(),
-                    model: resp.model.clone(),
-                    finish_reason: resp.finish_reason.clone(),
-                    usage: resp.usage.as_ref().map(|u| TokenUsageRecord {
-                        input_tokens: u.prompt_tokens,
-                        output_tokens: u.completion_tokens,
-                        cache_creation_input_tokens: u.cache_creation_input_tokens,
-                        cache_read_input_tokens: u.cache_read_input_tokens,
-                        reasoning_tokens: None,
-                    }),
-                    tool_calls: if resp.tool_calls.is_empty() {
-                        None
-                    } else {
-                        Some(
-                            resp.tool_calls
-                                .iter()
-                                .map(|call| serde_json::to_value(call).unwrap_or_default())
-                                .collect(),
-                        )
-                    },
-                }
+            let llm_response = step.llm_response.as_ref().map(|resp| LLMResponseRecord {
+                content: resp.content.clone(),
+                model: resp.model.clone(),
+                finish_reason: resp.finish_reason.clone(),
+                usage: resp.usage.as_ref().map(|u| TokenUsageRecord {
+                    input_tokens: u.prompt_tokens,
+                    output_tokens: u.completion_tokens,
+                    cache_creation_input_tokens: u.cache_creation_input_tokens,
+                    cache_read_input_tokens: u.cache_read_input_tokens,
+                    reasoning_tokens: None,
+                }),
+                tool_calls: if resp.tool_calls.is_empty() {
+                    None
+                } else {
+                    Some(
+                        resp.tool_calls
+                            .iter()
+                            .map(|call| serde_json::to_value(call).unwrap_or_default())
+                            .collect(),
+                    )
+                },
             });
 
             // Convert AgentStep to AgentStepRecord

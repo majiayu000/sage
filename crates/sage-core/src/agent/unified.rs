@@ -14,22 +14,25 @@
 //!     → Task completes → Return ExecutionOutcome
 //! ```
 
+use crate::agent::subagent::init_global_runner_from_config;
 use crate::agent::{
     AgentExecution, AgentState, AgentStep, ExecutionError, ExecutionMode, ExecutionOptions,
     ExecutionOutcome,
 };
-use crate::agent::subagent::init_global_runner_from_config;
 use crate::config::model::Config;
 use crate::config::provider::ProviderConfig;
 use crate::error::{SageError, SageResult};
-use crate::input::{AutoResponse, InputChannel, InputRequest, InputRequestKind, InputResponse, Question, QuestionOption};
+use crate::input::{
+    AutoResponse, InputChannel, InputRequest, InputRequestKind, InputResponse, Question,
+    QuestionOption,
+};
 use crate::interrupt::{global_interrupt_manager, reset_global_interrupt_manager};
 use crate::llm::client::LLMClient;
 use crate::llm::messages::LLMMessage;
 use crate::llm::providers::LLMProvider;
 use crate::prompts::SystemPromptBuilder;
 use crate::session::{
-    EnhancedMessage, EnhancedToolCall, EnhancedTokenUsage, FileSnapshotTracker,
+    EnhancedMessage, EnhancedTokenUsage, EnhancedToolCall, FileSnapshotTracker,
     JsonlSessionStorage, MessageChainTracker, SessionContext, TodoItem,
 };
 use crate::tools::executor::ToolExecutor;
@@ -128,23 +131,33 @@ impl UnifiedExecutor {
                     crate::agent::AutoResponse::FirstOption => AutoResponse::AlwaysAllow,
                     crate::agent::AutoResponse::LastOption => AutoResponse::AlwaysAllow,
                     crate::agent::AutoResponse::Cancel => AutoResponse::AlwaysDeny,
-                    crate::agent::AutoResponse::ContextBased { default_text, prefer_first_option } => {
+                    crate::agent::AutoResponse::ContextBased {
+                        default_text,
+                        prefer_first_option,
+                    } => {
                         let text = default_text.clone();
                         let prefer_first = *prefer_first_option;
                         AutoResponse::Custom(std::sync::Arc::new(move |req: &InputRequest| {
                             match &req.kind {
                                 InputRequestKind::Questions { questions } if prefer_first => {
                                     // Select first option for each question
-                                    let answers: std::collections::HashMap<String, String> = questions
-                                        .iter()
-                                        .map(|q| {
-                                            let answer = q.options.first().map(|o| o.label.clone()).unwrap_or_default();
-                                            (q.question.clone(), answer)
-                                        })
-                                        .collect();
+                                    let answers: std::collections::HashMap<String, String> =
+                                        questions
+                                            .iter()
+                                            .map(|q| {
+                                                let answer = q
+                                                    .options
+                                                    .first()
+                                                    .map(|o| o.label.clone())
+                                                    .unwrap_or_default();
+                                                (q.question.clone(), answer)
+                                            })
+                                            .collect();
                                     InputResponse::question_answers(req.id, answers)
                                 }
-                                InputRequestKind::Simple { options: Some(_), .. } if prefer_first => {
+                                InputRequestKind::Simple {
+                                    options: Some(_), ..
+                                } if prefer_first => {
                                     InputResponse::selected(req.id, 0, "auto-selected")
                                 }
                                 _ => InputResponse::text(req.id, text.clone()),
@@ -161,9 +174,7 @@ impl UnifiedExecutor {
         let animation_manager = AnimationManager::new();
 
         // Create JSONL storage (optional, can be enabled later)
-        let jsonl_storage = JsonlSessionStorage::default_path()
-            .ok()
-            .map(Arc::new);
+        let jsonl_storage = JsonlSessionStorage::default_path().ok().map(Arc::new);
 
         // Get working directory for context
         let working_dir = options
@@ -215,7 +226,9 @@ impl UnifiedExecutor {
                 .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
 
             // Create session
-            let mut metadata = storage.create_session(&session_id, working_dir.clone()).await?;
+            let mut metadata = storage
+                .create_session(&session_id, working_dir.clone())
+                .await?;
 
             // Set model info
             if let Ok(params) = self.config.default_model_parameters() {
@@ -355,10 +368,7 @@ impl UnifiedExecutor {
             .filter_map(|name| self.tool_executor.get_tool(name).cloned())
             .collect();
 
-        tracing::info!(
-            "Initializing sub-agent support with {} tools",
-            tools.len()
-        );
+        tracing::info!("Initializing sub-agent support with {} tools", tools.len());
 
         init_global_runner_from_config(&self.config, tools)
     }
@@ -480,13 +490,16 @@ impl UnifiedExecutor {
                                 // Convert tool calls if any exist
                                 let tool_calls = if !llm_response.tool_calls.is_empty() {
                                     Some(
-                                        llm_response.tool_calls
+                                        llm_response
+                                            .tool_calls
                                             .iter()
                                             .map(|c| EnhancedToolCall {
                                                 id: c.id.clone(),
                                                 name: c.name.clone(),
                                                 arguments: serde_json::to_value(&c.arguments)
-                                                    .unwrap_or(serde_json::Value::Object(Default::default())),
+                                                    .unwrap_or(serde_json::Value::Object(
+                                                        Default::default(),
+                                                    )),
                                             })
                                             .collect(),
                                     )
@@ -495,12 +508,17 @@ impl UnifiedExecutor {
                                 };
 
                                 // Convert usage if available
-                                let usage = llm_response.usage.as_ref().map(|u| EnhancedTokenUsage {
-                                    input_tokens: u.prompt_tokens as u64,
-                                    output_tokens: u.completion_tokens as u64,
-                                    cache_read_tokens: u.cache_read_input_tokens.unwrap_or(0) as u64,
-                                    cache_write_tokens: u.cache_creation_input_tokens.unwrap_or(0) as u64,
-                                });
+                                let usage =
+                                    llm_response.usage.as_ref().map(|u| EnhancedTokenUsage {
+                                        input_tokens: u.prompt_tokens as u64,
+                                        output_tokens: u.completion_tokens as u64,
+                                        cache_read_tokens: u.cache_read_input_tokens.unwrap_or(0)
+                                            as u64,
+                                        cache_write_tokens: u
+                                            .cache_creation_input_tokens
+                                            .unwrap_or(0)
+                                            as u64,
+                                    });
 
                                 // Record assistant message and get the message UUID
                                 if let Ok(Some(msg)) = self
@@ -580,7 +598,10 @@ impl UnifiedExecutor {
             recorder
                 .lock()
                 .await
-                .finalize_recording(outcome.is_success(), outcome.execution().final_result.clone())
+                .finalize_recording(
+                    outcome.is_success(),
+                    outcome.execution().final_result.clone(),
+                )
                 .await?;
         }
 
@@ -609,7 +630,7 @@ impl UnifiedExecutor {
         let prompt = SystemPromptBuilder::new()
             .with_model_name(&model_name)
             .with_working_dir(&working_dir)
-            .with_tools(tool_schemas)  // Include tool descriptions in prompt
+            .with_tools(tool_schemas) // Include tool descriptions in prompt
             .build();
 
         Ok(prompt)
@@ -629,15 +650,14 @@ impl UnifiedExecutor {
         self.animation_manager.stop_animation().await;
 
         // Parse questions from the tool call arguments
-        let questions_value = tool_call.arguments.get("questions").ok_or_else(|| {
-            SageError::agent("ask_user_question missing 'questions' parameter")
-        })?;
+        let questions_value = tool_call
+            .arguments
+            .get("questions")
+            .ok_or_else(|| SageError::agent("ask_user_question missing 'questions' parameter"))?;
 
         // Build the input request from the questions
-        let raw_questions: Vec<serde_json::Value> =
-            serde_json::from_value(questions_value.clone()).map_err(|e| {
-                SageError::agent(format!("Invalid questions format: {}", e))
-            })?;
+        let raw_questions: Vec<serde_json::Value> = serde_json::from_value(questions_value.clone())
+            .map_err(|e| SageError::agent(format!("Invalid questions format: {}", e)))?;
 
         // Convert to Question structs
         let mut questions: Vec<Question> = Vec::new();
@@ -645,8 +665,14 @@ impl UnifiedExecutor {
 
         for q in raw_questions.iter() {
             let question_str = q.get("question").and_then(|v| v.as_str()).unwrap_or("");
-            let header = q.get("header").and_then(|v| v.as_str()).unwrap_or("Question");
-            let multi_select = q.get("multi_select").and_then(|v| v.as_bool()).unwrap_or(false);
+            let header = q
+                .get("header")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Question");
+            let multi_select = q
+                .get("multi_select")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
 
             question_text.push_str(&format!("[{}] {}\n", header, question_str));
 
@@ -654,8 +680,16 @@ impl UnifiedExecutor {
             if let Some(opts) = q.get("options").and_then(|v| v.as_array()) {
                 for (opt_idx, opt) in opts.iter().enumerate() {
                     let label = opt.get("label").and_then(|v| v.as_str()).unwrap_or("");
-                    let description = opt.get("description").and_then(|v| v.as_str()).unwrap_or("");
-                    question_text.push_str(&format!("  {}. {}: {}\n", opt_idx + 1, label, description));
+                    let description = opt
+                        .get("description")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    question_text.push_str(&format!(
+                        "  {}. {}: {}\n",
+                        opt_idx + 1,
+                        label,
+                        description
+                    ));
                     options.push(QuestionOption::new(label, description));
                 }
             }
@@ -800,7 +834,9 @@ impl UnifiedExecutor {
 
                 // Track files before file-modifying tools execute (for undo capability)
                 if matches!(tool_call.name.as_str(), "edit" | "write" | "multi_edit") {
-                    if let Some(file_path) = tool_call.arguments.get("file_path")
+                    if let Some(file_path) = tool_call
+                        .arguments
+                        .get("file_path")
                         .or_else(|| tool_call.arguments.get("path"))
                         .and_then(|v| v.as_str())
                     {

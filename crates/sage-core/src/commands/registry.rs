@@ -251,11 +251,15 @@ impl CommandRegistry {
 
         // Discover project commands
         let project_dir = self.project_root.join(".sage").join("commands");
-        count += self.discover_from_dir(&project_dir, CommandSource::Project).await?;
+        count += self
+            .discover_from_dir(&project_dir, CommandSource::Project)
+            .await?;
 
         // Discover user commands
         let user_dir = self.user_config_dir.join("commands");
-        count += self.discover_from_dir(&user_dir, CommandSource::User).await?;
+        count += self
+            .discover_from_dir(&user_dir, CommandSource::User)
+            .await?;
 
         Ok(count)
     }
@@ -267,24 +271,33 @@ impl CommandRegistry {
         }
 
         let mut count = 0;
-        let mut entries = fs::read_dir(dir).await.map_err(|e| {
-            SageError::Storage(format!("Failed to read commands directory: {}", e))
-        })?;
+        let mut entries = fs::read_dir(dir)
+            .await
+            .map_err(|e| SageError::Storage(format!("Failed to read commands directory: {}", e)))?;
 
-        while let Some(entry) = entries.next_entry().await.map_err(|e| {
-            SageError::Storage(format!("Failed to read directory entry: {}", e))
-        })? {
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .map_err(|e| SageError::Storage(format!("Failed to read directory entry: {}", e)))?
+        {
             let path = entry.path();
 
             // Only process .md files
             if path.extension().map_or(false, |ext| ext == "md") {
                 if let Some(command) = self.load_command_from_file(&path).await? {
                     // Don't override builtins
-                    if !self.commands.get(&command.name).map_or(false, |(_, src)| *src == CommandSource::Builtin) {
+                    if !self
+                        .commands
+                        .get(&command.name)
+                        .map_or(false, |(_, src)| *src == CommandSource::Builtin)
+                    {
                         // Project commands override user commands
                         let should_register = match source {
                             CommandSource::Project => true,
-                            CommandSource::User => !self.commands.get(&command.name).map_or(false, |(_, src)| *src == CommandSource::Project),
+                            CommandSource::User => !self
+                                .commands
+                                .get(&command.name)
+                                .map_or(false, |(_, src)| *src == CommandSource::Project),
                             CommandSource::Builtin => true,
                         };
 
@@ -310,20 +323,20 @@ impl CommandRegistry {
             .to_string();
 
         // Read file content
-        let mut file = fs::File::open(path).await.map_err(|e| {
-            SageError::Storage(format!("Failed to open command file: {}", e))
-        })?;
+        let mut file = fs::File::open(path)
+            .await
+            .map_err(|e| SageError::Storage(format!("Failed to open command file: {}", e)))?;
 
         let mut content = String::new();
-        file.read_to_string(&mut content).await.map_err(|e| {
-            SageError::Storage(format!("Failed to read command file: {}", e))
-        })?;
+        file.read_to_string(&mut content)
+            .await
+            .map_err(|e| SageError::Storage(format!("Failed to read command file: {}", e)))?;
 
         // Parse frontmatter if present
         let (metadata, prompt_template) = self.parse_command_file(&content);
 
-        let mut command = SlashCommand::new(name, prompt_template)
-            .with_source_path(path.to_path_buf());
+        let mut command =
+            SlashCommand::new(name, prompt_template).with_source_path(path.to_path_buf());
 
         // Apply metadata
         if let Some(desc) = metadata.get("description") {
@@ -497,11 +510,9 @@ mod tests {
 
         let cmd_file = commands_dir.join("fancy.md");
         let mut file = File::create(&cmd_file).await.unwrap();
-        file.write_all(
-            b"---\ndescription: A fancy command\n---\nDo something fancy",
-        )
-        .await
-        .unwrap();
+        file.write_all(b"---\ndescription: A fancy command\n---\nDo something fancy")
+            .await
+            .unwrap();
 
         let mut registry = CommandRegistry::new(temp_dir.path());
         registry.discover().await.unwrap();
@@ -521,7 +532,11 @@ mod tests {
         f1.write_all(b"User version").await.unwrap();
 
         // Create project command
-        let project_dir = temp_dir.path().join("project").join(".sage").join("commands");
+        let project_dir = temp_dir
+            .path()
+            .join("project")
+            .join(".sage")
+            .join("commands");
         fs::create_dir_all(&project_dir).await.unwrap();
         let mut f2 = File::create(project_dir.join("test.md")).await.unwrap();
         f2.write_all(b"Project version").await.unwrap();

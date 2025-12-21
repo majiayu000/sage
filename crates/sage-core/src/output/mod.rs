@@ -63,8 +63,8 @@ pub mod formatter;
 pub mod types;
 
 pub use formatter::{
-    create_formatter, JsonFormatter, OutputFormatter, OutputWriter, StreamJsonFormatter,
-    TextFormatter,
+    JsonFormatter, OutputFormatter, OutputWriter, StreamJsonFormatter, TextFormatter,
+    create_formatter,
 };
 pub use types::{
     AssistantEvent, CostInfo, ErrorEvent, JsonOutput, OutputEvent, OutputFormat, ResultEvent,

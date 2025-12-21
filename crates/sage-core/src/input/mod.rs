@@ -562,9 +562,7 @@ impl InputResponse {
     pub fn free_text(request_id: Uuid, text: impl Into<String>) -> Self {
         Self::new(
             request_id,
-            InputResponseKind::FreeText {
-                text: text.into(),
-            },
+            InputResponseKind::FreeText { text: text.into() },
         )
     }
 
@@ -718,9 +716,10 @@ impl AutoResponse {
                 InputRequestKind::Questions { .. } => {
                     InputResponse::question_answers(req.id, HashMap::new())
                 }
-                InputRequestKind::Permission { .. } => {
-                    InputResponse::permission_denied(req.id, Some("Non-interactive mode".to_string()))
-                }
+                InputRequestKind::Permission { .. } => InputResponse::permission_denied(
+                    req.id,
+                    Some("Non-interactive mode".to_string()),
+                ),
                 InputRequestKind::FreeText { .. } => InputResponse::free_text(req.id, ""),
                 InputRequestKind::Simple { options, .. } => {
                     if options.is_some() {
@@ -736,7 +735,11 @@ impl AutoResponse {
                     let answers: HashMap<String, String> = questions
                         .iter()
                         .map(|q| {
-                            let answer = q.options.first().map(|o| o.label.clone()).unwrap_or_default();
+                            let answer = q
+                                .options
+                                .first()
+                                .map(|o| o.label.clone())
+                                .unwrap_or_default();
                             (q.question.clone(), answer)
                         })
                         .collect();
@@ -841,13 +844,11 @@ impl InputChannel {
             request_tx,
             response_rx,
             default_timeout: Some(Duration::from_millis(10)),
-            auto_responder: Some(Box::new(move |req: &InputRequest| {
-                match &req.kind {
-                    InputRequestKind::Simple { options, .. } if options.is_some() => {
-                        InputResponse::selected(req.id, 0, response.clone())
-                    }
-                    _ => InputResponse::text(req.id, response.clone()),
+            auto_responder: Some(Box::new(move |req: &InputRequest| match &req.kind {
+                InputRequestKind::Simple { options, .. } if options.is_some() => {
+                    InputResponse::selected(req.id, 0, response.clone())
                 }
+                _ => InputResponse::text(req.id, response.clone()),
             })),
         }
     }

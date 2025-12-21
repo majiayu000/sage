@@ -5,7 +5,7 @@
 
 use chrono::{DateTime, Utc};
 use colored::Colorize;
-use dialoguer::{theme::ColorfulTheme, FuzzySelect};
+use dialoguer::{FuzzySelect, theme::ColorfulTheme};
 use sage_core::error::{SageError, SageResult};
 use sage_core::session::{JsonlSessionStorage, SessionMetadata};
 use std::path::PathBuf;
@@ -81,17 +81,17 @@ impl SessionSelector {
         }
 
         // Format session items for display
-        let items: Vec<String> = sessions
-            .iter()
-            .map(|s| format_session_item(s))
-            .collect();
+        let items: Vec<String> = sessions.iter().map(|s| format_session_item(s)).collect();
 
         // Add cancel option
         let mut display_items = items.clone();
         display_items.push("Cancel".dimmed().to_string());
 
         println!("\n{}", "Select a session to resume:".bold());
-        println!("{}", "Use arrow keys to navigate, Enter to select, or type to search".dimmed());
+        println!(
+            "{}",
+            "Use arrow keys to navigate, Enter to select, or type to search".dimmed()
+        );
         println!();
 
         // Use FuzzySelect for better UX
@@ -128,10 +128,7 @@ impl SessionSelector {
                 working_directory: metadata.working_directory,
             })),
             None => {
-                println!(
-                    "{}",
-                    format!("Session '{}' not found.", session_id).red()
-                );
+                println!("{}", format!("Session '{}' not found.", session_id).red());
                 Ok(None)
             }
         }
@@ -228,11 +225,7 @@ pub fn print_session_details(session: &SessionMetadata) {
         "Messages:".dimmed(),
         session.message_count.to_string().yellow()
     );
-    println!(
-        "  {} {}",
-        "State:".dimmed(),
-        format_state(&session.state)
-    );
+    println!("  {} {}", "State:".dimmed(), format_state(&session.state));
     println!(
         "  {} {}",
         "Created:".dimmed(),

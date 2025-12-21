@@ -5,8 +5,8 @@
 
 use async_trait::async_trait;
 use sage_core::learning::{
-    create_learning_engine, LearningConfig, Pattern, PatternSource, PatternType,
-    SharedLearningEngine,
+    LearningConfig, Pattern, PatternSource, PatternType, SharedLearningEngine,
+    create_learning_engine,
 };
 use sage_core::tools::{Tool, ToolCall, ToolError, ToolParameter, ToolResult, ToolSchema};
 use serde_json::json;
@@ -121,13 +121,13 @@ Do NOT use for:
     }
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
-        let pattern_type_str = call
-            .get_string("pattern_type")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'pattern_type' parameter".to_string()))?;
+        let pattern_type_str = call.get_string("pattern_type").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'pattern_type' parameter".to_string())
+        })?;
 
-        let description = call
-            .get_string("description")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'description' parameter".to_string()))?;
+        let description = call.get_string("description").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'description' parameter".to_string())
+        })?;
 
         let rule = call
             .get_string("rule")
@@ -279,13 +279,16 @@ Actions:
         let response = match action.to_lowercase().as_str() {
             "list" => {
                 let pattern_type = call.get_string("pattern_type");
-                let pattern_type_filter = pattern_type.as_ref().map(|t| match t.to_lowercase().as_str() {
-                    "correction" => PatternType::Correction,
-                    "preference" | "tool_preference" => PatternType::ToolPreference,
-                    "style" | "coding_style" => PatternType::CodingStyle,
-                    "workflow" | "workflow_preference" => PatternType::WorkflowPreference,
-                    _ => PatternType::Custom,
-                });
+                let pattern_type_filter =
+                    pattern_type
+                        .as_ref()
+                        .map(|t| match t.to_lowercase().as_str() {
+                            "correction" => PatternType::Correction,
+                            "preference" | "tool_preference" => PatternType::ToolPreference,
+                            "style" | "coding_style" => PatternType::CodingStyle,
+                            "workflow" | "workflow_preference" => PatternType::WorkflowPreference,
+                            _ => PatternType::Custom,
+                        });
 
                 let patterns = if let Some(pt) = pattern_type_filter {
                     engine.get_patterns_by_type(pt).await
@@ -329,9 +332,9 @@ Actions:
             }
 
             "search" => {
-                let query = call
-                    .get_string("query")
-                    .ok_or_else(|| ToolError::InvalidArguments("Missing 'query' for search".to_string()))?;
+                let query = call.get_string("query").ok_or_else(|| {
+                    ToolError::InvalidArguments("Missing 'query' for search".to_string())
+                })?;
 
                 let query_lower = query.to_lowercase();
 
@@ -347,7 +350,9 @@ Actions:
                     for p in engine.get_patterns_by_type(pt).await {
                         if p.description.to_lowercase().contains(&query_lower)
                             || p.rule.to_lowercase().contains(&query_lower)
-                            || p.context.iter().any(|c| c.to_lowercase().contains(&query_lower))
+                            || p.context
+                                .iter()
+                                .any(|c| c.to_lowercase().contains(&query_lower))
                         {
                             matches.push(p);
                         }
@@ -357,7 +362,8 @@ Actions:
                 if matches.is_empty() {
                     format!("No patterns found matching '{}'.", query)
                 } else {
-                    let mut output = format!("Found {} patterns matching '{}':\n\n", matches.len(), query);
+                    let mut output =
+                        format!("Found {} patterns matching '{}':\n\n", matches.len(), query);
                     for (i, p) in matches.iter().enumerate() {
                         output.push_str(&format!(
                             "{}. [{}] {}\n   Rule: {}\n   ID: {}\n\n",
@@ -373,9 +379,9 @@ Actions:
             }
 
             "delete" => {
-                let pattern_id = call
-                    .get_string("pattern_id")
-                    .ok_or_else(|| ToolError::InvalidArguments("Missing 'pattern_id' for delete".to_string()))?;
+                let pattern_id = call.get_string("pattern_id").ok_or_else(|| {
+                    ToolError::InvalidArguments("Missing 'pattern_id' for delete".to_string())
+                })?;
 
                 use sage_core::learning::PatternId;
                 let id = PatternId::from_string(pattern_id.clone());

@@ -868,7 +868,10 @@ impl LLMClient {
         tracing::info!(
             "GLM API request tools count: {}, first tool: {:?}",
             request_body["tools"].as_array().map_or(0, |a| a.len()),
-            request_body["tools"].as_array().and_then(|a| a.first()).map(|t| t["name"].as_str())
+            request_body["tools"]
+                .as_array()
+                .and_then(|a| a.first())
+                .map(|t| t["name"].as_str())
         );
 
         // Debug: Write full request to file for debugging
@@ -1184,18 +1187,14 @@ impl LLMClient {
             // Remove empty "required" array
             if let Some(required) = schema.get("required") {
                 if required.as_array().map_or(false, |arr| arr.is_empty()) {
-                    schema
-                        .as_object_mut()
-                        .map(|obj| obj.remove("required"));
+                    schema.as_object_mut().map(|obj| obj.remove("required"));
                 }
             }
 
             // Remove empty "properties" object
             if let Some(properties) = schema.get("properties") {
                 if properties.as_object().map_or(false, |obj| obj.is_empty()) {
-                    schema
-                        .as_object_mut()
-                        .map(|obj| obj.remove("properties"));
+                    schema.as_object_mut().map(|obj| obj.remove("properties"));
                 }
             }
 
@@ -1305,9 +1304,7 @@ impl LLMClient {
                         // Parse tool_use block
                         let arguments: HashMap<String, Value> = block["input"]
                             .as_object()
-                            .map(|obj| {
-                                obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
-                            })
+                            .map(|obj| obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
                             .unwrap_or_default();
 
                         // Warn if input is empty (likely a proxy issue)
@@ -1371,7 +1368,7 @@ impl LLMClient {
             let total_input = input_tokens + cache_tokens;
 
             Some(LLMUsage {
-                prompt_tokens: total_input as u32,  // Include all cache tokens
+                prompt_tokens: total_input as u32, // Include all cache tokens
                 completion_tokens: output_tokens as u32,
                 total_tokens: (total_input + output_tokens) as u32,
                 cost_usd: None,

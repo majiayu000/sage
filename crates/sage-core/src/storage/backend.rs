@@ -299,13 +299,24 @@ pub trait DatabaseBackend: Send + Sync {
     async fn ping(&self) -> Result<(), DatabaseError>;
 
     /// Execute a query (SELECT)
-    async fn query(&self, sql: &str, params: &[DatabaseValue]) -> Result<QueryResult, DatabaseError>;
+    async fn query(
+        &self,
+        sql: &str,
+        params: &[DatabaseValue],
+    ) -> Result<QueryResult, DatabaseError>;
 
     /// Execute a statement (INSERT/UPDATE/DELETE)
-    async fn execute(&self, sql: &str, params: &[DatabaseValue]) -> Result<QueryResult, DatabaseError>;
+    async fn execute(
+        &self,
+        sql: &str,
+        params: &[DatabaseValue],
+    ) -> Result<QueryResult, DatabaseError>;
 
     /// Execute multiple statements in a transaction
-    async fn transaction(&self, statements: Vec<(&str, Vec<DatabaseValue>)>) -> Result<(), DatabaseError>;
+    async fn transaction(
+        &self,
+        statements: Vec<(&str, Vec<DatabaseValue>)>,
+    ) -> Result<(), DatabaseError>;
 
     /// Get database version
     async fn version(&self) -> Result<String, DatabaseError>;
@@ -412,7 +423,11 @@ impl DatabaseBackend for SqliteBackend {
         }
     }
 
-    async fn query(&self, sql: &str, params: &[DatabaseValue]) -> Result<QueryResult, DatabaseError> {
+    async fn query(
+        &self,
+        sql: &str,
+        params: &[DatabaseValue],
+    ) -> Result<QueryResult, DatabaseError> {
         if !self.is_connected().await {
             return Err(DatabaseError::Connection("Not connected".to_string()));
         }
@@ -460,7 +475,11 @@ impl DatabaseBackend for SqliteBackend {
         Ok(QueryResult::empty())
     }
 
-    async fn execute(&self, sql: &str, params: &[DatabaseValue]) -> Result<QueryResult, DatabaseError> {
+    async fn execute(
+        &self,
+        sql: &str,
+        params: &[DatabaseValue],
+    ) -> Result<QueryResult, DatabaseError> {
         if !self.is_connected().await {
             return Err(DatabaseError::Connection("Not connected".to_string()));
         }
@@ -511,9 +530,8 @@ impl DatabaseBackend for SqliteBackend {
                     // Create row from params with proper column names
                     let mut row = DatabaseRow::new();
                     for (i, param) in params.iter().enumerate() {
-                        let col_name = column_names.get(i)
-                            .map(|s| s.as_str())
-                            .unwrap_or_else(|| {
+                        let col_name =
+                            column_names.get(i).map(|s| s.as_str()).unwrap_or_else(|| {
                                 // Fallback to generic names
                                 match i {
                                     0 => "col0",
@@ -579,7 +597,10 @@ impl DatabaseBackend for SqliteBackend {
         Ok(QueryResult::from_affected(0))
     }
 
-    async fn transaction(&self, statements: Vec<(&str, Vec<DatabaseValue>)>) -> Result<(), DatabaseError> {
+    async fn transaction(
+        &self,
+        statements: Vec<(&str, Vec<DatabaseValue>)>,
+    ) -> Result<(), DatabaseError> {
         for (sql, params) in statements {
             self.execute(sql, &params).await?;
         }
@@ -605,13 +626,18 @@ pub struct PostgresBackend {
 impl PostgresBackend {
     /// Try to connect to PostgreSQL
     pub async fn connect(connection_string: &str) -> Result<Self, DatabaseError> {
-        tracing::info!("PostgreSQL backend attempting connection to: {}", connection_string);
+        tracing::info!(
+            "PostgreSQL backend attempting connection to: {}",
+            connection_string
+        );
 
         // In a real implementation, would use tokio-postgres or sqlx
         // For now, simulate connection failure to demonstrate fallback
 
         // Check if connection string looks valid
-        if !connection_string.starts_with("postgresql://") && !connection_string.starts_with("postgres://") {
+        if !connection_string.starts_with("postgresql://")
+            && !connection_string.starts_with("postgres://")
+        {
             return Err(DatabaseError::Connection(format!(
                 "Invalid connection string: {}",
                 connection_string
@@ -654,20 +680,39 @@ impl DatabaseBackend for PostgresBackend {
         }
     }
 
-    async fn query(&self, _sql: &str, _params: &[DatabaseValue]) -> Result<QueryResult, DatabaseError> {
-        Err(DatabaseError::NotAvailable("PostgreSQL not implemented".to_string()))
+    async fn query(
+        &self,
+        _sql: &str,
+        _params: &[DatabaseValue],
+    ) -> Result<QueryResult, DatabaseError> {
+        Err(DatabaseError::NotAvailable(
+            "PostgreSQL not implemented".to_string(),
+        ))
     }
 
-    async fn execute(&self, _sql: &str, _params: &[DatabaseValue]) -> Result<QueryResult, DatabaseError> {
-        Err(DatabaseError::NotAvailable("PostgreSQL not implemented".to_string()))
+    async fn execute(
+        &self,
+        _sql: &str,
+        _params: &[DatabaseValue],
+    ) -> Result<QueryResult, DatabaseError> {
+        Err(DatabaseError::NotAvailable(
+            "PostgreSQL not implemented".to_string(),
+        ))
     }
 
-    async fn transaction(&self, _statements: Vec<(&str, Vec<DatabaseValue>)>) -> Result<(), DatabaseError> {
-        Err(DatabaseError::NotAvailable("PostgreSQL not implemented".to_string()))
+    async fn transaction(
+        &self,
+        _statements: Vec<(&str, Vec<DatabaseValue>)>,
+    ) -> Result<(), DatabaseError> {
+        Err(DatabaseError::NotAvailable(
+            "PostgreSQL not implemented".to_string(),
+        ))
     }
 
     async fn version(&self) -> Result<String, DatabaseError> {
-        Err(DatabaseError::NotAvailable("PostgreSQL not implemented".to_string()))
+        Err(DatabaseError::NotAvailable(
+            "PostgreSQL not implemented".to_string(),
+        ))
     }
 
     async fn close(&self) -> Result<(), DatabaseError> {

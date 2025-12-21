@@ -263,14 +263,10 @@ impl PricingRegistry {
         );
 
         self.register(
-            ModelPricing::new(
-                "gemini-1.5-flash",
-                "google",
-                TokenPrice::new(0.075, 0.30),
-            )
-            .with_display_name("Gemini 1.5 Flash")
-            .with_context_window(1_000_000)
-            .with_max_output(8192),
+            ModelPricing::new("gemini-1.5-flash", "google", TokenPrice::new(0.075, 0.30))
+                .with_display_name("Gemini 1.5 Flash")
+                .with_context_window(1_000_000)
+                .with_max_output(8192),
         );
 
         self.register(

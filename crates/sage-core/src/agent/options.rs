@@ -91,7 +91,11 @@ impl AutoResponse {
     pub fn should_select_first(&self) -> bool {
         matches!(
             self,
-            Self::FirstOption | Self::ContextBased { prefer_first_option: true, .. }
+            Self::FirstOption
+                | Self::ContextBased {
+                    prefer_first_option: true,
+                    ..
+                }
         )
     }
 
@@ -400,8 +404,7 @@ mod tests {
 
     #[test]
     fn test_trajectory_path_enables_recording() {
-        let options = ExecutionOptions::interactive()
-            .with_trajectory_path("/tmp/trajectory.json");
+        let options = ExecutionOptions::interactive().with_trajectory_path("/tmp/trajectory.json");
 
         assert!(options.record_trajectory);
         assert_eq!(

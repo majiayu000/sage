@@ -176,7 +176,7 @@ impl RateLimiter {
                 Err(_) => {
                     return Err(RateLimitError::Timeout {
                         waited: start.elapsed(),
-                    })
+                    });
                 }
             }
         } else {
@@ -185,7 +185,7 @@ impl RateLimiter {
                 Err(_) => {
                     return Err(RateLimitError::ConcurrencyExceeded {
                         max: self.config.max_concurrent,
-                    })
+                    });
                 }
             }
         };
@@ -274,7 +274,9 @@ impl std::fmt::Display for RateLimitError {
         match self {
             Self::Timeout { waited } => write!(f, "Rate limit timeout after {:?}", waited),
             Self::WouldBlock => write!(f, "Rate limit would block"),
-            Self::ConcurrencyExceeded { max } => write!(f, "Concurrency limit exceeded (max {})", max),
+            Self::ConcurrencyExceeded { max } => {
+                write!(f, "Concurrency limit exceeded (max {})", max)
+            }
             Self::Closed => write!(f, "Rate limiter closed"),
         }
     }
@@ -487,7 +489,10 @@ mod tests {
 
         // Third should fail due to concurrency
         let result = limiter.acquire().await;
-        assert!(matches!(result, Err(RateLimitError::ConcurrencyExceeded { .. })));
+        assert!(matches!(
+            result,
+            Err(RateLimitError::ConcurrencyExceeded { .. })
+        ));
 
         // Drop one permit
         drop(g1);
@@ -595,10 +600,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_rate_limiter_concurrent_requests() {
-        let limiter = RateLimiter::with_config(
-            RateLimiterConfig::default()
-                .with_max_concurrent(3),
-        );
+        let limiter = RateLimiter::with_config(RateLimiterConfig::default().with_max_concurrent(3));
 
         assert_eq!(limiter.concurrent_requests(), 0);
 

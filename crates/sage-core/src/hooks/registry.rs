@@ -237,15 +237,9 @@ mod tests {
         let matcher2 = create_test_matcher(Some("python".to_string()));
         let matcher3 = create_test_matcher(None); // Wildcard
 
-        registry
-            .register(HookEvent::PreToolUse, matcher1)
-            .unwrap();
-        registry
-            .register(HookEvent::PreToolUse, matcher2)
-            .unwrap();
-        registry
-            .register(HookEvent::PreToolUse, matcher3)
-            .unwrap();
+        registry.register(HookEvent::PreToolUse, matcher1).unwrap();
+        registry.register(HookEvent::PreToolUse, matcher2).unwrap();
+        registry.register(HookEvent::PreToolUse, matcher3).unwrap();
 
         // Test matching
         let bash_hooks = registry.get_matching(HookEvent::PreToolUse, "bash");
@@ -297,7 +291,9 @@ mod tests {
             1
         );
         assert_eq!(
-            registry.get_matching(HookEvent::PreToolUse, "test_case").len(),
+            registry
+                .get_matching(HookEvent::PreToolUse, "test_case")
+                .len(),
             1
         );
         assert_eq!(
@@ -385,7 +381,9 @@ mod tests {
 
         // Check post_tool_use hooks (wildcard)
         assert_eq!(
-            registry.get_matching(HookEvent::PostToolUse, "anything").len(),
+            registry
+                .get_matching(HookEvent::PostToolUse, "anything")
+                .len(),
             1
         );
 
@@ -464,12 +462,18 @@ mod tests {
         assert_eq!(registry.count(), 0);
 
         registry
-            .register(HookEvent::PreToolUse, create_test_matcher(Some("bash".to_string())))
+            .register(
+                HookEvent::PreToolUse,
+                create_test_matcher(Some("bash".to_string())),
+            )
             .unwrap();
         assert_eq!(registry.count(), 1);
 
         registry
-            .register(HookEvent::PreToolUse, create_test_matcher(Some("python".to_string())))
+            .register(
+                HookEvent::PreToolUse,
+                create_test_matcher(Some("python".to_string())),
+            )
             .unwrap();
         assert_eq!(registry.count(), 2);
 

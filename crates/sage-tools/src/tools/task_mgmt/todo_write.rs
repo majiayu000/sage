@@ -89,12 +89,7 @@ impl TodoList {
                 TodoStatus::InProgress => "[/]",
                 TodoStatus::Completed => "[x]",
             };
-            output.push_str(&format!(
-                "{}. {} {}\n",
-                i + 1,
-                status_icon,
-                todo.content
-            ));
+            output.push_str(&format!("{}. {} {}\n", i + 1, status_icon, todo.content));
         }
         output
     }
@@ -103,8 +98,14 @@ impl TodoList {
     pub fn get_stats(&self) -> (usize, usize, usize) {
         let list = self.todos.read().unwrap();
         let total = list.len();
-        let completed = list.iter().filter(|t| t.status == TodoStatus::Completed).count();
-        let in_progress = list.iter().filter(|t| t.status == TodoStatus::InProgress).count();
+        let completed = list
+            .iter()
+            .filter(|t| t.status == TodoStatus::Completed)
+            .count();
+        let in_progress = list
+            .iter()
+            .filter(|t| t.status == TodoStatus::InProgress)
+            .count();
         (total, completed, in_progress)
     }
 }
@@ -187,7 +188,9 @@ impl Tool for TodoWriteTool {
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
         // Parse the todos array from input
-        let todos_value = call.arguments.get("todos")
+        let todos_value = call
+            .arguments
+            .get("todos")
             .ok_or_else(|| ToolError::InvalidArguments("Missing 'todos' parameter".to_string()))?;
 
         let todos: Vec<TodoItem> = serde_json::from_value(todos_value.clone())
@@ -197,10 +200,14 @@ impl Tool for TodoWriteTool {
         let mut in_progress_count = 0;
         for todo in &todos {
             if todo.content.is_empty() {
-                return Err(ToolError::InvalidArguments("Todo content cannot be empty".to_string()));
+                return Err(ToolError::InvalidArguments(
+                    "Todo content cannot be empty".to_string(),
+                ));
             }
             if todo.active_form.is_empty() {
-                return Err(ToolError::InvalidArguments("Todo activeForm cannot be empty".to_string()));
+                return Err(ToolError::InvalidArguments(
+                    "Todo activeForm cannot be empty".to_string(),
+                ));
             }
             if todo.status == TodoStatus::InProgress {
                 in_progress_count += 1;
@@ -293,7 +300,13 @@ mod tests {
                         "activeForm": "Writing tests"
                     }
                 ]
-            }).as_object().unwrap().clone().into_iter().map(|(k, v)| (k, v)).collect(),
+            })
+            .as_object()
+            .unwrap()
+            .clone()
+            .into_iter()
+            .map(|(k, v)| (k, v))
+            .collect(),
             call_id: None,
         };
 
@@ -331,7 +344,13 @@ mod tests {
                         "activeForm": "Starting task 3"
                     }
                 ]
-            }).as_object().unwrap().clone().into_iter().map(|(k, v)| (k, v)).collect(),
+            })
+            .as_object()
+            .unwrap()
+            .clone()
+            .into_iter()
+            .map(|(k, v)| (k, v))
+            .collect(),
             call_id: None,
         };
 
@@ -361,7 +380,13 @@ mod tests {
                         "activeForm": "Doing something"
                     }
                 ]
-            }).as_object().unwrap().clone().into_iter().map(|(k, v)| (k, v)).collect(),
+            })
+            .as_object()
+            .unwrap()
+            .clone()
+            .into_iter()
+            .map(|(k, v)| (k, v))
+            .collect(),
             call_id: None,
         };
 

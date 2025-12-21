@@ -53,7 +53,10 @@ impl ChangeDetector {
     }
 
     /// Track only specific file extensions
-    pub fn with_extensions(mut self, extensions: impl IntoIterator<Item = impl Into<String>>) -> Self {
+    pub fn with_extensions(
+        mut self,
+        extensions: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
         self.tracked_extensions = extensions.into_iter().map(Into::into).collect();
         self
     }
@@ -85,7 +88,9 @@ impl ChangeDetector {
         // Check extensions if filter is set
         if !self.tracked_extensions.is_empty() {
             if let Some(ext) = path.extension() {
-                return self.tracked_extensions.contains(ext.to_string_lossy().as_ref());
+                return self
+                    .tracked_extensions
+                    .contains(ext.to_string_lossy().as_ref());
             }
             return false;
         }
@@ -127,9 +132,9 @@ impl ChangeDetector {
             return Ok(None);
         }
 
-        let metadata = fs::metadata(&full_path).await.map_err(|e| {
-            SageError::Storage(format!("Failed to read file metadata: {}", e))
-        })?;
+        let metadata = fs::metadata(&full_path)
+            .await
+            .map_err(|e| SageError::Storage(format!("Failed to read file metadata: {}", e)))?;
 
         if metadata.is_dir() {
             return Ok(None);
@@ -203,7 +208,11 @@ impl ChangeDetector {
     }
 
     /// Recursive directory scanning
-    async fn scan_recursive(&self, dir: &Path, snapshots: &mut Vec<FileSnapshot>) -> SageResult<()> {
+    async fn scan_recursive(
+        &self,
+        dir: &Path,
+        snapshots: &mut Vec<FileSnapshot>,
+    ) -> SageResult<()> {
         let relative_dir = dir.strip_prefix(&self.base_dir).unwrap_or(dir);
 
         // Check if directory should be excluded
@@ -217,13 +226,16 @@ impl ChangeDetector {
             SageError::Storage(format!("Failed to read directory {:?}: {}", dir, e))
         })?;
 
-        while let Some(entry) = entries.next_entry().await.map_err(|e| {
-            SageError::Storage(format!("Failed to read directory entry: {}", e))
-        })? {
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .map_err(|e| SageError::Storage(format!("Failed to read directory entry: {}", e)))?
+        {
             let path = entry.path();
-            let metadata = entry.metadata().await.map_err(|e| {
-                SageError::Storage(format!("Failed to read metadata: {}", e))
-            })?;
+            let metadata = entry
+                .metadata()
+                .await
+                .map_err(|e| SageError::Storage(format!("Failed to read metadata: {}", e)))?;
 
             if metadata.is_dir() {
                 Box::pin(self.scan_recursive(&path, snapshots)).await?;
@@ -238,10 +250,7 @@ impl ChangeDetector {
     }
 
     /// Compare two sets of file snapshots and generate changes
-    pub fn compare_snapshots(
-        before: &[FileSnapshot],
-        after: &[FileSnapshot],
-    ) -> Vec<FileChange> {
+    pub fn compare_snapshots(before: &[FileSnapshot], after: &[FileSnapshot]) -> Vec<FileChange> {
         let before_map: HashMap<_, _> = before.iter().map(|f| (&f.path, f)).collect();
         let after_map: HashMap<_, _> = after.iter().map(|f| (&f.path, f)).collect();
 
@@ -306,11 +315,9 @@ impl ChangeDetector {
                 .with_size(after.size)
                 .with_hash(after.content_hash.clone().unwrap_or_default()),
 
-                FileChange::Deleted { path, snapshot } => FileSnapshot::new(
-                    path.clone(),
-                    FileState::Deleted,
-                )
-                .with_size(snapshot.size),
+                FileChange::Deleted { path, snapshot } => {
+                    FileSnapshot::new(path.clone(), FileState::Deleted).with_size(snapshot.size)
+                }
             })
             .collect()
     }
@@ -621,23 +628,27 @@ mod tests {
 
     #[test]
     fn test_compare_snapshots_modified() {
-        let before = vec![FileSnapshot::new(
-            "file.txt",
-            FileState::Exists {
-                content: Some("Before".to_string()),
-                content_ref: None,
-            },
-        )
-        .with_hash("hash1")];
+        let before = vec![
+            FileSnapshot::new(
+                "file.txt",
+                FileState::Exists {
+                    content: Some("Before".to_string()),
+                    content_ref: None,
+                },
+            )
+            .with_hash("hash1"),
+        ];
 
-        let after = vec![FileSnapshot::new(
-            "file.txt",
-            FileState::Exists {
-                content: Some("After".to_string()),
-                content_ref: None,
-            },
-        )
-        .with_hash("hash2")];
+        let after = vec![
+            FileSnapshot::new(
+                "file.txt",
+                FileState::Exists {
+                    content: Some("After".to_string()),
+                    content_ref: None,
+                },
+            )
+            .with_hash("hash2"),
+        ];
 
         let changes = ChangeDetector::compare_snapshots(&before, &after);
 

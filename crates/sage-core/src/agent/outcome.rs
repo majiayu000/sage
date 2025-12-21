@@ -145,7 +145,9 @@ impl ExecutionOutcome {
     /// Get the pending question if user cancelled during a prompt
     pub fn pending_question(&self) -> Option<&str> {
         match self {
-            Self::UserCancelled { pending_question, .. } => pending_question.as_deref(),
+            Self::UserCancelled {
+                pending_question, ..
+            } => pending_question.as_deref(),
             _ => None,
         }
     }

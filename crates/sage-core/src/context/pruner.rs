@@ -50,8 +50,9 @@ impl MessagePruner {
         let mut current_tokens = 0;
 
         // Always keep system messages first
-        let (system_msgs, other_msgs): (Vec<_>, Vec<_>) =
-            messages.into_iter().partition(|m| m.role == MessageRole::System);
+        let (system_msgs, other_msgs): (Vec<_>, Vec<_>) = messages
+            .into_iter()
+            .partition(|m| m.role == MessageRole::System);
 
         for msg in &system_msgs {
             current_tokens += self.estimator.estimate_message(msg);
@@ -75,9 +76,13 @@ impl MessagePruner {
         }
 
         // Reverse to restore chronological order (we added in reverse)
-        let _system_count = result.iter().filter(|m| m.role == MessageRole::System).count();
-        let (system_part, rest): (Vec<_>, Vec<_>) =
-            result.into_iter().partition(|m| m.role == MessageRole::System);
+        let _system_count = result
+            .iter()
+            .filter(|m| m.role == MessageRole::System)
+            .count();
+        let (system_part, rest): (Vec<_>, Vec<_>) = result
+            .into_iter()
+            .partition(|m| m.role == MessageRole::System);
 
         let mut final_result = system_part;
         let mut rest: Vec<_> = rest.into_iter().rev().collect();
@@ -98,8 +103,9 @@ impl MessagePruner {
         messages: Vec<LLMMessage>,
         _target_tokens: usize,
     ) -> PruneResult {
-        let (system_msgs, other_msgs): (Vec<_>, Vec<_>) =
-            messages.into_iter().partition(|m| m.role == MessageRole::System);
+        let (system_msgs, other_msgs): (Vec<_>, Vec<_>) = messages
+            .into_iter()
+            .partition(|m| m.role == MessageRole::System);
 
         let first_n = self.config.sliding_window_first;
         let last_m = self.config.sliding_window_last;
@@ -129,7 +135,11 @@ impl MessagePruner {
             }
 
             // Remove middle messages
-            for msg in other_msgs.iter().skip(first_n).take(other_len - first_n - last_m) {
+            for msg in other_msgs
+                .iter()
+                .skip(first_n)
+                .take(other_len - first_n - last_m)
+            {
                 removed.push(msg.clone());
             }
 
@@ -153,8 +163,9 @@ impl MessagePruner {
         messages: Vec<LLMMessage>,
         _target_tokens: usize,
     ) -> PruneResult {
-        let (system_msgs, other_msgs): (Vec<_>, Vec<_>) =
-            messages.into_iter().partition(|m| m.role == MessageRole::System);
+        let (system_msgs, other_msgs): (Vec<_>, Vec<_>) = messages
+            .into_iter()
+            .partition(|m| m.role == MessageRole::System);
 
         let min_keep = self.config.min_messages_to_keep;
 
@@ -272,7 +283,7 @@ mod tests {
                 name: None,
                 tool_calls: None,
                 tool_call_id: None,
-            cache_control: None,
+                cache_control: None,
                 metadata: HashMap::new(),
             });
         }
@@ -344,8 +355,7 @@ mod tests {
 
     #[test]
     fn test_no_prune_when_under_limit() {
-        let config = ContextConfig::new()
-            .with_strategy(OverflowStrategy::SlidingWindow);
+        let config = ContextConfig::new().with_strategy(OverflowStrategy::SlidingWindow);
 
         let pruner = MessagePruner::new(config);
         let messages = create_messages(5); // Small conversation

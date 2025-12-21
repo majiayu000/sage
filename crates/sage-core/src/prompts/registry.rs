@@ -73,12 +73,7 @@ impl PromptRegistry {
     pub fn list_by_category(&self, category: &str) -> Vec<&PromptTemplate> {
         self.by_category
             .get(category)
-            .map(|names| {
-                names
-                    .iter()
-                    .filter_map(|n| self.templates.get(n))
-                    .collect()
-            })
+            .map(|names| names.iter().filter_map(|n| self.templates.get(n)).collect())
             .unwrap_or_default()
     }
 
@@ -86,12 +81,7 @@ impl PromptRegistry {
     pub fn list_by_tag(&self, tag: &str) -> Vec<&PromptTemplate> {
         self.by_tag
             .get(tag)
-            .map(|names| {
-                names
-                    .iter()
-                    .filter_map(|n| self.templates.get(n))
-                    .collect()
-            })
+            .map(|names| names.iter().filter_map(|n| self.templates.get(n)).collect())
             .unwrap_or_default()
     }
 
@@ -154,7 +144,11 @@ impl PromptRegistry {
         let mut entries = fs::read_dir(dir).await?;
         while let Some(entry) = entries.next_entry().await? {
             let path = entry.path();
-            if path.extension().map(|e| e == "md" || e == "txt").unwrap_or(false) {
+            if path
+                .extension()
+                .map(|e| e == "md" || e == "txt")
+                .unwrap_or(false)
+            {
                 if let Ok(content) = fs::read_to_string(&path).await {
                     let name = path
                         .file_stem()
@@ -162,8 +156,7 @@ impl PromptRegistry {
                         .unwrap_or("unknown")
                         .to_string();
 
-                    let template = PromptTemplate::new(name, content)
-                        .with_category("custom");
+                    let template = PromptTemplate::new(name, content).with_category("custom");
 
                     self.register(template);
                     count += 1;
@@ -190,12 +183,12 @@ impl PromptRegistry {
         self.register(
             PromptTemplate::new(
                 "system_default",
-                "You are {{role}}, a helpful AI assistant. {{additional_context}}"
+                "You are {{role}}, a helpful AI assistant. {{additional_context}}",
             )
             .with_description("Default system prompt")
             .with_category("system")
             .with_default("role", "Claude")
-            .with_default("additional_context", "")
+            .with_default("additional_context", ""),
         );
 
         self.register(
@@ -220,13 +213,13 @@ impl PromptRegistry {
                  - Potential bugs or issues\n\
                  - Performance considerations\n\
                  - Security concerns\n\n\
-                 Code:\n```{{language}}\n{{code}}\n```"
+                 Code:\n```{{language}}\n{{code}}\n```",
             )
             .with_description("Code review prompt")
             .with_category("task")
             .with_tags(vec!["code".to_string(), "review".to_string()])
             .with_required("code")
-            .with_default("language", "")
+            .with_default("language", ""),
         );
 
         self.register(
@@ -237,13 +230,13 @@ impl PromptRegistry {
                  Focus on:\n\
                  - What the code does\n\
                  - How it works\n\
-                 - Key concepts used"
+                 - Key concepts used",
             )
             .with_description("Code explanation prompt")
             .with_category("task")
             .with_tags(vec!["code".to_string(), "explain".to_string()])
             .with_required("code")
-            .with_default("language", "")
+            .with_default("language", ""),
         );
 
         self.register(
@@ -252,14 +245,14 @@ impl PromptRegistry {
                 "I'm getting the following error:\n\n\
                  ```\n{{error}}\n```\n\n\
                  In this code:\n```{{language}}\n{{code}}\n```\n\n\
-                 Please help me understand and fix this error."
+                 Please help me understand and fix this error.",
             )
             .with_description("Error fixing prompt")
             .with_category("task")
             .with_tags(vec!["code".to_string(), "debug".to_string()])
             .with_required("error")
             .with_required("code")
-            .with_default("language", "")
+            .with_default("language", ""),
         );
 
         self.register(
@@ -267,7 +260,7 @@ impl PromptRegistry {
                 "refactor",
                 "Please refactor the following code to improve {{improvement_focus}}:\n\n\
                  ```{{language}}\n{{code}}\n```\n\n\
-                 Requirements:\n{{requirements}}"
+                 Requirements:\n{{requirements}}",
             )
             .with_description("Code refactoring prompt")
             .with_category("task")
@@ -275,7 +268,10 @@ impl PromptRegistry {
             .with_required("code")
             .with_default("language", "")
             .with_default("improvement_focus", "readability and maintainability")
-            .with_default("requirements", "- Maintain existing functionality\n- Add appropriate comments")
+            .with_default(
+                "requirements",
+                "- Maintain existing functionality\n- Add appropriate comments",
+            ),
         );
 
         // Conversation prompts
@@ -284,13 +280,13 @@ impl PromptRegistry {
                 "summarize",
                 "Please summarize the following text:\n\n{{text}}\n\n\
                  Summary length: {{length}}\n\
-                 Focus on: {{focus}}"
+                 Focus on: {{focus}}",
             )
             .with_description("Text summarization prompt")
             .with_category("conversation")
             .with_required("text")
             .with_default("length", "concise")
-            .with_default("focus", "key points")
+            .with_default("focus", "key points"),
         );
 
         self.register(
@@ -346,15 +342,9 @@ mod tests {
     #[test]
     fn test_registry_by_category() {
         let mut registry = PromptRegistry::new();
-        registry.register(
-            PromptTemplate::new("a", "A").with_category("cat1")
-        );
-        registry.register(
-            PromptTemplate::new("b", "B").with_category("cat1")
-        );
-        registry.register(
-            PromptTemplate::new("c", "C").with_category("cat2")
-        );
+        registry.register(PromptTemplate::new("a", "A").with_category("cat1"));
+        registry.register(PromptTemplate::new("b", "B").with_category("cat1"));
+        registry.register(PromptTemplate::new("c", "C").with_category("cat2"));
 
         let cat1 = registry.list_by_category("cat1");
         assert_eq!(cat1.len(), 2);
@@ -367,13 +357,9 @@ mod tests {
     fn test_registry_by_tag() {
         let mut registry = PromptRegistry::new();
         registry.register(
-            PromptTemplate::new("a", "A")
-                .with_tags(vec!["tag1".to_string(), "tag2".to_string()])
+            PromptTemplate::new("a", "A").with_tags(vec!["tag1".to_string(), "tag2".to_string()]),
         );
-        registry.register(
-            PromptTemplate::new("b", "B")
-                .with_tags(vec!["tag1".to_string()])
-        );
+        registry.register(PromptTemplate::new("b", "B").with_tags(vec!["tag1".to_string()]));
 
         let tag1 = registry.list_by_tag("tag1");
         assert_eq!(tag1.len(), 2);
@@ -387,12 +373,10 @@ mod tests {
         let mut registry = PromptRegistry::new();
         registry.register(
             PromptTemplate::new("code_review", "Review code")
-                .with_description("Review code for quality")
+                .with_description("Review code for quality"),
         );
-        registry.register(
-            PromptTemplate::new("greeting", "Hello")
-                .with_description("Simple greeting")
-        );
+        registry
+            .register(PromptTemplate::new("greeting", "Hello").with_description("Simple greeting"));
 
         let results = registry.search("code");
         assert_eq!(results.len(), 1);
@@ -408,7 +392,7 @@ mod tests {
         registry.register(
             PromptTemplate::new("test", "Test")
                 .with_category("cat")
-                .with_tags(vec!["tag".to_string()])
+                .with_tags(vec!["tag".to_string()]),
         );
 
         assert!(registry.get("test").is_some());
@@ -456,10 +440,13 @@ mod tests {
     #[test]
     fn test_builtin_code_review() {
         let registry = PromptRegistry::with_builtins();
-        let result = registry.render("code_review", &[
-            ("code", "fn main() { println!(\"Hello\"); }"),
-            ("language", "rust"),
-        ]);
+        let result = registry.render(
+            "code_review",
+            &[
+                ("code", "fn main() { println!(\"Hello\"); }"),
+                ("language", "rust"),
+            ],
+        );
 
         assert!(result.is_some());
         let rendered = result.unwrap();

@@ -312,7 +312,10 @@ mod tests {
     fn test_validate_timeout_too_large() {
         let validator = SettingsValidator::new();
         let mut settings = Settings::default();
-        settings.tools.timeouts.insert("bash".to_string(), 1_000_000);
+        settings
+            .tools
+            .timeouts
+            .insert("bash".to_string(), 1_000_000);
 
         assert!(validator.validate(&settings).is_err());
     }

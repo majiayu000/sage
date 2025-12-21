@@ -10,11 +10,11 @@ pub mod mermaid;
 pub use content_processing::{SearchUntruncatedTool, ViewRangeUntruncatedTool};
 pub use ide_diagnostics::DiagnosticsTool;
 pub use learning::{
-    get_global_learning_engine, get_learning_patterns_for_context, init_global_learning_engine,
-    LearnTool, LearningPatternsTool,
+    LearnTool, LearningPatternsTool, get_global_learning_engine, get_learning_patterns_for_context,
+    init_global_learning_engine,
 };
 pub use memory::{
-    get_global_memory_manager, get_memories_for_context, init_global_memory_manager,
-    RememberTool, SessionNotesTool,
+    RememberTool, SessionNotesTool, get_global_memory_manager, get_memories_for_context,
+    init_global_memory_manager,
 };
 pub use mermaid::RenderMermaidTool;

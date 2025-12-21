@@ -154,11 +154,9 @@ impl SkillTrigger {
                 let lower_kw = kw.to_lowercase();
                 lower_msg.contains(&lower_kw)
             }
-            Self::Regex(pattern) => {
-                regex::Regex::new(pattern)
-                    .map(|re| re.is_match(&context.user_message))
-                    .unwrap_or(false)
-            }
+            Self::Regex(pattern) => regex::Regex::new(pattern)
+                .map(|re| re.is_match(&context.user_message))
+                .unwrap_or(false),
             Self::FileExtension(ext) => context
                 .active_files
                 .iter()
@@ -382,8 +380,7 @@ mod tests {
     #[test]
     fn test_skill_trigger_file_extension() {
         let trigger = SkillTrigger::FileExtension("rs".to_string());
-        let context = SkillContext::new("Edit this file")
-            .with_file("main.rs");
+        let context = SkillContext::new("Edit this file").with_file("main.rs");
 
         assert!(trigger.matches(&context));
     }
@@ -391,8 +388,7 @@ mod tests {
     #[test]
     fn test_skill_trigger_tool_usage() {
         let trigger = SkillTrigger::ToolUsage("Bash".to_string());
-        let context = SkillContext::new("Run tests")
-            .with_recent_tool("Bash");
+        let context = SkillContext::new("Run tests").with_recent_tool("Bash");
 
         assert!(trigger.matches(&context));
     }
@@ -406,8 +402,7 @@ mod tests {
         let context1 = SkillContext::new("Write a test");
         assert!(skill.matches(&context1));
 
-        let context2 = SkillContext::new("Write code")
-            .with_task_type(TaskType::Testing);
+        let context2 = SkillContext::new("Write code").with_task_type(TaskType::Testing);
         assert!(skill.matches(&context2));
 
         let context3 = SkillContext::new("Write code");
@@ -459,11 +454,10 @@ mod tests {
 
     #[test]
     fn test_skill_prompt_expansion() {
-        let skill = Skill::new("test", "Test")
-            .with_prompt("User said: $USER_MESSAGE in $WORKING_DIR");
+        let skill =
+            Skill::new("test", "Test").with_prompt("User said: $USER_MESSAGE in $WORKING_DIR");
 
-        let context = SkillContext::new("hello")
-            .with_working_dir("/project");
+        let context = SkillContext::new("hello").with_working_dir("/project");
 
         let prompt = skill.get_full_prompt(&context);
         assert!(prompt.contains("hello"));

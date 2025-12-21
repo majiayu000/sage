@@ -1,7 +1,10 @@
 //! Memory manager for high-level memory operations
 
 use super::storage::{FileMemoryStorage, InMemoryStorage, MemoryStorage, MemoryStorageError};
-use super::types::{Memory, MemoryCategory, MemoryId, MemoryMetadata, MemoryQuery, MemoryScore, MemorySource, MemoryType};
+use super::types::{
+    Memory, MemoryCategory, MemoryId, MemoryMetadata, MemoryQuery, MemoryScore, MemorySource,
+    MemoryType,
+};
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -211,7 +214,10 @@ impl MemoryManager {
     }
 
     /// Search memories
-    pub async fn search(&self, query: &MemoryQuery) -> Result<Vec<MemoryScore>, MemoryStorageError> {
+    pub async fn search(
+        &self,
+        query: &MemoryQuery,
+    ) -> Result<Vec<MemoryScore>, MemoryStorageError> {
         self.storage.search(query).await
     }
 
@@ -223,14 +229,20 @@ impl MemoryManager {
     }
 
     /// Find memories by type
-    pub async fn find_by_type(&self, memory_type: MemoryType) -> Result<Vec<Memory>, MemoryStorageError> {
+    pub async fn find_by_type(
+        &self,
+        memory_type: MemoryType,
+    ) -> Result<Vec<Memory>, MemoryStorageError> {
         let query = MemoryQuery::new().memory_type(memory_type);
         let results = self.storage.search(&query).await?;
         Ok(results.into_iter().map(|ms| ms.memory).collect())
     }
 
     /// Find memories by category
-    pub async fn find_by_category(&self, category: MemoryCategory) -> Result<Vec<Memory>, MemoryStorageError> {
+    pub async fn find_by_category(
+        &self,
+        category: MemoryCategory,
+    ) -> Result<Vec<Memory>, MemoryStorageError> {
         let query = MemoryQuery::new().category(category);
         let results = self.storage.search(&query).await?;
         Ok(results.into_iter().map(|ms| ms.memory).collect())
@@ -257,8 +269,7 @@ impl MemoryManager {
         content: impl Into<String>,
         source: MemorySource,
     ) -> Result<MemoryId, MemoryStorageError> {
-        let memory = Memory::fact(content)
-            .with_metadata(MemoryMetadata::with_source(source));
+        let memory = Memory::fact(content).with_metadata(MemoryMetadata::with_source(source));
         self.store(memory).await
     }
 
@@ -277,8 +288,8 @@ impl MemoryManager {
         &self,
         content: impl Into<String>,
     ) -> Result<MemoryId, MemoryStorageError> {
-        let memory = Memory::lesson(content)
-            .with_metadata(MemoryMetadata::with_source(MemorySource::Agent));
+        let memory =
+            Memory::lesson(content).with_metadata(MemoryMetadata::with_source(MemorySource::Agent));
         self.store(memory).await
     }
 
@@ -352,7 +363,10 @@ impl MemoryManager {
 
         for memory in &all {
             // By type
-            *stats.by_type.entry(memory.memory_type.name().to_string()).or_default() += 1;
+            *stats
+                .by_type
+                .entry(memory.memory_type.name().to_string())
+                .or_default() += 1;
 
             // By category
             *stats.by_category.entry(memory.category.name()).or_default() += 1;
@@ -514,7 +528,10 @@ mod tests {
     async fn test_remember_fact() {
         let manager = MemoryManager::new(MemoryConfig::default()).await.unwrap();
 
-        manager.remember_fact("Rust uses Cargo", MemorySource::Agent).await.unwrap();
+        manager
+            .remember_fact("Rust uses Cargo", MemorySource::Agent)
+            .await
+            .unwrap();
 
         let facts = manager.facts().await.unwrap();
         assert_eq!(facts.len(), 1);
@@ -525,7 +542,10 @@ mod tests {
     async fn test_remember_preference() {
         let manager = MemoryManager::new(MemoryConfig::default()).await.unwrap();
 
-        manager.remember_preference("User prefers dark mode").await.unwrap();
+        manager
+            .remember_preference("User prefers dark mode")
+            .await
+            .unwrap();
 
         let prefs = manager.preferences().await.unwrap();
         assert_eq!(prefs.len(), 1);
@@ -536,7 +556,10 @@ mod tests {
     async fn test_remember_lesson() {
         let manager = MemoryManager::new(MemoryConfig::default()).await.unwrap();
 
-        manager.remember_lesson("Always check return values").await.unwrap();
+        manager
+            .remember_lesson("Always check return values")
+            .await
+            .unwrap();
 
         let lessons = manager.lessons().await.unwrap();
         assert_eq!(lessons.len(), 1);
@@ -546,8 +569,14 @@ mod tests {
     async fn test_search() {
         let manager = MemoryManager::new(MemoryConfig::default()).await.unwrap();
 
-        manager.remember_fact("Rust is a systems language", MemorySource::User).await.unwrap();
-        manager.remember_fact("Python is interpreted", MemorySource::User).await.unwrap();
+        manager
+            .remember_fact("Rust is a systems language", MemorySource::User)
+            .await
+            .unwrap();
+        manager
+            .remember_fact("Python is interpreted", MemorySource::User)
+            .await
+            .unwrap();
 
         let results = manager.find("Rust").await.unwrap();
         assert_eq!(results.len(), 1);
@@ -558,7 +587,10 @@ mod tests {
     async fn test_find_by_type() {
         let manager = MemoryManager::new(MemoryConfig::default()).await.unwrap();
 
-        manager.remember_fact("A fact", MemorySource::User).await.unwrap();
+        manager
+            .remember_fact("A fact", MemorySource::User)
+            .await
+            .unwrap();
         manager.remember_preference("A preference").await.unwrap();
 
         let facts = manager.find_by_type(MemoryType::Fact).await.unwrap();
@@ -572,7 +604,10 @@ mod tests {
     async fn test_pin_unpin() {
         let manager = MemoryManager::new(MemoryConfig::default()).await.unwrap();
 
-        let id = manager.remember_fact("Test", MemorySource::User).await.unwrap();
+        let id = manager
+            .remember_fact("Test", MemorySource::User)
+            .await
+            .unwrap();
 
         manager.pin(&id).await.unwrap();
         let pinned = manager.pinned().await.unwrap();
@@ -587,7 +622,10 @@ mod tests {
     async fn test_delete() {
         let manager = MemoryManager::new(MemoryConfig::default()).await.unwrap();
 
-        let id = manager.remember_fact("To delete", MemorySource::User).await.unwrap();
+        let id = manager
+            .remember_fact("To delete", MemorySource::User)
+            .await
+            .unwrap();
         manager.delete(&id).await.unwrap();
 
         assert!(manager.get(&id).await.unwrap().is_none());
@@ -597,8 +635,14 @@ mod tests {
     async fn test_stats() {
         let manager = MemoryManager::new(MemoryConfig::default()).await.unwrap();
 
-        manager.remember_fact("Fact 1", MemorySource::User).await.unwrap();
-        manager.remember_fact("Fact 2", MemorySource::User).await.unwrap();
+        manager
+            .remember_fact("Fact 1", MemorySource::User)
+            .await
+            .unwrap();
+        manager
+            .remember_fact("Fact 2", MemorySource::User)
+            .await
+            .unwrap();
         manager.remember_preference("Pref 1").await.unwrap();
 
         let stats = manager.stats().await.unwrap();
@@ -612,8 +656,14 @@ mod tests {
     async fn test_export_import() {
         let manager = MemoryManager::new(MemoryConfig::default()).await.unwrap();
 
-        manager.remember_fact("Fact 1", MemorySource::User).await.unwrap();
-        manager.remember_fact("Fact 2", MemorySource::User).await.unwrap();
+        manager
+            .remember_fact("Fact 1", MemorySource::User)
+            .await
+            .unwrap();
+        manager
+            .remember_fact("Fact 2", MemorySource::User)
+            .await
+            .unwrap();
 
         let json = manager.export().await.unwrap();
         manager.clear().await.unwrap();
@@ -632,8 +682,14 @@ mod tests {
     async fn test_relevant_context() {
         let manager = MemoryManager::new(MemoryConfig::default()).await.unwrap();
 
-        manager.remember_fact("Rust uses Cargo for builds", MemorySource::User).await.unwrap();
-        manager.remember_fact("Python uses pip for packages", MemorySource::User).await.unwrap();
+        manager
+            .remember_fact("Rust uses Cargo for builds", MemorySource::User)
+            .await
+            .unwrap();
+        manager
+            .remember_fact("Python uses pip for packages", MemorySource::User)
+            .await
+            .unwrap();
 
         let context = manager.get_relevant_context("Rust", 5).await.unwrap();
         assert!(context.contains("Cargo"));
@@ -649,8 +705,14 @@ mod tests {
         let manager = MemoryManager::new(config).await.unwrap();
 
         // Store similar memories
-        manager.remember_fact("Rust uses Cargo", MemorySource::User).await.unwrap();
-        manager.remember_fact("Rust uses Cargo build", MemorySource::User).await.unwrap();
+        manager
+            .remember_fact("Rust uses Cargo", MemorySource::User)
+            .await
+            .unwrap();
+        manager
+            .remember_fact("Rust uses Cargo build", MemorySource::User)
+            .await
+            .unwrap();
 
         // With deduplication, count should be 1
         assert_eq!(manager.storage.count().await.unwrap(), 1);
@@ -660,7 +722,10 @@ mod tests {
     async fn test_clear() {
         let manager = MemoryManager::new(MemoryConfig::default()).await.unwrap();
 
-        manager.remember_fact("Test", MemorySource::User).await.unwrap();
+        manager
+            .remember_fact("Test", MemorySource::User)
+            .await
+            .unwrap();
         manager.clear().await.unwrap();
 
         assert_eq!(manager.storage.count().await.unwrap(), 0);
@@ -690,7 +755,10 @@ mod tests {
         let config = MemoryConfig::default();
         let manager = create_memory_manager(config).await.unwrap();
 
-        manager.remember_fact("Shared test", MemorySource::User).await.unwrap();
+        manager
+            .remember_fact("Shared test", MemorySource::User)
+            .await
+            .unwrap();
         assert_eq!(manager.storage.count().await.unwrap(), 1);
     }
 }

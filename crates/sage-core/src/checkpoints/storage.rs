@@ -118,9 +118,11 @@ impl FileCheckpointStorage {
 
     /// Ensure directories exist
     async fn ensure_dirs(&self) -> SageResult<()> {
-        fs::create_dir_all(self.checkpoints_dir()).await.map_err(|e| {
-            SageError::Storage(format!("Failed to create checkpoints directory: {}", e))
-        })?;
+        fs::create_dir_all(self.checkpoints_dir())
+            .await
+            .map_err(|e| {
+                SageError::Storage(format!("Failed to create checkpoints directory: {}", e))
+            })?;
         fs::create_dir_all(self.content_dir()).await.map_err(|e| {
             SageError::Storage(format!("Failed to create content directory: {}", e))
         })?;
@@ -322,19 +324,18 @@ impl CheckpointStorage for FileCheckpointStorage {
         let processed = self.process_for_storage(checkpoint).await?;
 
         // Serialize to JSON
-        let json = serde_json::to_string_pretty(&processed).map_err(|e| {
-            SageError::Storage(format!("Failed to serialize checkpoint: {}", e))
-        })?;
+        let json = serde_json::to_string_pretty(&processed)
+            .map_err(|e| SageError::Storage(format!("Failed to serialize checkpoint: {}", e)))?;
 
         // Write to file
         let path = self.checkpoint_path(&checkpoint.id);
-        let mut file = fs::File::create(&path).await.map_err(|e| {
-            SageError::Storage(format!("Failed to create checkpoint file: {}", e))
-        })?;
+        let mut file = fs::File::create(&path)
+            .await
+            .map_err(|e| SageError::Storage(format!("Failed to create checkpoint file: {}", e)))?;
 
-        file.write_all(json.as_bytes()).await.map_err(|e| {
-            SageError::Storage(format!("Failed to write checkpoint file: {}", e))
-        })?;
+        file.write_all(json.as_bytes())
+            .await
+            .map_err(|e| SageError::Storage(format!("Failed to write checkpoint file: {}", e)))?;
 
         tracing::debug!("Saved checkpoint {} to {:?}", checkpoint.id, path);
         Ok(())
@@ -347,18 +348,17 @@ impl CheckpointStorage for FileCheckpointStorage {
             return Ok(None);
         }
 
-        let mut file = fs::File::open(&path).await.map_err(|e| {
-            SageError::Storage(format!("Failed to open checkpoint file: {}", e))
-        })?;
+        let mut file = fs::File::open(&path)
+            .await
+            .map_err(|e| SageError::Storage(format!("Failed to open checkpoint file: {}", e)))?;
 
         let mut content = String::new();
-        file.read_to_string(&mut content).await.map_err(|e| {
-            SageError::Storage(format!("Failed to read checkpoint file: {}", e))
-        })?;
+        file.read_to_string(&mut content)
+            .await
+            .map_err(|e| SageError::Storage(format!("Failed to read checkpoint file: {}", e)))?;
 
-        let checkpoint: Checkpoint = serde_json::from_str(&content).map_err(|e| {
-            SageError::Storage(format!("Failed to deserialize checkpoint: {}", e))
-        })?;
+        let checkpoint: Checkpoint = serde_json::from_str(&content)
+            .map_err(|e| SageError::Storage(format!("Failed to deserialize checkpoint: {}", e)))?;
 
         // Restore externalized content
         let restored = self.restore_content(&checkpoint).await?;
@@ -378,9 +378,11 @@ impl CheckpointStorage for FileCheckpointStorage {
             SageError::Storage(format!("Failed to read checkpoints directory: {}", e))
         })?;
 
-        while let Some(entry) = entries.next_entry().await.map_err(|e| {
-            SageError::Storage(format!("Failed to read directory entry: {}", e))
-        })? {
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .map_err(|e| SageError::Storage(format!("Failed to read directory entry: {}", e)))?
+        {
             let path = entry.path();
             if path.extension().map_or(false, |ext| ext == "json") {
                 if let Some(stem) = path.file_stem() {
@@ -436,27 +438,32 @@ impl CheckpointStorage for FileCheckpointStorage {
         }
 
         // Compress content
-        use flate2::write::GzEncoder;
         use flate2::Compression;
+        use flate2::write::GzEncoder;
         use std::io::Write;
 
         let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-        encoder.write_all(content.as_bytes()).map_err(|e| {
-            SageError::Storage(format!("Failed to compress content: {}", e))
-        })?;
-        let compressed = encoder.finish().map_err(|e| {
-            SageError::Storage(format!("Failed to finish compression: {}", e))
-        })?;
+        encoder
+            .write_all(content.as_bytes())
+            .map_err(|e| SageError::Storage(format!("Failed to compress content: {}", e)))?;
+        let compressed = encoder
+            .finish()
+            .map_err(|e| SageError::Storage(format!("Failed to finish compression: {}", e)))?;
 
         // Write compressed content
-        let mut file = fs::File::create(&path).await.map_err(|e| {
-            SageError::Storage(format!("Failed to create content file: {}", e))
-        })?;
-        file.write_all(&compressed).await.map_err(|e| {
-            SageError::Storage(format!("Failed to write content file: {}", e))
-        })?;
+        let mut file = fs::File::create(&path)
+            .await
+            .map_err(|e| SageError::Storage(format!("Failed to create content file: {}", e)))?;
+        file.write_all(&compressed)
+            .await
+            .map_err(|e| SageError::Storage(format!("Failed to write content file: {}", e)))?;
 
-        tracing::debug!("Stored content {} ({} -> {} bytes)", content_ref, content.len(), compressed.len());
+        tracing::debug!(
+            "Stored content {} ({} -> {} bytes)",
+            content_ref,
+            content.len(),
+            compressed.len()
+        );
         Ok(content_ref)
     }
 
@@ -468,14 +475,14 @@ impl CheckpointStorage for FileCheckpointStorage {
         }
 
         // Read compressed content
-        let mut file = fs::File::open(&path).await.map_err(|e| {
-            SageError::Storage(format!("Failed to open content file: {}", e))
-        })?;
+        let mut file = fs::File::open(&path)
+            .await
+            .map_err(|e| SageError::Storage(format!("Failed to open content file: {}", e)))?;
 
         let mut compressed = Vec::new();
-        file.read_to_end(&mut compressed).await.map_err(|e| {
-            SageError::Storage(format!("Failed to read content file: {}", e))
-        })?;
+        file.read_to_end(&mut compressed)
+            .await
+            .map_err(|e| SageError::Storage(format!("Failed to read content file: {}", e)))?;
 
         // Decompress
         use flate2::read::GzDecoder;
@@ -483,9 +490,9 @@ impl CheckpointStorage for FileCheckpointStorage {
 
         let mut decoder = GzDecoder::new(&compressed[..]);
         let mut decompressed = String::new();
-        decoder.read_to_string(&mut decompressed).map_err(|e| {
-            SageError::Storage(format!("Failed to decompress content: {}", e))
-        })?;
+        decoder
+            .read_to_string(&mut decompressed)
+            .map_err(|e| SageError::Storage(format!("Failed to decompress content: {}", e)))?;
 
         Ok(Some(decompressed))
     }
@@ -579,8 +586,7 @@ mod tests {
 
     fn create_test_checkpoint() -> Checkpoint {
         use super::super::types::CheckpointType;
-        Checkpoint::new("Test checkpoint", CheckpointType::Manual)
-            .with_name("Test")
+        Checkpoint::new("Test checkpoint", CheckpointType::Manual).with_name("Test")
     }
 
     #[tokio::test]
@@ -693,8 +699,8 @@ mod tests {
         use super::super::types::{CheckpointType, FileSnapshot, FileState};
         let large_content = "x".repeat(200);
 
-        let checkpoint = Checkpoint::new("With large file", CheckpointType::Auto)
-            .with_file(FileSnapshot::new(
+        let checkpoint =
+            Checkpoint::new("With large file", CheckpointType::Auto).with_file(FileSnapshot::new(
                 "large.txt",
                 FileState::Exists {
                     content: Some(large_content.clone()),
@@ -733,8 +739,8 @@ mod tests {
     async fn test_checkpoint_summary() {
         use super::super::types::CheckpointType;
 
-        let checkpoint = Checkpoint::new("Summary test", CheckpointType::Manual)
-            .with_name("Named checkpoint");
+        let checkpoint =
+            Checkpoint::new("Summary test", CheckpointType::Manual).with_name("Named checkpoint");
 
         let summary = CheckpointSummary::from(&checkpoint);
 

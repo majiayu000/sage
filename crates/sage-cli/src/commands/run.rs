@@ -1,6 +1,6 @@
 //! Run command implementation
 
-use crate::commands::session_resume::{print_session_details, SessionSelector};
+use crate::commands::session_resume::{SessionSelector, print_session_details};
 use crate::console::CLIConsole;
 use crate::signal_handler::start_global_signal_handling;
 use sage_core::commands::types::InteractiveCommand;
@@ -269,7 +269,9 @@ pub async fn execute(args: RunArgs) -> SageResult<()> {
                     console.warn("⚠ Task reached maximum steps without completion");
                     console.info("Consider breaking down the task or increasing max_steps");
                 }
-                ExecutionOutcome::UserCancelled { pending_question, .. } => {
+                ExecutionOutcome::UserCancelled {
+                    pending_question, ..
+                } => {
                     console.warn("⊘ Task cancelled by user");
                     if let Some(question) = pending_question {
                         console.info(&format!("Pending question: {}", question));
@@ -280,7 +282,9 @@ pub async fn execute(args: RunArgs) -> SageResult<()> {
                     if !last_response.is_empty() {
                         console.info(&format!("Last response: {}", last_response));
                     }
-                    console.info("ℹ Use interactive mode (sage interactive) for multi-turn conversations");
+                    console.info(
+                        "ℹ Use interactive mode (sage interactive) for multi-turn conversations",
+                    );
                 }
             }
 
@@ -401,9 +405,10 @@ async fn handle_interactive_command(
     console: &CLIConsole,
 ) -> SageResult<()> {
     match cmd {
-        InteractiveCommand::Resume { session_id, show_all } => {
-            handle_resume_command(session_id.clone(), *show_all, console).await
-        }
+        InteractiveCommand::Resume {
+            session_id,
+            show_all,
+        } => handle_resume_command(session_id.clone(), *show_all, console).await,
     }
 }
 
@@ -471,10 +476,7 @@ async fn handle_resume_command(
                     return Ok(());
                 }
                 None => {
-                    return Err(SageError::NotFound(format!(
-                        "Session '{}' not found",
-                        id
-                    )));
+                    return Err(SageError::NotFound(format!("Session '{}' not found", id)));
                 }
             }
         }

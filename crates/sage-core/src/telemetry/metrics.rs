@@ -1,8 +1,8 @@
 //! Metric types and definitions
 
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 
@@ -226,7 +226,9 @@ impl Histogram {
         Self::with_buckets(
             name,
             description,
-            vec![0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0],
+            vec![
+                0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
+            ],
         )
     }
 
@@ -496,9 +498,9 @@ mod tests {
         histogram.observe(0.8).await;
 
         let data = histogram.get_data().await;
-        assert_eq!(data.buckets[0], (0.1, 1));  // 0.05 <= 0.1
-        assert_eq!(data.buckets[1], (0.5, 2));  // 0.05, 0.3 <= 0.5
-        assert_eq!(data.buckets[2], (1.0, 3));  // all <= 1.0
+        assert_eq!(data.buckets[0], (0.1, 1)); // 0.05 <= 0.1
+        assert_eq!(data.buckets[1], (0.5, 2)); // 0.05, 0.3 <= 0.5
+        assert_eq!(data.buckets[2], (1.0, 3)); // all <= 1.0
     }
 
     #[tokio::test]
@@ -538,8 +540,14 @@ mod tests {
         counter.inc(["GET", "200"]).await;
         counter.inc(["POST", "201"]).await;
 
-        assert_eq!(counter.get(&["GET".to_string(), "200".to_string()]).await, 2);
-        assert_eq!(counter.get(&["POST".to_string(), "201".to_string()]).await, 1);
+        assert_eq!(
+            counter.get(&["GET".to_string(), "200".to_string()]).await,
+            2
+        );
+        assert_eq!(
+            counter.get(&["POST".to_string(), "201".to_string()]).await,
+            1
+        );
     }
 
     #[tokio::test]

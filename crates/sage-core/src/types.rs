@@ -49,7 +49,10 @@ impl LLMUsage {
             self.cost_usd = Some(cost1 + cost2);
         }
         // Add cache tokens
-        match (self.cache_creation_input_tokens, other.cache_creation_input_tokens) {
+        match (
+            self.cache_creation_input_tokens,
+            other.cache_creation_input_tokens,
+        ) {
             (Some(t1), Some(t2)) => self.cache_creation_input_tokens = Some(t1 + t2),
             (None, Some(t)) => self.cache_creation_input_tokens = Some(t),
             _ => {}

@@ -85,7 +85,12 @@ impl SystemPromptBuilder {
     }
 
     /// Set Git information
-    pub fn with_git_info(mut self, is_repo: bool, branch: impl Into<String>, main_branch: impl Into<String>) -> Self {
+    pub fn with_git_info(
+        mut self,
+        is_repo: bool,
+        branch: impl Into<String>,
+        main_branch: impl Into<String>,
+    ) -> Self {
         self.variables.is_git_repo = is_repo;
         self.variables.git_branch = branch.into();
         self.variables.main_branch = main_branch.into();
@@ -144,7 +149,11 @@ impl SystemPromptBuilder {
     }
 
     /// Add a custom section
-    pub fn with_custom_section(mut self, title: impl Into<String>, content: impl Into<String>) -> Self {
+    pub fn with_custom_section(
+        mut self,
+        title: impl Into<String>,
+        content: impl Into<String>,
+    ) -> Self {
         self.custom_sections.push((title.into(), content.into()));
         self
     }
@@ -156,7 +165,11 @@ impl SystemPromptBuilder {
     }
 
     /// Set platform info
-    pub fn with_platform(mut self, platform: impl Into<String>, os_version: impl Into<String>) -> Self {
+    pub fn with_platform(
+        mut self,
+        platform: impl Into<String>,
+        os_version: impl Into<String>,
+    ) -> Self {
         self.variables.platform = platform.into();
         self.variables.os_version = os_version.into();
         self
@@ -189,7 +202,10 @@ impl SystemPromptBuilder {
         // Add plan mode reminder if in plan mode
         if self.in_plan_mode {
             if let Some(plan_path) = &self.plan_file_path {
-                reminders.insert(0, SystemReminder::plan_mode_active(plan_path, self.plan_exists));
+                reminders.insert(
+                    0,
+                    SystemReminder::plan_mode_active(plan_path, self.plan_exists),
+                );
             }
         }
 
@@ -284,8 +300,8 @@ impl SystemPromptBuilder {
     pub fn build_for_agent(&self, agent_type: &str) -> String {
         use super::agent_prompts::AgentPrompts;
 
-        let agent_prompt = AgentPrompts::for_agent_type(agent_type)
-            .unwrap_or(AgentPrompts::GENERAL_PURPOSE);
+        let agent_prompt =
+            AgentPrompts::for_agent_type(agent_type).unwrap_or(AgentPrompts::GENERAL_PURPOSE);
 
         let mut prompt = TemplateRenderer::render(agent_prompt, &self.variables);
 
@@ -343,9 +359,7 @@ mod tests {
             ToolSchema::new("Write", "Writes files", vec![]),
         ];
 
-        let prompt = SystemPromptBuilder::new()
-            .with_tools(tools)
-            .build();
+        let prompt = SystemPromptBuilder::new().with_tools(tools).build();
 
         assert!(prompt.contains("Read"));
         assert!(prompt.contains("Write"));
@@ -394,8 +408,7 @@ mod tests {
 
     #[test]
     fn test_builder_agent_prompt() {
-        let builder = SystemPromptBuilder::new()
-            .with_agent_name("Sage Agent");
+        let builder = SystemPromptBuilder::new().with_agent_name("Sage Agent");
 
         let explore_prompt = builder.build_for_agent("explore");
         assert!(explore_prompt.contains("file search specialist"));
@@ -434,8 +447,7 @@ mod tests {
             ToolSchema::new("TodoWrite", "Manage tasks", vec![]),
         ];
 
-        let builder = SystemPromptBuilder::new()
-            .with_tools(tools);
+        let builder = SystemPromptBuilder::new().with_tools(tools);
 
         assert!(builder.variables.has_tool("Bash"));
         assert!(builder.variables.has_tool("TodoWrite"));

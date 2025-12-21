@@ -84,10 +84,7 @@ impl CommandExecutor {
         // Expand the prompt template
         let expanded = command.expand(&invocation.arguments);
 
-        Ok(CommandResult::prompt(expanded).with_status(format!(
-            "/{} is running...",
-            command.name
-        )))
+        Ok(CommandResult::prompt(expanded).with_status(format!("/{} is running...", command.name)))
     }
 
     /// Execute a built-in command
@@ -130,8 +127,7 @@ impl CommandExecutor {
 
     /// Execute /clear command
     async fn execute_clear(&self) -> SageResult<CommandResult> {
-        Ok(CommandResult::prompt("__CLEAR_CONVERSATION__")
-            .with_status("Conversation cleared"))
+        Ok(CommandResult::prompt("__CLEAR_CONVERSATION__").with_status("Conversation cleared"))
     }
 
     /// Execute /compact command
@@ -166,7 +162,10 @@ impl CommandExecutor {
     }
 
     /// Execute /checkpoint command
-    async fn execute_checkpoint(&self, invocation: &CommandInvocation) -> SageResult<CommandResult> {
+    async fn execute_checkpoint(
+        &self,
+        invocation: &CommandInvocation,
+    ) -> SageResult<CommandResult> {
         let name = invocation.arguments.first().cloned();
         let prompt = match name {
             Some(n) => format!(
@@ -322,7 +321,8 @@ Use /compact to reduce context usage when approaching limits.
         // Get version from cargo
         let version = env!("CARGO_PKG_VERSION");
 
-        let output = format!(r#"
+        let output = format!(
+            r#"
 Sage Agent Status
 =================
 
@@ -335,7 +335,10 @@ Configuration:
 
 For detailed provider and model info, check your sage_config.json file.
 Use /doctor to diagnose any connection issues.
-"#, version, self.registry.read().await.builtin_count());
+"#,
+            version,
+            self.registry.read().await.builtin_count()
+        );
 
         Ok(CommandResult::local(output).with_status("Showing status..."))
     }
@@ -343,7 +346,10 @@ Use /doctor to diagnose any connection issues.
     /// Execute /resume command - resume previous session
     async fn execute_resume(&self, invocation: &CommandInvocation) -> SageResult<CommandResult> {
         let session_id = invocation.arguments.first().cloned();
-        let show_all = invocation.arguments.iter().any(|a| a == "--all" || a == "-a");
+        let show_all = invocation
+            .arguments
+            .iter()
+            .any(|a| a == "--all" || a == "-a");
 
         // Return an interactive command that the CLI will handle
         Ok(CommandResult::interactive(InteractiveCommand::Resume {
@@ -363,7 +369,8 @@ Use /doctor to diagnose any connection issues.
                 Ok(CommandResult::prompt(prompt).with_status("Opening plan..."))
             }
             Some("clear") => {
-                let prompt = "Clear the current execution plan by removing or emptying .sage/plan.md";
+                let prompt =
+                    "Clear the current execution plan by removing or emptying .sage/plan.md";
                 Ok(CommandResult::prompt(prompt).with_status("Clearing plan..."))
             }
             Some("create") => {

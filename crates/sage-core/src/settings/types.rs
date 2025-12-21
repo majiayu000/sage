@@ -411,7 +411,10 @@ mod tests {
         let settings = Settings::default();
         assert!(settings.permissions.allow.is_empty());
         assert!(settings.permissions.deny.is_empty());
-        assert_eq!(settings.permissions.default_behavior, PermissionBehavior::Ask);
+        assert_eq!(
+            settings.permissions.default_behavior,
+            PermissionBehavior::Ask
+        );
     }
 
     #[test]

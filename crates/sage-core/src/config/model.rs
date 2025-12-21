@@ -303,7 +303,7 @@ impl Default for Config {
 
         Self {
             default_provider: "anthropic".to_string(),
-            max_steps: None, // None = unlimited steps
+            max_steps: None,          // None = unlimited steps
             total_token_budget: None, // No limit by default
             model_providers,
             lakeview_config: None,
@@ -370,7 +370,9 @@ impl Config {
         // Validate max steps (if set)
         if let Some(max_steps) = self.max_steps {
             if max_steps == 0 {
-                return Err(SageError::config("Max steps must be greater than 0 (use None for unlimited)"));
+                return Err(SageError::config(
+                    "Max steps must be greater than 0 (use None for unlimited)",
+                ));
             }
         }
 

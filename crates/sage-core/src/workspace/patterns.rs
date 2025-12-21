@@ -270,7 +270,12 @@ impl PatternMatcher {
         // Config
         self.add_pattern(
             ProjectPattern::new("Rust Config", ImportantFileType::Config)
-                .with_patterns(["rust-toolchain.toml", "rustfmt.toml", ".rustfmt.toml", "clippy.toml"])
+                .with_patterns([
+                    "rust-toolchain.toml",
+                    "rustfmt.toml",
+                    ".rustfmt.toml",
+                    "clippy.toml",
+                ])
                 .with_priority(60),
         );
 
@@ -294,8 +299,12 @@ impl PatternMatcher {
         self.add_pattern(
             ProjectPattern::new("Index", ImportantFileType::EntryPoint)
                 .with_patterns([
-                    "src/index.ts", "src/index.tsx", "src/index.js", "src/index.jsx",
-                    "index.ts", "index.js",
+                    "src/index.ts",
+                    "src/index.tsx",
+                    "src/index.js",
+                    "src/index.jsx",
+                    "index.ts",
+                    "index.js",
                 ])
                 .with_priority(95),
         );
@@ -303,9 +312,14 @@ impl PatternMatcher {
         self.add_pattern(
             ProjectPattern::new("App", ImportantFileType::EntryPoint)
                 .with_patterns([
-                    "src/App.tsx", "src/App.jsx", "src/app.ts", "src/app.js",
-                    "app/page.tsx", "app/page.jsx",  // Next.js app router
-                    "pages/_app.tsx", "pages/_app.jsx",  // Next.js pages router
+                    "src/App.tsx",
+                    "src/App.jsx",
+                    "src/app.ts",
+                    "src/app.js",
+                    "app/page.tsx",
+                    "app/page.jsx", // Next.js app router
+                    "pages/_app.tsx",
+                    "pages/_app.jsx", // Next.js pages router
                 ])
                 .with_priority(90),
         );
@@ -313,8 +327,12 @@ impl PatternMatcher {
         self.add_pattern(
             ProjectPattern::new("Server", ImportantFileType::EntryPoint)
                 .with_patterns([
-                    "server.ts", "server.js", "src/server.ts", "src/server.js",
-                    "src/main.ts", "src/main.js",
+                    "server.ts",
+                    "server.js",
+                    "src/server.ts",
+                    "src/server.js",
+                    "src/main.ts",
+                    "src/main.js",
                 ])
                 .with_priority(90),
         );
@@ -330,7 +348,10 @@ impl PatternMatcher {
         self.add_pattern(
             ProjectPattern::new("Lock File", ImportantFileType::LockFile)
                 .with_patterns([
-                    "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "bun.lockb",
+                    "package-lock.json",
+                    "yarn.lock",
+                    "pnpm-lock.yaml",
+                    "bun.lockb",
                 ])
                 .with_priority(60),
         );
@@ -345,8 +366,12 @@ impl PatternMatcher {
         self.add_pattern(
             ProjectPattern::new("ESLint", ImportantFileType::Config)
                 .with_patterns([
-                    ".eslintrc", ".eslintrc.js", ".eslintrc.json", ".eslintrc.cjs",
-                    "eslint.config.js", "eslint.config.mjs",
+                    ".eslintrc",
+                    ".eslintrc.js",
+                    ".eslintrc.json",
+                    ".eslintrc.cjs",
+                    "eslint.config.js",
+                    "eslint.config.mjs",
                 ])
                 .with_priority(60),
         );
@@ -354,8 +379,11 @@ impl PatternMatcher {
         self.add_pattern(
             ProjectPattern::new("Prettier", ImportantFileType::Config)
                 .with_patterns([
-                    ".prettierrc", ".prettierrc.js", ".prettierrc.json",
-                    "prettier.config.js", "prettier.config.mjs",
+                    ".prettierrc",
+                    ".prettierrc.js",
+                    ".prettierrc.json",
+                    "prettier.config.js",
+                    "prettier.config.mjs",
                 ])
                 .with_priority(50),
         );
@@ -382,8 +410,11 @@ impl PatternMatcher {
         self.add_pattern(
             ProjectPattern::new("Test Config", ImportantFileType::Config)
                 .with_patterns([
-                    "jest.config.js", "jest.config.ts", "vitest.config.ts",
-                    "playwright.config.ts", "cypress.config.ts",
+                    "jest.config.js",
+                    "jest.config.ts",
+                    "vitest.config.ts",
+                    "playwright.config.ts",
+                    "cypress.config.ts",
                 ])
                 .with_priority(70),
         );
@@ -398,7 +429,12 @@ impl PatternMatcher {
         // API
         self.add_pattern(
             ProjectPattern::new("OpenAPI", ImportantFileType::ApiDefinition)
-                .with_patterns(["openapi.yaml", "openapi.json", "swagger.yaml", "swagger.json"])
+                .with_patterns([
+                    "openapi.yaml",
+                    "openapi.json",
+                    "swagger.yaml",
+                    "swagger.json",
+                ])
                 .with_priority(75),
         );
     }
@@ -525,8 +561,11 @@ impl PatternMatcher {
         self.add_pattern(
             ProjectPattern::new("Main", ImportantFileType::EntryPoint)
                 .with_patterns([
-                    "**/Application.java", "**/Main.java", "**/App.java",
-                    "**/Application.kt", "**/Main.kt",
+                    "**/Application.java",
+                    "**/Main.java",
+                    "**/App.java",
+                    "**/Application.kt",
+                    "**/Main.kt",
                 ])
                 .with_priority(95),
         );
@@ -540,7 +579,12 @@ impl PatternMatcher {
 
         self.add_pattern(
             ProjectPattern::new("Gradle", ImportantFileType::Build)
-                .with_patterns(["build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"])
+                .with_patterns([
+                    "build.gradle",
+                    "build.gradle.kts",
+                    "settings.gradle",
+                    "settings.gradle.kts",
+                ])
                 .with_priority(100),
         );
 
@@ -608,7 +652,9 @@ impl PatternMatcher {
 
         // Sort by priority (descending) then by path
         files.sort_by(|a, b| {
-            b.priority.cmp(&a.priority).then_with(|| a.path.cmp(&b.path))
+            b.priority
+                .cmp(&a.priority)
+                .then_with(|| a.path.cmp(&b.path))
         });
 
         // Deduplicate by path
@@ -619,7 +665,10 @@ impl PatternMatcher {
     }
 
     /// Get files grouped by type
-    pub fn find_files_by_type(&self, root: &Path) -> HashMap<ImportantFileType, Vec<ImportantFile>> {
+    pub fn find_files_by_type(
+        &self,
+        root: &Path,
+    ) -> HashMap<ImportantFileType, Vec<ImportantFile>> {
         let files = self.find_important_files(root);
         let mut by_type: HashMap<ImportantFileType, Vec<ImportantFile>> = HashMap::new();
 
@@ -671,7 +720,9 @@ mod tests {
         let files = matcher.find_important_files(temp.path());
 
         assert!(!files.is_empty());
-        let readme = files.iter().find(|f| f.path.to_string_lossy().contains("README"));
+        let readme = files
+            .iter()
+            .find(|f| f.path.to_string_lossy().contains("README"));
         assert!(readme.is_some());
         assert_eq!(readme.unwrap().file_type, ImportantFileType::Documentation);
     }
@@ -687,7 +738,10 @@ mod tests {
         let matcher = PatternMatcher::for_language(LanguageType::Rust);
         let files = matcher.find_important_files(temp.path());
 
-        let paths: Vec<_> = files.iter().map(|f| f.path.to_string_lossy().to_string()).collect();
+        let paths: Vec<_> = files
+            .iter()
+            .map(|f| f.path.to_string_lossy().to_string())
+            .collect();
 
         assert!(paths.iter().any(|p| p.contains("Cargo.toml")));
         assert!(paths.iter().any(|p| p.contains("main.rs")));
@@ -705,7 +759,10 @@ mod tests {
         let matcher = PatternMatcher::for_language(LanguageType::TypeScript);
         let files = matcher.find_important_files(temp.path());
 
-        let paths: Vec<_> = files.iter().map(|f| f.path.to_string_lossy().to_string()).collect();
+        let paths: Vec<_> = files
+            .iter()
+            .map(|f| f.path.to_string_lossy().to_string())
+            .collect();
 
         assert!(paths.iter().any(|p| p.contains("package.json")));
         assert!(paths.iter().any(|p| p.contains("tsconfig.json")));
@@ -759,7 +816,9 @@ mod tests {
         let matcher = PatternMatcher::for_language(LanguageType::Rust);
         let files = matcher.find_important_files(temp.path());
 
-        let cicd = files.iter().find(|f| f.file_type == ImportantFileType::CiCd);
+        let cicd = files
+            .iter()
+            .find(|f| f.file_type == ImportantFileType::CiCd);
         assert!(cicd.is_some());
     }
 

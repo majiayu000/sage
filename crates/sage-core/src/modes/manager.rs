@@ -219,11 +219,7 @@ impl ModeManager {
     pub async fn record_blocked_tool(&self, tool_name: &str) {
         let mut state = self.state.write().await;
         state.record_blocked();
-        tracing::warn!(
-            "Tool '{}' blocked in {} mode",
-            tool_name,
-            state.mode
-        );
+        tracing::warn!("Tool '{}' blocked in {} mode", tool_name, state.mode);
     }
 
     /// Generate a plan file path
@@ -245,7 +241,12 @@ impl ModeManager {
         let idx1 = name.bytes().next().unwrap_or(0) as usize % adjectives.len();
         let idx2 = name.bytes().last().unwrap_or(0) as usize % nouns.len();
 
-        let descriptive = format!("{}-{}-{}", adjectives[idx1], nouns[idx2], &name[..4.min(name.len())]);
+        let descriptive = format!(
+            "{}-{}-{}",
+            adjectives[idx1],
+            nouns[idx2],
+            &name[..4.min(name.len())]
+        );
 
         self.plan_dir.join(format!("{}.md", descriptive))
     }
@@ -270,13 +271,13 @@ impl ModeManager {
         }
 
         // Write content
-        let mut file = fs::File::create(&plan_file).await.map_err(|e| {
-            SageError::Storage(format!("Failed to create plan file: {}", e))
-        })?;
+        let mut file = fs::File::create(&plan_file)
+            .await
+            .map_err(|e| SageError::Storage(format!("Failed to create plan file: {}", e)))?;
 
-        file.write_all(content.as_bytes()).await.map_err(|e| {
-            SageError::Storage(format!("Failed to write plan file: {}", e))
-        })?;
+        file.write_all(content.as_bytes())
+            .await
+            .map_err(|e| SageError::Storage(format!("Failed to write plan file: {}", e)))?;
 
         tracing::info!("Saved plan to {:?}", plan_file);
         Ok(plan_file)
@@ -297,14 +298,14 @@ impl ModeManager {
             return Ok(None);
         }
 
-        let mut file = fs::File::open(&plan_file).await.map_err(|e| {
-            SageError::Storage(format!("Failed to open plan file: {}", e))
-        })?;
+        let mut file = fs::File::open(&plan_file)
+            .await
+            .map_err(|e| SageError::Storage(format!("Failed to open plan file: {}", e)))?;
 
         let mut content = String::new();
-        file.read_to_string(&mut content).await.map_err(|e| {
-            SageError::Storage(format!("Failed to read plan file: {}", e))
-        })?;
+        file.read_to_string(&mut content)
+            .await
+            .map_err(|e| SageError::Storage(format!("Failed to read plan file: {}", e)))?;
 
         Ok(Some(content))
     }
@@ -429,10 +430,16 @@ mod tests {
     async fn test_transition_to() {
         let manager = ModeManager::new();
 
-        manager.transition_to(AgentMode::Debug, "Testing").await.unwrap();
+        manager
+            .transition_to(AgentMode::Debug, "Testing")
+            .await
+            .unwrap();
         assert_eq!(manager.current_mode().await, AgentMode::Debug);
 
-        manager.transition_to(AgentMode::Review, "Review").await.unwrap();
+        manager
+            .transition_to(AgentMode::Review, "Review")
+            .await
+            .unwrap();
         assert_eq!(manager.current_mode().await, AgentMode::Review);
     }
 

@@ -265,8 +265,7 @@ impl Pattern {
 
     /// Check if pattern is still valid (not too many contradictions)
     pub fn is_valid(&self) -> bool {
-        self.contradiction_count < self.observation_count / 2 + 1
-            && self.confidence.value() > 0.2
+        self.contradiction_count < self.observation_count / 2 + 1 && self.confidence.value() > 0.2
     }
 }
 
@@ -452,10 +451,7 @@ mod tests {
 
     #[test]
     fn test_pattern_correction() {
-        let pattern = Pattern::correction(
-            "Using tabs",
-            "Use spaces for indentation",
-        );
+        let pattern = Pattern::correction("Using tabs", "Use spaces for indentation");
 
         assert_eq!(pattern.pattern_type, PatternType::Correction);
         assert!(matches!(pattern.source, PatternSource::UserCorrection));

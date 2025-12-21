@@ -145,7 +145,9 @@ impl ConfigValidator {
         // Validate max_steps (if set; None means unlimited)
         if let Some(max_steps) = config.max_steps {
             if max_steps == 0 {
-                return Err(SageError::config("Max steps must be greater than 0 (use None for unlimited)"));
+                return Err(SageError::config(
+                    "Max steps must be greater than 0 (use None for unlimited)",
+                ));
             }
             if max_steps > 1000 {
                 return Err(SageError::config(format!(

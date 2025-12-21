@@ -22,9 +22,9 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tokio::fs;
 use tokio::sync::RwLock;
-use std::sync::Arc;
 
 /// Default cache file name
 const CACHE_FILE_NAME: &str = "cache.json";
@@ -246,15 +246,12 @@ pub struct SessionCache {
 impl SessionCache {
     /// Create a new session cache
     pub async fn new(config: SessionCacheConfig) -> SageResult<Self> {
-        let global_path = config
-            .global_cache_path
-            .clone()
-            .unwrap_or_else(|| {
-                dirs::home_dir()
-                    .unwrap_or_else(|| PathBuf::from("."))
-                    .join(GLOBAL_CACHE_DIR)
-                    .join(CACHE_FILE_NAME)
-            });
+        let global_path = config.global_cache_path.clone().unwrap_or_else(|| {
+            dirs::home_dir()
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join(GLOBAL_CACHE_DIR)
+                .join(CACHE_FILE_NAME)
+        });
 
         let cache = Self {
             config,
@@ -288,17 +285,15 @@ impl SessionCache {
 
         if self.global_path.exists() {
             match fs::read_to_string(&self.global_path).await {
-                Ok(content) => {
-                    match serde_json::from_str::<SessionCacheData>(&content) {
-                        Ok(data) => {
-                            *self.global_cache.write().await = data;
-                            tracing::debug!("Loaded global session cache from {:?}", self.global_path);
-                        }
-                        Err(e) => {
-                            tracing::warn!("Failed to parse global cache: {}, using defaults", e);
-                        }
+                Ok(content) => match serde_json::from_str::<SessionCacheData>(&content) {
+                    Ok(data) => {
+                        *self.global_cache.write().await = data;
+                        tracing::debug!("Loaded global session cache from {:?}", self.global_path);
                     }
-                }
+                    Err(e) => {
+                        tracing::warn!("Failed to parse global cache: {}, using defaults", e);
+                    }
+                },
                 Err(e) => {
                     tracing::debug!("No global cache file found: {}", e);
                 }
@@ -317,17 +312,15 @@ impl SessionCache {
         if let Some(path) = &self.project_path {
             if path.exists() {
                 match fs::read_to_string(path).await {
-                    Ok(content) => {
-                        match serde_json::from_str::<SessionCacheData>(&content) {
-                            Ok(data) => {
-                                *self.project_cache.write().await = Some(data);
-                                tracing::debug!("Loaded project session cache from {:?}", path);
-                            }
-                            Err(e) => {
-                                tracing::warn!("Failed to parse project cache: {}", e);
-                            }
+                    Ok(content) => match serde_json::from_str::<SessionCacheData>(&content) {
+                        Ok(data) => {
+                            *self.project_cache.write().await = Some(data);
+                            tracing::debug!("Loaded project session cache from {:?}", path);
                         }
-                    }
+                        Err(e) => {
+                            tracing::warn!("Failed to parse project cache: {}", e);
+                        }
+                    },
                     Err(e) => {
                         tracing::debug!("No project cache file: {}", e);
                     }
@@ -345,7 +338,8 @@ impl SessionCache {
         }
 
         // Save global cache
-        self.save_to_path(&self.global_path, &*self.global_cache.read().await).await?;
+        self.save_to_path(&self.global_path, &*self.global_cache.read().await)
+            .await?;
 
         // Save project cache if exists
         if let Some(path) = &self.project_path {
@@ -362,9 +356,9 @@ impl SessionCache {
     async fn save_to_path(&self, path: &Path, data: &SessionCacheData) -> SageResult<()> {
         // Ensure directory exists
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).await.map_err(|e| {
-                SageError::Io(format!("Failed to create cache directory: {}", e))
-            })?;
+            fs::create_dir_all(parent)
+                .await
+                .map_err(|e| SageError::Io(format!("Failed to create cache directory: {}", e)))?;
         }
 
         // Update last saved timestamp
@@ -372,9 +366,9 @@ impl SessionCache {
         data.last_saved = Some(Utc::now());
 
         let content = serde_json::to_string_pretty(&data)?;
-        fs::write(path, content).await.map_err(|e| {
-            SageError::Io(format!("Failed to write cache: {}", e))
-        })?;
+        fs::write(path, content)
+            .await
+            .map_err(|e| SageError::Io(format!("Failed to write cache: {}", e)))?;
 
         tracing::debug!("Saved session cache to {:?}", path);
         Ok(())
@@ -387,8 +381,12 @@ impl SessionCache {
 
         // Project settings override global
         if let Some(project) = &*self.project_cache.read().await {
-            trust.always_allowed.extend(project.tool_trust.always_allowed.clone());
-            trust.always_denied.extend(project.tool_trust.always_denied.clone());
+            trust
+                .always_allowed
+                .extend(project.tool_trust.always_allowed.clone());
+            trust
+                .always_denied
+                .extend(project.tool_trust.always_denied.clone());
         }
 
         trust
@@ -430,7 +428,10 @@ impl SessionCache {
     /// Add or update MCP server configuration
     pub async fn set_mcp_server(&self, config: MCPServerConfig) -> SageResult<()> {
         let mut cache = self.global_cache.write().await;
-        cache.mcp_servers.servers.insert(config.name.clone(), config);
+        cache
+            .mcp_servers
+            .servers
+            .insert(config.name.clone(), config);
         cache.mcp_servers.updated_at = Some(Utc::now());
 
         *self.dirty.write().await = true;
@@ -580,15 +581,18 @@ mod tests {
 
         // Add sessions
         for i in 0..7 {
-            cache.add_recent_session(RecentSession {
-                id: format!("session-{}", i),
-                name: Some(format!("Session {}", i)),
-                working_directory: "/tmp".to_string(),
-                model: Some("claude-3.5-sonnet".to_string()),
-                last_active: Utc::now(),
-                message_count: i * 10,
-                description: None,
-            }).await.unwrap();
+            cache
+                .add_recent_session(RecentSession {
+                    id: format!("session-{}", i),
+                    name: Some(format!("Session {}", i)),
+                    working_directory: "/tmp".to_string(),
+                    model: Some("claude-3.5-sonnet".to_string()),
+                    last_active: Utc::now(),
+                    message_count: i * 10,
+                    description: None,
+                })
+                .await
+                .unwrap();
         }
 
         let sessions = cache.get_recent_sessions().await;
@@ -611,14 +615,20 @@ mod tests {
 
             let cache = SessionCache::new(config).await.unwrap();
 
-            cache.update_tool_trust(|t| {
-                t.allow("read");
-                t.deny("rm");
-            }).await.unwrap();
+            cache
+                .update_tool_trust(|t| {
+                    t.allow("read");
+                    t.deny("rm");
+                })
+                .await
+                .unwrap();
 
-            cache.update_preferences(|p| {
-                p.default_model = Some("claude-3.5-sonnet".to_string());
-            }).await.unwrap();
+            cache
+                .update_preferences(|p| {
+                    p.default_model = Some("claude-3.5-sonnet".to_string());
+                })
+                .await
+                .unwrap();
 
             cache.save().await.unwrap();
         }

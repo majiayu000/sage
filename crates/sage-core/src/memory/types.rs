@@ -461,8 +461,8 @@ mod tests {
 
     #[test]
     fn test_memory_preference() {
-        let memory = Memory::preference("User prefers dark mode")
-            .with_category(MemoryCategory::Global);
+        let memory =
+            Memory::preference("User prefers dark mode").with_category(MemoryCategory::Global);
 
         assert_eq!(memory.memory_type, MemoryType::Preference);
         assert_eq!(memory.category, MemoryCategory::Global);
@@ -475,8 +475,7 @@ mod tests {
             "section": "dependencies"
         });
 
-        let memory = Memory::code_context("Project dependencies")
-            .with_data(data.clone());
+        let memory = Memory::code_context("Project dependencies").with_data(data.clone());
 
         assert_eq!(memory.data, Some(data));
     }
@@ -494,8 +493,8 @@ mod tests {
 
     #[test]
     fn test_memory_relevance_pinned() {
-        let memory = Memory::fact("Pinned fact")
-            .with_metadata(MemoryMetadata::default().with_pinned(true));
+        let memory =
+            Memory::fact("Pinned fact").with_metadata(MemoryMetadata::default().with_pinned(true));
 
         // Pinned memories should have high relevance
         assert!(memory.relevance_score() >= 0.9);

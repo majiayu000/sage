@@ -18,7 +18,7 @@ pub mod types;
 mod tests;
 
 pub use conversation_cache::{
-    CacheLookupResult, CacheCheckpoint, CachedConversation, ConversationCache,
+    CacheCheckpoint, CacheLookupResult, CachedConversation, ConversationCache,
     ConversationCacheConfig, ConversationCacheStats,
 };
 pub use llm_cache::LLMCache;

@@ -1,9 +1,9 @@
 //! Kill/terminate background shell processes
 
 use async_trait::async_trait;
+use sage_core::tools::BACKGROUND_REGISTRY;
 use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
-use sage_core::tools::BACKGROUND_REGISTRY;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;

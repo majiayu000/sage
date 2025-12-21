@@ -28,38 +28,55 @@ impl TaskType {
         let lower = description.to_lowercase();
 
         // Check for documentation-specific keywords
-        if lower.contains("文档") || lower.contains("readme")
-            || lower.contains("document") || lower.contains("write doc")
+        if lower.contains("文档")
+            || lower.contains("readme")
+            || lower.contains("document")
+            || lower.contains("write doc")
         {
             return TaskType::Documentation;
         }
 
         // Check for research keywords
-        if lower.contains("分析") || lower.contains("研究")
-            || lower.contains("调查") || lower.contains("investigate")
-            || lower.contains("analyze") || lower.contains("research")
-            || lower.contains("explain") || lower.contains("what is")
+        if lower.contains("分析")
+            || lower.contains("研究")
+            || lower.contains("调查")
+            || lower.contains("investigate")
+            || lower.contains("analyze")
+            || lower.contains("research")
+            || lower.contains("explain")
+            || lower.contains("what is")
         {
             return TaskType::Research;
         }
 
         // Check for bug fix keywords
-        if lower.contains("修复") || lower.contains("fix")
-            || lower.contains("bug") || lower.contains("error")
-            || lower.contains("issue") || lower.contains("problem")
+        if lower.contains("修复")
+            || lower.contains("fix")
+            || lower.contains("bug")
+            || lower.contains("error")
+            || lower.contains("issue")
+            || lower.contains("problem")
         {
             return TaskType::BugFix;
         }
 
         // Check for code implementation keywords
-        if lower.contains("设计") || lower.contains("创建")
-            || lower.contains("实现") || lower.contains("开发")
-            || lower.contains("做") || lower.contains("写")
-            || lower.contains("design") || lower.contains("create")
-            || lower.contains("implement") || lower.contains("build")
-            || lower.contains("make") || lower.contains("develop")
-            || lower.contains("add") || lower.contains("网站")
-            || lower.contains("website") || lower.contains("app")
+        if lower.contains("设计")
+            || lower.contains("创建")
+            || lower.contains("实现")
+            || lower.contains("开发")
+            || lower.contains("做")
+            || lower.contains("写")
+            || lower.contains("design")
+            || lower.contains("create")
+            || lower.contains("implement")
+            || lower.contains("build")
+            || lower.contains("make")
+            || lower.contains("develop")
+            || lower.contains("add")
+            || lower.contains("网站")
+            || lower.contains("website")
+            || lower.contains("app")
             || lower.contains("应用")
         {
             return TaskType::CodeImplementation;
@@ -98,7 +115,9 @@ impl FileOperationTracker {
         }
 
         // Extract file path from metadata or result
-        let file_path = result.metadata.get("file_path")
+        let file_path = result
+            .metadata
+            .get("file_path")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
@@ -139,7 +158,8 @@ impl FileOperationTracker {
 
     /// Get all affected files
     pub fn all_affected_files(&self) -> Vec<&String> {
-        self.created_files.iter()
+        self.created_files
+            .iter()
             .chain(self.modified_files.iter())
             .collect()
     }
@@ -162,22 +182,13 @@ pub enum CompletionStatus {
         files_modified: usize,
     },
     /// Task should continue
-    Continue {
-        reason: String,
-    },
+    Continue { reason: String },
     /// Task was blocked (e.g., by hook)
-    Blocked {
-        reason: String,
-    },
+    Blocked { reason: String },
     /// Reached execution limits
-    LimitReached {
-        limit_type: LimitType,
-    },
+    LimitReached { limit_type: LimitType },
     /// Warning - task marked complete but concerns exist
-    CompletedWithWarning {
-        summary: String,
-        warning: String,
-    },
+    CompletedWithWarning { summary: String, warning: String },
 }
 
 /// Types of limits that can be reached
@@ -238,23 +249,21 @@ impl CompletionChecker {
     /// Track tool results
     pub fn track_tool_results(&mut self, results: &[ToolResult]) {
         for result in results {
-            self.file_tracker.track_tool_result(&result.tool_name, result);
+            self.file_tracker
+                .track_tool_result(&result.tool_name, result);
         }
     }
 
     /// Check if task_done was called in tool results
     fn find_task_done_summary(&self, results: &[ToolResult]) -> Option<String> {
-        results.iter()
+        results
+            .iter()
             .find(|r| r.tool_name == "task_done" && r.success)
             .and_then(|r| r.output.clone())
     }
 
     /// Check completion status
-    pub fn check(
-        &self,
-        response: &LLMResponse,
-        tool_results: &[ToolResult],
-    ) -> CompletionStatus {
+    pub fn check(&self, response: &LLMResponse, tool_results: &[ToolResult]) -> CompletionStatus {
         // Check if task_done was called
         if let Some(summary) = self.find_task_done_summary(tool_results) {
             // For code tasks, verify file operations were performed
@@ -262,8 +271,10 @@ impl CompletionChecker {
                 if self.strict_mode {
                     return CompletionStatus::CompletedWithWarning {
                         summary: summary.clone(),
-                        warning: "Task marked complete but no code files were created or modified. \
-                                 This may indicate the task was not fully implemented.".to_string(),
+                        warning:
+                            "Task marked complete but no code files were created or modified. \
+                                 This may indicate the task was not fully implemented."
+                                .to_string(),
                     };
                 }
             }
@@ -291,7 +302,10 @@ impl CompletionChecker {
 
     /// Quick check if we should continue
     pub fn should_continue(&self, response: &LLMResponse, tool_results: &[ToolResult]) -> bool {
-        matches!(self.check(response, tool_results), CompletionStatus::Continue { .. })
+        matches!(
+            self.check(response, tool_results),
+            CompletionStatus::Continue { .. }
+        )
     }
 }
 
@@ -313,10 +327,7 @@ mod tests {
             TaskType::from_description("Fix the bug in login"),
             TaskType::BugFix
         );
-        assert_eq!(
-            TaskType::from_description("修复登录问题"),
-            TaskType::BugFix
-        );
+        assert_eq!(TaskType::from_description("修复登录问题"), TaskType::BugFix);
         assert_eq!(
             TaskType::from_description("分析这个代码的性能"),
             TaskType::Research

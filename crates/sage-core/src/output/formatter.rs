@@ -416,8 +416,7 @@ mod tests {
     fn test_text_formatter_tool_result_success() {
         let formatter = TextFormatter::new().without_colors();
 
-        if let OutputEvent::ToolCallResult(mut e) =
-            OutputEvent::tool_result("call_1", "Read", true)
+        if let OutputEvent::ToolCallResult(mut e) = OutputEvent::tool_result("call_1", "Read", true)
         {
             e.duration_ms = 100;
             e.output = Some("File content".to_string());

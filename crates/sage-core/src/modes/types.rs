@@ -100,28 +100,17 @@ impl ToolFilter {
     ];
 
     /// Write/modify tools list
-    pub const WRITE_TOOLS: &'static [&'static str] = &[
-        "Write",
-        "Edit",
-        "Bash",
-        "NotebookEdit",
-    ];
+    pub const WRITE_TOOLS: &'static [&'static str] = &["Write", "Edit", "Bash", "NotebookEdit"];
 
     /// Check if a tool is allowed
     pub fn allows(&self, tool_name: &str) -> bool {
         match self {
             Self::All => true,
-            Self::ReadOnly => {
-                Self::READ_ONLY_TOOLS
-                    .iter()
-                    .any(|t| t.eq_ignore_ascii_case(tool_name))
-            }
-            Self::Specific(allowed) => {
-                allowed.iter().any(|t| t.eq_ignore_ascii_case(tool_name))
-            }
-            Self::Except(blocked) => {
-                !blocked.iter().any(|t| t.eq_ignore_ascii_case(tool_name))
-            }
+            Self::ReadOnly => Self::READ_ONLY_TOOLS
+                .iter()
+                .any(|t| t.eq_ignore_ascii_case(tool_name)),
+            Self::Specific(allowed) => allowed.iter().any(|t| t.eq_ignore_ascii_case(tool_name)),
+            Self::Except(blocked) => !blocked.iter().any(|t| t.eq_ignore_ascii_case(tool_name)),
         }
     }
 
@@ -362,11 +351,8 @@ mod tests {
 
     #[test]
     fn test_mode_transition() {
-        let transition = ModeTransition::new(
-            AgentMode::Normal,
-            AgentMode::Plan,
-            "Starting plan mode",
-        );
+        let transition =
+            ModeTransition::new(AgentMode::Normal, AgentMode::Plan, "Starting plan mode");
 
         assert!(!transition.requires_approval);
         assert!(transition.is_entering_restricted());
@@ -375,11 +361,8 @@ mod tests {
 
     #[test]
     fn test_mode_transition_exit_requires_approval() {
-        let transition = ModeTransition::new(
-            AgentMode::Plan,
-            AgentMode::Normal,
-            "Exiting plan mode",
-        );
+        let transition =
+            ModeTransition::new(AgentMode::Plan, AgentMode::Normal, "Exiting plan mode");
 
         assert!(transition.requires_approval);
         assert!(!transition.is_entering_restricted());

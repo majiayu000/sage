@@ -13,7 +13,10 @@ pub enum SystemReminder {
     /// Reminder about file operations
     FileOperationWarning { message: String },
     /// Reminder about plan mode phase
-    PlanModePhase { phase: PlanPhase, instructions: String },
+    PlanModePhase {
+        phase: PlanPhase,
+        instructions: String,
+    },
     /// Plan mode is active - comprehensive reminder
     PlanModeActive {
         plan_file_path: String,
@@ -59,12 +62,16 @@ impl SystemReminder {
     /// Convert reminder to string format
     pub fn to_prompt_string(&self) -> String {
         match self {
-            SystemReminder::TodoListStatus { is_empty, task_count } => {
+            SystemReminder::TodoListStatus {
+                is_empty,
+                task_count,
+            } => {
                 if *is_empty {
                     "<system-reminder>\n\
                     Your todo list is currently empty. If you are working on tasks \
                     that would benefit from tracking, use the TodoWrite tool.\n\
-                    </system-reminder>".to_string()
+                    </system-reminder>"
+                        .to_string()
                 } else {
                     format!(
                         "<system-reminder>\n\
@@ -83,7 +90,10 @@ impl SystemReminder {
                     message
                 )
             }
-            SystemReminder::PlanModePhase { phase, instructions } => {
+            SystemReminder::PlanModePhase {
+                phase,
+                instructions,
+            } => {
                 format!(
                     "<system-reminder>\n\
                     PLAN MODE - Phase: {}\n\n\
@@ -92,7 +102,10 @@ impl SystemReminder {
                     phase, instructions
                 )
             }
-            SystemReminder::PlanModeActive { plan_file_path, plan_exists } => {
+            SystemReminder::PlanModeActive {
+                plan_file_path,
+                plan_exists,
+            } => {
                 let plan_file_info = if *plan_exists {
                     format!(
                         "A plan file already exists at {}. You can read it and make incremental edits using the ${{EDIT_TOOL_NAME}} tool.",
@@ -154,8 +167,7 @@ NOTE: At any point, feel free to ask user questions. Don't make large assumption
                     plan_file_info
                 )
             }
-            SystemReminder::PlanModeActiveForSubagent => {
-                "<system-reminder>\n\
+            SystemReminder::PlanModeActiveForSubagent => "<system-reminder>\n\
                 You are operating as a subagent in plan mode. \n\
                 \n\
                 IMPORTANT: You are in READ-ONLY mode. Do NOT:\n\
@@ -164,8 +176,8 @@ NOTE: At any point, feel free to ask user questions. Don't make large assumption
                 - Make commits or push changes\n\
                 \n\
                 Your role is to explore and analyze only. Report your findings clearly.\n\
-                </system-reminder>".to_string()
-            }
+                </system-reminder>"
+                .to_string(),
             SystemReminder::PlanModeReEntry { reason } => {
                 format!(
                     "<system-reminder>\n\
@@ -179,16 +191,15 @@ NOTE: At any point, feel free to ask user questions. Don't make large assumption
                     reason
                 )
             }
-            SystemReminder::TaskCompletionReminder => {
-                "<system-reminder>\n\
+            SystemReminder::TaskCompletionReminder => "<system-reminder>\n\
                 REMINDER: Do not call task_done unless you have:\n\
                 - Created or modified actual code files\n\
                 - Verified the implementation works\n\
                 - Completed ALL requested functionality\n\
                 \n\
                 If you have only written plans or documentation, the task is NOT complete.\n\
-                </system-reminder>".to_string()
-            }
+                </system-reminder>"
+                .to_string(),
             SystemReminder::DelegateMode { task_description } => {
                 format!(
                     "<system-reminder>\n\
@@ -285,7 +296,10 @@ mod tests {
 
     #[test]
     fn test_todo_list_reminder_empty() {
-        let reminder = SystemReminder::TodoListStatus { is_empty: true, task_count: 0 };
+        let reminder = SystemReminder::TodoListStatus {
+            is_empty: true,
+            task_count: 0,
+        };
         let text = reminder.to_prompt_string();
         assert!(text.contains("system-reminder"));
         assert!(text.contains("empty"));
@@ -293,7 +307,10 @@ mod tests {
 
     #[test]
     fn test_todo_list_reminder_with_tasks() {
-        let reminder = SystemReminder::TodoListStatus { is_empty: false, task_count: 5 };
+        let reminder = SystemReminder::TodoListStatus {
+            is_empty: false,
+            task_count: 5,
+        };
         let text = reminder.to_prompt_string();
         assert!(text.contains("5 tasks"));
     }
@@ -351,7 +368,7 @@ mod tests {
     #[test]
     fn test_delegate_mode() {
         let reminder = SystemReminder::DelegateMode {
-            task_description: "Fix the login bug".to_string()
+            task_description: "Fix the login bug".to_string(),
         };
         let text = reminder.to_prompt_string();
         assert!(text.contains("delegate mode"));

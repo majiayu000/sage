@@ -120,10 +120,7 @@ impl PromptTemplate {
     }
 
     /// Render with validation
-    pub fn render_validated(
-        &self,
-        values: &HashMap<&str, &str>,
-    ) -> Result<String, RenderError> {
+    pub fn render_validated(&self, values: &HashMap<&str, &str>) -> Result<String, RenderError> {
         // Check required variables
         for var in &self.variables {
             if var.required && !values.contains_key(var.name.as_str()) && var.default.is_none() {
@@ -310,11 +307,8 @@ mod tests {
     #[test]
     fn test_template_multiple_variables() {
         let template = PromptTemplate::new("test", "{{greeting}} {{name}}, welcome to {{place}}!");
-        let result = template.render(&[
-            ("greeting", "Hello"),
-            ("name", "Alice"),
-            ("place", "Sage"),
-        ]);
+        let result =
+            template.render(&[("greeting", "Hello"), ("name", "Alice"), ("place", "Sage")]);
         assert_eq!(result, "Hello Alice, welcome to Sage!");
     }
 
@@ -327,16 +321,14 @@ mod tests {
 
     #[test]
     fn test_template_default_value() {
-        let template = PromptTemplate::new("test", "Hello {{name}}!")
-            .with_default("name", "World");
+        let template = PromptTemplate::new("test", "Hello {{name}}!").with_default("name", "World");
         let result = template.render(&[]);
         assert_eq!(result, "Hello World!");
     }
 
     #[test]
     fn test_template_override_default() {
-        let template = PromptTemplate::new("test", "Hello {{name}}!")
-            .with_default("name", "World");
+        let template = PromptTemplate::new("test", "Hello {{name}}!").with_default("name", "World");
         let result = template.render(&[("name", "Alice")]);
         assert_eq!(result, "Hello Alice!");
     }
@@ -350,8 +342,7 @@ mod tests {
 
     #[test]
     fn test_template_validated_missing_required() {
-        let template = PromptTemplate::new("test", "Hello {{name}}!")
-            .with_required("name");
+        let template = PromptTemplate::new("test", "Hello {{name}}!").with_required("name");
         let values: HashMap<&str, &str> = HashMap::new();
         let result = template.render_validated(&values);
         assert!(matches!(result, Err(RenderError::MissingRequired(_))));
@@ -359,8 +350,7 @@ mod tests {
 
     #[test]
     fn test_template_validated_success() {
-        let template = PromptTemplate::new("test", "Hello {{name}}!")
-            .with_required("name");
+        let template = PromptTemplate::new("test", "Hello {{name}}!").with_required("name");
         let mut values = HashMap::new();
         values.insert("name", "World");
         let result = template.render_validated(&values);
@@ -392,14 +382,23 @@ mod tests {
             .build();
 
         assert_eq!(template.name, "greeting");
-        assert!(template.variables.iter().any(|v| v.name == "greeting" && v.default.is_some()));
-        assert!(template.variables.iter().any(|v| v.name == "name" && v.required));
+        assert!(
+            template
+                .variables
+                .iter()
+                .any(|v| v.name == "greeting" && v.default.is_some())
+        );
+        assert!(
+            template
+                .variables
+                .iter()
+                .any(|v| v.name == "name" && v.required)
+        );
     }
 
     #[test]
     fn test_template_has_required() {
-        let template = PromptTemplate::new("test", "{{a}} {{b}}")
-            .with_required("a");
+        let template = PromptTemplate::new("test", "{{a}} {{b}}").with_required("a");
 
         let mut values = HashMap::new();
         assert!(!template.has_required(&values));
@@ -437,7 +436,10 @@ mod tests {
     fn test_template_no_variables() {
         let template = PromptTemplate::new("static", "This is a static prompt with no variables.");
         assert!(template.variables.is_empty());
-        assert_eq!(template.render(&[]), "This is a static prompt with no variables.");
+        assert_eq!(
+            template.render(&[]),
+            "This is a static prompt with no variables."
+        );
     }
 
     #[test]

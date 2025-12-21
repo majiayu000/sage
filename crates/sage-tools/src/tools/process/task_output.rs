@@ -4,9 +4,9 @@
 //! were started with `run_in_background=true` in the Bash tool.
 
 use async_trait::async_trait;
+use sage_core::tools::BACKGROUND_REGISTRY;
 use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
-use sage_core::tools::BACKGROUND_REGISTRY;
 
 /// Tool for retrieving output from background shell tasks
 pub struct TaskOutputTool;

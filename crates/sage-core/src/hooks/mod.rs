@@ -57,9 +57,9 @@ pub mod types;
 // Re-export main types
 pub use events::HookEvent;
 pub use executor::{HookExecutionResult, HookExecutor};
-pub use matcher::{matches, PatternMatcher};
+pub use matcher::{PatternMatcher, matches};
 pub use registry::{HookRegistry, HooksConfig};
 pub use types::{
-    CallbackHook, CommandHook, HookConfig, HookImplementation, HookInput, HookMatcher,
-    HookOutput, HookType, HookVariant, PermissionDecision, PromptHook,
+    CallbackHook, CommandHook, HookConfig, HookImplementation, HookInput, HookMatcher, HookOutput,
+    HookType, HookVariant, PermissionDecision, PromptHook,
 };

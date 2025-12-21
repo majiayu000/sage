@@ -8,13 +8,11 @@ pub mod detector;
 pub mod patterns;
 
 pub use analyzer::{
-    AnalysisResult, DependencyInfo, EntryPoint, FileStats, ProjectStructure,
-    WorkspaceAnalyzer, WorkspaceConfig, WorkspaceError,
+    AnalysisResult, DependencyInfo, EntryPoint, FileStats, ProjectStructure, WorkspaceAnalyzer,
+    WorkspaceConfig, WorkspaceError,
 };
 pub use detector::{
-    BuildSystem, FrameworkType, LanguageType, ProjectType, ProjectTypeDetector,
-    RuntimeType, TestFramework,
+    BuildSystem, FrameworkType, LanguageType, ProjectType, ProjectTypeDetector, RuntimeType,
+    TestFramework,
 };
-pub use patterns::{
-    ImportantFile, ImportantFileType, PatternMatcher, ProjectPattern,
-};
+pub use patterns::{ImportantFile, ImportantFileType, PatternMatcher, ProjectPattern};

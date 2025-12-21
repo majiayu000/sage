@@ -4,8 +4,7 @@
 
 use async_trait::async_trait;
 use sage_core::memory::{
-    Memory, MemoryCategory, MemoryConfig, MemoryManager, MemoryType,
-    SharedMemoryManager,
+    Memory, MemoryCategory, MemoryConfig, MemoryManager, MemoryType, SharedMemoryManager,
 };
 use sage_core::tools::{Tool, ToolCall, ToolError, ToolParameter, ToolResult, ToolSchema};
 use serde::{Deserialize, Serialize};
@@ -116,8 +115,14 @@ Do NOT use for:
             self.description(),
             vec![
                 ToolParameter::string("memory", "The concise (1-2 sentences) memory to store."),
-                ToolParameter::optional_string("memory_type", "Type of memory: fact, preference, lesson, note. Defaults to 'fact'."),
-                ToolParameter::optional_string("tags", "Comma-separated tags to categorize the memory (e.g., 'rust,coding,preference')."),
+                ToolParameter::optional_string(
+                    "memory_type",
+                    "Type of memory: fact, preference, lesson, note. Defaults to 'fact'.",
+                ),
+                ToolParameter::optional_string(
+                    "tags",
+                    "Comma-separated tags to categorize the memory (e.g., 'rust,coding,preference').",
+                ),
             ],
         )
     }
@@ -130,7 +135,12 @@ Do NOT use for:
         let memory_type_str = call.get_string("memory_type").unwrap_or("fact".to_string());
         let tags: Vec<String> = call
             .get_string("tags")
-            .map(|s| s.split(',').map(|t| t.trim().to_string()).filter(|t| !t.is_empty()).collect())
+            .map(|s| {
+                s.split(',')
+                    .map(|t| t.trim().to_string())
+                    .filter(|t| !t.is_empty())
+                    .collect()
+            })
             .unwrap_or_default();
 
         // Parse memory type
@@ -172,7 +182,11 @@ Do NOT use for:
             memory_content,
             memory_type_str,
             id.as_str(),
-            if tags.is_empty() { "none".to_string() } else { tags.join(", ") },
+            if tags.is_empty() {
+                "none".to_string()
+            } else {
+                tags.join(", ")
+            },
             stats.total,
             stats.pinned
         );
@@ -233,9 +247,15 @@ Actions:
             self.name(),
             self.description(),
             vec![
-                ToolParameter::string("action", "Action to perform: list, search, delete, clear, stats"),
+                ToolParameter::string(
+                    "action",
+                    "Action to perform: list, search, delete, clear, stats",
+                ),
                 ToolParameter::string("query", "Search query (for 'search' action)"),
-                ToolParameter::string("memory_type", "Filter by type: fact, preference, lesson, note"),
+                ToolParameter::string(
+                    "memory_type",
+                    "Filter by type: fact, preference, lesson, note",
+                ),
                 ToolParameter::string("memory_id", "Memory ID (for 'delete' action)"),
             ],
         )
@@ -263,13 +283,20 @@ Actions:
                 } else {
                     // Get all memories
                     let mut all = Vec::new();
-                    for mem_type in [MemoryType::Fact, MemoryType::Preference, MemoryType::Lesson, MemoryType::Custom] {
+                    for mem_type in [
+                        MemoryType::Fact,
+                        MemoryType::Preference,
+                        MemoryType::Lesson,
+                        MemoryType::Custom,
+                    ] {
                         all.extend(manager.find_by_type(mem_type).await.unwrap_or_default());
                     }
                     Ok(all)
                 };
 
-                let memories = memories.map_err(|e| ToolError::ExecutionFailed(format!("Failed to list memories: {}", e)))?;
+                let memories = memories.map_err(|e| {
+                    ToolError::ExecutionFailed(format!("Failed to list memories: {}", e))
+                })?;
 
                 if memories.is_empty() {
                     "No memories found.".to_string()
@@ -282,7 +309,11 @@ Actions:
                             mem.memory_type.name(),
                             mem.content,
                             mem.id.as_str(),
-                            if mem.metadata.tags.is_empty() { "none".to_string() } else { mem.metadata.tags.join(", ") }
+                            if mem.metadata.tags.is_empty() {
+                                "none".to_string()
+                            } else {
+                                mem.metadata.tags.join(", ")
+                            }
                         ));
                     }
                     output
@@ -290,9 +321,9 @@ Actions:
             }
 
             "search" => {
-                let query = call
-                    .get_string("query")
-                    .ok_or_else(|| ToolError::InvalidArguments("Missing 'query' for search".to_string()))?;
+                let query = call.get_string("query").ok_or_else(|| {
+                    ToolError::InvalidArguments("Missing 'query' for search".to_string())
+                })?;
 
                 let memories = manager
                     .find(&query)
@@ -302,7 +333,11 @@ Actions:
                 if memories.is_empty() {
                     format!("No memories found matching '{}'.", query)
                 } else {
-                    let mut output = format!("Found {} memories matching '{}':\n\n", memories.len(), query);
+                    let mut output = format!(
+                        "Found {} memories matching '{}':\n\n",
+                        memories.len(),
+                        query
+                    );
                     for (i, mem) in memories.iter().enumerate() {
                         output.push_str(&format!(
                             "{}. [{}] {}\n   ID: {}\n\n",
@@ -317,9 +352,9 @@ Actions:
             }
 
             "delete" => {
-                let memory_id = call
-                    .get_string("memory_id")
-                    .ok_or_else(|| ToolError::InvalidArguments("Missing 'memory_id' for delete".to_string()))?;
+                let memory_id = call.get_string("memory_id").ok_or_else(|| {
+                    ToolError::InvalidArguments("Missing 'memory_id' for delete".to_string())
+                })?;
 
                 use sage_core::memory::MemoryId;
                 let id = MemoryId::from_string(memory_id.clone());
@@ -341,10 +376,9 @@ Actions:
             }
 
             "stats" => {
-                let stats = manager
-                    .stats()
-                    .await
-                    .map_err(|e| ToolError::ExecutionFailed(format!("Failed to get stats: {}", e)))?;
+                let stats = manager.stats().await.map_err(|e| {
+                    ToolError::ExecutionFailed(format!("Failed to get stats: {}", e))
+                })?;
 
                 format!(
                     "Memory Statistics:\n\
@@ -359,7 +393,9 @@ Actions:
                     stats.avg_relevance,
                     stats.created_last_24h,
                     stats.accessed_last_24h,
-                    stats.by_type.iter()
+                    stats
+                        .by_type
+                        .iter()
                         .map(|(k, v)| format!("  - {}: {}", k, v))
                         .collect::<Vec<_>>()
                         .join("\n")
@@ -438,7 +474,13 @@ mod tests {
             arguments: json!({
                 "memory": "User prefers tabs over spaces",
                 "memory_type": "preference"
-            }).as_object().unwrap().clone().into_iter().map(|(k, v)| (k, v)).collect(),
+            })
+            .as_object()
+            .unwrap()
+            .clone()
+            .into_iter()
+            .map(|(k, v)| (k, v))
+            .collect(),
             call_id: None,
         };
 
@@ -459,7 +501,13 @@ mod tests {
             arguments: json!({
                 "memory": "Test memory for listing",
                 "memory_type": "fact"
-            }).as_object().unwrap().clone().into_iter().map(|(k, v)| (k, v)).collect(),
+            })
+            .as_object()
+            .unwrap()
+            .clone()
+            .into_iter()
+            .map(|(k, v)| (k, v))
+            .collect(),
             call_id: None,
         };
         remember_tool.execute(&add_call).await.unwrap();
@@ -470,7 +518,13 @@ mod tests {
             name: "SessionNotes".to_string(),
             arguments: json!({
                 "action": "list"
-            }).as_object().unwrap().clone().into_iter().map(|(k, v)| (k, v)).collect(),
+            })
+            .as_object()
+            .unwrap()
+            .clone()
+            .into_iter()
+            .map(|(k, v)| (k, v))
+            .collect(),
             call_id: None,
         };
 
@@ -487,7 +541,13 @@ mod tests {
             name: "SessionNotes".to_string(),
             arguments: json!({
                 "action": "stats"
-            }).as_object().unwrap().clone().into_iter().map(|(k, v)| (k, v)).collect(),
+            })
+            .as_object()
+            .unwrap()
+            .clone()
+            .into_iter()
+            .map(|(k, v)| (k, v))
+            .collect(),
             call_id: None,
         };
 

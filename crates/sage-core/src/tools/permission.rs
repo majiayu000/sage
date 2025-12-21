@@ -477,12 +477,12 @@ impl RuleSource {
     /// Get the priority of this rule source (lower = higher priority)
     pub fn priority(&self) -> u8 {
         match self {
-            RuleSource::CliArg => 0,         // Highest priority
+            RuleSource::CliArg => 0, // Highest priority
             RuleSource::SessionSettings => 1,
             RuleSource::LocalSettings => 2,
             RuleSource::ProjectSettings => 3,
             RuleSource::UserSettings => 4,
-            RuleSource::Builtin => 5,        // Lowest priority
+            RuleSource::Builtin => 5, // Lowest priority
         }
     }
 
@@ -744,12 +744,18 @@ impl PermissionRuleEngine {
     /// Evaluate permission for a PermissionRequest
     pub fn evaluate_request(&self, request: &PermissionRequest) -> PermissionEvaluation {
         // Extract path from common tool arguments
-        let path = request.call.arguments.get("file_path")
+        let path = request
+            .call
+            .arguments
+            .get("file_path")
             .or_else(|| request.call.arguments.get("path"))
             .and_then(|v| v.as_str());
 
         // Extract command from bash tool arguments
-        let command = request.call.arguments.get("command")
+        let command = request
+            .call
+            .arguments
+            .get("command")
             .and_then(|v| v.as_str());
 
         self.evaluate(&request.tool_name, path, command)
@@ -801,10 +807,16 @@ impl PermissionEvaluation {
         match self.behavior {
             PermissionBehavior::Allow => PermissionResult::Allow,
             PermissionBehavior::Deny => PermissionResult::Deny {
-                reason: self.reason.clone().unwrap_or_else(|| "Denied by rule".to_string()),
+                reason: self
+                    .reason
+                    .clone()
+                    .unwrap_or_else(|| "Denied by rule".to_string()),
             },
             PermissionBehavior::Ask | PermissionBehavior::Passthrough => PermissionResult::Ask {
-                question: self.reason.clone().unwrap_or_else(|| "Permission required".to_string()),
+                question: self
+                    .reason
+                    .clone()
+                    .unwrap_or_else(|| "Permission required".to_string()),
                 default: false,
                 risk_level,
             },
@@ -974,7 +986,10 @@ mod tests {
     #[test]
     fn test_rule_source_display() {
         assert_eq!(format!("{}", RuleSource::CliArg), "command line");
-        assert_eq!(format!("{}", RuleSource::ProjectSettings), "project settings");
+        assert_eq!(
+            format!("{}", RuleSource::ProjectSettings),
+            "project settings"
+        );
     }
 
     #[test]
@@ -982,13 +997,15 @@ mod tests {
         assert_eq!(format!("{}", PermissionBehavior::Allow), "allow");
         assert_eq!(format!("{}", PermissionBehavior::Deny), "deny");
         assert_eq!(format!("{}", PermissionBehavior::Ask), "ask");
-        assert_eq!(format!("{}", PermissionBehavior::Passthrough), "passthrough");
+        assert_eq!(
+            format!("{}", PermissionBehavior::Passthrough),
+            "passthrough"
+        );
     }
 
     #[test]
     fn test_permission_rule_matches_tool() {
-        let rule = PermissionRule::new(PermissionBehavior::Allow)
-            .with_tool_pattern("bash");
+        let rule = PermissionRule::new(PermissionBehavior::Allow).with_tool_pattern("bash");
 
         assert!(rule.matches("bash", None, None));
         assert!(!rule.matches("edit", None, None));
@@ -996,8 +1013,8 @@ mod tests {
 
     #[test]
     fn test_permission_rule_matches_tool_pattern() {
-        let rule = PermissionRule::new(PermissionBehavior::Allow)
-            .with_tool_pattern("edit|write|read");
+        let rule =
+            PermissionRule::new(PermissionBehavior::Allow).with_tool_pattern("edit|write|read");
 
         assert!(rule.matches("edit", None, None));
         assert!(rule.matches("write", None, None));
@@ -1039,8 +1056,7 @@ mod tests {
 
     #[test]
     fn test_permission_rule_disabled() {
-        let mut rule = PermissionRule::new(PermissionBehavior::Allow)
-            .with_tool_pattern("bash");
+        let mut rule = PermissionRule::new(PermissionBehavior::Allow).with_tool_pattern("bash");
         rule.enabled = false;
 
         assert!(!rule.matches("bash", None, None));
@@ -1055,11 +1071,10 @@ mod tests {
             PermissionRule::new(PermissionBehavior::Deny)
                 .with_tool_pattern("bash")
                 .with_command_pattern(".*rm.*-rf.*")
-                .with_reason("Dangerous command")
+                .with_reason("Dangerous command"),
         );
         engine.add_rule(
-            PermissionRule::new(PermissionBehavior::Allow)
-                .with_tool_pattern("read|glob|grep")
+            PermissionRule::new(PermissionBehavior::Allow).with_tool_pattern("read|glob|grep"),
         );
 
         // Dangerous bash command should be denied
@@ -1083,12 +1098,12 @@ mod tests {
         engine.add_rule(
             PermissionRule::new(PermissionBehavior::Allow)
                 .with_source(RuleSource::Builtin)
-                .with_tool_pattern("bash")
+                .with_tool_pattern("bash"),
         );
         engine.add_rule(
             PermissionRule::new(PermissionBehavior::Deny)
                 .with_source(RuleSource::CliArg)
-                .with_tool_pattern("bash")
+                .with_tool_pattern("bash"),
         );
 
         engine.sort_by_priority();
@@ -1108,13 +1123,9 @@ mod tests {
 
         // Passthrough rule should be skipped
         engine.add_rule(
-            PermissionRule::new(PermissionBehavior::Passthrough)
-                .with_tool_pattern("bash")
+            PermissionRule::new(PermissionBehavior::Passthrough).with_tool_pattern("bash"),
         );
-        engine.add_rule(
-            PermissionRule::new(PermissionBehavior::Allow)
-                .with_tool_pattern("bash")
-        );
+        engine.add_rule(PermissionRule::new(PermissionBehavior::Allow).with_tool_pattern("bash"));
 
         let eval = engine.evaluate("bash", None, None);
         assert_eq!(eval.behavior, PermissionBehavior::Allow);
@@ -1143,13 +1154,9 @@ mod tests {
     async fn test_rule_based_handler() {
         let mut engine = PermissionRuleEngine::new();
         engine.add_rule(
-            PermissionRule::new(PermissionBehavior::Allow)
-                .with_tool_pattern("read|glob")
+            PermissionRule::new(PermissionBehavior::Allow).with_tool_pattern("read|glob"),
         );
-        engine.add_rule(
-            PermissionRule::new(PermissionBehavior::Deny)
-                .with_tool_pattern("bash")
-        );
+        engine.add_rule(PermissionRule::new(PermissionBehavior::Deny).with_tool_pattern("bash"));
 
         let handler = RuleBasedHandler::new(engine);
 

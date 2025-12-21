@@ -1,0 +1,46 @@
+# Git
+.git
+.gitignore
+
+# Build artifacts
+target/
+*.rs.bk
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Documentation (not needed in container)
+docs/
+*.md
+!README.md
+
+# Test files
+tests/
+*_test.rs
+*.test.rs
+
+# Development files
+trajectories/
+*.log
+*.tmp
+
+# Config examples (use runtime config instead)
+sage_config.json
+sage_config.json.example
+
+# SWE-bench evaluation (not needed in container)
+swebench_eval/
+swebench_test/
+
+# Scripts (not needed in container)
+scripts/
+*.py
+*.sh
+
+# Misc
+.DS_Store
+Thumbs.db

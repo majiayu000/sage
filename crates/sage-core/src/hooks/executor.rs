@@ -13,7 +13,9 @@ use tracing::{debug, error, info, warn};
 
 use super::events::HookEvent;
 use super::registry::HookRegistry;
-use super::types::{CommandHook, HookConfig, HookImplementation, HookInput, HookOutput, PromptHook};
+use super::types::{
+    CommandHook, HookConfig, HookImplementation, HookInput, HookOutput, PromptHook,
+};
 use crate::error::SageResult;
 
 /// Hook execution result
@@ -89,7 +91,10 @@ impl HookExecutor {
         let hooks = self.registry.get_matching(event, query);
 
         if hooks.is_empty() {
-            debug!("No hooks registered for event: {} with query: {}", event, query);
+            debug!(
+                "No hooks registered for event: {} with query: {}",
+                event, query
+            );
             return Ok(Vec::new());
         }
 
@@ -178,7 +183,10 @@ impl HookExecutor {
         let input_json = match serde_json::to_string(input) {
             Ok(json) => json,
             Err(e) => {
-                return HookExecutionResult::Error(format!("Failed to serialize hook input: {}", e));
+                return HookExecutionResult::Error(format!(
+                    "Failed to serialize hook input: {}",
+                    e
+                ));
             }
         };
 
@@ -306,8 +314,8 @@ impl Default for HookExecutor {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::types::HookType;
+    use super::*;
     use std::collections::HashMap;
 
     #[test]

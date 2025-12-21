@@ -164,7 +164,10 @@ mod tests {
             HookEvent::PermissionRequest.description(),
             "Permission request"
         );
-        assert_eq!(HookEvent::PreCompact.description(), "Before context compaction");
+        assert_eq!(
+            HookEvent::PreCompact.description(),
+            "Before context compaction"
+        );
         assert_eq!(HookEvent::Notification.description(), "Notification event");
         assert_eq!(HookEvent::Stop.description(), "Agent is stopping");
         assert_eq!(HookEvent::StatusLine.description(), "Status line update");

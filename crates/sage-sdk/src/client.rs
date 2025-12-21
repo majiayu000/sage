@@ -1,7 +1,9 @@
 //! SDK client implementation
 
 use sage_core::{
-    agent::{Agent, AgentExecution, ExecutionMode, ExecutionOptions, UnifiedExecutor, base::BaseAgent},
+    agent::{
+        Agent, AgentExecution, ExecutionMode, ExecutionOptions, UnifiedExecutor, base::BaseAgent,
+    },
     config::{loader::load_config_with_overrides, model::Config},
     error::SageResult,
     input::{InputChannel, InputChannelHandle, InputResponse},
@@ -202,7 +204,9 @@ impl SageAgentSDK {
                         }
                     }
                     _ => {
-                        let _ = input_handle.respond(InputResponse::cancelled(request.id)).await;
+                        let _ = input_handle
+                            .respond(InputResponse::cancelled(request.id))
+                            .await;
                         break;
                     }
                 }

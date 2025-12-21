@@ -511,9 +511,7 @@ impl ProjectTypeDetector {
                     project.build_systems.insert(BuildSystem::Poetry);
                 } else if content.contains("[tool.pdm]") {
                     project.build_systems.insert(BuildSystem::Pdm);
-                } else if content.contains("[tool.uv]")
-                    || self.root.join("uv.lock").exists()
-                {
+                } else if content.contains("[tool.uv]") || self.root.join("uv.lock").exists() {
                     project.build_systems.insert(BuildSystem::Uv);
                 } else {
                     project.build_systems.insert(BuildSystem::Pip);
@@ -555,9 +553,7 @@ impl ProjectTypeDetector {
         }
 
         // Check for pytest
-        if self.root.join("pytest.ini").exists()
-            || self.root.join("conftest.py").exists()
-        {
+        if self.root.join("pytest.ini").exists() || self.root.join("conftest.py").exists() {
             project.test_frameworks.insert(TestFramework::Pytest);
         }
     }
@@ -594,9 +590,7 @@ impl ProjectTypeDetector {
         }
 
         // Gradle
-        if self.root.join("build.gradle").exists()
-            || self.root.join("build.gradle.kts").exists()
-        {
+        if self.root.join("build.gradle").exists() || self.root.join("build.gradle.kts").exists() {
             if project.primary_language == LanguageType::Unknown {
                 project.primary_language = LanguageType::Java;
             }
@@ -682,7 +676,8 @@ impl ProjectTypeDetector {
     }
 
     fn detect_by_file_count(&self) -> LanguageType {
-        let mut counts: std::collections::HashMap<LanguageType, usize> = std::collections::HashMap::new();
+        let mut counts: std::collections::HashMap<LanguageType, usize> =
+            std::collections::HashMap::new();
 
         let languages = [
             LanguageType::Rust,
@@ -723,8 +718,8 @@ impl ProjectTypeDetector {
                     }
                 } else if path.is_dir() && self.max_depth > 0 {
                     // Simple recursive count (limited depth)
-                    let detector = ProjectTypeDetector::new(&path)
-                        .with_max_depth(self.max_depth - 1);
+                    let detector =
+                        ProjectTypeDetector::new(&path).with_max_depth(self.max_depth - 1);
                     count += detector.count_files_with_extensions(extensions);
                 }
             }
@@ -808,7 +803,11 @@ axum = "0.7"
         assert_eq!(project.primary_language, LanguageType::Rust);
         assert!(project.build_systems.contains(&BuildSystem::Cargo));
         assert!(project.frameworks.contains(&FrameworkType::Axum));
-        assert!(project.test_frameworks.contains(&TestFramework::RustBuiltin));
+        assert!(
+            project
+                .test_frameworks
+                .contains(&TestFramework::RustBuiltin)
+        );
     }
 
     #[test]

@@ -124,10 +124,7 @@ fn print_config(console: &CLIConsole, config: &Config) {
         Some(n) => n.to_string(),
         None => "unlimited".to_string(),
     };
-    console.info(&format!(
-        "Max Steps: {}",
-        max_steps_str.yellow()
-    ));
+    console.info(&format!("Max Steps: {}", max_steps_str.yellow()));
 
     if let Some(working_dir) = &config.working_directory {
         console.info(&format!(

@@ -20,7 +20,9 @@
 //! ```
 
 use crate::error::{SageError, SageResult};
-use crate::session::types::{FileBackupInfo, FileHistorySnapshot, TrackedFileState, TrackedFilesSnapshot};
+use crate::session::types::{
+    FileBackupInfo, FileHistorySnapshot, TrackedFileState, TrackedFilesSnapshot,
+};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -133,7 +135,11 @@ impl FileSnapshotTracker {
     }
 
     /// Create a backup of a file
-    async fn create_backup(&self, path: &Path, content: Option<&str>) -> SageResult<Option<PathBuf>> {
+    async fn create_backup(
+        &self,
+        path: &Path,
+        content: Option<&str>,
+    ) -> SageResult<Option<PathBuf>> {
         let content = match content {
             Some(c) => c,
             None => return Ok(None),
@@ -146,12 +152,13 @@ impl FileSnapshotTracker {
             self.backup_dir.clone()
         };
 
-        fs::create_dir_all(&backup_dir).await.map_err(|e| {
-            SageError::storage(format!("Failed to create backup directory: {}", e))
-        })?;
+        fs::create_dir_all(&backup_dir)
+            .await
+            .map_err(|e| SageError::storage(format!("Failed to create backup directory: {}", e)))?;
 
         // Generate backup filename
-        let file_name = path.file_name()
+        let file_name = path
+            .file_name()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| "unknown".to_string());
         let timestamp = chrono::Utc::now().timestamp_millis();
@@ -159,9 +166,9 @@ impl FileSnapshotTracker {
         let backup_path = backup_dir.join(backup_name);
 
         // Write backup
-        fs::write(&backup_path, content).await.map_err(|e| {
-            SageError::storage(format!("Failed to write backup file: {}", e))
-        })?;
+        fs::write(&backup_path, content)
+            .await
+            .map_err(|e| SageError::storage(format!("Failed to write backup file: {}", e)))?;
 
         debug!("Created backup at: {:?}", backup_path);
         Ok(Some(backup_path))
@@ -171,7 +178,10 @@ impl FileSnapshotTracker {
     ///
     /// This compares the current state of tracked files to their original state
     /// and generates a snapshot capturing all changes.
-    pub async fn create_snapshot(&self, message_id: impl Into<String>) -> SageResult<FileHistorySnapshot> {
+    pub async fn create_snapshot(
+        &self,
+        message_id: impl Into<String>,
+    ) -> SageResult<FileHistorySnapshot> {
         let message_id = message_id.into();
         let mut tracked_files = HashMap::new();
         let mut file_backups = HashMap::new();
@@ -242,7 +252,10 @@ impl FileSnapshotTracker {
     }
 
     /// Restore files to their original state from a snapshot
-    pub async fn restore_from_snapshot(&self, snapshot: &FileHistorySnapshot) -> SageResult<Vec<String>> {
+    pub async fn restore_from_snapshot(
+        &self,
+        snapshot: &FileHistorySnapshot,
+    ) -> SageResult<Vec<String>> {
         let mut restored = Vec::new();
 
         for (path_str, backup_info) in &snapshot.snapshot.file_backups {
@@ -251,9 +264,9 @@ impl FileSnapshotTracker {
 
             if backup_path.exists() {
                 // Read backup content
-                let content = fs::read_to_string(&backup_path).await.map_err(|e| {
-                    SageError::storage(format!("Failed to read backup: {}", e))
-                })?;
+                let content = fs::read_to_string(&backup_path)
+                    .await
+                    .map_err(|e| SageError::storage(format!("Failed to read backup: {}", e)))?;
 
                 // Restore file
                 if let Some(parent) = path.parent() {
@@ -262,9 +275,9 @@ impl FileSnapshotTracker {
                     })?;
                 }
 
-                fs::write(&path, content).await.map_err(|e| {
-                    SageError::storage(format!("Failed to restore file: {}", e))
-                })?;
+                fs::write(&path, content)
+                    .await
+                    .map_err(|e| SageError::storage(format!("Failed to restore file: {}", e)))?;
 
                 restored.push(path_str.clone());
                 debug!("Restored file: {}", path_str);
@@ -279,7 +292,10 @@ impl FileSnapshotTracker {
                 let path = PathBuf::from(path_str);
                 if path.exists() {
                     if let Err(e) = fs::remove_file(&path).await {
-                        warn!("Failed to remove created file during restore: {} - {}", path_str, e);
+                        warn!(
+                            "Failed to remove created file during restore: {} - {}",
+                            path_str, e
+                        );
                     } else {
                         restored.push(format!("deleted: {}", path_str));
                         debug!("Removed created file: {}", path_str);
@@ -363,9 +379,18 @@ mod tests {
         let snapshot = tracker.create_snapshot("msg-123").await.unwrap();
 
         assert_eq!(snapshot.message_id, "msg-123");
-        assert!(snapshot.snapshot.tracked_files.contains_key(&file_path.to_string_lossy().to_string()));
+        assert!(
+            snapshot
+                .snapshot
+                .tracked_files
+                .contains_key(&file_path.to_string_lossy().to_string())
+        );
 
-        let state = snapshot.snapshot.tracked_files.get(&file_path.to_string_lossy().to_string()).unwrap();
+        let state = snapshot
+            .snapshot
+            .tracked_files
+            .get(&file_path.to_string_lossy().to_string())
+            .unwrap();
         assert_eq!(state.state, "modified");
     }
 
@@ -407,7 +432,11 @@ mod tests {
         // Create snapshot
         let snapshot = tracker.create_snapshot("msg-456").await.unwrap();
 
-        let state = snapshot.snapshot.tracked_files.get(&file_path.to_string_lossy().to_string()).unwrap();
+        let state = snapshot
+            .snapshot
+            .tracked_files
+            .get(&file_path.to_string_lossy().to_string())
+            .unwrap();
         assert_eq!(state.state, "created");
     }
 }

@@ -323,7 +323,9 @@ impl AutoCompact {
         }
 
         // Generate summary
-        let summary = self.generate_summary(&to_compact, custom_instructions).await?;
+        let summary = self
+            .generate_summary(&to_compact, custom_instructions)
+            .await?;
         let summary_preview = summary.content.chars().take(200).collect::<String>();
 
         // Rebuild messages: summary + kept messages
@@ -376,8 +378,7 @@ impl AutoCompact {
         for (i, msg) in messages.iter().enumerate() {
             let is_recent = i >= total.saturating_sub(preserve_count);
             let is_system = msg.role == MessageRole::System && self.config.preserve_system_messages;
-            let is_tool =
-                msg.role == MessageRole::Tool && self.config.preserve_tool_messages;
+            let is_tool = msg.role == MessageRole::Tool && self.config.preserve_tool_messages;
 
             if is_recent || is_system || is_tool {
                 to_keep.push(msg.clone());

@@ -33,7 +33,10 @@ impl TruncatedOutput {
                 self.truncated_lines, self.truncated_chars
             )
         } else {
-            format!("\n\n... [{} characters truncated] ...", self.truncated_chars)
+            format!(
+                "\n\n... [{} characters truncated] ...",
+                self.truncated_chars
+            )
         };
 
         format!("{}{}{}", self.content, truncation_info, TRUNCATED_MESSAGE)
@@ -51,13 +54,20 @@ pub fn truncate_output_with_limit(content: &str, limit: usize) -> TruncatedOutpu
     let original_lines = content.lines().count();
 
     // First pass: truncate any lines longer than MAX_LINE_LENGTH
-    let lines: Vec<String> = content.lines().map(|line| {
-        if line.len() > MAX_LINE_LENGTH {
-            format!("{}... [line truncated at {} chars]", &line[..MAX_LINE_LENGTH], MAX_LINE_LENGTH)
-        } else {
-            line.to_string()
-        }
-    }).collect();
+    let lines: Vec<String> = content
+        .lines()
+        .map(|line| {
+            if line.len() > MAX_LINE_LENGTH {
+                format!(
+                    "{}... [line truncated at {} chars]",
+                    &line[..MAX_LINE_LENGTH],
+                    MAX_LINE_LENGTH
+                )
+            } else {
+                line.to_string()
+            }
+        })
+        .collect();
 
     let processed = lines.join("\n");
 
@@ -201,7 +211,9 @@ mod tests {
     #[test]
     fn test_maybe_truncate_long_content() {
         // Create content with many lines to exceed limit
-        let lines: Vec<String> = (0..10000).map(|i| format!("Line {}: Some content here", i)).collect();
+        let lines: Vec<String> = (0..10000)
+            .map(|i| format!("Line {}: Some content here", i))
+            .collect();
         let content = lines.join("\n");
         assert!(content.len() > MAX_RESPONSE_LEN);
 

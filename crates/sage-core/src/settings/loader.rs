@@ -238,9 +238,8 @@ impl SettingsLoader {
             })?;
         }
 
-        let content = serde_json::to_string_pretty(settings).map_err(|e| {
-            SageError::Config(format!("Failed to serialize settings: {}", e))
-        })?;
+        let content = serde_json::to_string_pretty(settings)
+            .map_err(|e| SageError::Config(format!("Failed to serialize settings: {}", e)))?;
 
         std::fs::write(path, content).map_err(|e| {
             SageError::Config(format!("Failed to write settings file {:?}: {}", path, e))
@@ -318,7 +317,10 @@ mod tests {
         let loader = SettingsLoader::from_directory(temp_dir.path());
         let settings = loader.load().unwrap();
 
-        assert_eq!(settings.permissions.default_behavior, PermissionBehavior::Ask);
+        assert_eq!(
+            settings.permissions.default_behavior,
+            PermissionBehavior::Ask
+        );
     }
 
     #[test]
@@ -342,7 +344,10 @@ mod tests {
 
         assert_eq!(settings.permissions.allow.len(), 1);
         assert_eq!(settings.permissions.deny.len(), 1);
-        assert_eq!(settings.permissions.default_behavior, PermissionBehavior::Allow);
+        assert_eq!(
+            settings.permissions.default_behavior,
+            PermissionBehavior::Allow
+        );
     }
 
     #[test]
@@ -375,7 +380,10 @@ mod tests {
         // Should have both allow patterns
         assert_eq!(settings.permissions.allow.len(), 2);
         // Local behavior should win
-        assert_eq!(settings.permissions.default_behavior, PermissionBehavior::Allow);
+        assert_eq!(
+            settings.permissions.default_behavior,
+            PermissionBehavior::Allow
+        );
     }
 
     #[test]

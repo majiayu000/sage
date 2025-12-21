@@ -87,9 +87,9 @@ impl BackgroundShellTask {
             .stderr(std::process::Stdio::piped())
             .stdin(std::process::Stdio::null());
 
-        let mut child = cmd.spawn().map_err(|e| {
-            SageError::Io(format!("Failed to spawn background process: {}", e))
-        })?;
+        let mut child = cmd
+            .spawn()
+            .map_err(|e| SageError::Io(format!("Failed to spawn background process: {}", e)))?;
 
         let pid = child.id();
 
@@ -136,10 +136,7 @@ impl BackgroundShellTask {
             Self::monitor_process(child, status_clone, cancel_token_clone, &shell_id_clone).await;
         });
 
-        info!(
-            "Background shell '{}' started with PID {:?}",
-            shell_id, pid
-        );
+        info!("Background shell '{}' started with PID {:?}", shell_id, pid);
 
         Ok(Self {
             shell_id,
@@ -248,7 +245,7 @@ impl BackgroundShellTask {
         // Force kill if still running via PID
         #[cfg(unix)]
         if let Some(pid) = self.pid {
-            use nix::sys::signal::{kill, Signal};
+            use nix::sys::signal::{Signal, kill};
             use nix::unistd::Pid;
 
             let pid = Pid::from_raw(pid as i32);
@@ -309,7 +306,10 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(200)).await;
 
         let status = task.status().await;
-        assert!(matches!(status, BackgroundTaskStatus::Completed { exit_code: 0 }));
+        assert!(matches!(
+            status,
+            BackgroundTaskStatus::Completed { exit_code: 0 }
+        ));
 
         let (stdout, _) = task.get_output().await;
         assert!(stdout.contains("hello world"));
@@ -380,7 +380,9 @@ mod tests {
         let status = BackgroundTaskStatus::Completed { exit_code: 1 };
         assert_eq!(format!("{}", status), "COMPLETED (exit code: 1)");
 
-        let status = BackgroundTaskStatus::Failed { error: "test error".to_string() };
+        let status = BackgroundTaskStatus::Failed {
+            error: "test error".to_string(),
+        };
         assert_eq!(format!("{}", status), "FAILED: test error");
 
         let status = BackgroundTaskStatus::Killed;

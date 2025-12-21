@@ -109,11 +109,7 @@ impl SubAgentRunner {
         }
 
         // Add user task
-        let user_message = format!(
-            "{}\n\nTask: {}",
-            definition.description,
-            config.prompt
-        );
+        let user_message = format!("{}\n\nTask: {}", definition.description, config.prompt);
         messages.push(LLMMessage::user(user_message));
 
         // Track execution
@@ -136,9 +132,7 @@ impl SubAgentRunner {
                     agent_id,
                     content: format!(
                         "Task incomplete: maximum steps ({}) reached. Last progress: {} tool uses, {} tokens.",
-                        self.max_steps,
-                        progress.tool_use_count,
-                        progress.token_count
+                        self.max_steps, progress.tool_use_count, progress.token_count
                     ),
                     metadata,
                 });
@@ -147,7 +141,10 @@ impl SubAgentRunner {
             progress.next_step();
 
             // Execute one step
-            match self.execute_step(&mut messages, &tools, &mut progress, &mut metadata).await? {
+            match self
+                .execute_step(&mut messages, &tools, &mut progress, &mut metadata)
+                .await?
+            {
                 StepResult::Continue => continue,
                 StepResult::Completed(output) => {
                     let elapsed_ms = start_time.elapsed().as_millis() as u64;
@@ -197,10 +194,7 @@ impl SubAgentRunner {
         let tool_schemas: Vec<ToolSchema> = tools.iter().map(|t| t.schema()).collect();
 
         // Call LLM
-        let response = self
-            .llm_client
-            .chat(messages, Some(&tool_schemas))
-            .await?;
+        let response = self.llm_client.chat(messages, Some(&tool_schemas)).await?;
 
         // Update token usage
         if let Some(usage) = &response.usage {
@@ -234,7 +228,9 @@ impl SubAgentRunner {
 
                 // Add tool result message
                 let tool_msg = LLMMessage::tool(
-                    result.output.unwrap_or_else(|| result.error.unwrap_or_default()),
+                    result
+                        .output
+                        .unwrap_or_else(|| result.error.unwrap_or_default()),
                     call.id.clone(),
                     Some(call.name.clone()),
                 );
@@ -252,11 +248,7 @@ impl SubAgentRunner {
     }
 
     /// Execute a tool call
-    async fn execute_tool_call(
-        &self,
-        call: &ToolCall,
-        tools: &[Arc<dyn Tool>],
-    ) -> ToolResult {
+    async fn execute_tool_call(&self, call: &ToolCall, tools: &[Arc<dyn Tool>]) -> ToolResult {
         // Find the tool
         let tool = match tools.iter().find(|t| t.name() == call.name) {
             Some(t) => t,
@@ -287,7 +279,10 @@ static GLOBAL_RUNNER: std::sync::OnceLock<Arc<RwLock<Option<SubAgentRunner>>>> =
     std::sync::OnceLock::new();
 
 /// Initialize the global sub-agent runner from configuration
-pub fn init_global_runner_from_config(config: &Config, tools: Vec<Arc<dyn Tool>>) -> SageResult<()> {
+pub fn init_global_runner_from_config(
+    config: &Config,
+    tools: Vec<Arc<dyn Tool>>,
+) -> SageResult<()> {
     let runner = SubAgentRunner::from_config(config, tools)?;
     init_global_runner(runner);
     Ok(())
@@ -320,8 +315,11 @@ pub fn get_global_runner() -> Option<Arc<RwLock<Option<SubAgentRunner>>>> {
 
 /// Execute a sub-agent using the global runner
 pub async fn execute_subagent(config: SubAgentConfig) -> SageResult<SubAgentResult> {
-    let runner_lock = get_global_runner()
-        .ok_or_else(|| SageError::agent("Sub-agent runner not initialized. Call init_global_runner_from_config first."))?;
+    let runner_lock = get_global_runner().ok_or_else(|| {
+        SageError::agent(
+            "Sub-agent runner not initialized. Call init_global_runner_from_config first.",
+        )
+    })?;
 
     let guard = runner_lock.read().await;
     let runner = guard

@@ -5,8 +5,8 @@
 //! character counts with provider-specific adjustments.
 
 use crate::llm::LLMMessage;
-use crate::tools::types::ToolSchema;
 use crate::tools::ToolCall;
+use crate::tools::types::ToolSchema;
 
 /// Token estimator for LLM messages
 #[derive(Debug, Clone)]
@@ -58,7 +58,10 @@ impl TokenEstimator {
 
         // Add tool call tokens if present
         let tool_tokens = if let Some(ref tool_calls) = message.tool_calls {
-            tool_calls.iter().map(|tc| self.estimate_tool_call(tc)).sum()
+            tool_calls
+                .iter()
+                .map(|tc| self.estimate_tool_call(tc))
+                .sum()
         } else {
             0
         };
@@ -88,8 +91,7 @@ impl TokenEstimator {
     /// Estimate tokens for a single tool schema
     fn estimate_tool_schema(&self, schema: &ToolSchema) -> usize {
         let name_tokens = (schema.name.len() as f32 / self.chars_per_token).ceil() as usize;
-        let desc_tokens =
-            (schema.description.len() as f32 / self.chars_per_token).ceil() as usize;
+        let desc_tokens = (schema.description.len() as f32 / self.chars_per_token).ceil() as usize;
 
         // Estimate parameter schema tokens
         let params_str = serde_json::to_string(&schema.parameters).unwrap_or_default();
@@ -99,11 +101,7 @@ impl TokenEstimator {
     }
 
     /// Estimate total tokens for a request (messages + tools)
-    pub fn estimate_request(
-        &self,
-        messages: &[LLMMessage],
-        tools: Option<&[ToolSchema]>,
-    ) -> usize {
+    pub fn estimate_request(&self, messages: &[LLMMessage], tools: Option<&[ToolSchema]>) -> usize {
         let message_tokens = self.estimate_conversation(messages);
         let tool_tokens = tools.map(|t| self.estimate_tools(t)).unwrap_or(0);
         message_tokens + tool_tokens + 10 // Request overhead
@@ -150,7 +148,10 @@ mod tests {
         let messages = vec![
             create_message(MessageRole::System, "You are a helpful assistant."),
             create_message(MessageRole::User, "Hello!"),
-            create_message(MessageRole::Assistant, "Hi there! How can I help you today?"),
+            create_message(
+                MessageRole::Assistant,
+                "Hi there! How can I help you today?",
+            ),
         ];
 
         let total = estimator.estimate_conversation(&messages);
@@ -197,9 +198,7 @@ mod tests {
     fn test_estimate_request() {
         let estimator = TokenEstimator::new();
 
-        let messages = vec![
-            create_message(MessageRole::User, "Please help me."),
-        ];
+        let messages = vec![create_message(MessageRole::User, "Please help me.")];
 
         let tools = vec![
             ToolSchema::new("tool1", "First tool", vec![]),

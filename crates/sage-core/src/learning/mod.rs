@@ -31,12 +31,12 @@ pub mod types;
 
 // Re-export main types
 pub use engine::{
-    create_learning_engine, create_learning_engine_with_memory, LearningEngine, LearningError,
-    SharedLearningEngine,
+    LearningEngine, LearningError, SharedLearningEngine, create_learning_engine,
+    create_learning_engine_with_memory,
 };
 pub use patterns::{
-    analyze_user_message, CorrectionRecord, CorrectionStats, PatternDetector, PreferenceIndicator,
-    StylePattern,
+    CorrectionRecord, CorrectionStats, PatternDetector, PreferenceIndicator, StylePattern,
+    analyze_user_message,
 };
 pub use types::{
     Confidence, LearningConfig, LearningEvent, LearningEventType, LearningStats, Pattern,
