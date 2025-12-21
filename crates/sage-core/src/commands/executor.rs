@@ -106,6 +106,7 @@ impl CommandExecutor {
             "restore" => self.execute_restore(invocation).await,
             "tasks" => self.execute_tasks().await,
             "commands" => self.execute_commands().await,
+            "undo" => self.execute_undo(invocation).await,
             _ => {
                 // Fall back to prompt expansion
                 let expanded = command.expand(&invocation.arguments);
@@ -191,6 +192,21 @@ impl CommandExecutor {
             "List all running and recently completed background tasks with their status.",
         )
         .with_status("Listing tasks..."))
+    }
+
+    /// Execute /undo command
+    async fn execute_undo(&self, invocation: &CommandInvocation) -> SageResult<CommandResult> {
+        let message_id = invocation.arguments.first().cloned();
+        let prompt = match message_id {
+            Some(id) => format!(
+                "Restore files to their state before message '{}'. List the files that will be restored and their changes, then proceed with the restoration.",
+                id
+            ),
+            None => {
+                "Restore files to their state before the last assistant message that modified files. List the files that will be restored and their changes, then proceed with the restoration.".to_string()
+            }
+        };
+        Ok(CommandResult::prompt(prompt).with_status("Preparing undo..."))
     }
 
     /// Execute /commands command

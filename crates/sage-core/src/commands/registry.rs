@@ -177,6 +177,17 @@ impl CommandRegistry {
                 .builtin(),
             CommandSource::Builtin,
         );
+
+        // Undo command
+        self.register(
+            SlashCommand::new(
+                "undo",
+                "Undo the last file changes by restoring files to their previous state. Usage: /undo [message-id]",
+            )
+            .with_description("Undo file changes")
+            .builtin(),
+            CommandSource::Builtin,
+        );
     }
 
     /// Discover commands from file system

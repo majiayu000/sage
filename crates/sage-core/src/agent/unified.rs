@@ -27,6 +27,10 @@ use crate::llm::client::LLMClient;
 use crate::llm::messages::LLMMessage;
 use crate::llm::providers::LLMProvider;
 use crate::prompts::SystemPromptBuilder;
+use crate::session::{
+    EnhancedMessage, EnhancedToolCall, EnhancedTokenUsage, FileSnapshotTracker,
+    JsonlSessionStorage, MessageChainTracker, SessionContext, TodoItem,
+};
 use crate::tools::executor::ToolExecutor;
 use crate::tools::types::ToolSchema;
 use crate::trajectory::recorder::TrajectoryRecorder;
@@ -55,6 +59,14 @@ pub struct UnifiedExecutor {
     trajectory_recorder: Option<Arc<Mutex<TrajectoryRecorder>>>,
     /// Animation manager
     animation_manager: AnimationManager,
+    /// JSONL session storage for enhanced messages
+    jsonl_storage: Option<Arc<JsonlSessionStorage>>,
+    /// Message chain tracker for building message relationships
+    message_tracker: MessageChainTracker,
+    /// Current session ID
+    current_session_id: Option<String>,
+    /// File snapshot tracker for undo capability
+    file_tracker: FileSnapshotTracker,
 }
 
 impl UnifiedExecutor {
@@ -147,6 +159,21 @@ impl UnifiedExecutor {
         // Create animation manager
         let animation_manager = AnimationManager::new();
 
+        // Create JSONL storage (optional, can be enabled later)
+        let jsonl_storage = JsonlSessionStorage::default_path()
+            .ok()
+            .map(Arc::new);
+
+        // Get working directory for context
+        let working_dir = options
+            .working_directory
+            .clone()
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
+        // Create message chain tracker
+        let context = SessionContext::new(working_dir);
+        let message_tracker = MessageChainTracker::new().with_context(context);
+
         Ok(Self {
             id: uuid::Uuid::new_v4(),
             config,
@@ -156,6 +183,10 @@ impl UnifiedExecutor {
             input_channel,
             trajectory_recorder: None,
             animation_manager,
+            jsonl_storage,
+            message_tracker,
+            current_session_id: None,
+            file_tracker: FileSnapshotTracker::default_tracker(),
         })
     }
 
@@ -167,6 +198,136 @@ impl UnifiedExecutor {
     /// Set trajectory recorder
     pub fn set_trajectory_recorder(&mut self, recorder: Arc<Mutex<TrajectoryRecorder>>) {
         self.trajectory_recorder = Some(recorder);
+    }
+
+    /// Enable JSONL session recording
+    ///
+    /// Creates a new session and starts recording enhanced messages.
+    pub async fn enable_session_recording(&mut self) -> SageResult<String> {
+        let session_id = uuid::Uuid::new_v4().to_string();
+
+        if let Some(storage) = &self.jsonl_storage {
+            let working_dir = self
+                .options
+                .working_directory
+                .clone()
+                .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
+            // Create session
+            let mut metadata = storage.create_session(&session_id, working_dir.clone()).await?;
+
+            // Set model info
+            if let Ok(params) = self.config.default_model_parameters() {
+                metadata = metadata.with_model(&params.model);
+            }
+            storage.save_metadata(&session_id, &metadata).await?;
+
+            // Update tracker
+            let mut context = SessionContext::new(working_dir);
+            context.detect_git_branch();
+            self.message_tracker = MessageChainTracker::new()
+                .with_session(&session_id)
+                .with_context(context);
+
+            self.current_session_id = Some(session_id.clone());
+
+            tracing::info!("Started JSONL session recording: {}", session_id);
+        }
+
+        Ok(self.current_session_id.clone().unwrap_or_default())
+    }
+
+    /// Get current session ID
+    pub fn current_session_id(&self) -> Option<&str> {
+        self.current_session_id.as_deref()
+    }
+
+    /// Record a user message
+    async fn record_user_message(&mut self, content: &str) -> SageResult<Option<EnhancedMessage>> {
+        if self.current_session_id.is_none() || self.jsonl_storage.is_none() {
+            return Ok(None);
+        }
+
+        let msg = self.message_tracker.create_user_message(content);
+
+        if let Some(storage) = &self.jsonl_storage {
+            if let Some(session_id) = &self.current_session_id {
+                storage.append_message(session_id, &msg).await?;
+            }
+        }
+
+        Ok(Some(msg))
+    }
+
+    /// Record an assistant message
+    async fn record_assistant_message(
+        &mut self,
+        content: &str,
+        tool_calls: Option<Vec<EnhancedToolCall>>,
+        usage: Option<EnhancedTokenUsage>,
+    ) -> SageResult<Option<EnhancedMessage>> {
+        if self.current_session_id.is_none() || self.jsonl_storage.is_none() {
+            return Ok(None);
+        }
+
+        let mut msg = self.message_tracker.create_assistant_message(content);
+
+        if let Some(calls) = tool_calls {
+            msg = msg.with_tool_calls(calls);
+        }
+        if let Some(u) = usage {
+            msg = msg.with_usage(u);
+        }
+
+        if let Some(storage) = &self.jsonl_storage {
+            if let Some(session_id) = &self.current_session_id {
+                storage.append_message(session_id, &msg).await?;
+            }
+        }
+
+        Ok(Some(msg))
+    }
+
+    /// Update todos in the message tracker
+    pub fn update_todos(&mut self, todos: Vec<TodoItem>) {
+        self.message_tracker.set_todos(todos);
+    }
+
+    /// Track a file for snapshot capability
+    ///
+    /// Call this before modifying files to enable undo.
+    pub async fn track_file(&mut self, path: impl AsRef<std::path::Path>) -> SageResult<()> {
+        self.file_tracker.track_file(path).await
+    }
+
+    /// Create and record a file snapshot for the current message
+    async fn record_file_snapshot(&mut self, message_uuid: &str) -> SageResult<()> {
+        if self.current_session_id.is_none() || self.jsonl_storage.is_none() {
+            return Ok(());
+        }
+
+        // Only create snapshot if files were tracked
+        if self.file_tracker.is_empty() {
+            return Ok(());
+        }
+
+        let snapshot = self.file_tracker.create_snapshot(message_uuid).await?;
+
+        if let Some(storage) = &self.jsonl_storage {
+            if let Some(session_id) = &self.current_session_id {
+                storage.append_snapshot(session_id, &snapshot).await?;
+            }
+        }
+
+        // Clear tracker for next round
+        self.file_tracker.clear();
+
+        Ok(())
+    }
+
+    /// Get the file tracker for external file tracking
+    pub fn file_tracker_mut(&mut self) -> &mut FileSnapshotTracker {
+        &mut self.file_tracker
     }
 
     /// Register a tool with the executor
@@ -248,6 +409,11 @@ impl UnifiedExecutor {
         // Initialize conversation with system prompt and task
         let mut messages = self.build_initial_messages(&system_prompt, &task.description);
 
+        // Record initial user message if session recording is enabled
+        if self.current_session_id.is_some() {
+            let _ = self.record_user_message(&task.description).await;
+        }
+
         // Start the unified execution loop
         let provider_name = self.config.get_default_provider().to_string();
         let max_steps = self.options.max_steps;
@@ -273,6 +439,49 @@ impl UnifiedExecutor {
                         // Record step in trajectory
                         if let Some(recorder) = &self.trajectory_recorder {
                             recorder.lock().await.record_step(step.clone()).await?;
+                        }
+
+                        // Record assistant message in JSONL session
+                        if self.current_session_id.is_some() {
+                            if let Some(ref llm_response) = step.llm_response {
+                                // Convert tool calls if any exist
+                                let tool_calls = if !llm_response.tool_calls.is_empty() {
+                                    Some(
+                                        llm_response.tool_calls
+                                            .iter()
+                                            .map(|c| EnhancedToolCall {
+                                                id: c.id.clone(),
+                                                name: c.name.clone(),
+                                                arguments: serde_json::to_value(&c.arguments)
+                                                    .unwrap_or(serde_json::Value::Object(Default::default())),
+                                            })
+                                            .collect(),
+                                    )
+                                } else {
+                                    None
+                                };
+
+                                // Convert usage if available
+                                let usage = llm_response.usage.as_ref().map(|u| EnhancedTokenUsage {
+                                    input_tokens: u.prompt_tokens as u64,
+                                    output_tokens: u.completion_tokens as u64,
+                                    cache_read_tokens: u.cache_read_input_tokens.unwrap_or(0) as u64,
+                                    cache_write_tokens: u.cache_creation_input_tokens.unwrap_or(0) as u64,
+                                });
+
+                                // Record assistant message and get the message UUID
+                                if let Ok(Some(msg)) = self
+                                    .record_assistant_message(
+                                        &llm_response.content,
+                                        tool_calls,
+                                        usage,
+                                    )
+                                    .await
+                                {
+                                    // Record file snapshot if files were tracked
+                                    let _ = self.record_file_snapshot(&msg.uuid).await;
+                                }
+                            }
                         }
 
                         execution.add_step(step);
@@ -552,6 +761,16 @@ impl UnifiedExecutor {
                 if task_scope.is_cancelled() {
                     self.animation_manager.stop_animation().await;
                     return Err(SageError::agent("Task interrupted during tool execution"));
+                }
+
+                // Track files before file-modifying tools execute (for undo capability)
+                if matches!(tool_call.name.as_str(), "edit" | "write" | "multi_edit") {
+                    if let Some(file_path) = tool_call.arguments.get("file_path")
+                        .or_else(|| tool_call.arguments.get("path"))
+                        .and_then(|v| v.as_str())
+                    {
+                        let _ = self.file_tracker.track_file(file_path).await;
+                    }
                 }
 
                 // Check if this tool requires user interaction (blocking input)

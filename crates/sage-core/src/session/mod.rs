@@ -44,6 +44,7 @@
 //! ```
 
 pub mod branching;
+pub mod file_tracker;
 pub mod jsonl_storage;
 pub mod manager;
 pub mod session_cache;
@@ -55,6 +56,7 @@ pub use branching::{
     BranchId, BranchManager, BranchNode, BranchSnapshot, SerializedMessage, SerializedToolCall,
     SharedBranchManager, create_branch_manager,
 };
+pub use file_tracker::FileSnapshotTracker;
 pub use jsonl_storage::{JsonlSessionStorage, MessageChainTracker, SessionMetadata};
 pub use manager::SessionManager;
 pub use session_cache::{
