@@ -25,8 +25,8 @@ pub struct TrajectoryRecord {
     pub provider: String,
     /// Model name used
     pub model: String,
-    /// Maximum steps allowed
-    pub max_steps: u32,
+    /// Maximum steps allowed (None = unlimited)
+    pub max_steps: Option<u32>,
     /// LLM interactions
     pub llm_interactions: Vec<LLMInteractionRecord>,
     /// Agent execution steps
@@ -151,7 +151,7 @@ impl TrajectoryRecorder {
         task: TaskMetadata,
         provider: String,
         model: String,
-        max_steps: u32,
+        max_steps: Option<u32>,
     ) -> SageResult<()> {
         let start_time = Utc::now();
         self.start_time = Some(start_time);

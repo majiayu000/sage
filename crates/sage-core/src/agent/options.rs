@@ -190,8 +190,8 @@ pub struct ExecutionOptions {
     /// How to handle user input requests
     pub mode: ExecutionMode,
 
-    /// Maximum number of agent steps before stopping
-    pub max_steps: u32,
+    /// Maximum number of agent steps before stopping (None = unlimited)
+    pub max_steps: Option<u32>,
 
     /// Maximum total execution time (None = no limit)
     pub execution_timeout: Option<Duration>,
@@ -220,7 +220,7 @@ impl Default for ExecutionOptions {
     fn default() -> Self {
         Self {
             mode: ExecutionMode::Interactive,
-            max_steps: 100,
+            max_steps: None, // None = unlimited
             execution_timeout: None,
             prompt_timeout: None,
             record_trajectory: false,
@@ -265,9 +265,21 @@ impl ExecutionOptions {
         self
     }
 
-    /// Set maximum steps
-    pub fn with_max_steps(mut self, max_steps: u32) -> Self {
+    /// Set maximum steps (None = unlimited)
+    pub fn with_max_steps(mut self, max_steps: Option<u32>) -> Self {
         self.max_steps = max_steps;
+        self
+    }
+
+    /// Set maximum steps with a specific limit
+    pub fn with_step_limit(mut self, limit: u32) -> Self {
+        self.max_steps = Some(limit);
+        self
+    }
+
+    /// Set unlimited steps
+    pub fn with_unlimited_steps(mut self) -> Self {
+        self.max_steps = None;
         self
     }
 
@@ -356,13 +368,13 @@ mod tests {
     #[test]
     fn test_execution_options_builder() {
         let options = ExecutionOptions::interactive()
-            .with_max_steps(50)
+            .with_step_limit(50)
             .with_execution_timeout(Duration::from_secs(3600))
             .with_trajectory(true)
             .with_verbose(true);
 
         assert!(options.is_interactive());
-        assert_eq!(options.max_steps, 50);
+        assert_eq!(options.max_steps, Some(50));
         assert_eq!(options.execution_timeout, Some(Duration::from_secs(3600)));
         assert!(options.record_trajectory);
         assert!(options.verbose);

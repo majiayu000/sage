@@ -153,7 +153,7 @@ pub async fn execute(args: RunArgs) -> SageResult<()> {
     }
 
     if let Some(max_steps) = args.max_steps {
-        sdk = sdk.with_max_steps(max_steps);
+        sdk = sdk.with_step_limit(max_steps);
     }
 
     if let Some(trajectory_file) = &args.trajectory_file {
@@ -173,7 +173,11 @@ pub async fn execute(args: RunArgs) -> SageResult<()> {
         console.info(&format!("Model: {}", params.model));
     }
 
-    console.info(&format!("Max Steps: {}", sdk.config().max_steps));
+    let max_steps_display = match sdk.config().max_steps {
+        Some(n) => n.to_string(),
+        None => "unlimited".to_string(),
+    };
+    console.info(&format!("Max Steps: {}", max_steps_display));
 
     if let Some(working_dir) = &sdk.config().working_directory {
         console.info(&format!("Working Directory: {}", working_dir.display()));

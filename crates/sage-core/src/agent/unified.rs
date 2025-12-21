@@ -18,6 +18,7 @@ use crate::agent::{
     AgentExecution, AgentState, AgentStep, ExecutionError, ExecutionMode, ExecutionOptions,
     ExecutionOutcome,
 };
+use crate::agent::subagent::init_global_runner_from_config;
 use crate::config::model::Config;
 use crate::config::provider::ProviderConfig;
 use crate::error::{SageError, SageResult};
@@ -342,6 +343,26 @@ impl UnifiedExecutor {
         }
     }
 
+    /// Initialize sub-agent support
+    ///
+    /// This should be called after all tools are registered to enable
+    /// the Task tool to execute sub-agents (Explore, Plan, etc.)
+    pub fn init_subagent_support(&self) -> SageResult<()> {
+        // Get all registered tools from the executor
+        let tool_names = self.tool_executor.tool_names();
+        let tools: Vec<Arc<dyn crate::tools::base::Tool>> = tool_names
+            .iter()
+            .filter_map(|name| self.tool_executor.get_tool(name).cloned())
+            .collect();
+
+        tracing::info!(
+            "Initializing sub-agent support with {} tools",
+            tools.len()
+        );
+
+        init_global_runner_from_config(&self.config, tools)
+    }
+
     /// Get the executor ID
     pub fn id(&self) -> Id {
         self.id.clone()
@@ -419,7 +440,19 @@ impl UnifiedExecutor {
         let max_steps = self.options.max_steps;
 
         let outcome = 'execution_loop: {
-            for step_number in 1..=max_steps {
+            let mut step_number = 0u32;
+            loop {
+                step_number += 1;
+
+                // Check max_steps limit (None = unlimited)
+                if let Some(max) = max_steps {
+                    if step_number > max {
+                        tracing::warn!("Reached maximum steps: {}", max);
+                        execution.complete(false, Some("Reached maximum steps".to_string()));
+                        break 'execution_loop ExecutionOutcome::MaxStepsReached { execution };
+                    }
+                }
+
                 // Check for interrupt before each step
                 if task_scope.is_cancelled() {
                     self.animation_manager.stop_animation().await;
@@ -531,10 +564,12 @@ impl UnifiedExecutor {
                 }
             }
 
-            // Reached max steps
-            tracing::warn!("Reached maximum steps: {}", max_steps);
-            execution.complete(false, Some("Reached maximum steps".to_string()));
-            ExecutionOutcome::MaxStepsReached { execution }
+            // This is unreachable since the loop only exits via break statements
+            // The compiler requires this branch for exhaustiveness
+            #[allow(unreachable_code)]
+            {
+                unreachable!("Execution loop should exit via break statements")
+            }
         };
 
         // Stop any running animations
@@ -862,9 +897,15 @@ impl UnifiedExecutorBuilder {
         self
     }
 
-    /// Set max steps
-    pub fn with_max_steps(mut self, max_steps: u32) -> Self {
+    /// Set max steps (None = unlimited)
+    pub fn with_max_steps(mut self, max_steps: Option<u32>) -> Self {
         self.options.max_steps = max_steps;
+        self
+    }
+
+    /// Set a specific step limit
+    pub fn with_step_limit(mut self, limit: u32) -> Self {
+        self.options.max_steps = Some(limit);
         self
     }
 
@@ -897,8 +938,8 @@ mod tests {
     #[test]
     fn test_unified_executor_builder() {
         // This test would need a valid config, so we just test the builder pattern
-        let options = ExecutionOptions::interactive().with_max_steps(50);
-        assert_eq!(options.max_steps, 50);
+        let options = ExecutionOptions::interactive().with_step_limit(50);
+        assert_eq!(options.max_steps, Some(50));
         assert!(options.is_interactive());
     }
 

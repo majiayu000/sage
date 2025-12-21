@@ -371,7 +371,11 @@ fn print_config(console: &CLIConsole, sdk: &SageAgentSDK) {
         console.info(&format!("Model: {}", params.model));
     }
 
-    console.info(&format!("Max Steps: {}", config.max_steps));
+    let max_steps_display = match config.max_steps {
+        Some(n) => n.to_string(),
+        None => "unlimited".to_string(),
+    };
+    console.info(&format!("Max Steps: {}", max_steps_display));
 
     if let Some(working_dir) = &config.working_directory {
         console.info(&format!("Working Directory: {}", working_dir.display()));
@@ -400,7 +404,11 @@ fn print_status(console: &CLIConsole, sdk: &SageAgentSDK) {
         "Available Tools: {}",
         config.tools.enabled_tools.len()
     ));
-    console.info(&format!("Max Steps: {}", config.max_steps));
+    let max_steps_display = match config.max_steps {
+        Some(n) => n.to_string(),
+        None => "unlimited".to_string(),
+    };
+    console.info(&format!("Max Steps: {}", max_steps_display));
 
     // Check configuration validity
     match sdk.validate_config() {

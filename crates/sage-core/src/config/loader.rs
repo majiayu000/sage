@@ -132,7 +132,7 @@ impl ConfigLoader {
     fn load_from_env(&self) -> SageResult<Config> {
         let mut config = Config {
             default_provider: String::new(), // Don't set default here
-            max_steps: 0,                    // Don't set default here
+            max_steps: None,                 // None = unlimited
             total_token_budget: None,
             model_providers: HashMap::new(),
             lakeview_config: None,
@@ -154,10 +154,11 @@ impl ConfigLoader {
             config.default_provider = provider;
         }
 
-        if let Ok(max_steps) = env::var("SAGE_MAX_STEPS") {
-            config.max_steps = max_steps
+        if let Ok(max_steps_str) = env::var("SAGE_MAX_STEPS") {
+            let max_steps: u32 = max_steps_str
                 .parse()
                 .map_err(|_| SageError::config("Invalid SAGE_MAX_STEPS value"))?;
+            config.max_steps = Some(max_steps);
         }
 
         // Load model parameters for different providers
@@ -234,7 +235,7 @@ impl ConfigLoader {
     fn load_from_args(&self, args: &HashMap<String, String>) -> SageResult<Config> {
         let mut config = Config {
             default_provider: String::new(), // Don't set default here
-            max_steps: 0,                    // Don't set default here
+            max_steps: None,                 // None = unlimited
             total_token_budget: None,
             model_providers: HashMap::new(),
             lakeview_config: None,
@@ -289,10 +290,11 @@ impl ConfigLoader {
             config.model_providers.insert(provider, params);
         }
 
-        if let Some(max_steps) = args.get("max_steps") {
-            config.max_steps = max_steps
+        if let Some(max_steps_str) = args.get("max_steps") {
+            let max_steps: u32 = max_steps_str
                 .parse()
                 .map_err(|_| SageError::config("Invalid max_steps value"))?;
+            config.max_steps = Some(max_steps);
         }
 
         if let Some(working_dir) = args.get("working_dir") {

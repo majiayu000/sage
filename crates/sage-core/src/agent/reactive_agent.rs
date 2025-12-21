@@ -278,15 +278,17 @@ impl ClaudeStyleAgent {
 
     /// Check if we can continue execution (budget and step limits)
     fn can_continue(&self) -> Result<(), SageError> {
-        // Check step limit
-        if self.current_step >= self.config.max_steps {
-            return Err(SageError::agent(format!(
-                "Max steps ({}) reached. Total tokens used: {} (input: {}, output: {})",
-                self.config.max_steps,
-                self.token_usage.total(),
-                self.token_usage.input(),
-                self.token_usage.output()
-            )));
+        // Check step limit (None = unlimited)
+        if let Some(max_steps) = self.config.max_steps {
+            if self.current_step >= max_steps {
+                return Err(SageError::agent(format!(
+                    "Max steps ({}) reached. Total tokens used: {} (input: {}, output: {})",
+                    max_steps,
+                    self.token_usage.total(),
+                    self.token_usage.input(),
+                    self.token_usage.output()
+                )));
+            }
         }
 
         // Check token budget

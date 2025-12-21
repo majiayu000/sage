@@ -163,8 +163,8 @@ impl Default for LakeviewConfig {
 pub struct Config {
     /// Default LLM provider to use
     pub default_provider: String,
-    /// Maximum number of execution steps
-    pub max_steps: u32,
+    /// Maximum number of execution steps (None = unlimited)
+    pub max_steps: Option<u32>,
     /// Total token budget across all steps (input + output)
     /// When exceeded, agent will stop with a budget exceeded error
     #[serde(default)]
@@ -303,7 +303,7 @@ impl Default for Config {
 
         Self {
             default_provider: "anthropic".to_string(),
-            max_steps: 20,
+            max_steps: None, // None = unlimited steps
             total_token_budget: None, // No limit by default
             model_providers,
             lakeview_config: None,
@@ -367,9 +367,11 @@ impl Config {
             )));
         }
 
-        // Validate max steps
-        if self.max_steps == 0 {
-            return Err(SageError::config("Max steps must be greater than 0"));
+        // Validate max steps (if set)
+        if let Some(max_steps) = self.max_steps {
+            if max_steps == 0 {
+                return Err(SageError::config("Max steps must be greater than 0 (use None for unlimited)"));
+            }
         }
 
         // Validate all model parameters
@@ -401,7 +403,8 @@ impl Config {
             self.default_provider = other.default_provider;
         }
 
-        if other.max_steps > 0 {
+        // Merge max_steps if other has a value set
+        if other.max_steps.is_some() {
             self.max_steps = other.max_steps;
         }
 
@@ -501,16 +504,22 @@ pub struct LoggingConfig {
 }
 
 /// Trajectory configuration
+/// Note: Trajectory recording is always enabled and cannot be disabled
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrajectoryConfig {
-    /// Whether to enable trajectory recording by default
-    pub enabled: bool,
     /// Directory to store trajectory files
     pub directory: PathBuf,
     /// Whether to auto-save trajectories during execution
     pub auto_save: bool,
     /// Number of steps between auto-saves
     pub save_interval_steps: usize,
+}
+
+impl TrajectoryConfig {
+    /// Trajectory is always enabled - this is a required feature
+    pub fn is_enabled(&self) -> bool {
+        true
+    }
 }
 
 /// MCP (Model Context Protocol) configuration
@@ -640,7 +649,7 @@ impl Default for LoggingConfig {
 impl Default for TrajectoryConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
+            // Note: trajectory is always enabled, no enabled field
             directory: PathBuf::from("trajectories"),
             auto_save: true,
             save_interval_steps: 5,

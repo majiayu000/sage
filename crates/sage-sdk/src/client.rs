@@ -108,9 +108,15 @@ impl SageAgentSDK {
         self
     }
 
-    /// Set maximum steps
-    pub fn with_max_steps(mut self, max_steps: u32) -> Self {
+    /// Set maximum steps (None = unlimited)
+    pub fn with_max_steps(mut self, max_steps: Option<u32>) -> Self {
         self.config.max_steps = max_steps;
+        self
+    }
+
+    /// Set a specific step limit
+    pub fn with_step_limit(mut self, limit: u32) -> Self {
+        self.config.max_steps = Some(limit);
         self
     }
 
@@ -138,15 +144,22 @@ impl SageAgentSDK {
         let task = TaskMetadata::new(task_description, &working_dir.to_string_lossy());
 
         // Set up execution options for unified executor
+        // Use options.max_steps if provided, otherwise fall back to config.max_steps
+        let max_steps = options.max_steps.or(self.config.max_steps);
         let exec_options = ExecutionOptions::default()
             .with_mode(ExecutionMode::interactive())
-            .with_max_steps(options.max_steps.unwrap_or(self.config.max_steps));
+            .with_max_steps(max_steps);
 
         // Create unified executor
         let mut executor = UnifiedExecutor::with_options(self.config.clone(), exec_options)?;
 
         // Register default tools - CRITICAL: without tools the AI cannot do anything!
         executor.register_tools(get_default_tools());
+
+        // Initialize sub-agent support so Task tool can execute Explore/Plan agents
+        if let Err(e) = executor.init_subagent_support() {
+            tracing::warn!("Failed to initialize sub-agent support: {}", e);
+        }
 
         // Set up input channel for interactive mode - handles ask_user_question
         let (input_channel, mut input_handle) = InputChannel::new(16);
@@ -324,9 +337,10 @@ impl SageAgentSDK {
             ExecutionMode::interactive()
         };
 
+        let max_steps = options.max_steps.or(self.config.max_steps);
         let mut exec_options = ExecutionOptions::default()
             .with_mode(mode)
-            .with_max_steps(options.max_steps.unwrap_or(self.config.max_steps));
+            .with_max_steps(max_steps);
 
         if let Some(dir) = &options.working_directory {
             exec_options = exec_options.with_working_directory(dir);
@@ -337,6 +351,11 @@ impl SageAgentSDK {
 
         // Register default tools - CRITICAL: without tools the AI cannot do anything!
         executor.register_tools(get_default_tools());
+
+        // Initialize sub-agent support so Task tool can execute Explore/Plan agents
+        if let Err(e) = executor.init_subagent_support() {
+            tracing::warn!("Failed to initialize sub-agent support: {}", e);
+        }
 
         // Set up input channel if interactive
         let input_handle = if !options.non_interactive {

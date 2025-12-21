@@ -27,6 +27,7 @@
 pub mod builtin;
 // pub mod executor; // Temporarily disabled - has compilation errors
 pub mod registry;
+pub mod runner;
 pub mod types;
 
 pub use builtin::{
@@ -34,6 +35,10 @@ pub use builtin::{
 };
 // pub use executor::{ExecutorMessage, SubAgentExecutor};
 pub use registry::AgentRegistry;
+pub use runner::{
+    execute_subagent, get_global_runner, init_global_runner, init_global_runner_from_config,
+    update_global_runner_tools, SubAgentRunner,
+};
 pub use types::{
     AgentDefinition, AgentProgress, AgentStatus, AgentType, ExecutionMetadata, RunningAgent,
     SubAgentConfig, SubAgentResult, ToolAccessControl,

@@ -10,6 +10,7 @@ use crate::signal_handler::start_global_signal_handling;
 use sage_core::agent::{ExecutionMode, ExecutionOptions, ExecutionOutcome, UnifiedExecutor};
 use sage_core::commands::{CommandExecutor, CommandRegistry};
 use sage_core::config::{load_config_from_file, Config};
+use sage_tools::get_default_tools;
 use sage_core::error::{SageError, SageResult};
 use sage_core::input::{InputChannel, InputChannelHandle, InputRequestKind, InputResponse};
 use sage_core::trajectory::TrajectoryRecorder;
@@ -137,8 +138,9 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
 
     let mut options = ExecutionOptions::default().with_mode(mode);
 
+    // Apply max_steps: if specified use it, otherwise keep unlimited (None)
     if let Some(max_steps) = args.max_steps {
-        options = options.with_max_steps(max_steps);
+        options = options.with_step_limit(max_steps);
     }
     if let Some(working_dir) = &args.working_dir {
         options = options.with_working_directory(working_dir);
@@ -149,6 +151,14 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
 
     // Create the unified executor
     let mut executor = UnifiedExecutor::with_options(config.clone(), options)?;
+
+    // Register default tools
+    executor.register_tools(get_default_tools());
+
+    // Initialize sub-agent support for Task tool
+    if let Err(e) = executor.init_subagent_support() {
+        console.warn(&format!("Failed to initialize sub-agent support: {}", e));
+    }
 
     // Set up trajectory recording if requested
     if let Some(trajectory_path) = &args.trajectory_file {
@@ -170,7 +180,11 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
     console.print_header("Task Execution");
     console.info(&format!("Task: {}", task_description));
     console.info(&format!("Provider: {}", config.get_default_provider()));
-    console.info(&format!("Max Steps: {}", executor.options().max_steps));
+    let max_steps_display = match executor.options().max_steps {
+        Some(n) => n.to_string(),
+        None => "unlimited".to_string(),
+    };
+    console.info(&format!("Max Steps: {}", max_steps_display));
     console.print_separator();
 
     // Create task metadata

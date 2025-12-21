@@ -58,7 +58,11 @@ pub async fn validate(config_file: &str) -> SageResult<()> {
                     // Print summary
                     console.print_separator();
                     console.info(&format!("Default provider: {}", config.default_provider));
-                    console.info(&format!("Max steps: {}", config.max_steps));
+                    let max_steps_display = match config.max_steps {
+                        Some(n) => n.to_string(),
+                        None => "unlimited".to_string(),
+                    };
+                    console.info(&format!("Max steps: {}", max_steps_display));
                     console.info(&format!(
                         "Providers configured: {}",
                         config.model_providers.len()
@@ -116,9 +120,13 @@ fn print_config(console: &CLIConsole, config: &Config) {
         "Default Provider: {}",
         config.default_provider.green()
     ));
+    let max_steps_str = match config.max_steps {
+        Some(n) => n.to_string(),
+        None => "unlimited".to_string(),
+    };
     console.info(&format!(
         "Max Steps: {}",
-        config.max_steps.to_string().yellow()
+        max_steps_str.yellow()
     ));
 
     if let Some(working_dir) = &config.working_directory {
@@ -238,7 +246,7 @@ fn create_sample_config() -> Config {
 
     Config {
         default_provider: "openai".to_string(),
-        max_steps: 20,
+        max_steps: None, // None = unlimited
         total_token_budget: None,
         model_providers,
         lakeview_config: None,
