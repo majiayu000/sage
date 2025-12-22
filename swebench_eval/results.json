@@ -1,0 +1,9 @@
+[
+  {
+    "instance_id": "django__django-11099",
+    "resolved": false,
+    "patch_applied": false,
+    "test_output": "",
+    "error": "Could not fetch instance data"
+  }
+]

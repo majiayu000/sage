@@ -1,0 +1,14 @@
+# Large directories with cloned repos and trajectories
+swebench_runs/
+
+# Virtual environment
+.venv/
+
+# Temporary evaluation outputs
+eval_runs/
+
+# Test directories
+swebench_test/
+
+# Docker logs
+docker_build.log
