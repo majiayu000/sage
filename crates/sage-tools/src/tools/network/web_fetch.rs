@@ -2,6 +2,8 @@ use async_trait::async_trait;
 use sage_core::tools::{Tool, ToolCall, ToolError, ToolParameter, ToolResult, ToolSchema};
 use serde::{Deserialize, Serialize};
 
+use super::validation::validate_url_security;
+
 #[derive(Debug, Clone)]
 pub struct WebFetchTool;
 
@@ -44,6 +46,10 @@ impl Tool for WebFetchTool {
         let url = call
             .get_string("url")
             .ok_or_else(|| ToolError::InvalidArguments("Missing 'url' parameter".to_string()))?;
+
+        // Validate URL to prevent SSRF attacks
+        validate_url_security(&url)
+            .map_err(|e| ToolError::InvalidArguments(format!("URL validation failed: {}", e)))?;
 
         // TODO: Implement actual web fetching functionality
         // This is a placeholder implementation

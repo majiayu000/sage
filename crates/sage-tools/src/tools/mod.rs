@@ -35,10 +35,15 @@ pub mod vcs {
 // Network module with only working tools
 pub mod network {
     pub mod browser;
+    // http_client has URL validation for SSRF prevention but needs Tool trait update
+    // pub mod http_client;
+    pub mod validation;
     pub mod web_fetch;
     pub mod web_search;
 
     pub use browser::BrowserTool;
+    // pub use http_client::HttpClientTool;  // TODO: Update to new Tool trait
+    pub use validation::validate_url_security;
     pub use web_fetch::WebFetchTool;
     pub use web_search::WebSearchTool;
 }

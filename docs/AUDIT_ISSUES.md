@@ -8,7 +8,7 @@
 
 | Severity | Count | Resolved |
 |----------|-------|----------|
-| Critical | 33 | 5 |
+| Critical | 33 | 6 |
 | High | 90 | 4 |
 | Medium | 86 | 0 |
 | Low | 56 | 0 |
@@ -57,11 +57,17 @@
   - Remaining: ~1400 occurrences (many in test code, lower priority)
 
 ### CRIT-006: Missing Tool Input Validation
-- **Status**: 🔴 Open
-- **Location**: `sage-tools/src/tools/*.rs`
+- **Status**: 🟢 Resolved
+- **Location**: `sage-tools/src/tools/network/`
 - **Description**: Tool inputs not validated before execution
-- **Risk**: Injection attacks, unexpected behavior
-- **Fix**: Add validation layer for all tool inputs
+- **Risk**: SSRF attacks, injection attacks, unexpected behavior
+- **Fix**: Added comprehensive URL validation module with SSRF prevention:
+  - Created `validation.rs` with `validate_url_security()` function
+  - Blocks localhost, private IPs, cloud metadata endpoints
+  - Validates URL schemes (only http/https allowed)
+  - Blocks internal hostnames (.local, .internal, .localhost)
+  - Integrated into `web_fetch` tool
+  - Added 7 comprehensive test cases
 
 ### CRIT-007: Hardcoded Default Credentials
 - **Status**: 🟢 Resolved
@@ -268,6 +274,7 @@
 | 2025-12-22 | HIGH-008 | Resolved | 6459fdb |
 | 2025-12-22 | CRIT-005 | Partial | 85e4863 |
 | 2025-12-22 | CRIT-005 | Partial | 02fb81d |
+| 2025-12-22 | CRIT-006 | Resolved | (pending) |
 
 ---
 
