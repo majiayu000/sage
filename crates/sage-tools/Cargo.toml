@@ -47,6 +47,9 @@ chrono = { workspace = true }
 lazy_static = "1.4"
 once_cell = { workspace = true }
 
+# Synchronization
+parking_lot = { workspace = true }
+
 # Configuration
 toml = "0.8"
 

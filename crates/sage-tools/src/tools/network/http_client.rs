@@ -123,20 +123,21 @@ impl HttpClientTool {
         if self.client.is_none() {
             let client = reqwest::Client::builder()
                 .danger_accept_invalid_certs(!verify_ssl)
-                .redirect(if follow_redirects { 
-                    reqwest::redirect::Policy::limited(10) 
-                } else { 
-                    reqwest::redirect::Policy::none() 
+                .redirect(if follow_redirects {
+                    reqwest::redirect::Policy::limited(10)
+                } else {
+                    reqwest::redirect::Policy::none()
                 })
                 .timeout(Duration::from_secs(timeout_secs))
                 .user_agent("Sage-Agent-HTTP-Client/1.0")
                 .build()
                 .context("Failed to create HTTP client")?;
-            
+
             self.client = Some(client);
         }
-        
-        Ok(self.client.as_ref().unwrap())
+
+        // SAFETY: unwrap is safe here because we just ensured self.client is Some above
+        Ok(self.client.as_ref().expect("client should be initialized"))
     }
 
     /// Convert HTTP method to reqwest method

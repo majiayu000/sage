@@ -1,8 +1,9 @@
 //! Tool monitoring and metrics system
 
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 /// Metrics for a specific tool
@@ -88,7 +89,7 @@ impl ToolMonitor {
 
     /// Record a successful tool execution
     pub fn record_success(&self, tool_name: &str, execution_time: Duration) {
-        let mut metrics = self.metrics.lock().unwrap();
+        let mut metrics = self.metrics.lock();
         let tool_metrics = metrics
             .entry(tool_name.to_string())
             .or_insert_with(|| ToolMetrics::new(tool_name.to_string()));
@@ -97,7 +98,7 @@ impl ToolMonitor {
 
     /// Record a failed tool execution
     pub fn record_error(&self, tool_name: &str, execution_time: Duration, error_type: String) {
-        let mut metrics = self.metrics.lock().unwrap();
+        let mut metrics = self.metrics.lock();
         let tool_metrics = metrics
             .entry(tool_name.to_string())
             .or_insert_with(|| ToolMetrics::new(tool_name.to_string()));
@@ -106,13 +107,13 @@ impl ToolMonitor {
 
     /// Get metrics for a specific tool
     pub fn get_tool_metrics(&self, tool_name: &str) -> Option<ToolMetrics> {
-        let metrics = self.metrics.lock().unwrap();
+        let metrics = self.metrics.lock();
         metrics.get(tool_name).cloned()
     }
 
     /// Get metrics for all tools
     pub fn get_all_metrics(&self) -> HashMap<String, ToolMetrics> {
-        let metrics = self.metrics.lock().unwrap();
+        let metrics = self.metrics.lock();
         metrics.clone()
     }
 
@@ -123,7 +124,7 @@ impl ToolMonitor {
 
     /// Generate a monitoring report
     pub fn generate_report(&self) -> MonitoringReport {
-        let metrics = self.metrics.lock().unwrap();
+        let metrics = self.metrics.lock();
         let total_executions: u64 = metrics.values().map(|m| m.execution_count).sum();
         let total_successes: u64 = metrics.values().map(|m| m.success_count).sum();
         let total_errors: u64 = metrics.values().map(|m| m.error_count).sum();
@@ -149,7 +150,7 @@ impl ToolMonitor {
 
     /// Reset all metrics
     pub fn reset_metrics(&self) {
-        let mut metrics = self.metrics.lock().unwrap();
+        let mut metrics = self.metrics.lock();
         metrics.clear();
     }
 }
