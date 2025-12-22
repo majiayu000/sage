@@ -8,7 +8,7 @@
 
 | Severity | Count | Resolved |
 |----------|-------|----------|
-| Critical | 33 | 4 |
+| Critical | 33 | 5 |
 | High | 90 | 3 |
 | Medium | 86 | 0 |
 | Low | 56 | 0 |
@@ -60,11 +60,11 @@
 - **Fix**: Add validation layer for all tool inputs
 
 ### CRIT-007: Hardcoded Default Credentials
-- **Status**: 🔴 Open
+- **Status**: 🟢 Resolved
 - **Location**: `sage-core/src/llm/client.rs`
 - **Description**: API keys in default values
 - **Risk**: Credential exposure
-- **Fix**: Remove hardcoded defaults, require explicit configuration
+- **Fix**: Replaced `.unwrap_or_default()` with proper `.ok_or_else()` validation for Azure, OpenRouter, and Doubao providers
 
 ### CRIT-008: No Rate Limiting for LLM Calls
 - **Status**: 🔴 Open
@@ -257,6 +257,7 @@
 | 2025-12-22 | HIGH-006 | Resolved | 150e08a |
 | 2025-12-22 | HIGH-001 | Resolved | 4a3f740 |
 | 2025-12-22 | HIGH-002 | Resolved | 4a3f740 |
+| 2025-12-22 | CRIT-007 | Resolved | ef9c297 |
 
 ---
 

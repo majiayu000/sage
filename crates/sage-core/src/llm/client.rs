@@ -392,6 +392,11 @@ impl LLMClient {
         messages: &[LLMMessage],
         tools: Option<&[ToolSchema]>,
     ) -> SageResult<LLMResponse> {
+        let api_key = self
+            .config
+            .get_api_key()
+            .ok_or_else(|| SageError::llm("Azure API key not provided"))?;
+
         let url = format!(
             "{}/openai/deployments/{}/chat/completions?api-version={}",
             self.config.get_base_url(),
@@ -425,7 +430,7 @@ impl LLMClient {
         let request = self
             .http_client
             .post(&url)
-            .header("api-key", self.config.get_api_key().unwrap_or_default())
+            .header("api-key", &api_key)
             .header("Content-Type", "application/json")
             .json(&request_body);
 
@@ -463,6 +468,11 @@ impl LLMClient {
         messages: &[LLMMessage],
         tools: Option<&[ToolSchema]>,
     ) -> SageResult<LLMResponse> {
+        let api_key = self
+            .config
+            .get_api_key()
+            .ok_or_else(|| SageError::llm("OpenRouter API key not provided"))?;
+
         let url = format!("{}/api/v1/chat/completions", self.config.get_base_url());
 
         let mut request_body = json!({
@@ -503,10 +513,7 @@ impl LLMClient {
         let request = self
             .http_client
             .post(&url)
-            .header(
-                "Authorization",
-                format!("Bearer {}", self.config.get_api_key().unwrap_or_default()),
-            )
+            .header("Authorization", format!("Bearer {}", api_key))
             .header("Content-Type", "application/json")
             .json(&request_body);
 
@@ -547,6 +554,11 @@ impl LLMClient {
         messages: &[LLMMessage],
         tools: Option<&[ToolSchema]>,
     ) -> SageResult<LLMResponse> {
+        let api_key = self
+            .config
+            .get_api_key()
+            .ok_or_else(|| SageError::llm("Doubao API key not provided"))?;
+
         let url = format!("{}/api/v3/chat/completions", self.config.get_base_url());
 
         let mut request_body = json!({
@@ -573,10 +585,7 @@ impl LLMClient {
         let request = self
             .http_client
             .post(&url)
-            .header(
-                "Authorization",
-                format!("Bearer {}", self.config.get_api_key().unwrap_or_default()),
-            )
+            .header("Authorization", format!("Bearer {}", api_key))
             .header("Content-Type", "application/json")
             .json(&request_body);
 
