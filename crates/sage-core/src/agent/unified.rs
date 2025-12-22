@@ -412,10 +412,7 @@ impl UnifiedExecutor {
         reset_global_interrupt_manager();
 
         // Create a task scope for interrupt handling
-        let task_scope = global_interrupt_manager()
-            .lock()
-            .map_err(|_| SageError::agent("Failed to acquire interrupt manager lock"))?
-            .create_task_scope();
+        let task_scope = global_interrupt_manager().lock().create_task_scope();
 
         // Initialize execution state
         let mut execution = AgentExecution::new(task.clone());
@@ -767,10 +764,7 @@ impl UnifiedExecutor {
             .await;
 
         // Get cancellation token for interrupt handling
-        let cancellation_token = global_interrupt_manager()
-            .lock()
-            .map_err(|_| SageError::agent("Failed to acquire interrupt manager lock"))?
-            .cancellation_token();
+        let cancellation_token = global_interrupt_manager().lock().cancellation_token();
 
         // Execute LLM call with interrupt support
         let llm_response = select! {

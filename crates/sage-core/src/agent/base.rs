@@ -280,10 +280,7 @@ impl BaseAgent {
             .await;
 
         // Get cancellation token for interrupt handling
-        let cancellation_token = global_interrupt_manager()
-            .lock()
-            .map_err(|_| SageError::agent("Failed to acquire interrupt manager lock"))?
-            .cancellation_token();
+        let cancellation_token = global_interrupt_manager().lock().cancellation_token();
 
         // Execute LLM call with interrupt support
         let llm_response = select! {
@@ -596,10 +593,7 @@ impl Agent for BaseAgent {
         reset_global_interrupt_manager();
 
         // Create a task scope for interrupt handling
-        let task_scope = global_interrupt_manager()
-            .lock()
-            .map_err(|_| SageError::agent("Failed to acquire interrupt manager lock"))?
-            .create_task_scope();
+        let task_scope = global_interrupt_manager().lock().create_task_scope();
 
         // Start trajectory recording if available
         if let Some(recorder) = &self.trajectory_recorder {

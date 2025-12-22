@@ -1,3 +1,4 @@
+use parking_lot::Mutex;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::broadcast;
@@ -141,50 +142,54 @@ impl TaskScope {
 }
 
 /// Global interrupt manager instance
-static GLOBAL_INTERRUPT_MANAGER: std::sync::OnceLock<std::sync::Mutex<InterruptManager>> =
+///
+/// Uses `parking_lot::Mutex` instead of `std::sync::Mutex` for:
+/// - Better performance (no poisoning overhead)
+/// - No panic on lock (no poison state handling needed)
+/// - Faster lock acquisition in async contexts
+static GLOBAL_INTERRUPT_MANAGER: std::sync::OnceLock<Mutex<InterruptManager>> =
     std::sync::OnceLock::new();
 
 /// Get the global interrupt manager
-pub fn global_interrupt_manager() -> &'static std::sync::Mutex<InterruptManager> {
-    GLOBAL_INTERRUPT_MANAGER.get_or_init(|| std::sync::Mutex::new(InterruptManager::new()))
+pub fn global_interrupt_manager() -> &'static Mutex<InterruptManager> {
+    GLOBAL_INTERRUPT_MANAGER.get_or_init(|| Mutex::new(InterruptManager::new()))
 }
 
 /// Convenience function to interrupt the current task
+///
+/// This function acquires the lock briefly to call interrupt().
+/// The lock is released immediately after the call.
 pub fn interrupt_current_task(reason: InterruptReason) {
-    if let Ok(manager) = global_interrupt_manager().lock() {
-        manager.interrupt(reason);
-    }
+    global_interrupt_manager().lock().interrupt(reason);
 }
 
 /// Convenience function to check if the current task is interrupted
+///
+/// Returns `true` if the current task has been interrupted, `false` otherwise.
 pub fn is_current_task_interrupted() -> bool {
-    global_interrupt_manager()
-        .lock()
-        .map(|manager| manager.is_interrupted())
-        .unwrap_or(false)
+    global_interrupt_manager().lock().is_interrupted()
 }
 
 /// Convenience function to get a cancellation token for the current task
-pub fn current_task_cancellation_token() -> Option<CancellationToken> {
-    global_interrupt_manager()
-        .lock()
-        .ok()
-        .map(|manager| manager.cancellation_token())
+///
+/// Returns the cancellation token that can be used to monitor for task cancellation.
+pub fn current_task_cancellation_token() -> CancellationToken {
+    global_interrupt_manager().lock().cancellation_token()
 }
 
 /// Convenience function to create a new task scope
-pub fn create_task_scope() -> Option<TaskScope> {
-    global_interrupt_manager()
-        .lock()
-        .ok()
-        .map(|manager| manager.create_task_scope())
+///
+/// Creates a child task scope that inherits cancellation from the parent.
+pub fn create_task_scope() -> TaskScope {
+    global_interrupt_manager().lock().create_task_scope()
 }
 
 /// Convenience function to reset the global interrupt manager
+///
+/// Resets the interrupt state for a new task. This should be called
+/// before starting a new top-level task.
 pub fn reset_global_interrupt_manager() {
-    if let Ok(mut manager) = global_interrupt_manager().lock() {
-        manager.reset();
-    }
+    global_interrupt_manager().lock().reset();
 }
 
 #[cfg(test)]

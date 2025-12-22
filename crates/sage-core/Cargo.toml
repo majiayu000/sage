@@ -51,6 +51,7 @@ dashmap = "6.0"
 lazy_static = "1.4"
 shell-words = "1.1"
 glob = "0.3"
+parking_lot = { workspace = true }
 
 # Async traits
 async-trait = { workspace = true }

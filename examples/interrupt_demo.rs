@@ -17,10 +17,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n📋 Demo 1: Basic Interrupt Functionality");
     println!("Creating a task scope...");
 
-    let task_scope = global_interrupt_manager()
-        .lock()
-        .unwrap()
-        .create_task_scope();
+    let task_scope = global_interrupt_manager().lock().create_task_scope();
 
     println!(
         "Task scope created. Checking if cancelled: {}",
@@ -40,7 +37,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n📋 Demo 2: Select! with Cancellation");
     reset_global_interrupt_manager();
 
-    let manager = global_interrupt_manager().lock().unwrap().clone();
+    let manager = global_interrupt_manager().lock().clone();
     let token = manager.cancellation_token();
 
     println!("Starting a long-running task...");
@@ -67,7 +64,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n📋 Demo 3: Multiple Task Scopes");
     reset_global_interrupt_manager();
 
-    let manager = global_interrupt_manager().lock().unwrap();
+    let manager = global_interrupt_manager().lock();
     let scope1 = manager.create_task_scope();
     let scope2 = manager.create_task_scope();
     let scope3 = manager.create_task_scope();
@@ -93,7 +90,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n📋 Demo 4: Different Interrupt Reasons");
     reset_global_interrupt_manager();
 
-    let manager = global_interrupt_manager().lock().unwrap();
+    let manager = global_interrupt_manager().lock();
     let _receiver = manager.subscribe();
     drop(manager);
 
@@ -107,7 +104,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for reason in reasons {
         reset_global_interrupt_manager();
-        let manager = global_interrupt_manager().lock().unwrap();
+        let manager = global_interrupt_manager().lock();
         let mut receiver = manager.subscribe();
         drop(manager);
 
