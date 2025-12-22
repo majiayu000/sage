@@ -3,10 +3,12 @@
 pub mod enhanced_errors;
 pub mod monitoring;
 pub mod sequential_thinking;
+pub mod tool_validator;
 pub mod util_functions;
 
 // Re-export tools
 pub use sequential_thinking::SequentialThinkingTool;
+pub use tool_validator::ToolUsageValidator;
 
 // Re-export utility functions
 pub use util_functions::{
