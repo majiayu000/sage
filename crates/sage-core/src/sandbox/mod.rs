@@ -15,6 +15,7 @@ pub use policy::{CommandPolicy, NetworkPolicy, PathPolicy, SandboxPolicy};
 
 use crate::tools::base::ToolError;
 use async_trait::async_trait;
+use parking_lot::RwLock;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -134,7 +135,7 @@ pub trait Sandbox: Send + Sync {
 pub struct DefaultSandbox {
     config: SandboxConfig,
     policy: SandboxPolicy,
-    usage: std::sync::RwLock<ResourceUsage>,
+    usage: RwLock<ResourceUsage>,
 }
 
 impl DefaultSandbox {
@@ -144,7 +145,7 @@ impl DefaultSandbox {
         Ok(Self {
             config,
             policy,
-            usage: std::sync::RwLock::new(ResourceUsage::default()),
+            usage: RwLock::new(ResourceUsage::default()),
         })
     }
 
@@ -234,7 +235,7 @@ impl Sandbox for DefaultSandbox {
     }
 
     fn current_usage(&self) -> ResourceUsage {
-        self.usage.read().unwrap().clone()
+        self.usage.read().clone()
     }
 }
 
