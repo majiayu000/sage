@@ -5,6 +5,7 @@
 
 pub mod collector;
 pub mod metrics;
+pub mod tool_usage;
 
 pub use collector::{
     MetricsCollector, MetricsSnapshot, SharedMetricsCollector, create_metrics_collector,
@@ -12,4 +13,7 @@ pub use collector::{
 pub use metrics::{
     Counter, Gauge, Histogram, HistogramData, HistogramTimer, LabeledCounter, Metric, MetricType,
     MetricValue,
+};
+pub use tool_usage::{
+    TelemetryCollector, TelemetrySummary, ToolStats, ToolUsageEvent, global_telemetry,
 };

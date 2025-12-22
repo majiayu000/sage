@@ -164,8 +164,8 @@ pub use storage::{
 };
 pub use telemetry::{
     Counter, Gauge, Histogram, HistogramData, HistogramTimer, LabeledCounter, Metric, MetricType,
-    MetricValue, MetricsCollector, MetricsSnapshot, SharedMetricsCollector,
-    create_metrics_collector,
+    MetricValue, MetricsCollector, MetricsSnapshot, SharedMetricsCollector, TelemetryCollector,
+    TelemetrySummary, ToolStats, ToolUsageEvent, create_metrics_collector, global_telemetry,
 };
 pub use workspace::{
     AnalysisResult, BuildSystem, DependencyInfo, EntryPoint, FileStats, FrameworkType, GitInfo,
