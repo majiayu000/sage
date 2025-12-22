@@ -824,9 +824,12 @@ impl LLMClient {
                 .map(|t| t["name"].as_str())
         );
 
-        // Debug: Write full request to file for debugging
-        if let Ok(json_str) = serde_json::to_string_pretty(&request_body) {
-            let _ = std::fs::write("/tmp/glm_request.json", &json_str);
+        // Debug: Write full request to file for debugging (only in debug builds with env var)
+        #[cfg(debug_assertions)]
+        if std::env::var("SAGE_DEBUG_REQUESTS").is_ok() {
+            if let Ok(json_str) = serde_json::to_string_pretty(&request_body) {
+                let _ = std::fs::write("/tmp/glm_request.json", &json_str);
+            }
         }
 
         let response = request
