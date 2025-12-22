@@ -156,7 +156,7 @@ impl LLMClient {
     /// Check if an error is retryable
     fn is_retryable_error(&self, error: &SageError) -> bool {
         match error {
-            SageError::Llm(msg) => {
+            SageError::llm(msg) => {
                 // Check for specific retryable error patterns
                 let msg_lower = msg.to_lowercase();
                 msg_lower.contains("503") ||  // Service Unavailable
@@ -168,7 +168,7 @@ impl LLMClient {
                 msg_lower.contains("connection") ||
                 msg_lower.contains("network")
             }
-            SageError::Http(_) => true, // HTTP errors are generally retryable
+            SageError::http(_) => true, // HTTP errors are generally retryable
             _ => false,
         }
     }
