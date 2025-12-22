@@ -168,7 +168,7 @@ pub use telemetry::{
     create_metrics_collector,
 };
 pub use workspace::{
-    AnalysisResult, BuildSystem, DependencyInfo, EntryPoint, FileStats, FrameworkType,
+    AnalysisResult, BuildSystem, DependencyInfo, EntryPoint, FileStats, FrameworkType, GitInfo,
     ImportantFile, ImportantFileType, LanguageType, PatternMatcher, ProjectPattern,
     ProjectStructure, ProjectType, ProjectTypeDetector, RuntimeType, TestFramework,
     WorkspaceAnalyzer, WorkspaceConfig, WorkspaceError,

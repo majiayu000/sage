@@ -2,7 +2,9 @@
 
 use crate::config::provider::ProviderConfig;
 use crate::error::{SageError, SageResult};
+use crate::llm::converters::{MessageConverter, ToolConverter};
 use crate::llm::messages::{LLMMessage, LLMResponse};
+use crate::llm::parsers::ResponseParser;
 use crate::llm::providers::{LLMProvider, ModelParameters};
 use crate::llm::streaming::{LLMStream, StreamChunk, StreamingLLMClient};
 use crate::tools::types::ToolSchema;
@@ -228,7 +230,7 @@ impl LLMClient {
 
         let mut request_body = json!({
             "model": self.model_params.model,
-            "messages": self.convert_messages_for_openai(messages)?,
+            "messages": MessageConverter::to_openai(messages)?,
         });
 
         // Add optional parameters
@@ -248,7 +250,7 @@ impl LLMClient {
         // Add tools if provided
         if let Some(tools) = tools {
             if !tools.is_empty() {
-                request_body["tools"] = json!(self.convert_tools_for_openai(tools)?);
+                request_body["tools"] = json!(ToolConverter::to_openai(tools)?);
                 if let Some(parallel) = self.model_params.parallel_tool_calls {
                     request_body["parallel_tool_calls"] = json!(parallel);
                 }
@@ -282,7 +284,7 @@ impl LLMClient {
             .await
             .map_err(|e| SageError::llm(format!("Failed to parse OpenAI response: {}", e)))?;
 
-        self.parse_openai_response(response_json)
+        ResponseParser::parse_openai(response_json)
     }
 
     /// Anthropic chat completion
@@ -297,11 +299,11 @@ impl LLMClient {
         let url = format!("{}/v1/messages", self.config.get_base_url());
         let enable_caching = self.model_params.is_prompt_caching_enabled();
 
-        let (system_message, user_messages) = self.extract_system_message(messages);
+        let (system_message, user_messages) = MessageConverter::extract_system_message(messages);
 
         let mut request_body = json!({
             "model": self.model_params.model,
-            "messages": self.convert_messages_for_anthropic(&user_messages)?,
+            "messages": MessageConverter::to_anthropic(&user_messages, enable_caching)?,
         });
 
         // Add system message with optional cache_control
@@ -335,7 +337,7 @@ impl LLMClient {
         // Add tools if provided, with optional cache_control on the last tool
         if let Some(tools) = tools {
             if !tools.is_empty() {
-                let mut tool_defs = self.convert_tools_for_anthropic(tools)?;
+                let mut tool_defs: Vec<Value> = ToolConverter::to_anthropic(tools)?;
 
                 // Add cache_control to the last tool when caching is enabled
                 // This caches all tools as a single cache breakpoint
@@ -381,7 +383,7 @@ impl LLMClient {
             .await
             .map_err(|e| SageError::llm(format!("Failed to parse Anthropic response: {}", e)))?;
 
-        self.parse_anthropic_response(response_json)
+        ResponseParser::parse_anthropic(response_json)
     }
 
     /// Azure OpenAI chat completion
@@ -401,7 +403,7 @@ impl LLMClient {
         );
 
         let mut request_body = json!({
-            "messages": self.convert_messages_for_openai(messages)?,
+            "messages": MessageConverter::to_openai(messages)?,
         });
 
         // Add optional parameters
@@ -417,20 +419,7 @@ impl LLMClient {
 
         // Add tools if provided
         if let Some(tools) = tools {
-            let tool_schemas: Vec<Value> = tools
-                .iter()
-                .map(|tool| {
-                    json!({
-                        "type": "function",
-                        "function": {
-                            "name": tool.name,
-                            "description": tool.description,
-                            "parameters": tool.parameters
-                        }
-                    })
-                })
-                .collect();
-            request_body["tools"] = json!(tool_schemas);
+            request_body["tools"] = json!(ToolConverter::to_openai(tools)?);
         }
 
         let request = self
@@ -465,7 +454,7 @@ impl LLMClient {
             serde_json::to_string_pretty(&response_json).unwrap_or_default()
         );
 
-        self.parse_openai_response(response_json)
+        ResponseParser::parse_openai(response_json)
     }
 
     /// OpenRouter chat completion
@@ -478,7 +467,7 @@ impl LLMClient {
 
         let mut request_body = json!({
             "model": self.model_params.model,
-            "messages": self.convert_messages_for_openai(messages)?,
+            "messages": MessageConverter::to_openai(messages)?,
         });
 
         // Add optional parameters
@@ -494,20 +483,7 @@ impl LLMClient {
 
         // Add tools if provided
         if let Some(tools) = tools {
-            let tool_schemas: Vec<Value> = tools
-                .iter()
-                .map(|tool| {
-                    json!({
-                        "type": "function",
-                        "function": {
-                            "name": tool.name,
-                            "description": tool.description,
-                            "parameters": tool.parameters
-                        }
-                    })
-                })
-                .collect();
-            request_body["tools"] = json!(tool_schemas);
+            request_body["tools"] = json!(ToolConverter::to_openai(tools)?);
         }
 
         // Force Google provider only to avoid Anthropic 403 errors and Bedrock tool_call format issues
@@ -562,7 +538,7 @@ impl LLMClient {
             serde_json::to_string_pretty(&response_json).unwrap_or_default()
         );
 
-        self.parse_openai_response(response_json)
+        ResponseParser::parse_openai(response_json)
     }
 
     /// Doubao chat completion
@@ -575,7 +551,7 @@ impl LLMClient {
 
         let mut request_body = json!({
             "model": self.model_params.model,
-            "messages": self.convert_messages_for_openai(messages)?,
+            "messages": MessageConverter::to_openai(messages)?,
         });
 
         // Add optional parameters
@@ -591,20 +567,7 @@ impl LLMClient {
 
         // Add tools if provided
         if let Some(tools) = tools {
-            let tool_schemas: Vec<Value> = tools
-                .iter()
-                .map(|tool| {
-                    json!({
-                        "type": "function",
-                        "function": {
-                            "name": tool.name,
-                            "description": tool.description,
-                            "parameters": tool.parameters
-                        }
-                    })
-                })
-                .collect();
-            request_body["tools"] = json!(tool_schemas);
+            request_body["tools"] = json!(ToolConverter::to_openai(tools)?);
         }
 
         let request = self
@@ -642,7 +605,7 @@ impl LLMClient {
             serde_json::to_string_pretty(&response_json).unwrap_or_default()
         );
 
-        self.parse_openai_response(response_json)
+        ResponseParser::parse_openai(response_json)
     }
 
     /// Google (Gemini) chat completion
@@ -663,7 +626,7 @@ impl LLMClient {
             api_key
         );
 
-        let converted_messages = self.convert_messages_for_google(messages)?;
+        let converted_messages = MessageConverter::to_google(messages)?;
         tracing::debug!("Google API converted messages: {:?}", converted_messages);
 
         let mut request_body = json!({
@@ -699,7 +662,7 @@ impl LLMClient {
         if let Some(tools) = tools {
             if !tools.is_empty() {
                 request_body["tools"] = json!([{
-                    "functionDeclarations": self.convert_tools_for_google(tools)?
+                    "functionDeclarations": ToolConverter::to_google(tools)?
                 }]);
             }
         }
@@ -728,7 +691,7 @@ impl LLMClient {
                 .unwrap_or_else(|_| "Failed to serialize".to_string())
         );
 
-        self.parse_google_response(response_json)
+        ResponseParser::parse_google(response_json, &self.model_params.model)
     }
 
     /// Ollama chat completion
@@ -741,7 +704,7 @@ impl LLMClient {
 
         let mut request_body = json!({
             "model": self.model_params.model,
-            "messages": self.convert_messages_for_openai(messages)?,
+            "messages": MessageConverter::to_openai(messages)?,
         });
 
         // Add optional parameters (Ollama supports limited parameters)
@@ -754,20 +717,7 @@ impl LLMClient {
 
         // Add tools if provided (Ollama has limited tool support)
         if let Some(tools) = tools {
-            let tool_schemas: Vec<Value> = tools
-                .iter()
-                .map(|tool| {
-                    json!({
-                        "type": "function",
-                        "function": {
-                            "name": tool.name,
-                            "description": tool.description,
-                            "parameters": tool.parameters
-                        }
-                    })
-                })
-                .collect();
-            request_body["tools"] = json!(tool_schemas);
+            request_body["tools"] = json!(ToolConverter::to_openai(tools)?);
         }
 
         let request = self
@@ -810,7 +760,7 @@ impl LLMClient {
             serde_json::to_string_pretty(&response_json).unwrap_or_default()
         );
 
-        self.parse_openai_response(response_json)
+        ResponseParser::parse_openai(response_json)
     }
 
     /// GLM (Zhipu AI) chat completion - Anthropic compatible format
@@ -822,11 +772,11 @@ impl LLMClient {
     ) -> SageResult<LLMResponse> {
         let url = format!("{}/v1/messages", self.config.get_base_url());
 
-        let (system_message, user_messages) = self.extract_system_message(messages);
+        let (system_message, user_messages) = MessageConverter::extract_system_message(messages);
 
         let mut request_body = json!({
             "model": self.model_params.model,
-            "messages": self.convert_messages_for_glm(&user_messages)?,
+            "messages": MessageConverter::to_glm(&user_messages)?,
         });
 
         // Add system message
@@ -850,7 +800,7 @@ impl LLMClient {
         // Add tools if provided (GLM format - stricter than Anthropic)
         if let Some(tools) = tools {
             if !tools.is_empty() {
-                let tool_defs = self.convert_tools_for_glm(tools)?;
+                let tool_defs = ToolConverter::to_glm(tools)?;
                 request_body["tools"] = json!(tool_defs);
             }
         }
@@ -899,695 +849,7 @@ impl LLMClient {
             serde_json::to_string_pretty(&response_json).unwrap_or_default()
         );
 
-        self.parse_anthropic_response(response_json)
-    }
-
-    /// Convert messages for OpenAI format
-    fn convert_messages_for_openai(&self, messages: &[LLMMessage]) -> SageResult<Vec<Value>> {
-        let mut converted = Vec::new();
-
-        for message in messages {
-            let mut msg = json!({
-                "role": message.role.to_string(),
-                "content": message.content
-            });
-
-            // Convert tool_calls to OpenAI format
-            if let Some(tool_calls) = &message.tool_calls {
-                let openai_tool_calls: Vec<Value> = tool_calls
-                    .iter()
-                    .map(|tc| {
-                        json!({
-                            "id": tc.id,
-                            "type": "function",
-                            "function": {
-                                "name": tc.name,
-                                "arguments": serde_json::to_string(&tc.arguments).unwrap_or_default()
-                            }
-                        })
-                    })
-                    .collect();
-                msg["tool_calls"] = json!(openai_tool_calls);
-            }
-
-            if let Some(tool_call_id) = &message.tool_call_id {
-                msg["tool_call_id"] = json!(tool_call_id);
-            }
-
-            if let Some(name) = &message.name {
-                msg["name"] = json!(name);
-            }
-
-            converted.push(msg);
-        }
-
-        Ok(converted)
-    }
-
-    /// Convert messages for Anthropic format
-    ///
-    /// When caching is enabled, adds `cache_control` to ONLY the last 2 messages
-    /// (Claude Code style). Anthropic API allows max 4 cache_control blocks total:
-    /// - 1 for system prompt
-    /// - 1 for tools (last tool)
-    /// - 2 for messages (last 2 messages only)
-    ///
-    /// This allows efficient caching with 90% cost savings on cache reads.
-    fn convert_messages_for_anthropic(&self, messages: &[LLMMessage]) -> SageResult<Vec<Value>> {
-        use crate::llm::messages::MessageRole;
-        let enable_caching = self.model_params.is_prompt_caching_enabled();
-        let mut converted = Vec::new();
-
-        // Filter out system messages first to get accurate count
-        let non_system_messages: Vec<_> = messages
-            .iter()
-            .filter(|m| m.role != MessageRole::System)
-            .collect();
-
-        let total_count = non_system_messages.len();
-
-        for (index, message) in non_system_messages.into_iter().enumerate() {
-            // Handle tool result messages specially for Anthropic format
-            if message.role == MessageRole::Tool {
-                if let Some(ref tool_call_id) = message.tool_call_id {
-                    // Determine if this is an error result
-                    let is_error = message.content.contains("<tool_use_error>");
-
-                    let msg = json!({
-                        "role": "user",
-                        "content": [{
-                            "type": "tool_result",
-                            "tool_use_id": tool_call_id,
-                            "content": message.content,
-                            "is_error": is_error
-                        }]
-                    });
-                    converted.push(msg);
-                    continue;
-                }
-            }
-
-            // Handle assistant messages with tool_use
-            if message.role == MessageRole::Assistant {
-                if let Some(ref tool_calls) = message.tool_calls {
-                    if !tool_calls.is_empty() {
-                        // Build content array with text and tool_use blocks
-                        let mut content_blocks = Vec::new();
-
-                        // Add text block if there's text content
-                        if !message.content.is_empty() {
-                            content_blocks.push(json!({
-                                "type": "text",
-                                "text": message.content
-                            }));
-                        }
-
-                        // Add tool_use blocks
-                        for tool_call in tool_calls {
-                            content_blocks.push(json!({
-                                "type": "tool_use",
-                                "id": tool_call.id,
-                                "name": tool_call.name,
-                                "input": tool_call.arguments
-                            }));
-                        }
-
-                        let msg = json!({
-                            "role": "assistant",
-                            "content": content_blocks
-                        });
-                        converted.push(msg);
-                        continue;
-                    }
-                }
-            }
-
-            // Only add cache_control to the last 2 messages (index >= total_count - 2)
-            // This keeps us within Anthropic's 4 cache_control block limit
-            // Also: cache_control cannot be set on empty text blocks!
-            let should_cache = enable_caching
-                && index >= total_count.saturating_sub(2)
-                && !message.content.is_empty();
-
-            if should_cache {
-                let msg = json!({
-                    "role": message.role.to_string(),
-                    "content": [{
-                        "type": "text",
-                        "text": message.content,
-                        "cache_control": {"type": "ephemeral"}
-                    }]
-                });
-                converted.push(msg);
-            } else {
-                let msg = json!({
-                    "role": message.role.to_string(),
-                    "content": message.content
-                });
-                converted.push(msg);
-            }
-        }
-
-        Ok(converted)
-    }
-
-    /// Convert messages for GLM (Anthropic-compatible format without cache_control)
-    fn convert_messages_for_glm(&self, messages: &[LLMMessage]) -> SageResult<Vec<Value>> {
-        use crate::llm::messages::MessageRole;
-        let mut converted = Vec::new();
-
-        // Filter out system messages
-        let non_system_messages: Vec<_> = messages
-            .iter()
-            .filter(|m| m.role != MessageRole::System)
-            .collect();
-
-        for message in non_system_messages.into_iter() {
-            // Handle tool result messages specially for Anthropic format
-            if message.role == MessageRole::Tool {
-                if let Some(ref tool_call_id) = message.tool_call_id {
-                    let is_error = message.content.contains("<tool_use_error>");
-                    let msg = json!({
-                        "role": "user",
-                        "content": [{
-                            "type": "tool_result",
-                            "tool_use_id": tool_call_id,
-                            "content": message.content,
-                            "is_error": is_error
-                        }]
-                    });
-                    converted.push(msg);
-                    continue;
-                }
-            }
-
-            // Handle assistant messages with tool_use
-            if message.role == MessageRole::Assistant {
-                if let Some(ref tool_calls) = message.tool_calls {
-                    if !tool_calls.is_empty() {
-                        let mut content_blocks = Vec::new();
-
-                        if !message.content.is_empty() {
-                            content_blocks.push(json!({
-                                "type": "text",
-                                "text": message.content
-                            }));
-                        }
-
-                        for tool_call in tool_calls {
-                            content_blocks.push(json!({
-                                "type": "tool_use",
-                                "id": tool_call.id,
-                                "name": tool_call.name,
-                                "input": tool_call.arguments
-                            }));
-                        }
-
-                        let msg = json!({
-                            "role": "assistant",
-                            "content": content_blocks
-                        });
-                        converted.push(msg);
-                        continue;
-                    }
-                }
-            }
-
-            // Simple message without cache_control (GLM doesn't support it)
-            let msg = json!({
-                "role": message.role.to_string(),
-                "content": message.content
-            });
-            converted.push(msg);
-        }
-
-        Ok(converted)
-    }
-
-    /// Extract system message from messages
-    fn extract_system_message(&self, messages: &[LLMMessage]) -> (Option<String>, Vec<LLMMessage>) {
-        let mut system_content = None;
-        let mut other_messages = Vec::new();
-
-        for message in messages {
-            if message.role == crate::llm::messages::MessageRole::System {
-                system_content = Some(message.content.clone());
-            } else {
-                other_messages.push(message.clone());
-            }
-        }
-
-        (system_content, other_messages)
-    }
-
-    /// Convert tools for OpenAI format
-    fn convert_tools_for_openai(&self, tools: &[ToolSchema]) -> SageResult<Vec<Value>> {
-        let mut converted = Vec::new();
-
-        for tool in tools {
-            let tool_def = json!({
-                "type": "function",
-                "function": {
-                    "name": tool.name,
-                    "description": tool.description,
-                    "parameters": tool.parameters
-                }
-            });
-            converted.push(tool_def);
-        }
-
-        Ok(converted)
-    }
-
-    /// Convert tools for Anthropic format
-    fn convert_tools_for_anthropic(&self, tools: &[ToolSchema]) -> SageResult<Vec<Value>> {
-        let mut converted = Vec::new();
-
-        for tool in tools {
-            let tool_def = json!({
-                "name": tool.name,
-                "description": tool.description,
-                "input_schema": tool.parameters
-            });
-            converted.push(tool_def);
-        }
-
-        Ok(converted)
-    }
-
-    /// Convert tools for GLM format (Anthropic-compatible but stricter)
-    /// GLM doesn't accept empty "required": [] or empty "properties": {}
-    fn convert_tools_for_glm(&self, tools: &[ToolSchema]) -> SageResult<Vec<Value>> {
-        let mut converted = Vec::new();
-
-        for tool in tools {
-            // Clone the parameters and clean up empty arrays/objects
-            let mut schema = tool.parameters.clone();
-
-            // Remove empty "required" array
-            if let Some(required) = schema.get("required") {
-                if required.as_array().map_or(false, |arr| arr.is_empty()) {
-                    schema.as_object_mut().map(|obj| obj.remove("required"));
-                }
-            }
-
-            // Remove empty "properties" object
-            if let Some(properties) = schema.get("properties") {
-                if properties.as_object().map_or(false, |obj| obj.is_empty()) {
-                    schema.as_object_mut().map(|obj| obj.remove("properties"));
-                }
-            }
-
-            let tool_def = json!({
-                "name": tool.name,
-                "description": tool.description,
-                "input_schema": schema
-            });
-            converted.push(tool_def);
-        }
-
-        Ok(converted)
-    }
-
-    /// Parse OpenAI response
-    fn parse_openai_response(&self, response: Value) -> SageResult<LLMResponse> {
-        let choice = response["choices"][0].clone();
-        let message = &choice["message"];
-
-        let content = message["content"].as_str().unwrap_or("").to_string();
-
-        let mut tool_calls = Vec::new();
-        if let Some(calls) = message["tool_calls"].as_array() {
-            for call in calls {
-                if let Some(function) = call["function"].as_object() {
-                    let tool_call = crate::tools::types::ToolCall {
-                        id: call["id"].as_str().unwrap_or("").to_string(),
-                        name: function
-                            .get("name")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string(),
-                        arguments: serde_json::from_str(
-                            function
-                                .get("arguments")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("{}"),
-                        )
-                        .unwrap_or_default(),
-                        call_id: None,
-                    };
-                    tool_calls.push(tool_call);
-                }
-            }
-        }
-
-        let usage = if let Some(usage_data) = response["usage"].as_object() {
-            Some(LLMUsage {
-                prompt_tokens: usage_data
-                    .get("prompt_tokens")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0) as u32,
-                completion_tokens: usage_data
-                    .get("completion_tokens")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0) as u32,
-                total_tokens: usage_data
-                    .get("total_tokens")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0) as u32,
-                cost_usd: None,
-                cache_creation_input_tokens: None,
-                cache_read_input_tokens: None,
-            })
-        } else {
-            None
-        };
-
-        Ok(LLMResponse {
-            content,
-            tool_calls,
-            usage,
-            model: response["model"].as_str().map(|s| s.to_string()),
-            finish_reason: choice["finish_reason"].as_str().map(|s| s.to_string()),
-            id: response["id"].as_str().map(|s| s.to_string()),
-            metadata: HashMap::new(),
-        })
-    }
-
-    /// Parse Anthropic response
-    ///
-    /// Anthropic responses have a content array that may contain:
-    /// - {"type": "text", "text": "..."} - Text content
-    /// - {"type": "tool_use", "id": "...", "name": "...", "input": {...}} - Tool calls
-    ///
-    /// When prompt caching is enabled, the usage object may also contain:
-    /// - cache_creation_input_tokens: Tokens written to cache
-    /// - cache_read_input_tokens: Tokens read from cache
-    fn parse_anthropic_response(&self, response: Value) -> SageResult<LLMResponse> {
-        let mut content = String::new();
-        let mut tool_calls = Vec::new();
-
-        // Iterate through content array to extract text and tool_use blocks
-        if let Some(content_array) = response["content"].as_array() {
-            for block in content_array {
-                match block["type"].as_str() {
-                    Some("text") => {
-                        // Append text content
-                        if let Some(text) = block["text"].as_str() {
-                            if !content.is_empty() {
-                                content.push('\n');
-                            }
-                            content.push_str(text);
-                        }
-                    }
-                    Some("tool_use") => {
-                        // Parse tool_use block
-                        let arguments: HashMap<String, Value> = block["input"]
-                            .as_object()
-                            .map(|obj| obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
-                            .unwrap_or_default();
-
-                        // Warn if input is empty (likely a proxy issue)
-                        if arguments.is_empty() {
-                            tracing::warn!(
-                                "Tool '{}' received empty input - this may indicate a proxy server issue",
-                                block["name"].as_str().unwrap_or("")
-                            );
-                        }
-
-                        let tool_call = crate::tools::types::ToolCall {
-                            id: block["id"].as_str().unwrap_or("").to_string(),
-                            name: block["name"].as_str().unwrap_or("").to_string(),
-                            arguments,
-                            call_id: None,
-                        };
-                        tool_calls.push(tool_call);
-                    }
-                    _ => {
-                        // Unknown content type, ignore
-                    }
-                }
-            }
-        }
-
-        let usage = if let Some(usage_data) = response["usage"].as_object() {
-            let input_tokens = usage_data
-                .get("input_tokens")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0);
-            let output_tokens = usage_data
-                .get("output_tokens")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0);
-
-            // Parse cache-related tokens (Anthropic prompt caching)
-            let cache_creation_input_tokens = usage_data
-                .get("cache_creation_input_tokens")
-                .and_then(|v| v.as_u64())
-                .map(|v| v as u32);
-            let cache_read_input_tokens = usage_data
-                .get("cache_read_input_tokens")
-                .and_then(|v| v.as_u64())
-                .map(|v| v as u32);
-
-            // Log cache metrics if present
-            if cache_creation_input_tokens.is_some() || cache_read_input_tokens.is_some() {
-                tracing::debug!(
-                    "Anthropic cache metrics - created: {:?}, read: {:?}",
-                    cache_creation_input_tokens,
-                    cache_read_input_tokens
-                );
-            }
-
-            // Total tokens should include ALL cache-related tokens for accurate reporting:
-            // - cache_creation_input_tokens: tokens written to cache (first request)
-            // - cache_read_input_tokens: tokens read from cache (subsequent requests)
-            // Both represent actual tokens processed by the model
-            let cache_tokens = cache_creation_input_tokens.unwrap_or(0) as u64
-                + cache_read_input_tokens.unwrap_or(0) as u64;
-            let total_input = input_tokens + cache_tokens;
-
-            Some(LLMUsage {
-                prompt_tokens: total_input as u32, // Include all cache tokens
-                completion_tokens: output_tokens as u32,
-                total_tokens: (total_input + output_tokens) as u32,
-                cost_usd: None,
-                cache_creation_input_tokens,
-                cache_read_input_tokens,
-            })
-        } else {
-            None
-        };
-
-        Ok(LLMResponse {
-            content,
-            tool_calls,
-            usage,
-            model: response["model"].as_str().map(|s| s.to_string()),
-            finish_reason: response["stop_reason"].as_str().map(|s| s.to_string()),
-            id: response["id"].as_str().map(|s| s.to_string()),
-            metadata: HashMap::new(),
-        })
-    }
-
-    /// Convert messages for Google format
-    fn convert_messages_for_google(&self, messages: &[LLMMessage]) -> SageResult<Vec<Value>> {
-        tracing::debug!("Converting {} messages for Google", messages.len());
-        for (i, msg) in messages.iter().enumerate() {
-            tracing::debug!(
-                "Message {}: role={:?}, content_len={}",
-                i,
-                msg.role,
-                msg.content.len()
-            );
-        }
-
-        let mut converted = Vec::new();
-        let mut system_message = String::new();
-
-        for message in messages {
-            match message.role {
-                crate::llm::messages::MessageRole::System => {
-                    // Collect system messages to prepend to first user message
-                    if !system_message.is_empty() {
-                        system_message.push_str("\n\n");
-                    }
-                    system_message.push_str(&message.content);
-                }
-                crate::llm::messages::MessageRole::User => {
-                    let mut content = message.content.clone();
-                    if !system_message.is_empty() {
-                        content = format!("{}\n\n{}", system_message, content);
-                        system_message.clear(); // Only add system message to first user message
-                    }
-
-                    converted.push(json!({
-                        "role": "user",
-                        "parts": [{"text": content}]
-                    }));
-                }
-                crate::llm::messages::MessageRole::Assistant => {
-                    let mut parts = Vec::new();
-
-                    // Add text content if present
-                    if !message.content.is_empty() {
-                        parts.push(json!({"text": message.content}));
-                    }
-
-                    // Add function calls if present
-                    if let Some(tool_calls) = &message.tool_calls {
-                        for tool_call in tool_calls {
-                            parts.push(json!({
-                                "functionCall": {
-                                    "name": tool_call.name,
-                                    "args": tool_call.arguments
-                                }
-                            }));
-                        }
-                    }
-
-                    converted.push(json!({
-                        "role": "model",
-                        "parts": parts
-                    }));
-                }
-                crate::llm::messages::MessageRole::Tool => {
-                    // Convert tool messages to user messages for Google
-                    // Google doesn't support tool role, so we treat tool results as user input
-                    converted.push(json!({
-                        "role": "user",
-                        "parts": [{"text": message.content}]
-                    }));
-                }
-            }
-        }
-
-        // If we only have system messages and no user messages, create a user message with the system content
-        if converted.is_empty() && !system_message.is_empty() {
-            converted.push(json!({
-                "role": "user",
-                "parts": [{"text": system_message}]
-            }));
-        }
-
-        // Google API requires conversations to end with a user message
-        // If the last message is from the model, add a continuation prompt
-        if let Some(last_msg) = converted.last() {
-            if last_msg["role"] == "model" {
-                converted.push(json!({
-                    "role": "user",
-                    "parts": [{"text": "Please continue with the task."}]
-                }));
-            }
-        }
-
-        Ok(converted)
-    }
-
-    /// Convert tools for Google format
-    fn convert_tools_for_google(&self, tools: &[ToolSchema]) -> SageResult<Vec<Value>> {
-        let mut converted = Vec::new();
-
-        for tool in tools {
-            let tool_def = json!({
-                "name": tool.name,
-                "description": tool.description,
-                "parameters": tool.parameters
-            });
-            converted.push(tool_def);
-        }
-
-        Ok(converted)
-    }
-
-    /// Parse Google response
-    fn parse_google_response(&self, response: Value) -> SageResult<LLMResponse> {
-        let candidates = response["candidates"]
-            .as_array()
-            .ok_or_else(|| SageError::llm("No candidates in Google response"))?;
-
-        if candidates.is_empty() {
-            return Err(SageError::llm("Empty candidates array in Google response"));
-        }
-
-        let candidate = &candidates[0];
-        let content_parts = candidate["content"]["parts"]
-            .as_array()
-            .ok_or_else(|| SageError::llm("No content parts in Google response"))?;
-
-        let mut content = String::new();
-        let mut tool_calls = Vec::new();
-
-        for part in content_parts {
-            if let Some(text) = part["text"].as_str() {
-                content.push_str(text);
-            } else if let Some(function_call) = part["functionCall"].as_object() {
-                let tool_name = function_call
-                    .get("name")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string();
-                let tool_call = crate::tools::types::ToolCall {
-                    id: format!("call_{}", uuid::Uuid::new_v4()),
-                    name: tool_name.clone(),
-                    arguments: function_call
-                        .get("args")
-                        .and_then(|v| v.as_object())
-                        .map(|args| {
-                            let mut map = std::collections::HashMap::new();
-                            for (k, v) in args {
-                                map.insert(k.clone(), v.clone());
-                            }
-                            map
-                        })
-                        .unwrap_or_else(std::collections::HashMap::new),
-                    call_id: None,
-                };
-                tool_calls.push(tool_call);
-
-                // Add some text content when there are tool calls but no text
-                if content.is_empty() {
-                    content = format!("I'll use the {} tool to help with this task.", tool_name);
-                }
-            }
-        }
-
-        let usage = if let Some(usage_metadata) = response["usageMetadata"].as_object() {
-            let prompt_tokens = usage_metadata
-                .get("promptTokenCount")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0) as u32;
-            let completion_tokens = usage_metadata
-                .get("candidatesTokenCount")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0) as u32;
-            let total_tokens = usage_metadata
-                .get("totalTokenCount")
-                .and_then(|v| v.as_u64())
-                .unwrap_or((prompt_tokens + completion_tokens) as u64)
-                as u32;
-
-            Some(LLMUsage {
-                prompt_tokens,
-                completion_tokens,
-                total_tokens,
-                cost_usd: None,
-                cache_creation_input_tokens: None,
-                cache_read_input_tokens: None,
-            })
-        } else {
-            None
-        };
-
-        Ok(LLMResponse {
-            content,
-            tool_calls,
-            usage,
-            model: Some(self.model_params.model.clone()),
-            finish_reason: candidate["finishReason"].as_str().map(|s| s.to_string()),
-            id: None, // Google doesn't provide request ID in the same way
-            metadata: HashMap::new(),
-        })
+        ResponseParser::parse_anthropic(response_json)
     }
 }
 
@@ -1629,7 +891,7 @@ impl LLMClient {
 
         let mut request_body = json!({
             "model": self.model_params.model,
-            "messages": self.convert_messages_for_openai(messages)?,
+            "messages": MessageConverter::to_openai(messages)?,
             "stream": true,
         });
 
@@ -1647,7 +909,7 @@ impl LLMClient {
         // Add tools if provided
         if let Some(tools) = tools {
             if !tools.is_empty() {
-                request_body["tools"] = json!(self.convert_tools_for_openai(tools)?);
+                request_body["tools"] = json!(ToolConverter::to_openai(tools)?);
             }
         }
 
@@ -1735,11 +997,11 @@ impl LLMClient {
         let url = format!("{}/v1/messages", self.config.get_base_url());
         let enable_caching = self.model_params.is_prompt_caching_enabled();
 
-        let (system_message, user_messages) = self.extract_system_message(messages);
+        let (system_message, user_messages) = MessageConverter::extract_system_message(messages);
 
         let mut request_body = json!({
             "model": self.model_params.model,
-            "messages": self.convert_messages_for_anthropic(&user_messages)?,
+            "messages": MessageConverter::to_anthropic(&user_messages, enable_caching)?,
             "stream": true,
         });
 
@@ -1772,7 +1034,7 @@ impl LLMClient {
         // Add tools if provided, with optional cache_control
         if let Some(tools) = tools {
             if !tools.is_empty() {
-                let mut tool_defs = self.convert_tools_for_anthropic(tools)?;
+                let mut tool_defs: Vec<Value> = ToolConverter::to_anthropic(tools)?;
 
                 if enable_caching {
                     if let Some(last_tool) = tool_defs.last_mut() {

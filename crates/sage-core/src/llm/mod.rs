@@ -1,8 +1,10 @@
 //! LLM client and message types
 
 pub mod client;
+pub mod converters;
 pub mod fallback;
 pub mod messages;
+pub mod parsers;
 pub mod providers;
 pub mod sse_decoder;
 pub mod streaming;

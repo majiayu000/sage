@@ -4,15 +4,29 @@
 //! and discovering important files and patterns.
 
 pub mod analyzer;
+pub mod dependencies;
 pub mod detector;
+pub mod entry_points;
+pub mod git;
+pub mod models;
 pub mod patterns;
+pub mod statistics;
+pub mod structure;
 
-pub use analyzer::{
-    AnalysisResult, DependencyInfo, EntryPoint, FileStats, ProjectStructure, WorkspaceAnalyzer,
+// Re-export commonly used types from models
+pub use models::{
+    AnalysisResult, DependencyInfo, EntryPoint, FileStats, GitInfo, ProjectStructure,
     WorkspaceConfig, WorkspaceError,
 };
+
+// Re-export analyzer
+pub use analyzer::WorkspaceAnalyzer;
+
+// Re-export detector types
 pub use detector::{
     BuildSystem, FrameworkType, LanguageType, ProjectType, ProjectTypeDetector, RuntimeType,
     TestFramework,
 };
+
+// Re-export pattern types
 pub use patterns::{ImportantFile, ImportantFileType, PatternMatcher, ProjectPattern};

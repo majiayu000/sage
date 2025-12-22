@@ -44,7 +44,9 @@
 //! ```
 
 pub mod branching;
+pub mod enhanced;
 pub mod file_tracker;
+pub mod file_tracking;
 pub mod jsonl_storage;
 pub mod manager;
 pub mod session_cache;
