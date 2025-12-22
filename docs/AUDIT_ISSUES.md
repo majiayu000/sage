@@ -10,7 +10,7 @@
 |----------|-------|----------|
 | Critical | 33 | 7 |
 | High | 90 | 8 |
-| Medium | 86 | 3 |
+| Medium | 86 | 4 |
 | Low | 56 | 0 |
 
 ---
@@ -227,10 +227,17 @@
 - **Fix**: Write comprehensive user documentation
 
 ### MED-004: CLI Mode Confusion
-- **Status**: 🔴 Open
+- **Status**: 🟢 Resolved
 - **Location**: `sage-cli/src/`
 - **Description**: Interactive vs non-interactive mode unclear
-- **Fix**: Clarify CLI modes and add help text
+- **Fix**: Added comprehensive CLI mode documentation:
+  - Created `CliMode` enum with clear descriptions and examples
+  - Added extensive module-level documentation explaining all execution modes
+  - Enhanced help text for all commands (Run, Interactive, Unified, Config, Trajectory, Tools)
+  - Added usage examples for each command and subcommand
+  - Documented special commands available in interactive mode
+  - Clarified differences between Run (one-shot), Interactive (multi-turn), and Unified (advanced) modes
+  - Updated ConfigAction and TrajectoryAction enums with detailed descriptions
 
 ### MED-005: Inconsistent Tool Response Format
 - **Status**: 🔴 Open
