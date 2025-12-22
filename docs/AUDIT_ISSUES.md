@@ -46,11 +46,15 @@
 - **Fix**: Gated behind `#[cfg(debug_assertions)]` and `SAGE_DEBUG_REQUESTS` env var
 
 ### CRIT-005: Excessive unwrap() Calls
-- **Status**: 🔴 Open
-- **Location**: Multiple files (1414 occurrences)
+- **Status**: 🟡 In Progress
+- **Location**: Multiple files (1414 occurrences total)
 - **Description**: Potential panics throughout codebase
 - **Risk**: Application crashes
-- **Fix**: Replace with proper error handling using `?` operator
+- **Progress**:
+  - Fixed http_client.rs: Added expect() with safety comment
+  - Fixed monitoring.rs: Switched to parking_lot::Mutex (6 unwrap() calls removed)
+  - Fixed sandbox/mod.rs: Switched to parking_lot::RwLock (1 unwrap() call removed)
+  - Remaining: ~1400 occurrences (many in test code, lower priority)
 
 ### CRIT-006: Missing Tool Input Validation
 - **Status**: 🔴 Open
@@ -262,6 +266,8 @@
 | 2025-12-22 | HIGH-002 | Resolved | 4a3f740 |
 | 2025-12-22 | CRIT-007 | Resolved | ef9c297 |
 | 2025-12-22 | HIGH-008 | Resolved | 6459fdb |
+| 2025-12-22 | CRIT-005 | Partial | 85e4863 |
+| 2025-12-22 | CRIT-005 | Partial | 02fb81d |
 
 ---
 
