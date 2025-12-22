@@ -9,7 +9,7 @@
 | Severity | Count | Resolved |
 |----------|-------|----------|
 | Critical | 33 | 4 |
-| High | 90 | 0 |
+| High | 90 | 1 |
 | Medium | 86 | 0 |
 | Low | 56 | 0 |
 
@@ -108,10 +108,10 @@
 - **Fix**: Unify error handling with common error types
 
 ### HIGH-006: Provider Whitelist Incomplete
-- **Status**: 🔴 Open
-- **Location**: `sage-core/src/config/validation.rs:35-38`
+- **Status**: 🟢 Resolved
+- **Location**: `sage-core/src/config/validation.rs:35-49`
 - **Description**: Missing glm, openrouter, doubao, azure providers
-- **Fix**: Update whitelist to include all supported providers
+- **Fix**: Added all providers (azure, openrouter, doubao, glm, zhipu) to whitelist and API key validation
 
 ### HIGH-007: Blocking Operations in Async
 - **Status**: 🔴 Open
@@ -253,7 +253,8 @@
 | 2025-12-22 | CRIT-004 | Resolved | db3eed5 |
 | 2025-12-22 | CRIT-002 | Resolved | ef01fe7 |
 | 2025-12-22 | CRIT-001 | Resolved | cb4b5b5 |
-| 2025-12-22 | CRIT-003 | Resolved | (pending) |
+| 2025-12-22 | CRIT-003 | Resolved | e46e4f4 |
+| 2025-12-22 | HIGH-006 | Resolved | (pending) |
 
 ---
 

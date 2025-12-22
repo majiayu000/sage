@@ -32,10 +32,21 @@ impl ConfigValidator {
         }
 
         // Validate provider names
-        let valid_providers: HashSet<&str> = ["openai", "anthropic", "google", "ollama"]
-            .iter()
-            .cloned()
-            .collect();
+        // All providers from LLMProvider enum in llm/providers.rs
+        let valid_providers: HashSet<&str> = [
+            "openai",     // OpenAI (GPT models)
+            "anthropic",  // Anthropic (Claude models)
+            "google",     // Google (Gemini models)
+            "azure",      // Azure OpenAI
+            "openrouter", // OpenRouter
+            "doubao",     // Doubao
+            "ollama",     // Ollama (local models)
+            "glm",        // GLM (Zhipu AI)
+            "zhipu",      // Alias for GLM
+        ]
+        .iter()
+        .cloned()
+        .collect();
 
         for provider in config.model_providers.keys() {
             if !valid_providers.contains(provider.as_str()) && !provider.starts_with("custom_") {
@@ -117,7 +128,18 @@ impl ConfigValidator {
             }
 
             // Validate API key presence for cloud providers
-            if ["openai", "anthropic", "google"].contains(&provider.as_str()) {
+            // Local providers like ollama don't require API keys
+            let cloud_providers = [
+                "openai",
+                "anthropic",
+                "google",
+                "azure",
+                "openrouter",
+                "doubao",
+                "glm",
+                "zhipu",
+            ];
+            if cloud_providers.contains(&provider.as_str()) {
                 if params.api_key.is_none() && params.get_api_key().is_none() {
                     return Err(SageError::config(format!(
                         "API key is required for provider '{}'. Set it in config or environment variables",
