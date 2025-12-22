@@ -180,6 +180,105 @@ impl BashTool {
             metadata: std::collections::HashMap::new(),
         })
     }
+
+    /// Validate command for security issues
+    ///
+    /// This checks for:
+    /// - Dangerous command patterns (system destruction, privilege escalation)
+    /// - Shell operators that could enable command injection
+    /// - Command substitution attempts
+    pub fn validate_command_security(command: &str) -> Result<(), ToolError> {
+        let command_lower = command.to_lowercase();
+
+        // Dangerous command patterns - system destruction
+        let dangerous_commands = [
+            "rm -rf /",
+            "rm -rf /*",
+            "rm -rf ~",
+            ":(){ :|:& };:",  // Fork bomb
+            ":(){:|:&};:",    // Fork bomb variant (no spaces)
+            "dd if=/dev/zero",
+            "dd if=/dev/random",
+            "mkfs",
+            "fdisk",
+            "parted",
+            "shutdown",
+            "reboot",
+            "halt",
+            "poweroff",
+            "init 0",
+            "init 6",
+            "telinit 0",
+            "> /dev/sda",
+            "mv /* /dev/null",
+            "chmod -r 000 /",
+            "chown -r",
+        ];
+
+        for pattern in &dangerous_commands {
+            if command_lower.contains(pattern) {
+                return Err(ToolError::PermissionDenied(format!(
+                    "Dangerous command pattern detected: {}",
+                    pattern
+                )));
+            }
+        }
+
+        // Privilege escalation commands
+        let privilege_commands = ["sudo ", "su ", "doas ", "pkexec "];
+        for pattern in &privilege_commands {
+            if command_lower.starts_with(pattern) || command_lower.contains(&format!(" {}", pattern.trim())) {
+                return Err(ToolError::PermissionDenied(format!(
+                    "Privilege escalation command not allowed: {}",
+                    pattern.trim()
+                )));
+            }
+        }
+
+        // Check for command substitution which could bypass validation
+        // These allow executing arbitrary commands within the main command
+        let substitution_patterns = [
+            "$(",     // Modern command substitution
+            "`",      // Legacy command substitution (backticks)
+            "${",     // Variable expansion with commands
+        ];
+
+        for pattern in &substitution_patterns {
+            if command.contains(pattern) {
+                return Err(ToolError::PermissionDenied(format!(
+                    "Command substitution not allowed: {}",
+                    pattern
+                )));
+            }
+        }
+
+        // Check for dangerous shell operators that enable command chaining
+        // Note: We allow pipes (|) and redirects (>, <) as they are commonly needed
+        // but block command separators that could run arbitrary commands
+        let dangerous_operators = [
+            ";",      // Command separator - runs multiple commands
+            "&&",     // Logical AND - runs second command if first succeeds
+            "||",     // Logical OR - runs second command if first fails
+        ];
+
+        for op in &dangerous_operators {
+            if command.contains(op) {
+                return Err(ToolError::PermissionDenied(format!(
+                    "Command chaining operator not allowed: '{}'",
+                    op
+                )));
+            }
+        }
+
+        // Check for process backgrounding which could escape control
+        if command.trim().ends_with('&') && !command.trim().ends_with("&&") {
+            return Err(ToolError::PermissionDenied(
+                "Background process operator (&) not allowed at end of command".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
 }
 
 impl Default for BashTool {
@@ -268,27 +367,8 @@ Use task_output(shell_id) to retrieve output and kill_shell(shell_id) to termina
             ));
         }
 
-        // Check for dangerous commands
-        let dangerous_patterns = [
-            "rm -rf /",
-            ":(){ :|:& };:", // Fork bomb
-            "dd if=/dev/zero",
-            "mkfs",
-            "fdisk",
-            "shutdown",
-            "reboot",
-            "halt",
-        ];
-
-        let command_lower = command.to_lowercase();
-        for pattern in &dangerous_patterns {
-            if command_lower.contains(pattern) {
-                return Err(ToolError::PermissionDenied(format!(
-                    "Dangerous command pattern detected: {}",
-                    pattern
-                )));
-            }
-        }
+        // Validate the command for security issues
+        Self::validate_command_security(&command)?;
 
         Ok(())
     }
@@ -466,5 +546,115 @@ mod tests {
         let schema = tool.schema();
         assert_eq!(schema.name, "bash");
         assert!(!schema.description.is_empty());
+    }
+
+    // Security validation tests
+    #[test]
+    fn test_dangerous_commands_blocked() {
+        // Test dangerous command patterns are blocked
+        let dangerous_commands = vec![
+            "rm -rf /",
+            "rm -rf /*",
+            ":(){ :|:& };:",
+            "dd if=/dev/zero of=/dev/sda",
+            "mkfs.ext4 /dev/sda",
+            "shutdown -h now",
+            "reboot",
+        ];
+
+        for cmd in dangerous_commands {
+            let result = BashTool::validate_command_security(cmd);
+            assert!(result.is_err(), "Command should be blocked: {}", cmd);
+        }
+    }
+
+    #[test]
+    fn test_privilege_escalation_blocked() {
+        // Test privilege escalation commands are blocked
+        let priv_commands = vec![
+            "sudo rm -rf /tmp/test",
+            "su - root",
+            "doas ls",
+            "pkexec /bin/bash",
+        ];
+
+        for cmd in priv_commands {
+            let result = BashTool::validate_command_security(cmd);
+            assert!(result.is_err(), "Command should be blocked: {}", cmd);
+        }
+    }
+
+    #[test]
+    fn test_command_substitution_blocked() {
+        // Test command substitution is blocked
+        let subst_commands = vec![
+            "echo $(whoami)",
+            "echo `id`",
+            "echo ${PATH}",
+        ];
+
+        for cmd in subst_commands {
+            let result = BashTool::validate_command_security(cmd);
+            assert!(result.is_err(), "Command should be blocked: {}", cmd);
+        }
+    }
+
+    #[test]
+    fn test_command_chaining_blocked() {
+        // Test command chaining operators are blocked
+        let chain_commands = vec![
+            "echo hello; rm -rf /",
+            "ls && cat /etc/passwd",
+            "false || reboot",
+        ];
+
+        for cmd in chain_commands {
+            let result = BashTool::validate_command_security(cmd);
+            assert!(result.is_err(), "Command should be blocked: {}", cmd);
+        }
+    }
+
+    #[test]
+    fn test_background_process_blocked() {
+        // Test background process operator is blocked at end
+        let result = BashTool::validate_command_security("sleep 9999 &");
+        assert!(result.is_err(), "Background process should be blocked");
+    }
+
+    #[test]
+    fn test_safe_commands_allowed() {
+        // Test that safe commands are allowed
+        let safe_commands = vec![
+            "echo 'Hello, World!'",
+            "ls -la",
+            "pwd",
+            "cat file.txt",
+            "grep pattern file.txt",
+            "find . -name '*.rs'",
+            "head -n 10 file.txt",
+            "tail -f log.txt",
+            "wc -l file.txt",
+        ];
+
+        for cmd in safe_commands {
+            let result = BashTool::validate_command_security(cmd);
+            assert!(result.is_ok(), "Command should be allowed: {}", cmd);
+        }
+    }
+
+    #[test]
+    fn test_pipe_and_redirect_allowed() {
+        // Test that pipes and redirects are still allowed (commonly needed)
+        let pipe_commands = vec![
+            "ls | head -10",
+            "grep pattern file.txt | wc -l",
+            "echo 'test' > output.txt",
+            "cat file.txt >> output.txt",
+        ];
+
+        for cmd in pipe_commands {
+            let result = BashTool::validate_command_security(cmd);
+            assert!(result.is_ok(), "Command should be allowed: {}", cmd);
+        }
     }
 }
