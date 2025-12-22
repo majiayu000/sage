@@ -1,0 +1,32 @@
+{
+    "total_instances": 1,
+    "submitted_instances": 10,
+    "completed_instances": 1,
+    "resolved_instances": 1,
+    "unresolved_instances": 0,
+    "empty_patch_instances": 0,
+    "error_instances": 0,
+    "completed_ids": [
+        "django__django-11099"
+    ],
+    "incomplete_ids": [],
+    "empty_patch_ids": [],
+    "submitted_ids": [
+        "django__django-10914",
+        "django__django-10924",
+        "django__django-11001",
+        "django__django-11019",
+        "django__django-11039",
+        "django__django-11049",
+        "django__django-11099",
+        "django__django-11133",
+        "django__django-11179",
+        "django__django-11283"
+    ],
+    "resolved_ids": [
+        "django__django-11099"
+    ],
+    "unresolved_ids": [],
+    "error_ids": [],
+    "schema_version": 2
+}

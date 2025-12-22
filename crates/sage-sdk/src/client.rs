@@ -256,6 +256,56 @@ impl SageAgentSDK {
         self.config.validate()
     }
 
+    /// Get the current SDK API version
+    ///
+    /// Returns the semantic version of the SDK's public API.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use sage_sdk::SageAgentSDK;
+    ///
+    /// let sdk = SageAgentSDK::new().unwrap();
+    /// let version = sdk.api_version();
+    /// println!("SDK API Version: {}", version);
+    /// ```
+    pub fn api_version(&self) -> crate::version::Version {
+        crate::version::API_VERSION
+    }
+
+    /// Get version information string
+    ///
+    /// Returns a formatted string with SDK version details.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use sage_sdk::SageAgentSDK;
+    ///
+    /// let sdk = SageAgentSDK::new().unwrap();
+    /// println!("{}", sdk.version_info());
+    /// ```
+    pub fn version_info(&self) -> String {
+        crate::version::version_info()
+    }
+
+    /// Check if a client version is compatible with this SDK
+    ///
+    /// Returns `true` if the specified client version can safely use this SDK.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use sage_sdk::{SageAgentSDK, version::Version};
+    ///
+    /// let sdk = SageAgentSDK::new().unwrap();
+    /// let client_version = Version::new(0, 1, 0);
+    /// assert!(sdk.is_compatible_with(&client_version));
+    /// ```
+    pub fn is_compatible_with(&self, client_version: &crate::version::Version) -> bool {
+        crate::version::is_compatible(client_version)
+    }
+
     /// Continue an existing execution with a new user message
     ///
     /// **Deprecated**: This method uses the old exit-resume pattern.

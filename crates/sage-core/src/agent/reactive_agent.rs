@@ -12,6 +12,7 @@ use crate::prompts::SystemPromptBuilder;
 use crate::tools::batch_executor::BatchToolExecutor;
 use crate::tools::types::{ToolCall, ToolResult};
 use crate::types::{Id, TaskMetadata};
+use anyhow::Context;
 use async_trait::async_trait;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
@@ -178,12 +179,14 @@ impl ClaudeStyleAgent {
     /// Create a new Claude-style agent
     pub fn new(config: Config) -> SageResult<Self> {
         // Initialize LLM client
-        let default_params = config.default_model_parameters()?;
+        let default_params = config.default_model_parameters()
+            .context("Failed to retrieve default model parameters from configuration")?;
         let provider_name = config.get_default_provider();
 
         let provider: LLMProvider = provider_name
             .parse()
-            .map_err(|_| SageError::config(format!("Invalid provider: {}", provider_name)))?;
+            .map_err(|_| SageError::config(format!("Invalid provider: {}", provider_name)))
+            .context(format!("Failed to parse provider name '{}' into a valid LLM provider", provider_name))?;
 
         let mut provider_config = crate::config::provider::ProviderConfig::new(provider_name)
             .with_api_key(default_params.get_api_key().unwrap_or_default())
@@ -196,7 +199,8 @@ impl ClaudeStyleAgent {
         }
 
         let model_params = default_params.to_llm_parameters();
-        let llm_client = LLMClient::new(provider, provider_config, model_params)?;
+        let llm_client = LLMClient::new(provider, provider_config, model_params)
+            .context(format!("Failed to create LLM client for provider: {}", provider_name))?;
 
         // Initialize batch tool executor
         let batch_executor = BatchToolExecutor::new();

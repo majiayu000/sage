@@ -1,6 +1,6 @@
 //! Trajectory storage implementations
 
-use crate::error::{SageError, SageResult};
+use crate::error::{ResultExt, SageError, SageResult};
 use crate::trajectory::recorder::TrajectoryRecord;
 use crate::types::Id;
 use async_trait::async_trait;
@@ -93,14 +93,19 @@ impl TrajectoryStorage for FileStorage {
 
         // Ensure parent directory exists
         if let Some(parent) = file_path.parent() {
-            fs::create_dir_all(parent).await?;
+            fs::create_dir_all(parent)
+                .await
+                .context(format!("Failed to create trajectory directory: {:?}", parent))?;
         }
 
         // Serialize record
-        let json = serde_json::to_string_pretty(record)?;
+        let json = serde_json::to_string_pretty(record)
+            .context("Failed to serialize trajectory record")?;
 
         // Write to file
-        fs::write(&file_path, json).await?;
+        fs::write(&file_path, &json)
+            .await
+            .context(format!("Failed to write trajectory to {:?}", file_path))?;
 
         Ok(())
     }
@@ -112,16 +117,51 @@ impl TrajectoryStorage for FileStorage {
             return Ok(None);
         }
 
-        let content = fs::read_to_string(&file_path).await?;
+        let content = fs::read_to_string(&file_path)
+            .await
+            .context(format!("Failed to read trajectory from {:?}", file_path))?;
 
-        let record: TrajectoryRecord = serde_json::from_str(&content)?;
+        let record: TrajectoryRecord = serde_json::from_str(&content)
+            .context(format!("Failed to parse trajectory JSON from {:?}", file_path))?;
 
         Ok(Some(record))
     }
 
     async fn list(&self) -> SageResult<Vec<Id>> {
-        // TODO: Fix after trajectory record refactor
-        Ok(Vec::new())
+        let mut ids = Vec::new();
+
+        // If base_path is a directory, scan for .json files
+        if self.base_path.is_dir() {
+            let mut entries = fs::read_dir(&self.base_path).await.map_err(|e| {
+                SageError::config(format!(
+                    "Failed to read trajectory directory {:?}: {}",
+                    self.base_path, e
+                ))
+            })?;
+
+            while let Some(entry) = entries.next_entry().await.map_err(|e| {
+                SageError::config(format!("Failed to read directory entry: {}", e))
+            })? {
+                let path = entry.path();
+                if path.extension().map_or(false, |ext| ext == "json") {
+                    // Try to load the file to get the ID
+                    if let Ok(content) = fs::read_to_string(&path).await {
+                        if let Ok(record) = serde_json::from_str::<TrajectoryRecord>(&content) {
+                            ids.push(record.id);
+                        }
+                    }
+                }
+            }
+        } else if self.base_path.exists() {
+            // If base_path is a file, try to load it
+            if let Ok(content) = fs::read_to_string(&self.base_path).await {
+                if let Ok(record) = serde_json::from_str::<TrajectoryRecord>(&content) {
+                    ids.push(record.id);
+                }
+            }
+        }
+
+        Ok(ids)
     }
 
     async fn delete(&self, id: Id) -> SageResult<()> {

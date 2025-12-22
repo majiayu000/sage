@@ -41,8 +41,10 @@ use crate::trajectory::recorder::TrajectoryRecorder;
 use crate::types::{Id, TaskMetadata};
 use crate::ui::animation::AnimationState;
 use crate::ui::{AnimationManager, DisplayManager};
+use anyhow::Context;
 use std::sync::Arc;
 use tokio::select;
+use tracing::instrument;
 use tokio::sync::Mutex;
 
 /// Unified executor that implements the Claude Code style execution loop
@@ -82,7 +84,8 @@ impl UnifiedExecutor {
     /// Create a new unified executor with custom options
     pub fn with_options(config: Config, options: ExecutionOptions) -> SageResult<Self> {
         // Get default provider configuration
-        let default_params = config.default_model_parameters()?;
+        let default_params = config.default_model_parameters()
+            .context("Failed to retrieve default model parameters from configuration")?;
         let provider_name = config.get_default_provider();
 
         tracing::info!(
@@ -94,7 +97,8 @@ impl UnifiedExecutor {
         // Parse provider
         let provider: LLMProvider = provider_name
             .parse()
-            .map_err(|_| SageError::config(format!("Invalid provider: {}", provider_name)))?;
+            .map_err(|_| SageError::config(format!("Invalid provider: {}", provider_name)))
+            .context(format!("Failed to parse provider name '{}' into a valid LLM provider", provider_name))?;
 
         // Create provider config
         let mut provider_config = ProviderConfig::new(provider_name)
@@ -111,7 +115,8 @@ impl UnifiedExecutor {
         let model_params = default_params.to_llm_parameters();
 
         // Create LLM client
-        let llm_client = LLMClient::new(provider, provider_config, model_params)?;
+        let llm_client = LLMClient::new(provider, provider_config, model_params)
+            .context(format!("Failed to create LLM client for provider: {}", provider_name))?;
 
         // Create tool executor
         let tool_executor = ToolExecutor::new();
@@ -228,13 +233,15 @@ impl UnifiedExecutor {
             // Create session
             let mut metadata = storage
                 .create_session(&session_id, working_dir.clone())
-                .await?;
+                .await
+                .context(format!("Failed to create JSONL session with ID: {}", session_id))?;
 
             // Set model info
             if let Ok(params) = self.config.default_model_parameters() {
                 metadata = metadata.with_model(&params.model);
             }
-            storage.save_metadata(&session_id, &metadata).await?;
+            storage.save_metadata(&session_id, &metadata).await
+                .context(format!("Failed to save session metadata for session: {}", session_id))?;
 
             // Update tracker
             let mut context = SessionContext::new(working_dir);
@@ -388,6 +395,34 @@ impl UnifiedExecutor {
         &self.options
     }
 
+    /// Graceful shutdown - cleanup resources and save state
+    ///
+    /// This method should be called when the executor is shutting down
+    /// to ensure all resources are properly cleaned up.
+    pub async fn shutdown(&mut self) -> SageResult<()> {
+        tracing::info!("Initiating graceful shutdown of UnifiedExecutor");
+
+        // Stop any animations
+        self.animation_manager.stop_animation().await;
+
+        // Finalize trajectory recording if present
+        if let Some(recorder) = &self.trajectory_recorder {
+            tracing::debug!("Finalizing trajectory recording");
+            let mut recorder_guard = recorder.lock().await;
+            if let Err(e) = recorder_guard.finalize_recording(false, Some("Shutdown".to_string())).await {
+                tracing::warn!("Failed to finalize trajectory recording: {}", e);
+            }
+        }
+
+        // Log session cleanup
+        if let Some(session_id) = &self.current_session_id {
+            tracing::debug!("Session {} shutdown complete", session_id);
+        }
+
+        tracing::info!("Graceful shutdown complete");
+        Ok(())
+    }
+
     /// Request user input via the input channel
     ///
     /// This method blocks until the user responds (or auto-responds in non-interactive mode).
@@ -407,6 +442,7 @@ impl UnifiedExecutor {
     /// - Never exits for user input
     /// - Blocks inline on InputChannel when needed
     /// - Returns only on completion, failure, interrupt, or max steps
+    #[instrument(skip(self), fields(task_id = %task.id, task_description = %task.description))]
     pub async fn execute(&mut self, task: TaskMetadata) -> SageResult<ExecutionOutcome> {
         // Reset interrupt manager at start of execution
         reset_global_interrupt_manager();

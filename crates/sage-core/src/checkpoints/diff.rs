@@ -134,7 +134,7 @@ impl ChangeDetector {
 
         let metadata = fs::metadata(&full_path)
             .await
-            .map_err(|e| SageError::Storage(format!("Failed to read file metadata: {}", e)))?;
+            .map_err(|e| SageError::storage(format!("Failed to read file metadata: {}", e)))?;
 
         if metadata.is_dir() {
             return Ok(None);

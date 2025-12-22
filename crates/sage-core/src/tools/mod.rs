@@ -11,6 +11,9 @@ pub mod registry;
 pub mod tool_cache;
 pub mod types;
 
+#[cfg(test)]
+mod executor_tests;
+
 pub use background_registry::{
     BACKGROUND_REGISTRY, BackgroundTaskRegistry, BackgroundTaskSummary, global_registry,
 };

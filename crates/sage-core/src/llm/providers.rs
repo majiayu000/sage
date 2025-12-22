@@ -1,6 +1,138 @@
 //! LLM provider definitions and configurations
 
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
+
+/// Timeout configuration for LLM requests
+///
+/// Provides fine-grained control over different timeout stages:
+/// - **Connection timeout**: Time allowed to establish a connection
+/// - **Request timeout**: Time allowed for a complete request/response cycle
+///
+/// # Examples
+///
+/// ```rust
+/// use sage_core::llm::providers::TimeoutConfig;
+///
+/// // Use default timeouts (30s connection, 60s request)
+/// let config = TimeoutConfig::default();
+///
+/// // Custom timeouts for slow network
+/// let config = TimeoutConfig::new()
+///     .with_connection_timeout_secs(10)
+///     .with_request_timeout_secs(120);
+///
+/// // Quick timeouts for fast local models
+/// let config = TimeoutConfig::quick();
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TimeoutConfig {
+    /// Connection timeout in seconds
+    ///
+    /// Maximum time allowed to establish a TCP connection to the API server.
+    /// Default: 30 seconds
+    #[serde(default = "TimeoutConfig::default_connection_timeout")]
+    pub connection_timeout_secs: u64,
+
+    /// Request timeout in seconds
+    ///
+    /// Maximum time allowed for the complete request/response cycle,
+    /// including connection establishment, sending request, and receiving response.
+    /// This is the total end-to-end timeout.
+    /// Default: 60 seconds
+    #[serde(default = "TimeoutConfig::default_request_timeout")]
+    pub request_timeout_secs: u64,
+}
+
+impl TimeoutConfig {
+    /// Default connection timeout in seconds
+    const fn default_connection_timeout() -> u64 {
+        30
+    }
+
+    /// Default request timeout in seconds
+    const fn default_request_timeout() -> u64 {
+        60
+    }
+
+    /// Create a new timeout configuration with default values
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Create a quick timeout configuration for fast local models
+    ///
+    /// - Connection: 5 seconds
+    /// - Request: 30 seconds
+    pub fn quick() -> Self {
+        Self {
+            connection_timeout_secs: 5,
+            request_timeout_secs: 30,
+        }
+    }
+
+    /// Create a relaxed timeout configuration for slow connections or large requests
+    ///
+    /// - Connection: 60 seconds
+    /// - Request: 300 seconds (5 minutes)
+    pub fn relaxed() -> Self {
+        Self {
+            connection_timeout_secs: 60,
+            request_timeout_secs: 300,
+        }
+    }
+
+    /// Set connection timeout in seconds
+    pub fn with_connection_timeout_secs(mut self, secs: u64) -> Self {
+        self.connection_timeout_secs = secs;
+        self
+    }
+
+    /// Set request timeout in seconds
+    pub fn with_request_timeout_secs(mut self, secs: u64) -> Self {
+        self.request_timeout_secs = secs;
+        self
+    }
+
+    /// Get connection timeout as Duration
+    pub fn connection_timeout(&self) -> Duration {
+        Duration::from_secs(self.connection_timeout_secs)
+    }
+
+    /// Get request timeout as Duration
+    pub fn request_timeout(&self) -> Duration {
+        Duration::from_secs(self.request_timeout_secs)
+    }
+
+    /// Validate timeout configuration
+    ///
+    /// Returns an error if:
+    /// - Any timeout is zero
+    /// - Request timeout is less than connection timeout
+    pub fn validate(&self) -> Result<(), String> {
+        if self.connection_timeout_secs == 0 {
+            return Err("Connection timeout must be greater than 0".to_string());
+        }
+        if self.request_timeout_secs == 0 {
+            return Err("Request timeout must be greater than 0".to_string());
+        }
+        if self.request_timeout_secs < self.connection_timeout_secs {
+            return Err(
+                "Request timeout must be greater than or equal to connection timeout".to_string(),
+            );
+        }
+        Ok(())
+    }
+}
+
+impl Default for TimeoutConfig {
+    fn default() -> Self {
+        Self {
+            connection_timeout_secs: Self::default_connection_timeout(),
+            request_timeout_secs: Self::default_request_timeout(),
+        }
+    }
+}
 
 /// Supported LLM providers
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

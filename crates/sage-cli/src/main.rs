@@ -1,4 +1,36 @@
 //! Sage Agent CLI application
+//!
+//! This CLI provides multiple execution modes for different use cases:
+//!
+//! # CLI Modes Overview
+//!
+//! ## 1. Interactive Mode (Default)
+//! Start a conversation loop where you can have multi-turn conversations with the AI.
+//! The AI remembers context across messages within the same conversation.
+//!
+//! **Use when:** You want to have a back-and-forth conversation, iterating on tasks
+//! **Command:** `sage` or `sage interactive`
+//! **Example:** Ask the AI to create a file, then ask it to modify that file
+//!
+//! ## 2. Run Mode (One-shot)
+//! Execute a single task and exit. Best for automation and scripting.
+//! The AI completes the task and returns immediately.
+//!
+//! **Use when:** You have a single, well-defined task to complete
+//! **Command:** `sage run "<task>"`
+//! **Example:** `sage run "Create a Python hello world script"`
+//!
+//! ## 3. Unified Mode (Advanced)
+//! New execution model with inline user input blocking. Supports both interactive
+//! and non-interactive modes via flag.
+//!
+//! **Use when:** You need fine-grained control over execution behavior
+//! **Command:** `sage unified "<task>"`
+//! **Example:** `sage unified --non-interactive "Run tests"`
+//!
+//! ## 4. Utility Commands
+//! Additional commands for configuration, trajectory analysis, and tool inspection.
+//! See `sage --help` for full list.
 
 mod claude_mode;
 mod commands;
@@ -12,9 +44,86 @@ use clap::{Parser, Subcommand};
 use sage_core::error::SageResult;
 use std::path::PathBuf;
 
+/// CLI Mode enum for documentation and type safety
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CliMode {
+    /// Interactive conversation mode with multi-turn context
+    Interactive,
+    /// One-shot task execution mode
+    Run,
+    /// Unified execution mode (Claude Code style)
+    Unified,
+    /// Configuration management
+    Config,
+    /// Trajectory analysis and management
+    Trajectory,
+    /// Tool inspection
+    Tools,
+}
+
+impl CliMode {
+    /// Get a human-readable description of the mode
+    pub fn description(&self) -> &'static str {
+        match self {
+            CliMode::Interactive => "Multi-turn conversation mode with context retention",
+            CliMode::Run => "Single task execution mode (fire-and-forget)",
+            CliMode::Unified => "Advanced execution mode with inline input blocking",
+            CliMode::Config => "Configuration file management",
+            CliMode::Trajectory => "Execution trajectory analysis",
+            CliMode::Tools => "Tool discovery and inspection",
+        }
+    }
+
+    /// Get usage examples for the mode
+    pub fn examples(&self) -> Vec<&'static str> {
+        match self {
+            CliMode::Interactive => vec![
+                "sage interactive",
+                "sage interactive --modern-ui",
+                "sage interactive --claude-style",
+            ],
+            CliMode::Run => vec![
+                "sage run \"Create a Python hello world\"",
+                "sage run \"Fix the bug in main.rs\" --provider anthropic",
+                "sage run --task-file task.txt",
+            ],
+            CliMode::Unified => vec![
+                "sage unified \"Create a test suite\"",
+                "sage unified --non-interactive \"Run tests\"",
+                "sage unified --max-steps 10 \"Refactor code\"",
+            ],
+            CliMode::Config => vec![
+                "sage config show",
+                "sage config validate",
+                "sage config init",
+            ],
+            CliMode::Trajectory => vec![
+                "sage trajectory list",
+                "sage trajectory show <file>",
+                "sage trajectory analyze <file>",
+            ],
+            CliMode::Tools => vec!["sage tools"],
+        }
+    }
+}
+
 #[derive(Parser)]
 #[command(name = "sage")]
 #[command(about = "Sage Agent - LLM-based agent for software engineering tasks")]
+#[command(long_about = r#"Sage Agent - LLM-based agent for software engineering tasks
+
+MODES:
+  Interactive (default) - Multi-turn conversation with context
+  Run                  - One-shot task execution
+  Unified              - Advanced execution with inline input
+
+QUICK START:
+  sage                           # Start interactive mode
+  sage run "your task"           # Execute a single task
+  sage interactive --modern-ui   # Use modern UI
+  sage config init               # Create config file
+
+For detailed help on any command, use: sage <command> --help"#)]
 #[command(version)]
 struct Cli {
     #[command(subcommand)]
@@ -43,7 +152,18 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Run a task using Sage Agent
+    /// Run a single task and exit (non-interactive mode)
+    ///
+    /// This mode executes one task and exits. Best for automation, scripting,
+    /// or when you have a single well-defined task to complete.
+    ///
+    /// The task can be provided as a string or loaded from a file.
+    ///
+    /// Examples:
+    ///   sage run "Create a Python script that prints hello world"
+    ///   sage run "Fix the bug in src/main.rs" --provider anthropic --model claude-3-opus
+    ///   sage run --task task.txt --working-dir /path/to/project
+    #[command(verbatim_doc_comment)]
     Run {
         /// The task description or path to a file containing the task
         task: String,
@@ -97,7 +217,30 @@ enum Commands {
         modern_ui: bool,
     },
 
-    /// Interactive mode
+    /// Start interactive conversation mode (multi-turn with context)
+    ///
+    /// This mode starts a conversation loop where you can have multiple exchanges
+    /// with the AI. The AI remembers previous messages and maintains context within
+    /// the same conversation session.
+    ///
+    /// Perfect for iterative development where you want to:
+    /// - Create something, then refine it
+    /// - Ask follow-up questions
+    /// - Build on previous responses
+    ///
+    /// Special commands available in interactive mode:
+    /// - help, h          - Show available commands
+    /// - new, new-task    - Start a new conversation (clears context)
+    /// - exit, quit, q    - Exit interactive mode
+    /// - config           - Show current configuration
+    /// - status           - Show system status
+    ///
+    /// Examples:
+    ///   sage interactive
+    ///   sage interactive --modern-ui
+    ///   sage interactive --claude-style
+    ///   sage interactive --config my_config.json
+    #[command(verbatim_doc_comment)]
     Interactive {
         /// Path to configuration file
         #[arg(long, default_value = "sage_config.json")]
@@ -124,22 +267,77 @@ enum Commands {
         claude_style: bool,
     },
 
-    /// Configuration management
+    /// Manage configuration files
+    ///
+    /// Use this command to create, validate, or inspect configuration files.
+    /// Configuration files control LLM provider settings, API keys, tool
+    /// configurations, and execution parameters.
+    ///
+    /// Examples:
+    ///   sage config init                    # Create a new config file
+    ///   sage config show                    # Display current configuration
+    ///   sage config validate                # Check config for errors
+    ///   sage config init --force            # Overwrite existing config
+    #[command(verbatim_doc_comment)]
     Config {
         #[command(subcommand)]
         action: ConfigAction,
     },
 
-    /// Trajectory management
+    /// Analyze and manage trajectory files
+    ///
+    /// Trajectories are execution recordings that capture all steps, tool calls,
+    /// LLM interactions, and results during agent execution. Use this command to
+    /// review past executions, analyze performance, or debug issues.
+    ///
+    /// Examples:
+    ///   sage trajectory list                # List all trajectory files
+    ///   sage trajectory show file.json      # Display trajectory details
+    ///   sage trajectory stats file.json     # Show statistics
+    ///   sage trajectory analyze .           # Analyze all in directory
+    #[command(verbatim_doc_comment)]
     Trajectory {
         #[command(subcommand)]
         action: TrajectoryAction,
     },
 
-    /// Show available tools and their descriptions
+    /// List all available tools and their descriptions
+    ///
+    /// Shows all registered tools that the agent can use, including:
+    /// - File operations (read, write, edit)
+    /// - Process execution (bash, command)
+    /// - Code analysis (search, grep)
+    /// - Task management
+    /// - And more
+    ///
+    /// Examples:
+    ///   sage tools                          # List all tools
+    #[command(verbatim_doc_comment)]
     Tools,
 
-    /// Run task with unified execution loop (Claude Code style)
+    /// Run task with unified execution loop (Claude Code style) [ADVANCED]
+    ///
+    /// This is an advanced execution mode that uses a unified loop inspired by
+    /// Claude Code. It supports both interactive and non-interactive execution
+    /// with inline user input blocking.
+    ///
+    /// Key differences from 'run' and 'interactive':
+    /// - Uses inline blocking for user input (InputChannel)
+    /// - Never exits for user questions in interactive mode
+    /// - More fine-grained control over execution behavior
+    /// - Cleaner execution model with fewer edge cases
+    ///
+    /// When to use:
+    /// - You want the newer, more robust execution model
+    /// - You need non-interactive mode with auto-responses
+    /// - You're integrating Sage into automated workflows
+    ///
+    /// Examples:
+    ///   sage unified "Create a test suite"
+    ///   sage unified --non-interactive "Run tests and report results"
+    ///   sage unified --max-steps 10 "Refactor the code"
+    ///   sage unified --working-dir /path/to/project "Fix the bug"
+    #[command(verbatim_doc_comment)]
     Unified {
         /// The task description (omit for interactive prompt)
         task: Option<String>,
@@ -165,6 +363,8 @@ enum Commands {
         verbose: bool,
 
         /// Non-interactive mode (auto-respond to user questions)
+        /// When enabled, the agent will not wait for user input and will
+        /// make decisions autonomously
         #[arg(long)]
         non_interactive: bool,
     },
@@ -172,27 +372,36 @@ enum Commands {
 
 #[derive(Subcommand)]
 enum ConfigAction {
-    /// Show current configuration
+    /// Display current configuration settings
+    ///
+    /// Shows the complete configuration including provider settings,
+    /// API keys (masked), tool configurations, and execution parameters.
     Show {
         /// Path to configuration file
         #[arg(long, default_value = "sage_config.json")]
         config_file: String,
     },
 
-    /// Validate configuration
+    /// Validate configuration file for errors
+    ///
+    /// Checks the configuration file for syntax errors, missing required
+    /// fields, invalid provider settings, and other configuration issues.
     Validate {
         /// Path to configuration file
         #[arg(long, default_value = "sage_config.json")]
         config_file: String,
     },
 
-    /// Create a sample configuration file
+    /// Create a new configuration file with defaults
+    ///
+    /// Generates a sample configuration file with placeholders for
+    /// API keys and sensible defaults for all settings.
     Init {
         /// Path for the new configuration file
         #[arg(long, default_value = "sage_config.json")]
         config_file: String,
 
-        /// Overwrite existing file
+        /// Overwrite existing file without prompting
         #[arg(long)]
         force: bool,
     },
@@ -200,26 +409,39 @@ enum ConfigAction {
 
 #[derive(Subcommand)]
 enum TrajectoryAction {
-    /// List trajectory files
+    /// List all trajectory files in a directory
+    ///
+    /// Scans the specified directory for trajectory JSON files and
+    /// displays them with metadata (date, task, status, etc.).
     List {
         /// Directory to search for trajectories
         #[arg(long, default_value = ".")]
         directory: PathBuf,
     },
 
-    /// Show trajectory details
+    /// Display detailed information about a trajectory
+    ///
+    /// Shows complete execution details including all steps, tool calls,
+    /// LLM interactions, token usage, and final results.
     Show {
         /// Path to trajectory file
         trajectory_file: PathBuf,
     },
 
-    /// Analyze trajectory statistics
+    /// Calculate statistics for trajectory file(s)
+    ///
+    /// Computes aggregated statistics like total steps, token usage,
+    /// execution time, tool usage frequency, and success rate.
     Stats {
         /// Path to trajectory file or directory
         path: PathBuf,
     },
 
-    /// Analyze trajectory patterns and performance
+    /// Analyze execution patterns and performance
+    ///
+    /// Performs deep analysis of trajectory patterns including common
+    /// failure points, bottlenecks, tool usage patterns, and optimization
+    /// opportunities.
     Analyze {
         /// Path to trajectory file or directory
         path: PathBuf,
@@ -228,7 +450,8 @@ enum TrajectoryAction {
 
 #[tokio::main]
 async fn main() -> SageResult<()> {
-    // Initialize logging
+    // Initialize logging with environment-based filtering
+    // Set RUST_LOG=debug for verbose logging
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
@@ -236,7 +459,9 @@ async fn main() -> SageResult<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        // If no subcommand is provided, default to interactive mode
+        // DEFAULT BEHAVIOR: If no subcommand is provided, start interactive mode
+        // This makes `sage` equivalent to `sage interactive` for convenience
+        // Users who want one-shot execution should use `sage run "<task>"`
         None => {
             if cli.modern_ui {
                 ui_launcher::launch_modern_ui(

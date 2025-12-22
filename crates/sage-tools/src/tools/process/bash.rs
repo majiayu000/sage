@@ -10,6 +10,7 @@ use std::process::Stdio;
 use std::sync::Arc;
 use tokio::process::Command;
 use tokio_util::sync::CancellationToken;
+use tracing::instrument;
 
 /// Tool for executing bash commands
 pub struct BashTool {
@@ -77,31 +78,28 @@ impl BashTool {
         // Register in global registry
         BACKGROUND_REGISTRY.register(Arc::new(task));
 
-        Ok(ToolResult {
-            call_id: "".to_string(),
-            tool_name: self.name().to_string(),
-            success: true,
-            output: Some(format!(
-                "Background shell started with ID: '{}' (PID: {:?})\n\
-                Command: {}\n\
-                Working directory: {}\n\n\
-                Use task_output(shell_id=\"{}\") to retrieve output.\n\
-                Use kill_shell(shell_id=\"{}\") to terminate.",
-                shell_id,
-                pid,
-                command,
-                self.working_directory.display(),
-                shell_id,
-                shell_id
-            )),
-            error: None,
-            exit_code: None,
-            execution_time_ms: Some(0),
-            metadata: std::collections::HashMap::new(),
-        })
+        let output = format!(
+            "Background shell started with ID: '{}' (PID: {:?})\n\
+            Command: {}\n\
+            Working directory: {}\n\n\
+            Use task_output(shell_id=\"{}\") to retrieve output.\n\
+            Use kill_shell(shell_id=\"{}\") to terminate.",
+            shell_id,
+            pid,
+            command,
+            self.working_directory.display(),
+            shell_id,
+            shell_id
+        );
+
+        Ok(ToolResult::success("", self.name(), output)
+            .with_metadata("shell_id", serde_json::Value::String(shell_id))
+            .with_metadata("pid", serde_json::json!(pid))
+            .with_execution_time(0))
     }
 
     /// Execute a command and return the result
+    #[instrument(skip(self), fields(command_preview = %command.chars().take(50).collect::<String>()))]
     async fn execute_command(&self, command: &str) -> Result<ToolResult, ToolError> {
         // Check if command is allowed
         if !self.is_command_allowed(command) {
@@ -162,23 +160,34 @@ impl BashTool {
             );
         }
 
-        Ok(ToolResult {
-            call_id: "".to_string(), // Will be set by executor
-            tool_name: self.name().to_string(),
-            success: output.status.success(),
-            output: Some(result_text),
-            error: if output.status.success() {
-                None
-            } else {
-                Some(format!(
-                    "Command failed with exit code: {:?}",
-                    output.status.code()
-                ))
-            },
-            exit_code: output.status.code(),
-            execution_time_ms: Some(execution_time),
-            metadata: std::collections::HashMap::new(),
-        })
+        // Build result using standardized format
+        let mut result = if output.status.success() {
+            ToolResult::success("", self.name(), result_text)
+        } else {
+            ToolResult::error(
+                "",
+                self.name(),
+                format!(
+                    "Command failed with exit code: {:?}\n\n{}",
+                    output.status.code(),
+                    result_text
+                ),
+            )
+        };
+
+        // Set additional fields
+        result.exit_code = output.status.code();
+        result.execution_time_ms = Some(execution_time);
+
+        // Add metadata
+        result = result
+            .with_metadata("command", serde_json::Value::String(command.to_string()))
+            .with_metadata(
+                "working_directory",
+                serde_json::Value::String(self.working_directory.display().to_string()),
+            );
+
+        Ok(result)
     }
 
     /// Validate command for security issues

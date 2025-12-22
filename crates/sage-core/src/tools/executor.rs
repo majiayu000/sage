@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::timeout;
+use tracing::instrument;
 
 /// Tool executor that manages and executes tools
 pub struct ToolExecutor {
@@ -77,6 +78,7 @@ impl ToolExecutor {
     }
 
     /// Execute a single tool call
+    #[instrument(skip(self), fields(tool_name = %call.name, call_id = %call.id))]
     pub async fn execute_tool(&self, call: &ToolCall) -> ToolResult {
         let tool = match self.tools.get(&call.name) {
             Some(tool) => tool,

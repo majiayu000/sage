@@ -5,6 +5,7 @@ use sage_core::tools::base::{FileSystemTool, Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
 use std::path::PathBuf;
 use tokio::fs;
+use tracing::instrument;
 
 /// Maximum line length before truncation
 const MAX_LINE_LENGTH: usize = 2000;
@@ -33,6 +34,7 @@ impl ReadTool {
     }
 
     /// Read file with line numbers
+    #[instrument(skip(self), fields(path = %file_path))]
     async fn read_file(
         &self,
         file_path: &str,

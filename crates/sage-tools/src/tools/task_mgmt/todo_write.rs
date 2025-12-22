@@ -8,7 +8,6 @@ use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolResult, ToolSchema};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 /// Todo item status
@@ -247,16 +246,16 @@ impl Tool for TodoWriteTool {
 
         response.push_str("\n\nEnsure that you continue to use the todo list to track your progress. Please proceed with the current tasks if applicable");
 
-        Ok(ToolResult {
-            call_id: call.id.clone(),
-            tool_name: self.name().to_string(),
-            success: true,
-            output: Some(response),
-            error: None,
-            exit_code: None,
-            execution_time_ms: None,
-            metadata: HashMap::new(),
-        })
+        // Build result using standardized format
+        let mut result = ToolResult::success(&call.id, self.name(), response);
+
+        // Add metadata about todo list state
+        result = result
+            .with_metadata("total_tasks", serde_json::json!(total))
+            .with_metadata("completed_tasks", serde_json::json!(completed))
+            .with_metadata("in_progress_tasks", serde_json::json!(in_progress));
+
+        Ok(result)
     }
 }
 

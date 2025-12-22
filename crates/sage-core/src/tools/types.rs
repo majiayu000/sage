@@ -64,6 +64,43 @@ impl ToolCall {
 }
 
 /// Result of a tool execution
+///
+/// This is the standardized response format for all tools in Sage Agent.
+/// Tools SHOULD use the helper methods `ToolResult::success()` and `ToolResult::error()`
+/// rather than manually constructing this struct.
+///
+/// # Standard Format
+///
+/// All tool responses follow this structure:
+/// - `success`: bool - Whether the tool execution succeeded
+/// - `output`: Option<String> - The primary output text (present on success)
+/// - `error`: Option<String> - Error message (present on failure)
+/// - `metadata`: HashMap<String, serde_json::Value> - Additional structured data
+/// - `exit_code`: Option<i32> - Exit code for command-line tools (0 = success)
+/// - `execution_time_ms`: Option<u64> - Execution duration in milliseconds
+///
+/// # Examples
+///
+/// ```rust
+/// use sage_core::tools::types::ToolResult;
+///
+/// // Success case
+/// let result = ToolResult::success("call-1", "ReadTool", "File contents here")
+///     .with_metadata("lines_read", 42.into())
+///     .with_execution_time(123);
+///
+/// // Error case
+/// let result = ToolResult::error("call-1", "ReadTool", "File not found");
+/// ```
+///
+/// # Best Practices
+///
+/// 1. Always use `ToolResult::success()` for successful operations
+/// 2. Always use `ToolResult::error()` for failed operations
+/// 3. Use `.with_metadata()` to add structured data (counts, timestamps, etc.)
+/// 4. Use `.with_execution_time()` to track performance
+/// 5. Keep `output` as human-readable text, use `metadata` for structured data
+/// 6. Set `call_id` from the incoming `ToolCall.id` after constructing the result
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolResult {
     /// Tool call ID this result corresponds to

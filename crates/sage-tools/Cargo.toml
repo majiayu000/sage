@@ -37,9 +37,6 @@ async-trait = { workspace = true }
 # JSON path
 jsonpath-rust = { workspace = true }
 
-# Process management
-tokio-process = { workspace = true }
-
 # Time handling
 chrono = { workspace = true }
 
@@ -56,9 +53,6 @@ toml = "0.8"
 # HTTP client
 reqwest = { workspace = true }
 base64 = "0.21"
-
-# CSV processing
-csv = "1.1"
 
 # Regular expressions
 regex = "1.5"

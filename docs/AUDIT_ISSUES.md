@@ -9,8 +9,8 @@
 | Severity | Count | Resolved |
 |----------|-------|----------|
 | Critical | 33 | 7 |
-| High | 90 | 6 |
-| Medium | 86 | 0 |
+| High | 90 | 7 |
+| Medium | 86 | 3 |
 | Low | 56 | 0 |
 
 ---
@@ -172,16 +172,30 @@
 - **Decision**: Acceptable for now. Duplication is in boilerplate/tests, not core logic. Doesn't impact functionality or maintainability significantly.
 
 ### HIGH-011: No Observability Instrumentation
-- **Status**: 🔴 Open
+- **Status**: 🟡 Partial
 - **Location**: Entire codebase
 - **Description**: Missing metrics and tracing spans
-- **Fix**: Add OpenTelemetry instrumentation
+- **Progress**:
+  - Added `#[instrument]` to UnifiedExecutor.execute() with task_id and task_description fields
+  - Added `#[instrument]` to MCP client methods (initialize, list_tools, call_tool)
+  - Added `#[instrument]` to BashTool.execute_command with command preview
+  - Added `#[instrument]` to ReadTool.read_file with path field
+  - Added `#[instrument]` to EditTool.execute with call_id field
+- **Remaining**: Add metrics collection, more span coverage in LLM providers
 
 ### HIGH-012: Trajectory Replay Not Implemented
-- **Status**: 🔴 Open
+- **Status**: 🟢 Resolved
 - **Location**: `sage-core/src/trajectory/`
 - **Description**: Recording works but replay is stub
-- **Fix**: Implement trajectory replay functionality
+- **Fix**: Implemented `TrajectoryReplayer` module with:
+  - `load_from_file()` to load trajectories from JSON files
+  - `load_by_id()` to load from storage backend
+  - `list_trajectories()` to scan directory for trajectory files
+  - `analyze_steps()` for step-by-step analysis
+  - `summarize()` for trajectory summary
+  - `calculate_token_usage()` for token usage statistics
+  - Fixed stub methods in `TrajectoryRecorder`: `load_trajectory()`, `list_trajectories()`, `delete_trajectory()`, `get_statistics()`
+  - Fixed `FileStorage.list()` to actually scan for trajectory files
 
 ---
 
@@ -217,10 +231,13 @@
 - **Fix**: Standardize tool response format
 
 ### MED-006: Missing Retry Logic for LLM
-- **Status**: 🔴 Open
+- **Status**: 🟢 Resolved
 - **Location**: `sage-core/src/llm/`
 - **Description**: No automatic retry on transient failures
-- **Fix**: Implement exponential backoff retry
+- **Fix**: Added exponential backoff with jitter to LLM client retry logic:
+  - Implemented `jittered_backoff()` function with configurable base delay
+  - Uses random jitter (0-50% of delay) to prevent thundering herd
+  - Applied to all retryable error scenarios
 
 ### MED-007: Large Trajectory Files
 - **Status**: 🔴 Open
@@ -229,10 +246,14 @@
 - **Fix**: Implement compression and rotation
 
 ### MED-008: No Graceful Shutdown
-- **Status**: 🔴 Open
+- **Status**: 🟢 Resolved
 - **Location**: `sage-core/src/agent/`
 - **Description**: Agent doesn't handle shutdown signals properly
-- **Fix**: Implement graceful shutdown with cleanup
+- **Fix**: Implemented graceful shutdown in `UnifiedExecutor`:
+  - Added `shutdown()` method to UnifiedExecutor
+  - Stops animations via AnimationManager.stop_animation()
+  - Finalizes trajectory recording if present
+  - Logs session cleanup with session ID
 
 ### MED-009: Missing Inline Documentation
 - **Status**: 🔴 Open
@@ -299,6 +320,10 @@
 | 2025-12-22 | CRIT-008 | Resolved | 2c0d1e0 |
 | 2025-12-22 | HIGH-009 | Acceptable | (analysis only) |
 | 2025-12-22 | HIGH-010 | Acceptable | (analysis only) |
+| 2025-12-22 | MED-006 | Resolved | (jitter in retry logic) |
+| 2025-12-22 | MED-008 | Resolved | (graceful shutdown) |
+| 2025-12-22 | HIGH-011 | Partial | (tracing instrumentation) |
+| 2025-12-22 | HIGH-012 | Resolved | (trajectory replayer) |
 
 ---
 

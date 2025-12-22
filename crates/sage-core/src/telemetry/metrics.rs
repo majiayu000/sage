@@ -4,7 +4,10 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
-use tokio::sync::RwLock;
+
+// Use parking_lot::RwLock for synchronous, non-blocking access
+// This avoids the need for block_on in sync trait methods
+use parking_lot::RwLock;
 
 /// Metric type
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -254,8 +257,11 @@ impl Histogram {
     }
 
     /// Observe a value
-    pub async fn observe(&self, value: f64) {
-        let mut data = self.data.write().await;
+    ///
+    /// This method is synchronous for compatibility with the Metric trait.
+    /// Uses parking_lot::RwLock for fast, non-blocking access.
+    pub fn observe(&self, value: f64) {
+        let mut data = self.data.write();
         data.count += 1;
         data.sum += value;
         data.min = data.min.min(value);
@@ -270,8 +276,8 @@ impl Histogram {
     }
 
     /// Observe a duration
-    pub async fn observe_duration(&self, duration: Duration) {
-        self.observe(duration.as_secs_f64()).await;
+    pub fn observe_duration(&self, duration: Duration) {
+        self.observe(duration.as_secs_f64());
     }
 
     /// Time an operation
@@ -283,8 +289,10 @@ impl Histogram {
     }
 
     /// Get histogram data
-    pub async fn get_data(&self) -> HistogramData {
-        let data = self.data.read().await;
+    ///
+    /// This method is synchronous for compatibility with the Metric trait.
+    pub fn get_data(&self) -> HistogramData {
+        let data = self.data.read();
         HistogramData {
             count: data.count,
             sum: data.sum,
@@ -310,19 +318,13 @@ impl Metric for Histogram {
     }
 
     fn value(&self) -> MetricValue {
-        // This is blocking - for async use get_data()
-        let data = futures::executor::block_on(self.data.read());
-        MetricValue::Histogram(HistogramData {
-            count: data.count,
-            sum: data.sum,
-            min: if data.count > 0 { data.min } else { 0.0 },
-            max: if data.count > 0 { data.max } else { 0.0 },
-            buckets: data.buckets.clone(),
-        })
+        // Uses parking_lot::RwLock for fast, non-blocking read access
+        MetricValue::Histogram(self.get_data())
     }
 
     fn reset(&self) {
-        let mut data = futures::executor::block_on(self.data.write());
+        // Uses parking_lot::RwLock for fast, non-blocking write access
+        let mut data = self.data.write();
         data.count = 0;
         data.sum = 0.0;
         data.min = f64::MAX;
@@ -341,9 +343,9 @@ pub struct HistogramTimer<'a> {
 
 impl<'a> HistogramTimer<'a> {
     /// Stop the timer and record the duration
-    pub async fn stop(self) {
+    pub fn stop(self) {
         let duration = self.start.elapsed();
-        self.histogram.observe_duration(duration).await;
+        self.histogram.observe_duration(duration);
     }
 
     /// Get elapsed time without stopping
@@ -353,6 +355,8 @@ impl<'a> HistogramTimer<'a> {
 }
 
 /// Labeled counter for tracking multiple series
+///
+/// Uses parking_lot::RwLock for synchronous, non-blocking access.
 #[derive(Debug)]
 pub struct LabeledCounter<const N: usize> {
     name: String,
@@ -377,14 +381,14 @@ impl<const N: usize> LabeledCounter<N> {
     }
 
     /// Increment counter for given labels
-    pub async fn inc(&self, labels: [impl Into<String>; N]) {
-        self.inc_by(labels, 1).await;
+    pub fn inc(&self, labels: [impl Into<String>; N]) {
+        self.inc_by(labels, 1);
     }
 
     /// Increment counter by amount for given labels
-    pub async fn inc_by(&self, labels: [impl Into<String>; N], n: u64) {
+    pub fn inc_by(&self, labels: [impl Into<String>; N], n: u64) {
         let labels: [String; N] = labels.map(|s| s.into());
-        let mut counters = self.counters.write().await;
+        let mut counters = self.counters.write();
 
         if let Some(counter) = counters.get(&labels) {
             counter.fetch_add(n, Ordering::Relaxed);
@@ -395,8 +399,8 @@ impl<const N: usize> LabeledCounter<N> {
     }
 
     /// Get counter value for labels
-    pub async fn get(&self, labels: &[String; N]) -> u64 {
-        let counters = self.counters.read().await;
+    pub fn get(&self, labels: &[String; N]) -> u64 {
+        let counters = self.counters.read();
         counters
             .get(labels)
             .map(|c| c.load(Ordering::Relaxed))
@@ -404,8 +408,8 @@ impl<const N: usize> LabeledCounter<N> {
     }
 
     /// Get all values
-    pub async fn get_all(&self) -> Vec<([String; N], u64)> {
-        let counters = self.counters.read().await;
+    pub fn get_all(&self) -> Vec<([String; N], u64)> {
+        let counters = self.counters.read();
         counters
             .iter()
             .map(|(labels, counter)| (labels.clone(), counter.load(Ordering::Relaxed)))
@@ -474,44 +478,44 @@ mod tests {
         assert!((gauge.get()).abs() < 0.001);
     }
 
-    #[tokio::test]
-    async fn test_histogram_basic() {
+    #[test]
+    fn test_histogram_basic() {
         let histogram = Histogram::new("request_duration", "Request duration in seconds");
 
-        histogram.observe(0.1).await;
-        histogram.observe(0.2).await;
-        histogram.observe(0.3).await;
+        histogram.observe(0.1);
+        histogram.observe(0.2);
+        histogram.observe(0.3);
 
-        let data = histogram.get_data().await;
+        let data = histogram.get_data();
         assert_eq!(data.count, 3);
         assert!((data.sum - 0.6).abs() < 0.001);
         assert!((data.min - 0.1).abs() < 0.001);
         assert!((data.max - 0.3).abs() < 0.001);
     }
 
-    #[tokio::test]
-    async fn test_histogram_buckets() {
+    #[test]
+    fn test_histogram_buckets() {
         let histogram = Histogram::with_buckets("test", "Test", vec![0.1, 0.5, 1.0]);
 
-        histogram.observe(0.05).await;
-        histogram.observe(0.3).await;
-        histogram.observe(0.8).await;
+        histogram.observe(0.05);
+        histogram.observe(0.3);
+        histogram.observe(0.8);
 
-        let data = histogram.get_data().await;
+        let data = histogram.get_data();
         assert_eq!(data.buckets[0], (0.1, 1)); // 0.05 <= 0.1
         assert_eq!(data.buckets[1], (0.5, 2)); // 0.05, 0.3 <= 0.5
         assert_eq!(data.buckets[2], (1.0, 3)); // all <= 1.0
     }
 
-    #[tokio::test]
-    async fn test_histogram_timer() {
+    #[test]
+    fn test_histogram_timer() {
         let histogram = Histogram::new("test", "Test");
         let timer = histogram.start_timer();
 
-        tokio::time::sleep(Duration::from_millis(10)).await;
-        timer.stop().await;
+        std::thread::sleep(Duration::from_millis(10));
+        timer.stop();
 
-        let data = histogram.get_data().await;
+        let data = histogram.get_data();
         assert_eq!(data.count, 1);
         assert!(data.sum >= 0.01); // At least 10ms
     }
@@ -528,36 +532,36 @@ mod tests {
         assert!((data.mean() - 2.5).abs() < 0.001);
     }
 
-    #[tokio::test]
-    async fn test_labeled_counter() {
+    #[test]
+    fn test_labeled_counter() {
         let counter: LabeledCounter<2> = LabeledCounter::new(
             "http_requests",
             "HTTP requests by method and status",
             ["method", "status"],
         );
 
-        counter.inc(["GET", "200"]).await;
-        counter.inc(["GET", "200"]).await;
-        counter.inc(["POST", "201"]).await;
+        counter.inc(["GET", "200"]);
+        counter.inc(["GET", "200"]);
+        counter.inc(["POST", "201"]);
 
         assert_eq!(
-            counter.get(&["GET".to_string(), "200".to_string()]).await,
+            counter.get(&["GET".to_string(), "200".to_string()]),
             2
         );
         assert_eq!(
-            counter.get(&["POST".to_string(), "201".to_string()]).await,
+            counter.get(&["POST".to_string(), "201".to_string()]),
             1
         );
     }
 
-    #[tokio::test]
-    async fn test_labeled_counter_get_all() {
+    #[test]
+    fn test_labeled_counter_get_all() {
         let counter: LabeledCounter<1> = LabeledCounter::new("test", "Test", ["label"]);
 
-        counter.inc(["a"]).await;
-        counter.inc_by(["b"], 5).await;
+        counter.inc(["a"]);
+        counter.inc_by(["b"], 5);
 
-        let all = counter.get_all().await;
+        let all = counter.get_all();
         assert_eq!(all.len(), 2);
     }
 

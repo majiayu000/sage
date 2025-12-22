@@ -108,68 +108,69 @@ impl TaskSupervisor {
         self.cancel_token.child_token()
     }
 
-    /// Run a task with supervision
+    /// Run a task with supervision (single attempt)
+    ///
+    /// This executes the task once and returns the supervision result.
+    /// Use `run()` to execute with automatic restart handling.
     pub async fn supervise<T, F, Fut>(&mut self, task_factory: F) -> SupervisionResult
     where
         F: Fn() -> Fut + Send + Sync,
         Fut: Future<Output = Result<T, SageError>> + Send,
         T: Send,
     {
-        loop {
-            if self.cancel_token.is_cancelled() {
+        if self.cancel_token.is_cancelled() {
+            return SupervisionResult::Stopped {
+                error: RecoverableError::permanent("Cancelled"),
+            };
+        }
+
+        let result = tokio::select! {
+            _ = self.cancel_token.cancelled() => {
                 return SupervisionResult::Stopped {
                     error: RecoverableError::permanent("Cancelled"),
                 };
             }
+            result = task_factory() => result
+        };
 
-            let result = tokio::select! {
-                _ = self.cancel_token.cancelled() => {
-                    return SupervisionResult::Stopped {
-                        error: RecoverableError::permanent("Cancelled"),
-                    };
+        match result {
+            Ok(_) => SupervisionResult::Completed,
+            Err(error) => {
+                let recoverable = super::to_recoverable(&error);
+
+                // Call error handler if set
+                if let Some(ref handler) = self.error_handler {
+                    handler(&recoverable);
                 }
-                result = task_factory() => result
-            };
 
-            match result {
-                Ok(_) => return SupervisionResult::Completed,
-                Err(error) => {
-                    let recoverable = super::to_recoverable(&error);
+                match self.handle_error(&recoverable) {
+                    SupervisionAction::Restart => {
+                        self.restart_count += 1;
+                        self.last_restart = Some(Instant::now());
 
-                    // Call error handler if set
-                    if let Some(ref handler) = self.error_handler {
-                        handler(&recoverable);
+                        tracing::warn!(
+                            task = %self.name,
+                            attempt = self.restart_count,
+                            error = %recoverable.message,
+                            "Restarting task after failure"
+                        );
+
+                        // Apply backoff delay
+                        let delay = self.calculate_restart_delay();
+                        tokio::time::sleep(delay).await;
+
+                        SupervisionResult::Restarted {
+                            attempt: self.restart_count,
+                        }
                     }
-
-                    match self.handle_error(&recoverable) {
-                        SupervisionAction::Restart => {
-                            self.restart_count += 1;
-                            self.last_restart = Some(Instant::now());
-
-                            tracing::warn!(
-                                task = %self.name,
-                                attempt = self.restart_count,
-                                error = %recoverable.message,
-                                "Restarting task after failure"
-                            );
-
-                            // Apply backoff delay
-                            let delay = self.calculate_restart_delay();
-                            tokio::time::sleep(delay).await;
-
-                            return SupervisionResult::Restarted {
-                                attempt: self.restart_count,
-                            };
-                        }
-                        SupervisionAction::Resume => {
-                            return SupervisionResult::Resumed { error: recoverable };
-                        }
-                        SupervisionAction::Stop => {
-                            return SupervisionResult::Stopped { error: recoverable };
-                        }
-                        SupervisionAction::Escalate => {
-                            return SupervisionResult::Escalated { error: recoverable };
-                        }
+                    SupervisionAction::Resume => {
+                        SupervisionResult::Resumed { error: recoverable }
+                    }
+                    SupervisionAction::Stop => {
+                        SupervisionResult::Stopped { error: recoverable }
+                    }
+                    SupervisionAction::Escalate => {
+                        SupervisionResult::Escalated { error: recoverable }
                     }
                 }
             }

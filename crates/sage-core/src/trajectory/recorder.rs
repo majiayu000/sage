@@ -341,21 +341,25 @@ impl TrajectoryRecorder {
     }
 
     /// Load a trajectory from storage
-    pub async fn load_trajectory(&self, _id: String) -> SageResult<Option<TrajectoryRecord>> {
-        // TODO: Fix after trajectory storage refactor
-        Ok(None)
+    pub async fn load_trajectory(&self, id: String) -> SageResult<Option<TrajectoryRecord>> {
+        let uuid = uuid::Uuid::parse_str(&id).map_err(|e| {
+            SageError::config(format!("Invalid trajectory ID '{}': {}", id, e))
+        })?;
+        self.storage.load(uuid).await
     }
 
     /// List all trajectories
     pub async fn list_trajectories(&self) -> SageResult<Vec<String>> {
-        // TODO: Fix after trajectory storage refactor
-        Ok(Vec::new())
+        let ids = self.storage.list().await?;
+        Ok(ids.iter().map(|id| id.to_string()).collect())
     }
 
     /// Delete a trajectory
-    pub async fn delete_trajectory(&self, _id: String) -> SageResult<()> {
-        // TODO: Fix after trajectory storage refactor
-        Ok(())
+    pub async fn delete_trajectory(&self, id: String) -> SageResult<()> {
+        let uuid = uuid::Uuid::parse_str(&id).map_err(|e| {
+            SageError::config(format!("Invalid trajectory ID '{}': {}", id, e))
+        })?;
+        self.storage.delete(uuid).await
     }
 
     /// Search trajectories by criteria
@@ -379,8 +383,34 @@ impl TrajectoryRecorder {
 
     /// Get trajectory statistics
     pub async fn get_statistics(&self) -> SageResult<TrajectoryStatistics> {
-        // TODO: Fix after trajectory storage refactor
-        Ok(TrajectoryStatistics::default())
+        let ids = self.storage.list().await?;
+        let mut stats = TrajectoryStatistics::default();
+
+        for id in ids {
+            if let Some(record) = self.storage.load(id).await? {
+                stats.total_trajectories += 1;
+                if record.success {
+                    stats.successful_trajectories += 1;
+                } else {
+                    stats.failed_trajectories += 1;
+                }
+                stats.total_steps += record.agent_steps.len();
+
+                // Sum token usage from LLM interactions
+                for interaction in &record.llm_interactions {
+                    if let Some(usage) = &interaction.response.usage {
+                        stats.total_tokens +=
+                            (usage.input_tokens + usage.output_tokens) as usize;
+                    }
+                }
+
+                // Add execution time
+                stats.total_execution_time = stats.total_execution_time
+                    + chrono::Duration::milliseconds((record.execution_time * 1000.0) as i64);
+            }
+        }
+
+        Ok(stats)
     }
 }
 

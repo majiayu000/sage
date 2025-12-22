@@ -1,5 +1,6 @@
 //! Provider-specific configuration
 
+use crate::llm::providers::TimeoutConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -20,7 +21,18 @@ pub struct ProviderConfig {
     pub project_id: Option<String>,
     /// Custom headers
     pub headers: HashMap<String, String>,
-    /// Request timeout in seconds
+    /// Timeout configuration
+    ///
+    /// Controls connection and request timeouts. If not specified, uses default values:
+    /// - Connection timeout: 30 seconds
+    /// - Request timeout: 60 seconds
+    #[serde(default)]
+    pub timeouts: TimeoutConfig,
+    /// Legacy timeout field (deprecated, use `timeouts` instead)
+    ///
+    /// For backward compatibility, this field is still supported.
+    /// If set, it will override the request timeout in `timeouts`.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub timeout: Option<u64>,
     /// Maximum number of retries
     pub max_retries: Option<u32>,
@@ -38,7 +50,8 @@ impl Default for ProviderConfig {
             organization: None,
             project_id: None,
             headers: HashMap::new(),
-            timeout: Some(60),
+            timeouts: TimeoutConfig::default(),
+            timeout: None,
             max_retries: Some(3),
             rate_limit: None,
         }
@@ -78,9 +91,18 @@ impl ProviderConfig {
         self
     }
 
-    /// Set timeout
+    /// Set timeout configuration
+    pub fn with_timeouts(mut self, timeouts: TimeoutConfig) -> Self {
+        self.timeouts = timeouts;
+        self
+    }
+
+    /// Set legacy timeout (deprecated, use `with_timeouts` instead)
+    ///
+    /// This sets only the request timeout for backward compatibility.
+    #[deprecated(since = "0.1.0", note = "Use with_timeouts instead")]
     pub fn with_timeout(mut self, timeout: u64) -> Self {
-        self.timeout = Some(timeout);
+        self.timeouts.request_timeout_secs = timeout;
         self
     }
 
@@ -131,6 +153,21 @@ impl ProviderConfig {
         matches!(self.name.as_str(), "openai" | "anthropic" | "google")
     }
 
+    /// Get the effective timeout configuration
+    ///
+    /// Handles backward compatibility with the legacy `timeout` field.
+    /// If the legacy `timeout` is set, it overrides the request timeout.
+    pub fn get_effective_timeouts(&self) -> TimeoutConfig {
+        let mut timeouts = self.timeouts;
+
+        // Apply legacy timeout if set (for backward compatibility)
+        if let Some(legacy_timeout) = self.timeout {
+            timeouts.request_timeout_secs = legacy_timeout;
+        }
+
+        timeouts
+    }
+
     /// Validate the provider configuration
     pub fn validate(&self) -> Result<(), String> {
         if self.name.is_empty() {
@@ -144,11 +181,9 @@ impl ProviderConfig {
             ));
         }
 
-        if let Some(timeout) = self.timeout {
-            if timeout == 0 {
-                return Err("Timeout must be greater than 0".to_string());
-            }
-        }
+        // Validate timeout configuration
+        let effective_timeouts = self.get_effective_timeouts();
+        effective_timeouts.validate()?;
 
         if let Some(max_retries) = self.max_retries {
             if max_retries > 10 {
@@ -189,7 +224,7 @@ impl ProviderDefaults {
     pub fn openai() -> ProviderConfig {
         ProviderConfig::new("openai")
             .with_base_url("https://api.openai.com/v1")
-            .with_timeout(60)
+            .with_timeouts(TimeoutConfig::default())
             .with_max_retries(3)
             .with_rate_limit(RateLimitConfig {
                 requests_per_minute: Some(60),
@@ -203,7 +238,7 @@ impl ProviderDefaults {
         ProviderConfig::new("anthropic")
             .with_base_url("https://api.anthropic.com")
             .with_api_version("2023-06-01")
-            .with_timeout(60)
+            .with_timeouts(TimeoutConfig::default())
             .with_max_retries(3)
             .with_rate_limit(RateLimitConfig {
                 requests_per_minute: Some(50),
@@ -216,7 +251,7 @@ impl ProviderDefaults {
     pub fn google() -> ProviderConfig {
         ProviderConfig::new("google")
             .with_base_url("https://generativelanguage.googleapis.com")
-            .with_timeout(60)
+            .with_timeouts(TimeoutConfig::default())
             .with_max_retries(3)
             .with_rate_limit(RateLimitConfig {
                 requests_per_minute: Some(60),
@@ -225,11 +260,16 @@ impl ProviderDefaults {
             })
     }
 
-    /// Get default configuration for Ollama
+    /// Get default configuration for Ollama (local models)
     pub fn ollama() -> ProviderConfig {
         ProviderConfig::new("ollama")
             .with_base_url("http://localhost:11434")
-            .with_timeout(120) // Longer timeout for local models
+            .with_timeouts(
+                // Longer timeouts for local models
+                TimeoutConfig::new()
+                    .with_connection_timeout_secs(10)
+                    .with_request_timeout_secs(120),
+            )
             .with_max_retries(1)
             .with_rate_limit(RateLimitConfig {
                 requests_per_minute: None, // No rate limiting for local
@@ -242,7 +282,49 @@ impl ProviderDefaults {
     pub fn glm() -> ProviderConfig {
         ProviderConfig::new("glm")
             .with_base_url("https://open.bigmodel.cn/api/paas/v4")
-            .with_timeout(60)
+            .with_timeouts(TimeoutConfig::default())
+            .with_max_retries(3)
+            .with_rate_limit(RateLimitConfig {
+                requests_per_minute: Some(60),
+                tokens_per_minute: Some(100_000),
+                max_concurrent_requests: Some(10),
+            })
+    }
+
+    /// Get default configuration for Azure OpenAI
+    pub fn azure() -> ProviderConfig {
+        ProviderConfig::new("azure")
+            .with_timeouts(TimeoutConfig::default())
+            .with_max_retries(3)
+            .with_rate_limit(RateLimitConfig {
+                requests_per_minute: Some(60),
+                tokens_per_minute: Some(100_000),
+                max_concurrent_requests: Some(10),
+            })
+    }
+
+    /// Get default configuration for OpenRouter
+    pub fn openrouter() -> ProviderConfig {
+        ProviderConfig::new("openrouter")
+            .with_base_url("https://openrouter.ai")
+            .with_timeouts(
+                // OpenRouter can be slower due to routing
+                TimeoutConfig::new()
+                    .with_connection_timeout_secs(30)
+                    .with_request_timeout_secs(90),
+            )
+            .with_max_retries(3)
+            .with_rate_limit(RateLimitConfig {
+                requests_per_minute: Some(60),
+                tokens_per_minute: Some(100_000),
+                max_concurrent_requests: Some(10),
+            })
+    }
+
+    /// Get default configuration for Doubao
+    pub fn doubao() -> ProviderConfig {
+        ProviderConfig::new("doubao")
+            .with_timeouts(TimeoutConfig::default())
             .with_max_retries(3)
             .with_rate_limit(RateLimitConfig {
                 requests_per_minute: Some(60),
@@ -257,6 +339,9 @@ impl ProviderDefaults {
             "openai" => Self::openai(),
             "anthropic" => Self::anthropic(),
             "google" => Self::google(),
+            "azure" => Self::azure(),
+            "openrouter" => Self::openrouter(),
+            "doubao" => Self::doubao(),
             "ollama" => Self::ollama(),
             "glm" | "zhipu" => Self::glm(),
             _ => ProviderConfig::new(name),

@@ -40,12 +40,14 @@ pulldown-cmark = "0.9"
 syntect = "5.0"
 textwrap = "0.16"
 
+# Random number generation (for retry jitter)
+rand = "0.8"
+
 # Utilities
 uuid = { workspace = true }
 chrono = { workspace = true }
 dirs = { workspace = true }
 shellexpand = { workspace = true }
-lru = "0.12"
 flate2 = "1.0"
 dashmap = "6.0"
 lazy_static = "1.4"
@@ -56,12 +58,8 @@ parking_lot = { workspace = true }
 # Async traits
 async-trait = { workspace = true }
 
-# JSON path
-jsonpath-rust = { workspace = true }
-
 # Configuration
 config = { workspace = true }
-dotenv = { workspace = true }
 
 # Sandbox
 regex = { workspace = true }

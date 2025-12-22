@@ -5,6 +5,7 @@ use sage_core::tools::base::{FileSystemTool, Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
 use std::path::PathBuf;
 use tokio::fs;
+use tracing::instrument;
 
 /// Edit tool for modifying files using string replacement
 /// Matches Claude Code's Edit tool design
@@ -73,6 +74,7 @@ Usage:
         )
     }
 
+    #[instrument(skip(self, call), fields(call_id = %call.id))]
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
         let file_path = call.get_string("file_path").ok_or_else(|| {
             ToolError::InvalidArguments("Missing 'file_path' parameter".to_string())

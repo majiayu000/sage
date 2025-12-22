@@ -25,7 +25,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 use tokio::sync::{Mutex, RwLock, mpsc, oneshot};
 use tokio::time::timeout;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, instrument, warn};
 
 /// Default request timeout in seconds
 const DEFAULT_REQUEST_TIMEOUT_SECS: u64 = 300; // 5 minutes
@@ -206,6 +206,7 @@ impl McpClient {
     }
 
     /// Initialize the MCP connection
+    #[instrument(skip(self), level = "debug")]
     pub async fn initialize(&self) -> Result<McpServerInfo, McpError> {
         if *self.initialized.read().await {
             return Err(McpError::AlreadyInitialized);
@@ -246,6 +247,7 @@ impl McpClient {
     }
 
     /// List available tools
+    #[instrument(skip(self), level = "debug")]
     pub async fn list_tools(&self) -> Result<Vec<McpTool>, McpError> {
         self.ensure_initialized().await?;
 
@@ -259,6 +261,7 @@ impl McpClient {
     }
 
     /// Call a tool with timeout
+    #[instrument(skip(self, arguments), fields(tool_name = %name))]
     pub async fn call_tool(&self, name: &str, arguments: Value) -> Result<McpToolResult, McpError> {
         self.ensure_initialized().await?;
 

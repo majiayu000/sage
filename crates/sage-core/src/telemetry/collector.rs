@@ -101,7 +101,7 @@ impl MetricsCollector {
         self.llm_requests.inc();
         self.llm_tokens_input.inc_by(input_tokens);
         self.llm_tokens_output.inc_by(output_tokens);
-        self.llm_latency.observe(latency_secs).await;
+        self.llm_latency.observe(latency_secs);
 
         if !success {
             self.llm_errors.inc();
@@ -111,7 +111,7 @@ impl MetricsCollector {
     /// Record a tool call
     pub async fn record_tool_call(&self, latency_secs: f64, success: bool) {
         self.tool_calls.inc();
-        self.tool_latency.observe(latency_secs).await;
+        self.tool_latency.observe(latency_secs);
 
         if success {
             self.tool_success.inc();
@@ -129,7 +129,7 @@ impl MetricsCollector {
     /// Record session end
     pub async fn record_session_end(&self, duration_secs: f64) {
         self.active_sessions.dec();
-        self.session_duration.observe(duration_secs).await;
+        self.session_duration.observe(duration_secs);
     }
 
     /// Record cache access
@@ -212,7 +212,7 @@ impl MetricsCollector {
     /// Observe a value in a custom histogram
     pub async fn observe_histogram(&self, name: &str, value: f64) {
         if let Some(histogram) = self.custom_histograms.read().await.get(name) {
-            histogram.observe(value).await;
+            histogram.observe(value);
         }
     }
 
@@ -226,19 +226,19 @@ impl MetricsCollector {
             llm_requests: self.llm_requests.get(),
             llm_tokens_input: self.llm_tokens_input.get(),
             llm_tokens_output: self.llm_tokens_output.get(),
-            llm_latency: self.llm_latency.get_data().await,
+            llm_latency: self.llm_latency.get_data(),
             llm_errors: self.llm_errors.get(),
 
             // Tool metrics
             tool_calls: self.tool_calls.get(),
             tool_success: self.tool_success.get(),
             tool_errors: self.tool_errors.get(),
-            tool_latency: self.tool_latency.get_data().await,
+            tool_latency: self.tool_latency.get_data(),
 
             // Session metrics
             active_sessions: self.active_sessions.get() as u64,
             total_sessions: self.total_sessions.get(),
-            session_duration: self.session_duration.get_data().await,
+            session_duration: self.session_duration.get_data(),
 
             // Cache metrics
             cache_hits: self.cache_hits.get(),
@@ -530,7 +530,7 @@ mod tests {
         collector.observe_histogram("custom_duration", 0.5).await;
 
         let histograms = collector.custom_histograms.read().await;
-        let data = histograms.get("custom_duration").unwrap().get_data().await;
+        let data = histograms.get("custom_duration").unwrap().get_data();
         assert_eq!(data.count, 1);
     }
 

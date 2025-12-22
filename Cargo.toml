@@ -59,9 +59,6 @@ async-trait = "0.1"
 # JSON path
 jsonpath-rust = "0.5"
 
-# Process management
-tokio-process = "0.2"
-
 # Signal handling
 signal-hook = "0.3"
 signal-hook-tokio = { version = "0.3", features = ["futures-v0_3"] }

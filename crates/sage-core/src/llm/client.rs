@@ -10,13 +10,15 @@ use crate::llm::rate_limiter::global as rate_limiter;
 use crate::llm::streaming::{LLMStream, StreamChunk, StreamingLLMClient};
 use crate::tools::types::ToolSchema;
 use crate::types::LLMUsage;
+use anyhow::Context;
 use async_trait::async_trait;
 use reqwest::Client;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio::time::sleep;
-use tracing::{debug, warn};
+use tracing::{debug, instrument, warn};
+use rand::Rng;
 
 /// LLM client for making requests to various providers
 pub struct LLMClient {
@@ -38,9 +40,13 @@ impl LLMClient {
             .validate()
             .map_err(|e| SageError::config(format!("Invalid provider config: {}", e)))?;
 
-        // Create HTTP client
-        let mut client_builder =
-            Client::builder().timeout(Duration::from_secs(config.timeout.unwrap_or(60)));
+        // Get effective timeout configuration (handles legacy timeout field)
+        let timeouts = config.get_effective_timeouts();
+
+        // Create HTTP client with comprehensive timeout configuration
+        let mut client_builder = Client::builder()
+            .connect_timeout(timeouts.connection_timeout())
+            .timeout(timeouts.request_timeout());
 
         // Add custom headers
         let mut headers = reqwest::header::HeaderMap::new();
@@ -60,6 +66,13 @@ impl LLMClient {
         let http_client = client_builder
             .build()
             .map_err(|e| SageError::llm(format!("Failed to create HTTP client: {}", e)))?;
+
+        debug!(
+            "Created LLM client for provider '{}' with timeouts: connection={}s, request={}s",
+            provider.name(),
+            timeouts.connection_timeout_secs,
+            timeouts.request_timeout_secs
+        );
 
         Ok(Self {
             provider,
@@ -106,16 +119,22 @@ impl LLMClient {
                     }
 
                     if attempt < max_retries {
-                        // Calculate exponential backoff delay: 2^attempt seconds
-                        let delay_secs = 2_u64.pow(attempt as u32);
-                        let delay = Duration::from_secs(delay_secs);
+                        // Calculate exponential backoff with jitter
+                        // Base delay: 2^attempt seconds, then add random jitter (0-50% of base)
+                        let base_delay_secs = 2_u64.pow(attempt as u32);
+                        let jitter_ms = {
+                            let mut rng = rand::thread_rng();
+                            rng.gen_range(0..=(base_delay_secs * 500)) // 0 to 50% jitter in ms
+                        };
+                        let delay = Duration::from_secs(base_delay_secs)
+                            + Duration::from_millis(jitter_ms);
 
                         warn!(
-                            "Request failed (attempt {}/{}): {}. Retrying in {} seconds...",
+                            "Request failed (attempt {}/{}): {}. Retrying in {:.2}s...",
                             attempt + 1,
                             max_retries + 1,
                             error,
-                            delay_secs
+                            delay.as_secs_f64()
                         );
 
                         sleep(delay).await;
@@ -155,6 +174,7 @@ impl LLMClient {
     }
 
     /// Send a chat completion request
+    #[instrument(skip(self, messages, tools), fields(provider = %self.provider, model = %self.model_params.model))]
     pub async fn chat(
         &self,
         messages: &[LLMMessage],
@@ -219,6 +239,7 @@ impl LLMClient {
     }
 
     /// OpenAI chat completion
+    #[instrument(skip(self, messages, tools), level = "debug")]
     async fn openai_chat(
         &self,
         messages: &[LLMMessage],
@@ -270,17 +291,20 @@ impl LLMClient {
         let response = request
             .send()
             .await
-            .map_err(|e| SageError::llm(format!("OpenAI request failed: {}", e)))?;
+            .map_err(|e| SageError::llm(format!("OpenAI request failed: {}", e)))
+            .context("Failed to send HTTP request to OpenAI API")?;
 
         if !response.status().is_success() {
+            let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
-            return Err(SageError::llm(format!("OpenAI API error: {}", error_text)));
+            return Err(SageError::llm(format!("OpenAI API error (status {}): {}", status, error_text)));
         }
 
         let response_json: Value = response
             .json()
             .await
-            .map_err(|e| SageError::llm(format!("Failed to parse OpenAI response: {}", e)))?;
+            .map_err(|e| SageError::llm(format!("Failed to parse OpenAI response: {}", e)))
+            .context("Failed to deserialize OpenAI API response as JSON")?;
 
         ResponseParser::parse_openai(response_json)
     }
@@ -366,20 +390,23 @@ impl LLMClient {
         let response = request
             .send()
             .await
-            .map_err(|e| SageError::llm(format!("Anthropic request failed: {}", e)))?;
+            .map_err(|e| SageError::llm(format!("Anthropic request failed: {}", e)))
+            .context("Failed to send HTTP request to Anthropic API")?;
 
         if !response.status().is_success() {
+            let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
             return Err(SageError::llm(format!(
-                "Anthropic API error: {}",
-                error_text
+                "Anthropic API error (status {}): {}",
+                status, error_text
             )));
         }
 
         let response_json: Value = response
             .json()
             .await
-            .map_err(|e| SageError::llm(format!("Failed to parse Anthropic response: {}", e)))?;
+            .map_err(|e| SageError::llm(format!("Failed to parse Anthropic response: {}", e)))
+            .context("Failed to deserialize Anthropic API response as JSON")?;
 
         ResponseParser::parse_anthropic(response_json)
     }
@@ -440,17 +467,20 @@ impl LLMClient {
         let response = request
             .send()
             .await
-            .map_err(|e| SageError::llm(format!("Azure API request failed: {}", e)))?;
+            .map_err(|e| SageError::llm(format!("Azure API request failed: {}", e)))
+            .context(format!("Failed to send HTTP request to Azure OpenAI deployment: {}", self.model_params.model))?;
 
         if !response.status().is_success() {
+            let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
-            return Err(SageError::llm(format!("Azure API error: {}", error_text)));
+            return Err(SageError::llm(format!("Azure API error (status {}): {}", status, error_text)));
         }
 
         let response_json: Value = response
             .json()
             .await
-            .map_err(|e| SageError::llm(format!("Failed to parse Azure response: {}", e)))?;
+            .map_err(|e| SageError::llm(format!("Failed to parse Azure response: {}", e)))
+            .context("Failed to deserialize Azure OpenAI API response as JSON")?;
 
         tracing::debug!(
             "Azure API response: {}",
@@ -523,20 +553,23 @@ impl LLMClient {
         let response = request
             .send()
             .await
-            .map_err(|e| SageError::llm(format!("OpenRouter API request failed: {}", e)))?;
+            .map_err(|e| SageError::llm(format!("OpenRouter API request failed: {}", e)))
+            .context(format!("Failed to send HTTP request to OpenRouter for model: {}", self.model_params.model))?;
 
         if !response.status().is_success() {
+            let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
             return Err(SageError::llm(format!(
-                "OpenRouter API error: {}",
-                error_text
+                "OpenRouter API error (status {}): {}",
+                status, error_text
             )));
         }
 
         let response_json: Value = response
             .json()
             .await
-            .map_err(|e| SageError::llm(format!("Failed to parse OpenRouter response: {}", e)))?;
+            .map_err(|e| SageError::llm(format!("Failed to parse OpenRouter response: {}", e)))
+            .context("Failed to deserialize OpenRouter API response as JSON")?;
 
         tracing::debug!(
             "OpenRouter API response: {}",
@@ -595,17 +628,20 @@ impl LLMClient {
         let response = request
             .send()
             .await
-            .map_err(|e| SageError::llm(format!("Doubao API request failed: {}", e)))?;
+            .map_err(|e| SageError::llm(format!("Doubao API request failed: {}", e)))
+            .context("Failed to send HTTP request to Doubao API")?;
 
         if !response.status().is_success() {
+            let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
-            return Err(SageError::llm(format!("Doubao API error: {}", error_text)));
+            return Err(SageError::llm(format!("Doubao API error (status {}): {}", status, error_text)));
         }
 
         let response_json: Value = response
             .json()
             .await
-            .map_err(|e| SageError::llm(format!("Failed to parse Doubao response: {}", e)))?;
+            .map_err(|e| SageError::llm(format!("Failed to parse Doubao response: {}", e)))
+            .context("Failed to deserialize Doubao API response as JSON")?;
 
         tracing::debug!(
             "Doubao API response: {}",
@@ -680,17 +716,20 @@ impl LLMClient {
             .json(&request_body)
             .send()
             .await
-            .map_err(|e| SageError::llm(format!("Google request failed: {}", e)))?;
+            .map_err(|e| SageError::llm(format!("Google request failed: {}", e)))
+            .context(format!("Failed to send HTTP request to Google Gemini API for model: {}", self.model_params.model))?;
 
         if !response.status().is_success() {
+            let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
-            return Err(SageError::llm(format!("Google API error: {}", error_text)));
+            return Err(SageError::llm(format!("Google API error (status {}): {}", status, error_text)));
         }
 
         let response_json: Value = response
             .json()
             .await
-            .map_err(|e| SageError::llm(format!("Failed to parse Google response: {}", e)))?;
+            .map_err(|e| SageError::llm(format!("Failed to parse Google response: {}", e)))
+            .context("Failed to deserialize Google Gemini API response as JSON")?;
 
         tracing::debug!(
             "Google API response: {}",
@@ -750,17 +789,20 @@ impl LLMClient {
         let response = request
             .send()
             .await
-            .map_err(|e| SageError::llm(format!("Ollama API request failed: {}", e)))?;
+            .map_err(|e| SageError::llm(format!("Ollama API request failed: {}", e)))
+            .context(format!("Failed to send HTTP request to Ollama for model: {}", self.model_params.model))?;
 
         if !response.status().is_success() {
+            let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
-            return Err(SageError::llm(format!("Ollama API error: {}", error_text)));
+            return Err(SageError::llm(format!("Ollama API error (status {}): {}", status, error_text)));
         }
 
         let response_json: Value = response
             .json()
             .await
-            .map_err(|e| SageError::llm(format!("Failed to parse Ollama response: {}", e)))?;
+            .map_err(|e| SageError::llm(format!("Failed to parse Ollama response: {}", e)))
+            .context("Failed to deserialize Ollama API response as JSON")?;
 
         tracing::debug!(
             "Ollama API response: {}",
@@ -842,17 +884,20 @@ impl LLMClient {
         let response = request
             .send()
             .await
-            .map_err(|e| SageError::llm(format!("GLM API request failed: {}", e)))?;
+            .map_err(|e| SageError::llm(format!("GLM API request failed: {}", e)))
+            .context(format!("Failed to send HTTP request to GLM (Zhipu AI) API for model: {}", self.model_params.model))?;
 
         if !response.status().is_success() {
+            let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
-            return Err(SageError::llm(format!("GLM API error: {}", error_text)));
+            return Err(SageError::llm(format!("GLM API error (status {}): {}", status, error_text)));
         }
 
         let response_json: Value = response
             .json()
             .await
-            .map_err(|e| SageError::llm(format!("Failed to parse GLM response: {}", e)))?;
+            .map_err(|e| SageError::llm(format!("Failed to parse GLM response: {}", e)))
+            .context("Failed to deserialize GLM (Zhipu AI) API response as JSON")?;
 
         tracing::debug!(
             "GLM API response: {}",

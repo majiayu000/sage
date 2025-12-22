@@ -60,7 +60,7 @@ pub use context::{
     MessagePruner, OverflowStrategy, PrepareResult, PruneResult, SharedStreamingMetrics,
     StreamingMetrics, StreamingStats, StreamingTokenCounter, TokenEstimator,
 };
-pub use error::{SageError, SageResult};
+pub use error::{OptionExt, ResultExt, SageError, SageResult};
 pub use events::{Event, EventBus, SharedEventBus};
 pub use hooks::{
     CallbackHook, CommandHook, HookConfig, HookEvent, HookExecutionResult, HookExecutor,

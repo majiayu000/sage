@@ -46,7 +46,6 @@ tracing-subscriber = { workspace = true }
 
 # Utilities
 dirs = { workspace = true }
-shellexpand = { workspace = true }
 chrono = { workspace = true }
 
 # Signal handling
