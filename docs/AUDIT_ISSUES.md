@@ -9,7 +9,7 @@
 | Severity | Count | Resolved |
 |----------|-------|----------|
 | Critical | 33 | 5 |
-| High | 90 | 3 |
+| High | 90 | 4 |
 | Medium | 86 | 0 |
 | Low | 56 | 0 |
 
@@ -123,10 +123,10 @@
 - **Decision**: Current state acceptable; no changes needed
 
 ### HIGH-008: Unsafe Blocks Without Justification
-- **Status**: 🔴 Open
-- **Location**: `sage-core/src/`
-- **Description**: 3 `unsafe` blocks without safety comments
-- **Fix**: Add safety documentation or remove unsafe code
+- **Status**: 🟢 Resolved
+- **Location**: `sage-core/src/plugins/registry.rs`, `sage-core/src/sandbox/executor.rs`
+- **Description**: 8 `unsafe` blocks without safety comments
+- **Fix**: Added comprehensive SAFETY comments explaining invariants for all unsafe blocks
 
 ### HIGH-009: Multiple Registry Implementations
 - **Status**: 🔴 Open
@@ -261,6 +261,7 @@
 | 2025-12-22 | HIGH-001 | Resolved | 4a3f740 |
 | 2025-12-22 | HIGH-002 | Resolved | 4a3f740 |
 | 2025-12-22 | CRIT-007 | Resolved | ef9c297 |
+| 2025-12-22 | HIGH-008 | Resolved | 6459fdb |
 
 ---
 
