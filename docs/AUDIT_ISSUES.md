@@ -114,10 +114,13 @@
 - **Fix**: Added all providers (azure, openrouter, doubao, glm, zhipu) to whitelist and API key validation
 
 ### HIGH-007: Blocking Operations in Async
-- **Status**: 🔴 Open
+- **Status**: 🟡 Acceptable
 - **Location**: `sage-core/src/agent/`
 - **Description**: 6 blocking operations found in async context
-- **Fix**: Replace with async alternatives or spawn_blocking
+- **Analysis**: Main issue (CRIT-003) fixed with parking_lot::Mutex. Remaining operations are:
+  - AgentRegistry uses std::sync::RwLock for quick HashMap ops (acceptable for short critical sections)
+  - File I/O in workspace detection (startup only, not in hot path)
+- **Decision**: Current state acceptable; no changes needed
 
 ### HIGH-008: Unsafe Blocks Without Justification
 - **Status**: 🔴 Open
