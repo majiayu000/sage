@@ -218,6 +218,11 @@ impl SandboxExecutor {
         let max_files = limits.max_open_files;
         let max_stack = limits.max_stack_bytes;
 
+        // SAFETY: pre_exec runs between fork() and exec() in the child process.
+        // The closure only calls async-signal-safe libc functions (setrlimit).
+        // All captured values (max_memory, max_cpu, max_files, max_stack) are
+        // Copy types moved into the closure, so no shared mutable state exists.
+        // The parent process is not affected by these limit changes.
         unsafe {
             cmd.pre_exec(move || {
                 // Set memory limit (RLIMIT_AS)

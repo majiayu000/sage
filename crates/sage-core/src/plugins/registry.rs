@@ -134,7 +134,11 @@ impl PluginRegistry {
         if let Some((_, entry)) = self.plugins.remove(name) {
             let mut entry = entry.write().await;
             if entry.lifecycle.state().is_operational() {
-                // Use raw pointer to avoid double borrow
+                // SAFETY: We hold exclusive write access to `entry` through the RwLock.
+                // The raw pointer is used to pass the plugin reference to lifecycle
+                // without triggering Rust's borrow checker on the simultaneous access
+                // to entry.lifecycle and entry.plugin. The pointer is valid for the
+                // duration of the shutdown call and is not retained afterward.
                 let plugin_ptr = &mut *entry.plugin as *mut dyn Plugin;
                 unsafe {
                     entry.lifecycle.shutdown(&mut *plugin_ptr).await?;
@@ -196,7 +200,11 @@ impl PluginRegistry {
 
         entry.context = Some(ctx.clone());
 
-        // Use raw pointer to avoid double borrow
+        // SAFETY: We hold exclusive write access to `entry` through the RwLock.
+        // The raw pointer is used to pass the plugin reference to lifecycle
+        // without triggering Rust's borrow checker on the simultaneous access
+        // to entry.lifecycle and entry.plugin. The pointer is valid for the
+        // duration of the initialize call and is not retained afterward.
         let plugin_ptr = &mut *entry.plugin as *mut dyn Plugin;
         unsafe { entry.lifecycle.initialize(&mut *plugin_ptr, &ctx).await }
     }
@@ -229,6 +237,7 @@ impl PluginRegistry {
             .ok_or_else(|| PluginError::NotFound(name.to_string()))?;
 
         let mut entry = entry.write().await;
+        // SAFETY: See safety comment in unregister() - same invariants apply.
         let plugin_ptr = &mut *entry.plugin as *mut dyn Plugin;
         unsafe { entry.lifecycle.shutdown(&mut *plugin_ptr).await }
     }
@@ -241,6 +250,7 @@ impl PluginRegistry {
         for entry_ref in self.plugins.iter() {
             let mut entry = entry_ref.write().await;
             if entry.lifecycle.state().can_shutdown() {
+                // SAFETY: See safety comment in unregister() - same invariants apply.
                 let plugin_ptr = &mut *entry.plugin as *mut dyn Plugin;
                 let result = unsafe { entry.lifecycle.shutdown(&mut *plugin_ptr).await };
                 results.push(result);
@@ -261,6 +271,7 @@ impl PluginRegistry {
 
         // Resume if suspended
         if entry.lifecycle.state() == PluginState::Suspended {
+            // SAFETY: See safety comment in unregister() - same invariants apply.
             let plugin_ptr = &mut *entry.plugin as *mut dyn Plugin;
             unsafe {
                 entry.lifecycle.resume(&mut *plugin_ptr).await?;
@@ -281,6 +292,7 @@ impl PluginRegistry {
 
         // Suspend if active
         if entry.lifecycle.state() == PluginState::Active {
+            // SAFETY: See safety comment in unregister() - same invariants apply.
             let plugin_ptr = &mut *entry.plugin as *mut dyn Plugin;
             unsafe {
                 entry.lifecycle.suspend(&mut *plugin_ptr).await?;
