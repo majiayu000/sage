@@ -271,21 +271,21 @@ pub async fn execute(args: InteractiveArgs) -> SageResult<()> {
 fn is_critical_error(error: &SageError) -> bool {
     match error {
         // Configuration errors are critical
-        SageError::Config(_) => true,
+        SageError::Config { .. } => true,
         // LLM client errors might be temporary, so not critical
-        SageError::Llm(_) => false,
+        SageError::Llm { .. } => false,
         // Tool errors are usually not critical
         SageError::Tool { .. } => false,
         // Agent errors might be critical
-        SageError::Agent(_) => false,
+        SageError::Agent { .. } => false,
         // IO errors might be critical depending on the context
-        SageError::Io(_) => false,
+        SageError::Io { .. } => false,
         // JSON errors are usually not critical
-        SageError::Json(_) => false,
+        SageError::Json { .. } => false,
         // HTTP errors are usually temporary
-        SageError::Http(_) => false,
+        SageError::Http { .. } => false,
         // Invalid input is not critical
-        SageError::InvalidInput(_) => false,
+        SageError::InvalidInput { .. } => false,
         // Timeout is not critical
         SageError::Timeout { .. } => false,
         // Cancelled is not critical
@@ -647,7 +647,7 @@ async fn execute_conversation_task(
                 "Conversation timed out after {:.2}s",
                 duration.as_secs_f64()
             ));
-            Err(SageError::Timeout { seconds: 300 })
+            Err(SageError::timeout(300))
         }
     }
 }
@@ -732,13 +732,13 @@ async fn execute_conversation_continuation(
                     "Conversation continuation timed out after {:.2}s",
                     duration.as_secs_f64()
                 ));
-                Err(SageError::Timeout { seconds: 300 })
+                Err(SageError::timeout(300))
             }
         }
     } else {
         console.error("No existing execution to continue");
-        Err(SageError::InvalidInput(
-            "No existing execution to continue".to_string(),
+        Err(SageError::invalid_input(
+            "No existing execution to continue",
         ))
     }
 }
@@ -884,7 +884,7 @@ async fn handle_resume_command(
                     return Ok(());
                 }
                 None => {
-                    return Err(SageError::NotFound(format!("Session '{}' not found", id)));
+                    return Err(SageError::not_found(format!("Session '{}' not found", id)));
                 }
             }
         }

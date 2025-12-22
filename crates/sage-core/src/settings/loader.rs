@@ -151,7 +151,7 @@ impl SettingsLoader {
     pub fn load_from_file(&self, path: impl AsRef<Path>) -> SageResult<Settings> {
         let path = path.as_ref();
         let content = std::fs::read_to_string(path).map_err(|e| {
-            SageError::Config(format!("Failed to read settings file {:?}: {}", path, e))
+            SageError::config(format!("Failed to read settings file {:?}: {}", path, e))
         })?;
 
         self.parse_settings(&content, path)
@@ -163,7 +163,7 @@ impl SettingsLoader {
         let stripped = Self::strip_json_comments(content);
 
         serde_json::from_str(&stripped).map_err(|e| {
-            SageError::Config(format!("Failed to parse settings file {:?}: {}", path, e))
+            SageError::config(format!("Failed to parse settings file {:?}: {}", path, e))
         })
     }
 
@@ -234,15 +234,15 @@ impl SettingsLoader {
         // Create parent directories if needed
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| {
-                SageError::Config(format!("Failed to create settings directory: {}", e))
+                SageError::config(format!("Failed to create settings directory: {}", e))
             })?;
         }
 
         let content = serde_json::to_string_pretty(settings)
-            .map_err(|e| SageError::Config(format!("Failed to serialize settings: {}", e)))?;
+            .map_err(|e| SageError::config(format!("Failed to serialize settings: {}", e)))?;
 
         std::fs::write(path, content).map_err(|e| {
-            SageError::Config(format!("Failed to write settings file {:?}: {}", path, e))
+            SageError::config(format!("Failed to write settings file {:?}: {}", path, e))
         })?;
 
         Ok(())

@@ -190,7 +190,7 @@ impl DiskStorage {
         // Create directory if it doesn't exist
         if !base_dir.exists() {
             std::fs::create_dir_all(&base_dir)
-                .map_err(|e| SageError::Io(format!("Failed to create cache directory: {}", e)))?;
+                .map_err(|e| SageError::io(format!("Failed to create cache directory: {}", e)))?;
         }
 
         Ok(Self {

@@ -121,10 +121,10 @@ impl FileCheckpointStorage {
         fs::create_dir_all(self.checkpoints_dir())
             .await
             .map_err(|e| {
-                SageError::Storage(format!("Failed to create checkpoints directory: {}", e))
+                SageError::storage(format!("Failed to create checkpoints directory: {}", e))
             })?;
         fs::create_dir_all(self.content_dir()).await.map_err(|e| {
-            SageError::Storage(format!("Failed to create content directory: {}", e))
+            SageError::storage(format!("Failed to create content directory: {}", e))
         })?;
         Ok(())
     }
@@ -325,17 +325,17 @@ impl CheckpointStorage for FileCheckpointStorage {
 
         // Serialize to JSON
         let json = serde_json::to_string_pretty(&processed)
-            .map_err(|e| SageError::Storage(format!("Failed to serialize checkpoint: {}", e)))?;
+            .map_err(|e| SageError::storage(format!("Failed to serialize checkpoint: {}", e)))?;
 
         // Write to file
         let path = self.checkpoint_path(&checkpoint.id);
         let mut file = fs::File::create(&path)
             .await
-            .map_err(|e| SageError::Storage(format!("Failed to create checkpoint file: {}", e)))?;
+            .map_err(|e| SageError::storage(format!("Failed to create checkpoint file: {}", e)))?;
 
         file.write_all(json.as_bytes())
             .await
-            .map_err(|e| SageError::Storage(format!("Failed to write checkpoint file: {}", e)))?;
+            .map_err(|e| SageError::storage(format!("Failed to write checkpoint file: {}", e)))?;
 
         tracing::debug!("Saved checkpoint {} to {:?}", checkpoint.id, path);
         Ok(())
@@ -350,15 +350,15 @@ impl CheckpointStorage for FileCheckpointStorage {
 
         let mut file = fs::File::open(&path)
             .await
-            .map_err(|e| SageError::Storage(format!("Failed to open checkpoint file: {}", e)))?;
+            .map_err(|e| SageError::storage(format!("Failed to open checkpoint file: {}", e)))?;
 
         let mut content = String::new();
         file.read_to_string(&mut content)
             .await
-            .map_err(|e| SageError::Storage(format!("Failed to read checkpoint file: {}", e)))?;
+            .map_err(|e| SageError::storage(format!("Failed to read checkpoint file: {}", e)))?;
 
         let checkpoint: Checkpoint = serde_json::from_str(&content)
-            .map_err(|e| SageError::Storage(format!("Failed to deserialize checkpoint: {}", e)))?;
+            .map_err(|e| SageError::storage(format!("Failed to deserialize checkpoint: {}", e)))?;
 
         // Restore externalized content
         let restored = self.restore_content(&checkpoint).await?;
@@ -375,13 +375,13 @@ impl CheckpointStorage for FileCheckpointStorage {
 
         let mut summaries = Vec::new();
         let mut entries = fs::read_dir(&checkpoints_dir).await.map_err(|e| {
-            SageError::Storage(format!("Failed to read checkpoints directory: {}", e))
+            SageError::storage(format!("Failed to read checkpoints directory: {}", e))
         })?;
 
         while let Some(entry) = entries
             .next_entry()
             .await
-            .map_err(|e| SageError::Storage(format!("Failed to read directory entry: {}", e)))?
+            .map_err(|e| SageError::storage(format!("Failed to read directory entry: {}", e)))?
         {
             let path = entry.path();
             if path.extension().map_or(false, |ext| ext == "json") {
@@ -405,7 +405,7 @@ impl CheckpointStorage for FileCheckpointStorage {
 
         if path.exists() {
             fs::remove_file(&path).await.map_err(|e| {
-                SageError::Storage(format!("Failed to delete checkpoint file: {}", e))
+                SageError::storage(format!("Failed to delete checkpoint file: {}", e))
             })?;
             tracing::debug!("Deleted checkpoint {}", id);
         }
@@ -445,18 +445,18 @@ impl CheckpointStorage for FileCheckpointStorage {
         let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
         encoder
             .write_all(content.as_bytes())
-            .map_err(|e| SageError::Storage(format!("Failed to compress content: {}", e)))?;
+            .map_err(|e| SageError::storage(format!("Failed to compress content: {}", e)))?;
         let compressed = encoder
             .finish()
-            .map_err(|e| SageError::Storage(format!("Failed to finish compression: {}", e)))?;
+            .map_err(|e| SageError::storage(format!("Failed to finish compression: {}", e)))?;
 
         // Write compressed content
         let mut file = fs::File::create(&path)
             .await
-            .map_err(|e| SageError::Storage(format!("Failed to create content file: {}", e)))?;
+            .map_err(|e| SageError::storage(format!("Failed to create content file: {}", e)))?;
         file.write_all(&compressed)
             .await
-            .map_err(|e| SageError::Storage(format!("Failed to write content file: {}", e)))?;
+            .map_err(|e| SageError::storage(format!("Failed to write content file: {}", e)))?;
 
         tracing::debug!(
             "Stored content {} ({} -> {} bytes)",
@@ -477,12 +477,12 @@ impl CheckpointStorage for FileCheckpointStorage {
         // Read compressed content
         let mut file = fs::File::open(&path)
             .await
-            .map_err(|e| SageError::Storage(format!("Failed to open content file: {}", e)))?;
+            .map_err(|e| SageError::storage(format!("Failed to open content file: {}", e)))?;
 
         let mut compressed = Vec::new();
         file.read_to_end(&mut compressed)
             .await
-            .map_err(|e| SageError::Storage(format!("Failed to read content file: {}", e)))?;
+            .map_err(|e| SageError::storage(format!("Failed to read content file: {}", e)))?;
 
         // Decompress
         use flate2::read::GzDecoder;
@@ -492,7 +492,7 @@ impl CheckpointStorage for FileCheckpointStorage {
         let mut decompressed = String::new();
         decoder
             .read_to_string(&mut decompressed)
-            .map_err(|e| SageError::Storage(format!("Failed to decompress content: {}", e)))?;
+            .map_err(|e| SageError::storage(format!("Failed to decompress content: {}", e)))?;
 
         Ok(Some(decompressed))
     }

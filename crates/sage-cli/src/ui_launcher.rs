@@ -37,22 +37,22 @@ pub async fn launch_modern_ui(
 fn get_ui_directory() -> SageResult<std::path::PathBuf> {
     // Get the current executable path
     let exe_path = std::env::current_exe()
-        .map_err(|e| SageError::Other(format!("Failed to get executable path: {}", e)))?;
+        .map_err(|e| SageError::other(format!("Failed to get executable path: {}", e)))?;
 
     // Navigate to the UI directory relative to the executable
     let ui_dir = exe_path
         .parent()
-        .ok_or_else(|| SageError::Other("Failed to get parent directory".to_string()))?
+        .ok_or_else(|| SageError::other("Failed to get parent directory".to_string()))?
         .parent()
-        .ok_or_else(|| SageError::Other("Failed to get grandparent directory".to_string()))?
+        .ok_or_else(|| SageError::other("Failed to get grandparent directory".to_string()))?
         .parent()
-        .ok_or_else(|| SageError::Other("Failed to get great-grandparent directory".to_string()))?
+        .ok_or_else(|| SageError::other("Failed to get great-grandparent directory".to_string()))?
         .join("crates")
         .join("sage-cli")
         .join("ui");
 
     if !ui_dir.exists() {
-        return Err(SageError::Other(format!(
+        return Err(SageError::other(format!(
             "UI directory not found: {}. Please ensure the UI components are properly installed.",
             ui_dir.display()
         )));
@@ -67,15 +67,15 @@ fn check_nodejs_available() -> SageResult<()> {
         .arg("--version")
         .output()
         .map_err(|e| {
-            SageError::Other(format!(
+            SageError::other(format!(
                 "Node.js not found. Please install Node.js 20+ to use the modern UI: {}",
                 e
             ))
         })?;
 
     if !output.status.success() {
-        return Err(SageError::Other(
-            "Node.js is not working properly".to_string(),
+        return Err(SageError::other(
+            "Node.js is not working properly",
         ));
     }
 
@@ -96,11 +96,11 @@ async fn ensure_ui_dependencies(ui_dir: &Path) -> SageResult<()> {
             .arg("install")
             .current_dir(ui_dir)
             .output()
-            .map_err(|e| SageError::Other(format!("Failed to run npm install: {}", e)))?;
+            .map_err(|e| SageError::other(format!("Failed to run npm install: {}", e)))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(SageError::Other(format!("npm install failed: {}", stderr)));
+            return Err(SageError::other(format!("npm install failed: {}", stderr)));
         }
 
         println!("UI dependencies installed successfully.");
@@ -143,11 +143,11 @@ async fn build_ui_if_needed(ui_dir: &Path) -> SageResult<()> {
             .arg("build")
             .current_dir(ui_dir)
             .output()
-            .map_err(|e| SageError::Other(format!("Failed to run npm run build: {}", e)))?;
+            .map_err(|e| SageError::other(format!("Failed to run npm run build: {}", e)))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(SageError::Other(format!("UI build failed: {}", stderr)));
+            return Err(SageError::other(format!("UI build failed: {}", stderr)));
         }
 
         println!("UI built successfully.");
@@ -182,10 +182,10 @@ async fn launch_ui_process(
 
     let status = cmd
         .status()
-        .map_err(|e| SageError::Other(format!("Failed to launch UI process: {}", e)))?;
+        .map_err(|e| SageError::other(format!("Failed to launch UI process: {}", e)))?;
 
     if !status.success() {
-        return Err(SageError::Other("UI process exited with error".to_string()));
+        return Err(SageError::other("UI process exited with error".to_string()));
     }
 
     Ok(())

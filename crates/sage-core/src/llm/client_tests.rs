@@ -5,7 +5,7 @@ mod tests {
     use crate::config::provider::ProviderConfig;
     use crate::error::SageError;
     use crate::llm::client::LLMClient;
-    use crate::llm::providers::{LLMProvider, ModelParameters};
+    use crate::llm::provider_types::{LLMProvider, ModelParameters};
 
     #[test]
     fn test_llm_client_creation() {
@@ -111,7 +111,7 @@ mod tests {
         let model_params = ModelParameters::default();
         let client = LLMClient::new(LLMProvider::OpenAI, config, model_params).unwrap();
 
-        let error = SageError::Http("Network error".to_string());
+        let error = SageError::http("Network error".to_string());
         assert!(client.is_retryable_error(&error));
     }
 
@@ -161,6 +161,9 @@ mod tests {
             top_k: Some(40),
             stop: Some(vec!["END".to_string()]),
             parallel_tool_calls: Some(true),
+            frequency_penalty: None,
+            presence_penalty: None,
+            seed: None,
             enable_prompt_caching: None,
         };
 

@@ -349,7 +349,7 @@ mod tests {
                 async move {
                     let count = attempts.fetch_add(1, Ordering::SeqCst);
                     if count < 2 {
-                        Err(SageError::Http("timeout".into()))
+                        Err(SageError::http("timeout"))
                     } else {
                         Ok(42)
                     }
@@ -374,7 +374,7 @@ mod tests {
                 let attempts = attempts_clone.clone();
                 async move {
                     attempts.fetch_add(1, Ordering::SeqCst);
-                    Err(SageError::Http("timeout".into()))
+                    Err(SageError::http("timeout"))
                 }
             },
             None,
@@ -396,7 +396,7 @@ mod tests {
                 let attempts = attempts_clone.clone();
                 async move {
                     attempts.fetch_add(1, Ordering::SeqCst);
-                    Err(SageError::Config("invalid config".into()))
+                    Err(SageError::config("invalid config"))
                 }
             },
             None,
@@ -418,7 +418,7 @@ mod tests {
 
         let result: RetryResult<i32> = retry(
             5,
-            || async { Err(SageError::Http("timeout".into())) },
+            || async { Err(SageError::http("timeout")) },
             Some(token_clone),
         )
         .await;
@@ -431,14 +431,14 @@ mod tests {
         let policy = RetryPolicy::new();
 
         // Transient errors should retry
-        assert!(policy.should_retry(&SageError::Http("timeout".into()), 0));
-        assert!(policy.should_retry(&SageError::Llm("rate limit".into()), 0));
+        assert!(policy.should_retry(&SageError::http("timeout"), 0));
+        assert!(policy.should_retry(&SageError::llm("rate limit"), 0));
 
         // Permanent errors should not retry
-        assert!(!policy.should_retry(&SageError::Config("invalid".into()), 0));
-        assert!(!policy.should_retry(&SageError::Http("401 unauthorized".into()), 0));
+        assert!(!policy.should_retry(&SageError::config("invalid"), 0));
+        assert!(!policy.should_retry(&SageError::http("401 unauthorized"), 0));
 
         // Max attempts check
-        assert!(!policy.should_retry(&SageError::Http("timeout".into()), 10));
+        assert!(!policy.should_retry(&SageError::http("timeout"), 10));
     }
 }

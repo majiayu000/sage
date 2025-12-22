@@ -12,7 +12,7 @@ use crate::config::provider::ProviderConfig;
 use crate::error::{SageError, SageResult};
 use crate::events::EventBus;
 use crate::llm::client::LLMClient;
-use crate::llm::providers::LLMProvider;
+use crate::llm::provider_types::LLMProvider;
 use crate::mcp::McpRegistry;
 use crate::mcp::transport::TransportConfig;
 use crate::tools::base::Tool;

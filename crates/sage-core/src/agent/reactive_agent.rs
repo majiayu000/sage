@@ -7,7 +7,7 @@ use crate::config::model::Config;
 use crate::error::{SageError, SageResult};
 use crate::llm::client::LLMClient;
 use crate::llm::messages::LLMMessage;
-use crate::llm::providers::LLMProvider;
+use crate::llm::provider_types::LLMProvider;
 use crate::prompts::SystemPromptBuilder;
 use crate::tools::batch_executor::BatchToolExecutor;
 use crate::tools::types::{ToolCall, ToolResult};

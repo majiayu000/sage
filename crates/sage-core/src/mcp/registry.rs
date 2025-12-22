@@ -60,8 +60,8 @@ impl McpRegistry {
                 Box::new(transport)
             }
             TransportConfig::WebSocket { .. } => {
-                return Err(McpError::Transport(
-                    "WebSocket transport not yet implemented".into(),
+                return Err(McpError::transport(
+                    "WebSocket transport not yet implemented",
                 ));
             }
         };
@@ -175,13 +175,13 @@ impl McpRegistry {
             .tool_mapping
             .get(name)
             .map(|e| e.value().clone())
-            .ok_or_else(|| McpError::ToolNotFound(name.to_string()))?;
+            .ok_or_else(|| McpError::tool_not_found(name.to_string()))?;
 
         let client = self
             .clients
             .get(&server_name)
             .map(|e| e.clone())
-            .ok_or_else(|| McpError::Connection(format!("Server {} not found", server_name)))?;
+            .ok_or_else(|| McpError::connection(format!("Server {} not found", server_name)))?;
 
         let result = client.call_tool(name, arguments).await?;
 
@@ -197,10 +197,7 @@ impl McpRegistry {
             .join("\n");
 
         if result.is_error {
-            Err(McpError::Server {
-                code: -1,
-                message: text,
-            })
+            Err(McpError::server(-1, text))
         } else {
             Ok(text)
         }
@@ -212,19 +209,19 @@ impl McpRegistry {
             .resource_mapping
             .get(uri)
             .map(|e| e.value().clone())
-            .ok_or_else(|| McpError::ResourceNotFound(uri.to_string()))?;
+            .ok_or_else(|| McpError::resource_not_found(uri.to_string()))?;
 
         let client = self
             .clients
             .get(&server_name)
             .map(|e| e.clone())
-            .ok_or_else(|| McpError::Connection(format!("Server {} not found", server_name)))?;
+            .ok_or_else(|| McpError::connection(format!("Server {} not found", server_name)))?;
 
         let content = client.read_resource(uri).await?;
 
         content
             .text
-            .ok_or_else(|| McpError::ResourceNotFound(uri.to_string()))
+            .ok_or_else(|| McpError::resource_not_found(uri.to_string()))
     }
 
     /// Convert MCP tools to Sage tools

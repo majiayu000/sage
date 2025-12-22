@@ -304,7 +304,7 @@ impl McpClient {
         contents
             .into_iter()
             .next()
-            .ok_or_else(|| McpError::ResourceNotFound(uri.to_string()))
+            .ok_or_else(|| McpError::resource_not_found(uri.to_string()))
     }
 
     /// List available prompts
@@ -385,7 +385,7 @@ impl McpClient {
                 sender: response_sender,
             })
             .await
-            .map_err(|_| McpError::Connection("Failed to register request".into()))?;
+            .map_err(|_| McpError::connection("Failed to register request"))?;
 
         // Send request
         {
@@ -396,16 +396,13 @@ impl McpClient {
         // Wait for response with timeout
         let response = timeout(self.request_timeout, response_receiver)
             .await
-            .map_err(|_| McpError::Timeout(self.request_timeout.as_secs()))?
-            .map_err(|_| McpError::Connection("Response channel closed".into()))?;
+            .map_err(|_| McpError::timeout(self.request_timeout.as_secs()))?
+            .map_err(|_| McpError::connection("Response channel closed"))?;
 
         // Handle response
         match response.into_result() {
             Ok(value) => serde_json::from_value(value).map_err(McpError::from),
-            Err(e) => Err(McpError::Server {
-                code: e.code,
-                message: e.message,
-            }),
+            Err(e) => Err(McpError::server(e.code, e.message)),
         }
     }
 

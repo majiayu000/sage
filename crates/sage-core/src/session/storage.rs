@@ -50,7 +50,7 @@ impl FileSessionStorage {
     /// Create storage with default path (~/.config/sage/sessions)
     pub fn default_path() -> SageResult<Self> {
         let home = dirs::home_dir()
-            .ok_or_else(|| SageError::Config("Could not determine home directory".to_string()))?;
+            .ok_or_else(|| SageError::config("Could not determine home directory".to_string()))?;
         let base_path = home.join(".config").join("sage").join("sessions");
         Ok(Self::new(base_path))
     }
@@ -65,7 +65,7 @@ impl FileSessionStorage {
         if !self.base_path.exists() {
             fs::create_dir_all(&self.base_path)
                 .await
-                .map_err(|e| SageError::Io(format!("Failed to create session directory: {}", e)))?;
+                .map_err(|e| SageError::io(format!("Failed to create session directory: {}", e)))?;
         }
         Ok(())
     }
@@ -78,11 +78,11 @@ impl SessionStorage for FileSessionStorage {
 
         let path = self.session_path(&session.id);
         let json = serde_json::to_string_pretty(session)
-            .map_err(|e| SageError::Json(format!("Failed to serialize session: {}", e)))?;
+            .map_err(|e| SageError::json(format!("Failed to serialize session: {}", e)))?;
 
         fs::write(&path, json)
             .await
-            .map_err(|e| SageError::Io(format!("Failed to write session file: {}", e)))?;
+            .map_err(|e| SageError::io(format!("Failed to write session file: {}", e)))?;
 
         debug!("Saved session {} to {:?}", session.id, path);
         Ok(())
@@ -97,10 +97,10 @@ impl SessionStorage for FileSessionStorage {
 
         let json = fs::read_to_string(&path)
             .await
-            .map_err(|e| SageError::Io(format!("Failed to read session file: {}", e)))?;
+            .map_err(|e| SageError::io(format!("Failed to read session file: {}", e)))?;
 
         let session: Session = serde_json::from_str(&json)
-            .map_err(|e| SageError::Json(format!("Failed to deserialize session: {}", e)))?;
+            .map_err(|e| SageError::json(format!("Failed to deserialize session: {}", e)))?;
 
         debug!("Loaded session {} from {:?}", id, path);
         Ok(Some(session))
@@ -112,7 +112,7 @@ impl SessionStorage for FileSessionStorage {
         if path.exists() {
             fs::remove_file(&path)
                 .await
-                .map_err(|e| SageError::Io(format!("Failed to delete session file: {}", e)))?;
+                .map_err(|e| SageError::io(format!("Failed to delete session file: {}", e)))?;
             info!("Deleted session {} from {:?}", id, path);
         } else {
             warn!("Session {} not found at {:?}", id, path);
@@ -127,12 +127,12 @@ impl SessionStorage for FileSessionStorage {
         let mut summaries = Vec::new();
         let mut entries = fs::read_dir(&self.base_path)
             .await
-            .map_err(|e| SageError::Io(format!("Failed to read session directory: {}", e)))?;
+            .map_err(|e| SageError::io(format!("Failed to read session directory: {}", e)))?;
 
         while let Some(entry) = entries
             .next_entry()
             .await
-            .map_err(|e| SageError::Io(format!("Failed to read directory entry: {}", e)))?
+            .map_err(|e| SageError::io(format!("Failed to read directory entry: {}", e)))?
         {
             let path = entry.path();
             if path.extension().map_or(false, |ext| ext == "json") {

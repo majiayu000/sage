@@ -51,7 +51,7 @@ impl CommandExecutor {
             }
             None => {
                 // Unknown command - return helpful error
-                Err(SageError::NotFound(format!(
+                Err(SageError::not_found(format!(
                     "Unknown command: /{}. Use /commands to see available commands.",
                     invocation.command_name
                 )))
@@ -68,7 +68,7 @@ impl CommandExecutor {
         // Check minimum arguments
         let min_args = command.min_args();
         if invocation.arguments.len() < min_args {
-            return Err(SageError::InvalidInput(format!(
+            return Err(SageError::invalid_input(format!(
                 "Command /{} requires at least {} argument(s), got {}",
                 command.name,
                 min_args,

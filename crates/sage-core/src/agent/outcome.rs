@@ -276,7 +276,7 @@ impl ExecutionError {
     /// Classify error and provide suggestions
     fn classify_error(error: &SageError) -> (ExecutionErrorKind, Option<String>) {
         match error {
-            SageError::Llm(msg) => {
+            SageError::Llm { message: msg, .. } => {
                 let msg_lower = msg.to_lowercase();
 
                 if msg_lower.contains("authentication")
@@ -328,18 +328,18 @@ impl ExecutionError {
                     tool_name
                 )),
             ),
-            SageError::Config(_) => (
+            SageError::Config { .. } => (
                 ExecutionErrorKind::Configuration,
                 Some("Check your sage_config.json configuration".into()),
             ),
-            SageError::Timeout { seconds } => (
+            SageError::Timeout { seconds, .. } => (
                 ExecutionErrorKind::Timeout,
                 Some(format!(
                     "Task timed out after {} seconds. Try a simpler task or increase timeout",
                     seconds
                 )),
             ),
-            SageError::Http(_) => (
+            SageError::Http { .. } => (
                 ExecutionErrorKind::Network,
                 Some("Check your network connection and try again".into()),
             ),

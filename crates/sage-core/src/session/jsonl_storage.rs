@@ -153,7 +153,7 @@ impl JsonlSessionStorage {
     /// Create storage with default path (~/.sage/sessions)
     pub fn default_path() -> SageResult<Self> {
         let home = dirs::home_dir()
-            .ok_or_else(|| SageError::Config("Could not determine home directory".to_string()))?;
+            .ok_or_else(|| SageError::config("Could not determine home directory".to_string()))?;
         let base_path = home.join(".sage").join("sessions");
         Ok(Self::new(base_path))
     }
@@ -184,7 +184,7 @@ impl JsonlSessionStorage {
         if !dir.exists() {
             fs::create_dir_all(&dir)
                 .await
-                .map_err(|e| SageError::Io(format!("Failed to create session directory: {}", e)))?;
+                .map_err(|e| SageError::io(format!("Failed to create session directory: {}", e)))?;
         }
         Ok(())
     }
@@ -222,11 +222,11 @@ impl JsonlSessionStorage {
     ) -> SageResult<()> {
         let path = self.metadata_path(id);
         let json = serde_json::to_string_pretty(metadata)
-            .map_err(|e| SageError::Json(format!("Failed to serialize metadata: {}", e)))?;
+            .map_err(|e| SageError::json(format!("Failed to serialize metadata: {}", e)))?;
 
         fs::write(&path, json)
             .await
-            .map_err(|e| SageError::Io(format!("Failed to write metadata file: {}", e)))?;
+            .map_err(|e| SageError::io(format!("Failed to write metadata file: {}", e)))?;
 
         debug!("Saved metadata for session {}", id);
         Ok(())
@@ -242,10 +242,10 @@ impl JsonlSessionStorage {
 
         let json = fs::read_to_string(&path)
             .await
-            .map_err(|e| SageError::Io(format!("Failed to read metadata file: {}", e)))?;
+            .map_err(|e| SageError::io(format!("Failed to read metadata file: {}", e)))?;
 
         let metadata: SessionMetadata = serde_json::from_str(&json)
-            .map_err(|e| SageError::Json(format!("Failed to deserialize metadata: {}", e)))?;
+            .map_err(|e| SageError::json(format!("Failed to deserialize metadata: {}", e)))?;
 
         Ok(Some(metadata))
     }
@@ -264,17 +264,17 @@ impl JsonlSessionStorage {
             .append(true)
             .open(&path)
             .await
-            .map_err(|e| SageError::Io(format!("Failed to open messages file: {}", e)))?;
+            .map_err(|e| SageError::io(format!("Failed to open messages file: {}", e)))?;
 
         let json = serde_json::to_string(message)
-            .map_err(|e| SageError::Json(format!("Failed to serialize message: {}", e)))?;
+            .map_err(|e| SageError::json(format!("Failed to serialize message: {}", e)))?;
 
         file.write_all(json.as_bytes())
             .await
-            .map_err(|e| SageError::Io(format!("Failed to write message: {}", e)))?;
+            .map_err(|e| SageError::io(format!("Failed to write message: {}", e)))?;
         file.write_all(b"\n")
             .await
-            .map_err(|e| SageError::Io(format!("Failed to write newline: {}", e)))?;
+            .map_err(|e| SageError::io(format!("Failed to write newline: {}", e)))?;
 
         debug!("Appended message {} to session {}", message.uuid, id);
         Ok(())
@@ -294,17 +294,17 @@ impl JsonlSessionStorage {
             .append(true)
             .open(&path)
             .await
-            .map_err(|e| SageError::Io(format!("Failed to open snapshots file: {}", e)))?;
+            .map_err(|e| SageError::io(format!("Failed to open snapshots file: {}", e)))?;
 
         let json = serde_json::to_string(snapshot)
-            .map_err(|e| SageError::Json(format!("Failed to serialize snapshot: {}", e)))?;
+            .map_err(|e| SageError::json(format!("Failed to serialize snapshot: {}", e)))?;
 
         file.write_all(json.as_bytes())
             .await
-            .map_err(|e| SageError::Io(format!("Failed to write snapshot: {}", e)))?;
+            .map_err(|e| SageError::io(format!("Failed to write snapshot: {}", e)))?;
         file.write_all(b"\n")
             .await
-            .map_err(|e| SageError::Io(format!("Failed to write newline: {}", e)))?;
+            .map_err(|e| SageError::io(format!("Failed to write newline: {}", e)))?;
 
         debug!(
             "Appended snapshot for message {} to session {}",
@@ -323,7 +323,7 @@ impl JsonlSessionStorage {
 
         let file = File::open(&path)
             .await
-            .map_err(|e| SageError::Io(format!("Failed to open messages file: {}", e)))?;
+            .map_err(|e| SageError::io(format!("Failed to open messages file: {}", e)))?;
 
         let reader = BufReader::new(file);
         let mut lines = reader.lines();
@@ -332,7 +332,7 @@ impl JsonlSessionStorage {
         while let Some(line) = lines
             .next_line()
             .await
-            .map_err(|e| SageError::Io(format!("Failed to read line: {}", e)))?
+            .map_err(|e| SageError::io(format!("Failed to read line: {}", e)))?
         {
             if line.trim().is_empty() {
                 continue;
@@ -364,7 +364,7 @@ impl JsonlSessionStorage {
 
         let file = File::open(&path)
             .await
-            .map_err(|e| SageError::Io(format!("Failed to open snapshots file: {}", e)))?;
+            .map_err(|e| SageError::io(format!("Failed to open snapshots file: {}", e)))?;
 
         let reader = BufReader::new(file);
         let mut lines = reader.lines();
@@ -373,7 +373,7 @@ impl JsonlSessionStorage {
         while let Some(line) = lines
             .next_line()
             .await
-            .map_err(|e| SageError::Io(format!("Failed to read line: {}", e)))?
+            .map_err(|e| SageError::io(format!("Failed to read line: {}", e)))?
         {
             if line.trim().is_empty() {
                 continue;
@@ -402,7 +402,7 @@ impl JsonlSessionStorage {
         if dir.exists() {
             fs::remove_dir_all(&dir)
                 .await
-                .map_err(|e| SageError::Io(format!("Failed to delete session directory: {}", e)))?;
+                .map_err(|e| SageError::io(format!("Failed to delete session directory: {}", e)))?;
             info!("Deleted session {}", id);
         } else {
             warn!("Session {} not found", id);
@@ -420,12 +420,12 @@ impl JsonlSessionStorage {
         let mut sessions = Vec::new();
         let mut entries = fs::read_dir(&self.base_path)
             .await
-            .map_err(|e| SageError::Io(format!("Failed to read sessions directory: {}", e)))?;
+            .map_err(|e| SageError::io(format!("Failed to read sessions directory: {}", e)))?;
 
         while let Some(entry) = entries
             .next_entry()
             .await
-            .map_err(|e| SageError::Io(format!("Failed to read directory entry: {}", e)))?
+            .map_err(|e| SageError::io(format!("Failed to read directory entry: {}", e)))?
         {
             let path = entry.path();
             if path.is_dir() {

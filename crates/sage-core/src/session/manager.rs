@@ -105,7 +105,7 @@ impl SessionManager {
             .storage
             .load(id)
             .await?
-            .ok_or_else(|| SageError::InvalidInput(format!("Session not found: {}", id)))?;
+            .ok_or_else(|| SageError::invalid_input(format!("Session not found: {}", id)))?;
 
         // Update state if paused
         let mut session = session;
@@ -183,7 +183,7 @@ impl SessionManager {
         let mut session = self
             .get(id)
             .await?
-            .ok_or_else(|| SageError::InvalidInput(format!("Session not found: {}", id)))?;
+            .ok_or_else(|| SageError::invalid_input(format!("Session not found: {}", id)))?;
 
         session.complete();
         self.save(&session).await?;
@@ -200,7 +200,7 @@ impl SessionManager {
         let mut session = self
             .get(id)
             .await?
-            .ok_or_else(|| SageError::InvalidInput(format!("Session not found: {}", id)))?;
+            .ok_or_else(|| SageError::invalid_input(format!("Session not found: {}", id)))?;
 
         session.fail(error);
         self.save(&session).await?;
@@ -217,7 +217,7 @@ impl SessionManager {
         let mut session = self
             .get(id)
             .await?
-            .ok_or_else(|| SageError::InvalidInput(format!("Session not found: {}", id)))?;
+            .ok_or_else(|| SageError::invalid_input(format!("Session not found: {}", id)))?;
 
         session.pause();
         self.save(&session).await?;
@@ -238,7 +238,7 @@ impl SessionManager {
         let mut session = self
             .get(id)
             .await?
-            .ok_or_else(|| SageError::InvalidInput(format!("Session not found: {}", id)))?;
+            .ok_or_else(|| SageError::invalid_input(format!("Session not found: {}", id)))?;
 
         session.add_message(message);
         self.save(&session).await?;

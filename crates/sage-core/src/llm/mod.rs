@@ -5,6 +5,7 @@ pub mod converters;
 pub mod fallback;
 pub mod messages;
 pub mod parsers;
+pub mod provider_types;
 pub mod providers;
 pub mod rate_limiter;
 pub mod sse_decoder;
@@ -19,7 +20,7 @@ pub use fallback::{
     ModelStats as FallbackModelStats, anthropic_fallback_chain, openai_fallback_chain,
 };
 pub use messages::{CacheControl, LLMMessage, LLMResponse, MessageRole};
-pub use providers::{LLMProvider, TimeoutConfig};
+pub use provider_types::{LLMProvider, TimeoutConfig};
 pub use rate_limiter::{RateLimitConfig, RateLimiter};
 pub use sse_decoder::{SSEDecoder, SSEEvent};
 pub use streaming::{LLMStream, StreamChunk, StreamingLLMClient};

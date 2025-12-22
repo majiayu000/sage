@@ -190,7 +190,7 @@ impl ProjectStorage {
             .append(true)
             .open(&self.file_path)
             .await
-            .map_err(|e| SageError::Io(format!("Failed to open trajectory file: {}", e)))?;
+            .map_err(|e| SageError::io(format!("Failed to open trajectory file: {}", e)))?;
 
         file.write_all(json_line.as_bytes()).await?;
         file.write_all(b"\n").await?;

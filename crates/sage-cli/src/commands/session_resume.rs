@@ -100,7 +100,7 @@ impl SessionSelector {
             .default(0)
             .highlight_matches(true)
             .interact_opt()
-            .map_err(|e| SageError::Io(format!("Failed to display session selector: {}", e)))?;
+            .map_err(|e| SageError::io(format!("Failed to display session selector: {}", e)))?;
 
         match selection {
             Some(idx) if idx < sessions.len() => {

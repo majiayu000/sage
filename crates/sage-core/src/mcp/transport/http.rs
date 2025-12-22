@@ -112,7 +112,7 @@ impl HttpTransport {
 
         let client = client_builder
             .build()
-            .map_err(|e| McpError::Connection(format!("Failed to create HTTP client: {}", e)))?;
+            .map_err(|e| McpError::connection(format!("Failed to create HTTP client: {}", e)))?;
 
         let (message_tx, message_rx) = mpsc::channel(100);
 
@@ -160,10 +160,10 @@ impl HttpTransport {
             .header("Accept", "text/event-stream")
             .send()
             .await
-            .map_err(|e| McpError::Connection(format!("Failed to connect to SSE: {}", e)))?;
+            .map_err(|e| McpError::connection(format!("Failed to connect to SSE: {}", e)))?;
 
         if !response.status().is_success() {
-            return Err(McpError::Connection(format!(
+            return Err(McpError::connection(format!(
                 "SSE connection failed with status: {}",
                 response.status()
             )));
@@ -219,7 +219,7 @@ impl HttpTransport {
 impl McpTransport for HttpTransport {
     async fn send(&mut self, message: McpMessage) -> Result<(), McpError> {
         if !self.connected.load(Ordering::SeqCst) {
-            return Err(McpError::Connection("Not connected".into()));
+            return Err(McpError::connection("Not connected"));
         }
 
         let json = serde_json::to_string(&message)?;
@@ -231,16 +231,16 @@ impl McpTransport for HttpTransport {
             .body(json)
             .send()
             .await
-            .map_err(|e| McpError::Connection(format!("Failed to send message: {}", e)))?;
+            .map_err(|e| McpError::connection(format!("Failed to send message: {}", e)))?;
 
         match response.status() {
             StatusCode::OK | StatusCode::ACCEPTED | StatusCode::NO_CONTENT => Ok(()),
             status => {
                 let body = response.text().await.unwrap_or_default();
-                Err(McpError::Server {
-                    code: status.as_u16() as i32,
-                    message: format!("HTTP error {}: {}", status, body),
-                })
+                Err(McpError::server(
+                    status.as_u16() as i32,
+                    format!("HTTP error {}: {}", status, body),
+                ))
             }
         }
     }
@@ -249,9 +249,9 @@ impl McpTransport for HttpTransport {
         if let Some(rx) = &mut self.message_rx {
             rx.recv()
                 .await
-                .ok_or_else(|| McpError::Connection("Channel closed".into()))
+                .ok_or_else(|| McpError::connection("Channel closed"))
         } else {
-            Err(McpError::Connection("No message receiver available".into()))
+            Err(McpError::connection("No message receiver available"))
         }
     }
 

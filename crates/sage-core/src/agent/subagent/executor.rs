@@ -489,7 +489,7 @@ mod tests {
         ];
 
         // Mock LLM client (won't be used in this test)
-        use crate::llm::providers::{LLMProvider, ModelParameters};
+        use crate::llm::provider_types::{LLMProvider, ModelParameters};
         use crate::config::provider::ProviderConfig;
 
         let llm_config = ProviderConfig {

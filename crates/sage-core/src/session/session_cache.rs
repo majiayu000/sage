@@ -358,7 +358,7 @@ impl SessionCache {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)
                 .await
-                .map_err(|e| SageError::Io(format!("Failed to create cache directory: {}", e)))?;
+                .map_err(|e| SageError::io(format!("Failed to create cache directory: {}", e)))?;
         }
 
         // Update last saved timestamp
@@ -368,7 +368,7 @@ impl SessionCache {
         let content = serde_json::to_string_pretty(&data)?;
         fs::write(path, content)
             .await
-            .map_err(|e| SageError::Io(format!("Failed to write cache: {}", e)))?;
+            .map_err(|e| SageError::io(format!("Failed to write cache: {}", e)))?;
 
         tracing::debug!("Saved session cache to {:?}", path);
         Ok(())

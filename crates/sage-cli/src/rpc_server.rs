@@ -201,7 +201,7 @@ pub async fn start_rpc_server(port: u16) -> SageResult<Server> {
     let server = ServerBuilder::new(io)
         .cors_allow_all()
         .start_http(&format!("127.0.0.1:{}", port).parse().unwrap())
-        .map_err(|e| SageError::Other(format!("Failed to start RPC server: {}", e)))?;
+        .map_err(|e| SageError::other(format!("Failed to start RPC server: {}", e)))?;
     
     println!("RPC server started on http://127.0.0.1:{}", port);
     Ok(server)

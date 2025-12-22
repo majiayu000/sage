@@ -156,11 +156,11 @@ impl McpServerManager {
     /// Discover servers from environment variable
     async fn discover_from_environment(&self, var_name: &str) -> Result<Vec<String>, McpError> {
         let value = std::env::var(var_name).map_err(|_| {
-            McpError::Connection(format!("Environment variable {} not set", var_name))
+            McpError::connection(format!("Environment variable {} not set", var_name))
         })?;
 
         let config: McpConfig = serde_json::from_str(&value)
-            .map_err(|e| McpError::Protocol(format!("Invalid JSON in {}: {}", var_name, e)))?;
+            .map_err(|e| McpError::protocol(format!("Invalid JSON in {}: {}", var_name, e)))?;
 
         self.discover_from_config(config).await
     }
@@ -169,10 +169,10 @@ impl McpServerManager {
     async fn discover_from_file(&self, path: &PathBuf) -> Result<Vec<String>, McpError> {
         let content = tokio::fs::read_to_string(path)
             .await
-            .map_err(|e| McpError::Connection(format!("Failed to read file {:?}: {}", path, e)))?;
+            .map_err(|e| McpError::connection(format!("Failed to read file {:?}: {}", path, e)))?;
 
         let config: McpConfig = serde_json::from_str(&content)
-            .map_err(|e| McpError::Protocol(format!("Invalid JSON in {:?}: {}", path, e)))?;
+            .map_err(|e| McpError::protocol(format!("Invalid JSON in {:?}: {}", path, e)))?;
 
         self.discover_from_config(config).await
     }
@@ -245,7 +245,7 @@ impl McpServerManager {
         let config = {
             let configs = self.server_configs.read().await;
             configs.get(name).cloned().ok_or_else(|| {
-                McpError::Connection(format!("No config found for server: {}", name))
+                McpError::connection(format!("No config found for server: {}", name))
             })?
         };
 
@@ -352,7 +352,7 @@ fn server_config_to_transport(config: &McpServerConfig) -> Result<TransportConfi
     match config.transport.as_str() {
         "stdio" => {
             let command = config.command.as_ref().ok_or_else(|| {
-                McpError::InvalidRequest("Stdio transport requires command".into())
+                McpError::invalid_request("Stdio transport requires command")
             })?;
 
             Ok(TransportConfig::Stdio {
@@ -365,7 +365,7 @@ fn server_config_to_transport(config: &McpServerConfig) -> Result<TransportConfi
             let url = config
                 .url
                 .as_ref()
-                .ok_or_else(|| McpError::InvalidRequest("HTTP transport requires url".into()))?;
+                .ok_or_else(|| McpError::invalid_request("HTTP transport requires url"))?;
 
             Ok(TransportConfig::Http {
                 base_url: url.clone(),
@@ -374,12 +374,12 @@ fn server_config_to_transport(config: &McpServerConfig) -> Result<TransportConfi
         }
         "websocket" => {
             let url = config.url.as_ref().ok_or_else(|| {
-                McpError::InvalidRequest("WebSocket transport requires url".into())
+                McpError::invalid_request("WebSocket transport requires url")
             })?;
 
             Ok(TransportConfig::WebSocket { url: url.clone() })
         }
-        other => Err(McpError::InvalidRequest(format!(
+        other => Err(McpError::invalid_request(format!(
             "Unknown transport type: {}",
             other
         ))),

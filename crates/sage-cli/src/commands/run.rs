@@ -379,15 +379,15 @@ pub async fn execute(args: RunArgs) -> SageResult<()> {
 
             // Print additional error context if available
             match &e {
-                SageError::Tool { tool_name, message } => {
+                SageError::Tool { tool_name, message, .. } => {
                     console.info(&format!("Tool: {}", tool_name));
                     console.info(&format!("Error: {}", message));
                 }
-                SageError::Llm(msg) => {
+                SageError::Llm { message: msg, .. } => {
                     console.info(&format!("LLM Provider: {}", sdk.config().default_provider));
                     console.info(&format!("Error: {}", msg));
                 }
-                SageError::Config(msg) => {
+                SageError::Config { message: msg, .. } => {
                     console.info(&format!("Configuration Error: {}", msg));
                 }
                 _ => {}
@@ -476,7 +476,7 @@ async fn handle_resume_command(
                     return Ok(());
                 }
                 None => {
-                    return Err(SageError::NotFound(format!("Session '{}' not found", id)));
+                    return Err(SageError::not_found(format!("Session '{}' not found", id)));
                 }
             }
         }

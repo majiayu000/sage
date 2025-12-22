@@ -1,6 +1,6 @@
 //! Provider-specific configuration
 
-use crate::llm::providers::TimeoutConfig;
+use crate::llm::provider_types::TimeoutConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

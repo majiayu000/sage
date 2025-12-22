@@ -53,7 +53,7 @@ impl StdioTransport {
         }
 
         let mut child = cmd.spawn().map_err(|e| {
-            McpError::Connection(format!(
+            McpError::connection(format!(
                 "Failed to spawn MCP server '{}': {}",
                 command.as_ref(),
                 e
@@ -63,12 +63,12 @@ impl StdioTransport {
         let stdin = child
             .stdin
             .take()
-            .ok_or_else(|| McpError::Connection("Failed to get stdin handle".into()))?;
+            .ok_or_else(|| McpError::connection("Failed to get stdin handle"))?;
 
         let stdout = child
             .stdout
             .take()
-            .ok_or_else(|| McpError::Connection("Failed to get stdout handle".into()))?;
+            .ok_or_else(|| McpError::connection("Failed to get stdout handle"))?;
 
         Ok(Self {
             child: Some(child),
@@ -119,13 +119,13 @@ impl McpTransport for StdioTransport {
 
         if bytes_read == 0 {
             self.connected = false;
-            return Err(McpError::Connection("Connection closed".into()));
+            return Err(McpError::connection("Connection closed"));
         }
 
         // Parse the JSON
         let message: McpMessage = serde_json::from_str(self.line_buffer.trim())
             .map_err(|e| {
-                McpError::Serialization(format!(
+                McpError::serialization(format!(
                     "Failed to parse MCP message: {}. Raw input: {}",
                     e,
                     self.line_buffer.trim().chars().take(200).collect::<String>()
@@ -146,7 +146,7 @@ impl McpTransport for StdioTransport {
             // Give the process a chance to exit gracefully
             tokio::select! {
                 result = child.wait() => {
-                    result.map_err(|e| McpError::Transport(e.to_string()))?;
+                    result.map_err(|e| McpError::transport(e.to_string()))?;
                 }
                 _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => {
                     // Force kill if it doesn't exit

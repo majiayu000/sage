@@ -222,12 +222,12 @@ impl SkillRegistry {
         let mut count = 0;
         let mut entries = fs::read_dir(dir)
             .await
-            .map_err(|e| SageError::Storage(format!("Failed to read skills directory: {}", e)))?;
+            .map_err(|e| SageError::storage(format!("Failed to read skills directory: {}", e)))?;
 
         while let Some(entry) = entries
             .next_entry()
             .await
-            .map_err(|e| SageError::Storage(format!("Failed to read directory entry: {}", e)))?
+            .map_err(|e| SageError::storage(format!("Failed to read directory entry: {}", e)))?
         {
             let path = entry.path();
 
@@ -260,17 +260,17 @@ impl SkillRegistry {
         let name = path
             .file_stem()
             .and_then(|s| s.to_str())
-            .ok_or_else(|| SageError::InvalidInput("Invalid skill file name".to_string()))?
+            .ok_or_else(|| SageError::invalid_input("Invalid skill file name".to_string()))?
             .to_string();
 
         let mut file = fs::File::open(path)
             .await
-            .map_err(|e| SageError::Storage(format!("Failed to open skill file: {}", e)))?;
+            .map_err(|e| SageError::storage(format!("Failed to open skill file: {}", e)))?;
 
         let mut content = String::new();
         file.read_to_string(&mut content)
             .await
-            .map_err(|e| SageError::Storage(format!("Failed to read skill file: {}", e)))?;
+            .map_err(|e| SageError::storage(format!("Failed to read skill file: {}", e)))?;
 
         let (metadata, prompt) = self.parse_skill_file(&content);
 

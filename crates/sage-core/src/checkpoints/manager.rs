@@ -295,7 +295,7 @@ impl CheckpointManager {
         conversation: ConversationSnapshot,
     ) -> SageResult<()> {
         let mut checkpoint = self.storage.load(checkpoint_id).await?.ok_or_else(|| {
-            SageError::NotFound(format!("Checkpoint {} not found", checkpoint_id))
+            SageError::not_found(format!("Checkpoint {} not found", checkpoint_id))
         })?;
 
         checkpoint.conversation = Some(conversation);
@@ -311,7 +311,7 @@ impl CheckpointManager {
         record: ToolExecutionRecord,
     ) -> SageResult<()> {
         let mut checkpoint = self.storage.load(checkpoint_id).await?.ok_or_else(|| {
-            SageError::NotFound(format!("Checkpoint {} not found", checkpoint_id))
+            SageError::not_found(format!("Checkpoint {} not found", checkpoint_id))
         })?;
 
         checkpoint.tool_history.push(record);
@@ -327,7 +327,7 @@ impl CheckpointManager {
         options: RestoreOptions,
     ) -> SageResult<RestoreResult> {
         let checkpoint = self.storage.load(checkpoint_id).await?.ok_or_else(|| {
-            SageError::NotFound(format!("Checkpoint {} not found", checkpoint_id))
+            SageError::not_found(format!("Checkpoint {} not found", checkpoint_id))
         })?;
 
         tracing::info!("Restoring to checkpoint {}", checkpoint.short_id());
@@ -400,17 +400,17 @@ impl CheckpointManager {
                     // Ensure parent directory exists
                     if let Some(parent) = full_path.parent() {
                         fs::create_dir_all(parent).await.map_err(|e| {
-                            SageError::Storage(format!("Failed to create directory: {}", e))
+                            SageError::storage(format!("Failed to create directory: {}", e))
                         })?;
                     }
 
                     // Write content
                     let mut file = fs::File::create(&full_path)
                         .await
-                        .map_err(|e| SageError::Storage(format!("Failed to create file: {}", e)))?;
+                        .map_err(|e| SageError::storage(format!("Failed to create file: {}", e)))?;
                     file.write_all(content.as_bytes())
                         .await
-                        .map_err(|e| SageError::Storage(format!("Failed to write file: {}", e)))?;
+                        .map_err(|e| SageError::storage(format!("Failed to write file: {}", e)))?;
 
                     // Restore permissions
                     #[cfg(unix)]
@@ -418,7 +418,7 @@ impl CheckpointManager {
                         use std::os::unix::fs::PermissionsExt;
                         let perms = std::fs::Permissions::from_mode(mode);
                         fs::set_permissions(&full_path, perms).await.map_err(|e| {
-                            SageError::Storage(format!("Failed to set permissions: {}", e))
+                            SageError::storage(format!("Failed to set permissions: {}", e))
                         })?;
                     }
                 }
@@ -430,10 +430,10 @@ impl CheckpointManager {
                 if let Some(content) = original_content {
                     let mut file = fs::File::create(&full_path)
                         .await
-                        .map_err(|e| SageError::Storage(format!("Failed to create file: {}", e)))?;
+                        .map_err(|e| SageError::storage(format!("Failed to create file: {}", e)))?;
                     file.write_all(content.as_bytes())
                         .await
-                        .map_err(|e| SageError::Storage(format!("Failed to write file: {}", e)))?;
+                        .map_err(|e| SageError::storage(format!("Failed to write file: {}", e)))?;
                 }
             }
             FileState::Deleted => {
@@ -442,7 +442,7 @@ impl CheckpointManager {
                 if full_path.exists() {
                     fs::remove_file(&full_path)
                         .await
-                        .map_err(|e| SageError::Storage(format!("Failed to delete file: {}", e)))?;
+                        .map_err(|e| SageError::storage(format!("Failed to delete file: {}", e)))?;
                 }
             }
         }
@@ -534,7 +534,7 @@ impl CheckpointManager {
         checkpoint_id: &CheckpointId,
     ) -> SageResult<Vec<RestorePreview>> {
         let checkpoint = self.storage.load(checkpoint_id).await?.ok_or_else(|| {
-            SageError::NotFound(format!("Checkpoint {} not found", checkpoint_id))
+            SageError::not_found(format!("Checkpoint {} not found", checkpoint_id))
         })?;
 
         let mut previews = Vec::new();

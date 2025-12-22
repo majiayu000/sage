@@ -164,9 +164,7 @@ impl InputChannel {
                     Ok(response)
                 }
                 Ok(None) => Err(SageError::agent("Input channel closed")),
-                Err(_) => Err(SageError::Timeout {
-                    seconds: timeout_duration.as_secs(),
-                }),
+                Err(_) => Err(SageError::timeout(timeout_duration.as_secs())),
             }
         } else {
             // Block indefinitely until response

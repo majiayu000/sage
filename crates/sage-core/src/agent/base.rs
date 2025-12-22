@@ -6,7 +6,7 @@ use crate::error::{SageError, SageResult};
 use crate::interrupt::{global_interrupt_manager, reset_global_interrupt_manager};
 use crate::llm::client::LLMClient;
 use crate::llm::messages::LLMMessage;
-use crate::llm::providers::LLMProvider;
+use crate::llm::provider_types::LLMProvider;
 use crate::prompts::SystemPromptBuilder;
 use crate::tools::executor::ToolExecutor;
 use crate::tools::types::ToolSchema;

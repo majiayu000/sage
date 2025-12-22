@@ -93,7 +93,7 @@ impl SettingsValidator {
         if errors.is_empty() {
             Ok(())
         } else {
-            Err(SageError::Config(format!(
+            Err(SageError::config(format!(
                 "Settings validation failed:\n- {}",
                 errors.join("\n- ")
             )))

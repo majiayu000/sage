@@ -52,7 +52,7 @@ impl LifecycleHookRegistry {
                 HookResult::Continue => continue,
                 HookResult::Skip => break,
                 HookResult::Abort(reason) => {
-                    return Err(LifecycleError::Aborted { phase, reason });
+                    return Err(LifecycleError::aborted(phase, reason));
                 }
                 HookResult::ModifyContext(new_context) => {
                     context = *new_context;

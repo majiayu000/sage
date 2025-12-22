@@ -57,7 +57,7 @@ mod tests {
         fn schema(&self) -> ToolSchema {
             ToolSchema::new(
                 self.name.clone(),
-                self.description(),
+                self.description().to_string(),
                 vec![ToolParameter::string("input", "Test input")],
             )
         }

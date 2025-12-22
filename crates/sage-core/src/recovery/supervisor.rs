@@ -509,7 +509,7 @@ mod tests {
                 async move {
                     let count = attempts.fetch_add(1, Ordering::SeqCst);
                     if count < 2 {
-                        Err(SageError::Http("timeout".into()))
+                        Err(SageError::http("timeout"))
                     } else {
                         Ok(())
                     }
@@ -529,7 +529,7 @@ mod tests {
         let mut supervisor = TaskSupervisor::new("test");
 
         let result = supervisor
-            .supervise(|| async { Err::<(), _>(SageError::Config("invalid".into())) })
+            .supervise(|| async { Err::<(), _>(SageError::config("invalid")) })
             .await;
 
         assert!(matches!(result, SupervisionResult::Stopped { .. }));

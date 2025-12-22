@@ -79,7 +79,7 @@ pub enum PluginError {
 
 impl From<PluginError> for SageError {
     fn from(error: PluginError) -> Self {
-        SageError::Agent(format!("Plugin error: {}", error))
+        SageError::agent(format!("Plugin error: {}", error))
     }
 }
 

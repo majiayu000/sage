@@ -17,7 +17,7 @@ use crate::config::provider::ProviderConfig;
 use crate::error::{SageError, SageResult};
 use crate::llm::client::LLMClient;
 use crate::llm::messages::{LLMMessage, MessageRole};
-use crate::llm::providers::LLMProvider;
+use crate::llm::provider_types::LLMProvider;
 use crate::tools::base::Tool;
 use crate::tools::types::{ToolCall, ToolResult, ToolSchema};
 use anyhow::Context;

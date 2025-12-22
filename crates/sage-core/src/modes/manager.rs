@@ -75,7 +75,7 @@ impl ModeManager {
         let current = self.current_mode().await;
 
         if current == AgentMode::Plan {
-            return Err(SageError::InvalidInput("Already in plan mode".to_string()));
+            return Err(SageError::invalid_input("Already in plan mode".to_string()));
         }
 
         // Generate plan file path
@@ -84,7 +84,7 @@ impl ModeManager {
         // Ensure plan directory exists
         if let Some(parent) = plan_file.parent() {
             fs::create_dir_all(parent).await.map_err(|e| {
-                SageError::Storage(format!("Failed to create plan directory: {}", e))
+                SageError::storage(format!("Failed to create plan directory: {}", e))
             })?;
         }
 
@@ -124,7 +124,7 @@ impl ModeManager {
         let state = self.state.read().await;
 
         if state.mode != AgentMode::Plan {
-            return Err(SageError::InvalidInput("Not in plan mode".to_string()));
+            return Err(SageError::invalid_input("Not in plan mode".to_string()));
         }
 
         let plan_config = state.plan_config.clone();
@@ -186,7 +186,7 @@ impl ModeManager {
 
         // Check if approval is needed
         if transition.requires_approval {
-            return Err(SageError::InvalidInput(format!(
+            return Err(SageError::invalid_input(format!(
                 "Transition from {} to {} requires approval",
                 current, mode
             )));
@@ -259,25 +259,25 @@ impl ModeManager {
             .plan_config
             .as_ref()
             .and_then(|c| c.plan_file.clone())
-            .ok_or_else(|| SageError::InvalidInput("No plan file configured".to_string()))?;
+            .ok_or_else(|| SageError::invalid_input("No plan file configured".to_string()))?;
 
         drop(state);
 
         // Ensure directory exists
         if let Some(parent) = plan_file.parent() {
             fs::create_dir_all(parent).await.map_err(|e| {
-                SageError::Storage(format!("Failed to create plan directory: {}", e))
+                SageError::storage(format!("Failed to create plan directory: {}", e))
             })?;
         }
 
         // Write content
         let mut file = fs::File::create(&plan_file)
             .await
-            .map_err(|e| SageError::Storage(format!("Failed to create plan file: {}", e)))?;
+            .map_err(|e| SageError::storage(format!("Failed to create plan file: {}", e)))?;
 
         file.write_all(content.as_bytes())
             .await
-            .map_err(|e| SageError::Storage(format!("Failed to write plan file: {}", e)))?;
+            .map_err(|e| SageError::storage(format!("Failed to write plan file: {}", e)))?;
 
         tracing::info!("Saved plan to {:?}", plan_file);
         Ok(plan_file)
@@ -300,12 +300,12 @@ impl ModeManager {
 
         let mut file = fs::File::open(&plan_file)
             .await
-            .map_err(|e| SageError::Storage(format!("Failed to open plan file: {}", e)))?;
+            .map_err(|e| SageError::storage(format!("Failed to open plan file: {}", e)))?;
 
         let mut content = String::new();
         file.read_to_string(&mut content)
             .await
-            .map_err(|e| SageError::Storage(format!("Failed to read plan file: {}", e)))?;
+            .map_err(|e| SageError::storage(format!("Failed to read plan file: {}", e)))?;
 
         Ok(Some(content))
     }

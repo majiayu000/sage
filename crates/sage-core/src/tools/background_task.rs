@@ -89,7 +89,7 @@ impl BackgroundShellTask {
 
         let mut child = cmd
             .spawn()
-            .map_err(|e| SageError::Io(format!("Failed to spawn background process: {}", e)))?;
+            .map_err(|e| SageError::io(format!("Failed to spawn background process: {}", e)))?;
 
         let pid = child.id();
 

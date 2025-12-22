@@ -223,19 +223,19 @@ impl ChangeDetector {
         }
 
         let mut entries = fs::read_dir(dir).await.map_err(|e| {
-            SageError::Storage(format!("Failed to read directory {:?}: {}", dir, e))
+            SageError::storage(format!("Failed to read directory {:?}: {}", dir, e))
         })?;
 
         while let Some(entry) = entries
             .next_entry()
             .await
-            .map_err(|e| SageError::Storage(format!("Failed to read directory entry: {}", e)))?
+            .map_err(|e| SageError::storage(format!("Failed to read directory entry: {}", e)))?
         {
             let path = entry.path();
             let metadata = entry
                 .metadata()
                 .await
-                .map_err(|e| SageError::Storage(format!("Failed to read metadata: {}", e)))?;
+                .map_err(|e| SageError::storage(format!("Failed to read metadata: {}", e)))?;
 
             if metadata.is_dir() {
                 Box::pin(self.scan_recursive(&path, snapshots)).await?;

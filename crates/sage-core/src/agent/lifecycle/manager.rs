@@ -153,7 +153,7 @@ impl LifecycleManager {
     ) -> LifecycleResult<()> {
         // Validate transition
         if !from.can_transition_to(&to) {
-            return Err(super::error::LifecycleError::InvalidTransition { from, to });
+            return Err(super::error::LifecycleError::invalid_transition(from, to));
         }
 
         let context = LifecycleContext::new(LifecyclePhase::StateTransition, to)

@@ -154,7 +154,7 @@ pub fn classify_error(error: &crate::error::SageError) -> ErrorClass {
 
     match error {
         // Network/HTTP errors are usually transient
-        SageError::Http(msg) => {
+        SageError::Http { message: msg, .. } => {
             if msg.contains("timeout")
                 || msg.contains("connection refused")
                 || msg.contains("connection reset")
@@ -174,7 +174,7 @@ pub fn classify_error(error: &crate::error::SageError) -> ErrorClass {
         }
 
         // IO errors are often transient
-        SageError::Io(msg) => {
+        SageError::Io { message: msg, .. } => {
             if msg.contains("permission denied") || msg.contains("not found") {
                 ErrorClass::Permanent
             } else {
@@ -183,7 +183,7 @@ pub fn classify_error(error: &crate::error::SageError) -> ErrorClass {
         }
 
         // LLM errors
-        SageError::Llm(msg) => {
+        SageError::Llm { message: msg, .. } => {
             if msg.contains("rate limit") || msg.contains("overloaded") {
                 ErrorClass::Transient
             } else if msg.contains("invalid") || msg.contains("context length") {
@@ -200,10 +200,10 @@ pub fn classify_error(error: &crate::error::SageError) -> ErrorClass {
         SageError::Cancelled => ErrorClass::Permanent,
 
         // Configuration and input errors are permanent
-        SageError::Config(_) | SageError::InvalidInput(_) => ErrorClass::Permanent,
+        SageError::Config { .. } | SageError::InvalidInput { .. } => ErrorClass::Permanent,
 
         // JSON errors are usually permanent (bad data)
-        SageError::Json(_) => ErrorClass::Permanent,
+        SageError::Json { .. } => ErrorClass::Permanent,
 
         // Tool errors need more context
         SageError::Tool { message, .. } => {
@@ -215,10 +215,10 @@ pub fn classify_error(error: &crate::error::SageError) -> ErrorClass {
         }
 
         // Agent and cache errors
-        SageError::Agent(_) | SageError::Cache(_) => ErrorClass::Unknown,
+        SageError::Agent { .. } | SageError::Cache { .. } => ErrorClass::Unknown,
 
         // Storage errors are often transient
-        SageError::Storage(msg) => {
+        SageError::Storage { message: msg, .. } => {
             if msg.contains("permission denied") {
                 ErrorClass::Permanent
             } else {
@@ -227,10 +227,10 @@ pub fn classify_error(error: &crate::error::SageError) -> ErrorClass {
         }
 
         // Not found errors are permanent
-        SageError::NotFound(_) => ErrorClass::Permanent,
+        SageError::NotFound { .. } => ErrorClass::Permanent,
 
         // Other errors
-        SageError::Other(_) => ErrorClass::Unknown,
+        SageError::Other { .. } => ErrorClass::Unknown,
     }
 }
 
@@ -252,7 +252,7 @@ fn extract_retry_after(error: &crate::error::SageError) -> Option<Duration> {
     use crate::error::SageError;
 
     match error {
-        SageError::Http(msg) if msg.contains("429") => {
+        SageError::Http { message: msg, .. } if msg.contains("429") => {
             // Try to parse retry-after from the message
             // Format: "429: retry after 30 seconds"
             if let Some(pos) = msg.find("retry after") {
@@ -280,15 +280,15 @@ mod tests {
     #[test]
     fn test_classify_http_errors() {
         assert_eq!(
-            classify_error(&SageError::Http("connection timeout".into())),
+            classify_error(&SageError::http("connection timeout")),
             ErrorClass::Transient
         );
         assert_eq!(
-            classify_error(&SageError::Http("429 rate limit".into())),
+            classify_error(&SageError::http("429 rate limit")),
             ErrorClass::Transient
         );
         assert_eq!(
-            classify_error(&SageError::Http("401 unauthorized".into())),
+            classify_error(&SageError::http("401 unauthorized")),
             ErrorClass::Permanent
         );
     }
@@ -296,11 +296,11 @@ mod tests {
     #[test]
     fn test_classify_llm_errors() {
         assert_eq!(
-            classify_error(&SageError::Llm("rate limit exceeded".into())),
+            classify_error(&SageError::llm("rate limit exceeded")),
             ErrorClass::Transient
         );
         assert_eq!(
-            classify_error(&SageError::Llm("context length exceeded".into())),
+            classify_error(&SageError::llm("context length exceeded")),
             ErrorClass::Permanent
         );
     }

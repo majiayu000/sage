@@ -273,12 +273,12 @@ impl CommandRegistry {
         let mut count = 0;
         let mut entries = fs::read_dir(dir)
             .await
-            .map_err(|e| SageError::Storage(format!("Failed to read commands directory: {}", e)))?;
+            .map_err(|e| SageError::storage(format!("Failed to read commands directory: {}", e)))?;
 
         while let Some(entry) = entries
             .next_entry()
             .await
-            .map_err(|e| SageError::Storage(format!("Failed to read directory entry: {}", e)))?
+            .map_err(|e| SageError::storage(format!("Failed to read directory entry: {}", e)))?
         {
             let path = entry.path();
 
@@ -319,18 +319,18 @@ impl CommandRegistry {
         let name = path
             .file_stem()
             .and_then(|s| s.to_str())
-            .ok_or_else(|| SageError::InvalidInput("Invalid command file name".to_string()))?
+            .ok_or_else(|| SageError::invalid_input("Invalid command file name".to_string()))?
             .to_string();
 
         // Read file content
         let mut file = fs::File::open(path)
             .await
-            .map_err(|e| SageError::Storage(format!("Failed to open command file: {}", e)))?;
+            .map_err(|e| SageError::storage(format!("Failed to open command file: {}", e)))?;
 
         let mut content = String::new();
         file.read_to_string(&mut content)
             .await
-            .map_err(|e| SageError::Storage(format!("Failed to read command file: {}", e)))?;
+            .map_err(|e| SageError::storage(format!("Failed to read command file: {}", e)))?;
 
         // Parse frontmatter if present
         let (metadata, prompt_template) = self.parse_command_file(&content);

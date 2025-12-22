@@ -239,6 +239,24 @@ pub struct ModelParameters {
     pub enable_prompt_caching: Option<bool>,
 }
 
+impl Default for ModelParameters {
+    fn default() -> Self {
+        Self {
+            model: "gpt-4".to_string(),
+            max_tokens: Some(4096),
+            temperature: Some(0.7),
+            top_p: Some(1.0),
+            top_k: None,
+            stop: None,
+            parallel_tool_calls: Some(true),
+            frequency_penalty: None,
+            presence_penalty: None,
+            seed: None,
+            enable_prompt_caching: None,
+        }
+    }
+}
+
 impl ModelParameters {
     /// Create new model parameters with just the model name
     pub fn new<S: Into<String>>(model: S) -> Self {
