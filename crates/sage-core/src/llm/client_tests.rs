@@ -222,4 +222,50 @@ mod tests {
         let error = SageError::llm("Connection refused");
         assert!(client.is_retryable_error(&error));
     }
+
+#[test]
+fn test_should_fallback_provider_403() {
+    let config = ProviderConfig::new("openai").with_api_key("test-key");
+    let model_params = ModelParameters::default();
+    let client = LLMClient::new(LLMProvider::OpenAI, config, model_params).unwrap();
+    let error = SageError::http_with_status("Forbidden", 403);
+    assert!(client.should_fallback_provider(&error));
+}
+
+#[test]
+fn test_should_fallback_provider_429() {
+    let config = ProviderConfig::new("openai").with_api_key("test-key");
+    let model_params = ModelParameters::default();
+    let client = LLMClient::new(LLMProvider::OpenAI, config, model_params).unwrap();
+    let error = SageError::http_with_status("Rate limited", 429);
+    assert!(client.should_fallback_provider(&error));
+}
+
+#[test]
+fn test_should_fallback_provider_quota_message() {
+    let config = ProviderConfig::new("openai").with_api_key("test-key");
+    let model_params = ModelParameters::default();
+    let client = LLMClient::new(LLMProvider::OpenAI, config, model_params).unwrap();
+    let error = SageError::llm("Quota exceeded");
+    assert!(client.should_fallback_provider(&error));
+}
+
+#[test]
+fn test_should_fallback_provider_rate_limit_message() {
+    let config = ProviderConfig::new("openai").with_api_key("test-key");
+    let model_params = ModelParameters::default();
+    let client = LLMClient::new(LLMProvider::OpenAI, config, model_params).unwrap();
+    let error = SageError::llm("Rate limit exceeded");
+    assert!(client.should_fallback_provider(&error));
+}
+
+#[test]
+fn test_should_not_fallback_provider_non_quota_error() {
+    let config = ProviderConfig::new("openai").with_api_key("test-key");
+    let model_params = ModelParameters::default();
+    let client = LLMClient::new(LLMProvider::OpenAI, config, model_params).unwrap();
+    let error = SageError::llm("500 Internal Server Error");
+    assert!(!client.should_fallback_provider(&error));
+}
+
 }

@@ -217,6 +217,27 @@ impl LLMClient {
         }
     }
 
+    /// Check if an error should trigger provider fallback
+    pub fn should_fallback_provider(&self, error: &SageError) -> bool {
+        match error {
+            SageError::Llm { message: msg, .. } => {
+                let msg_lower = msg.to_lowercase();
+                msg_lower.contains("403") ||
+                msg_lower.contains("429") ||
+                msg_lower.contains("quota") ||
+                msg_lower.contains("rate limit") ||
+                msg_lower.contains("insufficient") ||
+                msg_lower.contains("exceeded") ||
+                msg_lower.contains("not enough") ||
+                msg_lower.contains("token quota")
+            }
+            SageError::Http { status_code: Some(code), .. } => {
+                *code == 403 || *code == 429
+            }
+            _ => false,
+        }
+    }
+
     /// Send a chat completion request
     #[instrument(skip(self, messages, tools), fields(provider = %self.provider, model = %self.model_params.model))]
     pub async fn chat(
