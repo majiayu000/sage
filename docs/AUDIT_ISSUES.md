@@ -9,7 +9,7 @@
 | Severity | Count | Resolved |
 |----------|-------|----------|
 | Critical | 33 | 4 |
-| High | 90 | 1 |
+| High | 90 | 3 |
 | Medium | 86 | 0 |
 | Low | 56 | 0 |
 
@@ -78,16 +78,16 @@
 ## High Priority Issues (Priority 2)
 
 ### HIGH-001: Dependency Version Conflicts - nix
-- **Status**: 🔴 Open
+- **Status**: 🟢 Resolved
 - **Location**: `Cargo.toml` files
 - **Description**: `nix` crate version mismatch (0.27 vs 0.29)
-- **Fix**: Unify to latest compatible version
+- **Fix**: Updated sage-core to use workspace version (0.29)
 
 ### HIGH-002: Dependency Version Conflicts - reqwest
-- **Status**: 🔴 Open
+- **Status**: 🟢 Resolved
 - **Location**: `Cargo.toml` files
 - **Description**: `reqwest` version mismatch (0.11 vs 0.12)
-- **Fix**: Unify to latest compatible version
+- **Fix**: Updated sage-tools to use workspace version (0.12)
 
 ### HIGH-003: Insufficient Test Coverage
 - **Status**: 🔴 Open
@@ -254,7 +254,9 @@
 | 2025-12-22 | CRIT-002 | Resolved | ef01fe7 |
 | 2025-12-22 | CRIT-001 | Resolved | cb4b5b5 |
 | 2025-12-22 | CRIT-003 | Resolved | e46e4f4 |
-| 2025-12-22 | HIGH-006 | Resolved | (pending) |
+| 2025-12-22 | HIGH-006 | Resolved | 150e08a |
+| 2025-12-22 | HIGH-001 | Resolved | 4a3f740 |
+| 2025-12-22 | HIGH-002 | Resolved | 4a3f740 |
 
 ---
 

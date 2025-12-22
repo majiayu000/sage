@@ -70,7 +70,7 @@ sha2 = "0.10.9"
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }
-nix = { version = "0.27", features = ["signal", "process"] }
+nix = { workspace = true }
 
 [dev-dependencies]
 mockall = { workspace = true }
