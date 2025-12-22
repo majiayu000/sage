@@ -26,19 +26,26 @@ pub enum LLMProvider {
     Custom(String),
 }
 
+impl LLMProvider {
+    /// Get the provider name as a string
+    pub fn name(&self) -> &str {
+        match self {
+            LLMProvider::OpenAI => "openai",
+            LLMProvider::Anthropic => "anthropic",
+            LLMProvider::Google => "google",
+            LLMProvider::Azure => "azure",
+            LLMProvider::OpenRouter => "openrouter",
+            LLMProvider::Doubao => "doubao",
+            LLMProvider::Ollama => "ollama",
+            LLMProvider::Glm => "glm",
+            LLMProvider::Custom(name) => name,
+        }
+    }
+}
+
 impl std::fmt::Display for LLMProvider {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            LLMProvider::OpenAI => write!(f, "openai"),
-            LLMProvider::Anthropic => write!(f, "anthropic"),
-            LLMProvider::Google => write!(f, "google"),
-            LLMProvider::Azure => write!(f, "azure"),
-            LLMProvider::OpenRouter => write!(f, "openrouter"),
-            LLMProvider::Doubao => write!(f, "doubao"),
-            LLMProvider::Ollama => write!(f, "ollama"),
-            LLMProvider::Glm => write!(f, "glm"),
-            LLMProvider::Custom(name) => write!(f, "{}", name),
-        }
+        write!(f, "{}", self.name())
     }
 }
 

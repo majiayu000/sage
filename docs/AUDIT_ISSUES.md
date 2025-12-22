@@ -8,7 +8,7 @@
 
 | Severity | Count | Resolved |
 |----------|-------|----------|
-| Critical | 33 | 6 |
+| Critical | 33 | 7 |
 | High | 90 | 4 |
 | Medium | 86 | 0 |
 | Low | 56 | 0 |
@@ -77,11 +77,18 @@
 - **Fix**: Replaced `.unwrap_or_default()` with proper `.ok_or_else()` validation for Azure, OpenRouter, and Doubao providers
 
 ### CRIT-008: No Rate Limiting for LLM Calls
-- **Status**: 🔴 Open
+- **Status**: 🟢 Resolved
 - **Location**: `sage-core/src/llm/`
 - **Description**: LLM calls can trigger provider rate limits
 - **Risk**: Service disruption, cost overrun
-- **Fix**: Implement token bucket or sliding window rate limiter
+- **Fix**: Implemented token bucket rate limiter:
+  - Created `rate_limiter.rs` module with `RateLimiter` and `RateLimitConfig`
+  - Provider-specific rate limits (OpenAI, Anthropic, Google, etc.)
+  - Global rate limiter registry for shared state across clients
+  - Burst support (allows short bursts above sustained rate)
+  - Non-blocking `try_acquire()` and blocking `acquire()` methods
+  - Integration in both `chat()` and `chat_stream()` methods
+  - Added 8 comprehensive test cases
 
 ---
 
@@ -274,7 +281,8 @@
 | 2025-12-22 | HIGH-008 | Resolved | 6459fdb |
 | 2025-12-22 | CRIT-005 | Partial | 85e4863 |
 | 2025-12-22 | CRIT-005 | Partial | 02fb81d |
-| 2025-12-22 | CRIT-006 | Resolved | (pending) |
+| 2025-12-22 | CRIT-006 | Resolved | ff87be2 |
+| 2025-12-22 | CRIT-008 | Resolved | 2c0d1e0 |
 
 ---
 

@@ -6,6 +6,7 @@ use crate::llm::converters::{MessageConverter, ToolConverter};
 use crate::llm::messages::{LLMMessage, LLMResponse};
 use crate::llm::parsers::ResponseParser;
 use crate::llm::providers::{LLMProvider, ModelParameters};
+use crate::llm::rate_limiter::global as rate_limiter;
 use crate::llm::streaming::{LLMStream, StreamChunk, StreamingLLMClient};
 use crate::tools::types::ToolSchema;
 use crate::types::LLMUsage;
@@ -15,7 +16,7 @@ use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio::time::sleep;
-use tracing::warn;
+use tracing::{debug, warn};
 
 /// LLM client for making requests to various providers
 pub struct LLMClient {
@@ -159,20 +160,17 @@ impl LLMClient {
         messages: &[LLMMessage],
         tools: Option<&[ToolSchema]>,
     ) -> SageResult<LLMResponse> {
-        // TODO: Add streaming response support
-        // - Implement streaming for all providers
-        // - Add Server-Sent Events (SSE) support
-        // - Support token-by-token processing
+        // Apply rate limiting before making the request
+        let provider_name = self.provider.name();
+        let limiter = rate_limiter::get_rate_limiter(provider_name).await;
 
-        // TODO: Add response caching
-        // - Cache responses based on message hash
-        // - Implement cache invalidation strategies
-        // - Support distributed caching for multi-instance deployments
-
-        // TODO: Add request/response middleware
-        // - Request preprocessing and validation
-        // - Response post-processing and filtering
-        // - Metrics collection and monitoring
+        if let Some(wait_duration) = limiter.acquire().await {
+            debug!(
+                "Rate limited for provider '{}', waited {:.2}s",
+                provider_name,
+                wait_duration.as_secs_f64()
+            );
+        }
 
         // Execute the request with retry logic
         match &self.provider {
@@ -874,6 +872,18 @@ impl StreamingLLMClient for LLMClient {
         messages: &[LLMMessage],
         tools: Option<&[ToolSchema]>,
     ) -> SageResult<LLMStream> {
+        // Apply rate limiting before making the request
+        let provider_name = self.provider.name();
+        let limiter = rate_limiter::get_rate_limiter(provider_name).await;
+
+        if let Some(wait_duration) = limiter.acquire().await {
+            debug!(
+                "Rate limited for provider '{}' (streaming), waited {:.2}s",
+                provider_name,
+                wait_duration.as_secs_f64()
+            );
+        }
+
         match &self.provider {
             LLMProvider::OpenAI => self.openai_chat_stream(messages, tools).await,
             LLMProvider::Anthropic => self.anthropic_chat_stream(messages, tools).await,

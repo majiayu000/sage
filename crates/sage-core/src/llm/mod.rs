@@ -6,6 +6,7 @@ pub mod fallback;
 pub mod messages;
 pub mod parsers;
 pub mod providers;
+pub mod rate_limiter;
 pub mod sse_decoder;
 pub mod streaming;
 
@@ -16,5 +17,6 @@ pub use fallback::{
 };
 pub use messages::{CacheControl, LLMMessage, LLMResponse, MessageRole};
 pub use providers::LLMProvider;
+pub use rate_limiter::{RateLimitConfig, RateLimiter};
 pub use sse_decoder::{SSEDecoder, SSEEvent};
 pub use streaming::{LLMStream, StreamChunk, StreamingLLMClient};
