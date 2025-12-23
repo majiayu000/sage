@@ -459,7 +459,8 @@ impl UnifiedExecutor {
                 .lock()
                 .await
                 .start_recording(task.clone(), provider, model, self.options.max_steps)
-                .await?;
+                .await
+                .context("Failed to start trajectory recording")?;
         }
 
         // Build system prompt
@@ -595,7 +596,8 @@ impl UnifiedExecutor {
                                 .lock()
                                 .await
                                 .record_step(error_step.clone())
-                                .await?;
+                                .await
+                                .context(format!("Failed to record error step {} in trajectory", step_number))?;
                         }
 
                         execution.add_step(error_step);
@@ -779,6 +781,7 @@ impl UnifiedExecutor {
     }
 
     /// Execute a single step in the loop
+    #[instrument(skip(self, messages, tool_schemas, task_scope), fields(step_number = %step_number))]
     async fn execute_step(
         &mut self,
         step_number: u32,
@@ -847,6 +850,11 @@ impl UnifiedExecutor {
 
         // Handle tool calls
         if !llm_response.tool_calls.is_empty() {
+            tracing::info!(
+                tool_count = llm_response.tool_calls.len(),
+                "executing tools"
+            );
+
             // Start tool animation
             self.animation_manager
                 .start_animation(AnimationState::ExecutingTools, "Executing tools", "green")
@@ -910,6 +918,7 @@ impl UnifiedExecutor {
         if llm_response.finish_reason == Some("end_turn".to_string())
             && llm_response.tool_calls.is_empty()
         {
+            tracing::info!("step indicates task completion");
             step.state = AgentState::Completed;
         }
 
