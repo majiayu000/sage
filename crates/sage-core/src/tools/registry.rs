@@ -182,9 +182,11 @@ impl Default for ToolRegistryBuilder {
     }
 }
 
-use std::sync::{LazyLock, Mutex};
+use parking_lot::Mutex;
+use std::sync::LazyLock;
 
 /// Global tool registry instance using LazyLock (Rust 2024 edition)
+/// Uses parking_lot::Mutex for non-poisoning, faster locks
 static GLOBAL_REGISTRY: LazyLock<Mutex<ToolRegistry>> =
     LazyLock::new(|| Mutex::new(ToolRegistry::new()));
 
@@ -193,7 +195,7 @@ pub fn with_global_registry<F, R>(f: F) -> R
 where
     F: FnOnce(&mut ToolRegistry) -> R,
 {
-    let mut registry = GLOBAL_REGISTRY.lock().unwrap();
+    let mut registry = GLOBAL_REGISTRY.lock();
     f(&mut *registry)
 }
 

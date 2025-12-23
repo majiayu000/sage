@@ -1,7 +1,8 @@
 //! Telemetry system for tracking tool usage and agent behavior
 
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 /// Tool usage event
@@ -72,19 +73,19 @@ impl TelemetryCollector {
             agent_type,
         };
 
-        let mut events = self.events.write().unwrap();
+        let mut events = self.events.write();
         events.push(event);
     }
 
     /// Get all events
     pub fn get_events(&self) -> Vec<ToolUsageEvent> {
-        let events = self.events.read().unwrap();
+        let events = self.events.read();
         events.clone()
     }
 
     /// Get statistics for a specific tool
     pub fn get_tool_stats(&self, tool_name: &str) -> Option<ToolStats> {
-        let events = self.events.read().unwrap();
+        let events = self.events.read();
         let tool_events: Vec<_> = events
             .iter()
             .filter(|e| e.tool_name == tool_name)
@@ -112,7 +113,7 @@ impl TelemetryCollector {
 
     /// Get statistics for all tools
     pub fn get_all_stats(&self) -> Vec<ToolStats> {
-        let events = self.events.read().unwrap();
+        let events = self.events.read();
         let mut tool_names: Vec<String> = events
             .iter()
             .map(|e| e.tool_name.clone())
@@ -164,7 +165,7 @@ impl TelemetryCollector {
 
     /// Get summary report
     pub fn get_summary(&self) -> TelemetrySummary {
-        let events = self.events.read().unwrap();
+        let events = self.events.read();
         let total_events = events.len();
         let successful_events = events.iter().filter(|e| e.success).count();
         let failed_events = total_events - successful_events;
@@ -196,7 +197,7 @@ impl TelemetryCollector {
 
     /// Clear all events
     pub fn clear(&self) {
-        let mut events = self.events.write().unwrap();
+        let mut events = self.events.write();
         events.clear();
     }
 }

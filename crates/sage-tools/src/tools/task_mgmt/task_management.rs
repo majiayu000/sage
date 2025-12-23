@@ -1,12 +1,13 @@
 //! Task management tools for organizing complex work
 
 use async_trait::async_trait;
+use parking_lot::Mutex;
 use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolResult, ToolSchema};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use uuid::Uuid;
 
 /// Task state enumeration
@@ -89,8 +90,8 @@ impl TaskList {
         parent_id: Option<String>,
         after_task_id: Option<String>,
     ) -> Result<String, ToolError> {
-        let mut tasks = self.tasks.lock().unwrap();
-        let mut root_tasks = self.root_tasks.lock().unwrap();
+        let mut tasks = self.tasks.lock();
+        let mut root_tasks = self.root_tasks.lock();
 
         task.parent_id = parent_id.clone();
         let task_id = task.id.clone();
@@ -129,7 +130,7 @@ impl TaskList {
         description: Option<String>,
         state: Option<TaskState>,
     ) -> Result<(), ToolError> {
-        let mut tasks = self.tasks.lock().unwrap();
+        let mut tasks = self.tasks.lock();
 
         if let Some(task) = tasks.get_mut(task_id) {
             if let Some(name) = name {
@@ -152,15 +153,8 @@ impl TaskList {
     }
 
     pub fn view_tasklist(&self) -> String {
-        // Handle poisoned mutex by recovering the data
-        let tasks = match self.tasks.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        };
-        let root_tasks = match self.root_tasks.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        };
+        let tasks = self.tasks.lock();
+        let root_tasks = self.root_tasks.lock();
 
         if root_tasks.is_empty() {
             return "No tasks in the current task list.".to_string();
@@ -178,13 +172,13 @@ impl TaskList {
     }
 
     pub fn get_root_task_ids(&self) -> Vec<String> {
-        let root_tasks = self.root_tasks.lock().unwrap();
+        let root_tasks = self.root_tasks.lock();
         root_tasks.clone()
     }
 
     pub fn clear_and_rebuild(&self, new_tasks: Vec<Task>) -> Result<(), ToolError> {
-        let mut tasks = self.tasks.lock().unwrap();
-        let mut root_tasks = self.root_tasks.lock().unwrap();
+        let mut tasks = self.tasks.lock();
+        let mut root_tasks = self.root_tasks.lock();
 
         tasks.clear();
         root_tasks.clear();
@@ -495,10 +489,7 @@ impl Tool for UpdateTasksTool {
         if !updated_tasks.is_empty() {
             result.push_str("\n\n# Task Changes\n\n## Updated Tasks\n\n");
             // Show current state of updated tasks - handle poison errors
-            let tasks = match GLOBAL_TASK_LIST.tasks.lock() {
-                Ok(guard) => guard,
-                Err(poisoned) => poisoned.into_inner(),
-            };
+            let tasks = GLOBAL_TASK_LIST.tasks.lock();
             for task_id in &updated_tasks {
                 if let Some(task) = tasks.get(task_id) {
                     result.push_str(&format!(
@@ -580,18 +571,10 @@ mod tests {
         }
     }
 
-    // Helper function to clear the global task list safely
-    // Handles poisoned mutex by recovering the inner data
+    // Helper function to clear the global task list
     fn clear_global_task_list() {
-        // Replace the global task list contents - handle poison errors
-        match GLOBAL_TASK_LIST.tasks.lock() {
-            Ok(mut tasks) => tasks.clear(),
-            Err(poisoned) => poisoned.into_inner().clear(),
-        }
-        match GLOBAL_TASK_LIST.root_tasks.lock() {
-            Ok(mut root_tasks) => root_tasks.clear(),
-            Err(poisoned) => poisoned.into_inner().clear(),
-        }
+        GLOBAL_TASK_LIST.tasks.lock().clear();
+        GLOBAL_TASK_LIST.root_tasks.lock().clear();
     }
 
     #[tokio::test]
@@ -712,16 +695,10 @@ mod tests {
         );
         add_tool.execute(&add_call).await.unwrap();
 
-        // Get the task ID - handle potential poison errors
+        // Get the task ID
         let task_id = {
-            let _tasks = match GLOBAL_TASK_LIST.tasks.lock() {
-                Ok(guard) => guard,
-                Err(poisoned) => poisoned.into_inner(),
-            };
-            let root_tasks = match GLOBAL_TASK_LIST.root_tasks.lock() {
-                Ok(guard) => guard,
-                Err(poisoned) => poisoned.into_inner(),
-            };
+            let _tasks = GLOBAL_TASK_LIST.tasks.lock();
+            let root_tasks = GLOBAL_TASK_LIST.root_tasks.lock();
             root_tasks
                 .first()
                 .expect("Task list should not be empty after adding a task")
@@ -778,12 +755,9 @@ mod tests {
         );
         add_tool.execute(&add_call).await.unwrap();
 
-        // Get task IDs - handle poison errors
+        // Get task IDs
         let (task_id_1, task_id_2) = {
-            let root_tasks = match GLOBAL_TASK_LIST.root_tasks.lock() {
-                Ok(guard) => guard,
-                Err(poisoned) => poisoned.into_inner(),
-            };
+            let root_tasks = GLOBAL_TASK_LIST.root_tasks.lock();
             (root_tasks[0].clone(), root_tasks[1].clone())
         };
 
@@ -906,12 +880,9 @@ mod tests {
         assert!(output.contains("Write Tests"));
         assert!(output.contains("[ ]")); // All should be NOT_STARTED
 
-        // Step 4: Start working on first task - handle poison errors
+        // Step 4: Start working on first task
         let task_ids = {
-            let root_tasks = match GLOBAL_TASK_LIST.root_tasks.lock() {
-                Ok(guard) => guard,
-                Err(poisoned) => poisoned.into_inner(),
-            };
+            let root_tasks = GLOBAL_TASK_LIST.root_tasks.lock();
             root_tasks.clone()
         };
 
