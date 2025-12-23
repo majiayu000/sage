@@ -1,6 +1,6 @@
 //! Basic usage example for Sage Agent SDK
 
-use sage_sdk::{RunOptions, SageAgentSDK};
+use sage_sdk::{RunOptions, SageAgentSdk};
 use std::error::Error;
 
 #[tokio::main]
@@ -12,7 +12,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     println!("========================");
 
     // Create SDK instance with default configuration
-    let sdk = SageAgentSDK::new()?
+    let sdk = SageAgentSdk::new()?
         .with_provider_and_model("openai", "gpt-4", None)? // API key from environment
         .with_working_directory("./examples")
         .with_max_steps(Some(10));

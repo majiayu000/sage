@@ -1,6 +1,6 @@
 //! Basic run execution methods
 
-use crate::client::{ExecutionResult, RunOptions, SageAgentSDK};
+use crate::client::{ExecutionResult, RunOptions, SageAgentSdk};
 use sage_core::{
     agent::{ExecutionMode, ExecutionOptions, UnifiedExecutor},
     error::SageResult,
@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-impl SageAgentSDK {
+impl SageAgentSdk {
     /// Run a task with default options.
     ///
     /// Executes the task in interactive mode with default settings.
@@ -30,10 +30,10 @@ impl SageAgentSDK {
     /// # Examples
     ///
     /// ```no_run
-    /// use sage_sdk::SageAgentSDK;
+    /// use sage_sdk::SageAgentSdk;
     ///
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let sdk = SageAgentSDK::new()?;
+    /// let sdk = SageAgentSdk::new()?;
     /// let result = sdk.run("Write a hello world program in Rust").await?;
     ///
     /// if result.is_success() {
@@ -67,10 +67,10 @@ impl SageAgentSDK {
     /// # Examples
     ///
     /// ```no_run
-    /// use sage_sdk::{SageAgentSDK, RunOptions};
+    /// use sage_sdk::{SageAgentSdk, RunOptions};
     ///
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let sdk = SageAgentSDK::new()?;
+    /// let sdk = SageAgentSdk::new()?;
     /// let options = RunOptions::new()
     ///     .with_max_steps(50)
     ///     .with_trajectory(true);

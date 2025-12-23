@@ -19,18 +19,18 @@ pub use sage_core::input::InputRequest;
 
 /// High-level SDK client for interacting with Sage Agent.
 ///
-/// `SageAgentSDK` provides a fluent API for configuring and executing agent tasks.
+/// `SageAgentSdk` provides a fluent API for configuring and executing agent tasks.
 /// It handles configuration loading, tool registration, trajectory recording,
 /// and execution management.
 ///
 /// # Examples
 ///
 /// ```no_run
-/// use sage_sdk::SageAgentSDK;
+/// use sage_sdk::SageAgentSdk;
 ///
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// // Create SDK with default configuration
-/// let sdk = SageAgentSDK::new()?;
+/// let sdk = SageAgentSdk::new()?;
 ///
 /// // Execute a task
 /// let result = sdk.run("Fix the bug in src/main.rs").await?;
@@ -44,10 +44,10 @@ pub use sage_core::input::InputRequest;
 /// The SDK uses a builder pattern for configuration:
 ///
 /// ```no_run
-/// use sage_sdk::SageAgentSDK;
+/// use sage_sdk::SageAgentSdk;
 ///
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-/// let sdk = SageAgentSDK::new()?
+/// let sdk = SageAgentSdk::new()?
 ///     .with_working_directory("/path/to/project")
 ///     .with_max_steps(Some(50))
 ///     .with_trajectory_path("output/trajectory.json");
@@ -56,12 +56,12 @@ pub use sage_core::input::InputRequest;
 /// # Ok(())
 /// # }
 /// ```
-pub struct SageAgentSDK {
+pub struct SageAgentSdk {
     pub(crate) config: Config,
     pub(crate) trajectory_path: Option<PathBuf>,
 }
 
-impl SageAgentSDK {
+impl SageAgentSdk {
     /// Get the current configuration.
     ///
     /// Returns a reference to the SDK's configuration, allowing inspection
@@ -70,9 +70,9 @@ impl SageAgentSDK {
     /// # Examples
     ///
     /// ```no_run
-    /// use sage_sdk::SageAgentSDK;
+    /// use sage_sdk::SageAgentSdk;
     ///
-    /// let sdk = SageAgentSDK::new()?;
+    /// let sdk = SageAgentSdk::new()?;
     /// let config = sdk.config();
     /// println!("Provider: {}", config.get_default_provider());
     /// # Ok::<(), sage_sdk::SageError>(())
@@ -96,9 +96,9 @@ impl SageAgentSDK {
     /// # Examples
     ///
     /// ```no_run
-    /// use sage_sdk::SageAgentSDK;
+    /// use sage_sdk::SageAgentSdk;
     ///
-    /// let sdk = SageAgentSDK::new()?;
+    /// let sdk = SageAgentSdk::new()?;
     /// sdk.validate_config()?;
     /// # Ok::<(), sage_sdk::SageError>(())
     /// ```
@@ -113,9 +113,9 @@ impl SageAgentSDK {
     /// # Example
     ///
     /// ```
-    /// use sage_sdk::SageAgentSDK;
+    /// use sage_sdk::SageAgentSdk;
     ///
-    /// let sdk = SageAgentSDK::new().unwrap();
+    /// let sdk = SageAgentSdk::new().unwrap();
     /// let version = sdk.api_version();
     /// println!("SDK API Version: {}", version);
     /// ```
@@ -130,9 +130,9 @@ impl SageAgentSDK {
     /// # Example
     ///
     /// ```
-    /// use sage_sdk::SageAgentSDK;
+    /// use sage_sdk::SageAgentSdk;
     ///
-    /// let sdk = SageAgentSDK::new().unwrap();
+    /// let sdk = SageAgentSdk::new().unwrap();
     /// println!("{}", sdk.version_info());
     /// ```
     pub fn version_info(&self) -> String {
@@ -146,9 +146,9 @@ impl SageAgentSDK {
     /// # Example
     ///
     /// ```
-    /// use sage_sdk::{SageAgentSDK, version::Version};
+    /// use sage_sdk::{SageAgentSdk, version::Version};
     ///
-    /// let sdk = SageAgentSDK::new().unwrap();
+    /// let sdk = SageAgentSdk::new().unwrap();
     /// let client_version = Version::new(0, 1, 0);
     /// assert!(sdk.is_compatible_with(&client_version));
     /// ```

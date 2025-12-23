@@ -2,7 +2,7 @@
 
 use chrono::Utc;
 use sage_core::error::SageResult;
-use sage_sdk::SageAgentSDK;
+use sage_sdk::SageAgentSdk;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -46,12 +46,12 @@ pub struct ConfigInfo {
 
 /// UI Backend - similar to Gemini CLI's core package
 #[allow(dead_code)]
-pub struct SageUIBackend {
-    sdk: Arc<Mutex<Option<SageAgentSDK>>>,
+pub struct SageUiBackend {
+    sdk: Arc<Mutex<Option<SageAgentSdk>>>,
 }
 
 #[allow(dead_code)]
-impl SageUIBackend {
+impl SageUiBackend {
     pub fn new() -> Self {
         Self {
             sdk: Arc::new(Mutex::new(None)),
@@ -62,7 +62,7 @@ impl SageUIBackend {
         let mut sdk_guard = self.sdk.lock().await;
 
         if sdk_guard.is_none() {
-            let sdk = SageAgentSDK::with_config_file(config_file)?;
+            let sdk = SageAgentSdk::with_config_file(config_file)?;
             *sdk_guard = Some(sdk);
         }
 
@@ -173,11 +173,11 @@ impl SageUIBackend {
 use std::sync::OnceLock;
 
 /// Global backend instance for UI communication
-static GLOBAL_BACKEND: OnceLock<Arc<SageUIBackend>> = OnceLock::new();
+static GLOBAL_BACKEND: OnceLock<Arc<SageUiBackend>> = OnceLock::new();
 
-pub fn get_global_backend() -> Arc<SageUIBackend> {
+pub fn get_global_backend() -> Arc<SageUiBackend> {
     GLOBAL_BACKEND
-        .get_or_init(|| Arc::new(SageUIBackend::new()))
+        .get_or_init(|| Arc::new(SageUiBackend::new()))
         .clone()
 }
 

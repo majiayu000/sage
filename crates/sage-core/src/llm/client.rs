@@ -6,7 +6,7 @@ use crate::llm::messages::{LlmMessage, LlmResponse};
 use crate::llm::provider_types::{LlmProvider, ModelParameters};
 use crate::llm::providers::{
     AnthropicProvider, AzureProvider, DoubaoProvider, GlmProvider, GoogleProvider,
-    LlmProviderTrait, OllamaProvider, OpenAIProvider, OpenRouterProvider, ProviderInstance,
+    LlmProviderTrait, OllamaProvider, OpenAiProvider, OpenRouterProvider, ProviderInstance,
 };
 use crate::llm::rate_limiter::global as rate_limiter;
 use crate::llm::streaming::{LlmStream, StreamingLlmClient};
@@ -163,7 +163,7 @@ impl LlmClient {
 
         // Create provider instance based on provider type
         let provider_instance = match &provider {
-            LlmProvider::OpenAI => ProviderInstance::OpenAI(OpenAIProvider::new(
+            LlmProvider::OpenAI => ProviderInstance::OpenAI(OpenAiProvider::new(
                 config.clone(),
                 model_params.clone(),
                 http_client,

@@ -10,7 +10,7 @@ use sage_core::error::{SageError, SageResult};
 use sage_core::llm::messages::LlmMessage;
 use sage_core::types::TaskMetadata;
 use sage_core::ui::EnhancedConsole;
-use sage_sdk::{ExecutionErrorKind, ExecutionOutcome, RunOptions, SageAgentSDK};
+use sage_sdk::{ExecutionErrorKind, ExecutionOutcome, RunOptions, SageAgentSdk};
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::PathBuf;
@@ -104,13 +104,13 @@ pub async fn execute(args: InteractiveArgs) -> SageResult<()> {
     // Initialize SDK
     let mut sdk = if std::path::Path::new(&args.config_file).exists() {
         console.info(&format!("Loading configuration from: {}", args.config_file));
-        SageAgentSDK::with_config_file(&args.config_file)?
+        SageAgentSdk::with_config_file(&args.config_file)?
     } else {
         console.warn(&format!(
             "Configuration file not found: {}, using defaults",
             args.config_file
         ));
-        SageAgentSDK::new()?
+        SageAgentSdk::new()?
     };
 
     if let Some(working_dir) = &args.working_dir {
@@ -363,7 +363,7 @@ fn print_input_help(console: &CliConsole) {
 }
 
 /// Print current configuration
-fn print_config(console: &CliConsole, sdk: &SageAgentSDK) {
+fn print_config(console: &CliConsole, sdk: &SageAgentSdk) {
     console.print_header("Current Configuration");
     let config = sdk.config();
 
@@ -390,7 +390,7 @@ fn print_config(console: &CliConsole, sdk: &SageAgentSDK) {
 }
 
 /// Print system status
-fn print_status(console: &CliConsole, sdk: &SageAgentSDK) {
+fn print_status(console: &CliConsole, sdk: &SageAgentSdk) {
     console.print_header("Agent Status");
 
     let config = sdk.config();
@@ -453,7 +453,7 @@ fn print_status(console: &CliConsole, sdk: &SageAgentSDK) {
 /// Handle conversation mode - supports continuous dialogue
 async fn handle_conversation(
     console: &CliConsole,
-    sdk: &SageAgentSDK,
+    sdk: &SageAgentSdk,
     conversation: &mut ConversationSession,
     user_input: &str,
 ) -> SageResult<()> {
@@ -501,7 +501,7 @@ async fn handle_conversation(
 /// Execute a new conversation task
 async fn execute_conversation_task(
     console: &CliConsole,
-    sdk: &SageAgentSDK,
+    sdk: &SageAgentSdk,
     conversation: &mut ConversationSession,
     task: &TaskMetadata,
 ) -> SageResult<()> {
@@ -655,7 +655,7 @@ async fn execute_conversation_task(
 /// Execute conversation continuation (for follow-up messages)
 async fn execute_conversation_continuation(
     console: &CliConsole,
-    sdk: &SageAgentSDK,
+    sdk: &SageAgentSdk,
     conversation: &mut ConversationSession,
     _task: &TaskMetadata,
 ) -> SageResult<()> {
@@ -747,7 +747,7 @@ async fn execute_conversation_continuation(
 /// Returns Ok(true) if the command was handled, Ok(false) if it should be treated as conversation
 async fn handle_slash_command(
     console: &CliConsole,
-    sdk: &SageAgentSDK,
+    sdk: &SageAgentSdk,
     conversation: &mut ConversationSession,
     input: &str,
 ) -> SageResult<bool> {

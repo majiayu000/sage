@@ -3,7 +3,7 @@
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use sage_core::error::{SageError, SageResult};
-use sage_sdk::SageAgentSDK;
+use sage_sdk::SageAgentSdk;
 use serde::{Deserialize, Serialize};
 use warp::Filter;
 
@@ -37,7 +37,7 @@ pub struct ToolCallStatus {
 }
 
 pub struct SageHttpServer {
-    sdk: Arc<Mutex<Option<SageAgentSDK>>>,
+    sdk: Arc<Mutex<Option<SageAgentSdk>>>,
 }
 
 impl SageHttpServer {
@@ -51,7 +51,7 @@ impl SageHttpServer {
         let mut sdk_guard = self.sdk.lock().await;
         
         if sdk_guard.is_none() {
-            let sdk = SageAgentSDK::with_config_file(config_file)?;
+            let sdk = SageAgentSdk::with_config_file(config_file)?;
             *sdk_guard = Some(sdk);
         }
         

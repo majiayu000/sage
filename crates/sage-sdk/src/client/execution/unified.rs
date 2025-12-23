@@ -1,6 +1,6 @@
 //! Unified executor methods
 
-use crate::client::{ExecutionResult, SageAgentSDK, UnifiedRunOptions};
+use crate::client::{ExecutionResult, SageAgentSdk, UnifiedRunOptions};
 use sage_core::{
     agent::{ExecutionMode, ExecutionOptions, UnifiedExecutor},
     error::SageResult,
@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-impl SageAgentSDK {
+impl SageAgentSdk {
     /// Execute a task using the unified execution loop (Claude Code style)
     ///
     /// This method uses a unified execution model where:
@@ -23,7 +23,7 @@ impl SageAgentSDK {
     ///
     /// # Example
     /// ```ignore
-    /// let sdk = SageAgentSDK::new()?;
+    /// let sdk = SageAgentSdk::new()?;
     /// let (result_future, input_handle) = sdk.execute_unified("Create a web server", UnifiedRunOptions::default())?;
     ///
     /// // Handle user input in another task
@@ -142,10 +142,10 @@ impl SageAgentSDK {
     /// # Examples
     ///
     /// ```no_run
-    /// use sage_sdk::{SageAgentSDK, UnifiedRunOptions};
+    /// use sage_sdk::{SageAgentSdk, UnifiedRunOptions};
     ///
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let sdk = SageAgentSDK::new()?;
+    /// let sdk = SageAgentSdk::new()?;
     /// let result = sdk.execute_non_interactive(
     ///     "Run tests",
     ///     UnifiedRunOptions::default()

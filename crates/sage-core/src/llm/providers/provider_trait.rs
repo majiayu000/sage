@@ -26,7 +26,7 @@ pub trait LlmProviderTrait: Send + Sync {
 
 /// Unified provider enum that wraps all provider implementations
 pub enum ProviderInstance {
-    OpenAI(super::OpenAIProvider),
+    OpenAI(super::OpenAiProvider),
     Anthropic(super::AnthropicProvider),
     Google(super::GoogleProvider),
     Azure(super::AzureProvider),

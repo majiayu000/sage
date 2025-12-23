@@ -6,7 +6,7 @@ use crate::signal_handler::start_global_signal_handling;
 use sage_core::commands::types::InteractiveCommand;
 use sage_core::commands::{CommandExecutor, CommandRegistry};
 use sage_core::error::{SageError, SageResult};
-use sage_sdk::{ExecutionErrorKind, ExecutionOutcome, RunOptions, SageAgentSDK};
+use sage_sdk::{ExecutionErrorKind, ExecutionOutcome, RunOptions, SageAgentSdk};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -133,13 +133,13 @@ pub async fn execute(args: RunArgs) -> SageResult<()> {
     // Create SDK instance
     let mut sdk = if std::path::Path::new(&args.config_file).exists() {
         console.info(&format!("Loading configuration from: {}", args.config_file));
-        SageAgentSDK::with_config_file(&args.config_file)?
+        SageAgentSdk::with_config_file(&args.config_file)?
     } else {
         console.warn(&format!(
             "Configuration file not found: {}, using defaults",
             args.config_file
         ));
-        SageAgentSDK::new()?
+        SageAgentSdk::new()?
     };
 
     // Apply command line overrides

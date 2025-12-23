@@ -15,10 +15,10 @@ use std::path::PathBuf;
 /// # Examples
 ///
 /// ```no_run
-/// use sage_sdk::SageAgentSDK;
+/// use sage_sdk::SageAgentSdk;
 ///
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-/// let sdk = SageAgentSDK::new()?;
+/// let sdk = SageAgentSdk::new()?;
 /// let result = sdk.run("Complete the task").await?;
 ///
 /// if result.is_success() {
@@ -59,9 +59,9 @@ impl ExecutionResult {
     /// # Examples
     ///
     /// ```no_run
-    /// # use sage_sdk::SageAgentSDK;
+    /// # use sage_sdk::SageAgentSdk;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let sdk = SageAgentSDK::new()?;
+    /// # let sdk = SageAgentSdk::new()?;
     /// let result = sdk.run("task").await?;
     /// if result.is_success() {
     ///     println!("Task completed successfully");
@@ -78,9 +78,9 @@ impl ExecutionResult {
     /// # Examples
     ///
     /// ```no_run
-    /// # use sage_sdk::SageAgentSDK;
+    /// # use sage_sdk::SageAgentSdk;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let sdk = SageAgentSDK::new()?;
+    /// # let sdk = SageAgentSdk::new()?;
     /// let result = sdk.run("task").await?;
     /// if result.is_failed() {
     ///     println!("Error: {:?}", result.error());
@@ -97,9 +97,9 @@ impl ExecutionResult {
     /// # Examples
     ///
     /// ```no_run
-    /// # use sage_sdk::SageAgentSDK;
+    /// # use sage_sdk::SageAgentSdk;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let sdk = SageAgentSDK::new()?;
+    /// # let sdk = SageAgentSdk::new()?;
     /// let result = sdk.run("task").await?;
     /// if result.is_interrupted() {
     ///     println!("Execution was interrupted");
@@ -134,9 +134,9 @@ impl ExecutionResult {
     /// # Examples
     ///
     /// ```no_run
-    /// # use sage_sdk::SageAgentSDK;
+    /// # use sage_sdk::SageAgentSdk;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let sdk = SageAgentSDK::new()?;
+    /// # let sdk = SageAgentSdk::new()?;
     /// let result = sdk.run("task").await?;
     /// if let Some(error) = result.error() {
     ///     println!("Execution error: {}", error);
@@ -162,9 +162,9 @@ impl ExecutionResult {
     /// # Examples
     ///
     /// ```no_run
-    /// # use sage_sdk::SageAgentSDK;
+    /// # use sage_sdk::SageAgentSdk;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let sdk = SageAgentSDK::new()?;
+    /// # let sdk = SageAgentSdk::new()?;
     /// let result = sdk.run("task").await?;
     /// if let Some(path) = result.trajectory_path() {
     ///     println!("Trajectory saved to: {}", path.display());

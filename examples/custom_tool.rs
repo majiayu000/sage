@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::executor::ToolExecutorBuilder;
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
-use sage_sdk::SageAgentSDK;
+use sage_sdk::SageAgentSdk;
 use std::collections::HashMap;
 use std::error::Error;
 use std::sync::Arc;
@@ -221,7 +221,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .build();
 
     // Create SDK with custom configuration
-    let _sdk = SageAgentSDK::new()?
+    let _sdk = SageAgentSdk::new()?
         .with_provider_and_model("openai", "gpt-4", None)?
         .with_working_directory("./examples");
 

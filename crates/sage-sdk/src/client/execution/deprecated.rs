@@ -1,6 +1,6 @@
 //! Deprecated execution methods
 
-use crate::client::SageAgentSDK;
+use crate::client::SageAgentSdk;
 use sage_core::{
     agent::{Agent, AgentExecution, base::BaseAgent},
     error::SageResult,
@@ -11,7 +11,7 @@ use sage_tools::get_default_tools;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-impl SageAgentSDK {
+impl SageAgentSdk {
     /// Continue an existing execution with a new user message
     ///
     /// **Deprecated**: This method uses the old exit-resume pattern.

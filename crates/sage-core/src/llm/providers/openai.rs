@@ -15,13 +15,13 @@ use serde_json::{Value, json};
 use tracing::instrument;
 
 /// OpenAI provider handler
-pub struct OpenAIProvider {
+pub struct OpenAiProvider {
     config: ProviderConfig,
     model_params: ModelParameters,
     http_client: Client,
 }
 
-impl OpenAIProvider {
+impl OpenAiProvider {
     /// Create a new OpenAI provider
     pub fn new(config: ProviderConfig, model_params: ModelParameters, http_client: Client) -> Self {
         Self {

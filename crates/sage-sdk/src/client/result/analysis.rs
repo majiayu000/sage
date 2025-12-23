@@ -10,9 +10,9 @@ impl ExecutionResult {
     /// # Examples
     ///
     /// ```no_run
-    /// # use sage_sdk::SageAgentSDK;
+    /// # use sage_sdk::SageAgentSdk;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let sdk = SageAgentSDK::new()?;
+    /// # let sdk = SageAgentSdk::new()?;
     /// let result = sdk.run("task").await?;
     /// let stats = result.statistics();
     /// println!("Total steps: {}", stats.total_steps);
@@ -28,9 +28,9 @@ impl ExecutionResult {
     /// # Examples
     ///
     /// ```no_run
-    /// # use sage_sdk::SageAgentSDK;
+    /// # use sage_sdk::SageAgentSdk;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let sdk = SageAgentSDK::new()?;
+    /// # let sdk = SageAgentSdk::new()?;
     /// let result = sdk.run("task").await?;
     /// println!("{}", result.summary());
     /// # Ok(())
@@ -45,9 +45,9 @@ impl ExecutionResult {
     /// # Examples
     ///
     /// ```no_run
-    /// # use sage_sdk::SageAgentSDK;
+    /// # use sage_sdk::SageAgentSdk;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let sdk = SageAgentSDK::new()?;
+    /// # let sdk = SageAgentSdk::new()?;
     /// let result = sdk.run("task").await?;
     /// for call in result.tool_calls() {
     ///     println!("Tool: {}", call.name);
@@ -64,9 +64,9 @@ impl ExecutionResult {
     /// # Examples
     ///
     /// ```no_run
-    /// # use sage_sdk::SageAgentSDK;
+    /// # use sage_sdk::SageAgentSdk;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let sdk = SageAgentSDK::new()?;
+    /// # let sdk = SageAgentSdk::new()?;
     /// let result = sdk.run("task").await?;
     /// for tool_result in result.tool_results() {
     ///     println!("Tool result: {:?}", tool_result);

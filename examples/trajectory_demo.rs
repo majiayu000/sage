@@ -1,6 +1,6 @@
 //! Trajectory configuration demo
 
-use sage_sdk::{RunOptions, SageAgentSDK};
+use sage_sdk::{RunOptions, SageAgentSdk};
 use std::error::Error;
 
 #[tokio::main]
@@ -12,7 +12,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     println!("=============================");
 
     // Create SDK instance with trajectory enabled
-    let sdk = SageAgentSDK::new()?
+    let sdk = SageAgentSdk::new()?
         .with_provider_and_model("openai", "gpt-4", None)?
         .with_working_directory("./examples");
 

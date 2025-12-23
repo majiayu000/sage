@@ -9,7 +9,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use sage_core::error::{SageError, SageResult};
 use sage_core::llm::messages::LlmMessage;
-use sage_sdk::{RunOptions, SageAgentSDK};
+use sage_sdk::{RunOptions, SageAgentSdk};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
@@ -63,7 +63,7 @@ pub trait SageRpc {
 
 /// Implementation of the RPC service
 pub struct SageRpcImpl {
-    sdk: Arc<Mutex<Option<SageAgentSDK>>>,
+    sdk: Arc<Mutex<Option<SageAgentSdk>>>,
 }
 
 impl SageRpcImpl {
@@ -73,12 +73,12 @@ impl SageRpcImpl {
         }
     }
 
-    async fn get_or_create_sdk(&self, config_file: &str) -> SageResult<SageAgentSDK> {
+    async fn get_or_create_sdk(&self, config_file: &str) -> SageResult<SageAgentSdk> {
         let mut sdk_guard = self.sdk.lock().await;
         
         if sdk_guard.is_none() {
             // Initialize SDK with config
-            let sdk = SageAgentSDK::from_config_file(config_file)?;
+            let sdk = SageAgentSdk::from_config_file(config_file)?;
             *sdk_guard = Some(sdk);
         }
         
@@ -122,7 +122,7 @@ impl SageRpc for SageRpcImpl {
     }
 
     fn validate_config(&self, config_file: String) -> RpcResult<bool> {
-        match SageAgentSDK::from_config_file(&config_file) {
+        match SageAgentSdk::from_config_file(&config_file) {
             Ok(_) => Ok(true),
             Err(_) => Ok(false),
         }

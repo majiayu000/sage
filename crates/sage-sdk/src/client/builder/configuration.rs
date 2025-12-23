@@ -1,10 +1,10 @@
 //! SDK configuration builder methods
 
-use crate::client::SageAgentSDK;
+use crate::client::SageAgentSdk;
 use sage_core::error::SageResult;
 use std::path::PathBuf;
 
-impl SageAgentSDK {
+impl SageAgentSdk {
     /// Set trajectory recording path.
     ///
     /// When set, execution trajectories will be saved to the specified file.
@@ -14,9 +14,9 @@ impl SageAgentSDK {
     /// # Examples
     ///
     /// ```no_run
-    /// use sage_sdk::SageAgentSDK;
+    /// use sage_sdk::SageAgentSdk;
     ///
-    /// let sdk = SageAgentSDK::new()?
+    /// let sdk = SageAgentSdk::new()?
     ///     .with_trajectory_path("logs/execution.json");
     /// # Ok::<(), sage_sdk::SageError>(())
     /// ```
@@ -44,9 +44,9 @@ impl SageAgentSDK {
     /// # Examples
     ///
     /// ```no_run
-    /// use sage_sdk::SageAgentSDK;
+    /// use sage_sdk::SageAgentSdk;
     ///
-    /// let sdk = SageAgentSDK::new()?
+    /// let sdk = SageAgentSdk::new()?
     ///     .with_provider_and_model("anthropic", "claude-3-5-sonnet-20241022", None)?;
     /// # Ok::<(), sage_sdk::SageError>(())
     /// ```
@@ -85,9 +85,9 @@ impl SageAgentSDK {
     /// # Examples
     ///
     /// ```no_run
-    /// use sage_sdk::SageAgentSDK;
+    /// use sage_sdk::SageAgentSdk;
     ///
-    /// let sdk = SageAgentSDK::new()?
+    /// let sdk = SageAgentSdk::new()?
     ///     .with_working_directory("/path/to/project");
     /// # Ok::<(), sage_sdk::SageError>(())
     /// ```
@@ -104,9 +104,9 @@ impl SageAgentSDK {
     /// # Examples
     ///
     /// ```no_run
-    /// use sage_sdk::SageAgentSDK;
+    /// use sage_sdk::SageAgentSdk;
     ///
-    /// let sdk = SageAgentSDK::new()?
+    /// let sdk = SageAgentSdk::new()?
     ///     .with_max_steps(Some(100));
     /// # Ok::<(), sage_sdk::SageError>(())
     /// ```
@@ -123,9 +123,9 @@ impl SageAgentSDK {
     /// # Examples
     ///
     /// ```no_run
-    /// use sage_sdk::SageAgentSDK;
+    /// use sage_sdk::SageAgentSdk;
     ///
-    /// let sdk = SageAgentSDK::new()?
+    /// let sdk = SageAgentSdk::new()?
     ///     .with_step_limit(50);
     /// # Ok::<(), sage_sdk::SageError>(())
     /// ```

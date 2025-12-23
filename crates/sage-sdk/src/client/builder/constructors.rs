@@ -1,13 +1,13 @@
 //! SDK constructors
 
-use crate::client::SageAgentSDK;
+use crate::client::SageAgentSdk;
 use sage_core::{
     config::{load_config_with_overrides, model::Config},
     error::SageResult,
 };
 use std::collections::HashMap;
 
-impl SageAgentSDK {
+impl SageAgentSdk {
     /// Create a new SDK instance with default configuration.
     ///
     /// Loads configuration from the default search paths, applying environment
@@ -23,9 +23,9 @@ impl SageAgentSDK {
     /// # Examples
     ///
     /// ```no_run
-    /// use sage_sdk::SageAgentSDK;
+    /// use sage_sdk::SageAgentSdk;
     ///
-    /// let sdk = SageAgentSDK::new()?;
+    /// let sdk = SageAgentSdk::new()?;
     /// # Ok::<(), sage_sdk::SageError>(())
     /// ```
     pub fn new() -> SageResult<Self> {
@@ -43,10 +43,10 @@ impl SageAgentSDK {
     /// # Examples
     ///
     /// ```no_run
-    /// use sage_sdk::{SageAgentSDK, Config};
+    /// use sage_sdk::{SageAgentSdk, Config};
     ///
     /// let config = Config::default();
-    /// let sdk = SageAgentSDK::with_config(config);
+    /// let sdk = SageAgentSdk::with_config(config);
     /// ```
     pub fn with_config(config: Config) -> Self {
         Self {
@@ -70,9 +70,9 @@ impl SageAgentSDK {
     /// # Examples
     ///
     /// ```no_run
-    /// use sage_sdk::SageAgentSDK;
+    /// use sage_sdk::SageAgentSdk;
     ///
-    /// let sdk = SageAgentSDK::with_config_file("config/sage.json")?;
+    /// let sdk = SageAgentSdk::with_config_file("config/sage.json")?;
     /// # Ok::<(), sage_sdk::SageError>(())
     /// ```
     pub fn with_config_file<P: AsRef<std::path::Path>>(config_file: P) -> SageResult<Self> {
@@ -100,7 +100,7 @@ impl SageAgentSDK {
     }
 }
 
-impl Default for SageAgentSDK {
+impl Default for SageAgentSdk {
     fn default() -> Self {
         Self::new().unwrap_or_else(|_| Self {
             config: Config::default(),

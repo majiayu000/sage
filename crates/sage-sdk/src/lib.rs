@@ -35,7 +35,7 @@
 //! # Example
 //!
 //! ```rust
-//! use sage_sdk::{SageAgentSDK, version};
+//! use sage_sdk::{SageAgentSdk, version};
 //!
 //! // Check SDK version
 //! println!("SDK Version: {}", version::version_string());
@@ -50,7 +50,7 @@ pub mod version;
 
 pub use client::{
     ExecutionError, ExecutionErrorKind, ExecutionOutcome, ExecutionResult, RunOptions,
-    SageAgentSDK, UnifiedRunOptions,
+    SageAgentSdk, UnifiedRunOptions,
 };
 
 // Re-export commonly used types from core

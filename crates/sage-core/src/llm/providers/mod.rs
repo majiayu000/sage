@@ -16,6 +16,6 @@ pub use doubao::DoubaoProvider;
 pub use glm::GlmProvider;
 pub use google::GoogleProvider;
 pub use ollama::OllamaProvider;
-pub use openai::OpenAIProvider;
+pub use openai::OpenAiProvider;
 pub use openrouter::OpenRouterProvider;
 pub use provider_trait::{LlmProviderTrait, ProviderInstance};
