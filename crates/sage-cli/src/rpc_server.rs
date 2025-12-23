@@ -4,6 +4,7 @@ use jsonrpc_core::{IoHandler, Result as RpcResult, Error as RpcError};
 use jsonrpc_derive::rpc;
 use jsonrpc_http_server::{ServerBuilder, Server};
 use serde::{Deserialize, Serialize};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use sage_core::error::{SageError, SageResult};
@@ -81,7 +82,8 @@ impl SageRpcImpl {
             *sdk_guard = Some(sdk);
         }
         
-        Ok(sdk_guard.as_ref().unwrap().clone())
+        // SAFETY: We just ensured sdk_guard is Some in the if block above
+        Ok(sdk_guard.as_ref().expect("SDK was just initialized").clone())
     }
 }
 
@@ -198,9 +200,11 @@ pub async fn start_rpc_server(port: u16) -> SageResult<Server> {
     let rpc_impl = SageRpcImpl::new();
     io.extend_with(rpc_impl.to_delegate());
     
+    // Construct SocketAddr directly to avoid parse().unwrap()
+    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port);
     let server = ServerBuilder::new(io)
         .cors_allow_all()
-        .start_http(&format!("127.0.0.1:{}", port).parse().unwrap())
+        .start_http(&addr)
         .map_err(|e| SageError::other(format!("Failed to start RPC server: {}", e)))?;
     
     println!("RPC server started on http://127.0.0.1:{}", port);

@@ -2,8 +2,8 @@
 
 use crate::config::provider::ProviderConfig;
 use crate::error::{SageError, SageResult};
-use crate::llm::messages::{LLMMessage, LLMResponse};
-use crate::llm::provider_types::{LLMProvider, ModelParameters};
+use crate::llm::messages::{LlmMessage, LlmResponse};
+use crate::llm::provider_types::{LlmProvider, ModelParameters};
 use crate::llm::providers::{
     ProviderInstance, LLMProviderTrait, OpenAIProvider, AnthropicProvider, GoogleProvider,
     AzureProvider, OpenRouterProvider, OllamaProvider, DoubaoProvider, GlmProvider,
@@ -19,17 +19,21 @@ use tracing::{debug, instrument, warn};
 use rand::Rng;
 
 /// LLM client for making requests to various providers
-pub struct LLMClient {
-    provider: LLMProvider,
+pub struct LlmClient {
+    provider: LlmProvider,
     config: ProviderConfig,
     model_params: ModelParameters,
     provider_instance: ProviderInstance,
 }
 
-impl LLMClient {
+/// Deprecated: Use `LlmClient` instead
+#[deprecated(since = "0.2.0", note = "Use `LlmClient` instead")]
+pub type LLMClient = LlmClient;
+
+impl LlmClient {
     /// Create a new LLM client
     pub fn new(
-        provider: LLMProvider,
+        provider: LlmProvider,
         config: ProviderConfig,
         model_params: ModelParameters,
     ) -> SageResult<Self> {
@@ -74,47 +78,47 @@ impl LLMClient {
 
         // Create provider instance based on provider type
         let provider_instance = match &provider {
-            LLMProvider::OpenAI => ProviderInstance::OpenAI(OpenAIProvider::new(
+            LlmProvider::OpenAI => ProviderInstance::OpenAI(OpenAIProvider::new(
                 config.clone(),
                 model_params.clone(),
                 http_client,
             )),
-            LLMProvider::Anthropic => ProviderInstance::Anthropic(AnthropicProvider::new(
+            LlmProvider::Anthropic => ProviderInstance::Anthropic(AnthropicProvider::new(
                 config.clone(),
                 model_params.clone(),
                 http_client,
             )),
-            LLMProvider::Google => ProviderInstance::Google(GoogleProvider::new(
+            LlmProvider::Google => ProviderInstance::Google(GoogleProvider::new(
                 config.clone(),
                 model_params.clone(),
                 http_client,
             )),
-            LLMProvider::Azure => ProviderInstance::Azure(AzureProvider::new(
+            LlmProvider::Azure => ProviderInstance::Azure(AzureProvider::new(
                 config.clone(),
                 model_params.clone(),
                 http_client,
             )),
-            LLMProvider::OpenRouter => ProviderInstance::OpenRouter(OpenRouterProvider::new(
+            LlmProvider::OpenRouter => ProviderInstance::OpenRouter(OpenRouterProvider::new(
                 config.clone(),
                 model_params.clone(),
                 http_client,
             )),
-            LLMProvider::Ollama => ProviderInstance::Ollama(OllamaProvider::new(
+            LlmProvider::Ollama => ProviderInstance::Ollama(OllamaProvider::new(
                 config.clone(),
                 model_params.clone(),
                 http_client,
             )),
-            LLMProvider::Doubao => ProviderInstance::Doubao(DoubaoProvider::new(
+            LlmProvider::Doubao => ProviderInstance::Doubao(DoubaoProvider::new(
                 config.clone(),
                 model_params.clone(),
                 http_client,
             )),
-            LLMProvider::Glm => ProviderInstance::Glm(GlmProvider::new(
+            LlmProvider::Glm => ProviderInstance::Glm(GlmProvider::new(
                 config.clone(),
                 model_params.clone(),
                 http_client,
             )),
-            LLMProvider::Custom(name) => {
+            LlmProvider::Custom(name) => {
                 return Err(SageError::llm(format!(
                     "Custom provider '{name}' not implemented"
                 )))
@@ -130,7 +134,7 @@ impl LLMClient {
     }
 
     /// Get the provider
-    pub fn provider(&self) -> &LLMProvider {
+    pub fn provider(&self) -> &LlmProvider {
         &self.provider
     }
 
@@ -145,23 +149,38 @@ impl LLMClient {
     }
 
     /// Execute a request with retry logic and exponential backoff
-    async fn execute_with_retry<F, Fut>(&self, operation: F) -> SageResult<LLMResponse>
+    #[instrument(skip(self, operation), fields(max_retries = %self.config.max_retries.unwrap_or(3)))]
+    async fn execute_with_retry<F, Fut>(&self, operation: F) -> SageResult<LlmResponse>
     where
         F: Fn() -> Fut,
-        Fut: std::future::Future<Output = SageResult<LLMResponse>>,
+        Fut: std::future::Future<Output = SageResult<LlmResponse>>,
     {
         let max_retries = self.config.max_retries.unwrap_or(3);
         let mut last_error = None;
 
         for attempt in 0..=max_retries {
             match operation().await {
-                Ok(response) => return Ok(response),
+                Ok(response) => {
+                    if attempt > 0 {
+                        tracing::info!(attempt = attempt, "request succeeded after retry");
+                    }
+                    if let Some(usage) = &response.usage {
+                        tracing::info!(
+                            prompt_tokens = usage.prompt_tokens,
+                            completion_tokens = usage.completion_tokens,
+                            total_tokens = usage.total_tokens,
+                            "llm request completed"
+                        );
+                    }
+                    return Ok(response);
+                }
                 Err(error) => {
                     last_error = Some(error.clone());
 
                     // Check if error is retryable
                     if !self.is_retryable_error(&error) {
                         warn!("Non-retryable error encountered: {}", error);
+                        tracing::warn!(error = %error, "non-retryable error");
                         return Err(error);
                     }
 
@@ -183,6 +202,13 @@ impl LLMClient {
                             delay.as_secs_f64()
                         );
 
+                        tracing::warn!(
+                            attempt = attempt + 1,
+                            max_attempts = max_retries + 1,
+                            delay_secs = delay.as_secs_f64(),
+                            "retrying after failure"
+                        );
+
                         sleep(delay).await;
                     } else {
                         warn!(
@@ -190,6 +216,7 @@ impl LLMClient {
                             max_retries + 1,
                             error
                         );
+                        tracing::error!(attempts = max_retries + 1, "all retry attempts exhausted");
                     }
                 }
             }
@@ -242,9 +269,9 @@ impl LLMClient {
     #[instrument(skip(self, messages, tools), fields(provider = %self.provider, model = %self.model_params.model))]
     pub async fn chat(
         &self,
-        messages: &[LLMMessage],
+        messages: &[LlmMessage],
         tools: Option<&[ToolSchema]>,
-    ) -> SageResult<LLMResponse> {
+    ) -> SageResult<LlmResponse> {
         // Apply rate limiting before making the request
         let provider_name = self.provider.name();
         let limiter = rate_limiter::get_rate_limiter(provider_name).await;
@@ -267,11 +294,12 @@ impl LLMClient {
 
 // Streaming support implementation
 #[async_trait]
-impl StreamingLLMClient for LLMClient {
+impl StreamingLLMClient for LlmClient {
     /// Send a streaming chat completion request
+    #[instrument(skip(self, messages, tools), fields(provider = %self.provider, model = %self.model_params.model))]
     async fn chat_stream(
         &self,
-        messages: &[LLMMessage],
+        messages: &[LlmMessage],
         tools: Option<&[ToolSchema]>,
     ) -> SageResult<LLMStream> {
         // Apply rate limiting before making the request
@@ -286,6 +314,12 @@ impl StreamingLLMClient for LLMClient {
             );
         }
 
-        self.provider_instance.chat_stream(messages, tools).await
+        let result = self.provider_instance.chat_stream(messages, tools).await;
+
+        if result.is_ok() {
+            tracing::info!("streaming request initiated");
+        }
+
+        result
     }
 }

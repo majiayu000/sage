@@ -1,6 +1,7 @@
 //! Bash command execution tool
 
 use crate::utils::{check_command_efficiency, maybe_truncate, suggest_efficient_alternative};
+use anyhow::Context;
 use async_trait::async_trait;
 use sage_core::tools::base::{CommandTool, Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
@@ -70,7 +71,7 @@ impl BashTool {
         )
         .await
         .map_err(|e| {
-            ToolError::ExecutionFailed(format!("Failed to spawn background task: {}", e))
+            ToolError::ExecutionFailed(format!("Failed to spawn background shell '{}' in '{}': {}", shell_id, self.working_directory.display(), e))
         })?;
 
         let pid = task.pid;
@@ -136,7 +137,7 @@ impl BashTool {
         let output = cmd
             .output()
             .await
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to execute command: {}", e)))?;
+            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to execute command in '{}': {}", self.working_directory.display(), e)))?;
 
         let execution_time = start_time.elapsed().as_millis() as u64;
 
@@ -341,6 +342,7 @@ Use task_output(shell_id) to retrieve output and kill_shell(shell_id) to termina
         )
     }
 
+    #[instrument(skip(self, call), fields(call_id = %call.id, run_in_background))]
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
         let command = call.get_string("command").ok_or_else(|| {
             ToolError::InvalidArguments("Missing 'command' parameter".to_string())
@@ -353,13 +355,26 @@ Use task_output(shell_id) to retrieve output and kill_shell(shell_id) to termina
         }
 
         let run_in_background = call.get_bool("run_in_background").unwrap_or(false);
+        tracing::Span::current().record("run_in_background", run_in_background);
+
         let shell_id = call.get_string("shell_id");
+
+        tracing::debug!(
+            command_preview = %command.chars().take(100).collect::<String>(),
+            "executing bash command"
+        );
 
         let mut result = if run_in_background {
             self.execute_background(&command, shell_id).await?
         } else {
             self.execute_command(&command).await?
         };
+
+        if result.success {
+            tracing::info!("bash command completed successfully");
+        } else {
+            tracing::warn!("bash command failed");
+        }
 
         result.call_id = call.id.clone();
         Ok(result)

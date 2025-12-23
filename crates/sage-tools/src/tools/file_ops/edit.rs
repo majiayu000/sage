@@ -1,5 +1,6 @@
 //! Edit tool - Claude Code style string replacement based file editing
 
+use anyhow::Context;
 use async_trait::async_trait;
 use sage_core::tools::base::{FileSystemTool, Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
@@ -125,7 +126,7 @@ Usage:
         // Read the file
         let content = fs::read_to_string(&path)
             .await
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to read file content from '{}': {}", file_path, e)))?;
+            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to read file '{}' for editing: {}", file_path, e)))?;
 
         // Check if old_string exists
         if !content.contains(&old_string) {
@@ -153,7 +154,7 @@ Usage:
         // Write back to file
         fs::write(&path, &new_content)
             .await
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to write updated content to file '{}': {}", file_path, e)))?;
+            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to write edited content to '{}' ({} bytes): {}", file_path, new_content.len(), e)))?;
 
         let mut result = if replace_all && occurrences > 1 {
             ToolResult::success(

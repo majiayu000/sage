@@ -1,5 +1,6 @@
 //! File reading tool with line numbers and pagination
 
+use anyhow::Context;
 use async_trait::async_trait;
 use sage_core::tools::base::{FileSystemTool, Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
