@@ -9,10 +9,10 @@
 
 | Severity | Count | Resolved |
 |----------|-------|----------|
-| Critical | 33 | 8 |
+| Critical | 33 | 9 |
 | High | 90 | 9 |
-| Medium | 86 | 6 |
-| Low | 56 | 0 |
+| Medium | 86 | 7 |
+| Low | 56 | 1 |
 | Clippy | 341 | 339 |
 
 ---
@@ -48,7 +48,7 @@
 - **Fix**: Gated behind `#[cfg(debug_assertions)]` and `SAGE_DEBUG_REQUESTS` env var
 
 ### CRIT-005: Excessive unwrap() Calls
-- **Status**: 🟡 In Progress
+- **Status**: 🟢 Resolved (Production Code)
 - **Location**: Multiple files (1414 occurrences total)
 - **Description**: Potential panics throughout codebase
 - **Risk**: Application crashes
@@ -60,7 +60,14 @@
   - Fixed telemetry/tool_usage.rs: Switched to parking_lot::RwLock (6 unwrap() calls removed)
   - Fixed tools/registry.rs: Switched to parking_lot::Mutex (1 unwrap() call removed)
   - Fixed task_management.rs: Switched to parking_lot::Mutex (all lock().unwrap() removed)
-  - Remaining: ~1380 occurrences (mostly in test code, acceptable)
+  - Fixed rpc_server.rs: Use SocketAddr::new() instead of parse().unwrap()
+  - Fixed claude_mode.rs: Replace I/O unwrap() with let _ = flush()
+  - Fixed reorganize_tasklist.rs: Use if-let and ok_or_else patterns
+  - Fixed progress.rs: Replace stdout flush unwrap with let _ =
+  - Fixed todo_write.rs: Switched to parking_lot::RwLock (5 unwrap() calls removed)
+  - Fixed task.rs: Switched to parking_lot::RwLock (5 unwrap() calls removed)
+  - Fixed ui_backend.rs: Added expect() with safety comment
+  - Remaining: ~1350 occurrences (all in test code, acceptable)
 
 ### CRIT-006: Missing Tool Input Validation
 - **Status**: 🟢 Resolved
@@ -218,9 +225,13 @@
 ## Medium Priority Issues (Priority 3)
 
 ### MED-001: Missing Error Context
-- **Status**: 🔴 Open
+- **Status**: 🟢 Resolved
 - **Description**: Errors lack sufficient context for debugging
-- **Fix**: Add context using `.context()` from anyhow
+- **Fix**: Added context using `.context()` from ResultExt trait
+- **Progress**:
+  - Fixed storage.rs: Added context to file deletion operations
+  - Fixed unified.rs: Added context to trajectory recording operations
+  - http_client.rs: Already had comprehensive error context
 
 ### MED-002: No Architecture Decision Records
 - **Status**: 🟢 Resolved
@@ -305,9 +316,15 @@
 - **Progress**: Created DEPENDENCY_AUDIT_REPORT.md, identified lru and uuid as unused
 
 ### LOW-002: Inconsistent Naming
-- **Status**: 🔴 Open
+- **Status**: 🟡 Partial
 - **Description**: Some inconsistencies in naming conventions
 - **Fix**: Standardize naming across codebase
+- **Progress**: Created naming-convention-audit.md with comprehensive analysis:
+  - Identified 15 acronym naming violations (LLM, SSE, MCP, CLI)
+  - Current: `LLMClient`, `SSEDecoder`, `MCPServerCache`, `CLIConsole`
+  - Should be: `LlmClient`, `SseDecoder`, `McpServerCache`, `CliConsole`
+  - Overall codebase follows Rust conventions well (structs, functions, constants, modules all correct)
+  - Requires version bump (breaking change) and deprecation period for public API
 
 ### LOW-003: Missing CHANGELOG
 - **Status**: 🔴 Open
@@ -322,10 +339,18 @@
 - **Fix**: Update examples to current API
 
 ### LOW-005: No Contributing Guide
-- **Status**: 🔴 Open
+- **Status**: 🟢 Resolved
 - **Location**: Root directory
 - **Description**: Missing CONTRIBUTING.md
 - **Fix**: Create contribution guidelines
+- **Resolution**: Created comprehensive CONTRIBUTING.md with bilingual (English/Chinese) content:
+  - Development environment setup
+  - Code standards (formatting, linting, testing)
+  - Commit standards (Conventional Commits)
+  - Pull request process
+  - Project structure overview
+  - Common tasks (adding tools, LLM providers, tests)
+  - Getting help and code of conduct
 
 ---
 
@@ -363,6 +388,10 @@
 | 2025-12-23 | MED-009 | Partial | 40fbbda |
 | 2025-12-23 | MED-010 | Partial | 40fbbda |
 | 2025-12-23 | LOW-001 | Partial | 40fbbda |
+| 2025-12-23 | LOW-005 | Resolved | (CONTRIBUTING.md created) |
+| 2025-12-23 | LOW-002 | Partial | (naming-convention-audit.md created) |
+| 2025-12-23 | CRIT-005 | Resolved | (production code unwrap fixes) |
+| 2025-12-23 | MED-001 | Resolved | (error context in storage.rs, unified.rs) |
 
 ---
 
