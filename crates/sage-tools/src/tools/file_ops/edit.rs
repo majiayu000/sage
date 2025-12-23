@@ -1,6 +1,5 @@
 //! Edit tool - Claude Code style string replacement based file editing
 
-use anyhow::Context;
 use async_trait::async_trait;
 use sage_core::tools::base::{FileSystemTool, Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};

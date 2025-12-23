@@ -137,7 +137,7 @@ impl Default for TimeoutConfig {
 /// Supported LLM providers
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum LLMProvider {
+pub enum LlmProvider {
     /// OpenAI (GPT models)
     OpenAI,
     /// Anthropic (Claude models)
@@ -158,43 +158,47 @@ pub enum LLMProvider {
     Custom(String),
 }
 
-impl LLMProvider {
+/// Deprecated: Use `LlmProvider` instead
+#[deprecated(since = "0.2.0", note = "Use `LlmProvider` instead")]
+pub type LLMProvider = LlmProvider;
+
+impl LlmProvider {
     /// Get the provider name as a string
     pub fn name(&self) -> &str {
         match self {
-            LLMProvider::OpenAI => "openai",
-            LLMProvider::Anthropic => "anthropic",
-            LLMProvider::Google => "google",
-            LLMProvider::Azure => "azure",
-            LLMProvider::OpenRouter => "openrouter",
-            LLMProvider::Doubao => "doubao",
-            LLMProvider::Ollama => "ollama",
-            LLMProvider::Glm => "glm",
-            LLMProvider::Custom(name) => name,
+            LlmProvider::OpenAI => "openai",
+            LlmProvider::Anthropic => "anthropic",
+            LlmProvider::Google => "google",
+            LlmProvider::Azure => "azure",
+            LlmProvider::OpenRouter => "openrouter",
+            LlmProvider::Doubao => "doubao",
+            LlmProvider::Ollama => "ollama",
+            LlmProvider::Glm => "glm",
+            LlmProvider::Custom(name) => name,
         }
     }
 }
 
-impl std::fmt::Display for LLMProvider {
+impl std::fmt::Display for LlmProvider {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name())
     }
 }
 
-impl std::str::FromStr for LLMProvider {
+impl std::str::FromStr for LlmProvider {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "openai" => Ok(LLMProvider::OpenAI),
-            "anthropic" => Ok(LLMProvider::Anthropic),
-            "google" => Ok(LLMProvider::Google),
-            "azure" => Ok(LLMProvider::Azure),
-            "openrouter" => Ok(LLMProvider::OpenRouter),
-            "doubao" => Ok(LLMProvider::Doubao),
-            "ollama" => Ok(LLMProvider::Ollama),
-            "glm" | "zhipu" => Ok(LLMProvider::Glm),
-            _ => Ok(LLMProvider::Custom(s.to_string())),
+            "openai" => Ok(LlmProvider::OpenAI),
+            "anthropic" => Ok(LlmProvider::Anthropic),
+            "google" => Ok(LlmProvider::Google),
+            "azure" => Ok(LlmProvider::Azure),
+            "openrouter" => Ok(LlmProvider::OpenRouter),
+            "doubao" => Ok(LlmProvider::Doubao),
+            "ollama" => Ok(LlmProvider::Ollama),
+            "glm" | "zhipu" => Ok(LlmProvider::Glm),
+            _ => Ok(LlmProvider::Custom(s.to_string())),
         }
     }
 }

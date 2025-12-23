@@ -1,3 +1,8 @@
+//! Interrupt Manager Demonstration
+//!
+//! This example demonstrates the interrupt manager functionality which allows
+//! graceful interruption and cancellation of running agent tasks.
+
 use sage_core::interrupt::{
     InterruptReason, global_interrupt_manager, interrupt_current_task,
     reset_global_interrupt_manager,

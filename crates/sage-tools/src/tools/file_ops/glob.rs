@@ -7,6 +7,7 @@ use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
 use std::fs;
 use std::path::PathBuf;
 use std::time::SystemTime;
+use tracing::instrument;
 
 /// Maximum number of files to return
 const MAX_FILES: usize = 1000;
@@ -157,7 +158,17 @@ impl GlobTool {
             output = format!("Search directory: {}\n\n{}", path_str, output);
         }
 
-        Ok(ToolResult::success("", self.name(), output))
+        // Build result with metadata
+        let mut result = ToolResult::success("", self.name(), output)
+            .with_metadata("pattern", serde_json::Value::String(pattern.to_string()))
+            .with_metadata("results_count", serde_json::Value::Number(file_count.into()))
+            .with_metadata("truncated", serde_json::Value::Bool(truncated));
+
+        if let Some(path_str) = search_path {
+            result = result.with_metadata("search_path", serde_json::Value::String(path_str.to_string()));
+        }
+
+        Ok(result)
     }
 }
 
@@ -215,6 +226,7 @@ File paths are returned relative to the working directory when possible."
         )
     }
 
+    #[instrument(skip(self, call), fields(call_id = %call.id, pattern = call.get_string("pattern").as_deref().unwrap_or("<missing>")))]
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
         let pattern = call.get_string("pattern").ok_or_else(|| {
             ToolError::InvalidArguments("Missing 'pattern' parameter".to_string())

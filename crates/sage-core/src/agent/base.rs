@@ -20,6 +20,7 @@ use colored::*;
 use std::sync::Arc;
 use tokio::select;
 use tokio::sync::Mutex;
+use tracing::instrument;
 
 /// Model identity information for system prompt
 #[derive(Debug, Clone)]
@@ -265,6 +266,7 @@ impl BaseAgent {
     }
 
     /// Execute a single step
+    #[instrument(skip(self, messages, tools), fields(step_number = %step_number))]
     async fn execute_step(
         &mut self,
         step_number: u32,
@@ -371,6 +373,10 @@ impl BaseAgent {
 
         // Check if there are tool calls
         if !llm_response.tool_calls.is_empty() {
+            tracing::info!(
+                tool_count = llm_response.tool_calls.len(),
+                "executing tools"
+            );
             step.state = AgentState::ToolExecution;
 
             // Print tool execution separator
@@ -533,6 +539,7 @@ impl BaseAgent {
 
         // Check if task is completed
         if llm_response.indicates_completion() {
+            tracing::info!("step indicates task completion");
             step.state = AgentState::Completed;
             DisplayManager::print_separator("Task Completed", "green");
         }
@@ -591,7 +598,9 @@ impl BaseAgent {
 
 #[async_trait]
 impl Agent for BaseAgent {
+    #[instrument(skip(self), fields(task_id = %task.id, task_description = %task.description, max_steps = %self.max_steps))]
     async fn execute_task(&mut self, task: TaskMetadata) -> SageResult<ExecutionOutcome> {
+        tracing::info!("starting agent execution");
         let mut execution = AgentExecution::new(task.clone());
 
         // Reset the global interrupt manager for this new task
@@ -674,6 +683,11 @@ impl Agent for BaseAgent {
                         execution.add_step(step);
 
                         if is_completed {
+                            tracing::info!(
+                                steps = execution.steps.len(),
+                                total_tokens = execution.total_usage.total_tokens,
+                                "task completed successfully"
+                            );
                             execution
                                 .complete(true, Some("Task completed successfully".to_string()));
                             break 'execution_loop ExecutionOutcome::Success(execution);
@@ -692,6 +706,12 @@ impl Agent for BaseAgent {
                     Err(e) => {
                         // Stop animation on error
                         self.animation_manager.stop_animation().await;
+
+                        tracing::error!(
+                            step = step_number,
+                            error = %e,
+                            "execution step failed"
+                        );
 
                         let error_step = AgentStep::new(step_number, AgentState::Error)
                             .with_error(e.to_string());

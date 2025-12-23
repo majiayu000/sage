@@ -15,7 +15,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let sdk = SageAgentSDK::new()?
         .with_provider_and_model("openai", "gpt-4", None)? // API key from environment
         .with_working_directory("./examples")
-        .with_max_steps(10);
+        .with_max_steps(Some(10));
 
     // Simple task execution
     println!("\n📝 Running a simple task...");
@@ -28,9 +28,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let stats = result.statistics();
         println!("📊 Execution Stats:");
         println!("   Steps: {}", stats.total_steps);
-        println!("   Tokens: {}", result.execution.total_usage.total_tokens);
-        
-        if let Some(duration) = result.execution.duration() {
+        println!("   Tokens: {}", result.execution().total_usage.total_tokens);
+
+        if let Some(duration) = result.execution().duration() {
             println!("   Duration: {:.2}s", duration.num_milliseconds() as f64 / 1000.0);
         }
 

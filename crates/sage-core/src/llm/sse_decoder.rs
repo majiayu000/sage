@@ -8,7 +8,7 @@
 
 /// A parsed SSE event from the stream
 #[derive(Debug, Clone, PartialEq)]
-pub struct SSEEvent {
+pub struct SseEvent {
     /// Event type (e.g., "message_start", "content_block_delta")
     pub event_type: Option<String>,
     /// Event data (the JSON payload)
@@ -17,7 +17,11 @@ pub struct SSEEvent {
     pub id: Option<String>,
 }
 
-impl SSEEvent {
+/// Deprecated: Use `SseEvent` instead
+#[deprecated(since = "0.2.0", note = "Use `SseEvent` instead")]
+pub type SSEEvent = SseEvent;
+
+impl SseEvent {
     /// Create a new SSE event with just data
     pub fn new(data: impl Into<String>) -> Self {
         Self {
@@ -55,12 +59,16 @@ impl SSEEvent {
 ///
 /// Events are separated by double newlines (\n\n)
 #[derive(Debug, Default)]
-pub struct SSEDecoder {
+pub struct SseDecoder {
     /// Buffer for incomplete data
     buffer: String,
 }
 
-impl SSEDecoder {
+/// Deprecated: Use `SseDecoder` instead
+#[deprecated(since = "0.2.0", note = "Use `SseDecoder` instead")]
+pub type SSEDecoder = SseDecoder;
+
+impl SseDecoder {
     /// Create a new SSE decoder
     pub fn new() -> Self {
         Self {
@@ -72,7 +80,7 @@ impl SSEDecoder {
     ///
     /// Returns a vector of complete SSE events parsed from the input.
     /// Incomplete events are buffered for the next call.
-    pub fn feed(&mut self, chunk: &[u8]) -> Vec<SSEEvent> {
+    pub fn feed(&mut self, chunk: &[u8]) -> Vec<SseEvent> {
         // Convert bytes to string (SSE is always UTF-8)
         let chunk_str = match std::str::from_utf8(chunk) {
             Ok(s) => s,
@@ -129,7 +137,7 @@ impl SSEDecoder {
     }
 
     /// Parse a single SSE event from text
-    fn parse_event(&self, text: &str) -> Option<SSEEvent> {
+    fn parse_event(&self, text: &str) -> Option<SseEvent> {
         let mut event_type: Option<String> = None;
         let mut data_lines: Vec<&str> = Vec::new();
         let mut id: Option<String> = None;
@@ -162,7 +170,7 @@ impl SSEDecoder {
         // Join multi-line data with newlines (per SSE spec)
         let data = data_lines.join("\n");
 
-        Some(SSEEvent {
+        Some(SseEvent {
             event_type,
             data,
             id,
@@ -191,7 +199,7 @@ mod tests {
 
     #[test]
     fn test_simple_event() {
-        let mut decoder = SSEDecoder::new();
+        let mut decoder = SseDecoder::new();
         let events = decoder.feed(b"data: {\"text\": \"hello\"}\n\n");
 
         assert_eq!(events.len(), 1);
@@ -201,7 +209,7 @@ mod tests {
 
     #[test]
     fn test_event_with_type() {
-        let mut decoder = SSEDecoder::new();
+        let mut decoder = SseDecoder::new();
         let events = decoder.feed(b"event: message_start\ndata: {\"type\": \"message\"}\n\n");
 
         assert_eq!(events.len(), 1);
@@ -211,7 +219,7 @@ mod tests {
 
     #[test]
     fn test_multiple_events() {
-        let mut decoder = SSEDecoder::new();
+        let mut decoder = SseDecoder::new();
         let events = decoder.feed(b"data: first\n\ndata: second\n\n");
 
         assert_eq!(events.len(), 2);
@@ -221,7 +229,7 @@ mod tests {
 
     #[test]
     fn test_partial_chunks() {
-        let mut decoder = SSEDecoder::new();
+        let mut decoder = SseDecoder::new();
 
         // First chunk - incomplete
         let events1 = decoder.feed(b"event: content_block_delta\ndata: {\"ty");
@@ -239,7 +247,7 @@ mod tests {
 
     #[test]
     fn test_multi_line_data() {
-        let mut decoder = SSEDecoder::new();
+        let mut decoder = SseDecoder::new();
         let events = decoder.feed(b"data: line1\ndata: line2\ndata: line3\n\n");
 
         assert_eq!(events.len(), 1);
@@ -248,7 +256,7 @@ mod tests {
 
     #[test]
     fn test_openai_done_marker() {
-        let mut decoder = SSEDecoder::new();
+        let mut decoder = SseDecoder::new();
         let events = decoder.feed(b"data: [DONE]\n\n");
 
         assert_eq!(events.len(), 1);
@@ -257,7 +265,7 @@ mod tests {
 
     #[test]
     fn test_anthropic_event_sequence() {
-        let mut decoder = SSEDecoder::new();
+        let mut decoder = SseDecoder::new();
 
         let input = b"event: message_start\n\
             data: {\"type\": \"message_start\"}\n\n\
@@ -282,7 +290,7 @@ mod tests {
 
     #[test]
     fn test_event_with_id() {
-        let mut decoder = SSEDecoder::new();
+        let mut decoder = SseDecoder::new();
         let events = decoder.feed(b"id: msg_123\nevent: test\ndata: payload\n\n");
 
         assert_eq!(events.len(), 1);
@@ -293,7 +301,7 @@ mod tests {
 
     #[test]
     fn test_windows_line_endings() {
-        let mut decoder = SSEDecoder::new();
+        let mut decoder = SseDecoder::new();
         let events = decoder.feed(b"event: test\r\ndata: value\r\n\r\n");
 
         assert_eq!(events.len(), 1);
@@ -302,7 +310,7 @@ mod tests {
 
     #[test]
     fn test_empty_data() {
-        let mut decoder = SSEDecoder::new();
+        let mut decoder = SseDecoder::new();
         let events = decoder.feed(b"event: ping\n\n");
 
         // Event without data is not emitted
@@ -311,7 +319,7 @@ mod tests {
 
     #[test]
     fn test_clear_buffer() {
-        let mut decoder = SSEDecoder::new();
+        let mut decoder = SseDecoder::new();
         decoder.feed(b"data: incomplete");
         assert!(decoder.has_remaining());
 

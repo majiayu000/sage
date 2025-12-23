@@ -2,6 +2,7 @@
 
 use crate::config::model::{Config, ModelParameters};
 use crate::error::{SageError, SageResult};
+use anyhow::Context;
 use serde_json;
 use std::collections::HashMap;
 use std::env;
@@ -114,15 +115,19 @@ impl ConfigLoader {
         }
 
         let content = fs::read_to_string(path)
-            .map_err(|e| SageError::config(format!("Failed to read config file: {}", e)))?;
+            .map_err(|e| SageError::config(format!("Failed to read config file: {}", e)))
+            .with_context(|| format!("failed to read configuration from '{}'", path.display()))?;
 
         let config: Config = match path.extension().and_then(|s| s.to_str()) {
             Some("toml") => toml::from_str(&content)
-                .map_err(|e| SageError::config(format!("Failed to parse TOML config: {}", e)))?,
+                .map_err(|e| SageError::config(format!("Failed to parse TOML config: {}", e)))
+                .with_context(|| format!("failed to deserialize TOML configuration from '{}'", path.display()))?,
             Some("yaml") | Some("yml") => serde_yaml::from_str(&content)
-                .map_err(|e| SageError::config(format!("Failed to parse YAML config: {}", e)))?,
+                .map_err(|e| SageError::config(format!("Failed to parse YAML config: {}", e)))
+                .with_context(|| format!("failed to deserialize YAML configuration from '{}'", path.display()))?,
             _ => serde_json::from_str(&content)
-                .map_err(|e| SageError::config(format!("Failed to parse JSON config: {}", e)))?,
+                .map_err(|e| SageError::config(format!("Failed to parse JSON config: {}", e)))
+                .with_context(|| format!("failed to deserialize JSON configuration from '{}'", path.display()))?,
         };
 
         Ok(config)
@@ -210,17 +215,17 @@ impl ConfigLoader {
 
         // Temperature
         if let Ok(temp) = env::var(format!("{}_TEMPERATURE", env_prefix)) {
-            params.temperature = Some(temp.parse().map_err(|_| {
-                SageError::config(format!("Invalid {}_TEMPERATURE value", env_prefix))
-            })?);
+            params.temperature = Some(temp.parse()
+                .map_err(|_| SageError::config(format!("Invalid {}_TEMPERATURE value", env_prefix)))
+                .with_context(|| format!("failed to parse temperature value '{}' for provider '{}'", temp, provider))?);
             has_config = true;
         }
 
         // Max tokens
         if let Ok(max_tokens) = env::var(format!("{}_MAX_TOKENS", env_prefix)) {
-            params.max_tokens = Some(max_tokens.parse().map_err(|_| {
-                SageError::config(format!("Invalid {}_MAX_TOKENS value", env_prefix))
-            })?);
+            params.max_tokens = Some(max_tokens.parse()
+                .map_err(|_| SageError::config(format!("Invalid {}_MAX_TOKENS value", env_prefix)))
+                .with_context(|| format!("failed to parse max_tokens value '{}' for provider '{}'", max_tokens, provider))?);
             has_config = true;
         }
 
@@ -293,7 +298,8 @@ impl ConfigLoader {
         if let Some(max_steps_str) = args.get("max_steps") {
             let max_steps: u32 = max_steps_str
                 .parse()
-                .map_err(|_| SageError::config("Invalid max_steps value"))?;
+                .map_err(|_| SageError::config("Invalid max_steps value"))
+                .with_context(|| format!("failed to parse max_steps value '{}' from command line arguments", max_steps_str))?;
             config.max_steps = Some(max_steps);
         }
 

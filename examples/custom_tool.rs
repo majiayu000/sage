@@ -216,7 +216,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .build();
 
     // Create SDK with custom configuration
-    let mut sdk = SageAgentSDK::new()?
+    let _sdk = SageAgentSDK::new()?
         .with_provider_and_model("openai", "gpt-4", None)?
         .with_working_directory("./examples");
 

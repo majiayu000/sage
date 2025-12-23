@@ -78,6 +78,7 @@
     "enabled": false,
     "directory": "trajectories",
     "auto_save": true,
-    "save_interval_steps": 5
+    "save_interval_steps": 5,
+    "enable_compression": true
   }
 }

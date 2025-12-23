@@ -1,3 +1,28 @@
+[package]
+name = "sage"
+version = "0.1.0"
+edition = "2024"
+authors = ["Sage Agent Team"]
+license = "MIT"
+repository = "https://github.com/majiayu000/sage"
+description = "LLM-based agent for general purpose software engineering tasks"
+publish = false
+
+[dependencies]
+sage-sdk = { path = "crates/sage-sdk" }
+sage-core = { path = "crates/sage-core" }
+sage-tools = { path = "crates/sage-tools" }
+tokio = { workspace = true }
+tracing-subscriber = { workspace = true }
+async-trait = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3.10"
+crossterm = "0.27"
+uuid = { workspace = true }
+
 [workspace]
 members = [
     "crates/sage-core",
@@ -82,6 +107,9 @@ once_cell = "1.19"
 
 # Synchronization primitives (faster, no-poison alternative to std::sync::Mutex)
 parking_lot = "0.12"
+
+# LRU Cache
+lru = "0.12"
 
 [profile.release]
 lto = true

@@ -1,3 +1,8 @@
+//! LLM Retry Mechanism Test
+//!
+//! This example tests the retry functionality of the LLM client when
+//! handling API errors and timeouts.
+
 use sage_core::{
     config::provider::ProviderConfig,
     llm::{

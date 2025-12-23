@@ -2,8 +2,7 @@
 //! 
 //! Demonstrates basic reactive agent functionality without UI complexity
 
-use sage_core::{Config, ClaudeStyleAgent, TaskMetadata};
-use std::path::PathBuf;
+use sage_core::{Config, ClaudeStyleAgent, ReactiveAgent, TaskMetadata};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

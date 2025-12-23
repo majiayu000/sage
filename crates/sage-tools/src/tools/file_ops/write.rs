@@ -9,6 +9,7 @@ use sage_core::tools::base::{FileSystemTool, Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
 use std::path::PathBuf;
 use tokio::fs;
+use tracing::instrument;
 
 /// Tool for writing files to the filesystem
 ///
@@ -167,6 +168,7 @@ Security:
         )
     }
 
+    #[instrument(skip(self, call), fields(call_id = %call.id, file_path = call.get_string("file_path").as_deref().unwrap_or("<missing>")))]
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
         let file_path = call.get_string("file_path").ok_or_else(|| {
             ToolError::InvalidArguments("Missing 'file_path' parameter".to_string())

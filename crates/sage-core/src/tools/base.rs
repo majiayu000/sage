@@ -354,9 +354,10 @@ pub trait CommandTool: Tool {
             return true; // No restrictions
         }
 
-        allowed
-            .iter()
-            .any(|&allowed_cmd| command.starts_with(allowed_cmd))
+        allowed.iter().any(|&allowed_cmd| {
+            // Match exact command or command followed by space (subcommand)
+            command == allowed_cmd || command.starts_with(&format!("{} ", allowed_cmd))
+        })
     }
 
     /// Get the working directory for command execution

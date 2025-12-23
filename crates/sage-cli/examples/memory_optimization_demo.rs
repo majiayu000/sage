@@ -11,7 +11,7 @@ use sage_core::{
     llm::{LLMMessage, LLMResponse, MessageRole},
     trajectory::memory_optimized::{MemoryOptimizedConfig, MemoryOptimizedRecorder},
     trajectory::recorder::TrajectoryRecord,
-    types::LLMUsage,
+    types::{Id, LLMUsage},
 };
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -163,7 +163,7 @@ async fn test_memory_optimized_trajectory() -> SageResult<()> {
     // Add records that will exceed memory limits
     for i in 1..=8 {
         let record = TrajectoryRecord {
-            id: uuid::Uuid::new_v4(),
+            id: Id::new_v4(),
             task: format!("Task {}: Process large dataset", i),
             start_time: chrono::Utc::now().to_rfc3339(),
             end_time: chrono::Utc::now().to_rfc3339(),

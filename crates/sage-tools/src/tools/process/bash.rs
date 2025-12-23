@@ -1,7 +1,6 @@
 //! Bash command execution tool
 
 use crate::utils::{check_command_efficiency, maybe_truncate, suggest_efficient_alternative};
-use anyhow::Context;
 use async_trait::async_trait;
 use sage_core::tools::base::{CommandTool, Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};

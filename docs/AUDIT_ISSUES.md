@@ -11,8 +11,8 @@
 |----------|-------|----------|
 | Critical | 33 | 9 |
 | High | 90 | 9 |
-| Medium | 86 | 7 |
-| Low | 56 | 1 |
+| Medium | 86 | 9 |
+| Low | 56 | 5 |
 | Clippy | 341 | 339 |
 
 ---
@@ -195,7 +195,7 @@
 - **Decision**: Acceptable for now. Duplication is in boilerplate/tests, not core logic. Doesn't impact functionality or maintainability significantly.
 
 ### HIGH-011: No Observability Instrumentation
-- **Status**: 🟡 Partial
+- **Status**: 🟡 Partial (Major Progress)
 - **Location**: Entire codebase
 - **Description**: Missing metrics and tracing spans
 - **Progress**:
@@ -204,7 +204,11 @@
   - Added `#[instrument]` to BashTool.execute_command with command preview
   - Added `#[instrument]` to ReadTool.read_file with path field
   - Added `#[instrument]` to EditTool.execute with call_id field
-- **Remaining**: Add metrics collection, more span coverage in LLM providers
+  - Added `#[instrument]` to trajectory storage methods (save, load, save_compressed, load_compressed)
+  - Added `#[instrument]` to trajectory recorder methods (start_recording, record_step, finalize_recording)
+  - Added `#[instrument]` to WriteTool, GlobTool, GrepTool execute methods
+  - Added tracing events for state changes
+- **Remaining**: Add metrics collection (Prometheus), more span coverage in LLM providers
 
 ### HIGH-012: Trajectory Replay Not Implemented
 - **Status**: 🟢 Resolved
@@ -261,10 +265,16 @@
   - Updated ConfigAction and TrajectoryAction enums with detailed descriptions
 
 ### MED-005: Inconsistent Tool Response Format
-- **Status**: 🔴 Open
+- **Status**: 🟢 Resolved
 - **Location**: `sage-tools/src/tools/`
 - **Description**: Tools return different response structures
-- **Fix**: Standardize tool response format
+- **Fix**: Standardized tool response format with structured metadata
+- **Progress**:
+  - Enhanced GlobTool with metadata (pattern, results_count, truncated, search_path)
+  - Enhanced GrepTool with metadata (pattern, results_count, total_matches, output_mode, filters)
+  - Fixed HttpClientTool to use standard Tool trait (schema(), execute(&ToolCall))
+  - Removed unused imports from edit.rs, read.rs, bash.rs
+  - Created TOOL_RESPONSE_STANDARD.md documentation
 
 ### MED-006: Missing Retry Logic for LLM
 - **Status**: 🟢 Resolved
@@ -276,10 +286,18 @@
   - Applied to all retryable error scenarios
 
 ### MED-007: Large Trajectory Files
-- **Status**: 🔴 Open
-- **Location**: `trajectories/`
+- **Status**: 🟢 Resolved
+- **Location**: `trajectories/`, `sage-core/src/trajectory/storage.rs`
 - **Description**: Files can grow very large
-- **Fix**: Implement compression and rotation
+- **Fix**: Implemented compression and rotation
+- **Progress**:
+  - Added `RotationConfig` struct with `max_trajectories` and `total_size_limit` options
+  - Added `with_config()` constructor to `FileStorage` for rotation configuration
+  - Implemented `rotate_files()` method for automatic cleanup of old trajectories
+  - Fixed filename collisions with millisecond timestamps (`%Y%m%d_%H%M%S_%3f`)
+  - Fixed `load()` method for directory mode (non-compressed files)
+  - Added 10 comprehensive rotation tests
+  - Exported `RotationConfig` in trajectory module
 
 ### MED-008: No Graceful Shutdown
 - **Status**: 🟢 Resolved
@@ -310,10 +328,10 @@
 ## Low Priority Issues (Priority 4)
 
 ### LOW-001: Unused Dependencies
-- **Status**: 🟡 Partial
+- **Status**: 🟢 Resolved
 - **Description**: Some dependencies may be unused
 - **Fix**: Audit and remove unused dependencies
-- **Progress**: Created DEPENDENCY_AUDIT_REPORT.md, identified lru and uuid as unused
+- **Resolution**: Manual verification confirmed all dependencies are in use. Original audit report was incorrect - both `lru` (used in cache/storage.rs) and `uuid` (used in 35+ files) are actively used. Created DEPENDENCY_AUDIT_CORRECTED.md with detailed findings.
 
 ### LOW-002: Inconsistent Naming
 - **Status**: 🟡 Partial
@@ -327,16 +345,30 @@
   - Requires version bump (breaking change) and deprecation period for public API
 
 ### LOW-003: Missing CHANGELOG
-- **Status**: 🔴 Open
+- **Status**: 🟢 Resolved
 - **Location**: Root directory
 - **Description**: No CHANGELOG.md file
 - **Fix**: Create and maintain changelog
+- **Resolution**: Created comprehensive CHANGELOG.md following Keep a Changelog format:
+  - Unreleased section with Added, Changed, Fixed, Security, Deprecated, Removed subsections
+  - Documented all security fixes (CRIT-001 through CRIT-008)
+  - Documented major features (rate limiting, trajectory replay, API versioning, graceful shutdown)
+  - Documented code quality improvements (clippy cleanup from 341→2 warnings, unwrap removal)
+  - Documented dependency updates and architecture changes
+  - Included version 0.1.0 initial release notes
+  - Added links to repository, issue tracker, and documentation
 
 ### LOW-004: Example Code Outdated
-- **Status**: 🔴 Open
+- **Status**: 🟢 Resolved
 - **Location**: `examples/`
 - **Description**: Some examples may not reflect current API
-- **Fix**: Update examples to current API
+- **Fix**: Updated examples to current API
+- **Progress**:
+  - Added uuid to dev-dependencies in root Cargo.toml
+  - Fixed trajectory_compression_demo.rs uuid import
+  - Fixed custom_tool.rs unused variable warnings
+  - Added documentation comments to 5 example files
+  - All 23 examples now compile successfully
 
 ### LOW-005: No Contributing Guide
 - **Status**: 🟢 Resolved
@@ -392,6 +424,12 @@
 | 2025-12-23 | LOW-002 | Partial | (naming-convention-audit.md created) |
 | 2025-12-23 | CRIT-005 | Resolved | (production code unwrap fixes) |
 | 2025-12-23 | MED-001 | Resolved | (error context in storage.rs, unified.rs) |
+| 2025-12-23 | LOW-003 | Resolved | edfe72d (CHANGELOG.md created and maintained) |
+| 2025-12-23 | LOW-001 | Resolved | (dependency audit corrected - all deps confirmed in use) |
+| 2025-12-23 | MED-005 | Resolved | (tool response standardization) |
+| 2025-12-23 | MED-007 | Resolved | (trajectory compression and rotation) |
+| 2025-12-23 | LOW-004 | Resolved | (example code updated) |
+| 2025-12-23 | HIGH-011 | Partial | (additional observability spans) |
 
 ---
 

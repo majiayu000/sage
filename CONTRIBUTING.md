@@ -1,646 +1,1443 @@
-# Contributing to Sage Agent
+# Contributing to Sage Agent | 贡献指南
 
-Thank you for your interest in contributing to Sage Agent! This document provides guidelines and instructions for contributing to this project.
+[English](#english) | [中文](#中文)
 
-## Table of Contents
+---
 
-- [Code of Conduct](#code-of-conduct)
-- [How Can I Contribute?](#how-can-i-contribute)
-- [Development Setup](#development-setup)
-- [Building from Source](#building-from-source)
-- [Running Tests](#running-tests)
-- [Code Style Guidelines](#code-style-guidelines)
-- [Pull Request Process](#pull-request-process)
-- [Issue Reporting Guidelines](#issue-reporting-guidelines)
-- [Commit Message Format](#commit-message-format)
-- [Architecture Overview](#architecture-overview)
-- [Documentation](#documentation)
-- [Getting Help](#getting-help)
+<a name="english"></a>
+## English
 
-## Code of Conduct
+### Welcome Contributors
 
-This project follows the Rust community's [Code of Conduct](https://www.rust-lang.org/policies/code-of-conduct). By participating, you are expected to uphold this code. Please report unacceptable behavior to the project maintainers.
+Thank you for your interest in contributing to **Sage Agent**! This project is a Rust-based LLM agent system inspired by Claude Code's design patterns. We welcome contributions of all kinds - bug fixes, new features, documentation improvements, and more.
 
-## How Can I Contribute?
+Whether you're fixing a typo or implementing a major feature, your contribution is valued and appreciated.
 
-There are many ways to contribute to Sage Agent:
+---
 
-### Reporting Bugs
+### Development Environment Setup
 
-Before creating bug reports, please check the [existing issues](https://github.com/majiayu000/sage/issues) to avoid duplicates. When creating a bug report, include as many details as possible:
+#### Prerequisites
 
-- A clear and descriptive title
-- Steps to reproduce the issue
-- Expected behavior
-- Actual behavior
-- System information (OS, Rust version, etc.)
-- Relevant logs or error messages
-- Configuration files (with sensitive data removed)
+**Rust Requirements:**
+- Rust 1.85+ (Rust 2024 Edition)
+- `rustfmt` and `clippy` components
+- Basic familiarity with async/await and Tokio
 
-### Suggesting Enhancements
+**System Requirements:**
+- Git
+- Unix-like environment (macOS, Linux) or WSL on Windows
+- Terminal with UTF-8 support
 
-Enhancement suggestions are tracked as GitHub issues. When creating an enhancement suggestion, include:
+#### Installation Steps
 
-- A clear and descriptive title
-- Detailed description of the proposed feature
-- Explain why this enhancement would be useful
-- Examples of how the feature would be used
-- Possible implementation approaches (if applicable)
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/majiayu000/sage.git
+   cd sage
+   ```
 
-### Contributing Code
+2. **Setup Rust toolchain**
+   ```bash
+   # Update Rust to latest stable
+   rustup update
 
-1. **Fork the repository** and create your branch from `main`
-2. **Make your changes** following our code style guidelines
-3. **Add tests** for your changes
-4. **Update documentation** as needed
-5. **Ensure all tests pass** and code passes linting
-6. **Submit a pull request**
+   # Install required components
+   rustup component add rustfmt clippy
+   ```
 
-### Improving Documentation
+3. **Verify installation**
+   ```bash
+   # Check Rust version
+   rustc --version
 
-Documentation improvements are always welcome! This includes:
+   # Run development setup
+   make setup
+   ```
 
-- Fixing typos or grammatical errors
-- Improving clarity of existing documentation
-- Adding examples or tutorials
-- Translating documentation
-- Writing blog posts or guides about Sage Agent
+4. **Build the project**
+   ```bash
+   # Debug build
+   make build
+   # or
+   cargo build
 
-## Development Setup
+   # Release build
+   make release
+   ```
 
-### Prerequisites
+5. **Run tests**
+   ```bash
+   # All tests
+   make test
 
-- **Rust 1.85+** (Rust 2024 edition)
-- **Git**
-- **Make** (optional, but recommended)
+   # Unit tests only
+   make test-unit
 
-### Clone the Repository
+   # Integration tests
+   make test-int
+   ```
 
-```bash
-git clone https://github.com/majiayu000/sage.git
-cd sage
-```
+6. **Configure API keys** (for development)
+   ```bash
+   # Copy example configuration
+   cp sage_config.json.example sage_config.json
 
-### Install Development Tools
+   # Set environment variables
+   export ANTHROPIC_API_KEY="your-key-here"
+   export OPENAI_API_KEY="your-key-here"
+   ```
 
-```bash
-# Update Rust toolchain
-rustup update
+---
 
-# Install required components
-rustup component add rustfmt clippy
+### Code Standards
 
-# Or use the make target
-make setup
-```
+#### Formatting
 
-### Configuration
-
-1. Copy the example configuration:
+**Always format code before committing:**
 
 ```bash
-cp sage_config.json.example sage_config.json
+# Format all code
+make fmt
 # or
-cp configs/sage_config.example.json sage_config.json
+cargo fmt
+
+# Check formatting without modifying
+cargo fmt -- --check
 ```
 
-2. Edit `sage_config.json` and add your API keys:
+**Settings:**
+- Use `rustfmt.toml` in project root
+- 100-character line limit
+- 4-space indentation
+- No trailing whitespace
 
-```json
-{
-  "default_provider": "anthropic",
-  "model_providers": {
-    "anthropic": {
-      "model": "claude-sonnet-4-20250514",
-      "api_key": "${ANTHROPIC_API_KEY}",
-      "enable_prompt_caching": true
+#### Linting
+
+**Run Clippy before submitting PR:**
+
+```bash
+# Run clippy with warnings as errors
+make clippy
+# or
+cargo clippy -- -D warnings
+
+# Auto-fix some warnings
+cargo clippy --fix
+```
+
+**Standards:**
+- Fix all Clippy warnings
+- No `#[allow(clippy::...)]` without justification
+- Prefer idiomatic Rust patterns
+- Document `unsafe` code blocks
+
+#### Testing Requirements
+
+**All code changes must include tests:**
+
+1. **Unit Tests** (required)
+   - Test individual functions/methods
+   - Mock external dependencies
+   - Aim for >80% coverage
+
+2. **Integration Tests** (for new features)
+   - Test tool integration
+   - Test agent workflows
+   - Test error handling
+
+3. **Documentation Tests** (for public APIs)
+   - Include examples in doc comments
+   - Ensure examples compile and run
+
+**Testing Guidelines:**
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_feature_name() {
+        // Arrange
+        let input = "test";
+
+        // Act
+        let result = function_under_test(input);
+
+        // Assert
+        assert_eq!(result, expected_value);
     }
-  },
-  "max_steps": 20,
-  "working_directory": "."
+
+    #[tokio::test]
+    async fn test_async_feature() {
+        // Test async code
+    }
 }
 ```
 
-3. Set environment variables:
-
+**Run tests:**
 ```bash
-export ANTHROPIC_API_KEY="your-api-key"
-export OPENAI_API_KEY="your-api-key"  # if using OpenAI
-```
-
-## Building from Source
-
-### Debug Build
-
-```bash
-# Using cargo
-cargo build
-
-# Using make
-make build
-```
-
-### Release Build
-
-```bash
-# Using cargo
-cargo build --release
-
-# Using make
-make release
-```
-
-### Install Locally
-
-```bash
-# Install the CLI globally
-cargo install --path crates/sage-cli
-
-# Or using make
-make install
-```
-
-### Run in Development Mode
-
-```bash
-# Run without installing
-cargo run --bin sage
-
-# Using make
-make dev
-
-# Run with arguments
-cargo run --bin sage -- interactive
-make run ARGS="interactive"
-```
-
-## Running Tests
-
-### All Tests
-
-```bash
+# All tests
 cargo test
-# or
-make test
-```
 
-### Unit Tests Only
+# Specific test
+cargo test test_feature_name
 
-```bash
-cargo test --lib
-# or
-make test-unit
-```
+# With output
+cargo test -- --nocapture
 
-### Integration Tests Only
-
-```bash
-cargo test --test integration_test
-# or
-make test-int
-```
-
-### Running Examples
-
-Examples serve as integration tests and usage demonstrations:
-
-```bash
-# Run all examples
+# Run examples as tests
 make examples
-
-# Run specific example
-cargo run --example basic_usage
-cargo run --example markdown_demo
-cargo run --example ui_demo
-cargo run --example trajectory_demo
 ```
 
-### Test Coverage
+---
 
-When adding new features:
+### Commit Standards
 
-- Write unit tests for individual functions and modules
-- Write integration tests for end-to-end workflows
-- Add examples demonstrating the new feature
-- Ensure existing tests still pass
+We follow **Conventional Commits** specification.
 
-## Code Style Guidelines
-
-### Rust Standards
-
-This project follows **Rust 2024 edition** standards and best practices:
-
-- Use `cargo fmt` to format code
-- Use `cargo clippy` to check for common issues
-- Follow Rust naming conventions (snake_case, CamelCase, etc.)
-- Write idiomatic Rust code
-- Document public APIs with doc comments (`///`)
-
-### Code Quality Checks
-
-Before submitting a PR, run:
-
-```bash
-# Format code
-cargo fmt
-# or
-make fmt
-
-# Run clippy (with warnings as errors)
-cargo clippy -- -D warnings
-# or
-make clippy
-
-# Run all checks
-cargo check
-# or
-make check
-```
-
-### Quick Development Cycle
-
-```bash
-# Format, lint, and test
-make quick
-
-# Full CI check (what runs in CI)
-make ci
-```
-
-### Best Practices
-
-- **Error Handling**: Use `anyhow` for application errors, `thiserror` for library errors
-- **Async Code**: Use Tokio runtime, prefer async/await over manual futures
-- **Logging**: Use `tracing` for structured logging
-- **Dependencies**: Use workspace dependencies defined in root `Cargo.toml`
-- **Unwrap/Expect**: Avoid `unwrap()` in production code; use proper error handling
-- **Testing**: Write tests alongside your code
-- **Documentation**: Document complex logic and public APIs
-
-### Workspace Structure
-
-This is a Cargo workspace with four main crates:
-
-- `crates/sage-core/` - Core library (agent engine, LLM clients, tools)
-- `crates/sage-cli/` - Command-line interface
-- `crates/sage-sdk/` - High-level SDK for integration
-- `crates/sage-tools/` - Built-in tool implementations
-
-### File Size Limits
-
-- Keep source files under 500 lines when possible
-- Break large modules into smaller, focused files
-- Use submodules for complex features
-
-## Pull Request Process
-
-### Before Submitting
-
-1. **Sync with upstream**: Ensure your branch is up to date with `main`
-2. **Run tests**: All tests must pass (`make test`)
-3. **Run linters**: Code must pass `clippy` and `fmt` checks
-4. **Update documentation**: Include doc updates for new features
-5. **Add changelog entry**: Document user-facing changes
-
-### PR Requirements
-
-- **Clear title**: Use conventional commit format (see below)
-- **Description**: Explain what changed and why
-- **Issue reference**: Link to related issues (e.g., "Fixes #123")
-- **Tests**: Include tests for new functionality
-- **Documentation**: Update relevant docs
-- **Breaking changes**: Clearly mark and document breaking changes
-
-### PR Template
-
-```markdown
-## Summary
-
-Brief description of changes.
-
-## Related Issues
-
-Fixes #123
-Relates to #456
-
-## Changes
-
-- Added feature X
-- Fixed bug Y
-- Updated documentation Z
-
-## Testing
-
-- [ ] Unit tests added/updated
-- [ ] Integration tests added/updated
-- [ ] Manual testing performed
-- [ ] Examples updated (if applicable)
-
-## Documentation
-
-- [ ] Code comments added
-- [ ] API documentation updated
-- [ ] User guide updated (if applicable)
-- [ ] CHANGELOG updated
-
-## Breaking Changes
-
-List any breaking changes and migration guide (if applicable).
-```
-
-### Review Process
-
-1. Maintainers will review your PR
-2. Address review feedback with new commits
-3. Once approved, maintainers will merge your PR
-4. Your contribution will be included in the next release
-
-## Issue Reporting Guidelines
-
-### Before Creating an Issue
-
-- Search existing issues to avoid duplicates
-- Check the [documentation](docs/) for answers
-- Try the latest version to see if the issue is already fixed
-
-### Bug Report Template
-
-```markdown
-**Description**
-A clear and concise description of the bug.
-
-**Steps to Reproduce**
-1. Run command '...'
-2. Configure setting '...'
-3. See error
-
-**Expected Behavior**
-What you expected to happen.
-
-**Actual Behavior**
-What actually happened.
-
-**System Information**
-- OS: [e.g., macOS 14.0, Ubuntu 22.04]
-- Rust version: [output of `rustc --version`]
-- Sage version: [output of `sage --version`]
-- LLM provider: [e.g., Anthropic, OpenAI]
-
-**Configuration**
-```json
-// Your sage_config.json (remove sensitive data)
-```
-
-**Logs/Errors**
-```
-Paste relevant logs or error messages
-```
-
-**Additional Context**
-Any other relevant information.
-```
-
-### Feature Request Template
-
-```markdown
-**Problem/Use Case**
-Describe the problem you're trying to solve or use case you're trying to support.
-
-**Proposed Solution**
-Describe your proposed solution.
-
-**Alternatives Considered**
-Other approaches you've considered.
-
-**Additional Context**
-Any other relevant information, mockups, or examples.
-```
-
-## Commit Message Format
-
-This project follows **[Conventional Commits](https://www.conventionalcommits.org/)** specification.
-
-### Format
+#### Commit Message Format
 
 ```
 <type>(<scope>): <subject>
 
-<body>
+[optional body]
 
-<footer>
+[optional footer]
 ```
 
-### Type
+#### Commit Types
 
-Must be one of:
+| Type | Description | Example |
+|------|-------------|---------|
+| `feat` | New feature | `feat(tools): add WebSearch tool` |
+| `fix` | Bug fix | `fix(agent): resolve infinite loop in retry logic` |
+| `docs` | Documentation only | `docs: update CONTRIBUTING.md` |
+| `style` | Code style (formatting, semicolons, etc.) | `style: run cargo fmt` |
+| `refactor` | Code refactoring | `refactor(llm): simplify provider factory` |
+| `perf` | Performance improvement | `perf(tools): optimize glob search` |
+| `test` | Adding/updating tests | `test(core): add integration tests for agent` |
+| `chore` | Build process, dependencies | `chore: update tokio to 1.35` |
+| `ci` | CI/CD changes | `ci: add clippy check to workflow` |
 
-- `feat`: New feature
-- `fix`: Bug fix
-- `docs`: Documentation changes
-- `style`: Code style changes (formatting, semicolons, etc.)
-- `refactor`: Code refactoring without changing functionality
-- `perf`: Performance improvements
-- `test`: Adding or updating tests
-- `build`: Build system or dependency changes
-- `ci`: CI/CD configuration changes
-- `chore`: Other changes that don't modify src or test files
-- `security`: Security fixes or improvements
+#### Scopes
 
-### Scope (Optional)
+Common scopes in this project:
+- `core` - sage-core crate
+- `cli` - sage-cli crate
+- `sdk` - sage-sdk crate
+- `tools` - sage-tools crate
+- `agent` - agent execution logic
+- `llm` - LLM providers
+- `ui` - terminal UI components
+- `session` - session management
+- `commands` - slash commands
 
-The scope should specify the crate or component affected:
+#### Examples
 
-- `core`: sage-core crate
-- `cli`: sage-cli crate
-- `sdk`: sage-sdk crate
-- `tools`: sage-tools crate
-- `llm`: LLM client code
-- `agent`: Agent execution logic
-- `ui`: User interface components
-- `docs`: Documentation
-
-### Examples
-
+**Good commit messages:**
 ```bash
-# Feature
-feat(tools): add new grep tool with regex support
+feat(tools): implement Bash tool with background execution support
 
-# Bug fix
-fix(llm): handle rate limit errors correctly
+- Add run_in_background parameter
+- Support timeout configuration
+- Add process cleanup on cancellation
 
-# Documentation
-docs: create CONTRIBUTING.md guide (LOW-005)
+Closes #123
 
-# Security fix
-security(tools): add URL validation to prevent SSRF attacks (CRIT-006)
+---
 
-# Breaking change
-feat(agent)!: change agent execution model
+fix(llm): handle rate limiting for Anthropic API
 
-BREAKING CHANGE: Agent.run() now returns Result<AgentOutput>
-instead of AgentOutput. Update all callers to handle errors.
+The client now implements exponential backoff with jitter
+when receiving 429 responses.
+
+---
+
+docs(readme): add SDK usage examples
+
+Added three examples:
+- Basic usage
+- Non-interactive execution
+- Custom configuration
+
+---
+
+refactor(agent): extract state machine into separate module
+
+This improves testability and separation of concerns.
+No functional changes.
 ```
 
-### Guidelines
+**Bad commit messages:**
+```bash
+# ❌ Too vague
+fix: bug fix
 
-- Use imperative mood ("add" not "added" or "adds")
-- Don't capitalize first letter
-- No period at the end
-- Keep subject line under 72 characters
-- Reference issues in footer (e.g., "Fixes #123", "Closes #456")
-- Mark breaking changes with `!` after type/scope or in footer
+# ❌ Missing scope
+add new tool
 
-## Architecture Overview
+# ❌ Not descriptive
+update code
 
-### Workspace Structure
+# ❌ Multiple changes in one commit
+feat: add WebSearch tool, fix bash timeout, update docs
+```
+
+---
+
+### Pull Request Process
+
+#### Before Opening PR
+
+1. **Create a feature branch**
+   ```bash
+   # Branch naming format: type/short-description
+   git checkout -b feat/add-websearch-tool
+   git checkout -b fix/agent-infinite-loop
+   git checkout -b docs/update-contributing
+   ```
+
+2. **Make your changes**
+   ```bash
+   # Write code, add tests, update docs
+   ```
+
+3. **Run quality checks**
+   ```bash
+   # Quick check (formatting + linting + tests)
+   make quick
+
+   # Full CI check
+   make ci
+   ```
+
+4. **Commit your changes**
+   ```bash
+   git add .
+   git commit -m "feat(tools): add WebSearch tool"
+   ```
+
+5. **Push to your fork**
+   ```bash
+   git push origin feat/add-websearch-tool
+   ```
+
+#### PR Title Format
+
+Follow the same format as commit messages:
+
+```
+<type>(<scope>): <description>
+```
+
+Examples:
+- `feat(tools): add WebSearch tool with domain filtering`
+- `fix(agent): resolve memory leak in trajectory recording`
+- `docs: add contribution guidelines`
+
+#### PR Description Template
+
+When you open a PR, include:
+
+```markdown
+## Summary
+Brief description of what this PR does.
+
+## Changes
+- List key changes
+- Be specific about what was modified
+- Mention any breaking changes
+
+## Motivation
+Why is this change needed? What problem does it solve?
+
+## Testing
+- [ ] Unit tests added/updated
+- [ ] Integration tests added/updated
+- [ ] Manual testing performed
+- [ ] Documentation updated
+
+## Screenshots (if applicable)
+For UI changes, include before/after screenshots.
+
+## Related Issues
+Closes #123
+Relates to #456
+
+## Checklist
+- [ ] Code follows project style guidelines
+- [ ] Ran `make quick` successfully
+- [ ] Added tests for new functionality
+- [ ] Updated documentation
+- [ ] Commit messages follow Conventional Commits
+```
+
+#### Code Review Process
+
+1. **Automated Checks**
+   - CI must pass (build, tests, clippy, fmt)
+   - All tests must pass
+   - No clippy warnings
+
+2. **Maintainer Review**
+   - Code quality and style
+   - Test coverage
+   - Documentation completeness
+   - Architecture alignment
+
+3. **Addressing Feedback**
+   ```bash
+   # Make requested changes
+   git add .
+   git commit -m "refactor: address review feedback"
+   git push origin feat/your-branch
+   ```
+
+4. **Merge**
+   - Squash merge for single commits
+   - Rebase merge for clean multi-commit history
+   - Delete branch after merge
+
+---
+
+### Project Structure
+
+Understanding the codebase organization:
 
 ```
 sage/
 ├── crates/
-│   ├── sage-core/          # Core library
-│   │   ├── agent/          # Agent execution engine
-│   │   ├── llm/            # LLM provider clients
-│   │   ├── tools/          # Tool registry and execution
-│   │   ├── ui/             # Terminal UI components
-│   │   ├── session/        # Session management
-│   │   ├── commands/       # Slash command system
-│   │   ├── trajectory/     # Execution recording
-│   │   └── ...
+│   ├── sage-core/          # Core library (agent engine, LLM, tools)
+│   │   ├── src/
+│   │   │   ├── agent/      # Agent execution logic
+│   │   │   │   ├── base.rs           # Base agent trait
+│   │   │   │   ├── execution.rs      # Main execution loop
+│   │   │   │   ├── state.rs          # State management
+│   │   │   │   └── unified.rs        # Unified agent mode
+│   │   │   ├── llm/        # LLM provider implementations
+│   │   │   │   ├── anthropic.rs      # Anthropic/Claude
+│   │   │   │   ├── openai.rs         # OpenAI
+│   │   │   │   ├── google.rs         # Google Gemini
+│   │   │   │   └── factory.rs        # Provider factory
+│   │   │   ├── commands/   # Slash command system
+│   │   │   ├── session/    # Session management
+│   │   │   ├── tools/      # Tool registry
+│   │   │   └── ui/         # Terminal UI components
+│   │   └── Cargo.toml
+│   │
 │   ├── sage-cli/           # Command-line interface
-│   ├── sage-sdk/           # High-level SDK
+│   │   ├── src/
+│   │   │   ├── main.rs     # CLI entry point
+│   │   │   └── commands/   # CLI subcommands
+│   │   └── Cargo.toml
+│   │
+│   ├── sage-sdk/           # High-level SDK for programmatic use
+│   │   ├── src/
+│   │   │   └── client.rs   # SDK client
+│   │   └── Cargo.toml
+│   │
 │   └── sage-tools/         # Built-in tool implementations
+│       ├── src/
+│       │   └── tools/
+│       │       ├── file_ops/      # File operations (Read, Write, Edit, Glob, Grep)
+│       │       ├── bash.rs        # Bash command execution
+│       │       ├── web_search.rs  # Web search
+│       │       └── task_mgmt/     # Task management
+│       └── Cargo.toml
+│
 ├── examples/               # Usage examples
 ├── docs/                   # Documentation
-├── configs/                # Configuration templates
-└── tests/                  # Integration tests
+│   ├── user-guide/        # User documentation
+│   ├── development/       # Developer guides
+│   ├── architecture/      # System design
+│   └── api/               # API reference
+├── configs/               # Configuration templates
+└── Makefile              # Build automation
 ```
 
-### Key Components
+#### Key Crates
 
-#### Agent Execution
-
-- **Location**: `crates/sage-core/src/agent/`
-- **Purpose**: Core agent loop, state management, tool calling
-- **Key Files**: `unified.rs`, `executor.rs`
-
-#### LLM Providers
-
-- **Location**: `crates/sage-core/src/llm/`
-- **Purpose**: API clients for different LLM providers
-- **Supported**: OpenAI, Anthropic, Google, Azure, OpenRouter, Ollama, Doubao, GLM
-
-#### Tool System
-
-- **Location**: `crates/sage-core/src/tools/` and `crates/sage-tools/src/`
-- **Purpose**: Extensible tool registry and execution
-- **Tools**: Bash, file operations, search, web, task management
-
-#### Session Management
-
-- **Location**: `crates/sage-core/src/session/`
-- **Purpose**: Session storage, resume, and history tracking
-- **Format**: JSONL files in `~/.sage/sessions/`
-
-### Async Architecture
-
-- Built on **Tokio** runtime
-- Uses `async/await` throughout
-- Streaming responses with futures
-- Background task management
-
-### Dependencies
-
-Key workspace dependencies (see root `Cargo.toml`):
-
-- **Runtime**: tokio, futures
-- **HTTP**: reqwest
-- **Serialization**: serde, serde_json
-- **CLI**: clap, console, indicatif
-- **Error handling**: anyhow, thiserror
-- **Logging**: tracing, tracing-subscriber
-
-## Documentation
-
-### Documentation Structure
-
-- `docs/user-guide/` - End-user documentation
-- `docs/development/` - Developer guides
-- `docs/architecture/` - System design documentation
-- `docs/api/` - API reference
-- `docs/planning/` - Project roadmap and planning
-- `docs/tools/` - Tool documentation
-- `CLAUDE.md` - Guidelines for AI assistants
-
-### Writing Documentation
-
-- Use clear, concise language
-- Include code examples
-- Add screenshots for UI features
-- Keep documentation in sync with code
-- Use proper Markdown formatting
-
-### API Documentation
-
-Document public APIs using Rust doc comments:
-
-```rust
-/// Executes a command in the shell.
-///
-/// # Arguments
-///
-/// * `command` - The shell command to execute
-/// * `working_dir` - Optional working directory
-///
-/// # Returns
-///
-/// Returns the command output or an error.
-///
-/// # Examples
-///
-/// ```no_run
-/// use sage_tools::tools::bash::BashTool;
-///
-/// let result = bash_tool.execute("ls -la").await?;
-/// ```
-pub async fn execute(&self, command: &str) -> Result<Output> {
-    // Implementation
-}
-```
-
-### Generating Documentation
-
-```bash
-# Generate and open Rust docs
-cargo doc --open
-# or
-make docs
-```
-
-## Getting Help
-
-### Resources
-
-- **Documentation**: [docs/](docs/)
-- **Examples**: [examples/](examples/)
-- **Issues**: [GitHub Issues](https://github.com/majiayu000/sage/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/majiayu000/sage/discussions)
-
-### Community
-
-- Open an issue for bugs or feature requests
-- Start a discussion for questions or ideas
-- Check existing issues and discussions first
-
-### Asking Questions
-
-When asking for help:
-
-- Be specific about what you're trying to do
-- Include relevant code snippets
-- Share error messages and logs
-- Describe what you've already tried
-- Provide system information if relevant
+| Crate | Purpose | Key Dependencies |
+|-------|---------|------------------|
+| **sage-core** | Core agent engine | tokio, anyhow, serde, tracing |
+| **sage-cli** | Command-line interface | clap, indicatif, crossterm |
+| **sage-sdk** | High-level SDK | sage-core |
+| **sage-tools** | Built-in tools | ignore, regex, reqwest |
 
 ---
 
-Thank you for contributing to Sage Agent! Your contributions help make this project better for everyone.
+### Common Tasks
+
+#### 1. Adding a New Tool
+
+**Steps:**
+
+1. Create tool implementation in `crates/sage-tools/src/tools/`
+
+```rust
+// crates/sage-tools/src/tools/my_new_tool.rs
+use async_trait::async_trait;
+use sage_core::tools::{Tool, ToolError, ToolResult};
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MyNewToolParams {
+    pub input: String,
+}
+
+pub struct MyNewTool;
+
+#[async_trait]
+impl Tool for MyNewTool {
+    type Params = MyNewToolParams;
+
+    fn name(&self) -> &str {
+        "my_new_tool"
+    }
+
+    fn description(&self) -> &str {
+        "Description of what this tool does"
+    }
+
+    fn parameters_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "input": {
+                    "type": "string",
+                    "description": "Input parameter description"
+                }
+            },
+            "required": ["input"]
+        })
+    }
+
+    async fn execute(&self, params: Self::Params) -> ToolResult {
+        // Implementation here
+        Ok(format!("Processed: {}", params.input))
+    }
+}
+```
+
+2. Register tool in `crates/sage-tools/src/lib.rs`
+
+```rust
+pub mod tools {
+    pub mod my_new_tool;
+}
+
+use tools::my_new_tool::MyNewTool;
+
+pub fn register_default_tools(registry: &mut ToolRegistry) {
+    registry.register(Box::new(MyNewTool));
+    // ... other tools
+}
+```
+
+3. Add tests
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_my_new_tool() {
+        let tool = MyNewTool;
+        let params = MyNewToolParams {
+            input: "test".to_string(),
+        };
+        let result = tool.execute(params).await;
+        assert!(result.is_ok());
+    }
+}
+```
+
+4. Add documentation in `docs/tools/my_new_tool.md`
+
+#### 2. Adding a New LLM Provider
+
+**Steps:**
+
+1. Create provider implementation in `crates/sage-core/src/llm/`
+
+```rust
+// crates/sage-core/src/llm/my_provider.rs
+use async_trait::async_trait;
+use crate::llm::{LLMClient, LLMRequest, LLMResponse, LLMError};
+
+pub struct MyProviderClient {
+    api_key: String,
+    model: String,
+    base_url: String,
+}
+
+impl MyProviderClient {
+    pub fn new(api_key: String, model: String) -> Self {
+        Self {
+            api_key,
+            model,
+            base_url: "https://api.myprovider.com/v1".to_string(),
+        }
+    }
+}
+
+#[async_trait]
+impl LLMClient for MyProviderClient {
+    async fn chat(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+        // Implementation here
+        todo!()
+    }
+
+    fn model_name(&self) -> &str {
+        &self.model
+    }
+}
+```
+
+2. Add provider to factory in `crates/sage-core/src/llm/factory.rs`
+
+```rust
+pub enum ProviderType {
+    OpenAI,
+    Anthropic,
+    MyProvider,  // Add your provider
+}
+
+pub fn create_provider(config: &ProviderConfig) -> Result<Box<dyn LLMClient>> {
+    match config.provider_type {
+        ProviderType::MyProvider => {
+            Ok(Box::new(MyProviderClient::new(
+                config.api_key.clone(),
+                config.model.clone(),
+            )))
+        }
+        // ... other providers
+    }
+}
+```
+
+3. Update configuration schema in `crates/sage-core/src/config.rs`
+
+4. Add integration tests
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_my_provider_chat() {
+        let client = MyProviderClient::new(
+            "test-key".to_string(),
+            "test-model".to_string(),
+        );
+        // Test implementation
+    }
+}
+```
+
+5. Update documentation:
+   - `README.md` - Add to providers table
+   - `docs/user-guide/configuration.md` - Add config example
+   - Create `docs/providers/my_provider.md`
+
+#### 3. Adding Tests
+
+**Unit Test Example:**
+
+```rust
+// In the same file as your code
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_function_name() {
+        let result = function_to_test(input);
+        assert_eq!(result, expected);
+    }
+
+    #[tokio::test]
+    async fn test_async_function() {
+        let result = async_function().await;
+        assert!(result.is_ok());
+    }
+}
+```
+
+**Integration Test Example:**
+
+```rust
+// In crates/sage-core/tests/integration_test.rs
+use sage_core::agent::Agent;
+use sage_core::config::Config;
+
+#[tokio::test]
+async fn test_agent_execution() {
+    let config = Config::default();
+    let agent = Agent::new(config);
+
+    let result = agent.run("test task").await;
+    assert!(result.is_ok());
+}
+```
+
+**Tool Integration Test:**
+
+```rust
+// In crates/sage-tools/tests/my_tool_integration.rs
+use sage_tools::tools::my_new_tool::MyNewTool;
+use sage_core::tools::Tool;
+
+#[tokio::test]
+async fn test_tool_integration() {
+    let tool = MyNewTool;
+    let params = /* params */;
+    let result = tool.execute(params).await;
+    assert!(result.is_ok());
+}
+```
+
+---
+
+### Getting Help
+
+- **Documentation**: Check `docs/` directory
+- **Examples**: Run examples in `examples/` directory
+- **Issues**: Search existing issues or create new one
+- **Discussions**: Ask questions in GitHub Discussions
+
+### Code of Conduct
+
+- Be respectful and inclusive
+- Focus on constructive feedback
+- Help others in the community
+- Report unacceptable behavior
+
+---
+
+<a name="中文"></a>
+## 中文
+
+### 欢迎贡献者
+
+感谢您对 **Sage Agent** 项目的关注！这是一个基于 Rust 的 LLM 智能体系统，设计灵感来自 Claude Code。我们欢迎各种形式的贡献 - bug 修复、新功能、文档改进等。
+
+无论您是修复一个拼写错误还是实现一个重要功能，您的贡献都是宝贵的。
+
+---
+
+### 开发环境设置
+
+#### 前置要求
+
+**Rust 要求：**
+- Rust 1.85+ (Rust 2024 Edition)
+- `rustfmt` 和 `clippy` 组件
+- 基本的 async/await 和 Tokio 知识
+
+**系统要求：**
+- Git
+- 类 Unix 环境（macOS、Linux）或 Windows 上的 WSL
+- 支持 UTF-8 的终端
+
+#### 安装步骤
+
+1. **克隆仓库**
+   ```bash
+   git clone https://github.com/majiayu000/sage.git
+   cd sage
+   ```
+
+2. **设置 Rust 工具链**
+   ```bash
+   # 更新 Rust 到最新稳定版
+   rustup update
+
+   # 安装必需组件
+   rustup component add rustfmt clippy
+   ```
+
+3. **验证安装**
+   ```bash
+   # 检查 Rust 版本
+   rustc --version
+
+   # 运行开发环境设置
+   make setup
+   ```
+
+4. **构建项目**
+   ```bash
+   # Debug 构建
+   make build
+   # 或
+   cargo build
+
+   # Release 构建
+   make release
+   ```
+
+5. **运行测试**
+   ```bash
+   # 所有测试
+   make test
+
+   # 仅单元测试
+   make test-unit
+
+   # 集成测试
+   make test-int
+   ```
+
+6. **配置 API 密钥**（用于开发）
+   ```bash
+   # 复制示例配置
+   cp sage_config.json.example sage_config.json
+
+   # 设置环境变量
+   export ANTHROPIC_API_KEY="your-key-here"
+   export OPENAI_API_KEY="your-key-here"
+   ```
+
+---
+
+### 代码规范
+
+#### 代码格式化
+
+**提交前务必格式化代码：**
+
+```bash
+# 格式化所有代码
+make fmt
+# 或
+cargo fmt
+
+# 检查格式而不修改
+cargo fmt -- --check
+```
+
+**规范：**
+- 使用项目根目录的 `rustfmt.toml`
+- 100 字符行宽限制
+- 4 空格缩进
+- 无尾随空格
+
+#### 代码检查（Linting）
+
+**提交 PR 前运行 Clippy：**
+
+```bash
+# 运行 clippy，将警告视为错误
+make clippy
+# 或
+cargo clippy -- -D warnings
+
+# 自动修复部分警告
+cargo clippy --fix
+```
+
+**标准：**
+- 修复所有 Clippy 警告
+- 除非有充分理由，否则不使用 `#[allow(clippy::...)]`
+- 优先使用惯用的 Rust 模式
+- 记录 `unsafe` 代码块
+
+#### 测试要求
+
+**所有代码更改必须包含测试：**
+
+1. **单元测试**（必需）
+   - 测试单个函数/方法
+   - Mock 外部依赖
+   - 力争 >80% 覆盖率
+
+2. **集成测试**（新功能需要）
+   - 测试工具集成
+   - 测试 Agent 工作流
+   - 测试错误处理
+
+3. **文档测试**（公共 API 需要）
+   - 在文档注释中包含示例
+   - 确保示例可编译和运行
+
+**测试指南：**
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_feature_name() {
+        // Arrange - 准备
+        let input = "test";
+
+        // Act - 执行
+        let result = function_under_test(input);
+
+        // Assert - 断言
+        assert_eq!(result, expected_value);
+    }
+
+    #[tokio::test]
+    async fn test_async_feature() {
+        // 测试异步代码
+    }
+}
+```
+
+**运行测试：**
+```bash
+# 所有测试
+cargo test
+
+# 特定测试
+cargo test test_feature_name
+
+# 显示输出
+cargo test -- --nocapture
+
+# 运行示例作为测试
+make examples
+```
+
+---
+
+### 提交规范
+
+我们遵循 **Conventional Commits** 规范。
+
+#### 提交消息格式
+
+```
+<type>(<scope>): <subject>
+
+[可选的 body]
+
+[可选的 footer]
+```
+
+#### 提交类型
+
+| 类型 | 描述 | 示例 |
+|------|-----|------|
+| `feat` | 新功能 | `feat(tools): add WebSearch tool` |
+| `fix` | Bug 修复 | `fix(agent): resolve infinite loop in retry logic` |
+| `docs` | 仅文档 | `docs: update CONTRIBUTING.md` |
+| `style` | 代码风格（格式化、分号等） | `style: run cargo fmt` |
+| `refactor` | 代码重构 | `refactor(llm): simplify provider factory` |
+| `perf` | 性能优化 | `perf(tools): optimize glob search` |
+| `test` | 添加/更新测试 | `test(core): add integration tests for agent` |
+| `chore` | 构建过程、依赖 | `chore: update tokio to 1.35` |
+| `ci` | CI/CD 变更 | `ci: add clippy check to workflow` |
+
+#### 作用域（Scope）
+
+项目中常见的作用域：
+- `core` - sage-core crate
+- `cli` - sage-cli crate
+- `sdk` - sage-sdk crate
+- `tools` - sage-tools crate
+- `agent` - Agent 执行逻辑
+- `llm` - LLM 提供商
+- `ui` - 终端 UI 组件
+- `session` - 会话管理
+- `commands` - 斜杠命令
+
+#### 示例
+
+**好的提交消息：**
+```bash
+feat(tools): implement Bash tool with background execution support
+
+- Add run_in_background parameter
+- Support timeout configuration
+- Add process cleanup on cancellation
+
+Closes #123
+
+---
+
+fix(llm): handle rate limiting for Anthropic API
+
+The client now implements exponential backoff with jitter
+when receiving 429 responses.
+
+---
+
+docs(readme): add SDK usage examples
+
+Added three examples:
+- Basic usage
+- Non-interactive execution
+- Custom configuration
+
+---
+
+refactor(agent): extract state machine into separate module
+
+This improves testability and separation of concerns.
+No functional changes.
+```
+
+**不好的提交消息：**
+```bash
+# ❌ 太模糊
+fix: bug fix
+
+# ❌ 缺少 scope
+add new tool
+
+# ❌ 不够描述性
+update code
+
+# ❌ 一个提交包含多个变更
+feat: add WebSearch tool, fix bash timeout, update docs
+```
+
+---
+
+### Pull Request 流程
+
+#### 开启 PR 之前
+
+1. **创建功能分支**
+   ```bash
+   # 分支命名格式：type/short-description
+   git checkout -b feat/add-websearch-tool
+   git checkout -b fix/agent-infinite-loop
+   git checkout -b docs/update-contributing
+   ```
+
+2. **进行更改**
+   ```bash
+   # 编写代码、添加测试、更新文档
+   ```
+
+3. **运行质量检查**
+   ```bash
+   # 快速检查（格式化 + lint + 测试）
+   make quick
+
+   # 完整 CI 检查
+   make ci
+   ```
+
+4. **提交更改**
+   ```bash
+   git add .
+   git commit -m "feat(tools): add WebSearch tool"
+   ```
+
+5. **推送到您的 fork**
+   ```bash
+   git push origin feat/add-websearch-tool
+   ```
+
+#### PR 标题格式
+
+遵循与提交消息相同的格式：
+
+```
+<type>(<scope>): <description>
+```
+
+示例：
+- `feat(tools): add WebSearch tool with domain filtering`
+- `fix(agent): resolve memory leak in trajectory recording`
+- `docs: add contribution guidelines`
+
+#### PR 描述模板
+
+开启 PR 时，请包含：
+
+```markdown
+## 概述
+简要描述此 PR 的作用。
+
+## 变更内容
+- 列出关键变更
+- 具体说明修改了什么
+- 提及任何破坏性变更
+
+## 动机
+为什么需要这个变更？解决了什么问题？
+
+## 测试
+- [ ] 添加/更新了单元测试
+- [ ] 添加/更新了集成测试
+- [ ] 执行了手动测试
+- [ ] 更新了文档
+
+## 截图（如适用）
+对于 UI 变更，包含变更前后的截图。
+
+## 相关 Issue
+Closes #123
+Relates to #456
+
+## 检查清单
+- [ ] 代码遵循项目风格指南
+- [ ] 成功运行 `make quick`
+- [ ] 为新功能添加了测试
+- [ ] 更新了文档
+- [ ] 提交消息遵循 Conventional Commits
+```
+
+#### 代码审查流程
+
+1. **自动检查**
+   - CI 必须通过（构建、测试、clippy、fmt）
+   - 所有测试必须通过
+   - 无 clippy 警告
+
+2. **维护者审查**
+   - 代码质量和风格
+   - 测试覆盖率
+   - 文档完整性
+   - 架构对齐
+
+3. **处理反馈**
+   ```bash
+   # 进行请求的更改
+   git add .
+   git commit -m "refactor: address review feedback"
+   git push origin feat/your-branch
+   ```
+
+4. **合并**
+   - 单个提交使用 Squash merge
+   - 干净的多提交历史使用 Rebase merge
+   - 合并后删除分支
+
+---
+
+### 项目结构
+
+理解代码库组织：
+
+```
+sage/
+├── crates/
+│   ├── sage-core/          # 核心库（Agent 引擎、LLM、工具）
+│   │   ├── src/
+│   │   │   ├── agent/      # Agent 执行逻辑
+│   │   │   │   ├── base.rs           # 基础 Agent trait
+│   │   │   │   ├── execution.rs      # 主执行循环
+│   │   │   │   ├── state.rs          # 状态管理
+│   │   │   │   └── unified.rs        # 统一 Agent 模式
+│   │   │   ├── llm/        # LLM 提供商实现
+│   │   │   │   ├── anthropic.rs      # Anthropic/Claude
+│   │   │   │   ├── openai.rs         # OpenAI
+│   │   │   │   ├── google.rs         # Google Gemini
+│   │   │   │   └── factory.rs        # 提供商工厂
+│   │   │   ├── commands/   # 斜杠命令系统
+│   │   │   ├── session/    # 会话管理
+│   │   │   ├── tools/      # 工具注册表
+│   │   │   └── ui/         # 终端 UI 组件
+│   │   └── Cargo.toml
+│   │
+│   ├── sage-cli/           # 命令行界面
+│   │   ├── src/
+│   │   │   ├── main.rs     # CLI 入口
+│   │   │   └── commands/   # CLI 子命令
+│   │   └── Cargo.toml
+│   │
+│   ├── sage-sdk/           # 高级 SDK（编程使用）
+│   │   ├── src/
+│   │   │   └── client.rs   # SDK 客户端
+│   │   └── Cargo.toml
+│   │
+│   └── sage-tools/         # 内置工具实现
+│       ├── src/
+│       │   └── tools/
+│       │       ├── file_ops/      # 文件操作（Read、Write、Edit、Glob、Grep）
+│       │       ├── bash.rs        # Bash 命令执行
+│       │       ├── web_search.rs  # Web 搜索
+│       │       └── task_mgmt/     # 任务管理
+│       └── Cargo.toml
+│
+├── examples/               # 使用示例
+├── docs/                   # 文档
+│   ├── user-guide/        # 用户文档
+│   ├── development/       # 开发者指南
+│   ├── architecture/      # 系统设计
+│   └── api/               # API 参考
+├── configs/               # 配置模板
+└── Makefile              # 构建自动化
+```
+
+#### 核心 Crate
+
+| Crate | 用途 | 主要依赖 |
+|-------|------|---------|
+| **sage-core** | 核心 Agent 引擎 | tokio, anyhow, serde, tracing |
+| **sage-cli** | 命令行界面 | clap, indicatif, crossterm |
+| **sage-sdk** | 高级 SDK | sage-core |
+| **sage-tools** | 内置工具 | ignore, regex, reqwest |
+
+---
+
+### 常见任务
+
+#### 1. 添加新工具
+
+**步骤：**
+
+1. 在 `crates/sage-tools/src/tools/` 创建工具实现
+
+```rust
+// crates/sage-tools/src/tools/my_new_tool.rs
+use async_trait::async_trait;
+use sage_core::tools::{Tool, ToolError, ToolResult};
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MyNewToolParams {
+    pub input: String,
+}
+
+pub struct MyNewTool;
+
+#[async_trait]
+impl Tool for MyNewTool {
+    type Params = MyNewToolParams;
+
+    fn name(&self) -> &str {
+        "my_new_tool"
+    }
+
+    fn description(&self) -> &str {
+        "此工具的功能描述"
+    }
+
+    fn parameters_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "input": {
+                    "type": "string",
+                    "description": "输入参数描述"
+                }
+            },
+            "required": ["input"]
+        })
+    }
+
+    async fn execute(&self, params: Self::Params) -> ToolResult {
+        // 在此实现
+        Ok(format!("已处理: {}", params.input))
+    }
+}
+```
+
+2. 在 `crates/sage-tools/src/lib.rs` 注册工具
+
+```rust
+pub mod tools {
+    pub mod my_new_tool;
+}
+
+use tools::my_new_tool::MyNewTool;
+
+pub fn register_default_tools(registry: &mut ToolRegistry) {
+    registry.register(Box::new(MyNewTool));
+    // ... 其他工具
+}
+```
+
+3. 添加测试
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_my_new_tool() {
+        let tool = MyNewTool;
+        let params = MyNewToolParams {
+            input: "test".to_string(),
+        };
+        let result = tool.execute(params).await;
+        assert!(result.is_ok());
+    }
+}
+```
+
+4. 在 `docs/tools/my_new_tool.md` 添加文档
+
+#### 2. 添加新 LLM 提供商
+
+**步骤：**
+
+1. 在 `crates/sage-core/src/llm/` 创建提供商实现
+
+```rust
+// crates/sage-core/src/llm/my_provider.rs
+use async_trait::async_trait;
+use crate::llm::{LLMClient, LLMRequest, LLMResponse, LLMError};
+
+pub struct MyProviderClient {
+    api_key: String,
+    model: String,
+    base_url: String,
+}
+
+impl MyProviderClient {
+    pub fn new(api_key: String, model: String) -> Self {
+        Self {
+            api_key,
+            model,
+            base_url: "https://api.myprovider.com/v1".to_string(),
+        }
+    }
+}
+
+#[async_trait]
+impl LLMClient for MyProviderClient {
+    async fn chat(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+        // 在此实现
+        todo!()
+    }
+
+    fn model_name(&self) -> &str {
+        &self.model
+    }
+}
+```
+
+2. 在 `crates/sage-core/src/llm/factory.rs` 添加提供商到工厂
+
+```rust
+pub enum ProviderType {
+    OpenAI,
+    Anthropic,
+    MyProvider,  // 添加您的提供商
+}
+
+pub fn create_provider(config: &ProviderConfig) -> Result<Box<dyn LLMClient>> {
+    match config.provider_type {
+        ProviderType::MyProvider => {
+            Ok(Box::new(MyProviderClient::new(
+                config.api_key.clone(),
+                config.model.clone(),
+            )))
+        }
+        // ... 其他提供商
+    }
+}
+```
+
+3. 在 `crates/sage-core/src/config.rs` 更新配置 schema
+
+4. 添加集成测试
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_my_provider_chat() {
+        let client = MyProviderClient::new(
+            "test-key".to_string(),
+            "test-model".to_string(),
+        );
+        // 测试实现
+    }
+}
+```
+
+5. 更新文档：
+   - `README.md` - 添加到提供商表格
+   - `docs/user-guide/configuration.md` - 添加配置示例
+   - 创建 `docs/providers/my_provider.md`
+
+#### 3. 添加测试
+
+**单元测试示例：**
+
+```rust
+// 在代码同文件中
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_function_name() {
+        let result = function_to_test(input);
+        assert_eq!(result, expected);
+    }
+
+    #[tokio::test]
+    async fn test_async_function() {
+        let result = async_function().await;
+        assert!(result.is_ok());
+    }
+}
+```
+
+**集成测试示例：**
+
+```rust
+// 在 crates/sage-core/tests/integration_test.rs
+use sage_core::agent::Agent;
+use sage_core::config::Config;
+
+#[tokio::test]
+async fn test_agent_execution() {
+    let config = Config::default();
+    let agent = Agent::new(config);
+
+    let result = agent.run("test task").await;
+    assert!(result.is_ok());
+}
+```
+
+**工具集成测试示例：**
+
+```rust
+// 在 crates/sage-tools/tests/my_tool_integration.rs
+use sage_tools::tools::my_new_tool::MyNewTool;
+use sage_core::tools::Tool;
+
+#[tokio::test]
+async fn test_tool_integration() {
+    let tool = MyNewTool;
+    let params = /* params */;
+    let result = tool.execute(params).await;
+    assert!(result.is_ok());
+}
+```
+
+---
+
+### 获取帮助
+
+- **文档**：查看 `docs/` 目录
+- **示例**：运行 `examples/` 目录中的示例
+- **Issue**：搜索现有 issue 或创建新 issue
+- **讨论**：在 GitHub Discussions 中提问
+
+### 行为准则
+
+- 尊重和包容他人
+- 专注于建设性反馈
+- 帮助社区中的其他人
+- 报告不可接受的行为
+
+---
+
+## License | 许可证
+
+By contributing to Sage Agent, you agree that your contributions will be licensed under the MIT License.
+
+通过为 Sage Agent 做出贡献，您同意您的贡献将根据 MIT 许可证进行许可。
+
+---
+
+**Thank you for contributing to Sage Agent!** | **感谢您为 Sage Agent 做出贡献！**

@@ -15,10 +15,11 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use anyhow::{Result, Context, anyhow};
 use tokio::time::timeout;
-use tracing::{info, debug, error, warn};
+use tracing::{info, debug};
 use url::Url;
 
-use sage_core::tools::{Tool, ToolResult};
+use sage_core::tools::base::{Tool, ToolError};
+use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
 
 /// Validate URL to prevent SSRF attacks
 fn validate_url_security(url_str: &str) -> Result<()> {
@@ -411,7 +412,35 @@ impl Tool for HttpClientTool {
         &self.description
     }
 
-    fn parameters_json_schema(&self) -> serde_json::Value {
+    fn schema(&self) -> ToolSchema {
+        ToolSchema::new(
+            self.name(),
+            self.description(),
+            vec![
+                ToolParameter::string("method", "HTTP method")
+                    .with_default("GET".to_string()),
+                ToolParameter::string("url", "Request URL"),
+                ToolParameter::optional_string("headers", "Request headers as JSON object string"),
+                ToolParameter::optional_string("body", "Request body as JSON string"),
+                ToolParameter::optional_string("auth", "Authentication config as JSON string"),
+                ToolParameter::number("timeout", "Request timeout in seconds")
+                    .optional()
+                    .with_default(30),
+                ToolParameter::boolean("follow_redirects", "Follow redirects")
+                    .optional()
+                    .with_default(true),
+                ToolParameter::boolean("verify_ssl", "Verify SSL certificates")
+                    .optional()
+                    .with_default(true),
+                ToolParameter::optional_string("save_to_file", "Save response to file"),
+                ToolParameter::optional_string("graphql_query", "GraphQL query string"),
+                ToolParameter::optional_string("graphql_variables", "GraphQL variables as JSON string"),
+            ],
+        )
+    }
+
+    // Legacy method for backwards compatibility
+    fn parameters_json_schema_legacy(&self) -> serde_json::Value {
         serde_json::json!({
             "type": "object",
             "properties": {
@@ -541,65 +570,161 @@ impl Tool for HttpClientTool {
         })
     }
 
-    async fn execute(&self, params: serde_json::Value) -> Result<ToolResult> {
+    async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
+        // Parse method
+        let method_str = call.get_string("method").unwrap_or_else(|| "GET".to_string());
+        let method = match method_str.to_uppercase().as_str() {
+            "GET" => HttpMethod::Get,
+            "POST" => HttpMethod::Post,
+            "PUT" => HttpMethod::Put,
+            "DELETE" => HttpMethod::Delete,
+            "PATCH" => HttpMethod::Patch,
+            "HEAD" => HttpMethod::Head,
+            "OPTIONS" => HttpMethod::Options,
+            _ => return Err(ToolError::InvalidArguments(format!("Invalid HTTP method: {}", method_str))),
+        };
+
+        // Get URL (required)
+        let url = call.get_string("url")
+            .ok_or_else(|| ToolError::InvalidArguments("Missing 'url' parameter".to_string()))?;
+
+        // Parse optional parameters
+        let headers = if let Some(headers_str) = call.get_string("headers") {
+            serde_json::from_str(&headers_str)
+                .map_err(|e| ToolError::InvalidArguments(format!("Invalid headers JSON: {}", e)))?
+        } else {
+            None
+        };
+
+        let body = if let Some(body_str) = call.get_string("body") {
+            serde_json::from_str(&body_str)
+                .map_err(|e| ToolError::InvalidArguments(format!("Invalid body JSON: {}", e)))?
+        } else {
+            None
+        };
+
+        let auth = if let Some(auth_str) = call.get_string("auth") {
+            serde_json::from_str(&auth_str)
+                .map_err(|e| ToolError::InvalidArguments(format!("Invalid auth JSON: {}", e)))?
+        } else {
+            None
+        };
+
+        let timeout = call.get_number("timeout").map(|n| n as u64);
+        let follow_redirects = call.get_bool("follow_redirects");
+        let verify_ssl = call.get_bool("verify_ssl");
+        let save_to_file = call.get_string("save_to_file");
+        let graphql_query = call.get_string("graphql_query");
+
+        let graphql_variables = if let Some(vars_str) = call.get_string("graphql_variables") {
+            Some(serde_json::from_str(&vars_str)
+                .map_err(|e| ToolError::InvalidArguments(format!("Invalid graphql_variables JSON: {}", e)))?)
+        } else {
+            None
+        };
+
+        let params = HttpClientParams {
+            method,
+            url: url.clone(),
+            headers,
+            body,
+            auth,
+            timeout,
+            follow_redirects,
+            verify_ssl,
+            save_to_file,
+            graphql_query,
+            graphql_variables,
+        };
+
+        info!("Executing HTTP request: {:?} {}", params.method, params.url);
+
+        // Execute request
         let mut tool = self.clone();
-        let params: HttpClientParams = serde_json::from_value(params)
-            .context("Failed to parse HTTP client parameters")?;
-
-        info!("Executing HTTP request: {} {}", params.method, params.url);
-
-        let response = tool.execute_request(params).await?;
-        
-        let mut metadata = HashMap::new();
-        metadata.insert("status".to_string(), response.status.to_string());
-        metadata.insert("response_time".to_string(), format!("{}ms", response.response_time));
-        
-        if let Some(content_type) = &response.content_type {
-            metadata.insert("content_type".to_string(), content_type.clone());
-        }
-        
-        if let Some(content_length) = response.content_length {
-            metadata.insert("content_length".to_string(), content_length.to_string());
-        }
+        let response = tool.execute_request(params).await
+            .map_err(|e| ToolError::ExecutionFailed(format!("HTTP request failed: {}", e)))?;
 
         // Format result
-        let mut result = format!("HTTP {} - Status: {}\n", response.status, response.status);
-        result.push_str(&format!("Response time: {}ms\n", response.response_time));
-        
+        let mut output = format!("HTTP {} - Status: {}\n", response.status, response.status);
+        output.push_str(&format!("Response time: {}ms\n", response.response_time));
+
         if let Some(content_type) = &response.content_type {
-            result.push_str(&format!("Content-Type: {}\n", content_type));
+            output.push_str(&format!("Content-Type: {}\n", content_type));
         }
-        
+
         if let Some(content_length) = response.content_length {
-            result.push_str(&format!("Content-Length: {}\n", content_length));
+            output.push_str(&format!("Content-Length: {}\n", content_length));
         }
-        
-        result.push_str("\nResponse Headers:\n");
+
+        output.push_str("\nResponse Headers:\n");
         for (key, value) in &response.headers {
-            result.push_str(&format!("  {}: {}\n", key, value));
+            output.push_str(&format!("  {}: {}\n", key, value));
         }
-        
-        result.push_str("\nResponse Body:\n");
-        
+
+        output.push_str("\nResponse Body:\n");
+
         // Pretty print JSON if possible
         if let Some(content_type) = &response.content_type {
             if content_type.contains("application/json") {
                 match serde_json::from_str::<serde_json::Value>(&response.body) {
                     Ok(json) => {
-                        result.push_str(&serde_json::to_string_pretty(&json).unwrap_or(response.body));
+                        output.push_str(&serde_json::to_string_pretty(&json).unwrap_or_else(|_| response.body.clone()));
                     }
                     Err(_) => {
-                        result.push_str(&response.body);
+                        output.push_str(&response.body);
                     }
                 }
             } else {
-                result.push_str(&response.body);
+                output.push_str(&response.body);
             }
         } else {
-            result.push_str(&response.body);
+            output.push_str(&response.body);
         }
 
-        Ok(ToolResult::new(result, metadata))
+        // Build result with metadata
+        let mut result = ToolResult::success(&call.id, self.name(), output)
+            .with_metadata("status", serde_json::Value::Number(response.status.into()))
+            .with_metadata("response_time_ms", serde_json::Value::Number(response.response_time.into()))
+            .with_metadata("url", serde_json::Value::String(url));
+
+        if let Some(content_type) = response.content_type {
+            result = result.with_metadata("content_type", serde_json::Value::String(content_type));
+        }
+
+        if let Some(content_length) = response.content_length {
+            result = result.with_metadata("content_length", serde_json::Value::Number(content_length.into()));
+        }
+
+        result.call_id = call.id.clone();
+        Ok(result)
+    }
+
+    fn validate(&self, call: &ToolCall) -> Result<(), ToolError> {
+        // Validate URL parameter
+        let _url = call.get_string("url")
+            .ok_or_else(|| ToolError::InvalidArguments("Missing 'url' parameter".to_string()))?;
+
+        // Validate method if provided
+        if let Some(method_str) = call.get_string("method") {
+            let valid_methods = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"];
+            if !valid_methods.contains(&method_str.to_uppercase().as_str()) {
+                return Err(ToolError::InvalidArguments(format!(
+                    "Invalid HTTP method: {}. Must be one of: {}",
+                    method_str,
+                    valid_methods.join(", ")
+                )));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn max_execution_time(&self) -> Option<u64> {
+        Some(300) // 5 minutes max for HTTP requests
+    }
+
+    fn supports_parallel_execution(&self) -> bool {
+        true // HTTP requests can run in parallel
     }
 }
 
@@ -630,11 +755,12 @@ mod tests {
     #[tokio::test]
     async fn test_http_client_schema() {
         let tool = HttpClientTool::new();
-        let schema = tool.parameters_json_schema();
+        let schema = tool.schema();
 
-        assert!(schema.is_object());
-        assert!(schema["properties"]["method"].is_object());
-        assert!(schema["properties"]["url"].is_object());
+        assert_eq!(schema.name, "http_client");
+        assert!(!schema.description.is_empty());
+        // The parameters field is a JSON value with the schema structure
+        assert!(schema.parameters.is_object());
     }
 
     #[test]

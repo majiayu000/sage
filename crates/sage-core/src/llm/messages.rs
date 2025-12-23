@@ -1,7 +1,7 @@
 //! LLM message types and structures
 
 use crate::tools::ToolCall;
-use crate::types::LLMUsage;
+use crate::types::LlmUsage;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -67,7 +67,7 @@ impl std::fmt::Display for MessageRole {
 
 /// A message in the LLM conversation
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LLMMessage {
+pub struct LlmMessage {
     /// Role of the message sender
     pub role: MessageRole,
     /// Content of the message
@@ -85,7 +85,11 @@ pub struct LLMMessage {
     pub metadata: HashMap<String, serde_json::Value>,
 }
 
-impl LLMMessage {
+/// Deprecated: Use `LlmMessage` instead
+#[deprecated(since = "0.2.0", note = "Use `LlmMessage` instead")]
+pub type LLMMessage = LlmMessage;
+
+impl LlmMessage {
     /// Create a new system message
     pub fn system<S: Into<String>>(content: S) -> Self {
         Self {
@@ -190,13 +194,13 @@ impl LLMMessage {
 
 /// Response from an LLM
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LLMResponse {
+pub struct LlmResponse {
     /// The response content
     pub content: String,
     /// Tool calls requested by the LLM
     pub tool_calls: Vec<ToolCall>,
     /// Token usage information
-    pub usage: Option<LLMUsage>,
+    pub usage: Option<LlmUsage>,
     /// Model used for the response
     pub model: Option<String>,
     /// Finish reason
@@ -207,7 +211,11 @@ pub struct LLMResponse {
     pub metadata: HashMap<String, serde_json::Value>,
 }
 
-impl LLMResponse {
+/// Deprecated: Use `LlmResponse` instead
+#[deprecated(since = "0.2.0", note = "Use `LlmResponse` instead")]
+pub type LLMResponse = LlmResponse;
+
+impl LlmResponse {
     /// Create a new LLM response
     pub fn new<S: Into<String>>(content: S) -> Self {
         Self {
@@ -235,7 +243,7 @@ impl LLMResponse {
     }
 
     /// Add usage information
-    pub fn with_usage(mut self, usage: LLMUsage) -> Self {
+    pub fn with_usage(mut self, usage: LlmUsage) -> Self {
         self.usage = Some(usage);
         self
     }

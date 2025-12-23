@@ -75,7 +75,7 @@
 //! ## Custom Tool Implementation
 //!
 //! ```no_run
-//! use sage_core::tools::{Tool, ToolCall, ToolResult};
+//! use sage_core::tools::{Tool, ToolCall, ToolResult, ToolSchema, ToolError};
 //! use async_trait::async_trait;
 //!
 //! struct CustomTool;
@@ -85,9 +85,13 @@
 //!     fn name(&self) -> &str { "custom_tool" }
 //!     fn description(&self) -> &str { "A custom tool" }
 //!
-//!     async fn execute(&self, call: &ToolCall) -> ToolResult {
+//!     fn schema(&self) -> ToolSchema {
+//!         ToolSchema::new(self.name(), self.description(), vec![])
+//!     }
+//!
+//!     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
 //!         // Implementation
-//!         ToolResult::success("Result")
+//!         Ok(ToolResult::success("Result", self.name(), "output"))
 //!     }
 //! }
 //! ```

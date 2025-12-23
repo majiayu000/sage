@@ -1,3 +1,8 @@
+//! Planning Mode Demonstration
+//!
+//! This example demonstrates the planning mode tools which allow the agent
+//! to switch between planning and execution modes.
+
 use sage_tools::tools::{EnterPlanModeTool, ExitPlanModeTool};
 use sage_core::tools::base::Tool;
 use sage_core::tools::types::ToolCall;

@@ -10,7 +10,7 @@ pub type Id = Uuid;
 
 /// Token usage statistics for LLM calls
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct LLMUsage {
+pub struct LlmUsage {
     /// Number of tokens in the prompt
     pub prompt_tokens: u32,
     /// Number of tokens in the completion
@@ -27,8 +27,12 @@ pub struct LLMUsage {
     pub cache_read_input_tokens: Option<u32>,
 }
 
-impl LLMUsage {
-    /// Create a new LLMUsage instance
+/// Deprecated: Use `LlmUsage` instead
+#[deprecated(since = "0.2.0", note = "Use `LlmUsage` instead")]
+pub type LLMUsage = LlmUsage;
+
+impl LlmUsage {
+    /// Create a new LlmUsage instance
     pub fn new(prompt_tokens: u32, completion_tokens: u32) -> Self {
         Self {
             prompt_tokens,
@@ -40,8 +44,8 @@ impl LLMUsage {
         }
     }
 
-    /// Add usage from another LLMUsage instance
-    pub fn add(&mut self, other: &LLMUsage) {
+    /// Add usage from another LlmUsage instance
+    pub fn add(&mut self, other: &LlmUsage) {
         self.prompt_tokens += other.prompt_tokens;
         self.completion_tokens += other.completion_tokens;
         self.total_tokens += other.total_tokens;

@@ -11,6 +11,7 @@ use std::any::Any;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use tokio::fs;
+use tracing::instrument;
 
 /// Trait for trajectory storage backends
 #[async_trait]
@@ -45,16 +46,61 @@ pub struct StorageStatistics {
     pub average_record_size: u64,
 }
 
+/// Rotation configuration for trajectory files
+#[derive(Debug, Clone)]
+pub struct RotationConfig {
+    /// Maximum number of trajectory files to keep (None = unlimited)
+    pub max_trajectories: Option<usize>,
+    /// Maximum total size in bytes for all trajectories (None = unlimited)
+    pub total_size_limit: Option<u64>,
+}
+
+impl Default for RotationConfig {
+    fn default() -> Self {
+        Self {
+            max_trajectories: None,
+            total_size_limit: None,
+        }
+    }
+}
+
+impl RotationConfig {
+    /// Create a rotation config with max trajectories limit
+    pub fn with_max_trajectories(max: usize) -> Self {
+        Self {
+            max_trajectories: Some(max),
+            total_size_limit: None,
+        }
+    }
+
+    /// Create a rotation config with total size limit
+    pub fn with_total_size_limit(limit: u64) -> Self {
+        Self {
+            max_trajectories: None,
+            total_size_limit: Some(limit),
+        }
+    }
+
+    /// Create a rotation config with both limits
+    pub fn with_limits(max_trajectories: usize, total_size_limit: u64) -> Self {
+        Self {
+            max_trajectories: Some(max_trajectories),
+            total_size_limit: Some(total_size_limit),
+        }
+    }
+}
+
 /// File-based trajectory storage
 pub struct FileStorage {
     base_path: PathBuf,
     enable_compression: bool,
+    rotation_config: RotationConfig,
 }
 
 impl FileStorage {
-    /// Create a new file storage without compression
+    /// Create a new file storage without compression or rotation
     pub fn new<P: AsRef<Path>>(path: P) -> SageResult<Self> {
-        Self::with_compression(path, false)
+        Self::with_config(path, false, RotationConfig::default())
     }
 
     /// Create a new file storage with optional compression
@@ -79,6 +125,32 @@ impl FileStorage {
     /// # }
     /// ```
     pub fn with_compression<P: AsRef<Path>>(path: P, enable_compression: bool) -> SageResult<Self> {
+        Self::with_config(path, enable_compression, RotationConfig::default())
+    }
+
+    /// Create a new file storage with compression and rotation configuration
+    ///
+    /// # Arguments
+    /// * `path` - Directory path for trajectory files
+    /// * `enable_compression` - Whether to compress files with gzip
+    /// * `rotation_config` - Configuration for file rotation
+    ///
+    /// # Example
+    /// ```no_run
+    /// use sage_core::trajectory::storage::{FileStorage, RotationConfig};
+    /// # use sage_core::error::SageResult;
+    /// # fn example() -> SageResult<()> {
+    /// // Keep at most 10 trajectories
+    /// let rotation = RotationConfig::with_max_trajectories(10);
+    /// let storage = FileStorage::with_config("trajectories", true, rotation)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn with_config<P: AsRef<Path>>(
+        path: P,
+        enable_compression: bool,
+        rotation_config: RotationConfig,
+    ) -> SageResult<Self> {
         let base_path = path.as_ref().to_path_buf();
 
         // Create directory if it doesn't exist
@@ -91,6 +163,7 @@ impl FileStorage {
         Ok(Self {
             base_path,
             enable_compression,
+            rotation_config,
         })
     }
 
@@ -143,12 +216,14 @@ impl FileStorage {
     /// # Ok(())
     /// # }
     /// ```
+    #[instrument(skip(self, record), fields(id = %record.id, compressed = true))]
     pub async fn save_compressed(&self, record: &TrajectoryRecord) -> SageResult<()> {
         let file_path = if self.is_directory_path() {
             // If base_path is a directory, generate a new filename with .json.gz extension
+            // Use millisecond precision to avoid filename collisions
             self.base_path.join(format!(
                 "sage_{}.json.gz",
-                chrono::Utc::now().format("%Y%m%d_%H%M%S")
+                chrono::Utc::now().format("%Y%m%d_%H%M%S_%3f")
             ))
         } else {
             // If base_path is a file, add .gz extension if not present
@@ -187,6 +262,12 @@ impl FileStorage {
             .await
             .context(format!("Failed to write compressed trajectory to {:?}", file_path))?;
 
+        tracing::info!(
+            compressed_size = compressed.len(),
+            path = %file_path.display(),
+            "trajectory saved with compression"
+        );
+
         Ok(())
     }
 
@@ -215,6 +296,7 @@ impl FileStorage {
     /// # Ok(())
     /// # }
     /// ```
+    #[instrument(skip(self), fields(id = %id))]
     pub async fn load_compressed(&self, id: Id) -> SageResult<Option<TrajectoryRecord>> {
         if self.is_directory_path() {
             // Directory mode: Scan through all files to find the one with matching ID
@@ -251,11 +333,13 @@ impl FileStorage {
 
                 if let Some(record) = record_opt {
                     if record.id == id {
+                        tracing::info!("trajectory loaded successfully");
                         return Ok(Some(record));
                     }
                 }
             }
 
+            tracing::debug!("trajectory not found");
             Ok(None)
         } else {
             // File mode: Check if the base_path itself exists and load it
@@ -312,68 +396,237 @@ impl FileStorage {
             .map(|ext| ext == "gz")
             .unwrap_or(false)
     }
+
+    /// Perform file rotation based on configured limits
+    ///
+    /// This method enforces trajectory storage limits by:
+    /// 1. Deleting oldest files when max_trajectories is exceeded
+    /// 2. Deleting oldest files when total_size_limit is exceeded
+    ///
+    /// Files are sorted by modification time, with oldest files deleted first.
+    ///
+    /// # Example
+    /// ```no_run
+    /// use sage_core::trajectory::storage::{FileStorage, RotationConfig};
+    /// # use sage_core::error::SageResult;
+    /// # async fn example() -> SageResult<()> {
+    /// let rotation = RotationConfig::with_max_trajectories(10);
+    /// let storage = FileStorage::with_config("trajectories", true, rotation)?;
+    /// // Rotation happens automatically after save
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn rotate_files(&self) -> SageResult<()> {
+        // Only perform rotation if we're using directory mode
+        if !self.is_directory_path() {
+            return Ok(());
+        }
+
+        // If no rotation limits are set, nothing to do
+        if self.rotation_config.max_trajectories.is_none()
+            && self.rotation_config.total_size_limit.is_none()
+        {
+            return Ok(());
+        }
+
+        if !self.base_path.exists() {
+            return Ok(());
+        }
+
+        // Collect all trajectory files with metadata
+        #[derive(Debug)]
+        struct FileInfo {
+            path: PathBuf,
+            size: u64,
+            modified: std::time::SystemTime,
+        }
+
+        let mut files = Vec::new();
+        let mut entries = fs::read_dir(&self.base_path).await.map_err(|e| {
+            SageError::config(format!(
+                "Failed to read trajectory directory {:?}: {}",
+                self.base_path, e
+            ))
+        })?;
+
+        while let Some(entry) = entries.next_entry().await.map_err(|e| {
+            SageError::config(format!("Failed to read directory entry: {}", e))
+        })? {
+            let path = entry.path();
+            let extension = path.extension().and_then(|s| s.to_str());
+
+            // Only consider .json and .gz files
+            if extension == Some("json") || extension == Some("gz") {
+                if let Ok(metadata) = fs::metadata(&path).await {
+                    if let Ok(modified) = metadata.modified() {
+                        files.push(FileInfo {
+                            path: path.clone(),
+                            size: metadata.len(),
+                            modified,
+                        });
+                    }
+                }
+            }
+        }
+
+        // Sort by modification time (oldest first)
+        files.sort_by_key(|f| f.modified);
+
+        // Apply max_trajectories limit
+        if let Some(max_trajectories) = self.rotation_config.max_trajectories {
+            while files.len() > max_trajectories {
+                if let Some(oldest) = files.first() {
+                    tracing::info!(
+                        "Rotating trajectory file (max count): {}",
+                        oldest.path.display()
+                    );
+                    fs::remove_file(&oldest.path).await.map_err(|e| {
+                        SageError::io(format!(
+                            "Failed to delete trajectory file {:?}: {}",
+                            oldest.path, e
+                        ))
+                    })?;
+                    files.remove(0);
+                }
+            }
+        }
+
+        // Apply total_size_limit
+        if let Some(size_limit) = self.rotation_config.total_size_limit {
+            let mut total_size: u64 = files.iter().map(|f| f.size).sum();
+
+            while total_size > size_limit && !files.is_empty() {
+                if let Some(oldest) = files.first() {
+                    tracing::info!(
+                        "Rotating trajectory file (size limit): {} ({} bytes)",
+                        oldest.path.display(),
+                        oldest.size
+                    );
+                    total_size = total_size.saturating_sub(oldest.size);
+                    fs::remove_file(&oldest.path).await.map_err(|e| {
+                        SageError::io(format!(
+                            "Failed to delete trajectory file {:?}: {}",
+                            oldest.path, e
+                        ))
+                    })?;
+                    files.remove(0);
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[async_trait]
 impl TrajectoryStorage for FileStorage {
+    #[instrument(skip(self, record), fields(id = %record.id, compression = %self.enable_compression))]
     async fn save(&self, record: &TrajectoryRecord) -> SageResult<()> {
         // Use compression if enabled in configuration
         if self.enable_compression {
-            return self.save_compressed(record).await;
-        }
-
-        let file_path = if self.is_directory_path() {
-            // If base_path is a directory, generate a new filename
-            self.base_path.join(format!(
-                "sage_{}.json",
-                chrono::Utc::now().format("%Y%m%d_%H%M%S")
-            ))
+            self.save_compressed(record).await?;
         } else {
-            // If base_path is a file, use it directly
-            self.base_path.clone()
-        };
+            let file_path = if self.is_directory_path() {
+                // If base_path is a directory, generate a new filename
+                // Use millisecond precision to avoid filename collisions
+                self.base_path.join(format!(
+                    "sage_{}.json",
+                    chrono::Utc::now().format("%Y%m%d_%H%M%S_%3f")
+                ))
+            } else {
+                // If base_path is a file, use it directly
+                self.base_path.clone()
+            };
 
-        // Ensure parent directory exists
-        if let Some(parent) = file_path.parent() {
-            fs::create_dir_all(parent)
+            // Ensure parent directory exists
+            if let Some(parent) = file_path.parent() {
+                fs::create_dir_all(parent)
+                    .await
+                    .context(format!("Failed to create trajectory directory: {:?}", parent))?;
+            }
+
+            // Serialize record
+            let json = serde_json::to_string_pretty(record)
+                .context("Failed to serialize trajectory record")?;
+
+            // Write to file
+            fs::write(&file_path, &json)
                 .await
-                .context(format!("Failed to create trajectory directory: {:?}", parent))?;
+                .context(format!("Failed to write trajectory to {:?}", file_path))?;
+
+            tracing::info!(
+                size = json.len(),
+                path = %file_path.display(),
+                "trajectory saved without compression"
+            );
         }
 
-        // Serialize record
-        let json = serde_json::to_string_pretty(record)
-            .context("Failed to serialize trajectory record")?;
-
-        // Write to file
-        fs::write(&file_path, &json)
-            .await
-            .context(format!("Failed to write trajectory to {:?}", file_path))?;
+        // Perform rotation after saving
+        self.rotate_files().await?;
 
         Ok(())
     }
 
+    #[instrument(skip(self), fields(id = %id))]
     async fn load(&self, id: Id) -> SageResult<Option<TrajectoryRecord>> {
         // If compression is enabled, use load_compressed which handles both formats
         if self.enable_compression {
             return self.load_compressed(id).await;
         }
 
-        let file_path = self.get_file_path(id);
+        if self.is_directory_path() {
+            // Directory mode: Scan through all files to find the one with matching ID
+            if !self.base_path.exists() {
+                return Ok(None);
+            }
 
-        if !file_path.exists() {
-            return Ok(None);
+            let mut entries = fs::read_dir(&self.base_path).await.map_err(|e| {
+                SageError::config(format!(
+                    "Failed to read trajectory directory {:?}: {}",
+                    self.base_path, e
+                ))
+            })?;
+
+            while let Some(entry) = entries.next_entry().await.map_err(|e| {
+                SageError::config(format!("Failed to read directory entry: {}", e))
+            })? {
+                let path = entry.path();
+                let extension = path.extension().and_then(|s| s.to_str());
+
+                if extension == Some("json") {
+                    if let Ok(content) = fs::read_to_string(&path).await {
+                        if let Ok(record) = serde_json::from_str::<TrajectoryRecord>(&content) {
+                            if record.id == id {
+                                tracing::info!("trajectory loaded successfully");
+                                return Ok(Some(record));
+                            }
+                        }
+                    }
+                }
+            }
+
+            Ok(None)
+        } else {
+            // File mode: Try to load directly from base_path
+            let file_path = self.get_file_path(id);
+
+            if !file_path.exists() {
+                return Ok(None);
+            }
+
+            let content = fs::read_to_string(&file_path)
+                .await
+                .context(format!("Failed to read trajectory from {:?}", file_path))?;
+
+            let record: TrajectoryRecord = serde_json::from_str(&content)
+                .context(format!("Failed to parse trajectory JSON from {:?}", file_path))?;
+
+            tracing::info!("trajectory loaded successfully");
+            Ok(Some(record))
         }
-
-        let content = fs::read_to_string(&file_path)
-            .await
-            .context(format!("Failed to read trajectory from {:?}", file_path))?;
-
-        let record: TrajectoryRecord = serde_json::from_str(&content)
-            .context(format!("Failed to parse trajectory JSON from {:?}", file_path))?;
-
-        Ok(Some(record))
     }
 
+    #[instrument(skip(self))]
     async fn list(&self) -> SageResult<Vec<Id>> {
         let mut ids = Vec::new();
 
@@ -978,5 +1231,286 @@ mod compression_tests {
         }
 
         assert!(found_json, "Expected new() to default to no compression");
+    }
+}
+
+#[cfg(test)]
+mod rotation_tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    /// Helper function to create a sample trajectory record
+    fn create_test_record() -> TrajectoryRecord {
+        use crate::trajectory::recorder::{
+            AgentStepRecord, LLMInteractionRecord, LLMResponseRecord, TokenUsageRecord,
+        };
+
+        TrajectoryRecord {
+            id: uuid::Uuid::new_v4(),
+            task: "Test task".to_string(),
+            start_time: "2024-01-01T00:00:00Z".to_string(),
+            end_time: "2024-01-01T00:05:00Z".to_string(),
+            provider: "test-provider".to_string(),
+            model: "test-model".to_string(),
+            max_steps: Some(10),
+            llm_interactions: vec![LLMInteractionRecord {
+                timestamp: "2024-01-01T00:00:00Z".to_string(),
+                provider: "test-provider".to_string(),
+                model: "test-model".to_string(),
+                input_messages: vec![serde_json::json!({"role": "user", "content": "test"})],
+                response: LLMResponseRecord {
+                    content: "Test response".to_string(),
+                    model: Some("test-model".to_string()),
+                    finish_reason: Some("stop".to_string()),
+                    usage: Some(TokenUsageRecord {
+                        input_tokens: 10,
+                        output_tokens: 20,
+                        cache_creation_input_tokens: None,
+                        cache_read_input_tokens: None,
+                        reasoning_tokens: None,
+                    }),
+                    tool_calls: None,
+                },
+                tools_available: Some(vec!["tool1".to_string(), "tool2".to_string()]),
+            }],
+            agent_steps: vec![AgentStepRecord {
+                step_number: 1,
+                timestamp: "2024-01-01T00:00:00Z".to_string(),
+                state: "Running".to_string(),
+                llm_messages: Some(vec![serde_json::json!({"role": "user", "content": "test"})]),
+                llm_response: Some(LLMResponseRecord {
+                    content: "Test response".to_string(),
+                    model: Some("test-model".to_string()),
+                    finish_reason: Some("stop".to_string()),
+                    usage: Some(TokenUsageRecord {
+                        input_tokens: 10,
+                        output_tokens: 20,
+                        cache_creation_input_tokens: None,
+                        cache_read_input_tokens: None,
+                        reasoning_tokens: None,
+                    }),
+                    tool_calls: None,
+                }),
+                tool_calls: None,
+                tool_results: None,
+                reflection: Some("Test reflection".to_string()),
+                error: None,
+            }],
+            success: true,
+            final_result: Some("Test completed".to_string()),
+            execution_time: 300.0,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_rotation_max_trajectories() {
+        let temp_dir = TempDir::new().unwrap();
+        let storage_dir = temp_dir.path().to_path_buf();
+
+        // Create storage with max 3 trajectories
+        let rotation = RotationConfig::with_max_trajectories(3);
+        let storage = FileStorage::with_config(&storage_dir, false, rotation).unwrap();
+
+        // Save 5 trajectories
+        for _ in 0..5 {
+            let record = create_test_record();
+            storage.save(&record).await.unwrap();
+            // Small delay to ensure different modification times
+            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+        }
+
+        // Should only have 3 files
+        let ids = storage.list().await.unwrap();
+        assert_eq!(ids.len(), 3, "Should only keep 3 trajectories");
+    }
+
+    #[tokio::test]
+    async fn test_rotation_total_size_limit() {
+        let temp_dir = TempDir::new().unwrap();
+        let storage_dir = temp_dir.path().to_path_buf();
+
+        // First, create a test file to determine approximate size
+        let test_storage = FileStorage::new(&storage_dir).unwrap();
+        let test_record = create_test_record();
+        test_storage.save(&test_record).await.unwrap();
+
+        let stats = test_storage.statistics().await.unwrap();
+        let file_size = stats.average_record_size;
+
+        // Clean up test file
+        test_storage.delete(test_record.id).await.unwrap();
+
+        // Create storage with size limit for ~2.5 files
+        let size_limit = file_size * 5 / 2;
+        let rotation = RotationConfig::with_total_size_limit(size_limit);
+        let storage = FileStorage::with_config(&storage_dir, false, rotation).unwrap();
+
+        // Save 5 trajectories
+        for _ in 0..5 {
+            let record = create_test_record();
+            storage.save(&record).await.unwrap();
+            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+        }
+
+        // Should keep only 2 files (since we set limit to ~2.5 files)
+        let stats = storage.statistics().await.unwrap();
+        assert!(
+            stats.total_records <= 2,
+            "Should keep at most 2 trajectories based on size limit"
+        );
+        assert!(
+            stats.total_size_bytes <= size_limit,
+            "Total size should be within limit"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_rotation_with_both_limits() {
+        let temp_dir = TempDir::new().unwrap();
+        let storage_dir = temp_dir.path().to_path_buf();
+
+        // Create storage with both limits
+        let rotation = RotationConfig::with_limits(5, 1024 * 1024); // 5 files, 1MB
+        let storage = FileStorage::with_config(&storage_dir, false, rotation).unwrap();
+
+        // Save 10 trajectories
+        for _ in 0..10 {
+            let record = create_test_record();
+            storage.save(&record).await.unwrap();
+            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+        }
+
+        // Should only have 5 files (limited by max_trajectories)
+        let ids = storage.list().await.unwrap();
+        assert_eq!(ids.len(), 5, "Should only keep 5 trajectories");
+    }
+
+    #[tokio::test]
+    async fn test_rotation_with_compression() {
+        let temp_dir = TempDir::new().unwrap();
+        let storage_dir = temp_dir.path().to_path_buf();
+
+        // Create storage with compression and max 3 trajectories
+        let rotation = RotationConfig::with_max_trajectories(3);
+        let storage = FileStorage::with_config(&storage_dir, true, rotation).unwrap();
+
+        // Save 5 trajectories
+        for _ in 0..5 {
+            let record = create_test_record();
+            storage.save(&record).await.unwrap();
+            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+        }
+
+        // Should only have 3 compressed files
+        let ids = storage.list().await.unwrap();
+        assert_eq!(ids.len(), 3, "Should only keep 3 compressed trajectories");
+
+        // Verify files are compressed
+        let mut entries = fs::read_dir(&storage_dir).await.unwrap();
+        let mut gz_count = 0;
+
+        while let Some(entry) = entries.next_entry().await.unwrap() {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("gz") {
+                gz_count += 1;
+            }
+        }
+
+        assert_eq!(gz_count, 3, "Should have 3 .gz files");
+    }
+
+    #[tokio::test]
+    async fn test_rotation_keeps_newest_files() {
+        let temp_dir = TempDir::new().unwrap();
+        let storage_dir = temp_dir.path().to_path_buf();
+
+        // Create storage with max 2 trajectories
+        let rotation = RotationConfig::with_max_trajectories(2);
+        let storage = FileStorage::with_config(&storage_dir, false, rotation).unwrap();
+
+        // Save 3 trajectories and remember their IDs
+        let mut ids = Vec::new();
+        for _ in 0..3 {
+            let record = create_test_record();
+            ids.push(record.id);
+            storage.save(&record).await.unwrap();
+            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+        }
+
+        // Should only have the last 2 trajectories
+        let remaining_ids = storage.list().await.unwrap();
+        assert_eq!(remaining_ids.len(), 2);
+
+        // The first ID should be deleted, last 2 should remain
+        assert!(!remaining_ids.contains(&ids[0]), "Oldest should be deleted");
+        assert!(remaining_ids.contains(&ids[1]), "Second should remain");
+        assert!(remaining_ids.contains(&ids[2]), "Newest should remain");
+    }
+
+    #[tokio::test]
+    async fn test_rotation_no_limits() {
+        let temp_dir = TempDir::new().unwrap();
+        let storage_dir = temp_dir.path().to_path_buf();
+
+        // Create storage without rotation limits
+        let storage = FileStorage::new(&storage_dir).unwrap();
+
+        // Save 5 trajectories
+        for _ in 0..5 {
+            let record = create_test_record();
+            storage.save(&record).await.unwrap();
+            // Small delay to ensure different timestamps
+            tokio::time::sleep(tokio::time::Duration::from_millis(2)).await;
+        }
+
+        // Should keep all 5 files
+        let ids = storage.list().await.unwrap();
+        assert_eq!(ids.len(), 5, "Should keep all trajectories when no limits set");
+    }
+
+    #[tokio::test]
+    async fn test_rotation_config_builders() {
+        // Test with_max_trajectories
+        let config1 = RotationConfig::with_max_trajectories(10);
+        assert_eq!(config1.max_trajectories, Some(10));
+        assert_eq!(config1.total_size_limit, None);
+
+        // Test with_total_size_limit
+        let config2 = RotationConfig::with_total_size_limit(1024);
+        assert_eq!(config2.max_trajectories, None);
+        assert_eq!(config2.total_size_limit, Some(1024));
+
+        // Test with_limits
+        let config3 = RotationConfig::with_limits(5, 2048);
+        assert_eq!(config3.max_trajectories, Some(5));
+        assert_eq!(config3.total_size_limit, Some(2048));
+
+        // Test default
+        let config4 = RotationConfig::default();
+        assert_eq!(config4.max_trajectories, None);
+        assert_eq!(config4.total_size_limit, None);
+    }
+
+    #[tokio::test]
+    async fn test_rotation_does_not_affect_file_mode() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("single_trajectory.json");
+
+        // Create storage pointing to a single file with rotation config
+        let rotation = RotationConfig::with_max_trajectories(1);
+        let storage = FileStorage::with_config(&file_path, false, rotation).unwrap();
+
+        // Save multiple times to the same file
+        for _ in 0..3 {
+            let record = create_test_record();
+            storage.save(&record).await.unwrap();
+        }
+
+        // File should still exist (rotation shouldn't delete single file mode)
+        assert!(file_path.exists());
+
+        // Should only have 1 record (the file gets overwritten)
+        let ids = storage.list().await.unwrap();
+        assert_eq!(ids.len(), 1);
     }
 }

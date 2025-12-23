@@ -48,7 +48,7 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 dirs = { workspace = true }
 shellexpand = { workspace = true }
-lru = "0.12"
+lru = { workspace = true }
 flate2 = "1.0"
 dashmap = "6.0"
 lazy_static = "1.4"

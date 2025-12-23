@@ -515,6 +515,9 @@ pub struct TrajectoryConfig {
     pub auto_save: bool,
     /// Number of steps between auto-saves
     pub save_interval_steps: usize,
+    /// Whether to compress trajectory files with gzip
+    #[serde(default = "default_true")]
+    pub enable_compression: bool,
 }
 
 impl TrajectoryConfig {
@@ -655,6 +658,7 @@ impl Default for TrajectoryConfig {
             directory: PathBuf::from("trajectories"),
             auto_save: true,
             save_interval_steps: 5,
+            enable_compression: true, // Enable compression by default
         }
     }
 }

@@ -6,6 +6,7 @@ use sage_core::tools::base::{FileSystemTool, Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use tracing::instrument;
 use walkdir::WalkDir;
 
 /// Output mode for grep results
@@ -248,7 +249,36 @@ impl GrepTool {
             }
         };
 
-        Ok(ToolResult::success("", self.name(), output))
+        // Build result with metadata
+        let mode_str = match output_mode {
+            GrepOutputMode::Content => "content",
+            GrepOutputMode::FilesWithMatches => "files_with_matches",
+            GrepOutputMode::Count => "count",
+        };
+
+        let mut result = ToolResult::success("", self.name(), output)
+            .with_metadata("pattern", serde_json::Value::String(pattern.to_string()))
+            .with_metadata("results_count", serde_json::Value::Number(results.len().into()))
+            .with_metadata("total_matches", serde_json::Value::Number(total_matches.into()))
+            .with_metadata("output_mode", serde_json::Value::String(mode_str.to_string()));
+
+        if let Some(path) = search_path {
+            result = result.with_metadata("search_path", serde_json::Value::String(path.to_string()));
+        }
+
+        if let Some(glob) = glob_filter {
+            result = result.with_metadata("glob_filter", serde_json::Value::String(glob.to_string()));
+        }
+
+        if let Some(file_type) = type_filter {
+            result = result.with_metadata("type_filter", serde_json::Value::String(file_type.to_string()));
+        }
+
+        if case_insensitive {
+            result = result.with_metadata("case_insensitive", serde_json::Value::Bool(true));
+        }
+
+        Ok(result)
     }
 
     /// Search a single file
@@ -549,6 +579,7 @@ Automatically skips:
         )
     }
 
+    #[instrument(skip(self, call), fields(call_id = %call.id, pattern = call.get_string("pattern").as_deref().unwrap_or("<missing>")))]
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
         let pattern = call.get_string("pattern").ok_or_else(|| {
             ToolError::InvalidArguments("Missing 'pattern' parameter".to_string())

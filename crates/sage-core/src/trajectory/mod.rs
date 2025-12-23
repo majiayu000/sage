@@ -22,4 +22,4 @@ pub use replayer::{
     ReplayMode, ReplaySummary, StepAnalysis, StepReplayResult, TokenUsageStats, ToolCallInfo,
     ToolResultInfo, TrajectoryInfo, TrajectoryReplayer,
 };
-pub use storage::{FileStorage, TrajectoryStorage};
+pub use storage::{FileStorage, RotationConfig, StorageStatistics, TrajectoryStorage};

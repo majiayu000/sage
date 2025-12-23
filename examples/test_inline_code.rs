@@ -1,20 +1,15 @@
+//! Test Inline Code Rendering
+//!
+//! This example demonstrates the markdown rendering functionality,
+//! specifically testing how inline code blocks are rendered in the terminal UI.
 
-use crossterm::{
-    style::{Color, Stylize},
-    QueueableCommand,
-};
-use std::io::{self, Write};
-use sage_core::ui::markdown::Markdown;
+use sage_core::ui::render_markdown;
 
-fn main() -> io::Result<()> {
+fn main() {
     let markdown = r#"
 This is a test of `inline code` functionality.
 "#;
 
-    let mut stdout = io::stdout();
-    let md = Markdown::from(markdown);
-    md.draw(&mut stdout)?;
-    stdout.flush()?;
-
-    Ok(())
+    println!("Testing inline code rendering:\n");
+    render_markdown(markdown);
 }

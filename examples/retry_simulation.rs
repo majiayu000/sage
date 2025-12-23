@@ -1,3 +1,8 @@
+//! LLM Retry Simulation
+//!
+//! This example simulates various failure scenarios to demonstrate
+//! the robustness of the LLM client's retry and error handling mechanisms.
+
 use sage_core::{
     config::provider::ProviderConfig,
     error::SageError,
@@ -8,9 +13,6 @@ use sage_core::{
 };
 use std::time::Instant;
 use tracing_subscriber::fmt::init;
-
-/// 模拟重试机制的示例
-/// 这个示例展示了重试机制如何处理不同类型的错误
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 初始化日志，设置为WARN级别以看到重试日志

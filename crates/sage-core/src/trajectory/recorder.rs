@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tracing::instrument;
 
 /// Complete trajectory record - matches Python version format
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -146,6 +147,7 @@ impl TrajectoryRecorder {
     }
 
     /// Start recording a new trajectory
+    #[instrument(skip(self, task), fields(provider = %provider, model = %model, max_steps = ?max_steps))]
     pub async fn start_recording(
         &mut self,
         task: TaskMetadata,
@@ -178,6 +180,7 @@ impl TrajectoryRecorder {
     }
 
     /// Record an agent step
+    #[instrument(skip(self, step), fields(step_number = step.step_number))]
     pub async fn record_step(&mut self, step: AgentStep) -> SageResult<()> {
         let mut current = self.current_record.lock().await;
 
@@ -253,6 +256,7 @@ impl TrajectoryRecorder {
     }
 
     /// Finalize the recording
+    #[instrument(skip(self, final_result), fields(success = success))]
     pub async fn finalize_recording(
         &mut self,
         success: bool,

@@ -42,7 +42,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         println!("📈 Execution Stats:");
         println!("   Steps: {}", stats.total_steps);
         println!("   Tokens: {}", stats.total_tokens);
-        println!("   Duration: {:.2}s", stats.execution_time_seconds);
+        if let Some(duration) = stats.execution_time {
+            println!("   Duration: {:.2}s", duration.num_milliseconds() as f64 / 1000.0);
+        }
     } else {
         println!("❌ Task failed!");
     }
