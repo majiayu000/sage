@@ -45,7 +45,11 @@
       "max_tokens": 4096,
       "model": "llama3",
       "temperature": 0.7,
-      "top_p": 1.0
+      "top_p": 1.0,
+      "timeouts": {
+        "connection_timeout_secs": 10,
+        "request_timeout_secs": 120
+      }
     },
     "openai": {
       "api_key": "your-openai-api-key-here",

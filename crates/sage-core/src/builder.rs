@@ -126,7 +126,7 @@ impl SageBuilder {
     pub fn with_openai(mut self, api_key: impl Into<String>) -> Self {
         let config = ProviderConfig::new("openai")
             .with_api_key(api_key.into())
-            .with_timeouts(TimeoutConfig::new().with_request_timeout_secs(60))
+            .with_timeouts(TimeoutConfig::default())
             .with_max_retries(3);
         self.providers.insert("openai".to_string(), config);
         if self.default_provider.is_none() {
@@ -139,7 +139,7 @@ impl SageBuilder {
     pub fn with_anthropic(mut self, api_key: impl Into<String>) -> Self {
         let config = ProviderConfig::new("anthropic")
             .with_api_key(api_key.into())
-            .with_timeouts(TimeoutConfig::new().with_request_timeout_secs(60))
+            .with_timeouts(TimeoutConfig::default())
             .with_max_retries(3);
         self.providers.insert("anthropic".to_string(), config);
         if self.default_provider.is_none() {
@@ -152,7 +152,7 @@ impl SageBuilder {
     pub fn with_google(mut self, api_key: impl Into<String>) -> Self {
         let config = ProviderConfig::new("google")
             .with_api_key(api_key.into())
-            .with_timeouts(TimeoutConfig::new().with_request_timeout_secs(60))
+            .with_timeouts(TimeoutConfig::default())
             .with_max_retries(3);
         self.providers.insert("google".to_string(), config);
         if self.default_provider.is_none() {
@@ -341,7 +341,7 @@ impl SageBuilder {
                 c.default_model_parameters().ok().map(|params| {
                     let mut config = ProviderConfig::new(&provider_name)
                         .with_api_key(params.get_api_key().unwrap_or_default())
-                        .with_timeouts(TimeoutConfig::new().with_request_timeout_secs(60))
+                        .with_timeouts(TimeoutConfig::default())
                         .with_max_retries(3);
                     // Apply custom base_url if configured (for OpenRouter, etc.)
                     if let Some(base_url) = &params.base_url {
