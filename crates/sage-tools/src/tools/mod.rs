@@ -68,10 +68,11 @@ pub use process::{
     get_task, update_task_status,
 };
 pub use task_mgmt::{
-    AddTasksTool, ReorganizeTasklistTool, TaskDoneTool, TodoItem, TodoStatus, TodoWriteTool,
-    UpdateTasksTool, ViewTasklistTool, get_current_task, get_current_todos, get_todo_display,
+    AddTasksTool, ReorganizeTasklistTool, TaskDoneTool, TodoItem, TodoReadTool, TodoStatus,
+    TodoWriteTool, UpdateTasksTool, ViewTasklistTool, get_current_task, get_current_todos,
+    get_todo_display,
 };
-pub use utils::SequentialThinkingTool;
+pub use utils::{SequentialThinkingTool, TelemetryStatsTool};
 pub use vcs::GitTool;
 
 // Re-export MCP tools
@@ -102,6 +103,7 @@ pub fn get_default_tools() -> Vec<Arc<dyn Tool>> {
         Arc::new(TaskOutputTool::new()),
         // Task management
         Arc::new(TodoWriteTool::new()), // Claude Code compatible
+        Arc::new(TodoReadTool::new()),  // Read current todo list status
         Arc::new(ViewTasklistTool::new()),
         Arc::new(AddTasksTool::new()),
         Arc::new(UpdateTasksTool::new()),
@@ -117,6 +119,7 @@ pub fn get_default_tools() -> Vec<Arc<dyn Tool>> {
         Arc::new(SlashCommandTool::new()),
         // Utilities
         Arc::new(SequentialThinkingTool::new()),
+        Arc::new(TelemetryStatsTool::new()), // View tool usage statistics
         // Network tools
         Arc::new(WebSearchTool::new()),
         Arc::new(WebFetchTool::new()),

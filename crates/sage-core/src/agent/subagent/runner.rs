@@ -112,13 +112,30 @@ impl SubAgentRunner {
             messages.push(LLMMessage::system(&definition.system_prompt));
         }
 
-        // Add user task
-        let user_message = format!("{}\n\nTask: {}", definition.description, config.prompt);
+        // Add user task with thoroughness context for Explore agents
+        let user_message = if config.agent_type == AgentType::Explore {
+            format!(
+                "{}\n\n**Thoroughness Level**: {}\n{}\n\nTask: {}",
+                definition.description,
+                config.thoroughness,
+                config.thoroughness.description(),
+                config.prompt
+            )
+        } else {
+            format!("{}\n\nTask: {}", definition.description, config.prompt)
+        };
         messages.push(LLMMessage::user(user_message));
 
         // Track execution
         let mut progress = AgentProgress::new();
         let mut metadata = ExecutionMetadata::default();
+
+        // Calculate effective max steps based on agent type and thoroughness
+        let effective_max_steps = if config.agent_type == AgentType::Explore {
+            config.thoroughness.suggested_max_steps()
+        } else {
+            self.max_steps
+        };
 
         // Execute steps
         loop {
@@ -128,7 +145,7 @@ impl SubAgentRunner {
             }
 
             // Check step limit
-            if progress.current_step >= self.max_steps as u32 {
+            if progress.current_step >= effective_max_steps as u32 {
                 let elapsed_ms = start_time.elapsed().as_millis() as u64;
                 metadata.execution_time_ms = elapsed_ms;
 
@@ -136,7 +153,7 @@ impl SubAgentRunner {
                     agent_id,
                     content: format!(
                         "Task incomplete: maximum steps ({}) reached. Last progress: {} tool uses, {} tokens.",
-                        self.max_steps, progress.tool_use_count, progress.token_count
+                        effective_max_steps, progress.tool_use_count, progress.token_count
                     ),
                     metadata,
                 });

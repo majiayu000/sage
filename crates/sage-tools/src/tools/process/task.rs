@@ -4,7 +4,7 @@
 //! Now with actual execution support via SubAgentRunner.
 
 use async_trait::async_trait;
-use sage_core::agent::subagent::{AgentType, SubAgentConfig, execute_subagent};
+use sage_core::agent::subagent::{AgentType, SubAgentConfig, Thoroughness, execute_subagent};
 use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolResult, ToolSchema};
 use serde::{Deserialize, Serialize};
@@ -152,7 +152,7 @@ The Task tool launches specialized agents (subprocesses) that autonomously handl
 
 Available agent types:
 - general-purpose: General-purpose agent with access to all tools. Use for complex multi-step tasks.
-- Explore: Fast agent for codebase exploration. Use for finding files, searching code, or answering questions about the codebase. (Tools: Glob, Grep, Read, Bash)
+- Explore: Fast agent for codebase exploration. Use for finding files, searching code, or answering questions about the codebase. (Tools: Glob, Grep, Read, Bash). Supports thoroughness levels: "quick", "medium", "very_thorough".
 - Plan: Software architect agent for designing implementation plans. Returns step-by-step plans and identifies critical files. (Tools: All)
 
 When NOT to use the Task tool:
@@ -164,7 +164,8 @@ Usage notes:
 - Launch multiple agents concurrently when possible (use single message with multiple tool calls)
 - Agent results are not visible to the user - summarize results in your response
 - Use run_in_background=true for background execution, then use TaskOutput to retrieve results
-- Use resume parameter with agent ID to continue previous execution"#
+- Use resume parameter with agent ID to continue previous execution
+- For Explore agents, specify thoroughness: "quick" (5 steps), "medium" (15 steps), or "very_thorough" (30 steps)"#
     }
 
     fn schema(&self) -> ToolSchema {
@@ -199,6 +200,12 @@ Usage notes:
                     "resume": {
                         "type": "string",
                         "description": "Optional agent ID to resume from. Agent continues with previous context preserved."
+                    },
+                    "thoroughness": {
+                        "type": "string",
+                        "description": "Thoroughness level for Explore agents: quick (fast, 5 steps), medium (balanced, 15 steps), very_thorough (comprehensive, 30 steps). Default: medium.",
+                        "enum": ["quick", "medium", "very_thorough"],
+                        "default": "medium"
                     }
                 },
                 "required": ["description", "prompt", "subagent_type"]
@@ -250,6 +257,18 @@ Usage notes:
             .get("resume")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
+
+        // Parse thoroughness level
+        let thoroughness = call
+            .arguments
+            .get("thoroughness")
+            .and_then(|v| v.as_str())
+            .map(|s| match s.to_lowercase().as_str() {
+                "quick" => Thoroughness::Quick,
+                "very_thorough" | "very-thorough" | "thorough" => Thoroughness::VeryThorough,
+                _ => Thoroughness::Medium,
+            })
+            .unwrap_or(Thoroughness::Medium);
 
         // Generate task ID
         let task_id = resume
@@ -314,7 +333,8 @@ Usage notes:
             })
         } else {
             // Synchronous execution - actually run the subagent
-            let config = SubAgentConfig::new(agent_type, prompt.clone());
+            let config = SubAgentConfig::new(agent_type, prompt.clone())
+                .with_thoroughness(thoroughness);
 
             match execute_subagent(config).await {
                 Ok(result) => {

@@ -41,5 +41,5 @@ pub use runner::{
 };
 pub use types::{
     AgentDefinition, AgentProgress, AgentStatus, AgentType, ExecutionMetadata, RunningAgent,
-    SubAgentConfig, SubAgentResult, ToolAccessControl,
+    SubAgentConfig, SubAgentResult, Thoroughness, ToolAccessControl,
 };

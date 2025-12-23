@@ -1,11 +1,12 @@
 //! Tool execution engine
 
 use crate::error::{SageError, SageResult};
+use crate::telemetry::global_telemetry;
 use crate::tools::base::Tool;
 use crate::tools::types::{ToolCall, ToolResult};
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::time::timeout;
 use tracing::instrument;
 
@@ -83,6 +84,14 @@ impl ToolExecutor {
         let tool = match self.tools.get(&call.name) {
             Some(tool) => tool,
             None => {
+                // Record failed telemetry for missing tool
+                global_telemetry().record_tool_usage(
+                    &call.name,
+                    Duration::from_millis(0),
+                    false,
+                    Some("Tool not found".to_string()),
+                    None,
+                );
                 return ToolResult::error(
                     &call.id,
                     &call.name,
@@ -97,15 +106,40 @@ impl ToolExecutor {
             .map(Duration::from_secs)
             .unwrap_or(self.max_execution_time);
 
+        // Track execution time
+        let start = Instant::now();
+
         // Execute with timeout
-        match timeout(execution_timeout, tool.execute_with_timing(call)).await {
+        let result = match timeout(execution_timeout, tool.execute_with_timing(call)).await {
             Ok(result) => result,
-            Err(_) => ToolResult::error(
-                &call.id,
-                &call.name,
-                format!("Tool execution timed out after {:?}", execution_timeout),
-            ),
-        }
+            Err(_) => {
+                let elapsed = start.elapsed();
+                global_telemetry().record_tool_usage(
+                    &call.name,
+                    elapsed,
+                    false,
+                    Some(format!("Timed out after {:?}", execution_timeout)),
+                    None,
+                );
+                return ToolResult::error(
+                    &call.id,
+                    &call.name,
+                    format!("Tool execution timed out after {:?}", execution_timeout),
+                );
+            }
+        };
+
+        // Record telemetry
+        let elapsed = start.elapsed();
+        global_telemetry().record_tool_usage(
+            &call.name,
+            elapsed,
+            result.success,
+            result.error.clone(),
+            None,
+        );
+
+        result
     }
 
     /// Execute multiple tool calls
