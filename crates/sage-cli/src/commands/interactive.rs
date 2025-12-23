@@ -675,6 +675,7 @@ async fn execute_conversation_continuation(
 
     // Get the current execution, if it exists
     if let Some(execution) = &mut conversation.execution {
+        #[allow(deprecated)] // TODO: migrate to execute_unified with InputChannel
         match tokio::time::timeout(
             std::time::Duration::from_secs(300),
             sdk.continue_execution(execution, user_message),

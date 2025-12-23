@@ -3,10 +3,9 @@
 use super::filters;
 use super::output::GrepOutputMode;
 use crate::tools::file_ops::grep::GrepTool;
-use regex::{Regex, RegexBuilder};
+use regex::RegexBuilder;
 use sage_core::tools::base::{FileSystemTool, ToolError};
 use sage_core::tools::types::ToolResult;
-use std::path::Path;
 use walkdir::WalkDir;
 
 impl GrepTool {

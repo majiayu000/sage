@@ -5,7 +5,7 @@ use std::time::Instant;
 use tokio::sync::RwLock;
 
 use super::state::ModelState;
-use super::types::{FallbackEvent, FallbackReason, ModelConfig, ModelStats};
+use super::types::{FallbackEvent, FallbackReason, ModelConfig};
 
 /// Model fallback chain manager
 #[derive(Debug)]

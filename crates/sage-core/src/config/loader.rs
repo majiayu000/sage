@@ -390,7 +390,9 @@ auto_connect = true
 
     #[test]
     fn test_load_provider_from_env_temperature() {
+        // Clean up any leftover env vars from other tests that might run in parallel
         unsafe {
+            std::env::remove_var("GOOGLE_TEMPERATURE");
             std::env::set_var("ANTHROPIC_API_KEY", "test_key");
             std::env::set_var("ANTHROPIC_MODEL", "claude-3");
             std::env::set_var("ANTHROPIC_TEMPERATURE", "0.9");

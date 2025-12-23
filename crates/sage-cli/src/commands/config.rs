@@ -4,7 +4,7 @@ use crate::console::CliConsole;
 use colored::*;
 use sage_core::{
     config::{
-        loader::load_config_from_file,
+        load_config_from_file,
         model::{Config, TrajectoryConfig},
     },
     error::{SageError, SageResult},

@@ -140,7 +140,7 @@ impl SageUiBackend {
 
     pub async fn get_config(&self, config_file: &str) -> SageResult<ConfigInfo> {
         // Load config and return basic info
-        let config = sage_core::config::loader::load_config_from_file(config_file)?;
+        let config = sage_core::config::load_config_from_file(config_file)?;
 
         // Get model parameters from the default provider
         let default_params = config
