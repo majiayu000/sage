@@ -13,45 +13,191 @@ use std::path::{Path, PathBuf};
 use tokio::fs;
 use tracing::instrument;
 
-/// Trait for trajectory storage backends
+/// Trait for trajectory storage backends.
+///
+/// Defines the interface for storing, retrieving, and managing trajectory records.
+/// Implementations include file-based storage and in-memory storage.
+///
+/// # Examples
+///
+/// ```no_run
+/// use sage_core::trajectory::storage::{TrajectoryStorage, FileStorage};
+/// use sage_core::trajectory::recorder::TrajectoryRecord;
+///
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// let storage = FileStorage::new("trajectories")?;
+///
+/// // Save a trajectory
+/// # let record = TrajectoryRecord {
+/// #     id: uuid::Uuid::new_v4(),
+/// #     task: "example".to_string(),
+/// #     start_time: "2024-01-01T00:00:00Z".to_string(),
+/// #     end_time: "2024-01-01T00:05:00Z".to_string(),
+/// #     provider: "test".to_string(),
+/// #     model: "test".to_string(),
+/// #     max_steps: Some(10),
+/// #     llm_interactions: vec![],
+/// #     agent_steps: vec![],
+/// #     success: true,
+/// #     final_result: Some("done".to_string()),
+/// #     execution_time: 5.0,
+/// # };
+/// storage.save(&record).await?;
+///
+/// // Load it back
+/// let loaded = storage.load(record.id).await?;
+/// assert!(loaded.is_some());
+///
+/// // List all trajectories
+/// let ids = storage.list().await?;
+/// println!("Found {} trajectories", ids.len());
+/// # Ok(())
+/// # }
+/// ```
 #[async_trait]
 pub trait TrajectoryStorage: Send + Sync {
-    /// Save a trajectory record
+    /// Save a trajectory record to storage.
+    ///
+    /// # Arguments
+    ///
+    /// * `record` - The trajectory record to save
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Storage backend is unavailable
+    /// - Serialization fails
+    /// - File system errors occur (for file-based storage)
+    /// - Disk is full
     async fn save(&self, record: &TrajectoryRecord) -> SageResult<()>;
 
-    /// Load a trajectory record by ID
+    /// Load a trajectory record by ID.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The UUID of the trajectory to load
+    ///
+    /// # Returns
+    ///
+    /// Returns `Some(record)` if found, `None` if not found.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Storage backend is unavailable
+    /// - Deserialization fails
+    /// - File system errors occur
     async fn load(&self, id: Id) -> SageResult<Option<TrajectoryRecord>>;
 
-    /// List all trajectory IDs
+    /// List all trajectory IDs in storage.
+    ///
+    /// # Returns
+    ///
+    /// A vector of all trajectory UUIDs in the storage.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Storage backend is unavailable
+    /// - Directory cannot be read (for file-based storage)
     async fn list(&self) -> SageResult<Vec<Id>>;
 
-    /// Delete a trajectory record
+    /// Delete a trajectory record by ID.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The UUID of the trajectory to delete
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Trajectory not found
+    /// - Storage backend is unavailable
+    /// - File system errors occur
     async fn delete(&self, id: Id) -> SageResult<()>;
 
-    /// Get storage statistics
+    /// Get storage statistics.
+    ///
+    /// Returns metadata about the storage including total records,
+    /// total size, and average record size.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Storage backend is unavailable
+    /// - File system errors occur
     async fn statistics(&self) -> SageResult<StorageStatistics>;
 
-    /// For downcasting
+    /// For downcasting to concrete types.
+    ///
+    /// This method enables dynamic type checking and conversion.
     fn as_any(&self) -> &dyn Any;
 }
 
-/// Storage statistics
+/// Statistics about trajectory storage.
+///
+/// Provides metrics about stored trajectories including count and size information.
+///
+/// # Examples
+///
+/// ```no_run
+/// use sage_core::trajectory::storage::{TrajectoryStorage, FileStorage};
+///
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// let storage = FileStorage::new("trajectories")?;
+/// let stats = storage.statistics().await?;
+///
+/// println!("Total trajectories: {}", stats.total_records);
+/// println!("Total size: {} bytes", stats.total_size_bytes);
+/// println!("Average size: {} bytes", stats.average_record_size);
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Debug, Clone)]
 pub struct StorageStatistics {
-    /// Total number of stored trajectories
+    /// Total number of stored trajectories.
     pub total_records: usize,
-    /// Total storage size in bytes
+    /// Total storage size in bytes.
     pub total_size_bytes: u64,
-    /// Average record size in bytes
+    /// Average record size in bytes.
     pub average_record_size: u64,
 }
 
-/// Rotation configuration for trajectory files
+/// Rotation configuration for trajectory files.
+///
+/// Controls automatic deletion of old trajectory files to prevent
+/// unbounded storage growth. You can limit by count, total size, or both.
+///
+/// # Examples
+///
+/// ```no_run
+/// use sage_core::trajectory::storage::{RotationConfig, FileStorage};
+///
+/// # fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// // Keep only the 10 most recent trajectories
+/// let config = RotationConfig::with_max_trajectories(10);
+/// let storage = FileStorage::with_config("trajectories", false, config)?;
+///
+/// // Limit total storage to 100MB
+/// let config = RotationConfig::with_total_size_limit(100 * 1024 * 1024);
+/// let storage = FileStorage::with_config("trajectories", false, config)?;
+///
+/// // Apply both limits
+/// let config = RotationConfig::with_limits(50, 500 * 1024 * 1024);
+/// let storage = FileStorage::with_config("trajectories", false, config)?;
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Debug, Clone)]
 pub struct RotationConfig {
-    /// Maximum number of trajectory files to keep (None = unlimited)
+    /// Maximum number of trajectory files to keep.
+    ///
+    /// When exceeded, oldest files are deleted. `None` means unlimited.
     pub max_trajectories: Option<usize>,
-    /// Maximum total size in bytes for all trajectories (None = unlimited)
+
+    /// Maximum total size in bytes for all trajectories.
+    ///
+    /// When exceeded, oldest files are deleted until under limit. `None` means unlimited.
     pub total_size_limit: Option<u64>,
 }
 
@@ -65,7 +211,21 @@ impl Default for RotationConfig {
 }
 
 impl RotationConfig {
-    /// Create a rotation config with max trajectories limit
+    /// Create a rotation config with max trajectories limit.
+    ///
+    /// # Arguments
+    ///
+    /// * `max` - Maximum number of trajectory files to keep
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use sage_core::trajectory::storage::RotationConfig;
+    ///
+    /// let config = RotationConfig::with_max_trajectories(20);
+    /// assert_eq!(config.max_trajectories, Some(20));
+    /// assert_eq!(config.total_size_limit, None);
+    /// ```
     pub fn with_max_trajectories(max: usize) -> Self {
         Self {
             max_trajectories: Some(max),
@@ -73,7 +233,21 @@ impl RotationConfig {
         }
     }
 
-    /// Create a rotation config with total size limit
+    /// Create a rotation config with total size limit.
+    ///
+    /// # Arguments
+    ///
+    /// * `limit` - Maximum total size in bytes for all trajectories
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use sage_core::trajectory::storage::RotationConfig;
+    ///
+    /// let config = RotationConfig::with_total_size_limit(1024 * 1024 * 100); // 100MB
+    /// assert_eq!(config.max_trajectories, None);
+    /// assert_eq!(config.total_size_limit, Some(1024 * 1024 * 100));
+    /// ```
     pub fn with_total_size_limit(limit: u64) -> Self {
         Self {
             max_trajectories: None,
@@ -81,7 +255,24 @@ impl RotationConfig {
         }
     }
 
-    /// Create a rotation config with both limits
+    /// Create a rotation config with both count and size limits.
+    ///
+    /// Both limits are enforced - whichever is exceeded first triggers rotation.
+    ///
+    /// # Arguments
+    ///
+    /// * `max_trajectories` - Maximum number of trajectory files
+    /// * `total_size_limit` - Maximum total size in bytes
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use sage_core::trajectory::storage::RotationConfig;
+    ///
+    /// let config = RotationConfig::with_limits(50, 200 * 1024 * 1024); // 50 files or 200MB
+    /// assert_eq!(config.max_trajectories, Some(50));
+    /// assert_eq!(config.total_size_limit, Some(200 * 1024 * 1024));
+    /// ```
     pub fn with_limits(max_trajectories: usize, total_size_limit: u64) -> Self {
         Self {
             max_trajectories: Some(max_trajectories),
@@ -90,7 +281,36 @@ impl RotationConfig {
     }
 }
 
-/// File-based trajectory storage
+/// File-based trajectory storage.
+///
+/// Stores trajectory records as JSON files on disk, with optional gzip compression
+/// and automatic file rotation to manage disk space.
+///
+/// # Features
+///
+/// - **Compression**: Optional gzip compression reduces file sizes by 5-10x
+/// - **Rotation**: Automatic deletion of old files based on count or size limits
+/// - **Flexible paths**: Supports both directory-based (multiple files) and single-file modes
+/// - **Transparent loading**: Automatically detects and handles both compressed and uncompressed files
+///
+/// # Examples
+///
+/// ```no_run
+/// use sage_core::trajectory::storage::{FileStorage, RotationConfig};
+///
+/// # fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// // Basic usage - directory of JSON files
+/// let storage = FileStorage::new("trajectories")?;
+///
+/// // With compression enabled
+/// let storage = FileStorage::with_compression("trajectories", true)?;
+///
+/// // With rotation - keep last 10 files
+/// let rotation = RotationConfig::with_max_trajectories(10);
+/// let storage = FileStorage::with_config("trajectories", true, rotation)?;
+/// # Ok(())
+/// # }
+/// ```
 pub struct FileStorage {
     base_path: PathBuf,
     enable_compression: bool,
@@ -98,7 +318,35 @@ pub struct FileStorage {
 }
 
 impl FileStorage {
-    /// Create a new file storage without compression or rotation
+    /// Create a new file storage without compression or rotation.
+    ///
+    /// Creates a basic file storage that saves trajectories as uncompressed JSON
+    /// files with no automatic rotation.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Directory path for trajectory files, or a single file path
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Parent directory cannot be created
+    /// - Path is invalid
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_core::trajectory::storage::FileStorage;
+    ///
+    /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// // Directory mode - saves multiple files
+    /// let storage = FileStorage::new("trajectories")?;
+    ///
+    /// // Single file mode
+    /// let storage = FileStorage::new("trajectory.json")?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn new<P: AsRef<Path>>(path: P) -> SageResult<Self> {
         Self::with_config(path, false, RotationConfig::default())
     }
@@ -167,7 +415,10 @@ impl FileStorage {
         })
     }
 
-    /// Get the file path for a trajectory ID
+    /// Get the file path for a trajectory ID.
+    ///
+    /// In directory mode, generates a path with the trajectory ID.
+    /// In single-file mode, returns the base path.
     fn get_file_path(&self, id: Id) -> PathBuf {
         if self.is_directory_path() {
             self.base_path.join(format!("{}.json", id))
@@ -177,15 +428,34 @@ impl FileStorage {
         }
     }
 
-    /// Get the base path
+    /// Get the base path for this storage.
+    ///
+    /// Returns the directory or file path configured for this storage.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_core::trajectory::storage::FileStorage;
+    ///
+    /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let storage = FileStorage::new("trajectories")?;
+    /// println!("Storage path: {}", storage.path().display());
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn path(&self) -> &Path {
         &self.base_path
     }
 
-    /// Determine if base_path should be treated as a directory
+    /// Determine if base_path should be treated as a directory.
+    ///
     /// A path is considered a directory if:
     /// 1. It exists and is a directory, OR
     /// 2. It doesn't exist but has no file extension (assumed to be a directory)
+    ///
+    /// This allows the storage to work in two modes:
+    /// - Directory mode: Multiple trajectory files with timestamp-based names
+    /// - File mode: Single trajectory file that gets overwritten
     fn is_directory_path(&self) -> bool {
         if self.base_path.exists() {
             self.base_path.is_dir()
@@ -362,7 +632,20 @@ impl FileStorage {
         }
     }
 
-    /// Load a gzip-compressed trajectory file
+    /// Load a gzip-compressed trajectory file.
+    ///
+    /// Internal method for loading and decompressing `.json.gz` files.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Path to the compressed file
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - File cannot be read
+    /// - Decompression fails
+    /// - JSON parsing fails
     async fn load_gzip_file(path: &Path) -> SageResult<Option<TrajectoryRecord>> {
         let compressed = fs::read(path)
             .await
@@ -389,7 +672,20 @@ impl FileStorage {
         Ok(Some(record))
     }
 
-    /// Check if a file is gzip-compressed based on extension
+    /// Check if a file is gzip-compressed based on extension.
+    ///
+    /// Returns `true` if the file has a `.gz` extension.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use sage_core::trajectory::storage::FileStorage;
+    /// use std::path::Path;
+    ///
+    /// assert!(FileStorage::is_compressed_file(Path::new("trajectory.json.gz")));
+    /// assert!(FileStorage::is_compressed_file(Path::new("file.gz")));
+    /// assert!(!FileStorage::is_compressed_file(Path::new("trajectory.json")));
+    /// ```
     pub fn is_compressed_file(path: &Path) -> bool {
         path.extension()
             .and_then(|s| s.to_str())
@@ -806,13 +1102,61 @@ impl TrajectoryStorage for FileStorage {
     }
 }
 
-/// In-memory trajectory storage (for testing)
+/// In-memory trajectory storage.
+///
+/// Stores trajectory records in memory using a HashMap. Useful for testing
+/// and temporary storage scenarios where persistence is not required.
+///
+/// # Examples
+///
+/// ```no_run
+/// use sage_core::trajectory::storage::{TrajectoryStorage, MemoryStorage};
+/// use sage_core::trajectory::recorder::TrajectoryRecord;
+///
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// let storage = MemoryStorage::new();
+///
+/// // Save a trajectory
+/// # let record = TrajectoryRecord {
+/// #     id: uuid::Uuid::new_v4(),
+/// #     task: "example".to_string(),
+/// #     start_time: "2024-01-01T00:00:00Z".to_string(),
+/// #     end_time: "2024-01-01T00:05:00Z".to_string(),
+/// #     provider: "test".to_string(),
+/// #     model: "test".to_string(),
+/// #     max_steps: Some(10),
+/// #     llm_interactions: vec![],
+/// #     agent_steps: vec![],
+/// #     success: true,
+/// #     final_result: Some("done".to_string()),
+/// #     execution_time: 5.0,
+/// # };
+/// storage.save(&record).await?;
+///
+/// // List all trajectories
+/// let ids = storage.list().await?;
+/// println!("Stored {} trajectories in memory", ids.len());
+/// # Ok(())
+/// # }
+/// ```
 pub struct MemoryStorage {
     records: std::sync::Arc<tokio::sync::Mutex<std::collections::HashMap<Id, TrajectoryRecord>>>,
 }
 
 impl MemoryStorage {
-    /// Create a new memory storage
+    /// Create a new memory storage.
+    ///
+    /// Initializes an empty in-memory storage with no persisted data.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use sage_core::trajectory::storage::MemoryStorage;
+    ///
+    /// let storage = MemoryStorage::new();
+    /// // or use Default
+    /// let storage = MemoryStorage::default();
+    /// ```
     pub fn new() -> Self {
         Self {
             records: std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),

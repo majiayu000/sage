@@ -40,7 +40,7 @@ impl SseEvent {
         }
     }
 
-    /// Check if this is a [DONE] marker (OpenAI format)
+    /// Check if this is a `[DONE]` marker (OpenAI format)
     pub fn is_done(&self) -> bool {
         self.data.trim() == "[DONE]"
     }

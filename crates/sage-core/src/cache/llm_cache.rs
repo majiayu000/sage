@@ -2,19 +2,24 @@
 
 use super::{CacheKey, CacheManager, types::hash_utils};
 use crate::error::SageResult;
-use crate::llm::{LLMMessage, LLMResponse};
+use crate::llm::messages::{LlmMessage, LlmResponse};
+use crate::llm::client::LlmClient;
 use crate::tools::ToolSchema;
 use std::time::Duration;
 
 /// LLM response cache
-pub struct LLMCache {
+pub struct LlmCache {
     /// Cache manager
     cache_manager: CacheManager,
     /// Default TTL for LLM responses
     default_ttl: Option<Duration>,
 }
 
-impl LLMCache {
+/// Deprecated: Use `LlmCache` instead
+#[deprecated(since = "0.2.0", note = "Use `LlmCache` instead")]
+pub type LLMCache = LlmCache;
+
+impl LlmCache {
     /// Create a new LLM cache
     pub fn new(cache_manager: CacheManager, default_ttl: Option<Duration>) -> Self {
         Self {
@@ -28,9 +33,9 @@ impl LLMCache {
         &self,
         provider: &str,
         model: &str,
-        messages: &[LLMMessage],
+        messages: &[LlmMessage],
         tools: Option<&[ToolSchema]>,
-    ) -> SageResult<Option<LLMResponse>> {
+    ) -> SageResult<Option<LlmResponse>> {
         let key = self.create_cache_key(provider, model, messages, tools);
         self.cache_manager.get(&key).await
     }
@@ -40,9 +45,9 @@ impl LLMCache {
         &self,
         provider: &str,
         model: &str,
-        messages: &[LLMMessage],
+        messages: &[LlmMessage],
         tools: Option<&[ToolSchema]>,
-        response: &LLMResponse,
+        response: &LlmResponse,
         ttl: Option<Duration>,
     ) -> SageResult<()> {
         let key = self.create_cache_key(provider, model, messages, tools);
@@ -55,11 +60,11 @@ impl LLMCache {
         &self,
         provider: &str,
         model: &str,
-        messages: &[LLMMessage],
+        messages: &[LlmMessage],
         tools: Option<&[ToolSchema]>,
     ) -> SageResult<bool> {
         let key = self.create_cache_key(provider, model, messages, tools);
-        Ok(self.cache_manager.get::<LLMResponse>(&key).await?.is_some())
+        Ok(self.cache_manager.get::<LlmResponse>(&key).await?.is_some())
     }
 
     /// Invalidate cached response
@@ -67,7 +72,7 @@ impl LLMCache {
         &self,
         provider: &str,
         model: &str,
-        messages: &[LLMMessage],
+        messages: &[LlmMessage],
         tools: Option<&[ToolSchema]>,
     ) -> SageResult<()> {
         let key = self.create_cache_key(provider, model, messages, tools);
@@ -94,7 +99,7 @@ impl LLMCache {
         &self,
         provider: &str,
         model: &str,
-        messages: &[LLMMessage],
+        messages: &[LlmMessage],
         tools: Option<&[ToolSchema]>,
     ) -> CacheKey {
         let messages_hash = hash_utils::hash_messages(messages);
@@ -105,12 +110,16 @@ impl LLMCache {
 }
 
 /// LLM cache builder for easy configuration
-pub struct LLMCacheBuilder {
+pub struct LlmCacheBuilder {
     cache_manager: Option<CacheManager>,
     default_ttl: Option<Duration>,
 }
 
-impl LLMCacheBuilder {
+/// Deprecated: Use `LlmCacheBuilder` instead
+#[deprecated(since = "0.2.0", note = "Use `LlmCacheBuilder` instead")]
+pub type LLMCacheBuilder = LlmCacheBuilder;
+
+impl LlmCacheBuilder {
     /// Create a new builder
     pub fn new() -> Self {
         Self {
@@ -132,33 +141,37 @@ impl LLMCacheBuilder {
     }
 
     /// Build the LLM cache
-    pub fn build(self) -> SageResult<LLMCache> {
+    pub fn build(self) -> SageResult<LlmCache> {
         let cache_manager = self.cache_manager.unwrap_or_default();
-        Ok(LLMCache::new(cache_manager, self.default_ttl))
+        Ok(LlmCache::new(cache_manager, self.default_ttl))
     }
 }
 
-impl Default for LLMCacheBuilder {
+impl Default for LlmCacheBuilder {
     fn default() -> Self {
         Self::new()
     }
 }
 
 /// Cache-aware LLM client wrapper
-pub struct CachedLLMClient<T> {
+pub struct CachedLlmClient<T> {
     /// Inner LLM client
     inner: T,
     /// LLM cache
-    cache: LLMCache,
+    cache: LlmCache,
     /// Whether to use cache for reads
     enable_read_cache: bool,
     /// Whether to use cache for writes
     enable_write_cache: bool,
 }
 
-impl<T> CachedLLMClient<T> {
+/// Deprecated: Use `CachedLlmClient` instead
+#[deprecated(since = "0.2.0", note = "Use `CachedLlmClient` instead")]
+pub type CachedLLMClient<T> = CachedLlmClient<T>;
+
+impl<T> CachedLlmClient<T> {
     /// Create a new cached LLM client
-    pub fn new(inner: T, cache: LLMCache) -> Self {
+    pub fn new(inner: T, cache: LlmCache) -> Self {
         Self {
             inner,
             cache,
@@ -185,18 +198,18 @@ impl<T> CachedLLMClient<T> {
     }
 
     /// Get the cache
-    pub fn cache(&self) -> &LLMCache {
+    pub fn cache(&self) -> &LlmCache {
         &self.cache
     }
 }
 
-impl CachedLLMClient<crate::llm::LLMClient> {
+impl CachedLlmClient<LlmClient> {
     /// Chat with caching support
     pub async fn chat_with_cache(
         &self,
-        messages: &[LLMMessage],
+        messages: &[LlmMessage],
         tools: Option<&[ToolSchema]>,
-    ) -> SageResult<LLMResponse> {
+    ) -> SageResult<LlmResponse> {
         let provider = self.inner.provider().to_string();
         let model = self.inner.model().to_string();
 
@@ -231,8 +244,8 @@ pub mod warming {
 
     /// Warm cache with common requests
     pub async fn warm_cache_with_common_requests(
-        cache: &LLMCache,
-        requests: &[(String, String, Vec<LLMMessage>, Option<Vec<ToolSchema>>)],
+        cache: &LlmCache,
+        requests: &[(String, String, Vec<LlmMessage>, Option<Vec<ToolSchema>>)],
     ) -> SageResult<()> {
         for (provider, model, messages, tools) in requests {
             // Check if already cached
@@ -255,13 +268,13 @@ pub mod warming {
 
     /// Preload frequently used responses
     pub async fn preload_responses(
-        cache: &LLMCache,
+        cache: &LlmCache,
         responses: &[(
             String,
             String,
-            Vec<LLMMessage>,
+            Vec<LlmMessage>,
             Option<Vec<ToolSchema>>,
-            LLMResponse,
+            LlmResponse,
         )],
     ) -> SageResult<()> {
         for (provider, model, messages, tools, response) in responses {

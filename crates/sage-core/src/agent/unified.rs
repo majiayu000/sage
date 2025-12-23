@@ -220,6 +220,7 @@ impl UnifiedExecutor {
     /// Enable JSONL session recording
     ///
     /// Creates a new session and starts recording enhanced messages.
+    #[instrument(skip(self))]
     pub async fn enable_session_recording(&mut self) -> SageResult<String> {
         let session_id = uuid::Uuid::new_v4().to_string();
 
@@ -264,6 +265,7 @@ impl UnifiedExecutor {
     }
 
     /// Record a user message
+    #[instrument(skip(self, content), fields(content_len = %content.len()))]
     async fn record_user_message(&mut self, content: &str) -> SageResult<Option<EnhancedMessage>> {
         if self.current_session_id.is_none() || self.jsonl_storage.is_none() {
             return Ok(None);
@@ -280,6 +282,7 @@ impl UnifiedExecutor {
     }
 
     /// Record an assistant message
+    #[instrument(skip(self, content, tool_calls, usage), fields(content_len = %content.len(), tool_calls_count = tool_calls.as_ref().map(|tc| tc.len()).unwrap_or(0)))]
     async fn record_assistant_message(
         &mut self,
         content: &str,
@@ -320,6 +323,7 @@ impl UnifiedExecutor {
     }
 
     /// Create and record a file snapshot for the current message
+    #[instrument(skip(self), fields(message_uuid = %message_uuid))]
     async fn record_file_snapshot(&mut self, message_uuid: &str) -> SageResult<()> {
         if self.current_session_id.is_none() || self.jsonl_storage.is_none() {
             return Ok(());
@@ -397,6 +401,7 @@ impl UnifiedExecutor {
     ///
     /// This method should be called when the executor is shutting down
     /// to ensure all resources are properly cleaned up.
+    #[instrument(skip(self))]
     pub async fn shutdown(&mut self) -> SageResult<()> {
         tracing::info!("Initiating graceful shutdown of UnifiedExecutor");
 
@@ -425,6 +430,7 @@ impl UnifiedExecutor {
     ///
     /// This method blocks until the user responds (or auto-responds in non-interactive mode).
     /// If no input channel is set (batch mode without channel), returns an error.
+    #[instrument(skip(self, request), fields(request_id = %request.id))]
     pub async fn request_user_input(&mut self, request: InputRequest) -> SageResult<InputResponse> {
         match &mut self.input_channel {
             Some(channel) => channel.request_input(request).await,
@@ -640,6 +646,7 @@ impl UnifiedExecutor {
     }
 
     /// Build the system prompt
+    #[instrument(skip(self))]
     fn build_system_prompt(&self) -> SageResult<String> {
         let model_name = self
             .config
@@ -671,6 +678,7 @@ impl UnifiedExecutor {
     ///
     /// This method intercepts ask_user_question tool calls and uses the InputChannel
     /// to actually block and wait for user input, implementing the unified loop pattern.
+    #[instrument(skip(self, tool_call), fields(tool_call_id = %tool_call.id))]
     async fn handle_ask_user_question(
         &mut self,
         tool_call: &crate::tools::types::ToolCall,

@@ -6,13 +6,17 @@ use indicatif::{ProgressBar, ProgressStyle};
 use std::io::{self, Write};
 
 /// CLI console for formatted output
-pub struct CLIConsole {
+pub struct CliConsole {
     verbose: bool,
     #[allow(dead_code)] // May be used in future features
     progress_bar: Option<ProgressBar>,
 }
 
-impl CLIConsole {
+/// Deprecated: Use `CliConsole` instead
+#[deprecated(since = "0.2.0", note = "Use `CliConsole` instead")]
+pub type CLIConsole = CliConsole;
+
+impl CliConsole {
     /// Create a new CLI console
     pub const fn new(verbose: bool) -> Self {
         Self {

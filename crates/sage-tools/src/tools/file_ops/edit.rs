@@ -125,7 +125,10 @@ Usage:
         // Read the file
         let content = fs::read_to_string(&path)
             .await
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to read file '{}' for editing: {}", file_path, e)))?;
+            .map_err(|e| ToolError::ExecutionFailed(format!(
+                "Failed to read file '{}' for editing: {}. Ensure the file exists and is readable.",
+                file_path, e
+            )))?;
 
         // Check if old_string exists
         if !content.contains(&old_string) {

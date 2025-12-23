@@ -1,9 +1,9 @@
 //! Streaming response support for LLM clients
 
 use crate::error::SageResult;
-use crate::llm::messages::{LLMMessage, LLMResponse};
+use crate::llm::messages::{LlmMessage, LlmResponse};
 use crate::tools::types::ToolSchema;
-use crate::types::LLMUsage;
+use crate::types::LlmUsage;
 use async_trait::async_trait;
 use futures::Stream;
 use serde::{Deserialize, Serialize};
@@ -19,7 +19,7 @@ pub struct StreamChunk {
     /// Tool calls (if any)
     pub tool_calls: Option<Vec<crate::tools::ToolCall>>,
     /// Usage information (usually only in the last chunk)
-    pub usage: Option<LLMUsage>,
+    pub usage: Option<LlmUsage>,
     /// Whether this is the final chunk
     pub is_final: bool,
     /// Finish reason (if final)
@@ -42,7 +42,7 @@ impl StreamChunk {
     }
 
     /// Create a final chunk with usage information
-    pub fn final_chunk(usage: Option<LLMUsage>, finish_reason: Option<String>) -> Self {
+    pub fn final_chunk(usage: Option<LlmUsage>, finish_reason: Option<String>) -> Self {
         Self {
             content: None,
             tool_calls: None,
@@ -67,17 +67,32 @@ impl StreamChunk {
 }
 
 /// Stream of LLM response chunks
-pub type LLMStream = Pin<Box<dyn Stream<Item = SageResult<StreamChunk>> + Send>>;
+pub type LlmStream = Pin<Box<dyn Stream<Item = SageResult<StreamChunk>> + Send>>;
+
+/// Deprecated: Use `LlmStream` instead
+#[deprecated(since = "0.2.0", note = "Use `LlmStream` instead")]
+pub type LLMStream = LlmStream;
 
 /// Trait for streaming LLM clients
 #[async_trait]
+pub trait StreamingLlmClient {
+    /// Send a streaming chat completion request
+    async fn chat_stream(
+        &self,
+        messages: &[LlmMessage],
+        tools: Option<&[ToolSchema]>,
+    ) -> SageResult<LlmStream>;
+}
+
+/// Deprecated: Use `StreamingLlmClient` instead
+#[deprecated(since = "0.2.0", note = "Use `StreamingLlmClient` instead")]
 pub trait StreamingLLMClient {
     /// Send a streaming chat completion request
     async fn chat_stream(
         &self,
-        messages: &[LLMMessage],
+        messages: &[LlmMessage],
         tools: Option<&[ToolSchema]>,
-    ) -> SageResult<LLMStream>;
+    ) -> SageResult<LlmStream>;
 }
 
 /// Utility functions for working with streams
@@ -86,7 +101,7 @@ pub mod stream_utils {
     use futures::StreamExt;
 
     /// Collect a stream into a complete response
-    pub async fn collect_stream(mut stream: LLMStream) -> SageResult<LLMResponse> {
+    pub async fn collect_stream(mut stream: LlmStream) -> SageResult<LlmResponse> {
         let mut content = String::new();
         let mut tool_calls = Vec::new();
         let mut usage = None;
@@ -119,7 +134,7 @@ pub mod stream_utils {
             }
         }
 
-        Ok(LLMResponse {
+        Ok(LlmResponse {
             content,
             tool_calls,
             usage,
@@ -131,7 +146,7 @@ pub mod stream_utils {
     }
 
     /// Apply a function to each chunk in the stream
-    pub fn map_stream<F>(stream: LLMStream, f: F) -> LLMStream
+    pub fn map_stream<F>(stream: LlmStream, f: F) -> LlmStream
     where
         F: Fn(StreamChunk) -> StreamChunk + Send + 'static,
     {
@@ -139,7 +154,7 @@ pub mod stream_utils {
     }
 
     /// Filter chunks in the stream
-    pub fn filter_stream<F>(stream: LLMStream, f: F) -> LLMStream
+    pub fn filter_stream<F>(stream: LlmStream, f: F) -> LlmStream
     where
         F: Fn(&StreamChunk) -> bool + Send + Sync + 'static,
     {
@@ -158,12 +173,12 @@ pub mod stream_utils {
     }
 
     /// Take only content chunks (filter out tool calls and metadata)
-    pub fn content_only(stream: LLMStream) -> LLMStream {
+    pub fn content_only(stream: LlmStream) -> LlmStream {
         filter_stream(stream, |chunk| chunk.content.is_some())
     }
 
     /// Buffer chunks and emit them in batches
-    pub fn buffer_chunks(stream: LLMStream, buffer_size: usize) -> LLMStream {
+    pub fn buffer_chunks(stream: LlmStream, buffer_size: usize) -> LlmStream {
         Box::pin(stream.chunks(buffer_size).map(|chunk_batch| {
             // Combine multiple chunks into one
             let mut combined_content = String::new();
@@ -215,7 +230,7 @@ pub mod stream_utils {
     }
 
     /// Add timing information to chunks
-    pub fn with_timing(stream: LLMStream) -> LLMStream {
+    pub fn with_timing(stream: LlmStream) -> LlmStream {
         let start_time = std::time::Instant::now();
         Box::pin(stream.map(move |chunk_result| {
             chunk_result.map(|mut chunk| {
@@ -312,7 +327,7 @@ pub mod sse {
 
     /// Convert a stream to SSE events
     pub fn stream_to_sse(
-        stream: LLMStream,
+        stream: LlmStream,
     ) -> Pin<Box<dyn Stream<Item = SageResult<SSEEvent>> + Send>> {
         Box::pin(stream.map(|chunk_result| chunk_result.and_then(chunk_to_sse)))
     }

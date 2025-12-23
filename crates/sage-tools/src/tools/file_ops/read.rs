@@ -69,7 +69,10 @@ impl ReadTool {
 
         // Try to detect if it's a binary file by reading first few bytes
         let metadata = fs::metadata(&path).await
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to read file metadata for '{}': {}", file_path, e)))?;
+            .map_err(|e| ToolError::ExecutionFailed(format!(
+                "Failed to read file metadata for '{}': {}. Ensure the file exists and you have permission to access it.",
+                file_path, e
+            )))?;
 
         // Check if file is too large (> 100MB)
         if metadata.len() > 100 * 1024 * 1024 {

@@ -42,6 +42,7 @@ impl BashTool {
     }
 
     /// Execute a command in the background
+    #[instrument(skip(self), fields(command_preview = %command.chars().take(50).collect::<String>(), shell_id))]
     async fn execute_background(
         &self,
         command: &str,
@@ -57,6 +58,7 @@ impl BashTool {
 
         // Generate or use provided shell ID
         let shell_id = shell_id.unwrap_or_else(|| BACKGROUND_REGISTRY.generate_shell_id());
+        tracing::Span::current().record("shell_id", &shell_id);
 
         // Create cancellation token
         let cancel_token = CancellationToken::new();
@@ -70,7 +72,10 @@ impl BashTool {
         )
         .await
         .map_err(|e| {
-            ToolError::ExecutionFailed(format!("Failed to spawn background shell '{}' in '{}': {}", shell_id, self.working_directory.display(), e))
+            ToolError::ExecutionFailed(format!(
+                "Failed to spawn background shell '{}' in '{}': {}. Verify the working directory exists and you have execute permissions.",
+                shell_id, self.working_directory.display(), e
+            ))
         })?;
 
         let pid = task.pid;
@@ -136,7 +141,10 @@ impl BashTool {
         let output = cmd
             .output()
             .await
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to execute command in '{}': {}", self.working_directory.display(), e)))?;
+            .map_err(|e| ToolError::ExecutionFailed(format!(
+                "Failed to execute command in '{}': {}. Ensure bash is available and the working directory is accessible.",
+                self.working_directory.display(), e
+            )))?;
 
         let execution_time = start_time.elapsed().as_millis() as u64;
 

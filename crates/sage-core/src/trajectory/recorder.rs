@@ -29,7 +29,7 @@ pub struct TrajectoryRecord {
     /// Maximum steps allowed (None = unlimited)
     pub max_steps: Option<u32>,
     /// LLM interactions
-    pub llm_interactions: Vec<LLMInteractionRecord>,
+    pub llm_interactions: Vec<LlmInteractionRecord>,
     /// Agent execution steps
     pub agent_steps: Vec<AgentStepRecord>,
     /// Whether task completed successfully
@@ -42,7 +42,7 @@ pub struct TrajectoryRecord {
 
 /// LLM interaction record - matches Python version format
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LLMInteractionRecord {
+pub struct LlmInteractionRecord {
     /// Timestamp of the interaction
     pub timestamp: String,
     /// Provider used
@@ -52,14 +52,18 @@ pub struct LLMInteractionRecord {
     /// Input messages
     pub input_messages: Vec<serde_json::Value>,
     /// Response from LLM
-    pub response: LLMResponseRecord,
+    pub response: LlmResponseRecord,
     /// Tools available during interaction
     pub tools_available: Option<Vec<String>>,
 }
 
+/// Deprecated: Use `LlmInteractionRecord` instead
+#[deprecated(since = "0.2.0", note = "Use `LlmInteractionRecord` instead")]
+pub type LLMInteractionRecord = LlmInteractionRecord;
+
 /// LLM response record
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LLMResponseRecord {
+pub struct LlmResponseRecord {
     /// Response content
     pub content: String,
     /// Model that generated the response
@@ -71,6 +75,10 @@ pub struct LLMResponseRecord {
     /// Tool calls made
     pub tool_calls: Option<Vec<serde_json::Value>>,
 }
+
+/// Deprecated: Use `LlmResponseRecord` instead
+#[deprecated(since = "0.2.0", note = "Use `LlmResponseRecord` instead")]
+pub type LLMResponseRecord = LlmResponseRecord;
 
 /// Token usage record
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -99,7 +107,7 @@ pub struct AgentStepRecord {
     /// LLM messages sent in this step
     pub llm_messages: Option<Vec<serde_json::Value>>,
     /// LLM response received
-    pub llm_response: Option<LLMResponseRecord>,
+    pub llm_response: Option<LlmResponseRecord>,
     /// Tool calls made
     pub tool_calls: Option<Vec<serde_json::Value>>,
     /// Tool results received
@@ -186,7 +194,7 @@ impl TrajectoryRecorder {
 
         if let Some(record) = current.as_mut() {
             // Convert LLM response if present
-            let llm_response = step.llm_response.as_ref().map(|resp| LLMResponseRecord {
+            let llm_response = step.llm_response.as_ref().map(|resp| LlmResponseRecord {
                 content: resp.content.clone(),
                 model: resp.model.clone(),
                 finish_reason: resp.finish_reason.clone(),
@@ -291,13 +299,13 @@ impl TrajectoryRecorder {
         provider: String,
         model: String,
         input_messages: Vec<serde_json::Value>,
-        response: LLMResponseRecord,
+        response: LlmResponseRecord,
         tools_available: Option<Vec<String>>,
     ) -> SageResult<()> {
         let mut current = self.current_record.lock().await;
 
         if let Some(record) = current.as_mut() {
-            let interaction = LLMInteractionRecord {
+            let interaction = LlmInteractionRecord {
                 timestamp: Utc::now().to_rfc3339(),
                 provider: provider.clone(),
                 model: model.clone(),

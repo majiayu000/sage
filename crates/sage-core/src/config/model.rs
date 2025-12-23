@@ -716,3 +716,545 @@ impl McpConfig {
             .unwrap_or(self.default_timeout_secs)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_model_parameters_default() {
+        let params = ModelParameters::default();
+        assert_eq!(params.model, "gpt-4");
+        assert_eq!(params.max_tokens, Some(4096));
+        assert_eq!(params.temperature, Some(0.7));
+        assert_eq!(params.top_p, Some(1.0));
+        assert_eq!(params.parallel_tool_calls, Some(true));
+        assert_eq!(params.max_retries, Some(3));
+    }
+
+    #[test]
+    fn test_model_parameters_get_api_key_from_config() {
+        let params = ModelParameters {
+            api_key: Some("test_key".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(params.get_api_key(), Some("test_key".to_string()));
+    }
+
+    #[test]
+    fn test_model_parameters_get_api_key_from_env() {
+        unsafe {
+            std::env::set_var("OPENAI_API_KEY", "env_key");
+        }
+
+        let params = ModelParameters {
+            api_key: None,
+            ..Default::default()
+        };
+        assert_eq!(params.get_api_key(), Some("env_key".to_string()));
+
+        unsafe {
+            std::env::remove_var("OPENAI_API_KEY");
+        }
+    }
+
+    #[test]
+    fn test_model_parameters_get_base_url() {
+        let params = ModelParameters {
+            base_url: Some("https://custom.api".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(params.get_base_url(), "https://custom.api");
+    }
+
+    #[test]
+    fn test_model_parameters_get_base_url_default() {
+        let params = ModelParameters {
+            base_url: None,
+            ..Default::default()
+        };
+        assert_eq!(params.get_base_url(), "https://api.openai.com/v1");
+    }
+
+    #[test]
+    fn test_model_parameters_get_base_url_for_provider() {
+        let params = ModelParameters::default();
+
+        assert_eq!(params.get_base_url_for_provider("openai"), "https://api.openai.com/v1");
+        assert_eq!(params.get_base_url_for_provider("anthropic"), "https://api.anthropic.com");
+        assert_eq!(params.get_base_url_for_provider("google"), "https://generativelanguage.googleapis.com");
+        assert_eq!(params.get_base_url_for_provider("ollama"), "http://localhost:11434");
+        assert_eq!(params.get_base_url_for_provider("unknown"), "http://localhost:8000");
+    }
+
+    #[test]
+    fn test_model_parameters_validate_success() {
+        let params = ModelParameters {
+            model: "gpt-4".to_string(),
+            temperature: Some(0.7),
+            top_p: Some(0.9),
+            max_tokens: Some(4096),
+            ..Default::default()
+        };
+        assert!(params.validate().is_ok());
+    }
+
+    #[test]
+    fn test_model_parameters_validate_empty_model() {
+        let params = ModelParameters {
+            model: "".to_string(),
+            ..Default::default()
+        };
+        assert!(params.validate().is_err());
+    }
+
+    #[test]
+    fn test_model_parameters_validate_invalid_temperature() {
+        let params = ModelParameters {
+            model: "gpt-4".to_string(),
+            temperature: Some(3.0), // > 2.0
+            ..Default::default()
+        };
+        assert!(params.validate().is_err());
+    }
+
+    #[test]
+    fn test_model_parameters_validate_invalid_top_p() {
+        let params = ModelParameters {
+            model: "gpt-4".to_string(),
+            top_p: Some(1.5), // > 1.0
+            ..Default::default()
+        };
+        assert!(params.validate().is_err());
+    }
+
+    #[test]
+    fn test_model_parameters_validate_zero_max_tokens() {
+        let params = ModelParameters {
+            model: "gpt-4".to_string(),
+            max_tokens: Some(0),
+            ..Default::default()
+        };
+        assert!(params.validate().is_err());
+    }
+
+    #[test]
+    fn test_lakeview_config_default() {
+        let config = LakeviewConfig::default();
+        assert_eq!(config.model_provider, "openai");
+        assert_eq!(config.model_name, "gpt-4");
+        assert!(!config.enabled);
+    }
+
+    #[test]
+    fn test_config_default() {
+        let config = Config::default();
+        assert_eq!(config.default_provider, "anthropic");
+        assert_eq!(config.max_steps, None);
+        assert!(config.model_providers.contains_key("anthropic"));
+        assert!(config.model_providers.contains_key("openai"));
+        assert!(config.model_providers.contains_key("google"));
+    }
+
+    #[test]
+    fn test_config_new() {
+        let config = Config::new();
+        assert_eq!(config.default_provider, "anthropic");
+    }
+
+    #[test]
+    fn test_config_default_model_parameters() {
+        let config = Config::default();
+        let params = config.default_model_parameters().unwrap();
+        assert_eq!(params.model, "claude-sonnet-4-20250514");
+    }
+
+    #[test]
+    fn test_config_default_model_parameters_missing() {
+        let mut config = Config::default();
+        config.default_provider = "nonexistent".to_string();
+        assert!(config.default_model_parameters().is_err());
+    }
+
+    #[test]
+    fn test_config_get_default_provider() {
+        let config = Config::default();
+        assert_eq!(config.get_default_provider(), "anthropic");
+    }
+
+    #[test]
+    fn test_config_set_model_parameters() {
+        let mut config = Config::default();
+        let params = ModelParameters {
+            model: "new-model".to_string(),
+            ..Default::default()
+        };
+        config.set_model_parameters("custom".to_string(), params);
+        assert!(config.model_providers.contains_key("custom"));
+    }
+
+    #[test]
+    fn test_config_set_default_provider_success() {
+        let mut config = Config::default();
+        assert!(config.set_default_provider("openai".to_string()).is_ok());
+        assert_eq!(config.default_provider, "openai");
+    }
+
+    #[test]
+    fn test_config_set_default_provider_not_found() {
+        let mut config = Config::default();
+        assert!(config.set_default_provider("nonexistent".to_string()).is_err());
+    }
+
+    #[test]
+    fn test_config_validate_success() {
+        let config = Config::default();
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_config_validate_missing_default_provider() {
+        let mut config = Config::default();
+        config.default_provider = "nonexistent".to_string();
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_config_validate_zero_max_steps() {
+        let mut config = Config::default();
+        config.max_steps = Some(0);
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_config_validate_invalid_model_parameters() {
+        let mut config = Config::default();
+        let invalid_params = ModelParameters {
+            model: "".to_string(), // Empty model name
+            ..Default::default()
+        };
+        config.model_providers.insert("anthropic".to_string(), invalid_params);
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_config_merge() {
+        let mut config1 = Config::default();
+        let mut config2 = Config::default();
+        config2.default_provider = "openai".to_string();
+        config2.max_steps = Some(100);
+
+        config1.merge(config2);
+        assert_eq!(config1.default_provider, "openai");
+        assert_eq!(config1.max_steps, Some(100));
+    }
+
+    #[test]
+    fn test_config_merge_empty_provider() {
+        let mut config1 = Config::default();
+        let mut config2 = Config::default();
+        config2.default_provider = "".to_string();
+
+        config1.merge(config2);
+        // Empty provider should not override
+        assert_eq!(config1.default_provider, "anthropic");
+    }
+
+    #[test]
+    fn test_tool_config_default() {
+        let config = ToolConfig::default();
+        assert!(config.enabled_tools.contains(&"bash".to_string()));
+        assert!(config.enabled_tools.contains(&"task_done".to_string()));
+        assert_eq!(config.max_execution_time, 300);
+        assert!(config.allow_parallel_execution);
+    }
+
+    #[test]
+    fn test_tool_config_is_tool_enabled() {
+        let config = ToolConfig::default();
+        assert!(config.is_tool_enabled("bash"));
+        assert!(!config.is_tool_enabled("nonexistent"));
+    }
+
+    #[test]
+    fn test_tool_config_get_tool_settings() {
+        let mut config = ToolConfig::default();
+        config.tool_settings.insert(
+            "bash".to_string(),
+            serde_json::json!({"timeout": 60}),
+        );
+        assert!(config.get_tool_settings("bash").is_some());
+        assert!(config.get_tool_settings("nonexistent").is_none());
+    }
+
+    #[test]
+    fn test_tool_config_merge() {
+        let mut config1 = ToolConfig::default();
+        let mut config2 = ToolConfig {
+            enabled_tools: vec!["custom_tool".to_string()],
+            max_execution_time: 600,
+            allow_parallel_execution: false,
+            tool_settings: HashMap::new(),
+        };
+        config2.tool_settings.insert(
+            "custom".to_string(),
+            serde_json::json!({"key": "value"}),
+        );
+
+        config1.merge(config2);
+        assert!(config1.enabled_tools.contains(&"custom_tool".to_string()));
+        assert_eq!(config1.max_execution_time, 600);
+        assert!(!config1.allow_parallel_execution);
+        assert!(config1.tool_settings.contains_key("custom"));
+    }
+
+    #[test]
+    fn test_logging_config_default() {
+        let config = LoggingConfig::default();
+        assert_eq!(config.level, "info");
+        assert!(!config.log_to_file);
+        assert!(config.log_to_console);
+        assert_eq!(config.format, "pretty");
+    }
+
+    #[test]
+    fn test_logging_config_merge() {
+        let mut config1 = LoggingConfig::default();
+        let config2 = LoggingConfig {
+            level: "debug".to_string(),
+            log_to_file: true,
+            log_file: Some(PathBuf::from("/tmp/test.log")),
+            log_to_console: false,
+            format: "json".to_string(),
+        };
+
+        config1.merge(config2);
+        assert_eq!(config1.level, "debug");
+        assert!(config1.log_to_file);
+        assert_eq!(config1.log_file, Some(PathBuf::from("/tmp/test.log")));
+        assert!(!config1.log_to_console);
+        assert_eq!(config1.format, "json");
+    }
+
+    #[test]
+    fn test_trajectory_config_default() {
+        let config = TrajectoryConfig::default();
+        assert_eq!(config.directory, PathBuf::from("trajectories"));
+        assert!(config.auto_save);
+        assert_eq!(config.save_interval_steps, 5);
+        assert!(config.enable_compression);
+    }
+
+    #[test]
+    fn test_trajectory_config_is_enabled() {
+        let config = TrajectoryConfig::default();
+        assert!(config.is_enabled()); // Always returns true
+    }
+
+    #[test]
+    fn test_mcp_config_default() {
+        let config = McpConfig::default();
+        assert!(!config.enabled);
+        assert!(config.servers.is_empty());
+        // Note: Default trait sets default_timeout_secs to 0
+        // The default_mcp_timeout() is only used during deserialization
+        assert_eq!(config.default_timeout_secs, 0);
+        // default_true() is also only for deserialization, Default trait sets to false
+        assert!(!config.auto_connect);
+    }
+
+    #[test]
+    fn test_mcp_config_merge() {
+        let mut config1 = McpConfig::default();
+        let mut config2 = McpConfig::default();
+        config2.enabled = true;
+        config2.default_timeout_secs = 600;
+        config2.auto_connect = false;
+        config2.servers.insert(
+            "test".to_string(),
+            McpServerConfig::stdio("test", vec![]),
+        );
+
+        config1.merge(config2);
+        assert!(config1.enabled);
+        assert_eq!(config1.default_timeout_secs, 600);
+        assert!(!config1.auto_connect);
+        assert!(config1.servers.contains_key("test"));
+    }
+
+    #[test]
+    fn test_mcp_config_enabled_servers() {
+        let mut config = McpConfig::default();
+        config.servers.insert(
+            "enabled".to_string(),
+            McpServerConfig::stdio("test", vec![]),
+        );
+        let mut disabled = McpServerConfig::stdio("test", vec![]);
+        disabled.enabled = false;
+        config.servers.insert("disabled".to_string(), disabled);
+
+        let enabled: Vec<_> = config.enabled_servers().collect();
+        assert_eq!(enabled.len(), 1);
+        assert!(enabled[0].0 == "enabled");
+    }
+
+    #[test]
+    fn test_mcp_config_get_timeout() {
+        let mut config = McpConfig::default();
+        config.default_timeout_secs = 300;
+
+        // Server with custom timeout
+        let mut server1 = McpServerConfig::stdio("test", vec![]);
+        server1.timeout_secs = Some(120);
+        config.servers.insert("custom".to_string(), server1);
+
+        // Server without custom timeout
+        let server2 = McpServerConfig::stdio("test", vec![]);
+        config.servers.insert("default".to_string(), server2);
+
+        assert_eq!(config.get_timeout("custom"), 120);
+        assert_eq!(config.get_timeout("default"), 300);
+        assert_eq!(config.get_timeout("nonexistent"), 300);
+    }
+
+    #[test]
+    fn test_mcp_server_config_stdio() {
+        let config = McpServerConfig::stdio("python", vec!["-m".to_string(), "test".to_string()]);
+        assert_eq!(config.transport, "stdio");
+        assert_eq!(config.command, Some("python".to_string()));
+        assert_eq!(config.args, vec!["-m", "test"]);
+        assert!(config.enabled);
+    }
+
+    #[test]
+    fn test_mcp_server_config_http() {
+        let config = McpServerConfig::http("http://localhost:8080");
+        assert_eq!(config.transport, "http");
+        assert_eq!(config.url, Some("http://localhost:8080".to_string()));
+        assert!(config.enabled);
+    }
+
+    #[test]
+    fn test_mcp_server_config_websocket() {
+        let config = McpServerConfig::websocket("ws://localhost:9000");
+        assert_eq!(config.transport, "websocket");
+        assert_eq!(config.url, Some("ws://localhost:9000".to_string()));
+        assert!(config.enabled);
+    }
+
+    #[test]
+    fn test_mcp_server_config_with_env() {
+        let config = McpServerConfig::stdio("test", vec![])
+            .with_env("KEY", "value");
+        assert_eq!(config.env.get("KEY"), Some(&"value".to_string()));
+    }
+
+    #[test]
+    fn test_mcp_server_config_with_header() {
+        let config = McpServerConfig::http("http://test")
+            .with_header("Authorization", "Bearer token");
+        assert_eq!(config.headers.get("Authorization"), Some(&"Bearer token".to_string()));
+    }
+
+    #[test]
+    fn test_mcp_server_config_with_timeout() {
+        let config = McpServerConfig::stdio("test", vec![])
+            .with_timeout(120);
+        assert_eq!(config.timeout_secs, Some(120));
+    }
+
+    #[test]
+    fn test_model_parameters_to_llm_parameters() {
+        let params = ModelParameters {
+            model: "gpt-4".to_string(),
+            max_tokens: Some(4096),
+            temperature: Some(0.7),
+            top_p: Some(0.9),
+            top_k: Some(40),
+            stop_sequences: Some(vec!["STOP".to_string()]),
+            parallel_tool_calls: Some(true),
+            ..Default::default()
+        };
+
+        let llm_params = params.to_llm_parameters();
+        assert_eq!(llm_params.model, "gpt-4");
+        assert_eq!(llm_params.max_tokens, Some(4096));
+        assert_eq!(llm_params.temperature, Some(0.7));
+        assert_eq!(llm_params.top_p, Some(0.9));
+        assert_eq!(llm_params.top_k, Some(40));
+        assert_eq!(llm_params.stop, Some(vec!["STOP".to_string()]));
+        assert_eq!(llm_params.parallel_tool_calls, Some(true));
+    }
+
+    #[test]
+    fn test_model_parameters_debug() {
+        let params = ModelParameters::default();
+        let debug_string = format!("{:?}", params);
+        assert!(debug_string.contains("ModelParameters"));
+    }
+
+    #[test]
+    fn test_model_parameters_clone() {
+        let params = ModelParameters::default();
+        let cloned = params.clone();
+        assert_eq!(params.model, cloned.model);
+    }
+
+    #[test]
+    fn test_config_debug() {
+        let config = Config::default();
+        let debug_string = format!("{:?}", config);
+        assert!(debug_string.contains("Config"));
+    }
+
+    #[test]
+    fn test_config_clone() {
+        let config = Config::default();
+        let cloned = config.clone();
+        assert_eq!(config.default_provider, cloned.default_provider);
+    }
+
+    #[test]
+    fn test_tool_config_merge_empty_tools() {
+        let mut config1 = ToolConfig::default();
+        let config2 = ToolConfig {
+            enabled_tools: vec![],
+            max_execution_time: 0,
+            allow_parallel_execution: false,
+            tool_settings: HashMap::new(),
+        };
+
+        let original_tools = config1.enabled_tools.clone();
+        config1.merge(config2);
+        // Empty tools should not override
+        assert_eq!(config1.enabled_tools, original_tools);
+        // But max_execution_time of 0 should be ignored
+        assert_eq!(config1.max_execution_time, 300);
+    }
+
+    #[test]
+    fn test_logging_config_merge_empty_level() {
+        let mut config1 = LoggingConfig::default();
+        let config2 = LoggingConfig {
+            level: "".to_string(),
+            log_to_file: true,
+            log_file: None,
+            log_to_console: false,
+            format: "".to_string(),
+        };
+
+        config1.merge(config2);
+        // Empty strings should not override
+        assert_eq!(config1.level, "info");
+        assert_eq!(config1.format, "pretty");
+        // But booleans should update
+        assert!(config1.log_to_file);
+        assert!(!config1.log_to_console);
+    }
+
+    #[test]
+    fn test_default_functions() {
+        assert_eq!(default_mcp_timeout(), 300);
+        assert_eq!(default_true(), true);
+    }
+}

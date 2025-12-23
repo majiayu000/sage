@@ -114,16 +114,20 @@ impl ToolTrustSettings {
 
 /// MCP server configuration cache
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct MCPServerCache {
+pub struct McpServerCache {
     /// Server configurations by name
-    pub servers: HashMap<String, MCPServerConfig>,
+    pub servers: HashMap<String, McpServerConfig>,
     /// Last updated timestamp
     pub updated_at: Option<DateTime<Utc>>,
 }
 
+/// Deprecated: Use `McpServerCache` instead
+#[deprecated(since = "0.2.0", note = "Use `McpServerCache` instead")]
+pub type MCPServerCache = McpServerCache;
+
 /// Cached MCP server configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MCPServerConfig {
+pub struct McpServerConfig {
     /// Server name
     pub name: String,
     /// Command to start the server
@@ -137,6 +141,10 @@ pub struct MCPServerConfig {
     /// When this config was last used
     pub last_used: Option<DateTime<Utc>>,
 }
+
+/// Deprecated: Use `McpServerConfig` instead
+#[deprecated(since = "0.2.0", note = "Use `McpServerConfig` instead")]
+pub type MCPServerConfig = McpServerConfig;
 
 /// Recent session entry
 #[derive(Debug, Clone, Serialize, Deserialize)]

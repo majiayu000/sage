@@ -35,7 +35,7 @@ impl GlmProvider {
     }
 
     /// GLM chat completion - Anthropic compatible format
-    /// Uses https://open.bigmodel.cn/api/anthropic endpoint
+    /// Uses <https://open.bigmodel.cn/api/anthropic> endpoint
     #[instrument(skip(self, messages, tools), level = "debug")]
     pub async fn chat(
         &self,

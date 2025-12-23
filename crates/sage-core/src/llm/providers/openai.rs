@@ -148,7 +148,8 @@ impl OpenAIProvider {
         let response = request
             .send()
             .await
-            .map_err(|e| SageError::llm(format!("OpenAI streaming request failed: {}", e)))?;
+            .map_err(|e| SageError::llm(format!("OpenAI streaming request failed: {}", e)))
+            .context("Failed to send HTTP request to OpenAI streaming API")?;
 
         if !response.status().is_success() {
             let error_text = response.text().await.unwrap_or_default();
