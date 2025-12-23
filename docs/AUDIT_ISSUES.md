@@ -1,17 +1,19 @@
 # Sage Agent Codebase Audit Issues
 
 > Generated: 2025-12-22
+> Updated: 2025-12-23
 > Total Issues: 265
-> Status: In Progress
+> Status: In Progress (Major Cleanup Phase Completed)
 
 ## Summary
 
 | Severity | Count | Resolved |
 |----------|-------|----------|
-| Critical | 33 | 7 |
-| High | 90 | 8 |
+| Critical | 33 | 8 |
+| High | 90 | 9 |
 | Medium | 86 | 4 |
 | Low | 56 | 0 |
+| Clippy | 341 | 339 |
 
 ---
 
@@ -344,6 +346,37 @@
 | 2025-12-22 | HIGH-011 | Partial | (tracing instrumentation) |
 | 2025-12-22 | HIGH-012 | Resolved | (trajectory replayer) |
 | 2025-12-23 | CRIT-005 | Partial | 4d74353 (more unwrap fixes) |
+| 2025-12-23 | CRIT-003 | Enhanced | b2cf3b4 (parking_lot::Mutex in signal_handler.rs) |
+| 2025-12-23 | Clippy | Fixed | 81a35b5 (auto-fix 35 files) |
+| 2025-12-23 | Clippy | Fixed | 1b7c6c3 (341→2 warnings) |
+
+---
+
+### Clippy Cleanup Summary (2025-12-23)
+
+A major clippy cleanup was performed, reducing warnings from **341 to 2**:
+
+1. **Phase 1: Critical Fixes**
+   - Replaced `std::sync::Mutex` with `parking_lot::Mutex` in `signal_handler.rs`
+   - Fixed MutexGuard held across await points
+   - Added parking_lot dependency to sage-cli
+
+2. **Phase 2: Auto-fix**
+   - Ran `cargo clippy --fix` across workspace
+   - Applied automatic fixes to 35 files
+   - Fixed iterator patterns, redundant closures, type annotations
+
+3. **Phase 3: Manual Improvements**
+   - Replaced `filter_map` with `map` where all arms return `Some`
+   - Used `sort_by_key` instead of `sort_by`
+   - Simplified `match` with `unwrap_or` patterns
+   - Used `strip_prefix` instead of manual slicing
+   - Fixed loop variable indexing with `enumerate`
+   - Used HashMap `entry` API
+   - Added `Default` impl for `DisplayManager`
+   - Added `#[allow]` attributes for intentional design choices
+
+Remaining 2 warnings are deprecated method warnings (intentional deprecation).
 
 ---
 
