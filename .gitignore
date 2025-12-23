@@ -87,6 +87,7 @@ ENV/
 test_output/
 test_results/
 coverage/
+swebench_test/
 
 # Temporary files
 tmp/
