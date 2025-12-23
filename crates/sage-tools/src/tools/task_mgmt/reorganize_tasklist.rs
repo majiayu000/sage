@@ -84,20 +84,17 @@ impl ReorganizeTasklistTool {
             ));
         };
 
-        // Remove state prefix
+        // Remove state prefix - safe to use expect since we verified prefix above
+        let state_char = match state {
+            TaskState::NotStarted => " ",
+            TaskState::InProgress => "/",
+            TaskState::Cancelled => "-",
+            TaskState::Complete => "x",
+        };
         let content = trimmed
             .strip_prefix("- [")
-            .unwrap()
-            .strip_prefix(&format!(
-                "{}]",
-                match state {
-                    TaskState::NotStarted => " ",
-                    TaskState::InProgress => "/",
-                    TaskState::Cancelled => "-",
-                    TaskState::Complete => "x",
-                }
-            ))
-            .unwrap()
+            .and_then(|s| s.strip_prefix(&format!("{}]", state_char)))
+            .ok_or_else(|| ToolError::InvalidArguments("Malformed task state prefix".to_string()))?
             .trim();
 
         // Parse UUID, NAME, DESCRIPTION
@@ -109,11 +106,11 @@ impl ReorganizeTasklistTool {
         let mut i = 0;
 
         while i < parts.len() {
-            if parts[i].starts_with("UUID:") {
-                uuid = parts[i].strip_prefix("UUID:").unwrap().to_string();
-            } else if parts[i].starts_with("NAME:") {
+            if let Some(uuid_val) = parts[i].strip_prefix("UUID:") {
+                uuid = uuid_val.to_string();
+            } else if let Some(name_start) = parts[i].strip_prefix("NAME:") {
                 // Collect name until next field
-                let mut name_parts = vec![parts[i].strip_prefix("NAME:").unwrap()];
+                let mut name_parts = vec![name_start];
                 i += 1;
                 while i < parts.len() && !parts[i].starts_with("DESCRIPTION:") {
                     name_parts.push(parts[i]);
@@ -121,9 +118,9 @@ impl ReorganizeTasklistTool {
                 }
                 name = name_parts.join(" ");
                 continue; // Skip the i += 1 at the end
-            } else if parts[i].starts_with("DESCRIPTION:") {
+            } else if let Some(desc_start) = parts[i].strip_prefix("DESCRIPTION:") {
                 // Collect description until end
-                let mut desc_parts = vec![parts[i].strip_prefix("DESCRIPTION:").unwrap()];
+                let mut desc_parts = vec![desc_start];
                 i += 1;
                 while i < parts.len() {
                     desc_parts.push(parts[i]);
