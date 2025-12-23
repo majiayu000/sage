@@ -1,9 +1,8 @@
 use sage_core::{
     config::provider::ProviderConfig,
     llm::{
-        client::LLMClient,
-        messages::LLMMessage,
-        providers::{LLMProvider, ModelParameters},
+        client::LLMClient, messages::LLMMessage, provider_types::ModelParameters, LLMProvider,
+        TimeoutConfig,
     },
 };
 use tracing_subscriber::fmt::init;
@@ -16,7 +15,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create a Google provider configuration with retry settings
     let provider_config = ProviderConfig::new("google")
         .with_api_key("AIzaSyCtI947T9sCiW6fMob6Sipt8l0JfGFS_U4")
-        .with_timeout(30)
+        .with_timeouts(TimeoutConfig::new().with_request_timeout_secs(30))
         .with_max_retries(3);
 
     // Create model parameters

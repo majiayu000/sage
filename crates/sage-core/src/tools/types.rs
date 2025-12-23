@@ -86,7 +86,7 @@ impl ToolCall {
 ///
 /// // Success case
 /// let result = ToolResult::success("call-1", "ReadTool", "File contents here")
-///     .with_metadata("lines_read", 42.into())
+///     .with_metadata("lines_read", 42)
 ///     .with_execution_time(123);
 ///
 /// // Error case

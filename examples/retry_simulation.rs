@@ -2,9 +2,8 @@ use sage_core::{
     config::provider::ProviderConfig,
     error::SageError,
     llm::{
-        client::LLMClient,
-        messages::LLMMessage,
-        providers::{LLMProvider, ModelParameters},
+        client::LLMClient, messages::LLMMessage, provider_types::ModelParameters, LLMProvider,
+        TimeoutConfig,
     },
 };
 use std::time::Instant;
@@ -23,7 +22,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 创建一个配置，使用无效的API密钥来模拟错误
     let provider_config = ProviderConfig::new("google")
         .with_api_key("invalid-api-key-for-testing")
-        .with_timeout(10)
+        .with_timeouts(TimeoutConfig::new().with_request_timeout_secs(10))
         .with_max_retries(3);
 
     let model_params = ModelParameters::new("gemini-2.5-pro")
@@ -57,7 +56,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 使用真实的API密钥（如果可用）
     let real_config = ProviderConfig::new("google")
         .with_api_key("AIzaSyCtI947T9sCiW6fMob6Sipt8l0JfGFS_U4")
-        .with_timeout(30)
+        .with_timeouts(TimeoutConfig::new().with_request_timeout_secs(30))
         .with_max_retries(2);
 
     let real_client = LLMClient::new(LLMProvider::Google, real_config, model_params)?;

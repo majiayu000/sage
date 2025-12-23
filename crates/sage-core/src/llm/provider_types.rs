@@ -12,7 +12,7 @@ use std::time::Duration;
 /// # Examples
 ///
 /// ```rust
-/// use sage_core::llm::providers::TimeoutConfig;
+/// use sage_core::llm::TimeoutConfig;
 ///
 /// // Use default timeouts (30s connection, 60s request)
 /// let config = TimeoutConfig::default();
