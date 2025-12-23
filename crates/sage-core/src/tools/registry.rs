@@ -32,7 +32,7 @@ impl ToolRegistry {
 
         self.categories
             .entry(category.to_string())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(name);
     }
 
@@ -196,7 +196,7 @@ where
     F: FnOnce(&mut ToolRegistry) -> R,
 {
     let mut registry = GLOBAL_REGISTRY.lock();
-    f(&mut *registry)
+    f(&mut registry)
 }
 
 /// Register a tool globally

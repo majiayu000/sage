@@ -110,13 +110,13 @@ impl ModelParameters {
         }
 
         if let Some(temp) = self.temperature {
-            if temp < 0.0 || temp > 2.0 {
+            if !(0.0..=2.0).contains(&temp) {
                 return Err(SageError::config("Temperature must be between 0.0 and 2.0"));
             }
         }
 
         if let Some(top_p) = self.top_p {
-            if top_p < 0.0 || top_p > 1.0 {
+            if !(0.0..=1.0).contains(&top_p) {
                 return Err(SageError::config("Top-p must be between 0.0 and 1.0"));
             }
         }

@@ -606,7 +606,7 @@ async fn execute_conversation_task(
 
                             // Add the AI's response to the conversation
                             if !last_response.is_empty() {
-                                conversation.add_assistant_message(&last_response);
+                                conversation.add_assistant_message(last_response);
                             }
 
                             console.info("ℹ Type your response to continue the conversation");

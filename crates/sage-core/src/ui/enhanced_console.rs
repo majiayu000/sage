@@ -323,7 +323,7 @@ impl EnhancedConsole {
         let mut current_line = String::new();
 
         for word in words {
-            if current_line.len() + word.len() + 1 <= width {
+            if current_line.len() + word.len() < width {
                 if !current_line.is_empty() {
                     current_line.push(' ');
                 }

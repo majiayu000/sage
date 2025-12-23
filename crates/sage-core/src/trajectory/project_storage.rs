@@ -134,8 +134,7 @@ impl ProjectStorage {
     /// Escape a path for use as a directory name (replace / with -)
     fn escape_path(path: &Path) -> String {
         path.to_string_lossy()
-            .replace('/', "-")
-            .replace('\\', "-")
+            .replace(['/', '\\'], "-")
             .trim_start_matches('-')
             .to_string()
     }

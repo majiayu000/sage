@@ -129,9 +129,7 @@ Usage:
 
         // Check if old_string exists
         if !content.contains(&old_string) {
-            return Err(ToolError::ExecutionFailed(format!(
-                "The string to replace was not found in the file. Make sure the old_string matches exactly, including whitespace and indentation."
-            )));
+            return Err(ToolError::ExecutionFailed("The string to replace was not found in the file. Make sure the old_string matches exactly, including whitespace and indentation.".to_string()));
         }
 
         // Count occurrences

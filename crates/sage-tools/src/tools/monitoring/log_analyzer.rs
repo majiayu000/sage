@@ -137,7 +137,7 @@ impl LogAnalyzerTool {
         let avg_line_length = analyzed_lines.iter().map(|line| line.len()).sum::<usize>() as f64
             / analyzed_lines.len() as f64;
 
-        result.push_str(&format!("\nStatistics:\n"));
+        result.push_str(&"\nStatistics:\n".to_string());
         result.push_str(&format!(
             "Average line length: {:.1} characters\n",
             avg_line_length

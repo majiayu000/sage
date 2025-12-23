@@ -108,8 +108,7 @@ impl PromptTemplate {
         for var in &self.variables {
             let placeholder = format!("{{{{{}}}}}", var.name);
             let value = values
-                .get(var.name.as_str())
-                .map(|s| *s)
+                .get(var.name.as_str()).copied()
                 .or(var.default.as_deref())
                 .unwrap_or("");
 

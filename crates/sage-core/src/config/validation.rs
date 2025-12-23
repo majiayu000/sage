@@ -73,7 +73,7 @@ impl ConfigValidator {
 
             // Validate temperature
             if let Some(temp) = params.temperature {
-                if temp < 0.0 || temp > 2.0 {
+                if !(0.0..=2.0).contains(&temp) {
                     return Err(SageError::config(format!(
                         "Temperature must be between 0.0 and 2.0 for provider '{}', got {}",
                         provider, temp
@@ -83,7 +83,7 @@ impl ConfigValidator {
 
             // Validate top_p
             if let Some(top_p) = params.top_p {
-                if top_p < 0.0 || top_p > 1.0 {
+                if !(0.0..=1.0).contains(&top_p) {
                     return Err(SageError::config(format!(
                         "Top-p must be between 0.0 and 1.0 for provider '{}', got {}",
                         provider, top_p

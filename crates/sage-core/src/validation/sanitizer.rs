@@ -186,15 +186,15 @@ impl InputSanitizer {
         }
 
         // Also remove common dangerous patterns
-        let result = result
+        
+
+        result
             .replace("javascript:", "")
             .replace("vbscript:", "")
             .replace("data:", "")
             .replace("onclick", "")
             .replace("onerror", "")
-            .replace("onload", "");
-
-        result
+            .replace("onload", "")
     }
 
     /// Sanitize an array

@@ -77,7 +77,7 @@ impl PatternDetector {
         let tool_counts = self
             .file_preferences
             .entry(file_type.to_string())
-            .or_insert_with(HashMap::new);
+            .or_default();
         *tool_counts.entry(preferred_tool.to_string()).or_insert(0) += 1;
     }
 

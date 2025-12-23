@@ -167,7 +167,7 @@ impl LLMClient {
 
                     if attempt < max_retries {
                         // Calculate exponential backoff with jitter
-                        let base_delay_secs = 2_u64.pow(attempt as u32);
+                        let base_delay_secs = 2_u64.pow(attempt);
                         let jitter_ms = {
                             let mut rng = rand::thread_rng();
                             rng.gen_range(0..=(base_delay_secs * 500))

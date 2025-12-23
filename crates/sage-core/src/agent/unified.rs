@@ -376,7 +376,7 @@ impl UnifiedExecutor {
 
     /// Get the executor ID
     pub fn id(&self) -> Id {
-        self.id.clone()
+        self.id
     }
 
     /// Get configuration

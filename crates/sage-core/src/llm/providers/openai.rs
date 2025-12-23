@@ -167,8 +167,8 @@ impl OpenAIProvider {
                     // Convert bytes to string and process lines
                     let chunk_str = String::from_utf8_lossy(&chunk);
                     for line in chunk_str.lines() {
-                        if line.starts_with("data: ") {
-                            let data = &line[6..]; // Remove "data: " prefix
+                        if let Some(data) = line.strip_prefix("data: ") {
+                            // Remove "data: " prefix
                             if data == "[DONE]" {
                                 return Some(Ok(StreamChunk::final_chunk(
                                     None,

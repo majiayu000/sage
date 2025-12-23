@@ -43,7 +43,7 @@ pub fn parse_python_dependencies(root: &Path, info: &mut DependencyInfo) {
                 let line = line.trim();
                 if !line.is_empty() && !line.starts_with('#') && !line.starts_with('-') {
                     let name = line
-                        .split(|c| c == '=' || c == '<' || c == '>' || c == '[')
+                        .split(['=', '<', '>', '['])
                         .next()
                         .map(|s| s.trim().to_string())
                         .unwrap_or_default();

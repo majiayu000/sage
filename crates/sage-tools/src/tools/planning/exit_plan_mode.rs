@@ -57,7 +57,7 @@ impl Tool for ExitPlanModeTool {
         let teammate_count = call.get_number("teammateCount").unwrap_or(3.0) as u32;
 
         // Validate teammate count if swarm is being launched
-        if launch_swarm && (teammate_count < 1 || teammate_count > 10) {
+        if launch_swarm && !(1..=10).contains(&teammate_count) {
             return Err(ToolError::InvalidArguments(
                 "teammateCount must be between 1 and 10".to_string(),
             ));
@@ -131,7 +131,7 @@ NO MORE PLANNING - EXECUTE!
         if launch_swarm {
             if let Some(count) = call.get_number("teammateCount") {
                 let teammate_count = count as u32;
-                if teammate_count < 1 || teammate_count > 10 {
+                if !(1..=10).contains(&teammate_count) {
                     return Err(ToolError::InvalidArguments(
                         "teammateCount must be between 1 and 10".to_string(),
                     ));

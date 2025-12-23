@@ -42,8 +42,7 @@ impl ResponseParser {
             }
         }
 
-        let usage = if let Some(usage_data) = response["usage"].as_object() {
-            Some(LLMUsage {
+        let usage = response["usage"].as_object().map(|usage_data| LLMUsage {
                 prompt_tokens: usage_data
                     .get("prompt_tokens")
                     .and_then(|v| v.as_u64())
@@ -59,10 +58,7 @@ impl ResponseParser {
                 cost_usd: None,
                 cache_creation_input_tokens: None,
                 cache_read_input_tokens: None,
-            })
-        } else {
-            None
-        };
+            });
 
         Ok(LLMResponse {
             content,

@@ -227,7 +227,7 @@ impl McpTransport for HttpTransport {
 
         let response = self
             .client
-            .post(&self.message_url())
+            .post(self.message_url())
             .body(json)
             .send()
             .await

@@ -254,9 +254,9 @@ impl TaskSupervisor {
         let multiplier = 2.0_f64;
 
         let delay_ms = base.as_millis() as f64 * multiplier.powi(self.restart_count as i32);
-        let delay = Duration::from_millis(delay_ms.min(max.as_millis() as f64) as u64);
+        
 
-        delay
+        Duration::from_millis(delay_ms.min(max.as_millis() as f64) as u64)
     }
 }
 

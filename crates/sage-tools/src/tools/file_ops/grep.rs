@@ -279,11 +279,7 @@ impl GrepTool {
 
                 if output_mode == GrepOutputMode::Content {
                     // Add context lines before
-                    let start = if i >= lines_before {
-                        i - lines_before
-                    } else {
-                        0
-                    };
+                    let start = i.saturating_sub(lines_before);
 
                     for j in start..i {
                         if show_line_numbers {

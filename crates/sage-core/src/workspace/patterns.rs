@@ -636,7 +636,7 @@ impl PatternMatcher {
                 if !glob_pattern.contains('/') && !glob_pattern.contains('*') {
                     let path = root.join(glob_pattern);
                     if path.exists() && path.is_file() {
-                        let exists = files.iter().any(|f| f.path == PathBuf::from(glob_pattern));
+                        let exists = files.iter().any(|f| f.path == *glob_pattern);
                         if !exists {
                             files.push(ImportantFile {
                                 path: PathBuf::from(glob_pattern),

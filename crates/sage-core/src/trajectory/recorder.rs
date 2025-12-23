@@ -242,7 +242,7 @@ impl TrajectoryRecorder {
 
             // Auto-save if enabled and interval reached
             if self.auto_save && self.steps_since_save >= self.save_interval_steps {
-                self.save_current(&record).await?;
+                self.save_current(record).await?;
                 self.steps_since_save = 0;
             }
         } else {
@@ -272,7 +272,7 @@ impl TrajectoryRecorder {
             }
 
             // Final save
-            self.save_current(&record).await?;
+            self.save_current(record).await?;
 
             // Clear current record
             *current = None;
@@ -333,11 +333,7 @@ impl TrajectoryRecorder {
     /// Get the trajectory file path (if using file storage)
     pub fn get_trajectory_path(&self) -> Option<PathBuf> {
         // Try to downcast to FileStorage
-        if let Some(file_storage) = self.storage.as_any().downcast_ref::<FileStorage>() {
-            Some(file_storage.path().to_path_buf())
-        } else {
-            None
-        }
+        self.storage.as_any().downcast_ref::<FileStorage>().map(|file_storage| file_storage.path().to_path_buf())
     }
 
     /// Load a trajectory from storage
@@ -405,8 +401,7 @@ impl TrajectoryRecorder {
                 }
 
                 // Add execution time
-                stats.total_execution_time = stats.total_execution_time
-                    + chrono::Duration::milliseconds((record.execution_time * 1000.0) as i64);
+                stats.total_execution_time += chrono::Duration::milliseconds((record.execution_time * 1000.0) as i64);
             }
         }
 

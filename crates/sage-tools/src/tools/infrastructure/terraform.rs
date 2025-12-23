@@ -71,7 +71,7 @@ impl TerraformTool {
     /// Initialize Terraform in a directory
     async fn init_terraform(&self, working_dir: &str) -> Result<String, ToolError> {
         // Check if directory exists
-        if !tokio::fs::metadata(working_dir).await.is_ok() {
+        if tokio::fs::metadata(working_dir).await.is_err() {
             tokio::fs::create_dir_all(working_dir).await.map_err(|e| {
                 ToolError::ExecutionFailed(format!("Failed to create directory: {}", e))
             })?;
@@ -333,7 +333,7 @@ resource "kubernetes_deployment" "example" {
         let config_path = format!("{}/main.tf", working_dir);
 
         // Create directory if it doesn't exist
-        if !tokio::fs::metadata(working_dir).await.is_ok() {
+        if tokio::fs::metadata(working_dir).await.is_err() {
             tokio::fs::create_dir_all(working_dir).await.map_err(|e| {
                 ToolError::ExecutionFailed(format!("Failed to create directory: {}", e))
             })?;

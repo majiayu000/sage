@@ -481,8 +481,8 @@ async fn main() -> SageResult<()> {
             if cli.modern_ui {
                 ui_launcher::launch_modern_ui(
                     &cli.config_file,
-                    cli.trajectory_file.as_ref().map(|p| p.to_str()).flatten(),
-                    cli.working_dir.as_ref().map(|p| p.to_str()).flatten(),
+                    cli.trajectory_file.as_ref().and_then(|p| p.to_str()),
+                    cli.working_dir.as_ref().and_then(|p| p.to_str()),
                 )
                 .await
             } else {
@@ -541,8 +541,8 @@ async fn main() -> SageResult<()> {
             } else if modern_ui {
                 ui_launcher::launch_modern_ui(
                     &config_file,
-                    trajectory_file.as_ref().map(|p| p.to_str()).flatten(),
-                    working_dir.as_ref().map(|p| p.to_str()).flatten(),
+                    trajectory_file.as_ref().and_then(|p| p.to_str()),
+                    working_dir.as_ref().and_then(|p| p.to_str()),
                 )
                 .await
             } else {

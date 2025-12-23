@@ -129,7 +129,7 @@ impl MemoryOptimizedRecorder {
 
             // Add to buffer
             buffer.push_back(record.clone());
-            index.insert(record.id.clone(), buffer.len() - 1);
+            index.insert(record.id, buffer.len() - 1);
             *memory_bytes += record_size;
 
             // Update stats

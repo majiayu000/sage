@@ -108,7 +108,7 @@ impl CLIConsole {
         if self.verbose {
             println!(
                 "  {} {} {}",
-                "🔧".to_string(),
+                "🔧",
                 tool_name.magenta().bold(),
                 args.dimmed()
             );

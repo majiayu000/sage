@@ -41,7 +41,7 @@ impl KubernetesTool {
         cmd.args(args);
 
         if let Some(ns) = namespace {
-            cmd.args(&["--namespace", ns]);
+            cmd.args(["--namespace", ns]);
         }
 
         debug!("Executing kubectl command: kubectl {}", args.join(" "));
