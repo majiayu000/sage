@@ -50,6 +50,42 @@ pub enum ToolError {
     Other(String),
 }
 
+impl crate::error::UnifiedError for ToolError {
+    fn error_code(&self) -> &str {
+        match self {
+            ToolError::InvalidArguments(_) => "TOOL_INVALID_ARGS",
+            ToolError::ExecutionFailed(_) => "TOOL_EXEC_FAILED",
+            ToolError::NotFound(_) => "TOOL_NOT_FOUND",
+            ToolError::Timeout => "TOOL_TIMEOUT",
+            ToolError::PermissionDenied(_) => "TOOL_PERMISSION_DENIED",
+            ToolError::ValidationFailed(_) => "TOOL_VALIDATION_FAILED",
+            ToolError::Io(_) => "TOOL_IO_ERROR",
+            ToolError::Json(_) => "TOOL_JSON_ERROR",
+            ToolError::Cancelled => "TOOL_CANCELLED",
+            ToolError::Other(_) => "TOOL_OTHER",
+        }
+    }
+
+    fn message(&self) -> &str {
+        match self {
+            ToolError::InvalidArguments(msg) => msg,
+            ToolError::ExecutionFailed(msg) => msg,
+            ToolError::NotFound(name) => name,
+            ToolError::Timeout => "Tool execution timeout",
+            ToolError::PermissionDenied(msg) => msg,
+            ToolError::ValidationFailed(msg) => msg,
+            ToolError::Io(_) => "IO error occurred",
+            ToolError::Json(_) => "JSON error occurred",
+            ToolError::Cancelled => "Tool execution cancelled",
+            ToolError::Other(msg) => msg,
+        }
+    }
+
+    fn is_retryable(&self) -> bool {
+        matches!(self, ToolError::Timeout | ToolError::Io(_))
+    }
+}
+
 /// Concurrency mode for tool execution
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ConcurrencyMode {
