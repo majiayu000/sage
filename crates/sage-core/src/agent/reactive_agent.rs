@@ -7,7 +7,7 @@ use crate::config::model::Config;
 use crate::error::{SageError, SageResult};
 use crate::llm::client::LLMClient;
 use crate::llm::messages::LLMMessage;
-use crate::llm::provider_types::LLMProvider;
+use crate::llm::provider_types::{LLMProvider, TimeoutConfig};
 use crate::prompts::SystemPromptBuilder;
 use crate::tools::batch_executor::BatchToolExecutor;
 use crate::tools::types::{ToolCall, ToolResult};
@@ -191,7 +191,7 @@ impl ClaudeStyleAgent {
 
         let mut provider_config = crate::config::provider::ProviderConfig::new(provider_name)
             .with_api_key(default_params.get_api_key().unwrap_or_default())
-            .with_timeout(60)
+            .with_timeouts(TimeoutConfig::new().with_request_timeout_secs(60))
             .with_max_retries(3);
 
         // Apply custom base_url if configured (for OpenRouter, etc.)

@@ -5,7 +5,7 @@ mod tests {
     use crate::config::provider::ProviderConfig;
     use crate::error::SageError;
     use crate::llm::client::LLMClient;
-    use crate::llm::provider_types::{LLMProvider, ModelParameters};
+    use crate::llm::provider_types::{LLMProvider, ModelParameters, TimeoutConfig};
 
     #[test]
     fn test_llm_client_creation() {
@@ -130,7 +130,7 @@ mod tests {
     fn test_client_with_timeout() {
         let config = ProviderConfig::new("openai")
             .with_api_key("test-key")
-            .with_timeout(120);
+            .with_timeouts(TimeoutConfig::new().with_request_timeout_secs(120));
 
         let model_params = ModelParameters::default();
         let client = LLMClient::new(LLMProvider::OpenAI, config, model_params);
