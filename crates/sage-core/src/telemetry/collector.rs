@@ -424,6 +424,15 @@ pub fn create_metrics_collector() -> SharedMetricsCollector {
     Arc::new(MetricsCollector::new())
 }
 
+/// Global metrics collector for the application
+static GLOBAL_METRICS: once_cell::sync::Lazy<MetricsCollector> =
+    once_cell::sync::Lazy::new(MetricsCollector::new);
+
+/// Get the global metrics collector
+pub fn global_metrics() -> &'static MetricsCollector {
+    &GLOBAL_METRICS
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

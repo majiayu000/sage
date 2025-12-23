@@ -1,7 +1,7 @@
 //! Tool execution engine
 
 use crate::error::{SageError, SageResult};
-use crate::telemetry::global_telemetry;
+use crate::telemetry::{global_metrics, global_telemetry};
 use crate::tools::base::Tool;
 use crate::tools::types::{ToolCall, ToolResult};
 use std::collections::HashMap;
@@ -138,6 +138,16 @@ impl ToolExecutor {
             result.error.clone(),
             None,
         );
+
+        // Record metrics
+        let metrics = global_metrics();
+        metrics.tool_calls.inc();
+        metrics.tool_latency.observe(elapsed.as_secs_f64());
+        if result.success {
+            metrics.tool_success.inc();
+        } else {
+            metrics.tool_errors.inc();
+        }
 
         result
     }
