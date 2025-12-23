@@ -24,7 +24,7 @@ pub struct RunOptions {
     pub working_directory: Option<PathBuf>,
     /// Maximum number of steps
     pub max_steps: Option<u32>,
-    /// Enable trajectory recording
+    /// Enable trajectory recording (kept for compatibility; recording is always on)
     pub enable_trajectory: bool,
     /// Custom trajectory file path
     pub trajectory_path: Option<PathBuf>,
@@ -77,6 +77,8 @@ impl RunOptions {
     }
 
     /// Enable or disable trajectory recording.
+    ///
+    /// Note: trajectory recording is always enabled in the runtime.
     ///
     /// # Examples
     ///

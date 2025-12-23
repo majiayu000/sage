@@ -156,8 +156,8 @@ impl SageAgentSdk {
             }
         });
 
-        // Set up trajectory recording if requested
-        let trajectory_path = if options.enable_trajectory || self.trajectory_path.is_some() {
+        // Trajectory recording is always enabled
+        let trajectory_path = {
             let path = options
                 .trajectory_path
                 .or_else(|| self.trajectory_path.clone())
@@ -172,8 +172,6 @@ impl SageAgentSdk {
             let recorder = TrajectoryRecorder::new(&path)?;
             executor.set_trajectory_recorder(Arc::new(Mutex::new(recorder)));
             Some(path)
-        } else {
-            None
         };
 
         // Execute the task
