@@ -54,7 +54,11 @@
   - Fixed http_client.rs: Added expect() with safety comment
   - Fixed monitoring.rs: Switched to parking_lot::Mutex (6 unwrap() calls removed)
   - Fixed sandbox/mod.rs: Switched to parking_lot::RwLock (1 unwrap() call removed)
-  - Remaining: ~1400 occurrences (many in test code, lower priority)
+  - Fixed reactive_agent.rs: Replaced .last().unwrap() with if-let pattern
+  - Fixed telemetry/tool_usage.rs: Switched to parking_lot::RwLock (6 unwrap() calls removed)
+  - Fixed tools/registry.rs: Switched to parking_lot::Mutex (1 unwrap() call removed)
+  - Fixed task_management.rs: Switched to parking_lot::Mutex (all lock().unwrap() removed)
+  - Remaining: ~1380 occurrences (mostly in test code, acceptable)
 
 ### CRIT-006: Missing Tool Input Validation
 - **Status**: 🟢 Resolved
@@ -339,6 +343,7 @@
 | 2025-12-22 | MED-008 | Resolved | (graceful shutdown) |
 | 2025-12-22 | HIGH-011 | Partial | (tracing instrumentation) |
 | 2025-12-22 | HIGH-012 | Resolved | (trajectory replayer) |
+| 2025-12-23 | CRIT-005 | Partial | 4d74353 (more unwrap fixes) |
 
 ---
 
