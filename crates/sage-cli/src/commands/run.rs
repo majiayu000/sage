@@ -379,7 +379,9 @@ pub async fn execute(args: RunArgs) -> SageResult<()> {
 
             // Print additional error context if available
             match &e {
-                SageError::Tool { tool_name, message, .. } => {
+                SageError::Tool {
+                    tool_name, message, ..
+                } => {
                     console.info(&format!("Tool: {}", tool_name));
                     console.info(&format!("Error: {}", message));
                 }

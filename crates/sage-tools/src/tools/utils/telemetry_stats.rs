@@ -178,7 +178,9 @@ impl Tool for TelemetryStatsTool {
                 }
             }
             _ => {
-                output.push_str("Unknown view type. Use: summary, all, most_used, slowest, failures\n");
+                output.push_str(
+                    "Unknown view type. Use: summary, all, most_used, slowest, failures\n",
+                );
             }
         }
 

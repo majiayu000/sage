@@ -2,11 +2,11 @@
 //!
 //! This example shows how to use the Write tool to create and overwrite files.
 
-use sage_tools::WriteTool;
 use sage_core::tools::base::Tool;
 use sage_core::tools::types::ToolCall;
-use std::collections::HashMap;
+use sage_tools::WriteTool;
 use serde_json::json;
+use std::collections::HashMap;
 use tempfile::TempDir;
 
 #[tokio::main]
@@ -21,10 +21,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Example 1: Create a new file
     println!("1. Creating a new file...");
-    let call = create_tool_call("call-1", "Write", json!({
-        "file_path": "hello.txt",
-        "content": "Hello, World!\nThis is a test file."
-    }));
+    let call = create_tool_call(
+        "call-1",
+        "Write",
+        json!({
+            "file_path": "hello.txt",
+            "content": "Hello, World!\nThis is a test file."
+        }),
+    );
 
     match tool.execute(&call).await {
         Ok(result) => {
@@ -37,10 +41,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Example 2: Create a file in a nested directory
     println!("\n2. Creating a file in nested directories...");
-    let call = create_tool_call("call-2", "Write", json!({
-        "file_path": "subdir/nested/file.txt",
-        "content": "This file is in a nested directory structure."
-    }));
+    let call = create_tool_call(
+        "call-2",
+        "Write",
+        json!({
+            "file_path": "subdir/nested/file.txt",
+            "content": "This file is in a nested directory structure."
+        }),
+    );
 
     match tool.execute(&call).await {
         Ok(result) => {
@@ -53,10 +61,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Example 3: Try to overwrite without reading (should fail)
     println!("\n3. Attempting to overwrite existing file without reading first...");
-    let call = create_tool_call("call-3", "Write", json!({
-        "file_path": "hello.txt",
-        "content": "This should fail!"
-    }));
+    let call = create_tool_call(
+        "call-3",
+        "Write",
+        json!({
+            "file_path": "hello.txt",
+            "content": "This should fail!"
+        }),
+    );
 
     match tool.execute(&call).await {
         Ok(result) => {
@@ -72,10 +84,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let file_path = temp_dir.path().join("hello.txt");
     tool.mark_file_as_read(file_path);
 
-    let call = create_tool_call("call-4", "Write", json!({
-        "file_path": "hello.txt",
-        "content": "Updated content after reading!"
-    }));
+    let call = create_tool_call(
+        "call-4",
+        "Write",
+        json!({
+            "file_path": "hello.txt",
+            "content": "Updated content after reading!"
+        }),
+    );
 
     match tool.execute(&call).await {
         Ok(result) => {
@@ -101,10 +117,14 @@ This is a sample markdown file.
 Run the program with `cargo run`.
 "#;
 
-    let call = create_tool_call("call-5", "Write", json!({
-        "file_path": "README.md",
-        "content": multiline_content
-    }));
+    let call = create_tool_call(
+        "call-5",
+        "Write",
+        json!({
+            "file_path": "README.md",
+            "content": multiline_content
+        }),
+    );
 
     match tool.execute(&call).await {
         Ok(result) => {

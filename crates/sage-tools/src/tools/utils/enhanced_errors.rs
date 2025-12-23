@@ -304,7 +304,10 @@ mod tests {
             .with_context("operation", "read");
 
         assert_eq!(enhanced.context.len(), 2);
-        assert_eq!(enhanced.context.get("file_path"), Some(&"/test/path".to_string()));
+        assert_eq!(
+            enhanced.context.get("file_path"),
+            Some(&"/test/path".to_string())
+        );
         assert_eq!(enhanced.context.get("operation"), Some(&"read".to_string()));
     }
 
@@ -335,8 +338,7 @@ mod tests {
     #[test]
     fn test_enhanced_tool_error_with_category() {
         let tool_error = ToolError::Other("Network issue".to_string());
-        let enhanced = EnhancedToolError::new(tool_error)
-            .with_category(ErrorCategory::Network);
+        let enhanced = EnhancedToolError::new(tool_error).with_category(ErrorCategory::Network);
 
         assert_eq!(enhanced.category, ErrorCategory::Network);
     }
@@ -344,8 +346,7 @@ mod tests {
     #[test]
     fn test_enhanced_tool_error_with_recoverable() {
         let tool_error = ToolError::Timeout;
-        let enhanced = EnhancedToolError::new(tool_error)
-            .with_recoverable(false);
+        let enhanced = EnhancedToolError::new(tool_error).with_recoverable(false);
 
         assert!(!enhanced.recoverable);
     }
@@ -354,7 +355,10 @@ mod tests {
     fn test_error_category_user_input() {
         let errors = vec![
             ToolError::InvalidArguments("test".to_string()),
-            ToolError::Json(serde_json::Error::io(std::io::Error::new(std::io::ErrorKind::Other, "test"))),
+            ToolError::Json(serde_json::Error::io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "test",
+            ))),
             ToolError::ValidationFailed("test".to_string()),
         ];
 
@@ -557,8 +561,14 @@ mod tests {
 
         assert_eq!(error.category, ErrorCategory::UserInput);
         assert_eq!(error.context.get("parameter"), Some(&"port".to_string()));
-        assert_eq!(error.context.get("provided_value"), Some(&"abc".to_string()));
-        assert_eq!(error.context.get("expected_format"), Some(&"number between 1-65535".to_string()));
+        assert_eq!(
+            error.context.get("provided_value"),
+            Some(&"abc".to_string())
+        );
+        assert_eq!(
+            error.context.get("expected_format"),
+            Some(&"number between 1-65535".to_string())
+        );
     }
 
     #[test]
@@ -618,14 +628,32 @@ mod tests {
     #[test]
     fn test_get_error_type_all_variants() {
         let test_cases = vec![
-            (ToolError::InvalidArguments("test".into()), "InvalidArguments"),
-            (ToolError::Io(std::io::Error::new(std::io::ErrorKind::Other, "test")), "Io"),
-            (ToolError::PermissionDenied("test".into()), "PermissionDenied"),
+            (
+                ToolError::InvalidArguments("test".into()),
+                "InvalidArguments",
+            ),
+            (
+                ToolError::Io(std::io::Error::new(std::io::ErrorKind::Other, "test")),
+                "Io",
+            ),
+            (
+                ToolError::PermissionDenied("test".into()),
+                "PermissionDenied",
+            ),
             (ToolError::NotFound("test".into()), "NotFound"),
             (ToolError::Timeout, "Timeout"),
-            (ToolError::Json(serde_json::Error::io(std::io::Error::new(std::io::ErrorKind::Other, "test"))), "Json"),
+            (
+                ToolError::Json(serde_json::Error::io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "test",
+                ))),
+                "Json",
+            ),
             (ToolError::ExecutionFailed("test".into()), "ExecutionFailed"),
-            (ToolError::ValidationFailed("test".into()), "ValidationFailed"),
+            (
+                ToolError::ValidationFailed("test".into()),
+                "ValidationFailed",
+            ),
             (ToolError::Cancelled, "Cancelled"),
             (ToolError::Other("test".into()), "Other"),
         ];

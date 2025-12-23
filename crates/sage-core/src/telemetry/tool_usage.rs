@@ -86,10 +86,7 @@ impl TelemetryCollector {
     /// Get statistics for a specific tool
     pub fn get_tool_stats(&self, tool_name: &str) -> Option<ToolStats> {
         let events = self.events.read();
-        let tool_events: Vec<_> = events
-            .iter()
-            .filter(|e| e.tool_name == tool_name)
-            .collect();
+        let tool_events: Vec<_> = events.iter().filter(|e| e.tool_name == tool_name).collect();
 
         if tool_events.is_empty() {
             return None;
@@ -114,10 +111,7 @@ impl TelemetryCollector {
     /// Get statistics for all tools
     pub fn get_all_stats(&self) -> Vec<ToolStats> {
         let events = self.events.read();
-        let mut tool_names: Vec<String> = events
-            .iter()
-            .map(|e| e.tool_name.clone())
-            .collect();
+        let mut tool_names: Vec<String> = events.iter().map(|e| e.tool_name.clone()).collect();
         tool_names.sort();
         tool_names.dedup();
 

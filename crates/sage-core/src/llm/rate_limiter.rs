@@ -404,11 +404,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_set_rate_limit() {
-        global::set_rate_limit(
-            "custom_provider",
-            RateLimitConfig::new(120, 20),
-        )
-        .await;
+        global::set_rate_limit("custom_provider", RateLimitConfig::new(120, 20)).await;
 
         let limiter = global::get_rate_limiter("custom_provider").await;
         assert_eq!(limiter.config().requests_per_minute, 120);

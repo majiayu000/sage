@@ -161,8 +161,7 @@ impl Version {
     ///
     /// A version is supported if it's between MIN_SUPPORTED_VERSION and API_VERSION.
     pub const fn is_supported(&self) -> bool {
-        self.is_compatible_with(&MIN_SUPPORTED_VERSION)
-            && API_VERSION.is_compatible_with(self)
+        self.is_compatible_with(&MIN_SUPPORTED_VERSION) && API_VERSION.is_compatible_with(self)
     }
 }
 
@@ -181,15 +180,15 @@ impl FromStr for Version {
             return Err(VersionError::InvalidFormat(s.to_string()));
         }
 
-        let major = parts[0]
-            .parse()
-            .map_err(|_| VersionError::InvalidComponent("major".to_string(), parts[0].to_string()))?;
-        let minor = parts[1]
-            .parse()
-            .map_err(|_| VersionError::InvalidComponent("minor".to_string(), parts[1].to_string()))?;
-        let patch = parts[2]
-            .parse()
-            .map_err(|_| VersionError::InvalidComponent("patch".to_string(), parts[2].to_string()))?;
+        let major = parts[0].parse().map_err(|_| {
+            VersionError::InvalidComponent("major".to_string(), parts[0].to_string())
+        })?;
+        let minor = parts[1].parse().map_err(|_| {
+            VersionError::InvalidComponent("minor".to_string(), parts[1].to_string())
+        })?;
+        let patch = parts[2].parse().map_err(|_| {
+            VersionError::InvalidComponent("patch".to_string(), parts[2].to_string())
+        })?;
 
         Ok(Version {
             major,

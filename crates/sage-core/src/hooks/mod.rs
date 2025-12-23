@@ -52,14 +52,42 @@ pub mod events;
 pub mod executor;
 pub mod matcher;
 pub mod registry;
-pub mod types;
 
-// Re-export main types
+// Type modules (split from the original large types.rs)
+pub mod hook_types;
+pub mod command_hook;
+pub mod prompt_hook;
+pub mod callback_hook;
+pub mod hook_config;
+pub mod hook_input;
+pub mod hook_output;
+
+// Backwards compatibility: keep types module as an alias
+#[allow(deprecated)]
+pub mod types {
+    //! Legacy types module - re-exports all hook types for backward compatibility
+    //!
+    //! This module is kept for backward compatibility. New code should import
+    //! types directly from their respective modules.
+
+    pub use super::callback_hook::CallbackHook;
+    pub use super::command_hook::CommandHook;
+    pub use super::hook_config::{HookConfig, HookMatcher};
+    pub use super::hook_input::HookInput;
+    pub use super::hook_output::HookOutput;
+    pub use super::hook_types::{HookImplementation, HookType, HookVariant, PermissionDecision};
+    pub use super::prompt_hook::PromptHook;
+}
+
+// Re-export main types for convenience
+pub use callback_hook::CallbackHook;
+pub use command_hook::CommandHook;
 pub use events::HookEvent;
 pub use executor::{HookExecutionResult, HookExecutor};
-pub use matcher::{PatternMatcher, matches};
+pub use hook_config::{HookConfig, HookMatcher};
+pub use hook_input::HookInput;
+pub use hook_output::HookOutput;
+pub use hook_types::{HookImplementation, HookType, HookVariant, PermissionDecision};
+pub use matcher::{matches, PatternMatcher};
+pub use prompt_hook::PromptHook;
 pub use registry::{HookRegistry, HooksConfig};
-pub use types::{
-    CallbackHook, CommandHook, HookConfig, HookImplementation, HookInput, HookMatcher, HookOutput,
-    HookType, HookVariant, PermissionDecision, PromptHook,
-};

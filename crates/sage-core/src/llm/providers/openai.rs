@@ -1,5 +1,6 @@
 //! OpenAI provider implementation
 
+use crate::config::provider::ProviderConfig;
 use crate::error::{SageError, SageResult};
 use crate::llm::converters::{MessageConverter, ToolConverter};
 use crate::llm::messages::LLMMessage;
@@ -7,7 +8,6 @@ use crate::llm::parsers::ResponseParser;
 use crate::llm::provider_types::ModelParameters;
 use crate::llm::streaming::{LLMStream, StreamChunk};
 use crate::tools::types::ToolSchema;
-use crate::config::provider::ProviderConfig;
 use anyhow::Context;
 use futures::StreamExt;
 use reqwest::Client;
@@ -23,11 +23,7 @@ pub struct OpenAIProvider {
 
 impl OpenAIProvider {
     /// Create a new OpenAI provider
-    pub fn new(
-        config: ProviderConfig,
-        model_params: ModelParameters,
-        http_client: Client,
-    ) -> Self {
+    pub fn new(config: ProviderConfig, model_params: ModelParameters, http_client: Client) -> Self {
         Self {
             config,
             model_params,
@@ -94,7 +90,10 @@ impl OpenAIProvider {
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
-            return Err(SageError::llm(format!("OpenAI API error (status {}): {}", status, error_text)));
+            return Err(SageError::llm(format!(
+                "OpenAI API error (status {}): {}",
+                status, error_text
+            )));
         }
 
         let response_json: Value = response

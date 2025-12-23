@@ -1,13 +1,13 @@
 //! Example of creating and using a custom tool
 
 use async_trait::async_trait;
-use std::collections::HashMap;
-use std::error::Error;
-use std::sync::Arc;
 use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::executor::ToolExecutorBuilder;
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
 use sage_sdk::SageAgentSDK;
+use std::collections::HashMap;
+use std::error::Error;
+use std::sync::Arc;
 
 /// A custom tool that calculates mathematical expressions
 pub struct CalculatorTool;
@@ -26,42 +26,39 @@ impl Tool for CalculatorTool {
         ToolSchema::new(
             self.name(),
             self.description(),
-            vec![
-                ToolParameter::string("expression", "Mathematical expression to evaluate (e.g., '2 + 3 * 4')"),
-            ],
+            vec![ToolParameter::string(
+                "expression",
+                "Mathematical expression to evaluate (e.g., '2 + 3 * 4')",
+            )],
         )
     }
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
-        let expression = call
-            .get_string("expression")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'expression' parameter".to_string()))?;
+        let expression = call.get_string("expression").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'expression' parameter".to_string())
+        })?;
 
         // Simple expression evaluator (for demo purposes)
         let result = match self.evaluate_expression(&expression) {
-            Ok(value) => {
-                ToolResult::success(
-                    &call.id,
-                    self.name(),
-                    format!("The result of '{}' is: {}", expression, value),
-                )
-            }
-            Err(e) => {
-                ToolResult::error(
-                    &call.id,
-                    self.name(),
-                    format!("Failed to evaluate expression '{}': {}", expression, e),
-                )
-            }
+            Ok(value) => ToolResult::success(
+                &call.id,
+                self.name(),
+                format!("The result of '{}' is: {}", expression, value),
+            ),
+            Err(e) => ToolResult::error(
+                &call.id,
+                self.name(),
+                format!("Failed to evaluate expression '{}': {}", expression, e),
+            ),
         };
 
         Ok(result)
     }
 
     fn validate(&self, call: &ToolCall) -> Result<(), ToolError> {
-        let expression = call
-            .get_string("expression")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'expression' parameter".to_string()))?;
+        let expression = call.get_string("expression").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'expression' parameter".to_string())
+        })?;
 
         if expression.trim().is_empty() {
             return Err(ToolError::InvalidArguments(
@@ -97,10 +94,10 @@ impl CalculatorTool {
     fn evaluate_expression(&self, expr: &str) -> Result<f64, String> {
         // Remove whitespace
         let expr = expr.replace(' ', "");
-        
+
         // For this example, we'll handle very simple cases
         // In a real implementation, you'd use a proper expression parser
-        
+
         if let Some(pos) = expr.find('+') {
             let (left, right) = expr.split_at(pos);
             let right = &right[1..]; // Skip the '+'
@@ -108,7 +105,7 @@ impl CalculatorTool {
             let right_val = right.parse::<f64>().map_err(|_| "Invalid right operand")?;
             return Ok(left_val + right_val);
         }
-        
+
         if let Some(pos) = expr.find('-') {
             let (left, right) = expr.split_at(pos);
             let right = &right[1..]; // Skip the '-'
@@ -116,7 +113,7 @@ impl CalculatorTool {
             let right_val = right.parse::<f64>().map_err(|_| "Invalid right operand")?;
             return Ok(left_val - right_val);
         }
-        
+
         if let Some(pos) = expr.find('*') {
             let (left, right) = expr.split_at(pos);
             let right = &right[1..]; // Skip the '*'
@@ -124,7 +121,7 @@ impl CalculatorTool {
             let right_val = right.parse::<f64>().map_err(|_| "Invalid right operand")?;
             return Ok(left_val * right_val);
         }
-        
+
         if let Some(pos) = expr.find('/') {
             let (left, right) = expr.split_at(pos);
             let right = &right[1..]; // Skip the '/'
@@ -135,9 +132,10 @@ impl CalculatorTool {
             }
             return Ok(left_val / right_val);
         }
-        
+
         // If no operator found, try to parse as a single number
-        expr.parse::<f64>().map_err(|_| "Invalid number".to_string())
+        expr.parse::<f64>()
+            .map_err(|_| "Invalid number".to_string())
     }
 }
 
@@ -169,7 +167,7 @@ impl Tool for RandomNumberTool {
         let min = call
             .get_number("min")
             .ok_or_else(|| ToolError::InvalidArguments("Missing 'min' parameter".to_string()))?;
-        
+
         let max = call
             .get_number("max")
             .ok_or_else(|| ToolError::InvalidArguments("Missing 'max' parameter".to_string()))?;
@@ -188,16 +186,23 @@ impl Tool for RandomNumberTool {
         use std::time::{SystemTime, UNIX_EPOCH};
 
         let mut hasher = DefaultHasher::new();
-        SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos().hash(&mut hasher);
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+            .hash(&mut hasher);
         let hash = hasher.finish();
-        
+
         let range = max - min;
         let random_value = min + (hash as f64 % range);
 
         Ok(ToolResult::success(
             &call.id,
             self.name(),
-            format!("Random number between {} and {}: {:.2}", min, max, random_value),
+            format!(
+                "Random number between {} and {}: {:.2}",
+                min, max, random_value
+            ),
         ))
     }
 }
@@ -225,12 +230,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // how the tools would work independently.
 
     println!("\n🧮 Testing Calculator Tool...");
-    
+
     // Test the calculator tool directly
     let calc_tool = CalculatorTool;
     let mut call_args = HashMap::new();
-    call_args.insert("expression".to_string(), serde_json::Value::String("10 + 5".to_string()));
-    
+    call_args.insert(
+        "expression".to_string(),
+        serde_json::Value::String("10 + 5".to_string()),
+    );
+
     let tool_call = sage_core::tools::types::ToolCall {
         id: "test-1".to_string(),
         name: "calculator".to_string(),
@@ -240,7 +248,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     match calc_tool.execute(&tool_call).await {
         Ok(result) => {
-            println!("✅ Calculator result: {}", result.output.unwrap_or_default());
+            println!(
+                "✅ Calculator result: {}",
+                result.output.unwrap_or_default()
+            );
         }
         Err(e) => {
             println!("❌ Calculator error: {}", e);
@@ -248,13 +259,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     println!("\n🎲 Testing Random Number Tool...");
-    
+
     // Test the random number tool
     let random_tool = RandomNumberTool;
     let mut call_args = HashMap::new();
-    call_args.insert("min".to_string(), serde_json::Value::Number(serde_json::Number::from(1)));
-    call_args.insert("max".to_string(), serde_json::Value::Number(serde_json::Number::from(100)));
-    
+    call_args.insert(
+        "min".to_string(),
+        serde_json::Value::Number(serde_json::Number::from(1)),
+    );
+    call_args.insert(
+        "max".to_string(),
+        serde_json::Value::Number(serde_json::Number::from(100)),
+    );
+
     let tool_call = sage_core::tools::types::ToolCall {
         id: "test-2".to_string(),
         name: "random_number".to_string(),
@@ -264,7 +281,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     match random_tool.execute(&tool_call).await {
         Ok(result) => {
-            println!("✅ Random number result: {}", result.output.unwrap_or_default());
+            println!(
+                "✅ Random number result: {}",
+                result.output.unwrap_or_default()
+            );
         }
         Err(e) => {
             println!("❌ Random number error: {}", e);

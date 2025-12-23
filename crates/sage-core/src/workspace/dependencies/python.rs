@@ -14,9 +14,7 @@ pub fn parse_python_dependencies(root: &Path, info: &mut DependencyInfo) {
             let mut in_deps = false;
             for line in content.lines() {
                 let line = line.trim();
-                if line.starts_with("dependencies")
-                    || line.contains("[tool.poetry.dependencies]")
-                {
+                if line.starts_with("dependencies") || line.contains("[tool.poetry.dependencies]") {
                     in_deps = true;
                 } else if line.starts_with('[') && !line.contains("dependencies") {
                     in_deps = false;

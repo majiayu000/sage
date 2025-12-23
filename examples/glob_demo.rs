@@ -2,11 +2,11 @@
 //!
 //! Run with: cargo run --example glob_demo
 
-use sage_tools::GlobTool;
 use sage_core::tools::base::Tool;
 use sage_core::tools::types::ToolCall;
-use std::collections::HashMap;
+use sage_tools::GlobTool;
 use serde_json::json;
+use std::collections::HashMap;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -21,9 +21,13 @@ async fn main() -> anyhow::Result<()> {
     println!("Example 1: Find all Rust files recursively");
     println!("Pattern: **/*.rs\n");
 
-    let call1 = create_tool_call("call-1", "Glob", json!({
-        "pattern": "**/*.rs"
-    }));
+    let call1 = create_tool_call(
+        "call-1",
+        "Glob",
+        json!({
+            "pattern": "**/*.rs"
+        }),
+    );
 
     match glob_tool.execute(&call1).await {
         Ok(result) => {
@@ -43,9 +47,13 @@ async fn main() -> anyhow::Result<()> {
     println!("Example 2: Find all Cargo.toml files");
     println!("Pattern: **/Cargo.toml\n");
 
-    let call2 = create_tool_call("call-2", "Glob", json!({
-        "pattern": "**/Cargo.toml"
-    }));
+    let call2 = create_tool_call(
+        "call-2",
+        "Glob",
+        json!({
+            "pattern": "**/Cargo.toml"
+        }),
+    );
 
     match glob_tool.execute(&call2).await {
         Ok(result) => {
@@ -66,10 +74,14 @@ async fn main() -> anyhow::Result<()> {
     println!("Pattern: **/*.rs");
     println!("Path: crates/sage-core/src\n");
 
-    let call3 = create_tool_call("call-3", "Glob", json!({
-        "pattern": "**/*.rs",
-        "path": "crates/sage-core/src"
-    }));
+    let call3 = create_tool_call(
+        "call-3",
+        "Glob",
+        json!({
+            "pattern": "**/*.rs",
+            "path": "crates/sage-core/src"
+        }),
+    );
 
     match glob_tool.execute(&call3).await {
         Ok(result) => {
@@ -97,9 +109,13 @@ async fn main() -> anyhow::Result<()> {
     println!("Example 4: Find all example files");
     println!("Pattern: examples/*.rs\n");
 
-    let call4 = create_tool_call("call-4", "Glob", json!({
-        "pattern": "examples/*.rs"
-    }));
+    let call4 = create_tool_call(
+        "call-4",
+        "Glob",
+        json!({
+            "pattern": "examples/*.rs"
+        }),
+    );
 
     match glob_tool.execute(&call4).await {
         Ok(result) => {
@@ -119,9 +135,13 @@ async fn main() -> anyhow::Result<()> {
     println!("Example 5: Find markdown files starting with uppercase letters");
     println!("Pattern: [A-Z]*.md\n");
 
-    let call5 = create_tool_call("call-5", "Glob", json!({
-        "pattern": "[A-Z]*.md"
-    }));
+    let call5 = create_tool_call(
+        "call-5",
+        "Glob",
+        json!({
+            "pattern": "[A-Z]*.md"
+        }),
+    );
 
     match glob_tool.execute(&call5).await {
         Ok(result) => {

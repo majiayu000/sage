@@ -63,9 +63,15 @@ impl Thoroughness {
     /// Get description for prompting
     pub fn description(&self) -> &str {
         match self {
-            Thoroughness::Quick => "Perform a quick search. Focus on the most obvious locations and patterns. Stop early if you find good matches.",
-            Thoroughness::Medium => "Perform a moderate search. Check multiple locations and naming conventions. Balance thoroughness with speed.",
-            Thoroughness::VeryThorough => "Perform a comprehensive search. Check all possible locations, naming patterns, and variations. Be thorough even if it takes longer.",
+            Thoroughness::Quick => {
+                "Perform a quick search. Focus on the most obvious locations and patterns. Stop early if you find good matches."
+            }
+            Thoroughness::Medium => {
+                "Perform a moderate search. Check multiple locations and naming conventions. Balance thoroughness with speed."
+            }
+            Thoroughness::VeryThorough => {
+                "Perform a comprehensive search. Check all possible locations, naming patterns, and variations. Be thorough even if it takes longer."
+            }
         }
     }
 }

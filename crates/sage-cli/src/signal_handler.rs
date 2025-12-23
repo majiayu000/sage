@@ -104,7 +104,9 @@ impl SignalHandler {
                                 AppState::ExecutingTask => {
                                     // During task execution - interrupt the task
                                     // parking_lot::Mutex is used in sage-core, .lock() returns guard directly
-                                    global_interrupt_manager().lock().interrupt(InterruptReason::UserInterrupt);
+                                    global_interrupt_manager()
+                                        .lock()
+                                        .interrupt(InterruptReason::UserInterrupt);
 
                                     // Print a message to let user know the task was interrupted
                                     eprintln!("\n🛑 Interrupting current task... (Ctrl+C)");

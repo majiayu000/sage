@@ -102,8 +102,8 @@ impl WorkspaceAnalyzer {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::detector::LanguageType;
+    use super::*;
     use std::fs;
     use tempfile::TempDir;
 

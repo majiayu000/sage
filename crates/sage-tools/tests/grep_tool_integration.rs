@@ -32,9 +32,12 @@ async fn test_grep_basic_search() {
     let file2 = temp_dir.path().join("file2.txt");
     let file3 = temp_dir.path().join("file3.txt");
 
-    fs::write(&file1, "Hello World\nThis contains the keyword test\nAnother line")
-        .await
-        .unwrap();
+    fs::write(
+        &file1,
+        "Hello World\nThis contains the keyword test\nAnother line",
+    )
+    .await
+    .unwrap();
     fs::write(&file2, "No matches here\nJust plain text")
         .await
         .unwrap();
@@ -358,7 +361,10 @@ async fn test_grep_head_limit() {
 
     if let Some(output) = &result.output {
         // Count only lines that contain "file" and ".txt", excluding summary line
-        let line_count = output.lines().filter(|l| l.contains("file") && l.contains(".txt")).count();
+        let line_count = output
+            .lines()
+            .filter(|l| l.contains("file") && l.contains(".txt"))
+            .count();
         assert_eq!(line_count, 3);
     }
     println!("✓ Head limit correctly limited results to 3 files");
@@ -393,7 +399,10 @@ async fn test_grep_offset() {
 
     if let Some(output) = &result.output {
         // Should skip first 2 files and show next 2
-        let lines: Vec<&str> = output.lines().filter(|l| l.contains("file") && l.contains(".txt")).collect();
+        let lines: Vec<&str> = output
+            .lines()
+            .filter(|l| l.contains("file") && l.contains(".txt"))
+            .collect();
         assert_eq!(lines.len(), 2);
     }
     println!("✓ Offset correctly skipped first 2 results");
@@ -456,9 +465,12 @@ async fn test_grep_multiline_mode() {
     let file = temp_dir.path().join("multiline.txt");
 
     // Create file where pattern exists within single lines
-    fs::write(&file, "start middle end\nsomething else\nstart and middle again")
-        .await
-        .unwrap();
+    fs::write(
+        &file,
+        "start middle end\nsomething else\nstart and middle again",
+    )
+    .await
+    .unwrap();
 
     let tool = GrepTool::with_working_directory(temp_dir.path());
 

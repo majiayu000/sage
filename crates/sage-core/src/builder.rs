@@ -117,7 +117,7 @@ impl SageBuilder {
 
     /// Set configuration from a file path
     pub fn with_config_file(mut self, path: impl Into<PathBuf>) -> SageResult<Self> {
-        let config = crate::config::loader::load_config_from_file(path.into())?;
+        let config = crate::config::load_config_from_file(path.into())?;
         self.config = Some(config);
         Ok(self)
     }

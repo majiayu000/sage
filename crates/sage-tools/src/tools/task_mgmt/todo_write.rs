@@ -4,12 +4,12 @@
 //! Replaces the entire todo list with each call.
 
 use async_trait::async_trait;
+use parking_lot::RwLock;
 use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolResult, ToolSchema};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::Arc;
-use parking_lot::RwLock;
 
 /// Todo item status
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

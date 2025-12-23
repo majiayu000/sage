@@ -78,7 +78,12 @@ mod tests {
         assert_eq!(tool_call.id, "call_abc123");
         assert_eq!(tool_call.name, "get_weather");
         assert_eq!(
-            tool_call.arguments.get("location").unwrap().as_str().unwrap(),
+            tool_call
+                .arguments
+                .get("location")
+                .unwrap()
+                .as_str()
+                .unwrap(),
             "San Francisco"
         );
         assert_eq!(
@@ -222,17 +227,19 @@ mod tests {
         assert!(result.is_ok());
 
         let llm_response = result.unwrap();
-        assert_eq!(
-            llm_response.content,
-            "I'll check the weather for you."
-        );
+        assert_eq!(llm_response.content, "I'll check the weather for you.");
         assert_eq!(llm_response.tool_calls.len(), 1);
 
         let tool_call = &llm_response.tool_calls[0];
         assert_eq!(tool_call.id, "toolu_123");
         assert_eq!(tool_call.name, "get_weather");
         assert_eq!(
-            tool_call.arguments.get("location").unwrap().as_str().unwrap(),
+            tool_call
+                .arguments
+                .get("location")
+                .unwrap()
+                .as_str()
+                .unwrap(),
             "Paris"
         );
         assert_eq!(
@@ -420,10 +427,12 @@ mod tests {
 
         let result = ResponseParser::parse_google(response, "gemini-pro");
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Empty candidates array"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Empty candidates array")
+        );
     }
 
     #[test]
@@ -434,10 +443,7 @@ mod tests {
 
         let result = ResponseParser::parse_google(response, "gemini-pro");
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("No candidates"));
+        assert!(result.unwrap_err().to_string().contains("No candidates"));
     }
 
     #[test]

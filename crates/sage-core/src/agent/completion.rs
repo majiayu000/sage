@@ -267,13 +267,15 @@ impl CompletionChecker {
         // Check if task_done was called
         if let Some(summary) = self.find_task_done_summary(tool_results) {
             // For code tasks, verify file operations were performed
-            if self.task_type.requires_code() && !self.file_tracker.has_file_operations() && self.strict_mode {
+            if self.task_type.requires_code()
+                && !self.file_tracker.has_file_operations()
+                && self.strict_mode
+            {
                 return CompletionStatus::CompletedWithWarning {
                     summary: summary.clone(),
-                    warning:
-                        "Task marked complete but no code files were created or modified. \
+                    warning: "Task marked complete but no code files were created or modified. \
                              This may indicate the task was not fully implemented."
-                            .to_string(),
+                        .to_string(),
                 };
             }
 

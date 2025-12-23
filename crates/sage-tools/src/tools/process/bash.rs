@@ -212,8 +212,8 @@ impl BashTool {
             "rm -rf /",
             "rm -rf /*",
             "rm -rf ~",
-            ":(){ :|:& };:",  // Fork bomb
-            ":(){:|:&};:",    // Fork bomb variant (no spaces)
+            ":(){ :|:& };:", // Fork bomb
+            ":(){:|:&};:",   // Fork bomb variant (no spaces)
             "dd if=/dev/zero",
             "dd if=/dev/random",
             "mkfs",
@@ -244,7 +244,9 @@ impl BashTool {
         // Privilege escalation commands
         let privilege_commands = ["sudo ", "su ", "doas ", "pkexec "];
         for pattern in &privilege_commands {
-            if command_lower.starts_with(pattern) || command_lower.contains(&format!(" {}", pattern.trim())) {
+            if command_lower.starts_with(pattern)
+                || command_lower.contains(&format!(" {}", pattern.trim()))
+            {
                 return Err(ToolError::PermissionDenied(format!(
                     "Privilege escalation command not allowed: {}",
                     pattern.trim()
@@ -255,9 +257,9 @@ impl BashTool {
         // Check for command substitution which could bypass validation
         // These allow executing arbitrary commands within the main command
         let substitution_patterns = [
-            "$(",     // Modern command substitution
-            "`",      // Legacy command substitution (backticks)
-            "${",     // Variable expansion with commands
+            "$(", // Modern command substitution
+            "`",  // Legacy command substitution (backticks)
+            "${", // Variable expansion with commands
         ];
 
         for pattern in &substitution_patterns {
@@ -273,9 +275,9 @@ impl BashTool {
         // Note: We allow pipes (|) and redirects (>, <) as they are commonly needed
         // but block command separators that could run arbitrary commands
         let dangerous_operators = [
-            ";",      // Command separator - runs multiple commands
-            "&&",     // Logical AND - runs second command if first succeeds
-            "||",     // Logical OR - runs second command if first fails
+            ";",  // Command separator - runs multiple commands
+            "&&", // Logical AND - runs second command if first succeeds
+            "||", // Logical OR - runs second command if first fails
         ];
 
         for op in &dangerous_operators {
@@ -618,11 +620,7 @@ mod tests {
     #[test]
     fn test_command_substitution_blocked() {
         // Test command substitution is blocked
-        let subst_commands = vec![
-            "echo $(whoami)",
-            "echo `id`",
-            "echo ${PATH}",
-        ];
+        let subst_commands = vec!["echo $(whoami)", "echo `id`", "echo ${PATH}"];
 
         for cmd in subst_commands {
             let result = BashTool::validate_command_security(cmd);

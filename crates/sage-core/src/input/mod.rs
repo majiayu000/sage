@@ -62,7 +62,7 @@ pub use request::{InputRequest, InputRequestKind, LegacyInputRequest};
 pub use response::{InputResponse, InputResponseKind, LegacyInputResponse};
 
 // Auto-response types
-pub use auto_response::{AutoResponse, AutoResponder};
+pub use auto_response::{AutoResponder, AutoResponse};
 
 // Channel types
 pub use channel::{InputChannel, InputChannelHandle};

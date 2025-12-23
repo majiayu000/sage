@@ -1,7 +1,7 @@
 //! Basic usage example for Sage Agent SDK
 
+use sage_sdk::{RunOptions, SageAgentSDK};
 use std::error::Error;
-use sage_sdk::{SageAgentSDK, RunOptions};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -19,11 +19,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Simple task execution
     println!("\n📝 Running a simple task...");
-    let result = sdk.run("Create a simple hello world Python script named hello.py").await?;
+    let result = sdk
+        .run("Create a simple hello world Python script named hello.py")
+        .await?;
 
     if result.is_success() {
         println!("✅ Task completed successfully!");
-        
+
         // Print execution statistics
         let stats = result.statistics();
         println!("📊 Execution Stats:");
@@ -31,7 +33,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         println!("   Tokens: {}", result.execution().total_usage.total_tokens);
 
         if let Some(duration) = result.execution().duration() {
-            println!("   Duration: {:.2}s", duration.num_milliseconds() as f64 / 1000.0);
+            println!(
+                "   Duration: {:.2}s",
+                duration.num_milliseconds() as f64 / 1000.0
+            );
         }
 
         // Print final result
@@ -49,7 +54,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     } else {
         println!("❌ Task failed!");
-        
+
         // Print error steps
         let error_steps = result.error_steps();
         if !error_steps.is_empty() {
@@ -70,14 +75,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .with_trajectory_path("./examples/sage_example.json")
         .with_metadata("example_type", "basic_usage");
 
-    let result2 = sdk.run_with_options(
-        "List all Python files in the current directory and show their sizes",
-        run_options,
-    ).await?;
+    let result2 = sdk
+        .run_with_options(
+            "List all Python files in the current directory and show their sizes",
+            run_options,
+        )
+        .await?;
 
     if result2.is_success() {
         println!("✅ Second task completed!");
-        
+
         if let Some(trajectory_path) = result2.trajectory_path() {
             println!("📁 Trajectory saved to: {}", trajectory_path.display());
         }

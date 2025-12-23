@@ -43,22 +43,22 @@ impl ResponseParser {
         }
 
         let usage = response["usage"].as_object().map(|usage_data| LLMUsage {
-                prompt_tokens: usage_data
-                    .get("prompt_tokens")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0) as u32,
-                completion_tokens: usage_data
-                    .get("completion_tokens")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0) as u32,
-                total_tokens: usage_data
-                    .get("total_tokens")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0) as u32,
-                cost_usd: None,
-                cache_creation_input_tokens: None,
-                cache_read_input_tokens: None,
-            });
+            prompt_tokens: usage_data
+                .get("prompt_tokens")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as u32,
+            completion_tokens: usage_data
+                .get("completion_tokens")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as u32,
+            total_tokens: usage_data
+                .get("total_tokens")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as u32,
+            cost_usd: None,
+            cache_creation_input_tokens: None,
+            cache_read_input_tokens: None,
+        });
 
         Ok(LLMResponse {
             content,

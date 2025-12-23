@@ -4,8 +4,8 @@ use super::*;
 use crate::agent::{AgentState, AgentStep};
 use crate::types::TaskMetadata;
 use async_trait::async_trait;
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 use tokio::sync::RwLock;
 
 struct CountingHook {

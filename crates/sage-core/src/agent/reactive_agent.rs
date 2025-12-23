@@ -176,14 +176,18 @@ impl ClaudeStyleAgent {
     /// Create a new Claude-style agent
     pub fn new(config: Config) -> SageResult<Self> {
         // Initialize LLM client
-        let default_params = config.default_model_parameters()
+        let default_params = config
+            .default_model_parameters()
             .context("Failed to retrieve default model parameters from configuration")?;
         let provider_name = config.get_default_provider();
 
         let provider: LLMProvider = provider_name
             .parse()
             .map_err(|_| SageError::config(format!("Invalid provider: {}", provider_name)))
-            .context(format!("Failed to parse provider name '{}' into a valid LLM provider", provider_name))?;
+            .context(format!(
+                "Failed to parse provider name '{}' into a valid LLM provider",
+                provider_name
+            ))?;
 
         let mut provider_config = crate::config::provider::ProviderConfig::new(provider_name)
             .with_api_key(default_params.get_api_key().unwrap_or_default())
@@ -196,8 +200,11 @@ impl ClaudeStyleAgent {
         }
 
         let model_params = default_params.to_llm_parameters();
-        let llm_client = LLMClient::new(provider, provider_config, model_params)
-            .context(format!("Failed to create LLM client for provider: {}", provider_name))?;
+        let llm_client =
+            LLMClient::new(provider, provider_config, model_params).context(format!(
+                "Failed to create LLM client for provider: {}",
+                provider_name
+            ))?;
 
         // Initialize batch tool executor
         let batch_executor = BatchToolExecutor::new();
@@ -278,7 +285,11 @@ impl ClaudeStyleAgent {
     /// Check if we can continue execution (budget and step limits)
     fn can_continue(&self) -> Result<(), SageError> {
         // Check step limit (None = unlimited)
-        if let Some(max_steps) = self.config.max_steps.filter(|&max| self.current_step >= max) {
+        if let Some(max_steps) = self
+            .config
+            .max_steps
+            .filter(|&max| self.current_step >= max)
+        {
             return Err(SageError::agent(format!(
                 "Max steps ({}) reached. Total tokens used: {} (input: {}, output: {})",
                 max_steps,
@@ -506,7 +517,10 @@ impl ReactiveExecutionManager {
         // Continue if not completed and there's a continuation prompt
         // SAFETY: responses is never empty here since we just pushed a response above
         if !completed {
-            if let Some(continuation) = responses.last().and_then(|r| r.continuation_prompt.as_ref()) {
+            if let Some(continuation) = responses
+                .last()
+                .and_then(|r| r.continuation_prompt.as_ref())
+            {
                 let last_response = responses.last().unwrap();
                 let follow_up = self
                     .agent

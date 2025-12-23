@@ -170,7 +170,9 @@ pub fn show_step_header(step: u32, max_steps: u32) {
     let percent = (step as f32 / max_steps as f32 * 100.0) as u32;
     println!(
         "🚀 {} [{}] {}%",
-        step_text, progress_bar, percent.to_string().blue()
+        step_text,
+        progress_bar,
+        percent.to_string().blue()
     );
     println!("{}", "═".repeat(60).blue());
 }

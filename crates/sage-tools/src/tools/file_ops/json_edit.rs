@@ -42,8 +42,9 @@ impl JsonEditTool {
             )));
         }
 
-        let content = fs::read_to_string(&path).await
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to read JSON file '{}': {}", file_path, e)))?;
+        let content = fs::read_to_string(&path).await.map_err(|e| {
+            ToolError::ExecutionFailed(format!("Failed to read JSON file '{}': {}", file_path, e))
+        })?;
 
         serde_json::from_str(&content).map_err(|e| {
             ToolError::ExecutionFailed(format!("Invalid JSON in file {}: {}", file_path, e))
@@ -65,16 +66,21 @@ impl JsonEditTool {
         let content = serde_json::to_string_pretty(json)
             .map_err(|e| ToolError::ExecutionFailed(format!("Failed to serialize JSON: {}", e)))?;
 
-        fs::write(&path, content).await
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to write JSON file '{}': {}", file_path, e)))?;
+        fs::write(&path, content).await.map_err(|e| {
+            ToolError::ExecutionFailed(format!("Failed to write JSON file '{}': {}", file_path, e))
+        })?;
 
         Ok(())
     }
 
     /// Query JSON using JSONPath
     async fn query_json(&self, file_path: &str, json_path: &str) -> Result<ToolResult, ToolError> {
-        let json = self.read_json(file_path).await
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to read JSON for query from '{}': {}", file_path, e)))?;
+        let json = self.read_json(file_path).await.map_err(|e| {
+            ToolError::ExecutionFailed(format!(
+                "Failed to read JSON for query from '{}': {}",
+                file_path, e
+            ))
+        })?;
 
         let finder = JsonPathFinder::from_str(&json.to_string(), json_path).map_err(|e| {
             ToolError::InvalidArguments(format!("Invalid JSONPath '{}': {}", json_path, e))
@@ -101,8 +107,12 @@ impl JsonEditTool {
         json_path: &str,
         new_value: &str,
     ) -> Result<ToolResult, ToolError> {
-        let mut json = self.read_json(file_path).await
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to read JSON for editing from '{}': {}", file_path, e)))?;
+        let mut json = self.read_json(file_path).await.map_err(|e| {
+            ToolError::ExecutionFailed(format!(
+                "Failed to read JSON for editing from '{}': {}",
+                file_path, e
+            ))
+        })?;
 
         // Parse the new value
         let new_val: serde_json::Value = if new_value.starts_with('"') && new_value.ends_with('"') {
@@ -145,8 +155,12 @@ impl JsonEditTool {
             self.set_json_value(&mut json, &path_parts, new_val)?;
         }
 
-        self.write_json(file_path, &json).await
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to write edited JSON to '{}': {}", file_path, e)))?;
+        self.write_json(file_path, &json).await.map_err(|e| {
+            ToolError::ExecutionFailed(format!(
+                "Failed to write edited JSON to '{}': {}",
+                file_path, e
+            ))
+        })?;
 
         Ok(ToolResult::success(
             "",
@@ -249,8 +263,12 @@ impl Tool for JsonEditTool {
 
         let mut result = match command.as_str() {
             "read" => {
-                let json = self.read_json(&path).await
-                    .map_err(|e| ToolError::ExecutionFailed(format!("Failed to read JSON file '{}': {}", path, e)))?;
+                let json = self.read_json(&path).await.map_err(|e| {
+                    ToolError::ExecutionFailed(format!(
+                        "Failed to read JSON file '{}': {}",
+                        path, e
+                    ))
+                })?;
                 ToolResult::success(
                     "",
                     self.name(),
@@ -267,8 +285,9 @@ impl Tool for JsonEditTool {
                         "Missing 'json_path' parameter for query".to_string(),
                     )
                 })?;
-                self.query_json(&path, &json_path).await
-                    .map_err(|e| ToolError::ExecutionFailed(format!("Failed to query JSON at '{}': {}", path, e)))?
+                self.query_json(&path, &json_path).await.map_err(|e| {
+                    ToolError::ExecutionFailed(format!("Failed to query JSON at '{}': {}", path, e))
+                })?
             }
             "edit" => {
                 let json_path = call.get_string("json_path").ok_or_else(|| {
@@ -281,8 +300,14 @@ impl Tool for JsonEditTool {
                         "Missing 'new_value' parameter for edit".to_string(),
                     )
                 })?;
-                self.edit_json(&path, &json_path, &new_value).await
-                    .map_err(|e| ToolError::ExecutionFailed(format!("Failed to edit JSON at '{}': {}", path, e)))?
+                self.edit_json(&path, &json_path, &new_value)
+                    .await
+                    .map_err(|e| {
+                        ToolError::ExecutionFailed(format!(
+                            "Failed to edit JSON at '{}': {}",
+                            path, e
+                        ))
+                    })?
             }
             _ => {
                 return Err(ToolError::InvalidArguments(format!(

@@ -171,7 +171,8 @@ impl SchemaTranslator {
 
         let enum_values = obj
             .and_then(|o| o.get("enum"))
-            .and_then(|e| e.as_array()).cloned();
+            .and_then(|e| e.as_array())
+            .cloned();
 
         let mut properties = HashMap::new();
 

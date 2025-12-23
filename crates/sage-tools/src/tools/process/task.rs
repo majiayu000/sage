@@ -4,6 +4,7 @@
 //! Now with actual execution support via SubAgentRunner.
 
 use async_trait::async_trait;
+use parking_lot::RwLock;
 use sage_core::agent::subagent::{AgentType, SubAgentConfig, Thoroughness, execute_subagent};
 use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolResult, ToolSchema};
@@ -11,7 +12,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
-use parking_lot::RwLock;
 use uuid::Uuid;
 
 /// Task request for subagent execution
@@ -333,8 +333,8 @@ Usage notes:
             })
         } else {
             // Synchronous execution - actually run the subagent
-            let config = SubAgentConfig::new(agent_type, prompt.clone())
-                .with_thoroughness(thoroughness);
+            let config =
+                SubAgentConfig::new(agent_type, prompt.clone()).with_thoroughness(thoroughness);
 
             match execute_subagent(config).await {
                 Ok(result) => {

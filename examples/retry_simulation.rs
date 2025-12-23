@@ -7,8 +7,8 @@ use sage_core::{
     config::provider::ProviderConfig,
     error::SageError,
     llm::{
-        client::LLMClient, messages::LLMMessage, provider_types::ModelParameters, LLMProvider,
-        TimeoutConfig,
+        LLMProvider, TimeoutConfig, client::LLMClient, messages::LLMMessage,
+        provider_types::ModelParameters,
     },
 };
 use std::time::Instant;

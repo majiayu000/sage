@@ -309,7 +309,8 @@ mod tests {
             Arc::new(MockTool::new("tool3")),
         ]);
 
-        let schemas = executor.get_schemas_for_tools(&vec!["tool1".to_string(), "tool3".to_string()]);
+        let schemas =
+            executor.get_schemas_for_tools(&vec!["tool1".to_string(), "tool3".to_string()]);
         assert_eq!(schemas.len(), 2);
 
         let names: Vec<String> = schemas.iter().map(|s| s.name.clone()).collect();
@@ -358,9 +359,7 @@ mod tests {
             Arc::new(MockTool::new("tool3")),
         ];
 
-        let executor = ToolExecutorBuilder::new()
-            .with_tools(tools)
-            .build();
+        let executor = ToolExecutorBuilder::new().with_tools(tools).build();
 
         assert_eq!(executor.tool_names().len(), 3);
     }

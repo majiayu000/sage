@@ -284,10 +284,7 @@ impl SageError {
     }
 
     /// Create an invalid input error with field
-    pub fn invalid_input_field(
-        message: impl Into<String>,
-        field: impl Into<String>,
-    ) -> Self {
+    pub fn invalid_input_field(message: impl Into<String>, field: impl Into<String>) -> Self {
         Self::InvalidInput {
             message: message.into(),
             field: Some(field.into()),
@@ -547,12 +544,10 @@ impl From<crate::validation::ValidationError> for SageError {
 impl From<crate::workspace::WorkspaceError> for SageError {
     fn from(error: crate::workspace::WorkspaceError) -> Self {
         match error {
-            crate::workspace::WorkspaceError::DirectoryNotFound(path) => {
-                Self::not_found_resource(
-                    format!("Directory not found: {}", path.display()),
-                    "directory",
-                )
-            }
+            crate::workspace::WorkspaceError::DirectoryNotFound(path) => Self::not_found_resource(
+                format!("Directory not found: {}", path.display()),
+                "directory",
+            ),
             crate::workspace::WorkspaceError::NotADirectory(path) => {
                 Self::invalid_input(format!("Not a directory: {}", path.display()))
             }
@@ -633,9 +628,7 @@ impl From<crate::sandbox::SandboxError> for SageError {
             SandboxError::PermissionDenied(msg) => {
                 Self::tool("sandbox", format!("Permission denied: {}", msg))
             }
-            SandboxError::Internal(msg) => {
-                Self::agent(format!("Sandbox internal error: {}", msg))
-            }
+            SandboxError::Internal(msg) => Self::agent(format!("Sandbox internal error: {}", msg)),
         }
     }
 }

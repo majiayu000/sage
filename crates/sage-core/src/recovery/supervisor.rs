@@ -163,12 +163,8 @@ impl TaskSupervisor {
                             attempt: self.restart_count,
                         }
                     }
-                    SupervisionAction::Resume => {
-                        SupervisionResult::Resumed { error: recoverable }
-                    }
-                    SupervisionAction::Stop => {
-                        SupervisionResult::Stopped { error: recoverable }
-                    }
+                    SupervisionAction::Resume => SupervisionResult::Resumed { error: recoverable },
+                    SupervisionAction::Stop => SupervisionResult::Stopped { error: recoverable },
                     SupervisionAction::Escalate => {
                         SupervisionResult::Escalated { error: recoverable }
                     }
@@ -253,7 +249,6 @@ impl TaskSupervisor {
         let multiplier = 2.0_f64;
 
         let delay_ms = base.as_millis() as f64 * multiplier.powi(self.restart_count as i32);
-        
 
         Duration::from_millis(delay_ms.min(max.as_millis() as f64) as u64)
     }

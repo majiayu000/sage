@@ -9,7 +9,7 @@ use sage_core::tools::types::{ToolCall, ToolResult, ToolSchema};
 use serde_json::json;
 use std::sync::Arc;
 
-use super::todo_write::{TodoList, TodoStatus, GLOBAL_TODO_LIST};
+use super::todo_write::{GLOBAL_TODO_LIST, TodoList, TodoStatus};
 
 /// TodoRead tool - Read current task list
 pub struct TodoReadTool {
@@ -89,7 +89,8 @@ impl Tool for TodoReadTool {
 
         if todos.is_empty() {
             output.push_str("No tasks in todo list.\n\n");
-            output.push_str("Use TodoWrite to create tasks when working on complex multi-step work.");
+            output
+                .push_str("Use TodoWrite to create tasks when working on complex multi-step work.");
         } else {
             output.push_str(&format!(
                 "## Todo List Status\n\n**Total**: {} | **Completed**: {} | **In Progress**: {} | **Pending**: {}\n\n",
@@ -134,8 +135,8 @@ impl Tool for TodoReadTool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::todo_write::TodoItem;
+    use super::*;
 
     #[tokio::test]
     async fn test_todo_read_empty() {

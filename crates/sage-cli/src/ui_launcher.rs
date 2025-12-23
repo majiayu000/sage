@@ -74,9 +74,7 @@ fn check_nodejs_available() -> SageResult<()> {
         })?;
 
     if !output.status.success() {
-        return Err(SageError::other(
-            "Node.js is not working properly",
-        ));
+        return Err(SageError::other("Node.js is not working properly"));
     }
 
     let version = String::from_utf8_lossy(&output.stdout);

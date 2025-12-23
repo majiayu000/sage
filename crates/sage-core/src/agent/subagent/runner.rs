@@ -36,7 +36,8 @@ impl SubAgentRunner {
     /// Create a new sub-agent runner from configuration
     pub fn from_config(config: &Config, tools: Vec<Arc<dyn Tool>>) -> SageResult<Self> {
         // Get default provider configuration
-        let default_params = config.default_model_parameters()
+        let default_params = config
+            .default_model_parameters()
             .context("Failed to retrieve default model parameters from configuration")?;
         let provider_name = config.get_default_provider();
 
@@ -44,7 +45,10 @@ impl SubAgentRunner {
         let provider: LLMProvider = provider_name
             .parse()
             .map_err(|_| SageError::config(format!("Invalid provider: {}", provider_name)))
-            .context(format!("Failed to parse provider name '{}' into a valid LLM provider for sub-agent", provider_name))?;
+            .context(format!(
+                "Failed to parse provider name '{}' into a valid LLM provider for sub-agent",
+                provider_name
+            ))?;
 
         // Create provider config
         let mut provider_config = ProviderConfig::new(provider_name)
@@ -61,8 +65,11 @@ impl SubAgentRunner {
         let model_params = default_params.to_llm_parameters();
 
         // Create LLM client
-        let llm_client = LLMClient::new(provider, provider_config, model_params)
-            .context(format!("Failed to create LLM client for sub-agent runner with provider: {}", provider_name))?;
+        let llm_client =
+            LLMClient::new(provider, provider_config, model_params).context(format!(
+                "Failed to create LLM client for sub-agent runner with provider: {}",
+                provider_name
+            ))?;
 
         Ok(Self {
             llm_client,

@@ -19,9 +19,8 @@ pub use super::conversation::{ConversationMessage, SessionToolCall, SessionToolR
 
 // Re-export enhanced message types
 pub use super::enhanced::{
-    EnhancedMessage, EnhancedMessageType, EnhancedTokenUsage, EnhancedToolCall,
-    EnhancedToolResult, MessageContent, SessionContext, ThinkingLevel, ThinkingMetadata,
-    TodoItem, TodoStatus,
+    EnhancedMessage, EnhancedMessageType, EnhancedTokenUsage, EnhancedToolCall, EnhancedToolResult,
+    MessageContent, SessionContext, ThinkingLevel, ThinkingMetadata, TodoItem, TodoStatus,
 };
 
 // Re-export file tracking types

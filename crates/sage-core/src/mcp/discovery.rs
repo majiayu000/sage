@@ -351,9 +351,10 @@ impl Default for McpServerManager {
 fn server_config_to_transport(config: &McpServerConfig) -> Result<TransportConfig, McpError> {
     match config.transport.as_str() {
         "stdio" => {
-            let command = config.command.as_ref().ok_or_else(|| {
-                McpError::invalid_request("Stdio transport requires command")
-            })?;
+            let command = config
+                .command
+                .as_ref()
+                .ok_or_else(|| McpError::invalid_request("Stdio transport requires command"))?;
 
             Ok(TransportConfig::Stdio {
                 command: command.clone(),
@@ -373,9 +374,10 @@ fn server_config_to_transport(config: &McpServerConfig) -> Result<TransportConfi
             })
         }
         "websocket" => {
-            let url = config.url.as_ref().ok_or_else(|| {
-                McpError::invalid_request("WebSocket transport requires url")
-            })?;
+            let url = config
+                .url
+                .as_ref()
+                .ok_or_else(|| McpError::invalid_request("WebSocket transport requires url"))?;
 
             Ok(TransportConfig::WebSocket { url: url.clone() })
         }

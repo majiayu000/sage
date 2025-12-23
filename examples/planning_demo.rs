@@ -3,11 +3,11 @@
 //! This example demonstrates the planning mode tools which allow the agent
 //! to switch between planning and execution modes.
 
-use sage_tools::tools::{EnterPlanModeTool, ExitPlanModeTool};
 use sage_core::tools::base::Tool;
 use sage_core::tools::types::ToolCall;
-use std::collections::HashMap;
+use sage_tools::tools::{EnterPlanModeTool, ExitPlanModeTool};
 use serde_json::json;
+use std::collections::HashMap;
 
 #[tokio::main]
 async fn main() {

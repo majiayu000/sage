@@ -123,14 +123,17 @@ impl McpTransport for StdioTransport {
         }
 
         // Parse the JSON
-        let message: McpMessage = serde_json::from_str(self.line_buffer.trim())
-            .map_err(|e| {
-                McpError::serialization(format!(
-                    "Failed to parse MCP message: {}. Raw input: {}",
-                    e,
-                    self.line_buffer.trim().chars().take(200).collect::<String>()
-                ))
-            })?;
+        let message: McpMessage = serde_json::from_str(self.line_buffer.trim()).map_err(|e| {
+            McpError::serialization(format!(
+                "Failed to parse MCP message: {}. Raw input: {}",
+                e,
+                self.line_buffer
+                    .trim()
+                    .chars()
+                    .take(200)
+                    .collect::<String>()
+            ))
+        })?;
 
         Ok(message)
     }

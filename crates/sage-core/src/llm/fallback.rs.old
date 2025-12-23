@@ -860,10 +860,7 @@ mod tests {
         // Generate more than max_history events
         for i in 0..10 {
             chain
-                .record_failure(
-                    "m1",
-                    FallbackReason::Error(format!("error {}", i)),
-                )
+                .record_failure("m1", FallbackReason::Error(format!("error {}", i)))
                 .await;
         }
 
@@ -954,10 +951,7 @@ mod tests {
     #[tokio::test]
     async fn test_builder_add_method() {
         let config = ModelConfig::new("test", "provider");
-        let chain = FallbackChainBuilder::new()
-            .add(config)
-            .build()
-            .await;
+        let chain = FallbackChainBuilder::new().add(config).build().await;
 
         assert_eq!(chain.model_count().await, 1);
     }

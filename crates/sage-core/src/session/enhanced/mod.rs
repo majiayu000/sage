@@ -6,6 +6,6 @@ pub mod message;
 // Re-export all types for convenience
 pub use context::{SessionContext, ThinkingLevel, ThinkingMetadata, TodoItem, TodoStatus};
 pub use message::{
-    EnhancedMessage, EnhancedMessageType, EnhancedTokenUsage, EnhancedToolCall,
-    EnhancedToolResult, MessageContent,
+    EnhancedMessage, EnhancedMessageType, EnhancedTokenUsage, EnhancedToolCall, EnhancedToolResult,
+    MessageContent,
 };

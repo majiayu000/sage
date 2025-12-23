@@ -184,39 +184,51 @@ mod tests {
     fn test_validate_bash_cat() {
         let validator = ToolUsageValidator::new();
         assert!(validator.validate_bash_command("cat file.txt").is_err());
-        assert!(validator.validate_bash_command("cat /path/to/file").is_err());
+        assert!(
+            validator
+                .validate_bash_command("cat /path/to/file")
+                .is_err()
+        );
     }
 
     #[test]
     fn test_validate_bash_echo_redirect() {
         let validator = ToolUsageValidator::new();
-        assert!(validator
-            .validate_bash_command("echo 'content' > file.txt")
-            .is_err());
+        assert!(
+            validator
+                .validate_bash_command("echo 'content' > file.txt")
+                .is_err()
+        );
     }
 
     #[test]
     fn test_validate_bash_sed() {
         let validator = ToolUsageValidator::new();
-        assert!(validator
-            .validate_bash_command("sed -i 's/old/new/' file.txt")
-            .is_err());
+        assert!(
+            validator
+                .validate_bash_command("sed -i 's/old/new/' file.txt")
+                .is_err()
+        );
     }
 
     #[test]
     fn test_validate_bash_find() {
         let validator = ToolUsageValidator::new();
-        assert!(validator
-            .validate_bash_command("find . -name '*.rs'")
-            .is_err());
+        assert!(
+            validator
+                .validate_bash_command("find . -name '*.rs'")
+                .is_err()
+        );
     }
 
     #[test]
     fn test_validate_bash_grep() {
         let validator = ToolUsageValidator::new();
-        assert!(validator
-            .validate_bash_command("grep 'pattern' file.txt")
-            .is_err());
+        assert!(
+            validator
+                .validate_bash_command("grep 'pattern' file.txt")
+                .is_err()
+        );
     }
 
     #[test]
@@ -232,18 +244,26 @@ mod tests {
     fn test_validate_tool_selection() {
         let validator = ToolUsageValidator::new();
 
-        assert!(validator
-            .validate_tool_selection("Bash", "read file contents")
-            .is_err());
-        assert!(validator
-            .validate_tool_selection("Bash", "write file data")
-            .is_err());
-        assert!(validator
-            .validate_tool_selection("Bash", "edit file content")
-            .is_err());
+        assert!(
+            validator
+                .validate_tool_selection("Bash", "read file contents")
+                .is_err()
+        );
+        assert!(
+            validator
+                .validate_tool_selection("Bash", "write file data")
+                .is_err()
+        );
+        assert!(
+            validator
+                .validate_tool_selection("Bash", "edit file content")
+                .is_err()
+        );
 
-        assert!(validator
-            .validate_tool_selection("Bash", "run git command")
-            .is_ok());
+        assert!(
+            validator
+                .validate_tool_selection("Bash", "run git command")
+                .is_ok()
+        );
     }
 }

@@ -172,10 +172,7 @@ impl UnifiedError for LifecycleError {
     }
 
     fn is_retryable(&self) -> bool {
-        matches!(
-            self,
-            Self::HookFailed { .. } | Self::ShutdownFailed { .. }
-        )
+        matches!(self, Self::HookFailed { .. } | Self::ShutdownFailed { .. })
     }
 }
 

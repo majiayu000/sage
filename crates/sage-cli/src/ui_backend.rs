@@ -74,7 +74,9 @@ impl SageUIBackend {
 
         let sdk_guard = self.sdk.lock().await;
         // SAFETY: get_or_create_sdk() ensures SDK is initialized before returning Ok
-        let sdk = sdk_guard.as_ref().expect("SDK must be initialized after get_or_create_sdk");
+        let sdk = sdk_guard
+            .as_ref()
+            .expect("SDK must be initialized after get_or_create_sdk");
 
         // Execute the task
         match sdk.run(&request.message).await {

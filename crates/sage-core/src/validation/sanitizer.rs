@@ -186,7 +186,6 @@ impl InputSanitizer {
         }
 
         // Also remove common dangerous patterns
-        
 
         result
             .replace("javascript:", "")

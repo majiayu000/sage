@@ -1,12 +1,14 @@
 //! Configuration loading and management
 
-use crate::config::model::{Config, ModelParameters};
-use crate::error::{SageError, SageResult};
-use serde_json;
+use crate::config::model::Config;
+use crate::error::SageResult;
 use std::collections::HashMap;
-use std::env;
-use std::fs;
 use std::path::{Path, PathBuf};
+
+// Import the delegated loading functions
+use super::args_loader;
+use super::env_loader;
+use super::file_loader;
 
 /// Source of configuration data
 #[derive(Debug, Clone)]
@@ -84,19 +86,19 @@ impl ConfigLoader {
         match source {
             ConfigSource::File(path) => {
                 tracing::debug!("Loading config from file: {}", path.display());
-                let config = self.load_from_file(path)?;
+                let config = file_loader::load_from_file(path)?;
                 tracing::debug!("File config provider: {}", config.default_provider);
                 Ok(config)
             }
             ConfigSource::Environment => {
                 tracing::debug!("Loading config from environment");
-                let config = self.load_from_env()?;
+                let config = env_loader::load_from_env()?;
                 tracing::debug!("Env config provider: {}", config.default_provider);
                 Ok(config)
             }
             ConfigSource::CommandLine(args) => {
                 tracing::debug!("Loading config from command line");
-                self.load_from_args(args)
+                args_loader::load_from_args(args)
             }
             ConfigSource::Default => {
                 tracing::debug!("Loading default config");
@@ -106,265 +108,12 @@ impl ConfigLoader {
             }
         }
     }
-
-    /// Load configuration from a file
-    fn load_from_file(&self, path: &Path) -> SageResult<Config> {
-        if !path.exists() {
-            return Ok(Config::default());
-        }
-
-        let content = fs::read_to_string(path)
-            .map_err(|e| SageError::config_with_context(
-                format!("Failed to read config file: {}", e),
-                format!("Reading configuration from '{}'", path.display())
-            ))?;
-
-        let config: Config = match path.extension().and_then(|s| s.to_str()) {
-            Some("toml") => toml::from_str(&content)
-                .map_err(|e| SageError::config_with_context(
-                    format!("Failed to parse TOML config: {}", e),
-                    format!("Deserializing TOML configuration from '{}'", path.display())
-                ))?,
-            Some("yaml") | Some("yml") => serde_yaml::from_str(&content)
-                .map_err(|e| SageError::config_with_context(
-                    format!("Failed to parse YAML config: {}", e),
-                    format!("Deserializing YAML configuration from '{}'", path.display())
-                ))?,
-            _ => serde_json::from_str(&content)
-                .map_err(|e| SageError::config_with_context(
-                    format!("Failed to parse JSON config: {}", e),
-                    format!("Deserializing JSON configuration from '{}'", path.display())
-                ))?,
-        };
-
-        Ok(config)
-    }
-
-    /// Load configuration from environment variables
-    fn load_from_env(&self) -> SageResult<Config> {
-        let mut config = Config {
-            default_provider: String::new(), // Don't set default here
-            max_steps: None,                 // None = unlimited
-            total_token_budget: None,
-            model_providers: HashMap::new(),
-            lakeview_config: None,
-            enable_lakeview: false,
-            working_directory: None,
-            tools: crate::config::model::ToolConfig {
-                enabled_tools: Vec::new(),
-                tool_settings: HashMap::new(),
-                max_execution_time: 0,
-                allow_parallel_execution: false,
-            },
-            logging: crate::config::model::LoggingConfig::default(),
-            trajectory: crate::config::model::TrajectoryConfig::default(),
-            mcp: crate::config::model::McpConfig::default(),
-        };
-
-        // Load provider settings
-        if let Ok(provider) = env::var("SAGE_DEFAULT_PROVIDER") {
-            config.default_provider = provider;
-        }
-
-        if let Ok(max_steps_str) = env::var("SAGE_MAX_STEPS") {
-            let max_steps: u32 = max_steps_str
-                .parse()
-                .map_err(|_| SageError::config("Invalid SAGE_MAX_STEPS value"))?;
-            config.max_steps = Some(max_steps);
-        }
-
-        // Load model parameters for different providers
-        self.load_provider_from_env(&mut config, "openai", "OPENAI")?;
-        self.load_provider_from_env(&mut config, "anthropic", "ANTHROPIC")?;
-        self.load_provider_from_env(&mut config, "google", "GOOGLE")?;
-        self.load_provider_from_env(&mut config, "ollama", "OLLAMA")?;
-
-        // Load working directory
-        if let Ok(working_dir) = env::var("SAGE_WORKING_DIR") {
-            config.working_directory = Some(PathBuf::from(working_dir));
-        }
-
-        // Load Lakeview settings
-        if let Ok(enable_lakeview) = env::var("SAGE_ENABLE_LAKEVIEW") {
-            config.enable_lakeview = enable_lakeview.parse().unwrap_or(false);
-        }
-
-        Ok(config)
-    }
-
-    /// Load provider configuration from environment variables
-    fn load_provider_from_env(
-        &self,
-        config: &mut Config,
-        provider: &str,
-        env_prefix: &str,
-    ) -> SageResult<()> {
-        let mut params = ModelParameters::default();
-        let mut has_config = false;
-
-        // API Key
-        if let Ok(api_key) = env::var(format!("{}_API_KEY", env_prefix)) {
-            params.api_key = Some(api_key);
-            has_config = true;
-        }
-
-        // Model
-        if let Ok(model) = env::var(format!("{}_MODEL", env_prefix)) {
-            params.model = model;
-            has_config = true;
-        }
-
-        // Base URL
-        if let Ok(base_url) = env::var(format!("{}_BASE_URL", env_prefix)) {
-            params.base_url = Some(base_url);
-            has_config = true;
-        }
-
-        // Temperature
-        if let Ok(temp) = env::var(format!("{}_TEMPERATURE", env_prefix)) {
-            params.temperature = Some(temp.parse()
-                .map_err(|_| SageError::config_with_context(
-                    format!("Invalid {}_TEMPERATURE value", env_prefix),
-                    format!("Parsing temperature value '{}' for provider '{}'", temp, provider)
-                ))?);
-            has_config = true;
-        }
-
-        // Max tokens
-        if let Ok(max_tokens) = env::var(format!("{}_MAX_TOKENS", env_prefix)) {
-            params.max_tokens = Some(max_tokens.parse()
-                .map_err(|_| SageError::config_with_context(
-                    format!("Invalid {}_MAX_TOKENS value", env_prefix),
-                    format!("Parsing max_tokens value '{}' for provider '{}'", max_tokens, provider)
-                ))?);
-            has_config = true;
-        }
-
-        if has_config {
-            config.model_providers.insert(provider.to_string(), params);
-        }
-
-        Ok(())
-    }
-
-    /// Load configuration from command line arguments
-    fn load_from_args(&self, args: &HashMap<String, String>) -> SageResult<Config> {
-        let mut config = Config {
-            default_provider: String::new(), // Don't set default here
-            max_steps: None,                 // None = unlimited
-            total_token_budget: None,
-            model_providers: HashMap::new(),
-            lakeview_config: None,
-            enable_lakeview: false,
-            working_directory: None,
-            tools: crate::config::model::ToolConfig {
-                enabled_tools: Vec::new(),
-                tool_settings: HashMap::new(),
-                max_execution_time: 0,
-                allow_parallel_execution: false,
-            },
-            logging: crate::config::model::LoggingConfig::default(),
-            trajectory: crate::config::model::TrajectoryConfig::default(),
-            mcp: crate::config::model::McpConfig::default(),
-        };
-
-        if let Some(provider) = args.get("provider") {
-            config.default_provider = provider.clone();
-        }
-
-        if let Some(model) = args.get("model") {
-            // Update the model for the current provider
-            let provider = config.default_provider.clone();
-            let mut params = config
-                .model_providers
-                .get(&provider)
-                .cloned()
-                .unwrap_or_default();
-            params.model = model.clone();
-            config.model_providers.insert(provider, params);
-        }
-
-        if let Some(api_key) = args.get("api_key") {
-            let provider = config.default_provider.clone();
-            let mut params = config
-                .model_providers
-                .get(&provider)
-                .cloned()
-                .unwrap_or_default();
-            params.api_key = Some(api_key.clone());
-            config.model_providers.insert(provider, params);
-        }
-
-        if let Some(base_url) = args.get("model_base_url") {
-            let provider = config.default_provider.clone();
-            let mut params = config
-                .model_providers
-                .get(&provider)
-                .cloned()
-                .unwrap_or_default();
-            params.base_url = Some(base_url.clone());
-            config.model_providers.insert(provider, params);
-        }
-
-        if let Some(max_steps_str) = args.get("max_steps") {
-            let max_steps: u32 = max_steps_str
-                .parse()
-                .map_err(|_| SageError::config_with_context(
-                    "Invalid max_steps value",
-                    format!("Parsing max_steps value '{}' from command line arguments", max_steps_str)
-                ))?;
-            config.max_steps = Some(max_steps);
-        }
-
-        if let Some(working_dir) = args.get("working_dir") {
-            config.working_directory = Some(PathBuf::from(working_dir));
-        }
-
-        Ok(config)
-    }
 }
 
 impl Default for ConfigLoader {
     fn default() -> Self {
         Self::new()
     }
-}
-
-/// Convenience function to load configuration with default sources
-pub fn load_config() -> SageResult<Config> {
-    ConfigLoader::new()
-        .with_defaults()
-        .with_file("sage_config.json")
-        .with_file("sage_config.toml")
-        .with_env()
-        .load()
-}
-
-/// Load configuration with custom file path
-pub fn load_config_from_file<P: AsRef<Path>>(path: P) -> SageResult<Config> {
-    ConfigLoader::new()
-        .with_defaults()
-        .with_file(path)
-        .with_env()
-        .load()
-}
-
-/// Load configuration with command line overrides
-pub fn load_config_with_overrides(
-    config_file: Option<&str>,
-    overrides: HashMap<String, String>,
-) -> SageResult<Config> {
-    let mut loader = ConfigLoader::new().with_defaults().with_env();
-
-    if let Some(file) = config_file {
-        loader = loader.with_file(file);
-    } else {
-        loader = loader
-            .with_file("sage_config.json")
-            .with_file("sage_config.toml");
-    }
-
-    loader.with_args(overrides).load()
 }
 
 #[cfg(test)]
@@ -634,10 +383,7 @@ auto_connect = true
     fn test_load_config_with_invalid_max_steps() {
         let args = HashMap::from([("max_steps".to_string(), "invalid".to_string())]);
 
-        let result = ConfigLoader::new()
-            .with_defaults()
-            .with_args(args)
-            .load();
+        let result = ConfigLoader::new().with_defaults().with_args(args).load();
 
         assert!(result.is_err());
     }
@@ -678,10 +424,7 @@ auto_connect = true
             std::env::set_var("GOOGLE_TEMPERATURE", "invalid");
         }
 
-        let result = ConfigLoader::new()
-            .with_defaults()
-            .with_env()
-            .load();
+        let result = ConfigLoader::new().with_defaults().with_env().load();
 
         assert!(result.is_err());
 
@@ -728,7 +471,10 @@ auto_connect = true
     #[test]
     fn test_load_config_with_working_directory() {
         let temp_dir = TempDir::new().unwrap();
-        let args = HashMap::from([("working_dir".to_string(), temp_dir.path().to_str().unwrap().to_string())]);
+        let args = HashMap::from([(
+            "working_dir".to_string(),
+            temp_dir.path().to_str().unwrap().to_string(),
+        )]);
 
         let config = ConfigLoader::new()
             .with_defaults()
@@ -736,7 +482,10 @@ auto_connect = true
             .load()
             .unwrap();
 
-        assert_eq!(config.working_directory, Some(temp_dir.path().to_path_buf()));
+        assert_eq!(
+            config.working_directory,
+            Some(temp_dir.path().to_path_buf())
+        );
     }
 
     #[test]
@@ -744,7 +493,7 @@ auto_connect = true
         let temp_dir = TempDir::new().unwrap();
         let config_path = create_test_json_config(&temp_dir, "test.json");
 
-        let config = load_config_from_file(&config_path).unwrap();
+        let config = super::super::defaults::load_config_from_file(&config_path).unwrap();
         assert_eq!(config.default_provider, "openai");
     }
 
@@ -902,7 +651,10 @@ mcp:
     fn test_load_config_with_base_url_from_args() {
         let args = HashMap::from([
             ("provider".to_string(), "ollama".to_string()),
-            ("model_base_url".to_string(), "http://custom-host:8080".to_string()),
+            (
+                "model_base_url".to_string(),
+                "http://custom-host:8080".to_string(),
+            ),
         ]);
 
         let config = ConfigLoader::new()

@@ -2,7 +2,7 @@
 
 use crate::error::SageResult;
 use crate::tools::types::ToolSchema;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Tool format converter
 pub struct ToolConverter;

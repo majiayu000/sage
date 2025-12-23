@@ -5,18 +5,18 @@ use crate::error::{SageError, SageResult};
 use crate::llm::messages::{LlmMessage, LlmResponse};
 use crate::llm::provider_types::{LlmProvider, ModelParameters};
 use crate::llm::providers::{
-    ProviderInstance, LLMProviderTrait, OpenAIProvider, AnthropicProvider, GoogleProvider,
-    AzureProvider, OpenRouterProvider, OllamaProvider, DoubaoProvider, GlmProvider,
+    AnthropicProvider, AzureProvider, DoubaoProvider, GlmProvider, GoogleProvider,
+    LLMProviderTrait, OllamaProvider, OpenAIProvider, OpenRouterProvider, ProviderInstance,
 };
 use crate::llm::rate_limiter::global as rate_limiter;
 use crate::llm::streaming::{LlmStream, StreamingLlmClient};
 use crate::tools::types::ToolSchema;
 use async_trait::async_trait;
+use rand::Rng;
 use reqwest::Client;
 use std::time::Duration;
 use tokio::time::sleep;
 use tracing::{debug, instrument, warn};
-use rand::Rng;
 
 /// LLM client for making requests to various providers.
 ///
@@ -118,12 +118,15 @@ impl LlmClient {
         model_params: ModelParameters,
     ) -> SageResult<Self> {
         // Validate configuration
-        config
-            .validate()
-            .map_err(|e| SageError::config_with_context(
+        config.validate().map_err(|e| {
+            SageError::config_with_context(
                 format!("Invalid provider config: {}", e),
-                format!("Validating configuration for provider '{}'", provider.name())
-            ))?;
+                format!(
+                    "Validating configuration for provider '{}'",
+                    provider.name()
+                ),
+            )
+        })?;
 
         // Get effective timeout configuration (handles legacy timeout field)
         let timeouts = config.get_effective_timeouts();
@@ -148,12 +151,12 @@ impl LlmClient {
             client_builder = client_builder.default_headers(headers);
         }
 
-        let http_client = client_builder
-            .build()
-            .map_err(|e| SageError::llm_with_provider(
+        let http_client = client_builder.build().map_err(|e| {
+            SageError::llm_with_provider(
                 format!("Failed to create HTTP client: {}", e),
-                provider.name()
-            ))?;
+                provider.name(),
+            )
+        })?;
 
         debug!(
             "Created LLM client for provider '{}' with timeouts: connection={}s, request={}s",
@@ -206,9 +209,11 @@ impl LlmClient {
             )),
             LlmProvider::Custom(name) => {
                 return Err(SageError::llm_with_provider(
-                    format!("Custom provider not implemented. Consider using OpenRouter or Ollama for custom models."),
-                    name
-                ))
+                    format!(
+                        "Custom provider not implemented. Consider using OpenRouter or Ollama for custom models."
+                    ),
+                    name,
+                ));
             }
         };
 
@@ -366,8 +371,8 @@ impl LlmClient {
                             let mut rng = rand::thread_rng();
                             rng.gen_range(0..=(base_delay_secs * 500))
                         };
-                        let delay = Duration::from_secs(base_delay_secs)
-                            + Duration::from_millis(jitter_ms);
+                        let delay =
+                            Duration::from_secs(base_delay_secs) + Duration::from_millis(jitter_ms);
 
                         warn!(
                             "Request failed (attempt {}/{}): {}. Retrying in {:.2}s...",
@@ -399,8 +404,11 @@ impl LlmClient {
 
         Err(last_error.unwrap_or_else(|| {
             SageError::llm_with_provider(
-                format!("All {} retry attempts failed without error details", max_retries + 1),
-                self.provider.name()
+                format!(
+                    "All {} retry attempts failed without error details",
+                    max_retries + 1
+                ),
+                self.provider.name(),
             )
         }))
     }
@@ -448,14 +456,14 @@ impl LlmClient {
         match error {
             SageError::Llm { message: msg, .. } => {
                 let msg_lower = msg.to_lowercase();
-                msg_lower.contains("503") ||
-                msg_lower.contains("502") ||
-                msg_lower.contains("504") ||
-                msg_lower.contains("429") ||
-                msg_lower.contains("overloaded") ||
-                msg_lower.contains("timeout") ||
-                msg_lower.contains("connection") ||
-                msg_lower.contains("network")
+                msg_lower.contains("503")
+                    || msg_lower.contains("502")
+                    || msg_lower.contains("504")
+                    || msg_lower.contains("429")
+                    || msg_lower.contains("overloaded")
+                    || msg_lower.contains("timeout")
+                    || msg_lower.contains("connection")
+                    || msg_lower.contains("network")
             }
             SageError::Http { .. } => true,
             _ => false,
@@ -503,18 +511,19 @@ impl LlmClient {
         match error {
             SageError::Llm { message: msg, .. } => {
                 let msg_lower = msg.to_lowercase();
-                msg_lower.contains("403") ||
-                msg_lower.contains("429") ||
-                msg_lower.contains("quota") ||
-                msg_lower.contains("rate limit") ||
-                msg_lower.contains("insufficient") ||
-                msg_lower.contains("exceeded") ||
-                msg_lower.contains("not enough") ||
-                msg_lower.contains("token quota")
+                msg_lower.contains("403")
+                    || msg_lower.contains("429")
+                    || msg_lower.contains("quota")
+                    || msg_lower.contains("rate limit")
+                    || msg_lower.contains("insufficient")
+                    || msg_lower.contains("exceeded")
+                    || msg_lower.contains("not enough")
+                    || msg_lower.contains("token quota")
             }
-            SageError::Http { status_code: Some(code), .. } => {
-                *code == 403 || *code == 429
-            }
+            SageError::Http {
+                status_code: Some(code),
+                ..
+            } => *code == 403 || *code == 429,
             _ => false,
         }
     }
@@ -591,10 +600,8 @@ impl LlmClient {
         }
 
         // Execute the request with retry logic
-        self.execute_with_retry(|| async {
-            self.provider_instance.chat(messages, tools).await
-        })
-        .await
+        self.execute_with_retry(|| async { self.provider_instance.chat(messages, tools).await })
+            .await
     }
 }
 

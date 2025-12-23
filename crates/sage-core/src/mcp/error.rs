@@ -1,7 +1,7 @@
 //! MCP error types
 
-use thiserror::Error;
 use crate::error::UnifiedError;
+use thiserror::Error;
 
 /// MCP-specific errors
 ///
@@ -250,7 +250,10 @@ impl UnifiedError for McpError {
     fn is_retryable(&self) -> bool {
         matches!(
             self,
-            Self::Connection { .. } | Self::Transport { .. } | Self::Timeout { .. } | Self::Server { .. }
+            Self::Connection { .. }
+                | Self::Transport { .. }
+                | Self::Timeout { .. }
+                | Self::Server { .. }
         )
     }
 }

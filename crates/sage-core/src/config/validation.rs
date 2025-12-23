@@ -320,7 +320,9 @@ impl ConfigValidator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::model::{LoggingConfig, ModelParameters, ToolConfig, TrajectoryConfig, McpConfig};
+    use crate::config::model::{
+        LoggingConfig, McpConfig, ModelParameters, ToolConfig, TrajectoryConfig,
+    };
     use std::collections::HashMap;
 
     fn create_test_config() -> Config {
@@ -387,10 +389,9 @@ mod tests {
     #[test]
     fn test_validate_providers_unknown_provider() {
         let mut config = create_test_config();
-        config.model_providers.insert(
-            "unknown_provider".to_string(),
-            ModelParameters::default(),
-        );
+        config
+            .model_providers
+            .insert("unknown_provider".to_string(), ModelParameters::default());
         config.default_provider = "unknown_provider".to_string();
 
         let result = ConfigValidator::validate_providers(&config);
@@ -401,10 +402,9 @@ mod tests {
     #[test]
     fn test_validate_providers_custom_prefix_allowed() {
         let mut config = create_test_config();
-        config.model_providers.insert(
-            "custom_my_llm".to_string(),
-            ModelParameters::default(),
-        );
+        config
+            .model_providers
+            .insert("custom_my_llm".to_string(), ModelParameters::default());
         config.default_provider = "custom_my_llm".to_string();
 
         // Custom providers with custom_ prefix should be allowed
@@ -416,11 +416,18 @@ mod tests {
         let mut config = create_test_config();
         let mut params = config.model_providers.get("anthropic").unwrap().clone();
         params.model = "".to_string();
-        config.model_providers.insert("anthropic".to_string(), params);
+        config
+            .model_providers
+            .insert("anthropic".to_string(), params);
 
         let result = ConfigValidator::validate_models(&config);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Model name cannot be empty"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Model name cannot be empty")
+        );
     }
 
     #[test]
@@ -428,7 +435,9 @@ mod tests {
         let mut config = create_test_config();
         let mut params = config.model_providers.get("anthropic").unwrap().clone();
         params.temperature = Some(3.0); // Invalid: > 2.0
-        config.model_providers.insert("anthropic".to_string(), params);
+        config
+            .model_providers
+            .insert("anthropic".to_string(), params);
 
         let result = ConfigValidator::validate_models(&config);
         assert!(result.is_err());
@@ -440,7 +449,9 @@ mod tests {
         let mut config = create_test_config();
         let mut params = config.model_providers.get("anthropic").unwrap().clone();
         params.temperature = Some(-0.1); // Invalid: < 0.0
-        config.model_providers.insert("anthropic".to_string(), params);
+        config
+            .model_providers
+            .insert("anthropic".to_string(), params);
 
         let result = ConfigValidator::validate_models(&config);
         assert!(result.is_err());
@@ -451,7 +462,9 @@ mod tests {
         let mut config = create_test_config();
         let mut params = config.model_providers.get("anthropic").unwrap().clone();
         params.top_p = Some(1.5); // Invalid: > 1.0
-        config.model_providers.insert("anthropic".to_string(), params);
+        config
+            .model_providers
+            .insert("anthropic".to_string(), params);
 
         let result = ConfigValidator::validate_models(&config);
         assert!(result.is_err());
@@ -463,11 +476,18 @@ mod tests {
         let mut config = create_test_config();
         let mut params = config.model_providers.get("anthropic").unwrap().clone();
         params.max_tokens = Some(0);
-        config.model_providers.insert("anthropic".to_string(), params);
+        config
+            .model_providers
+            .insert("anthropic".to_string(), params);
 
         let result = ConfigValidator::validate_models(&config);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Max tokens must be greater than 0"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Max tokens must be greater than 0")
+        );
     }
 
     #[test]
@@ -475,11 +495,18 @@ mod tests {
         let mut config = create_test_config();
         let mut params = config.model_providers.get("anthropic").unwrap().clone();
         params.max_tokens = Some(2_000_000); // Too large
-        config.model_providers.insert("anthropic".to_string(), params);
+        config
+            .model_providers
+            .insert("anthropic".to_string(), params);
 
         let result = ConfigValidator::validate_models(&config);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Max tokens seems too large"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Max tokens seems too large")
+        );
     }
 
     #[test]
@@ -487,11 +514,18 @@ mod tests {
         let mut config = create_test_config();
         let mut params = config.model_providers.get("anthropic").unwrap().clone();
         params.top_k = Some(0);
-        config.model_providers.insert("anthropic".to_string(), params);
+        config
+            .model_providers
+            .insert("anthropic".to_string(), params);
 
         let result = ConfigValidator::validate_models(&config);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Top-k must be greater than 0"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Top-k must be greater than 0")
+        );
     }
 
     #[test]
@@ -499,11 +533,18 @@ mod tests {
         let mut config = create_test_config();
         let mut params = config.model_providers.get("anthropic").unwrap().clone();
         params.max_retries = Some(15); // Too many
-        config.model_providers.insert("anthropic".to_string(), params);
+        config
+            .model_providers
+            .insert("anthropic".to_string(), params);
 
         let result = ConfigValidator::validate_models(&config);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Max retries seems too large"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Max retries seems too large")
+        );
     }
 
     #[test]
@@ -511,11 +552,18 @@ mod tests {
         let mut config = create_test_config();
         let mut params = config.model_providers.get("anthropic").unwrap().clone();
         params.base_url = Some("invalid-url".to_string()); // No http(s)://
-        config.model_providers.insert("anthropic".to_string(), params);
+        config
+            .model_providers
+            .insert("anthropic".to_string(), params);
 
         let result = ConfigValidator::validate_models(&config);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Base URL must start with http"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Base URL must start with http")
+        );
     }
 
     #[test]
@@ -523,7 +571,9 @@ mod tests {
         let mut config = create_test_config();
         let mut params = config.model_providers.get("anthropic").unwrap().clone();
         params.api_key = None; // Remove API key
-        config.model_providers.insert("anthropic".to_string(), params);
+        config
+            .model_providers
+            .insert("anthropic".to_string(), params);
 
         // Clear environment variables to ensure they don't interfere
         // SAFETY: This is test code running in single-threaded test context
@@ -535,7 +585,12 @@ mod tests {
 
         let result = ConfigValidator::validate_models(&config);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("API key is required"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("API key is required")
+        );
     }
 
     #[test]
@@ -545,7 +600,12 @@ mod tests {
 
         let result = ConfigValidator::validate_limits(&config);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Max steps must be greater than 0"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Max steps must be greater than 0")
+        );
     }
 
     #[test]
@@ -555,7 +615,12 @@ mod tests {
 
         let result = ConfigValidator::validate_limits(&config);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Max steps seems too large"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Max steps seems too large")
+        );
     }
 
     #[test]
@@ -573,7 +638,12 @@ mod tests {
 
         let result = ConfigValidator::validate_limits(&config);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Tool max execution time must be greater than 0"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Tool max execution time must be greater than 0")
+        );
     }
 
     #[test]
@@ -583,17 +653,29 @@ mod tests {
 
         let result = ConfigValidator::validate_limits(&config);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Tool max execution time seems too large"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Tool max execution time seems too large")
+        );
     }
 
     #[test]
     fn test_validate_paths_nonexistent_working_directory() {
         let mut config = create_test_config();
-        config.working_directory = Some(std::path::PathBuf::from("/nonexistent/path/that/does/not/exist"));
+        config.working_directory = Some(std::path::PathBuf::from(
+            "/nonexistent/path/that/does/not/exist",
+        ));
 
         let result = ConfigValidator::validate_paths(&config);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Working directory does not exist"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Working directory does not exist")
+        );
     }
 
     #[test]
@@ -611,7 +693,12 @@ mod tests {
         std::fs::remove_file(&temp_file).ok();
 
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Working directory is not a directory"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Working directory is not a directory")
+        );
     }
 
     #[test]
@@ -621,7 +708,12 @@ mod tests {
 
         let result = ConfigValidator::validate_paths(&config);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Log file directory does not exist"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Log file directory does not exist")
+        );
     }
 
     #[test]
@@ -637,7 +729,10 @@ mod tests {
     #[test]
     fn test_validate_tools_custom_tool_allowed() {
         let mut config = create_test_config();
-        config.tools.enabled_tools.push("custom_my_tool".to_string());
+        config
+            .tools
+            .enabled_tools
+            .push("custom_my_tool".to_string());
 
         // Custom tools with custom_ prefix should be allowed
         assert!(ConfigValidator::validate_tools(&config).is_ok());
@@ -660,7 +755,12 @@ mod tests {
 
         let result = ConfigValidator::validate_logging(&config);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Invalid log level"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Invalid log level")
+        );
     }
 
     #[test]
@@ -681,7 +781,12 @@ mod tests {
 
         let result = ConfigValidator::validate_logging(&config);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Invalid log format"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Invalid log format")
+        );
     }
 
     #[test]
@@ -703,7 +808,12 @@ mod tests {
 
         let result = ConfigValidator::validate_logging(&config);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("At least one of log_to_console or log_to_file must be enabled"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("At least one of log_to_console or log_to_file must be enabled")
+        );
     }
 
     #[test]
@@ -740,7 +850,12 @@ mod tests {
 
         let result = ConfigValidator::validate_lakeview(&config);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Lakeview model provider cannot be empty"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Lakeview model provider cannot be empty")
+        );
     }
 
     #[test]
@@ -756,7 +871,12 @@ mod tests {
 
         let result = ConfigValidator::validate_lakeview(&config);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Lakeview model name cannot be empty"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Lakeview model name cannot be empty")
+        );
     }
 
     #[test]

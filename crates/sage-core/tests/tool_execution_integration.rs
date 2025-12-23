@@ -1,9 +1,9 @@
 //! Integration tests for tool execution flow
 
+use async_trait::async_trait;
 use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::executor::{ToolExecutor, ToolExecutorBuilder};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
-use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -79,7 +79,12 @@ impl Tool for CalculatorTool {
                 }
                 a / b
             }
-            _ => return Err(ToolError::InvalidArguments(format!("Unknown operation: {}", operation))),
+            _ => {
+                return Err(ToolError::InvalidArguments(format!(
+                    "Unknown operation: {}",
+                    operation
+                )));
+            }
         };
 
         Ok(ToolResult::success(
@@ -338,9 +343,7 @@ async fn test_tool_validation() {
     assert!(executor.validate_calls(&valid_calls).is_ok());
 
     // Invalid call (nonexistent tool)
-    let invalid_calls = vec![
-        ToolCall::new("call_1", "nonexistent_tool", HashMap::new()),
-    ];
+    let invalid_calls = vec![ToolCall::new("call_1", "nonexistent_tool", HashMap::new())];
     assert!(executor.validate_calls(&invalid_calls).is_err());
 }
 
@@ -352,10 +355,8 @@ async fn test_get_specific_tool_schemas() {
         .with_tool(Arc::new(FileReaderTool))
         .build();
 
-    let schemas = executor.get_schemas_for_tools(&vec![
-        "echo".to_string(),
-        "calculator".to_string(),
-    ]);
+    let schemas =
+        executor.get_schemas_for_tools(&vec!["echo".to_string(), "calculator".to_string()]);
 
     assert_eq!(schemas.len(), 2);
     let names: Vec<String> = schemas.iter().map(|s| s.name.clone()).collect();

@@ -161,11 +161,17 @@ impl GlobTool {
         // Build result with metadata
         let mut result = ToolResult::success("", self.name(), output)
             .with_metadata("pattern", serde_json::Value::String(pattern.to_string()))
-            .with_metadata("results_count", serde_json::Value::Number(file_count.into()))
+            .with_metadata(
+                "results_count",
+                serde_json::Value::Number(file_count.into()),
+            )
             .with_metadata("truncated", serde_json::Value::Bool(truncated));
 
         if let Some(path_str) = search_path {
-            result = result.with_metadata("search_path", serde_json::Value::String(path_str.to_string()));
+            result = result.with_metadata(
+                "search_path",
+                serde_json::Value::String(path_str.to_string()),
+            );
         }
 
         Ok(result)
@@ -235,8 +241,12 @@ File paths are returned relative to the working directory when possible."
         let path = call.get_string("path");
         let path_ref = path.as_deref();
 
-        let mut result = self.find_files(&pattern, path_ref).await
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to find files matching pattern '{}': {}", pattern, e)))?;
+        let mut result = self.find_files(&pattern, path_ref).await.map_err(|e| {
+            ToolError::ExecutionFailed(format!(
+                "Failed to find files matching pattern '{}': {}",
+                pattern, e
+            ))
+        })?;
         result.call_id = call.id.clone();
         Ok(result)
     }

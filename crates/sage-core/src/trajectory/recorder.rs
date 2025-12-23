@@ -345,14 +345,16 @@ impl TrajectoryRecorder {
     /// Get the trajectory file path (if using file storage)
     pub fn get_trajectory_path(&self) -> Option<PathBuf> {
         // Try to downcast to FileStorage
-        self.storage.as_any().downcast_ref::<FileStorage>().map(|file_storage| file_storage.path().to_path_buf())
+        self.storage
+            .as_any()
+            .downcast_ref::<FileStorage>()
+            .map(|file_storage| file_storage.path().to_path_buf())
     }
 
     /// Load a trajectory from storage
     pub async fn load_trajectory(&self, id: String) -> SageResult<Option<TrajectoryRecord>> {
-        let uuid = uuid::Uuid::parse_str(&id).map_err(|e| {
-            SageError::config(format!("Invalid trajectory ID '{}': {}", id, e))
-        })?;
+        let uuid = uuid::Uuid::parse_str(&id)
+            .map_err(|e| SageError::config(format!("Invalid trajectory ID '{}': {}", id, e)))?;
         self.storage.load(uuid).await
     }
 
@@ -364,9 +366,8 @@ impl TrajectoryRecorder {
 
     /// Delete a trajectory
     pub async fn delete_trajectory(&self, id: String) -> SageResult<()> {
-        let uuid = uuid::Uuid::parse_str(&id).map_err(|e| {
-            SageError::config(format!("Invalid trajectory ID '{}': {}", id, e))
-        })?;
+        let uuid = uuid::Uuid::parse_str(&id)
+            .map_err(|e| SageError::config(format!("Invalid trajectory ID '{}': {}", id, e)))?;
         self.storage.delete(uuid).await
     }
 
@@ -407,13 +408,13 @@ impl TrajectoryRecorder {
                 // Sum token usage from LLM interactions
                 for interaction in &record.llm_interactions {
                     if let Some(usage) = &interaction.response.usage {
-                        stats.total_tokens +=
-                            (usage.input_tokens + usage.output_tokens) as usize;
+                        stats.total_tokens += (usage.input_tokens + usage.output_tokens) as usize;
                     }
                 }
 
                 // Add execution time
-                stats.total_execution_time += chrono::Duration::milliseconds((record.execution_time * 1000.0) as i64);
+                stats.total_execution_time +=
+                    chrono::Duration::milliseconds((record.execution_time * 1000.0) as i64);
             }
         }
 

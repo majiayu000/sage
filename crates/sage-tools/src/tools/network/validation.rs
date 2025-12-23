@@ -5,7 +5,7 @@
 
 use std::net::{IpAddr, ToSocketAddrs};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 /// Validate URL to prevent SSRF attacks
 ///
@@ -17,8 +17,7 @@ use anyhow::{anyhow, Result};
 /// - No cloud metadata endpoints
 pub fn validate_url_security(url_str: &str) -> Result<()> {
     // Parse the URL
-    let url = url::Url::parse(url_str)
-        .map_err(|e| anyhow!("Invalid URL format: {}", e))?;
+    let url = url::Url::parse(url_str).map_err(|e| anyhow!("Invalid URL format: {}", e))?;
 
     // Only allow http and https schemes
     match url.scheme() {
@@ -32,7 +31,8 @@ pub fn validate_url_security(url_str: &str) -> Result<()> {
     }
 
     // Get the host
-    let host = url.host_str()
+    let host = url
+        .host_str()
         .ok_or_else(|| anyhow!("URL must have a host"))?;
 
     // Block localhost variants
@@ -175,7 +175,9 @@ mod tests {
         assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(172, 31, 255, 255))));
 
         // Link-local
-        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(169, 254, 169, 254))));
+        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(
+            169, 254, 169, 254
+        ))));
 
         // Public IPs should return false
         assert!(!is_private_ip(&IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8))));

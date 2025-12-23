@@ -10,7 +10,7 @@ use crate::llm::streaming::LLMStream;
 use crate::tools::types::ToolSchema;
 use anyhow::Context;
 use reqwest::Client;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tracing::instrument;
 
 /// Doubao provider handler
@@ -22,11 +22,7 @@ pub struct DoubaoProvider {
 
 impl DoubaoProvider {
     /// Create a new Doubao provider
-    pub fn new(
-        config: ProviderConfig,
-        model_params: ModelParameters,
-        http_client: Client,
-    ) -> Self {
+    pub fn new(config: ProviderConfig, model_params: ModelParameters, http_client: Client) -> Self {
         Self {
             config,
             model_params,

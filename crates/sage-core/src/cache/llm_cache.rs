@@ -2,8 +2,8 @@
 
 use super::{CacheKey, CacheManager, types::hash_utils};
 use crate::error::SageResult;
-use crate::llm::messages::{LlmMessage, LlmResponse};
 use crate::llm::client::LlmClient;
+use crate::llm::messages::{LlmMessage, LlmResponse};
 use crate::tools::ToolSchema;
 use std::time::Duration;
 

@@ -125,7 +125,8 @@ impl CliMode {
 #[derive(Parser)]
 #[command(name = "sage")]
 #[command(about = "Sage Agent - LLM-based agent for software engineering tasks")]
-#[command(long_about = r#"Sage Agent - LLM-based agent for software engineering tasks
+#[command(
+    long_about = r#"Sage Agent - LLM-based agent for software engineering tasks
 
 MODES:
   Interactive (default) - Multi-turn conversation with context
@@ -138,7 +139,8 @@ QUICK START:
   sage interactive --modern-ui   # Use modern UI
   sage config init               # Create config file
 
-For detailed help on any command, use: sage <command> --help"#)]
+For detailed help on any command, use: sage <command> --help"#
+)]
 #[command(version)]
 struct Cli {
     #[command(subcommand)]

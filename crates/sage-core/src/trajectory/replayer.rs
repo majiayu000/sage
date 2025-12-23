@@ -4,9 +4,9 @@
 //! Useful for debugging, testing, and analyzing agent behavior.
 
 use crate::error::{SageError, SageResult};
+use crate::tools::types::ToolResult;
 use crate::trajectory::recorder::{AgentStepRecord, TrajectoryRecord};
 use crate::trajectory::storage::TrajectoryStorage;
-use crate::tools::types::ToolResult;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::fs;
@@ -87,10 +87,7 @@ impl TrajectoryReplayer {
 
     /// Load a trajectory from a file path
     #[instrument(skip(self), fields(path = %path.as_ref().display()))]
-    pub async fn load_from_file<P: AsRef<Path>>(
-        &self,
-        path: P,
-    ) -> SageResult<TrajectoryRecord> {
+    pub async fn load_from_file<P: AsRef<Path>>(&self, path: P) -> SageResult<TrajectoryRecord> {
         let path = path.as_ref();
         debug!("Loading trajectory from file: {:?}", path);
 
@@ -105,9 +102,8 @@ impl TrajectoryReplayer {
             SageError::config(format!("Failed to read trajectory file {:?}: {}", path, e))
         })?;
 
-        let record: TrajectoryRecord = serde_json::from_str(&content).map_err(|e| {
-            SageError::config(format!("Failed to parse trajectory JSON: {}", e))
-        })?;
+        let record: TrajectoryRecord = serde_json::from_str(&content)
+            .map_err(|e| SageError::config(format!("Failed to parse trajectory JSON: {}", e)))?;
 
         info!(
             "Loaded trajectory: {} steps, task: {}",
@@ -121,9 +117,10 @@ impl TrajectoryReplayer {
     /// Load a trajectory by ID from storage
     #[instrument(skip(self))]
     pub async fn load_by_id(&self, id: uuid::Uuid) -> SageResult<Option<TrajectoryRecord>> {
-        let storage = self.storage.as_ref().ok_or_else(|| {
-            SageError::config("No storage backend configured for replayer")
-        })?;
+        let storage = self
+            .storage
+            .as_ref()
+            .ok_or_else(|| SageError::config("No storage backend configured for replayer"))?;
 
         storage.load(id).await
     }
@@ -142,13 +139,15 @@ impl TrajectoryReplayer {
         }
 
         let mut trajectories = Vec::new();
-        let mut entries = fs::read_dir(dir).await.map_err(|e| {
-            SageError::config(format!("Failed to read directory {:?}: {}", dir, e))
-        })?;
+        let mut entries = fs::read_dir(dir)
+            .await
+            .map_err(|e| SageError::config(format!("Failed to read directory {:?}: {}", dir, e)))?;
 
-        while let Some(entry) = entries.next_entry().await.map_err(|e| {
-            SageError::config(format!("Failed to read directory entry: {}", e))
-        })? {
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .map_err(|e| SageError::config(format!("Failed to read directory entry: {}", e)))?
+        {
             let path = entry.path();
             if path.extension().map_or(false, |ext| ext == "json") {
                 match self.load_from_file(&path).await {

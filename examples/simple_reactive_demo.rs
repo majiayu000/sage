@@ -1,28 +1,28 @@
 //! Simple Reactive Agent Demo
-//! 
+//!
 //! Demonstrates basic reactive agent functionality without UI complexity
 
-use sage_core::{Config, ClaudeStyleAgent, ReactiveAgent, TaskMetadata};
+use sage_core::{ClaudeStyleAgent, Config, ReactiveAgent, TaskMetadata};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
     tracing_subscriber::fmt::init();
-    
+
     println!("🚀 Simple Reactive Agent Demo\n");
-    
+
     // Create a basic config
     let config = create_basic_config();
-    
+
     // Create reactive agent
     match ClaudeStyleAgent::new(config) {
         Ok(mut agent) => {
             println!("✅ Reactive agent created successfully");
-            
+
             // Test basic interaction
             let request = "Hello, please tell me about yourself";
             println!("📝 Request: {}", request);
-            
+
             match agent.process_request(request, None).await {
                 Ok(response) => {
                     println!("🤖 Response: {}", response.content);
@@ -39,7 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("❌ Failed to create agent: {}", e);
         }
     }
-    
+
     println!("\n🎯 Demo completed!");
     Ok(())
 }

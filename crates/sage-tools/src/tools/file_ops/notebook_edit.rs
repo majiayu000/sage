@@ -105,9 +105,12 @@ impl NotebookEditTool {
         }
 
         // Read and parse notebook
-        let content = fs::read_to_string(&path)
-            .await
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to read notebook file '{}': {}", notebook_path, e)))?;
+        let content = fs::read_to_string(&path).await.map_err(|e| {
+            ToolError::ExecutionFailed(format!(
+                "Failed to read notebook file '{}': {}",
+                notebook_path, e
+            ))
+        })?;
 
         let mut notebook: Notebook =
             serde_json::from_str(&content).map_err(|e| ToolError::Json(e))?;
@@ -145,9 +148,12 @@ impl NotebookEditTool {
         let new_content =
             serde_json::to_string_pretty(&notebook).map_err(|e| ToolError::Json(e))?;
 
-        fs::write(&path, new_content)
-            .await
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to write updated notebook to '{}': {}", notebook_path, e)))?;
+        fs::write(&path, new_content).await.map_err(|e| {
+            ToolError::ExecutionFailed(format!(
+                "Failed to write updated notebook to '{}': {}",
+                notebook_path, e
+            ))
+        })?;
 
         Ok(ToolResult::success(
             "",
@@ -179,9 +185,12 @@ impl NotebookEditTool {
         }
 
         // Read and parse notebook
-        let content = fs::read_to_string(&path)
-            .await
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to read notebook file for insertion '{}': {}", notebook_path, e)))?;
+        let content = fs::read_to_string(&path).await.map_err(|e| {
+            ToolError::ExecutionFailed(format!(
+                "Failed to read notebook file for insertion '{}': {}",
+                notebook_path, e
+            ))
+        })?;
 
         let mut notebook: Notebook =
             serde_json::from_str(&content).map_err(|e| ToolError::Json(e))?;
@@ -226,9 +235,12 @@ impl NotebookEditTool {
         let new_content =
             serde_json::to_string_pretty(&notebook).map_err(|e| ToolError::Json(e))?;
 
-        fs::write(&path, new_content)
-            .await
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to write notebook after insertion to '{}': {}", notebook_path, e)))?;
+        fs::write(&path, new_content).await.map_err(|e| {
+            ToolError::ExecutionFailed(format!(
+                "Failed to write notebook after insertion to '{}': {}",
+                notebook_path, e
+            ))
+        })?;
 
         let position_msg = if let Some(id) = cell_id {
             format!("after cell '{}'", id)
@@ -263,9 +275,12 @@ impl NotebookEditTool {
         }
 
         // Read and parse notebook
-        let content = fs::read_to_string(&path)
-            .await
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to read notebook file for deletion '{}': {}", notebook_path, e)))?;
+        let content = fs::read_to_string(&path).await.map_err(|e| {
+            ToolError::ExecutionFailed(format!(
+                "Failed to read notebook file for deletion '{}': {}",
+                notebook_path, e
+            ))
+        })?;
 
         let mut notebook: Notebook =
             serde_json::from_str(&content).map_err(|e| ToolError::Json(e))?;
@@ -285,9 +300,12 @@ impl NotebookEditTool {
         let new_content =
             serde_json::to_string_pretty(&notebook).map_err(|e| ToolError::Json(e))?;
 
-        fs::write(&path, new_content)
-            .await
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to write notebook after deletion to '{}': {}", notebook_path, e)))?;
+        fs::write(&path, new_content).await.map_err(|e| {
+            ToolError::ExecutionFailed(format!(
+                "Failed to write notebook after deletion to '{}': {}",
+                notebook_path, e
+            ))
+        })?;
 
         Ok(ToolResult::success(
             "",

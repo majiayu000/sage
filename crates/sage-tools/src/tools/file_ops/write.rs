@@ -91,15 +91,21 @@ impl WriteTool {
 
         // Create parent directories if needed
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
-                .await
-                .map_err(|e| ToolError::ExecutionFailed(format!("Failed to create parent directories for '{}': {}", file_path, e)))?;
+            fs::create_dir_all(parent).await.map_err(|e| {
+                ToolError::ExecutionFailed(format!(
+                    "Failed to create parent directories for '{}': {}",
+                    file_path, e
+                ))
+            })?;
         }
 
         // Write the file
-        fs::write(&path, content)
-            .await
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to write content to file '{}': {}", file_path, e)))?;
+        fs::write(&path, content).await.map_err(|e| {
+            ToolError::ExecutionFailed(format!(
+                "Failed to write content to file '{}': {}",
+                file_path, e
+            ))
+        })?;
 
         // Mark as read for future operations
         self.mark_file_as_read(path.clone());

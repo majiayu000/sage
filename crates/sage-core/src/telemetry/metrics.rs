@@ -544,14 +544,8 @@ mod tests {
         counter.inc(["GET", "200"]);
         counter.inc(["POST", "201"]);
 
-        assert_eq!(
-            counter.get(&["GET".to_string(), "200".to_string()]),
-            2
-        );
-        assert_eq!(
-            counter.get(&["POST".to_string(), "201".to_string()]),
-            1
-        );
+        assert_eq!(counter.get(&["GET".to_string(), "200".to_string()]), 2);
+        assert_eq!(counter.get(&["POST".to_string(), "201".to_string()]), 1);
     }
 
     #[test]

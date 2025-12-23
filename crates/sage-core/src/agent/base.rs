@@ -85,7 +85,8 @@ impl BaseAgent {
     /// Create a new base agent
     pub fn new(config: Config) -> SageResult<Self> {
         // Get default provider configuration
-        let default_params = config.default_model_parameters()
+        let default_params = config
+            .default_model_parameters()
             .context("Failed to retrieve default model parameters from configuration")?;
         let provider_name = config.get_default_provider();
 
@@ -98,7 +99,10 @@ impl BaseAgent {
         let provider: LLMProvider = provider_name
             .parse()
             .map_err(|_| SageError::config(format!("Invalid provider: {}", provider_name)))
-            .context(format!("Failed to parse provider name '{}' into a valid LLM provider", provider_name))?;
+            .context(format!(
+                "Failed to parse provider name '{}' into a valid LLM provider",
+                provider_name
+            ))?;
 
         tracing::info!("Parsed provider: {:?}", provider);
 
@@ -117,8 +121,11 @@ impl BaseAgent {
         let model_params = default_params.to_llm_parameters();
 
         // Create LLM client
-        let llm_client = LLMClient::new(provider, provider_config, model_params)
-            .context(format!("Failed to create LLM client for provider: {}", provider_name))?;
+        let llm_client =
+            LLMClient::new(provider, provider_config, model_params).context(format!(
+                "Failed to create LLM client for provider: {}",
+                provider_name
+            ))?;
 
         // Create tool executor
         let tool_executor = ToolExecutor::new();
@@ -880,7 +887,9 @@ mod tests {
     fn test_is_markdown_content_formatting() {
         assert!(BaseAgent::is_markdown_content("**bold text**"));
         assert!(BaseAgent::is_markdown_content("*italic text*"));
-        assert!(BaseAgent::is_markdown_content("[link](https://example.com)"));
+        assert!(BaseAgent::is_markdown_content(
+            "[link](https://example.com)"
+        ));
         assert!(BaseAgent::is_markdown_content("> blockquote"));
     }
 

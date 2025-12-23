@@ -2,7 +2,7 @@
 
 use crate::error::SageResult;
 use crate::llm::messages::{LLMMessage, MessageRole};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Message format converter
 pub struct MessageConverter;

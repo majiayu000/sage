@@ -3,10 +3,10 @@
 //! This example shows how to use trajectory file compression to reduce disk space usage.
 
 use sage_core::error::SageResult;
-use sage_core::trajectory::storage::{FileStorage, TrajectoryStorage};
 use sage_core::trajectory::recorder::{
-    TrajectoryRecord, LLMInteractionRecord, LLMResponseRecord, TokenUsageRecord, AgentStepRecord,
+    AgentStepRecord, LLMInteractionRecord, LLMResponseRecord, TokenUsageRecord, TrajectoryRecord,
 };
+use sage_core::trajectory::storage::{FileStorage, TrajectoryStorage};
 use tempfile::TempDir;
 use uuid::Uuid;
 
@@ -48,12 +48,14 @@ async fn main() -> SageResult<()> {
     println!("Files created: {}", stats_compressed.total_records);
     println!("Total size: {} bytes", stats_compressed.total_size_bytes);
 
-    let compression_ratio = stats_uncompressed.total_size_bytes as f64
-        / stats_compressed.total_size_bytes as f64;
+    let compression_ratio =
+        stats_uncompressed.total_size_bytes as f64 / stats_compressed.total_size_bytes as f64;
     println!("Compression ratio: {:.2}x", compression_ratio);
-    println!("Space saved: {} bytes ({:.1}%)",
+    println!(
+        "Space saved: {} bytes ({:.1}%)",
         stats_uncompressed.total_size_bytes - stats_compressed.total_size_bytes,
-        (1.0 - 1.0/compression_ratio) * 100.0);
+        (1.0 - 1.0 / compression_ratio) * 100.0
+    );
     println!();
 
     // Demo 3: Load compressed trajectory
@@ -98,66 +100,58 @@ fn create_sample_trajectory() -> TrajectoryRecord {
         provider: "anthropic".to_string(),
         model: "claude-sonnet-4".to_string(),
         max_steps: Some(20),
-        llm_interactions: vec![
-            LLMInteractionRecord {
-                timestamp: "2024-01-01T10:00:00Z".to_string(),
-                provider: "anthropic".to_string(),
-                model: "claude-sonnet-4".to_string(),
-                input_messages: vec![
-                    serde_json::json!({
-                        "role": "user",
-                        "content": "Add gzip compression support for trajectory files"
-                    })
-                ],
-                response: LLMResponseRecord {
-                    content: "I'll implement compression using the flate2 crate...".to_string(),
-                    model: Some("claude-sonnet-4".to_string()),
-                    finish_reason: Some("stop".to_string()),
-                    usage: Some(TokenUsageRecord {
-                        input_tokens: 150,
-                        output_tokens: 450,
-                        cache_creation_input_tokens: None,
-                        cache_read_input_tokens: None,
-                        reasoning_tokens: None,
-                    }),
-                    tool_calls: None,
-                },
-                tools_available: Some(vec![
-                    "str_replace_based_edit_tool".to_string(),
-                    "bash".to_string(),
-                ]),
-            }
-        ],
-        agent_steps: vec![
-            AgentStepRecord {
-                step_number: 1,
-                timestamp: "2024-01-01T10:00:00Z".to_string(),
-                state: "Running".to_string(),
-                llm_messages: Some(vec![
-                    serde_json::json!({
-                        "role": "user",
-                        "content": "Add compression configuration"
-                    })
-                ]),
-                llm_response: Some(LLMResponseRecord {
-                    content: "Adding compression configuration...".to_string(),
-                    model: Some("claude-sonnet-4".to_string()),
-                    finish_reason: Some("stop".to_string()),
-                    usage: Some(TokenUsageRecord {
-                        input_tokens: 150,
-                        output_tokens: 450,
-                        cache_creation_input_tokens: None,
-                        cache_read_input_tokens: None,
-                        reasoning_tokens: None,
-                    }),
-                    tool_calls: None,
+        llm_interactions: vec![LLMInteractionRecord {
+            timestamp: "2024-01-01T10:00:00Z".to_string(),
+            provider: "anthropic".to_string(),
+            model: "claude-sonnet-4".to_string(),
+            input_messages: vec![serde_json::json!({
+                "role": "user",
+                "content": "Add gzip compression support for trajectory files"
+            })],
+            response: LLMResponseRecord {
+                content: "I'll implement compression using the flate2 crate...".to_string(),
+                model: Some("claude-sonnet-4".to_string()),
+                finish_reason: Some("stop".to_string()),
+                usage: Some(TokenUsageRecord {
+                    input_tokens: 150,
+                    output_tokens: 450,
+                    cache_creation_input_tokens: None,
+                    cache_read_input_tokens: None,
+                    reasoning_tokens: None,
                 }),
                 tool_calls: None,
-                tool_results: None,
-                reflection: Some("Implementation looks good".to_string()),
-                error: None,
-            }
-        ],
+            },
+            tools_available: Some(vec![
+                "str_replace_based_edit_tool".to_string(),
+                "bash".to_string(),
+            ]),
+        }],
+        agent_steps: vec![AgentStepRecord {
+            step_number: 1,
+            timestamp: "2024-01-01T10:00:00Z".to_string(),
+            state: "Running".to_string(),
+            llm_messages: Some(vec![serde_json::json!({
+                "role": "user",
+                "content": "Add compression configuration"
+            })]),
+            llm_response: Some(LLMResponseRecord {
+                content: "Adding compression configuration...".to_string(),
+                model: Some("claude-sonnet-4".to_string()),
+                finish_reason: Some("stop".to_string()),
+                usage: Some(TokenUsageRecord {
+                    input_tokens: 150,
+                    output_tokens: 450,
+                    cache_creation_input_tokens: None,
+                    cache_read_input_tokens: None,
+                    reasoning_tokens: None,
+                }),
+                tool_calls: None,
+            }),
+            tool_calls: None,
+            tool_results: None,
+            reflection: Some("Implementation looks good".to_string()),
+            error: None,
+        }],
         success: true,
         final_result: Some("Compression feature successfully implemented".to_string()),
         execution_time: 900.0,

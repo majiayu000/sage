@@ -3,9 +3,9 @@
 //! This example shows how to use the extension tools for executing
 //! specialized skills and custom slash commands.
 
-use sage_tools::tools::extensions::{SkillTool, SlashCommandTool};
 use sage_core::tools::base::Tool;
 use sage_core::tools::types::ToolCall;
+use sage_tools::tools::extensions::{SkillTool, SlashCommandTool};
 use std::collections::HashMap;
 
 #[tokio::main]
@@ -35,7 +35,10 @@ async fn demo_skill_tool() -> Result<(), Box<dyn std::error::Error>> {
     // Example 1: Execute brainstorming skill
     println!("Example 1: Execute 'brainstorming' skill");
     let mut args = HashMap::new();
-    args.insert("skill".to_string(), serde_json::Value::String("brainstorming".to_string()));
+    args.insert(
+        "skill".to_string(),
+        serde_json::Value::String("brainstorming".to_string()),
+    );
 
     let call = ToolCall {
         id: "call-1".to_string(),
@@ -54,7 +57,10 @@ async fn demo_skill_tool() -> Result<(), Box<dyn std::error::Error>> {
     // Example 2: Execute comprehensive-testing skill
     println!("Example 2: Execute 'comprehensive-testing' skill");
     let mut args = HashMap::new();
-    args.insert("skill".to_string(), serde_json::Value::String("comprehensive-testing".to_string()));
+    args.insert(
+        "skill".to_string(),
+        serde_json::Value::String("comprehensive-testing".to_string()),
+    );
 
     let call = ToolCall {
         id: "call-2".to_string(),
@@ -85,7 +91,10 @@ async fn demo_slash_command_tool() -> Result<(), Box<dyn std::error::Error>> {
     // Example 1: Execute simple command
     println!("Example 1: Execute '/test' command");
     let mut args = HashMap::new();
-    args.insert("command".to_string(), serde_json::Value::String("/test".to_string()));
+    args.insert(
+        "command".to_string(),
+        serde_json::Value::String("/test".to_string()),
+    );
 
     let call = ToolCall {
         id: "call-3".to_string(),
@@ -104,7 +113,10 @@ async fn demo_slash_command_tool() -> Result<(), Box<dyn std::error::Error>> {
     // Example 2: Execute command with arguments
     println!("Example 2: Execute '/review-pr 123' command");
     let mut args = HashMap::new();
-    args.insert("command".to_string(), serde_json::Value::String("/review-pr 123".to_string()));
+    args.insert(
+        "command".to_string(),
+        serde_json::Value::String("/review-pr 123".to_string()),
+    );
 
     let call = ToolCall {
         id: "call-4".to_string(),

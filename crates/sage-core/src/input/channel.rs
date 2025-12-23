@@ -5,7 +5,7 @@ use tokio::sync::mpsc;
 
 use crate::error::{SageError, SageResult};
 
-use super::auto_response::{AutoResponse, AutoResponder};
+use super::auto_response::{AutoResponder, AutoResponse};
 use super::request::InputRequest;
 use super::response::InputResponse;
 

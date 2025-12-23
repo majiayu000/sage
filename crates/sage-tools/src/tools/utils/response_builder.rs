@@ -300,8 +300,7 @@ mod tests {
 
     #[test]
     fn test_command_response() {
-        let response = CommandResponse::new("echo hello")
-            .with_working_directory("/home/user");
+        let response = CommandResponse::new("echo hello").with_working_directory("/home/user");
         let result = response.build("call-1", "BashTool", true, "hello\n", Some(0));
 
         assert!(result.success);

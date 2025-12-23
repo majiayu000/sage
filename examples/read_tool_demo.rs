@@ -1,10 +1,10 @@
 //! Demo of the Read tool functionality
 
-use sage_tools::tools::file_ops::ReadTool;
 use sage_core::tools::base::Tool;
 use sage_core::tools::types::ToolCall;
-use std::collections::HashMap;
+use sage_tools::tools::file_ops::ReadTool;
 use serde_json::json;
+use std::collections::HashMap;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -32,9 +32,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let call1 = ToolCall {
         id: "test-1".to_string(),
         name: "Read".to_string(),
-        arguments: HashMap::from([
-            ("file_path".to_string(), json!(test_file.to_string_lossy().to_string())),
-        ]),
+        arguments: HashMap::from([(
+            "file_path".to_string(),
+            json!(test_file.to_string_lossy().to_string()),
+        )]),
         call_id: None,
     };
 
@@ -56,7 +57,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         id: "test-2".to_string(),
         name: "Read".to_string(),
         arguments: HashMap::from([
-            ("file_path".to_string(), json!(test_file.to_string_lossy().to_string())),
+            (
+                "file_path".to_string(),
+                json!(test_file.to_string_lossy().to_string()),
+            ),
             ("offset".to_string(), json!(20)),
         ]),
         call_id: None,
@@ -78,7 +82,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         id: "test-3".to_string(),
         name: "Read".to_string(),
         arguments: HashMap::from([
-            ("file_path".to_string(), json!(test_file.to_string_lossy().to_string())),
+            (
+                "file_path".to_string(),
+                json!(test_file.to_string_lossy().to_string()),
+            ),
             ("limit".to_string(), json!(10)),
         ]),
         call_id: None,
@@ -100,7 +107,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         id: "test-4".to_string(),
         name: "Read".to_string(),
         arguments: HashMap::from([
-            ("file_path".to_string(), json!(test_file.to_string_lossy().to_string())),
+            (
+                "file_path".to_string(),
+                json!(test_file.to_string_lossy().to_string()),
+            ),
             ("offset".to_string(), json!(29)), // 0-indexed, so 29 = line 30
             ("limit".to_string(), json!(6)),
         ]),

@@ -625,5 +625,8 @@ async fn test_bash_execution_time() {
     assert!(result.success);
     assert!(result.execution_time_ms.is_some());
     assert!(result.execution_time_ms.unwrap() >= 0);
-    println!("✓ Execution time tracked: {} ms", result.execution_time_ms.unwrap());
+    println!(
+        "✓ Execution time tracked: {} ms",
+        result.execution_time_ms.unwrap()
+    );
 }

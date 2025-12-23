@@ -5,10 +5,7 @@ use std::path::Path;
 use super::models::{FileStats, WorkspaceConfig, WorkspaceError};
 
 /// Collect file statistics for a workspace
-pub fn collect_stats(
-    root: &Path,
-    config: &WorkspaceConfig,
-) -> Result<FileStats, WorkspaceError> {
+pub fn collect_stats(root: &Path, config: &WorkspaceConfig) -> Result<FileStats, WorkspaceError> {
     let mut stats = FileStats::default();
     let mut files_scanned = 0;
 
