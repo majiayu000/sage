@@ -205,9 +205,7 @@ impl LlmClient {
             )),
             LlmProvider::Custom(name) => {
                 return Err(SageError::llm_with_provider(
-                    format!(
-                        "Custom provider not implemented. Consider using OpenRouter or Ollama for custom models."
-                    ),
+                    "Custom provider not implemented. Consider using OpenRouter or Ollama for custom models.".to_string(),
                     name,
                 ));
             }

@@ -14,6 +14,8 @@ pub enum GrepOutputMode {
 }
 
 impl GrepOutputMode {
+    /// Parse from string with ToolError
+    #[allow(clippy::should_implement_trait)] // Uses ToolError instead of ParseError
     pub fn from_str(s: &str) -> Result<Self, ToolError> {
         match s {
             "content" => Ok(Self::Content),

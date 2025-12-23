@@ -2,6 +2,7 @@
 
 // Internal modules
 mod args_loader;
+#[allow(clippy::module_inception)] // config module in config directory is intentional
 mod config;
 mod defaults;
 mod env_loader;
