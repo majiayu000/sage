@@ -102,10 +102,10 @@ impl McpToolAdapter {
         let output = mcp_result
             .content
             .iter()
-            .filter_map(|c| match c {
-                McpContent::Text { text } => Some(text.clone()),
-                McpContent::Image { .. } => Some("[Image content]".to_string()),
-                McpContent::Resource { .. } => Some("[Resource reference]".to_string()),
+            .map(|c| match c {
+                McpContent::Text { text } => text.clone(),
+                McpContent::Image { .. } => "[Image content]".to_string(),
+                McpContent::Resource { .. } => "[Resource reference]".to_string(),
             })
             .collect::<Vec<_>>()
             .join("\n");

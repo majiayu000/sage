@@ -291,7 +291,7 @@ impl TrajectoryReplayer {
             .map(|results| {
                 results
                     .iter()
-                    .filter_map(|result| {
+                    .map(|result| {
                         let call_id = result
                             .get("call_id")
                             .and_then(|i| i.as_str())
@@ -311,12 +311,12 @@ impl TrajectoryReplayer {
                             .and_then(|o| o.as_str())
                             .map(|s| s.to_string());
 
-                        Some(ToolResultInfo {
+                        ToolResultInfo {
                             call_id,
                             tool_name,
                             success,
                             output,
-                        })
+                        }
                     })
                     .collect()
             })

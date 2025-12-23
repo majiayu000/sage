@@ -92,11 +92,13 @@ impl MemoryStorage for InMemoryStorage {
     async fn update(&self, memory: Memory) -> Result<(), MemoryStorageError> {
         let id = memory.id.clone();
         let mut memories = self.memories.write().await;
-        if memories.contains_key(&id) {
-            memories.insert(id, memory);
-            Ok(())
-        } else {
-            Err(MemoryStorageError::NotFound(id))
+        use std::collections::hash_map::Entry;
+        match memories.entry(id.clone()) {
+            Entry::Occupied(mut e) => {
+                e.insert(memory);
+                Ok(())
+            }
+            Entry::Vacant(_) => Err(MemoryStorageError::NotFound(id)),
         }
     }
 

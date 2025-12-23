@@ -2,7 +2,7 @@
 //!
 //! Provides supervision strategies for managing task lifecycles and failures.
 
-use super::{ErrorClass, RecoverableError, RecoveryError};
+use super::{RecoverableError, RecoveryError};
 use crate::error::SageError;
 use std::future::Future;
 use std::panic::AssertUnwindSafe;
@@ -235,9 +235,8 @@ impl TaskSupervisor {
 
                 if self.restart_count < *max_restarts && error.is_retryable() {
                     SupervisionAction::Restart
-                } else if error.class == ErrorClass::Permanent {
-                    SupervisionAction::Stop
                 } else {
+                    // Stop for both permanent errors and non-retryable errors
                     SupervisionAction::Stop
                 }
             }

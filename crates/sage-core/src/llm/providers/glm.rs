@@ -63,7 +63,7 @@ impl GlmProvider {
         if let Some(temperature) = self.model_params.temperature {
             // Convert to f64 and round to 2 decimal places to avoid f32 precision issues
             // f32: 0.7 -> 0.699999988079071, f64: 0.7 -> 0.7
-            let rounded_temp = ((temperature as f64 * 100.0).round() / 100.0);
+            let rounded_temp = (temperature as f64 * 100.0).round() / 100.0;
             request_body["temperature"] = json!(rounded_temp);
         } else if let Some(top_p) = self.model_params.top_p {
             request_body["top_p"] = json!(top_p);

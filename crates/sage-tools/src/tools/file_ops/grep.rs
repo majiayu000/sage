@@ -281,11 +281,12 @@ impl GrepTool {
                     // Add context lines before
                     let start = i.saturating_sub(lines_before);
 
-                    for j in start..i {
+                    for (idx, ctx_line) in lines[start..i].iter().enumerate() {
+                        let line_num = start + idx + 1;
                         if show_line_numbers {
-                            matching_lines.push(format!("{}:\t{}", j + 1, lines[j]));
+                            matching_lines.push(format!("{}:\t{}", line_num, ctx_line));
                         } else {
-                            matching_lines.push(lines[j].to_string());
+                            matching_lines.push(ctx_line.to_string());
                         }
                     }
 
@@ -298,11 +299,12 @@ impl GrepTool {
 
                     // Add context lines after
                     let end = std::cmp::min(i + lines_after + 1, lines.len());
-                    for j in (i + 1)..end {
+                    for (idx, ctx_line) in lines[(i + 1)..end].iter().enumerate() {
+                        let line_num = i + 2 + idx;
                         if show_line_numbers {
-                            matching_lines.push(format!("{}:\t{}", j + 1, lines[j]));
+                            matching_lines.push(format!("{}:\t{}", line_num, ctx_line));
                         } else {
-                            matching_lines.push(lines[j].to_string());
+                            matching_lines.push(ctx_line.to_string());
                         }
                     }
 

@@ -212,10 +212,7 @@ impl EventBus {
     /// Returns the number of active receivers that will receive this event.
     /// Returns 0 if there are no active subscribers.
     pub fn publish(&self, event: Event) -> usize {
-        match self.sender.send(event) {
-            Ok(n) => n,
-            Err(_) => 0, // No active receivers
-        }
+        self.sender.send(event).unwrap_or(0)
     }
 
     /// Subscribe to events

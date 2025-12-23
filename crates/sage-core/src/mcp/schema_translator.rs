@@ -239,12 +239,12 @@ impl SchemaTranslator {
     pub fn mcp_content_to_string(content: &[McpContent]) -> String {
         content
             .iter()
-            .filter_map(|c| match c {
-                McpContent::Text { text } => Some(text.clone()),
+            .map(|c| match c {
+                McpContent::Text { text } => text.clone(),
                 McpContent::Image { data, mime_type } => {
-                    Some(format!("[Image: {} ({} bytes)]", mime_type, data.len()))
+                    format!("[Image: {} ({} bytes)]", mime_type, data.len())
                 }
-                McpContent::Resource { resource } => Some(format!("[Resource: {}]", resource.uri)),
+                McpContent::Resource { resource } => format!("[Resource: {}]", resource.uri),
             })
             .collect::<Vec<_>>()
             .join("\n")

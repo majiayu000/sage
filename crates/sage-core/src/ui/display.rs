@@ -190,3 +190,9 @@ impl DisplayManager {
         println!("{}", rendered);
     }
 }
+
+impl Default for DisplayManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}

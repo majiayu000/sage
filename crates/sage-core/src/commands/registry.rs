@@ -351,10 +351,10 @@ impl CommandRegistry {
         let mut metadata = HashMap::new();
 
         // Check for YAML frontmatter (--- ... ---)
-        if content.starts_with("---") {
-            if let Some(end) = content[3..].find("---") {
-                let frontmatter = &content[3..3 + end];
-                let prompt_template = content[3 + end + 3..].trim().to_string();
+        if let Some(after_prefix) = content.strip_prefix("---") {
+            if let Some(end) = after_prefix.find("---") {
+                let frontmatter = &after_prefix[..end];
+                let prompt_template = after_prefix[end + 3..].trim().to_string();
 
                 // Parse simple YAML key: value pairs
                 for line in frontmatter.lines() {

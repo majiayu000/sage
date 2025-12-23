@@ -107,8 +107,7 @@ impl CLIConsole {
     pub fn print_tool_execution(&self, tool_name: &str, args: &str) {
         if self.verbose {
             println!(
-                "  {} {} {}",
-                "🔧",
+                "  🔧 {} {}",
                 tool_name.magenta().bold(),
                 args.dimmed()
             );

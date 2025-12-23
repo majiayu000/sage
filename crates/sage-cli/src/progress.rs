@@ -166,12 +166,11 @@ pub fn show_step_header(step: u32, max_steps: u32) {
 
     println!();
     println!("{}", "═".repeat(60).blue());
+    let step_text = format!("STEP {}/{}", step, max_steps).blue().bold();
+    let percent = (step as f32 / max_steps as f32 * 100.0) as u32;
     println!(
-        "{} {} {} {}",
-        "🚀",
-        format!("STEP {}/{}", step, max_steps).blue().bold(),
-        format!("[{}]", progress_bar),
-        format!("{}%", (step as f32 / max_steps as f32 * 100.0) as u32).blue()
+        "🚀 {} [{}] {}%",
+        step_text, progress_bar, percent.to_string().blue()
     );
     println!("{}", "═".repeat(60).blue());
 }

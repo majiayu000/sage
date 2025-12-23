@@ -432,6 +432,7 @@ impl FallbackChainBuilder {
     }
 
     /// Add a model to the chain
+    #[allow(clippy::should_implement_trait)]
     pub fn add(mut self, config: ModelConfig) -> Self {
         self.models.push(config);
         self

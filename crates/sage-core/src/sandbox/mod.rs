@@ -150,6 +150,7 @@ impl DefaultSandbox {
     }
 
     /// Create a sandbox with default configuration
+    #[allow(clippy::self_named_constructors)]
     pub fn default_sandbox() -> SandboxResult<Self> {
         Self::new(SandboxConfig::default())
     }

@@ -26,7 +26,7 @@ impl LifecycleHookRegistry {
         let mut hooks = self.hooks.write().await;
         hooks.push(hook);
         // Sort by priority (higher first)
-        hooks.sort_by(|a, b| b.priority().cmp(&a.priority()));
+        hooks.sort_by_key(|h| std::cmp::Reverse(h.priority()));
     }
 
     /// Unregister a hook by name

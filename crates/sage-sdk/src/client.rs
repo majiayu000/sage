@@ -90,11 +90,11 @@ impl SageAgentSDK {
                 params.api_key = Some(key.to_string());
             }
         } else {
-            let mut params = sage_core::config::model::ModelParameters::default();
-            params.model = model.to_string();
-            if let Some(key) = api_key {
-                params.api_key = Some(key.to_string());
-            }
+            let params = sage_core::config::model::ModelParameters {
+                model: model.to_string(),
+                api_key: api_key.map(|k| k.to_string()),
+                ..Default::default()
+            };
             self.config
                 .model_providers
                 .insert(provider.to_string(), params);

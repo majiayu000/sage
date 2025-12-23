@@ -338,10 +338,10 @@ impl SkillRegistry {
     fn parse_skill_file(&self, content: &str) -> (HashMap<String, String>, String) {
         let mut metadata = HashMap::new();
 
-        if content.starts_with("---") {
-            if let Some(end) = content[3..].find("---") {
-                let frontmatter = &content[3..3 + end];
-                let prompt = content[3 + end + 3..].trim().to_string();
+        if let Some(after_prefix) = content.strip_prefix("---") {
+            if let Some(end) = after_prefix.find("---") {
+                let frontmatter = &after_prefix[..end];
+                let prompt = after_prefix[end + 3..].trim().to_string();
 
                 for line in frontmatter.lines() {
                     if let Some(colon) = line.find(':') {
