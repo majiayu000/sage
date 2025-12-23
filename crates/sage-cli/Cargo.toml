@@ -34,9 +34,6 @@ futures = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
-# Utilities
-uuid = { workspace = true }
-
 # Synchronization
 parking_lot = { workspace = true }
 
