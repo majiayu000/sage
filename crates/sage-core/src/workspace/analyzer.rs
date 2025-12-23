@@ -6,10 +6,10 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use super::dependencies;
-use super::detector::ProjectTypeDetector;
+use super::detector::{LanguageType, ProjectTypeDetector};
 use super::entry_points;
 use super::git;
-use super::models::{AnalysisResult, WorkspaceConfig, WorkspaceError};
+use super::models::{AnalysisResult, FileStats, WorkspaceConfig, WorkspaceError};
 use super::patterns::PatternMatcher;
 use super::statistics;
 use super::structure;
@@ -48,10 +48,9 @@ impl WorkspaceAnalyzer {
             return Err(WorkspaceError::NotADirectory(self.root.clone()));
         }
 
-        // Detect project type
-        let project_type = ProjectTypeDetector::new(&self.root)
-            .with_max_depth(self.config.max_depth)
-            .detect();
+        // Detect project type (fast, without extra filesystem scans)
+        let detector = ProjectTypeDetector::new(&self.root).with_max_depth(self.config.max_depth);
+        let mut project_type = detector.detect_fast();
 
         // Find important files
         let matcher = PatternMatcher::for_language(project_type.primary_language);
@@ -59,6 +58,13 @@ impl WorkspaceAnalyzer {
 
         // Collect file statistics
         let stats = statistics::collect_stats(&self.root, &self.config)?;
+
+        if project_type.primary_language == LanguageType::Unknown {
+            if let Some(lang) = primary_language_from_stats(&stats) {
+                project_type.primary_language = lang;
+                detector.recalculate_confidence(&mut project_type);
+            }
+        }
 
         // Find entry points
         let entry_points = entry_points::find_entry_points(&important_files, &project_type);
@@ -107,6 +113,31 @@ impl WorkspaceAnalyzer {
             .with_max_depth(self.config.max_depth)
             .detect()
     }
+}
+
+fn primary_language_from_stats(stats: &FileStats) -> Option<LanguageType> {
+    stats
+        .by_language
+        .iter()
+        .max_by_key(|(_, count)| *count)
+        .and_then(|(lang, _)| match lang.as_str() {
+            "Rust" => Some(LanguageType::Rust),
+            "TypeScript" => Some(LanguageType::TypeScript),
+            "JavaScript" => Some(LanguageType::JavaScript),
+            "Python" => Some(LanguageType::Python),
+            "Go" => Some(LanguageType::Go),
+            "Java" => Some(LanguageType::Java),
+            "C#" => Some(LanguageType::CSharp),
+            "C++" => Some(LanguageType::Cpp),
+            "C" => Some(LanguageType::C),
+            "Ruby" => Some(LanguageType::Ruby),
+            "Swift" => Some(LanguageType::Swift),
+            "Kotlin" => Some(LanguageType::Kotlin),
+            "Scala" => Some(LanguageType::Scala),
+            "PHP" => Some(LanguageType::Php),
+            "Shell" => Some(LanguageType::Shell),
+            _ => None,
+        })
 }
 
 #[cfg(test)]

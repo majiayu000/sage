@@ -55,6 +55,23 @@ impl ProjectTypeDetector {
         project_type
     }
 
+    /// Detect project type without extra filesystem scans.
+    pub fn detect_fast(&self) -> ProjectType {
+        let mut project_type = ProjectType::default();
+
+        // Run all language-specific detectors
+        detectors::detect_all(&self.root, &mut project_type);
+
+        // Skip file-count language detection here to avoid extra scans
+        project_type.confidence = self.calculate_confidence(&project_type);
+        project_type
+    }
+
+    /// Recalculate confidence after external updates.
+    pub fn recalculate_confidence(&self, project_type: &mut ProjectType) {
+        project_type.confidence = self.calculate_confidence(project_type);
+    }
+
     fn calculate_confidence(&self, project: &ProjectType) -> f32 {
         let mut confidence: f32 = 0.0;
 
