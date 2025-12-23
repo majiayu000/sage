@@ -19,6 +19,9 @@
 #![allow(clippy::derivable_impls)]
 #![allow(clippy::type_complexity)]
 #![allow(clippy::too_many_arguments)]
+#![allow(clippy::unnecessary_map_or)]
+#![allow(clippy::redundant_closure)]
+#![allow(clippy::manual_range_patterns)]
 //! Clients can check compatibility using [`version::is_compatible`] or
 //! [`version::negotiate_version`].
 //!
