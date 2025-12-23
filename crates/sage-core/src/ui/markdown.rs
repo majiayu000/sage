@@ -259,3 +259,80 @@ pub fn render_markdown(text: &str) -> String {
 pub fn render_markdown_with_width(text: &str, width: usize) -> String {
     MarkdownRenderer::new().with_width(width).render(text)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_markdown_renderer_creation() {
+        let renderer = MarkdownRenderer::new();
+        assert_eq!(renderer.width, 80);
+    }
+
+    #[test]
+    fn test_markdown_renderer_with_width() {
+        let renderer = MarkdownRenderer::new().with_width(120);
+        assert_eq!(renderer.width, 120);
+    }
+
+    #[test]
+    fn test_render_simple_text() {
+        let renderer = MarkdownRenderer::new();
+        let result = renderer.render("Hello, World!");
+        assert!(result.contains("Hello, World!"));
+    }
+
+    #[test]
+    fn test_render_heading() {
+        let renderer = MarkdownRenderer::new();
+        let result = renderer.render("# Heading 1");
+        // Should contain the heading text
+        assert!(result.contains("Heading 1"));
+    }
+
+    #[test]
+    fn test_render_list() {
+        let renderer = MarkdownRenderer::new();
+        let result = renderer.render("- Item 1\n- Item 2");
+        // Should contain bullet points
+        assert!(result.contains("•"));
+        assert!(result.contains("Item 1"));
+        assert!(result.contains("Item 2"));
+    }
+
+    #[test]
+    fn test_render_code_block() {
+        let renderer = MarkdownRenderer::new();
+        let result = renderer.render("```rust\nlet x = 1;\n```");
+        // Should contain the code
+        assert!(result.contains("let x = 1"));
+        // Should have box drawing characters
+        assert!(result.contains("┌") || result.contains("│"));
+    }
+
+    #[test]
+    fn test_render_inline_code() {
+        let renderer = MarkdownRenderer::new();
+        let result = renderer.render("Use `println!` for output");
+        assert!(result.contains("println!"));
+    }
+
+    #[test]
+    fn test_render_markdown_function() {
+        let result = render_markdown("**bold text**");
+        assert!(result.contains("bold text"));
+    }
+
+    #[test]
+    fn test_render_markdown_with_width_function() {
+        let result = render_markdown_with_width("test", 40);
+        assert!(result.contains("test"));
+    }
+
+    #[test]
+    fn test_default_trait() {
+        let renderer = MarkdownRenderer::default();
+        assert_eq!(renderer.width, 80);
+    }
+}
