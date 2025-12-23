@@ -121,10 +121,6 @@ pub struct McpServerCache {
     pub updated_at: Option<DateTime<Utc>>,
 }
 
-/// Deprecated: Use `McpServerCache` instead
-#[deprecated(since = "0.2.0", note = "Use `McpServerCache` instead")]
-pub type McpServerCache = McpServerCache;
-
 /// Cached MCP server configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpServerConfig {
@@ -141,10 +137,6 @@ pub struct McpServerConfig {
     /// When this config was last used
     pub last_used: Option<DateTime<Utc>>,
 }
-
-/// Deprecated: Use `McpServerConfig` instead
-#[deprecated(since = "0.2.0", note = "Use `McpServerConfig` instead")]
-pub type McpServerConfig = McpServerConfig;
 
 /// Recent session entry
 #[derive(Debug, Clone, Serialize, Deserialize)]

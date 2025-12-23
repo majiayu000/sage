@@ -85,10 +85,6 @@ pub struct LlmMessage {
     pub metadata: HashMap<String, serde_json::Value>,
 }
 
-/// Deprecated: Use `LlmMessage` instead
-#[deprecated(since = "0.2.0", note = "Use `LlmMessage` instead")]
-pub type LlmMessage = LlmMessage;
-
 impl LlmMessage {
     /// Create a new system message
     pub fn system<S: Into<String>>(content: S) -> Self {
@@ -210,10 +206,6 @@ pub struct LlmResponse {
     /// Additional metadata from the provider
     pub metadata: HashMap<String, serde_json::Value>,
 }
-
-/// Deprecated: Use `LlmResponse` instead
-#[deprecated(since = "0.2.0", note = "Use `LlmResponse` instead")]
-pub type LlmResponse = LlmResponse;
 
 impl LlmResponse {
     /// Create a new LLM response

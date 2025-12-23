@@ -437,7 +437,9 @@ auto_connect = true
 
     #[test]
     fn test_load_provider_from_env_base_url() {
+        // Clean up any leftover env vars from other tests that might run in parallel
         unsafe {
+            std::env::remove_var("GOOGLE_TEMPERATURE");
             std::env::set_var("OLLAMA_BASE_URL", "http://localhost:11434");
             std::env::set_var("OLLAMA_MODEL", "llama2");
         }

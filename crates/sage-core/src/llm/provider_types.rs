@@ -158,10 +158,6 @@ pub enum LlmProvider {
     Custom(String),
 }
 
-/// Deprecated: Use `LlmProvider` instead
-#[deprecated(since = "0.2.0", note = "Use `LlmProvider` instead")]
-pub type LlmProvider = LlmProvider;
-
 impl LlmProvider {
     /// Get the provider name as a string
     pub fn name(&self) -> &str {

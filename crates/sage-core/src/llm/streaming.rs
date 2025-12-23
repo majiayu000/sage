@@ -69,23 +69,8 @@ impl StreamChunk {
 /// Stream of LLM response chunks
 pub type LlmStream = Pin<Box<dyn Stream<Item = SageResult<StreamChunk>> + Send>>;
 
-/// Deprecated: Use `LlmStream` instead
-#[deprecated(since = "0.2.0", note = "Use `LlmStream` instead")]
-pub type LlmStream = LlmStream;
-
 /// Trait for streaming LLM clients
 #[async_trait]
-pub trait StreamingLlmClient {
-    /// Send a streaming chat completion request
-    async fn chat_stream(
-        &self,
-        messages: &[LlmMessage],
-        tools: Option<&[ToolSchema]>,
-    ) -> SageResult<LlmStream>;
-}
-
-/// Deprecated: Use `StreamingLlmClient` instead
-#[deprecated(since = "0.2.0", note = "Use `StreamingLlmClient` instead")]
 pub trait StreamingLlmClient {
     /// Send a streaming chat completion request
     async fn chat_stream(

@@ -17,10 +17,6 @@ pub struct SseEvent {
     pub id: Option<String>,
 }
 
-/// Deprecated: Use `SseEvent` instead
-#[deprecated(since = "0.2.0", note = "Use `SseEvent` instead")]
-pub type SseEvent = SseEvent;
-
 impl SseEvent {
     /// Create a new SSE event with just data
     pub fn new(data: impl Into<String>) -> Self {
@@ -63,10 +59,6 @@ pub struct SseDecoder {
     /// Buffer for incomplete data
     buffer: String,
 }
-
-/// Deprecated: Use `SseDecoder` instead
-#[deprecated(since = "0.2.0", note = "Use `SseDecoder` instead")]
-pub type SseDecoder = SseDecoder;
 
 impl SseDecoder {
     /// Create a new SSE decoder

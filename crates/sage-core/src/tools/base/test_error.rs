@@ -2,8 +2,8 @@
 
 #![cfg(test)]
 
-use super::concurrency::ConcurrencyMode;
-use super::error::ToolError;
+use crate::tools::base::concurrency::ConcurrencyMode;
+use crate::tools::base::error::ToolError;
 use crate::error::SageError;
 
 #[test]

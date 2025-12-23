@@ -2,7 +2,7 @@
 
 use crate::client::SageAgentSDK;
 use sage_core::{
-    config::{loader::load_config_with_overrides, model::Config},
+    config::{load_config_with_overrides, model::Config},
     error::SageResult,
 };
 use std::collections::HashMap;

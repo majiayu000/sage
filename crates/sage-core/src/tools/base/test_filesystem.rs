@@ -2,7 +2,7 @@
 
 #![cfg(test)]
 
-use super::filesystem_tool::FileSystemTool;
+use crate::tools::base::filesystem_tool::FileSystemTool;
 use super::test_mocks::MockTool;
 
 #[test]

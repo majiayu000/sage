@@ -27,10 +27,6 @@ pub struct LlmUsage {
     pub cache_read_input_tokens: Option<u32>,
 }
 
-/// Deprecated: Use `LlmUsage` instead
-#[deprecated(since = "0.2.0", note = "Use `LlmUsage` instead")]
-pub type LlmUsage = LlmUsage;
-
 impl LlmUsage {
     /// Create a new LlmUsage instance
     pub fn new(prompt_tokens: u32, completion_tokens: u32) -> Self {

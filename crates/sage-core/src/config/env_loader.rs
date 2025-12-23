@@ -127,8 +127,16 @@ fn load_provider_from_env(
 mod tests {
     use super::*;
 
+    /// Clean up any leftover env vars from other tests that might run in parallel
+    fn clean_test_env() {
+        unsafe {
+            std::env::remove_var("GOOGLE_TEMPERATURE");
+        }
+    }
+
     #[test]
     fn test_load_from_env_basic() {
+        clean_test_env();
         unsafe {
             std::env::set_var("SAGE_DEFAULT_PROVIDER", "google");
             std::env::set_var("SAGE_MAX_STEPS", "75");
@@ -146,6 +154,7 @@ mod tests {
 
     #[test]
     fn test_load_from_env_with_provider() {
+        clean_test_env();
         unsafe {
             std::env::set_var("OPENAI_API_KEY", "env_test_key");
             std::env::set_var("OPENAI_MODEL", "gpt-4-turbo");
@@ -168,6 +177,7 @@ mod tests {
 
     #[test]
     fn test_load_provider_temperature_and_tokens() {
+        clean_test_env();
         unsafe {
             std::env::set_var("ANTHROPIC_API_KEY", "test_key");
             std::env::set_var("ANTHROPIC_MODEL", "claude-3");
@@ -208,6 +218,7 @@ mod tests {
 
     #[test]
     fn test_load_provider_base_url() {
+        clean_test_env();
         unsafe {
             std::env::set_var("OLLAMA_BASE_URL", "http://localhost:11434");
             std::env::set_var("OLLAMA_MODEL", "llama2");
@@ -227,6 +238,7 @@ mod tests {
 
     #[test]
     fn test_load_lakeview_enabled() {
+        clean_test_env();
         unsafe {
             std::env::set_var("SAGE_ENABLE_LAKEVIEW", "true");
         }
@@ -241,6 +253,7 @@ mod tests {
 
     #[test]
     fn test_load_multiple_providers() {
+        clean_test_env();
         unsafe {
             std::env::set_var("OPENAI_API_KEY", "openai_key");
             std::env::set_var("OPENAI_MODEL", "gpt-4");

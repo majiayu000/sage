@@ -2,7 +2,7 @@
 
 #![cfg(test)]
 
-use super::command_tool::CommandTool;
+use crate::tools::base::command_tool::CommandTool;
 use super::test_mocks::MockCommandTool;
 
 #[test]

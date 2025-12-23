@@ -2,10 +2,10 @@
 
 #![cfg(test)]
 
-use super::command_tool::CommandTool;
-use super::error::ToolError;
-use super::filesystem_tool::FileSystemTool;
-use super::tool_trait::Tool;
+use crate::tools::base::command_tool::CommandTool;
+use crate::tools::base::error::ToolError;
+use crate::tools::base::filesystem_tool::FileSystemTool;
+use crate::tools::base::tool_trait::Tool;
 use crate::tools::types::{ToolCall, ToolResult, ToolSchema};
 use async_trait::async_trait;
 use std::path::PathBuf;

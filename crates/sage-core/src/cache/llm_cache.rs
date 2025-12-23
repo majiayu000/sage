@@ -15,10 +15,6 @@ pub struct LlmCache {
     default_ttl: Option<Duration>,
 }
 
-/// Deprecated: Use `LlmCache` instead
-#[deprecated(since = "0.2.0", note = "Use `LlmCache` instead")]
-pub type LlmCache = LlmCache;
-
 impl LlmCache {
     /// Create a new LLM cache
     pub fn new(cache_manager: CacheManager, default_ttl: Option<Duration>) -> Self {
@@ -115,10 +111,6 @@ pub struct LlmCacheBuilder {
     default_ttl: Option<Duration>,
 }
 
-/// Deprecated: Use `LlmCacheBuilder` instead
-#[deprecated(since = "0.2.0", note = "Use `LlmCacheBuilder` instead")]
-pub type LlmCacheBuilder = LlmCacheBuilder;
-
 impl LlmCacheBuilder {
     /// Create a new builder
     pub fn new() -> Self {
@@ -164,10 +156,6 @@ pub struct CachedLlmClient<T> {
     /// Whether to use cache for writes
     enable_write_cache: bool,
 }
-
-/// Deprecated: Use `CachedLlmClient` instead
-#[deprecated(since = "0.2.0", note = "Use `CachedLlmClient` instead")]
-pub type CachedLlmClient<T> = CachedLlmClient<T>;
 
 impl<T> CachedLlmClient<T> {
     /// Create a new cached LLM client

@@ -66,10 +66,6 @@ pub struct LlmClient {
     provider_instance: ProviderInstance,
 }
 
-/// Deprecated: Use `LlmClient` instead
-#[deprecated(since = "0.2.0", note = "Use `LlmClient` instead")]
-pub type LlmClient = LlmClient;
-
 impl LlmClient {
     /// Create a new LLM client.
     ///

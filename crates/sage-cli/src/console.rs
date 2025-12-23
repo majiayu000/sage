@@ -12,10 +12,6 @@ pub struct CliConsole {
     progress_bar: Option<ProgressBar>,
 }
 
-/// Deprecated: Use `CliConsole` instead
-#[deprecated(since = "0.2.0", note = "Use `CliConsole` instead")]
-pub type CliConsole = CliConsole;
-
 impl CliConsole {
     /// Create a new CLI console
     pub const fn new(verbose: bool) -> Self {
