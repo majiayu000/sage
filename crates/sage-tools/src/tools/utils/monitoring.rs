@@ -1,5 +1,6 @@
 //! Tool monitoring and metrics system
 
+use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -238,9 +239,7 @@ impl MonitoringReport {
 }
 
 // Global tool monitor instance
-lazy_static::lazy_static! {
-    pub static ref GLOBAL_MONITOR: ToolMonitor = ToolMonitor::new();
-}
+pub static GLOBAL_MONITOR: Lazy<ToolMonitor> = Lazy::new(ToolMonitor::new);
 
 /// Helper function to record a successful execution
 pub fn record_success(tool_name: &str, execution_time: Duration) {

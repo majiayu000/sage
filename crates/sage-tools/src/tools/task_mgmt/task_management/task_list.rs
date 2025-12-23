@@ -1,6 +1,7 @@
 //! Task list management and operations
 
 use super::types::{Task, TaskState};
+use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use sage_core::tools::base::ToolError;
 use std::collections::HashMap;
@@ -166,6 +167,4 @@ impl TaskList {
 }
 
 // Global task list instance
-lazy_static::lazy_static! {
-    pub static ref GLOBAL_TASK_LIST: TaskList = TaskList::new();
-}
+pub static GLOBAL_TASK_LIST: Lazy<TaskList> = Lazy::new(TaskList::new);

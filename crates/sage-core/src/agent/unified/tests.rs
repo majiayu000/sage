@@ -62,7 +62,14 @@ mod tests {
     fn test_builder_working_directory() {
         let options = ExecutionOptions::interactive().with_working_directory("/tmp");
         assert!(options.working_directory.is_some());
-        assert_eq!(options.working_directory.unwrap().to_str().unwrap(), "/tmp");
+        assert_eq!(
+            options
+                .working_directory
+                .expect("working_directory should be Some in test context")
+                .to_str()
+                .expect("working_directory path should be valid UTF-8"),
+            "/tmp"
+        );
     }
 
     #[test]

@@ -16,6 +16,7 @@ sage-core = { path = "../sage-core" }
 # Async runtime
 tokio = { workspace = true }
 tokio-util = { workspace = true }
+futures = { workspace = true }
 
 # Serialization
 serde = { workspace = true }
@@ -41,7 +42,6 @@ jsonpath-rust = { workspace = true }
 chrono = { workspace = true }
 
 # Static variables
-lazy_static = "1.4"
 once_cell = { workspace = true }
 
 # Synchronization
@@ -53,6 +53,7 @@ toml = "0.8"
 # HTTP client
 reqwest = { workspace = true }
 base64 = "0.21"
+html2md-rs = "0.10.2"
 
 # Regular expressions
 regex = "1.5"

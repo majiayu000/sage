@@ -4,6 +4,7 @@
 //! Now with actual execution support via SubAgentRunner.
 
 use async_trait::async_trait;
+use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 use sage_core::agent::subagent::{AgentType, SubAgentConfig, Thoroughness, execute_subagent};
 use sage_core::tools::base::{Tool, ToolError};
@@ -112,9 +113,8 @@ impl TaskRegistry {
 }
 
 // Global task registry
-lazy_static::lazy_static! {
-    pub static ref GLOBAL_TASK_REGISTRY: Arc<TaskRegistry> = Arc::new(TaskRegistry::new());
-}
+pub static GLOBAL_TASK_REGISTRY: Lazy<Arc<TaskRegistry>> =
+    Lazy::new(|| Arc::new(TaskRegistry::new()));
 
 /// Task tool for spawning subagents
 pub struct TaskTool {

@@ -51,7 +51,6 @@ shellexpand = { workspace = true }
 lru = { workspace = true }
 flate2 = "1.0"
 dashmap = "6.0"
-lazy_static = "1.4"
 once_cell = { workspace = true }
 shell-words = "1.1"
 glob = "0.3"

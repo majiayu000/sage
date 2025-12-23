@@ -5,6 +5,7 @@ pub mod background_task;
 pub mod base;
 pub mod batch_executor;
 pub mod executor;
+pub mod names;
 pub mod parallel_executor;
 pub mod permission;
 pub mod registry;

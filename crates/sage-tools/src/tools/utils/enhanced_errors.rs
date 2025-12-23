@@ -71,6 +71,7 @@ impl EnhancedToolError {
             ToolError::ExecutionFailed(_) => "ExecutionFailed".to_string(),
             ToolError::ValidationFailed(_) => "ValidationFailed".to_string(),
             ToolError::Cancelled => "Cancelled".to_string(),
+            ToolError::ConfirmationRequired(_) => "ConfirmationRequired".to_string(),
             ToolError::Other(_) => "Other".to_string(),
         }
     }
@@ -117,6 +118,7 @@ impl EnhancedToolError {
             ToolError::ExecutionFailed(_) => ErrorCategory::Internal,
             ToolError::ValidationFailed(_) => ErrorCategory::UserInput,
             ToolError::Cancelled => ErrorCategory::Internal,
+            ToolError::ConfirmationRequired(_) => ErrorCategory::UserInput,
             ToolError::Other(_) => ErrorCategory::Internal,
         }
     }
@@ -133,6 +135,7 @@ impl EnhancedToolError {
             ToolError::ExecutionFailed(_) => false,
             ToolError::ValidationFailed(_) => true,
             ToolError::Cancelled => false,
+            ToolError::ConfirmationRequired(_) => true,
             ToolError::Other(_) => false,
         }
     }

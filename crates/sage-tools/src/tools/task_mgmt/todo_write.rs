@@ -4,6 +4,7 @@
 //! Replaces the entire todo list with each call.
 
 use async_trait::async_trait;
+use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolResult, ToolSchema};
@@ -111,9 +112,8 @@ impl TodoList {
 }
 
 // Global todo list instance
-lazy_static::lazy_static! {
-    pub static ref GLOBAL_TODO_LIST: Arc<TodoList> = Arc::new(TodoList::new());
-}
+pub static GLOBAL_TODO_LIST: Lazy<Arc<TodoList>> =
+    Lazy::new(|| Arc::new(TodoList::new()));
 
 /// TodoWrite tool - Claude Code compatible
 pub struct TodoWriteTool {

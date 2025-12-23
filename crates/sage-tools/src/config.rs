@@ -1,5 +1,6 @@
 //! Configuration system for Sage Tools
 
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -239,10 +240,8 @@ impl ToolsConfig {
 }
 
 // Global configuration instance
-lazy_static::lazy_static! {
-    pub static ref GLOBAL_CONFIG: std::sync::RwLock<ToolsConfig> =
-        std::sync::RwLock::new(ToolsConfig::default());
-}
+pub static GLOBAL_CONFIG: Lazy<std::sync::RwLock<ToolsConfig>> =
+    Lazy::new(|| std::sync::RwLock::new(ToolsConfig::default()));
 
 /// Helper function to get global configuration
 pub fn get_global_config() -> ToolsConfig {

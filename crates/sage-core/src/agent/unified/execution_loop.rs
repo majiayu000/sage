@@ -19,6 +19,11 @@ impl UnifiedExecutor {
         provider_name: String,
         max_steps: Option<u32>,
     ) -> SageResult<ExecutionOutcome> {
+        // Repetition detection: track recent outputs to detect loops
+        const MAX_RECENT_OUTPUTS: usize = 3;
+        const REPETITION_THRESHOLD: usize = 2; // Force completion after N similar outputs
+        let mut recent_outputs: Vec<String> = Vec::with_capacity(MAX_RECENT_OUTPUTS);
+
         let outcome = 'execution_loop: {
             let mut step_number = 0u32;
             loop {
@@ -44,7 +49,44 @@ impl UnifiedExecutor {
                     .execute_step(step_number, &messages, &tool_schemas, &task_scope)
                     .await
                 {
-                    Ok((step, new_messages)) => {
+                    Ok((mut step, new_messages)) => {
+                        // Repetition detection: check if output is repeated
+                        // Only check non-empty content - empty strings are normal when AI only calls tools
+                        if let Some(ref response) = step.llm_response {
+                            let content_trimmed = response.content.trim();
+
+                            // Skip repetition detection for empty or very short content
+                            // (AI often returns empty content when only calling tools)
+                            if content_trimmed.len() >= 10 {
+                                let output_key = if content_trimmed.len() > 200 {
+                                    // Use first 200 chars as fingerprint for long outputs
+                                    content_trimmed.chars().take(200).collect::<String>()
+                                } else {
+                                    content_trimmed.to_string()
+                                };
+
+                                // Count how many recent outputs are similar
+                                let repetition_count = recent_outputs
+                                    .iter()
+                                    .filter(|o| *o == &output_key)
+                                    .count();
+
+                                if repetition_count >= REPETITION_THRESHOLD {
+                                    tracing::warn!(
+                                        repetition_count = repetition_count,
+                                        "Detected repeated output, forcing completion to prevent infinite loop"
+                                    );
+                                    step.state = AgentState::Completed;
+                                }
+
+                                // Track this output
+                                if recent_outputs.len() >= MAX_RECENT_OUTPUTS {
+                                    recent_outputs.remove(0);
+                                }
+                                recent_outputs.push(output_key);
+                            }
+                        }
+
                         let is_completed = step.state == AgentState::Completed;
 
                         // Record step in trajectory
@@ -127,11 +169,13 @@ impl UnifiedExecutor {
 
     /// Record step in JSONL session
     async fn record_step_in_session(&mut self, step: &AgentStep) -> SageResult<()> {
-        if self.current_session_id.is_none() || step.llm_response.is_none() {
+        if self.current_session_id.is_none() {
             return Ok(());
         }
 
-        let llm_response = step.llm_response.as_ref().unwrap();
+        let Some(llm_response) = step.llm_response.as_ref() else {
+            return Ok(());
+        };
 
         // Convert tool calls if any exist
         let tool_calls = if !llm_response.tool_calls.is_empty() {

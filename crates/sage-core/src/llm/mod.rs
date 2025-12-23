@@ -4,6 +4,7 @@ pub mod client;
 pub mod converters;
 pub mod fallback;
 pub mod messages;
+pub mod model_capabilities;
 pub mod parsers;
 pub mod provider_fallback;
 pub mod provider_types;

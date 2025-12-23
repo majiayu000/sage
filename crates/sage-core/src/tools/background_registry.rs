@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use dashmap::DashMap;
+use once_cell::sync::Lazy;
 use tracing::{debug, info, warn};
 
 use super::background_task::{BackgroundShellTask, BackgroundTaskStatus};
@@ -186,11 +187,9 @@ impl Default for BackgroundTaskRegistry {
 }
 
 // Global singleton registry
-lazy_static::lazy_static! {
-    /// Global background task registry
-    pub static ref BACKGROUND_REGISTRY: Arc<BackgroundTaskRegistry> =
-        Arc::new(BackgroundTaskRegistry::new());
-}
+/// Global background task registry
+pub static BACKGROUND_REGISTRY: Lazy<Arc<BackgroundTaskRegistry>> =
+    Lazy::new(|| Arc::new(BackgroundTaskRegistry::new()));
 
 /// Get the global background task registry
 pub fn global_registry() -> &'static Arc<BackgroundTaskRegistry> {

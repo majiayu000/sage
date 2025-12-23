@@ -19,6 +19,7 @@ mod trajectory_config;
 pub mod loader;
 pub mod model;
 pub mod provider;
+pub mod timeouts;
 pub mod validation;
 
 // Re-export public API
