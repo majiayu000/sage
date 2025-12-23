@@ -72,12 +72,12 @@ impl ToolCall {
 /// # Standard Format
 ///
 /// All tool responses follow this structure:
-/// - `success`: bool - Whether the tool execution succeeded
-/// - `output`: Option<String> - The primary output text (present on success)
-/// - `error`: Option<String> - Error message (present on failure)
-/// - `metadata`: HashMap<String, serde_json::Value> - Additional structured data
-/// - `exit_code`: Option<i32> - Exit code for command-line tools (0 = success)
-/// - `execution_time_ms`: Option<u64> - Execution duration in milliseconds
+/// - `success`: `bool` - Whether the tool execution succeeded
+/// - `output`: `Option<String>` - The primary output text (present on success)
+/// - `error`: `Option<String>` - Error message (present on failure)
+/// - `metadata`: `HashMap<String, Value>` - Additional structured data
+/// - `exit_code`: `Option<i32>` - Exit code for command-line tools (0 = success)
+/// - `execution_time_ms`: `Option<u64>` - Execution duration in milliseconds
 ///
 /// # Examples
 ///
