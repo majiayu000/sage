@@ -53,22 +53,22 @@ Based on the comprehensive audit in `docs/naming-convention-audit.md`, the follo
 5. **LLMCache** → **LlmCache**
    - Location: `crates/sage-core/src/cache/llm_cache.rs`
    - Impact: Caching functionality for LLM responses
-   - Status: 🔄 **IN PROGRESS** - Needs deprecated alias
+   - Status: ✅ **COMPLETED** - Renamed with deprecated alias
 
 6. **LLMCacheBuilder** → **LlmCacheBuilder**
    - Location: `crates/sage-core/src/cache/llm_cache.rs`
    - Impact: Builder pattern for LLM cache
-   - Status: 🔄 **IN PROGRESS** - Needs deprecated alias
+   - Status: ✅ **COMPLETED** - Renamed with deprecated alias
 
 7. **LLMInteractionRecord** → **LlmInteractionRecord**
    - Location: `crates/sage-core/src/trajectory/recorder.rs`
    - Impact: Trajectory recording functionality
-   - Status: 🔄 **IN PROGRESS** - Needs deprecated alias
+   - Status: ✅ **COMPLETED** - Renamed with deprecated alias
 
 8. **LLMResponseRecord** → **LlmResponseRecord**
    - Location: `crates/sage-core/src/trajectory/recorder.rs`
    - Impact: Trajectory recording functionality
-   - Status: 🔄 **IN PROGRESS** - Needs deprecated alias
+   - Status: ✅ **COMPLETED** - Renamed with deprecated alias
 
 9. **LLMProvider** → **LlmProvider**
    - Location: `crates/sage-core/src/llm/provider_types.rs`
@@ -78,7 +78,7 @@ Based on the comprehensive audit in `docs/naming-convention-audit.md`, the follo
 10. **LLMStream** → **LlmStream**
     - Location: `crates/sage-core/src/llm/streaming.rs`
     - Impact: Type alias for streaming functionality
-    - Status: 🔄 **IN PROGRESS** - Needs deprecated alias
+    - Status: ✅ **COMPLETED** - Renamed with deprecated alias
 
 #### SSE-prefixed Types (2 instances)
 
@@ -97,19 +97,19 @@ Based on the comprehensive audit in `docs/naming-convention-audit.md`, the follo
 13. **MCPServerCache** → **McpServerCache**
     - Location: `crates/sage-core/src/session/session_cache.rs`
     - Impact: MCP server caching functionality
-    - Status: 🔄 **IN PROGRESS** - Needs deprecated alias
+    - Status: ✅ **COMPLETED** - Renamed with deprecated alias
 
 14. **MCPServerConfig** → **McpServerConfig**
     - Location: `crates/sage-core/src/session/session_cache.rs`
     - Impact: MCP server configuration
-    - Status: 🔄 **IN PROGRESS** - Needs deprecated alias
+    - Status: ✅ **COMPLETED** - Renamed with deprecated alias
 
 #### CLI-prefixed Types (1 instance)
 
 15. **CLIConsole** → **CliConsole**
     - Location: `crates/sage-cli/src/console.rs`
     - Impact: CLI console implementation
-    - Status: 🔄 **IN PROGRESS** - Needs deprecated alias
+    - Status: ✅ **COMPLETED** - Renamed with deprecated alias
 
 ## Migration Strategy
 
@@ -212,11 +212,11 @@ See the migration guide for automated migration scripts.
 - [x] **messages.rs**: Add `#[deprecated]` for `LLMMessage` and `LLMResponse`
 - [x] **sse_decoder.rs**: Add `#[deprecated]` for `SSEEvent` and `SSEDecoder`
 - [x] **provider_types.rs**: Add `#[deprecated]` for `LLMProvider`
-- [ ] **llm_cache.rs**: Add `#[deprecated]` for `LLMCache` and `LLMCacheBuilder`
-- [ ] **recorder.rs**: Add `#[deprecated]` for `LLMInteractionRecord` and `LLMResponseRecord`
-- [ ] **streaming.rs**: Add `#[deprecated]` for `LLMStream`
-- [ ] **session_cache.rs**: Add `#[deprecated]` for `MCPServerCache` and `MCPServerConfig`
-- [ ] **console.rs**: Add `#[deprecated]` for `CLIConsole`
+- [x] **llm_cache.rs**: Add `#[deprecated]` for `LLMCache` and `LLMCacheBuilder`
+- [x] **recorder.rs**: Add `#[deprecated]` for `LLMInteractionRecord` and `LLMResponseRecord`
+- [x] **streaming.rs**: Add `#[deprecated]` for `LLMStream`
+- [x] **session_cache.rs**: Add `#[deprecated]` for `MCPServerCache` and `MCPServerConfig`
+- [x] **console.rs**: Add `#[deprecated]` for `CLIConsole`
 
 ### Documentation Updates
 

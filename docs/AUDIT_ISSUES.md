@@ -334,15 +334,18 @@
 - **Resolution**: Manual verification confirmed all dependencies are in use. Original audit report was incorrect - both `lru` (used in cache/storage.rs) and `uuid` (used in 35+ files) are actively used. Created DEPENDENCY_AUDIT_CORRECTED.md with detailed findings.
 
 ### LOW-002: Inconsistent Naming
-- **Status**: 🟡 Partial
+- **Status**: 🟢 Resolved
 - **Description**: Some inconsistencies in naming conventions
 - **Fix**: Standardize naming across codebase
-- **Progress**: Created naming-convention-audit.md with comprehensive analysis:
-  - Identified 15 acronym naming violations (LLM, SSE, MCP, CLI)
-  - Current: `LLMClient`, `SSEDecoder`, `MCPServerCache`, `CLIConsole`
-  - Should be: `LlmClient`, `SseDecoder`, `McpServerCache`, `CliConsole`
-  - Overall codebase follows Rust conventions well (structs, functions, constants, modules all correct)
-  - Requires version bump (breaking change) and deprecation period for public API
+- **Progress**: All 15 acronym naming violations fixed with deprecated type aliases:
+  - ✅ LLMClient → LlmClient, LLMMessage → LlmMessage, LLMResponse → LlmResponse
+  - ✅ LLMUsage → LlmUsage, LLMProvider → LlmProvider, LLMStream → LlmStream
+  - ✅ LLMCache → LlmCache, LLMCacheBuilder → LlmCacheBuilder
+  - ✅ LLMInteractionRecord → LlmInteractionRecord, LLMResponseRecord → LlmResponseRecord
+  - ✅ SSEEvent → SseEvent, SSEDecoder → SseDecoder
+  - ✅ MCPServerCache → McpServerCache, MCPServerConfig → McpServerConfig
+  - ✅ CLIConsole → CliConsole
+- **Note**: Old names available as deprecated type aliases until v1.0.0
 
 ### LOW-003: Missing CHANGELOG
 - **Status**: 🟢 Resolved
