@@ -44,6 +44,7 @@
 //! ```
 
 pub mod branching;
+pub mod conversation;
 pub mod enhanced;
 pub mod file_tracker;
 pub mod file_tracking;
