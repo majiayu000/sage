@@ -163,11 +163,22 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
         console.warn(&format!("Failed to initialize sub-agent support: {}", e));
     }
 
-    // Set up trajectory recording if requested
-    if let Some(trajectory_path) = &args.trajectory_file {
-        let recorder = TrajectoryRecorder::new(trajectory_path)?;
-        executor.set_trajectory_recorder(Arc::new(Mutex::new(recorder)));
+    // Set up trajectory recording - always enabled
+    // Use command-line arg if provided, otherwise use config directory
+    let trajectory_path = args.trajectory_file.clone().unwrap_or_else(|| {
+        let trajectory_dir = config.trajectory.directory.clone();
+        let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+        let filename = format!("sage_{}.json", timestamp);
+        trajectory_dir.join(filename)
+    });
+
+    // Ensure trajectory directory exists
+    if let Some(parent) = trajectory_path.parent() {
+        std::fs::create_dir_all(parent)?;
     }
+
+    let recorder = TrajectoryRecorder::new(&trajectory_path)?;
+    executor.set_trajectory_recorder(Arc::new(Mutex::new(recorder)));
 
     // Set up input channel for interactive mode
     let verbose = args.verbose;
