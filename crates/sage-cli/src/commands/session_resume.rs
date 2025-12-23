@@ -38,6 +38,7 @@ impl SessionSelector {
     }
 
     /// Create a new session selector with custom storage path
+    #[allow(dead_code)] // Used in tests and for custom storage paths
     pub fn with_storage_path(path: impl Into<PathBuf>) -> Self {
         Self {
             storage: JsonlSessionStorage::new(path),

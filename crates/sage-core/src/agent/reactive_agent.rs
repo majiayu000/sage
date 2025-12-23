@@ -153,6 +153,7 @@ impl FileOperationTracker {
         !self.created_files.is_empty() || !self.modified_files.is_empty()
     }
 
+    #[allow(dead_code)] // Reserved for session reset functionality
     fn reset(&mut self) {
         self.created_files.clear();
         self.modified_files.clear();

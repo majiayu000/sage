@@ -23,6 +23,7 @@ use tokio::sync::Mutex;
 
 /// Model identity information for system prompt
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // Reserved for future system prompt customization
 struct ModelIdentity {
     base_model_info: String,
     model_name: String,

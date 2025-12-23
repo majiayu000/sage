@@ -41,6 +41,7 @@ pub struct FileSnapshotTracker {
 
 /// Internal tracked file state
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // Fields reserved for future file statistics
 struct TrackedFile {
     /// Original content (None if file didn't exist)
     original_content: Option<String>,

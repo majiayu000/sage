@@ -8,5 +8,4 @@ pub mod tools;
 pub mod trajectory;
 pub mod unified;
 
-pub use session_resume::{ResumeResult, SessionSelector};
 pub use unified::{UnifiedArgs, execute as unified_execute};

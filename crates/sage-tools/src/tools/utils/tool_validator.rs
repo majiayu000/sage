@@ -1,12 +1,12 @@
 //! Tool usage validation
 
-use crate::tools::Tool;
 use sage_core::error::{SageError, SageResult};
 use std::collections::HashSet;
 
 /// Tool usage policy validator
 pub struct ToolUsageValidator {
     /// Commands that should not be used in Bash
+    #[allow(dead_code)] // Reserved for dynamic validation rules
     forbidden_bash_commands: HashSet<&'static str>,
 }
 
