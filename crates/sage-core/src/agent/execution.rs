@@ -233,3 +233,199 @@ pub struct ExecutionStatistics {
     /// Tool usage count by tool name
     pub tool_usage: HashMap<String, usize>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agent::AgentState;
+    use crate::types::LLMUsage;
+
+    fn create_test_task() -> TaskMetadata {
+        TaskMetadata::new("Test task", ".")
+    }
+
+    #[test]
+    fn test_new_execution() {
+        let task = create_test_task();
+        let execution = AgentExecution::new(task.clone());
+
+        assert_eq!(execution.task.description, "Test task");
+        assert_eq!(execution.steps.len(), 0);
+        assert!(!execution.success);
+        assert!(execution.final_result.is_none());
+        assert!(execution.completed_at.is_none());
+        assert_eq!(execution.total_usage.total_tokens, 0);
+    }
+
+    #[test]
+    fn test_add_step() {
+        let task = create_test_task();
+        let mut execution = AgentExecution::new(task);
+
+        let step = AgentStep::new(1, AgentState::Thinking);
+        execution.add_step(step);
+
+        assert_eq!(execution.steps.len(), 1);
+        assert_eq!(execution.current_step_number(), 2);
+    }
+
+    #[test]
+    fn test_add_step_with_usage() {
+        let task = create_test_task();
+        let mut execution = AgentExecution::new(task);
+
+        let mut step = AgentStep::new(1, AgentState::Thinking);
+        step.llm_usage = Some(LLMUsage {
+            prompt_tokens: 100,
+            completion_tokens: 50,
+            total_tokens: 150,
+            cache_creation_input_tokens: None,
+            cache_read_input_tokens: None,
+            cost_usd: None,
+        });
+
+        execution.add_step(step);
+
+        assert_eq!(execution.total_usage.total_tokens, 150);
+        assert_eq!(execution.total_usage.prompt_tokens, 100);
+        assert_eq!(execution.total_usage.completion_tokens, 50);
+    }
+
+    #[test]
+    fn test_complete_execution() {
+        let task = create_test_task();
+        let mut execution = AgentExecution::new(task);
+
+        execution.complete(true, Some("Task completed successfully".to_string()));
+
+        assert!(execution.success);
+        assert_eq!(
+            execution.final_result,
+            Some("Task completed successfully".to_string())
+        );
+        assert!(execution.completed_at.is_some());
+        assert!(execution.is_completed());
+    }
+
+    #[test]
+    fn test_last_step() {
+        let task = create_test_task();
+        let mut execution = AgentExecution::new(task);
+
+        assert!(execution.last_step().is_none());
+
+        let step1 = AgentStep::new(1, AgentState::Thinking);
+        execution.add_step(step1);
+
+        let step2 = AgentStep::new(2, AgentState::ToolExecution);
+        execution.add_step(step2);
+
+        let last = execution.last_step();
+        assert!(last.is_some());
+        assert_eq!(last.unwrap().step_number, 2);
+    }
+
+    #[test]
+    fn test_duration() {
+        let task = create_test_task();
+        let mut execution = AgentExecution::new(task);
+
+        // Duration is None before completion
+        assert!(execution.duration().is_none());
+
+        execution.complete(true, None);
+
+        // Duration should be Some after completion
+        let duration = execution.duration();
+        assert!(duration.is_some());
+        assert!(duration.unwrap().num_milliseconds() >= 0);
+    }
+
+    #[test]
+    fn test_summary() {
+        let task = create_test_task();
+        let mut execution = AgentExecution::new(task);
+
+        let mut step = AgentStep::new(1, AgentState::Thinking);
+        step.llm_usage = Some(LLMUsage {
+            prompt_tokens: 100,
+            completion_tokens: 50,
+            total_tokens: 150,
+            cache_creation_input_tokens: None,
+            cache_read_input_tokens: None,
+            cost_usd: None,
+        });
+        execution.add_step(step);
+
+        execution.complete(true, None);
+
+        let summary = execution.summary();
+        assert!(summary.contains("SUCCESS"));
+        assert!(summary.contains("Test task"));
+        assert!(summary.contains("1 steps"));
+        assert!(summary.contains("150 tokens"));
+    }
+
+    #[test]
+    fn test_with_metadata() {
+        let task = create_test_task();
+        let execution = AgentExecution::new(task)
+            .with_metadata("key1", "value1")
+            .with_metadata("key2", 42);
+
+        assert_eq!(execution.metadata.len(), 2);
+        assert_eq!(
+            execution.metadata.get("key1").unwrap().as_str().unwrap(),
+            "value1"
+        );
+        assert_eq!(
+            execution.metadata.get("key2").unwrap().as_i64().unwrap(),
+            42
+        );
+    }
+
+    #[test]
+    fn test_statistics() {
+        let task = create_test_task();
+        let mut execution = AgentExecution::new(task);
+
+        let mut step1 = AgentStep::new(1, AgentState::Thinking);
+        step1.llm_usage = Some(LLMUsage {
+            prompt_tokens: 100,
+            completion_tokens: 50,
+            total_tokens: 150,
+            cache_creation_input_tokens: Some(50),
+            cache_read_input_tokens: Some(25),
+            cost_usd: None,
+        });
+        execution.add_step(step1);
+
+        let mut step2 = AgentStep::new(2, AgentState::Error);
+        step2.error = Some("Test error".to_string());
+        execution.add_step(step2);
+
+        execution.complete(false, None);
+
+        let stats = execution.statistics();
+        assert_eq!(stats.total_steps, 2);
+        assert_eq!(stats.failed_steps, 1);
+        assert_eq!(stats.successful_steps, 1);
+        assert_eq!(stats.total_tokens, 150);
+        assert_eq!(stats.cache_creation_tokens, Some(50));
+        assert_eq!(stats.cache_read_tokens, Some(25));
+    }
+
+    #[test]
+    fn test_current_step_number() {
+        let task = create_test_task();
+        let mut execution = AgentExecution::new(task);
+
+        assert_eq!(execution.current_step_number(), 1);
+
+        execution.add_step(AgentStep::new(1, AgentState::Thinking));
+        assert_eq!(execution.current_step_number(), 2);
+
+        execution.add_step(AgentStep::new(2, AgentState::Thinking));
+        assert_eq!(execution.current_step_number(), 3);
+    }
+}

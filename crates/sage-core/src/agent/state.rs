@@ -117,3 +117,103 @@ impl AgentState {
         self.possible_transitions().contains(target)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_state_is_terminal() {
+        assert!(AgentState::Completed.is_terminal());
+        assert!(AgentState::Error.is_terminal());
+        assert!(AgentState::Cancelled.is_terminal());
+        assert!(AgentState::Timeout.is_terminal());
+
+        assert!(!AgentState::Initializing.is_terminal());
+        assert!(!AgentState::Thinking.is_terminal());
+        assert!(!AgentState::ToolExecution.is_terminal());
+        assert!(!AgentState::WaitingForTools.is_terminal());
+    }
+
+    #[test]
+    fn test_state_is_active() {
+        assert!(AgentState::Thinking.is_active());
+        assert!(AgentState::ToolExecution.is_active());
+        assert!(AgentState::WaitingForTools.is_active());
+
+        assert!(!AgentState::Initializing.is_active());
+        assert!(!AgentState::Completed.is_active());
+        assert!(!AgentState::Error.is_active());
+        assert!(!AgentState::Cancelled.is_active());
+        assert!(!AgentState::Timeout.is_active());
+    }
+
+    #[test]
+    fn test_state_is_successful() {
+        assert!(AgentState::Completed.is_successful());
+
+        assert!(!AgentState::Thinking.is_successful());
+        assert!(!AgentState::Error.is_successful());
+        assert!(!AgentState::Cancelled.is_successful());
+    }
+
+    #[test]
+    fn test_state_is_error() {
+        assert!(AgentState::Error.is_error());
+        assert!(AgentState::Cancelled.is_error());
+        assert!(AgentState::Timeout.is_error());
+
+        assert!(!AgentState::Completed.is_error());
+        assert!(!AgentState::Thinking.is_error());
+    }
+
+    #[test]
+    fn test_state_transitions() {
+        // Valid transitions from Initializing
+        assert!(AgentState::Initializing.can_transition_to(&AgentState::Thinking));
+        assert!(AgentState::Initializing.can_transition_to(&AgentState::Error));
+        assert!(!AgentState::Initializing.can_transition_to(&AgentState::Completed));
+
+        // Valid transitions from Thinking
+        assert!(AgentState::Thinking.can_transition_to(&AgentState::ToolExecution));
+        assert!(AgentState::Thinking.can_transition_to(&AgentState::Completed));
+        assert!(AgentState::Thinking.can_transition_to(&AgentState::Error));
+        assert!(AgentState::Thinking.can_transition_to(&AgentState::Cancelled));
+        assert!(!AgentState::Thinking.can_transition_to(&AgentState::Initializing));
+
+        // Valid transitions from ToolExecution
+        assert!(AgentState::ToolExecution.can_transition_to(&AgentState::WaitingForTools));
+        assert!(AgentState::ToolExecution.can_transition_to(&AgentState::Thinking));
+        assert!(AgentState::ToolExecution.can_transition_to(&AgentState::Error));
+
+        // Terminal states have no valid transitions
+        assert!(!AgentState::Completed.can_transition_to(&AgentState::Thinking));
+        assert!(!AgentState::Error.can_transition_to(&AgentState::Thinking));
+        assert!(AgentState::Completed.possible_transitions().is_empty());
+    }
+
+    #[test]
+    fn test_state_display() {
+        assert_eq!(AgentState::Thinking.to_string(), "thinking");
+        assert_eq!(AgentState::Completed.to_string(), "completed");
+        assert_eq!(AgentState::Error.to_string(), "error");
+        assert_eq!(AgentState::ToolExecution.to_string(), "tool_execution");
+    }
+
+    #[test]
+    fn test_state_description() {
+        assert!(!AgentState::Thinking.description().is_empty());
+        assert!(!AgentState::Completed.description().is_empty());
+        assert!(AgentState::Thinking.description().contains("Processing"));
+        assert!(AgentState::Completed.description().contains("successfully"));
+    }
+
+    #[test]
+    fn test_state_possible_transitions() {
+        let transitions = AgentState::Thinking.possible_transitions();
+        assert!(transitions.contains(&AgentState::ToolExecution));
+        assert!(transitions.contains(&AgentState::Completed));
+        assert!(transitions.contains(&AgentState::Error));
+        assert!(!transitions.contains(&AgentState::Initializing));
+    }
+}

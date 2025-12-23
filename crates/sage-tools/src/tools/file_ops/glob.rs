@@ -223,7 +223,8 @@ File paths are returned relative to the working directory when possible."
         let path = call.get_string("path");
         let path_ref = path.as_deref();
 
-        let mut result = self.find_files(&pattern, path_ref).await?;
+        let mut result = self.find_files(&pattern, path_ref).await
+            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to find files matching pattern '{}': {}", pattern, e)))?;
         result.call_id = call.id.clone();
         Ok(result)
     }

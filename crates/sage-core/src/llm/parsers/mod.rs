@@ -2,4 +2,7 @@
 
 pub mod responses;
 
+#[cfg(test)]
+mod responses_tests;
+
 pub use responses::ResponseParser;

@@ -381,4 +381,180 @@ mod tests {
 
         assert_eq!(tokens1, tokens2);
     }
+
+    #[tokio::test]
+    async fn test_global_registry_different_providers() {
+        // Get limiters for different providers with unique names to avoid conflicts
+        let provider1 = format!("test_provider_a_{}", uuid::Uuid::new_v4());
+        let provider2 = format!("test_provider_b_{}", uuid::Uuid::new_v4());
+
+        let limiter1 = global::get_rate_limiter(&provider1).await;
+        let limiter2 = global::get_rate_limiter(&provider2).await;
+
+        // They should have independent state
+        limiter1.try_acquire().await;
+        limiter1.try_acquire().await;
+
+        let tokens1 = limiter1.available_tokens().await;
+        let tokens2 = limiter2.available_tokens().await;
+
+        // Second provider should still have more tokens than first
+        assert!(tokens2 > tokens1);
+    }
+
+    #[tokio::test]
+    async fn test_set_rate_limit() {
+        global::set_rate_limit(
+            "custom_provider",
+            RateLimitConfig::new(120, 20),
+        )
+        .await;
+
+        let limiter = global::get_rate_limiter("custom_provider").await;
+        assert_eq!(limiter.config().requests_per_minute, 120);
+        assert_eq!(limiter.config().burst_size, 20);
+    }
+
+    #[tokio::test]
+    async fn test_disable_rate_limit() {
+        global::disable_rate_limit("disabled_provider").await;
+
+        let limiter = global::get_rate_limiter("disabled_provider").await;
+        assert!(!limiter.is_enabled());
+
+        // Should always succeed when disabled
+        for _ in 0..100 {
+            assert!(limiter.try_acquire().await);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_rate_limiter_clone_shares_state() {
+        let limiter1 = RateLimiter::new(RateLimitConfig::new(60, 5));
+        let limiter2 = limiter1.clone();
+
+        // Consume tokens from limiter1
+        limiter1.try_acquire().await;
+        limiter1.try_acquire().await;
+
+        // limiter2 should see the same state
+        let tokens1 = limiter1.available_tokens().await;
+        let tokens2 = limiter2.available_tokens().await;
+        assert_eq!(tokens1, tokens2);
+    }
+
+    #[tokio::test]
+    async fn test_rate_limiter_burst_size_limit() {
+        let limiter = RateLimiter::new(RateLimitConfig {
+            requests_per_minute: 600, // 10 per second
+            burst_size: 3,
+            enabled: true,
+        });
+
+        // Wait to ensure bucket is full
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        // Available tokens should not exceed burst size
+        let available = limiter.available_tokens().await;
+        assert_eq!(available, 3);
+    }
+
+    #[tokio::test]
+    async fn test_rate_limiter_config_for_known_providers() {
+        let providers = vec![
+            "openai",
+            "anthropic",
+            "google",
+            "azure",
+            "doubao",
+            "openrouter",
+            "ollama",
+            "glm",
+        ];
+
+        for provider in providers {
+            let config = RateLimitConfig::for_provider(provider);
+            assert!(config.enabled);
+            assert!(config.requests_per_minute > 0);
+            assert!(config.burst_size > 0);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_rate_limiter_unknown_provider_uses_default() {
+        let config = RateLimitConfig::for_provider("unknown_provider_xyz");
+        let default_config = RateLimitConfig::default();
+
+        assert_eq!(
+            config.requests_per_minute,
+            default_config.requests_per_minute
+        );
+        assert_eq!(config.burst_size, default_config.burst_size);
+    }
+
+    #[test]
+    fn test_rate_limit_config_disabled() {
+        let config = RateLimitConfig::disabled();
+        assert!(!config.enabled);
+    }
+
+    #[test]
+    fn test_rate_limit_config_new() {
+        let config = RateLimitConfig::new(100, 25);
+        assert_eq!(config.requests_per_minute, 100);
+        assert_eq!(config.burst_size, 25);
+        assert!(config.enabled);
+    }
+
+    #[tokio::test]
+    async fn test_rate_limiter_precise_timing() {
+        // Test that refill happens correctly over time
+        let limiter = RateLimiter::new(RateLimitConfig {
+            requests_per_minute: 600, // 10 tokens per second
+            burst_size: 5,
+            enabled: true,
+        });
+
+        // Exhaust all tokens
+        for _ in 0..5 {
+            assert!(limiter.try_acquire().await);
+        }
+        assert!(!limiter.try_acquire().await);
+
+        // Wait for 300ms (should get ~3 tokens at 10/sec)
+        tokio::time::sleep(Duration::from_millis(300)).await;
+
+        // Should have at least 2 tokens now
+        assert!(limiter.try_acquire().await);
+        assert!(limiter.try_acquire().await);
+    }
+
+    #[tokio::test]
+    async fn test_acquire_returns_none_when_token_available() {
+        let limiter = RateLimiter::new(RateLimitConfig::new(60, 10));
+
+        // First acquire should not wait
+        let wait_duration = limiter.acquire().await;
+        assert!(wait_duration.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_available_tokens_after_partial_refill() {
+        let limiter = RateLimiter::new(RateLimitConfig {
+            requests_per_minute: 600, // 10 per second
+            burst_size: 10,
+            enabled: true,
+        });
+
+        // Use all tokens
+        for _ in 0..10 {
+            limiter.try_acquire().await;
+        }
+
+        // Wait for partial refill (500ms = 5 tokens)
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        let available = limiter.available_tokens().await;
+        assert!(available >= 4 && available <= 6); // Allow some timing variance
+    }
 }

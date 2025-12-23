@@ -49,7 +49,8 @@ pub mod client;
 pub mod version;
 
 pub use client::{
-    ExecutionError, ExecutionErrorKind, ExecutionOutcome, ExecutionResult, RunOptions, SageAgentSDK,
+    ExecutionError, ExecutionErrorKind, ExecutionOutcome, ExecutionResult, RunOptions,
+    SageAgentSDK, UnifiedRunOptions,
 };
 
 // Re-export commonly used types from core

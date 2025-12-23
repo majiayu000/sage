@@ -272,7 +272,8 @@ impl UnifiedExecutor {
         let msg = self.message_tracker.create_user_message(content);
 
         if let (Some(storage), Some(session_id)) = (&self.jsonl_storage, &self.current_session_id) {
-            storage.append_message(session_id, &msg).await?;
+            storage.append_message(session_id, &msg).await
+                .context(format!("Failed to append user message to JSONL session: {}", session_id))?;
         }
 
         Ok(Some(msg))
@@ -299,7 +300,8 @@ impl UnifiedExecutor {
         }
 
         if let (Some(storage), Some(session_id)) = (&self.jsonl_storage, &self.current_session_id) {
-            storage.append_message(session_id, &msg).await?;
+            storage.append_message(session_id, &msg).await
+                .context(format!("Failed to append assistant message to JSONL session: {}", session_id))?;
         }
 
         Ok(Some(msg))
@@ -328,10 +330,12 @@ impl UnifiedExecutor {
             return Ok(());
         }
 
-        let snapshot = self.file_tracker.create_snapshot(message_uuid).await?;
+        let snapshot = self.file_tracker.create_snapshot(message_uuid).await
+            .context(format!("Failed to create file snapshot for message: {}", message_uuid))?;
 
         if let (Some(storage), Some(session_id)) = (&self.jsonl_storage, &self.current_session_id) {
-            storage.append_snapshot(session_id, &snapshot).await?;
+            storage.append_snapshot(session_id, &snapshot).await
+                .context(format!("Failed to append file snapshot to JSONL session: {}", session_id))?;
         }
 
         // Clear tracker for next round
@@ -506,7 +510,8 @@ impl UnifiedExecutor {
 
                         // Record step in trajectory
                         if let Some(recorder) = &self.trajectory_recorder {
-                            recorder.lock().await.record_step(step.clone()).await?;
+                            recorder.lock().await.record_step(step.clone()).await
+                                .context(format!("Failed to record execution step {} in trajectory", step_number))?;
                         }
 
                         // Record assistant message in JSONL session
@@ -733,7 +738,8 @@ impl UnifiedExecutor {
         println!("\n{}", question_text);
 
         // Block and wait for user input via InputChannel
-        let response = self.request_user_input(request).await?;
+        let response = self.request_user_input(request).await
+            .context("Failed to request user input for ask_user_question tool")?;
 
         // Check if user cancelled
         if response.is_cancelled() {
@@ -1010,5 +1016,81 @@ mod tests {
 
         let batch = ExecutionMode::batch();
         assert!(batch.is_batch());
+    }
+
+    #[test]
+    fn test_builder_with_options() {
+        let options = ExecutionOptions::interactive()
+            .with_step_limit(100)
+            .with_verbose(true);
+
+        assert_eq!(options.max_steps, Some(100));
+        assert!(options.verbose);
+        assert!(options.is_interactive());
+    }
+
+    #[test]
+    fn test_builder_batch_mode() {
+        let options = ExecutionOptions::batch();
+        assert!(options.mode.is_batch());
+        assert!(!options.is_interactive());
+    }
+
+    #[test]
+    fn test_builder_non_interactive_mode() {
+        let options = ExecutionOptions::non_interactive("auto answer");
+        assert!(options.mode.is_non_interactive());
+        assert!(!options.is_interactive());
+    }
+
+    #[test]
+    fn test_builder_max_steps() {
+        let options = ExecutionOptions::interactive().with_max_steps(None);
+        assert_eq!(options.max_steps, None);
+
+        let options = ExecutionOptions::interactive().with_step_limit(50);
+        assert_eq!(options.max_steps, Some(50));
+    }
+
+    #[test]
+    fn test_builder_working_directory() {
+        let options = ExecutionOptions::interactive().with_working_directory("/tmp");
+        assert!(options.working_directory.is_some());
+        assert_eq!(
+            options.working_directory.unwrap().to_str().unwrap(),
+            "/tmp"
+        );
+    }
+
+    #[test]
+    fn test_options_trajectory() {
+        let options = ExecutionOptions::interactive().with_trajectory(true);
+        assert!(options.should_record_trajectory());
+
+        let options = ExecutionOptions::interactive().with_trajectory(false);
+        assert!(!options.should_record_trajectory());
+    }
+
+    #[test]
+    fn test_options_continue_on_error() {
+        let options = ExecutionOptions::interactive().with_continue_on_error(true);
+        assert!(options.continue_on_error);
+
+        let options = ExecutionOptions::interactive().with_continue_on_error(false);
+        assert!(!options.continue_on_error);
+    }
+
+    #[test]
+    fn test_builder_fluent_api() {
+        let options = ExecutionOptions::default()
+            .with_mode(ExecutionMode::batch())
+            .with_step_limit(10)
+            .with_verbose(true)
+            .with_continue_on_error(true);
+
+        assert!(options.mode.is_batch());
+        assert_eq!(options.max_steps, Some(10));
+        assert!(options.verbose);
+        assert!(options.continue_on_error);
     }
 }

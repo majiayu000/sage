@@ -21,14 +21,71 @@ use tokio::sync::Mutex;
 pub use sage_core::agent::{ExecutionError, ExecutionErrorKind, ExecutionOutcome};
 pub use sage_core::input::InputRequest;
 
-/// SDK client for Sage Agent
+/// High-level SDK client for interacting with Sage Agent.
+///
+/// `SageAgentSDK` provides a fluent API for configuring and executing agent tasks.
+/// It handles configuration loading, tool registration, trajectory recording,
+/// and execution management.
+///
+/// # Examples
+///
+/// ```no_run
+/// use sage_sdk::SageAgentSDK;
+///
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// // Create SDK with default configuration
+/// let sdk = SageAgentSDK::new()?;
+///
+/// // Execute a task
+/// let result = sdk.run("Fix the bug in src/main.rs").await?;
+/// println!("Task completed: {}", result.is_success());
+/// # Ok(())
+/// # }
+/// ```
+///
+/// # Builder Pattern
+///
+/// The SDK uses a builder pattern for configuration:
+///
+/// ```no_run
+/// use sage_sdk::SageAgentSDK;
+///
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// let sdk = SageAgentSDK::new()?
+///     .with_working_directory("/path/to/project")
+///     .with_max_steps(Some(50))
+///     .with_trajectory_path("output/trajectory.json");
+///
+/// let result = sdk.run("Implement new feature").await?;
+/// # Ok(())
+/// # }
+/// ```
 pub struct SageAgentSDK {
     config: Config,
     trajectory_path: Option<PathBuf>,
 }
 
 impl SageAgentSDK {
-    /// Create a new SDK instance with default configuration
+    /// Create a new SDK instance with default configuration.
+    ///
+    /// Loads configuration from the default search paths, applying environment
+    /// variable substitutions.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Configuration file cannot be found or parsed
+    /// - Required environment variables are missing
+    /// - Configuration validation fails
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_sdk::SageAgentSDK;
+    ///
+    /// let sdk = SageAgentSDK::new()?;
+    /// # Ok::<(), sage_sdk::SageError>(())
+    /// ```
     pub fn new() -> SageResult<Self> {
         let config = load_config_with_overrides(None, HashMap::new())?;
         Ok(Self {
@@ -37,7 +94,18 @@ impl SageAgentSDK {
         })
     }
 
-    /// Create SDK instance with custom configuration
+    /// Create SDK instance with custom configuration.
+    ///
+    /// Use this when you have already constructed a `Config` object programmatically.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_sdk::{SageAgentSDK, Config};
+    ///
+    /// let config = Config::default();
+    /// let sdk = SageAgentSDK::with_config(config);
+    /// ```
     pub fn with_config(config: Config) -> Self {
         Self {
             config,
@@ -45,7 +113,26 @@ impl SageAgentSDK {
         }
     }
 
-    /// Create SDK instance with configuration file
+    /// Create SDK instance with configuration file.
+    ///
+    /// Loads configuration from the specified file path, applying environment
+    /// variable substitutions.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - File does not exist or cannot be read
+    /// - File contains invalid JSON/TOML
+    /// - Configuration validation fails
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_sdk::SageAgentSDK;
+    ///
+    /// let sdk = SageAgentSDK::with_config_file("config/sage.json")?;
+    /// # Ok::<(), sage_sdk::SageError>(())
+    /// ```
     pub fn with_config_file<P: AsRef<std::path::Path>>(config_file: P) -> SageResult<Self> {
         let config_path = config_file.as_ref();
         tracing::info!("Loading SDK config from: {}", config_path.display());
@@ -70,13 +157,51 @@ impl SageAgentSDK {
         })
     }
 
-    /// Set trajectory recording path
+    /// Set trajectory recording path.
+    ///
+    /// When set, execution trajectories will be saved to the specified file.
+    /// Trajectories contain complete execution history including all LLM interactions,
+    /// tool calls, and results.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_sdk::SageAgentSDK;
+    ///
+    /// let sdk = SageAgentSDK::new()?
+    ///     .with_trajectory_path("logs/execution.json");
+    /// # Ok::<(), sage_sdk::SageError>(())
+    /// ```
     pub fn with_trajectory_path<P: Into<PathBuf>>(mut self, path: P) -> Self {
         self.trajectory_path = Some(path.into());
         self
     }
 
-    /// Set provider and model
+    /// Set provider and model.
+    ///
+    /// Configures the LLM provider and model to use for task execution.
+    /// Optionally provide an API key (otherwise uses environment variables).
+    ///
+    /// # Arguments
+    ///
+    /// * `provider` - Provider name (e.g., "anthropic", "openai", "google")
+    /// * `model` - Model identifier (e.g., "claude-3-5-sonnet-20241022")
+    /// * `api_key` - Optional API key (defaults to environment variable)
+    ///
+    /// # Errors
+    ///
+    /// This method currently does not return errors but may in future versions
+    /// if provider validation is added.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_sdk::SageAgentSDK;
+    ///
+    /// let sdk = SageAgentSDK::new()?
+    ///     .with_provider_and_model("anthropic", "claude-3-5-sonnet-20241022", None)?;
+    /// # Ok::<(), sage_sdk::SageError>(())
+    /// ```
     pub fn with_provider_and_model(
         mut self,
         provider: &str,
@@ -104,34 +229,128 @@ impl SageAgentSDK {
         Ok(self)
     }
 
-    /// Set working directory
+    /// Set working directory.
+    ///
+    /// The working directory is where tools like Bash and Edit will operate.
+    /// If not set, uses the current working directory.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_sdk::SageAgentSDK;
+    ///
+    /// let sdk = SageAgentSDK::new()?
+    ///     .with_working_directory("/path/to/project");
+    /// # Ok::<(), sage_sdk::SageError>(())
+    /// ```
     pub fn with_working_directory<P: Into<PathBuf>>(mut self, working_dir: P) -> Self {
         self.config.working_directory = Some(working_dir.into());
         self
     }
 
-    /// Set maximum steps (None = unlimited)
+    /// Set maximum steps (None = unlimited).
+    ///
+    /// Limits the number of agent reasoning steps to prevent infinite loops.
+    /// Set to `None` for unlimited steps (use with caution).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_sdk::SageAgentSDK;
+    ///
+    /// let sdk = SageAgentSDK::new()?
+    ///     .with_max_steps(Some(100));
+    /// # Ok::<(), sage_sdk::SageError>(())
+    /// ```
     pub fn with_max_steps(mut self, max_steps: Option<u32>) -> Self {
         self.config.max_steps = max_steps;
         self
     }
 
-    /// Set a specific step limit
+    /// Set a specific step limit.
+    ///
+    /// Convenience method for setting a specific maximum step count.
+    /// Equivalent to `with_max_steps(Some(limit))`.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_sdk::SageAgentSDK;
+    ///
+    /// let sdk = SageAgentSDK::new()?
+    ///     .with_step_limit(50);
+    /// # Ok::<(), sage_sdk::SageError>(())
+    /// ```
     pub fn with_step_limit(mut self, limit: u32) -> Self {
         self.config.max_steps = Some(limit);
         self
     }
 
-    /// Run a task
+    /// Run a task with default options.
+    ///
+    /// Executes the task in interactive mode with default settings.
+    /// User input prompts will be handled via stdin.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - LLM provider fails to respond
+    /// - Tool execution fails critically
+    /// - Configuration is invalid
+    /// - Maximum steps exceeded
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_sdk::SageAgentSDK;
+    ///
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let sdk = SageAgentSDK::new()?;
+    /// let result = sdk.run("Write a hello world program in Rust").await?;
+    ///
+    /// if result.is_success() {
+    ///     println!("Task completed successfully");
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn run(&self, task_description: &str) -> SageResult<ExecutionResult> {
         self.run_with_options(task_description, RunOptions::default())
             .await
     }
 
-    /// Run a task with options
+    /// Run a task with custom options.
     ///
-    /// This method now uses the unified execution loop internally, which properly
+    /// Provides fine-grained control over execution behavior including working
+    /// directory, step limits, and trajectory recording.
+    ///
+    /// This method uses the unified execution loop internally, which properly
     /// blocks on user input when ask_user_question is called.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - LLM provider fails to respond
+    /// - Tool execution fails critically
+    /// - Configuration is invalid
+    /// - Maximum steps exceeded
+    /// - Working directory does not exist
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_sdk::{SageAgentSDK, RunOptions};
+    ///
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let sdk = SageAgentSDK::new()?;
+    /// let options = RunOptions::new()
+    ///     .with_max_steps(50)
+    ///     .with_trajectory(true);
+    ///
+    /// let result = sdk.run_with_options("Refactor the code", options).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn run_with_options(
         &self,
         task_description: &str,
@@ -246,12 +465,46 @@ impl SageAgentSDK {
         })
     }
 
-    /// Get the current configuration
+    /// Get the current configuration.
+    ///
+    /// Returns a reference to the SDK's configuration, allowing inspection
+    /// of provider settings, model parameters, and other options.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_sdk::SageAgentSDK;
+    ///
+    /// let sdk = SageAgentSDK::new()?;
+    /// let config = sdk.config();
+    /// println!("Provider: {}", config.get_default_provider());
+    /// # Ok::<(), sage_sdk::SageError>(())
+    /// ```
     pub fn config(&self) -> &Config {
         &self.config
     }
 
-    /// Validate the current configuration
+    /// Validate the current configuration.
+    ///
+    /// Checks that the configuration is valid and can be used for execution.
+    /// This includes verifying provider settings, API keys, and other required fields.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Required provider configuration is missing
+    /// - API keys are not set and not available in environment
+    /// - Model parameters are invalid
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_sdk::SageAgentSDK;
+    ///
+    /// let sdk = SageAgentSDK::new()?;
+    /// sdk.validate_config()?;
+    /// # Ok::<(), sage_sdk::SageError>(())
+    /// ```
     pub fn validate_config(&self) -> SageResult<()> {
         self.config.validate()
     }
@@ -456,10 +709,34 @@ impl SageAgentSDK {
         Ok((execution_future, input_handle))
     }
 
-    /// Execute a task in non-interactive mode using the unified executor
+    /// Execute a task in non-interactive mode using the unified executor.
     ///
     /// This is a simpler API for cases where no user interaction is needed.
+    /// The agent will automatically respond to user input prompts with default values.
     /// For interactive execution, use `execute_unified` instead.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - LLM provider fails to respond
+    /// - Tool execution fails critically
+    /// - Configuration is invalid
+    /// - Maximum steps exceeded
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_sdk::{SageAgentSDK, UnifiedRunOptions};
+    ///
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let sdk = SageAgentSDK::new()?;
+    /// let result = sdk.execute_non_interactive(
+    ///     "Run tests",
+    ///     UnifiedRunOptions::default()
+    /// ).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn execute_non_interactive(
         &self,
         task_description: &str,
@@ -483,7 +760,21 @@ impl Default for SageAgentSDK {
     }
 }
 
-/// Options for running tasks
+/// Options for running tasks.
+///
+/// Provides fine-grained control over task execution behavior including
+/// working directory, step limits, trajectory recording, and metadata.
+///
+/// # Examples
+///
+/// ```no_run
+/// use sage_sdk::RunOptions;
+///
+/// let options = RunOptions::new()
+///     .with_working_directory("/path/to/project")
+///     .with_max_steps(50)
+///     .with_trajectory(true);
+/// ```
 #[derive(Debug, Clone, Default)]
 pub struct RunOptions {
     /// Working directory for the task
@@ -499,37 +790,93 @@ pub struct RunOptions {
 }
 
 impl RunOptions {
-    /// Create new run options
+    /// Create new run options with default values.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use sage_sdk::RunOptions;
+    ///
+    /// let options = RunOptions::new();
+    /// ```
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Set working directory
+    /// Set working directory for task execution.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use sage_sdk::RunOptions;
+    ///
+    /// let options = RunOptions::new()
+    ///     .with_working_directory("/path/to/project");
+    /// ```
     pub fn with_working_directory<P: Into<PathBuf>>(mut self, working_dir: P) -> Self {
         self.working_directory = Some(working_dir.into());
         self
     }
 
-    /// Set maximum steps
+    /// Set maximum number of execution steps.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use sage_sdk::RunOptions;
+    ///
+    /// let options = RunOptions::new()
+    ///     .with_max_steps(100);
+    /// ```
     pub fn with_max_steps(mut self, max_steps: u32) -> Self {
         self.max_steps = Some(max_steps);
         self
     }
 
-    /// Enable trajectory recording
+    /// Enable or disable trajectory recording.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use sage_sdk::RunOptions;
+    ///
+    /// let options = RunOptions::new()
+    ///     .with_trajectory(true);
+    /// ```
     pub fn with_trajectory(mut self, enabled: bool) -> Self {
         self.enable_trajectory = enabled;
         self
     }
 
-    /// Set trajectory file path
+    /// Set custom trajectory file path.
+    ///
+    /// Automatically enables trajectory recording.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use sage_sdk::RunOptions;
+    ///
+    /// let options = RunOptions::new()
+    ///     .with_trajectory_path("logs/execution.json");
+    /// ```
     pub fn with_trajectory_path<P: Into<PathBuf>>(mut self, path: P) -> Self {
         self.trajectory_path = Some(path.into());
         self.enable_trajectory = true;
         self
     }
 
-    /// Add metadata
+    /// Add custom metadata to the execution.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use sage_sdk::RunOptions;
+    ///
+    /// let options = RunOptions::new()
+    ///     .with_metadata("task_id", "task-123")
+    ///     .with_metadata("priority", 1);
+    /// ```
     pub fn with_metadata<K, V>(mut self, key: K, value: V) -> Self
     where
         K: Into<String>,
@@ -540,7 +887,20 @@ impl RunOptions {
     }
 }
 
-/// Options for running tasks with the unified executor
+/// Options for running tasks with the unified executor.
+///
+/// Extends `RunOptions` with support for non-interactive mode and advanced
+/// execution control. Used with `execute_unified` and `execute_non_interactive`.
+///
+/// # Examples
+///
+/// ```no_run
+/// use sage_sdk::UnifiedRunOptions;
+///
+/// let options = UnifiedRunOptions::new()
+///     .with_non_interactive(true)
+///     .with_max_steps(50);
+/// ```
 #[derive(Debug, Clone, Default)]
 pub struct UnifiedRunOptions {
     /// Working directory for the task
@@ -558,43 +918,111 @@ pub struct UnifiedRunOptions {
 }
 
 impl UnifiedRunOptions {
-    /// Create new unified run options
+    /// Create new unified run options with default values.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use sage_sdk::UnifiedRunOptions;
+    ///
+    /// let options = UnifiedRunOptions::new();
+    /// ```
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Set working directory
+    /// Set working directory for task execution.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use sage_sdk::UnifiedRunOptions;
+    ///
+    /// let options = UnifiedRunOptions::new()
+    ///     .with_working_directory("/path/to/project");
+    /// ```
     pub fn with_working_directory<P: Into<PathBuf>>(mut self, working_dir: P) -> Self {
         self.working_directory = Some(working_dir.into());
         self
     }
 
-    /// Set maximum steps
+    /// Set maximum number of execution steps.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use sage_sdk::UnifiedRunOptions;
+    ///
+    /// let options = UnifiedRunOptions::new()
+    ///     .with_max_steps(100);
+    /// ```
     pub fn with_max_steps(mut self, max_steps: u32) -> Self {
         self.max_steps = Some(max_steps);
         self
     }
 
-    /// Enable trajectory recording
+    /// Enable or disable trajectory recording.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use sage_sdk::UnifiedRunOptions;
+    ///
+    /// let options = UnifiedRunOptions::new()
+    ///     .with_trajectory(true);
+    /// ```
     pub fn with_trajectory(mut self, enabled: bool) -> Self {
         self.enable_trajectory = enabled;
         self
     }
 
-    /// Set trajectory file path
+    /// Set custom trajectory file path.
+    ///
+    /// Automatically enables trajectory recording.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use sage_sdk::UnifiedRunOptions;
+    ///
+    /// let options = UnifiedRunOptions::new()
+    ///     .with_trajectory_path("logs/execution.json");
+    /// ```
     pub fn with_trajectory_path<P: Into<PathBuf>>(mut self, path: P) -> Self {
         self.trajectory_path = Some(path.into());
         self.enable_trajectory = true;
         self
     }
 
-    /// Set non-interactive mode
+    /// Set non-interactive mode.
+    ///
+    /// When enabled, the agent will automatically respond to user input prompts
+    /// with default values instead of blocking for user input.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use sage_sdk::UnifiedRunOptions;
+    ///
+    /// let options = UnifiedRunOptions::new()
+    ///     .with_non_interactive(true);
+    /// ```
     pub fn with_non_interactive(mut self, non_interactive: bool) -> Self {
         self.non_interactive = non_interactive;
         self
     }
 
-    /// Add metadata
+    /// Add custom metadata to the execution.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use sage_sdk::UnifiedRunOptions;
+    ///
+    /// let options = UnifiedRunOptions::new()
+    ///     .with_metadata("task_id", "task-123")
+    ///     .with_metadata("priority", 1);
+    /// ```
     pub fn with_metadata<K, V>(mut self, key: K, value: V) -> Self
     where
         K: Into<String>,
@@ -605,7 +1033,30 @@ impl UnifiedRunOptions {
     }
 }
 
-/// Result of task execution
+/// Result of task execution.
+///
+/// Contains the execution outcome, trajectory path (if recorded), and the
+/// configuration used for execution. Provides convenient methods for checking
+/// execution status and extracting details.
+///
+/// # Examples
+///
+/// ```no_run
+/// use sage_sdk::SageAgentSDK;
+///
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// let sdk = SageAgentSDK::new()?;
+/// let result = sdk.run("Complete the task").await?;
+///
+/// if result.is_success() {
+///     println!("Final result: {:?}", result.final_result());
+///     println!("Statistics: {:?}", result.statistics());
+/// } else if result.is_failed() {
+///     println!("Error: {:?}", result.error());
+/// }
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Debug, Clone)]
 pub struct ExecutionResult {
     /// The execution outcome (success, failure, interrupted, or max steps)
@@ -617,77 +1068,220 @@ pub struct ExecutionResult {
 }
 
 impl ExecutionResult {
-    /// Check if the execution was successful
+    /// Check if the execution completed successfully.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use sage_sdk::SageAgentSDK;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let sdk = SageAgentSDK::new()?;
+    /// let result = sdk.run("task").await?;
+    /// if result.is_success() {
+    ///     println!("Task completed successfully");
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn is_success(&self) -> bool {
         self.outcome.is_success()
     }
 
-    /// Check if the execution failed
+    /// Check if the execution failed.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use sage_sdk::SageAgentSDK;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let sdk = SageAgentSDK::new()?;
+    /// let result = sdk.run("task").await?;
+    /// if result.is_failed() {
+    ///     println!("Error: {:?}", result.error());
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn is_failed(&self) -> bool {
         self.outcome.is_failed()
     }
 
-    /// Check if the execution was interrupted
+    /// Check if the execution was interrupted.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use sage_sdk::SageAgentSDK;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let sdk = SageAgentSDK::new()?;
+    /// let result = sdk.run("task").await?;
+    /// if result.is_interrupted() {
+    ///     println!("Execution was interrupted");
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn is_interrupted(&self) -> bool {
         self.outcome.is_interrupted()
     }
 
-    /// Get the execution outcome
+    /// Get the execution outcome.
+    ///
+    /// Returns a reference to the underlying `ExecutionOutcome` which contains
+    /// detailed information about how the execution completed.
     pub fn outcome(&self) -> &ExecutionOutcome {
         &self.outcome
     }
 
-    /// Get the underlying execution (regardless of outcome)
+    /// Get the underlying execution (regardless of outcome).
+    ///
+    /// Returns the complete execution state including all steps, messages,
+    /// and tool interactions.
     pub fn execution(&self) -> &AgentExecution {
         self.outcome.execution()
     }
 
-    /// Get the error if the execution failed
+    /// Get the error if the execution failed.
+    ///
+    /// Returns `None` if the execution did not fail.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use sage_sdk::SageAgentSDK;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let sdk = SageAgentSDK::new()?;
+    /// let result = sdk.run("task").await?;
+    /// if let Some(error) = result.error() {
+    ///     println!("Execution error: {}", error);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn error(&self) -> Option<&ExecutionError> {
         self.outcome.error()
     }
 
-    /// Get the final result message
+    /// Get the final result message from the agent.
+    ///
+    /// Returns `None` if no final result was produced.
     pub fn final_result(&self) -> Option<&str> {
         self.outcome.execution().final_result.as_deref()
     }
 
-    /// Get execution statistics
+    /// Get execution statistics.
+    ///
+    /// Returns metrics including step count, tool usage, and timing information.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use sage_sdk::SageAgentSDK;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let sdk = SageAgentSDK::new()?;
+    /// let result = sdk.run("task").await?;
+    /// let stats = result.statistics();
+    /// println!("Total steps: {}", stats.total_steps);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn statistics(&self) -> sage_core::agent::execution::ExecutionStatistics {
         self.outcome.execution().statistics()
     }
 
-    /// Get a summary of the execution
+    /// Get a human-readable summary of the execution.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use sage_sdk::SageAgentSDK;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let sdk = SageAgentSDK::new()?;
+    /// let result = sdk.run("task").await?;
+    /// println!("{}", result.summary());
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn summary(&self) -> String {
         self.outcome.execution().summary()
     }
 
-    /// Get all tool calls made during execution
+    /// Get all tool calls made during execution.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use sage_sdk::SageAgentSDK;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let sdk = SageAgentSDK::new()?;
+    /// let result = sdk.run("task").await?;
+    /// for call in result.tool_calls() {
+    ///     println!("Tool: {}", call.name);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn tool_calls(&self) -> Vec<&sage_core::tools::types::ToolCall> {
         self.outcome.execution().all_tool_calls()
     }
 
-    /// Get all tool results from execution
+    /// Get all tool results from execution.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use sage_sdk::SageAgentSDK;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let sdk = SageAgentSDK::new()?;
+    /// let result = sdk.run("task").await?;
+    /// for tool_result in result.tool_results() {
+    ///     println!("Tool result: {:?}", tool_result);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn tool_results(&self) -> Vec<&sage_core::tools::types::ToolResult> {
         self.outcome.execution().all_tool_results()
     }
 
-    /// Get steps that had errors
+    /// Get steps that had errors.
+    ///
+    /// Returns a list of agent steps where tool execution or other errors occurred.
     pub fn error_steps(&self) -> Vec<&sage_core::agent::AgentStep> {
         self.outcome.execution().error_steps()
     }
 
-    /// Get the trajectory file path if available
+    /// Get the trajectory file path if available.
+    ///
+    /// Returns `None` if trajectory recording was not enabled.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use sage_sdk::SageAgentSDK;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let sdk = SageAgentSDK::new()?;
+    /// let result = sdk.run("task").await?;
+    /// if let Some(path) = result.trajectory_path() {
+    ///     println!("Trajectory saved to: {}", path.display());
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn trajectory_path(&self) -> Option<&PathBuf> {
         self.trajectory_path.as_ref()
     }
 
-    /// Get a user-friendly status message
+    /// Get a user-friendly status message.
+    ///
+    /// Returns a short status description suitable for display to users.
     pub fn status_message(&self) -> &'static str {
         self.outcome.status_message()
     }
 
-    /// Get the status icon for CLI display
+    /// Get the status icon for CLI display.
+    ///
+    /// Returns an icon (emoji or symbol) representing the execution status.
     pub fn status_icon(&self) -> &'static str {
         self.outcome.status_icon()
     }

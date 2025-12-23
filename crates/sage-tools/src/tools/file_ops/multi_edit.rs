@@ -153,7 +153,8 @@ impl MultiEditTool {
         }
 
         // Read the file content
-        let mut content = fs::read_to_string(&path).await.map_err(ToolError::Io)?;
+        let mut content = fs::read_to_string(&path).await
+            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to read file content from '{}': {}", file_path, e)))?;
 
         // Track edit results
         let mut edit_results = Vec::new();
@@ -205,7 +206,8 @@ impl MultiEditTool {
         }
 
         // Write the updated content back to the file
-        fs::write(&path, &content).await.map_err(ToolError::Io)?;
+        fs::write(&path, &content).await
+            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to write updated content to file '{}': {}", file_path, e)))?;
 
         // Format the success message
         let summary = format!(

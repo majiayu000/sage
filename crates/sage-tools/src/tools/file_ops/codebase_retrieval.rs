@@ -188,10 +188,12 @@ impl CodebaseRetrievalTool {
             return Ok(());
         }
 
-        let entries = fs::read_dir(dir).map_err(ToolError::Io)?;
+        let entries = fs::read_dir(dir)
+            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to read directory '{}': {}", dir.display(), e)))?;
 
         for entry in entries {
-            let entry = entry.map_err(ToolError::Io)?;
+            let entry = entry
+                .map_err(|e| ToolError::ExecutionFailed(format!("Failed to read directory entry in '{}': {}", dir.display(), e)))?;
             let path = entry.path();
 
             if path.is_file() {
@@ -249,7 +251,8 @@ impl CodebaseRetrievalTool {
         file_path: &Path,
         search_analysis: &SearchAnalysis,
     ) -> Result<Vec<SearchResult>, ToolError> {
-        let content = fs::read_to_string(file_path).map_err(ToolError::Io)?;
+        let content = fs::read_to_string(file_path)
+            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to read file for search '{}': {}", file_path.display(), e)))?;
         let lines: Vec<&str> = content.lines().collect();
         let mut results = Vec::new();
 

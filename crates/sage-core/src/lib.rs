@@ -2,6 +2,100 @@
 //!
 //! This crate provides the core functionality for the Sage Agent system,
 //! including agent execution, LLM integration, tool management, and configuration.
+//!
+//! # Overview
+//!
+//! `sage-core` is the foundational library for the Sage Agent ecosystem. It provides
+//! low-level components for building AI agents that can interact with LLMs, execute
+//! tools, manage state, and handle complex workflows.
+//!
+//! # Key Components
+//!
+//! ## Agent Execution
+//!
+//! The [`agent`] module provides the core agent execution engine:
+//!
+//! - [`Agent`] - Main trait for agent implementations
+//! - [`AgentExecution`] - Tracks execution state across multiple steps
+//! - [`ExecutionMode`] - Controls interactive vs. non-interactive execution
+//! - [`UnifiedExecutor`] - Unified execution loop (Claude Code style)
+//!
+//! ## LLM Integration
+//!
+//! The [`llm`] module provides multi-provider LLM support:
+//!
+//! - [`LLMClient`] - Async interface for LLM interactions
+//! - [`LLMProvider`] - Abstraction over different providers (Anthropic, OpenAI, Google)
+//! - [`LLMMessage`] - Unified message format
+//!
+//! ## Tool System
+//!
+//! The [`tools`] module provides a flexible tool execution framework:
+//!
+//! - [`Tool`] - Trait for defining custom tools
+//! - [`ToolExecutor`] - Manages tool execution with safety and sandboxing
+//! - [`ToolCall`] and [`ToolResult`] - Tool invocation types
+//!
+//! ## Configuration
+//!
+//! The [`config`] module handles configuration loading and validation:
+//!
+//! - [`Config`] - Main configuration structure
+//! - [`ModelParameters`] - LLM model configuration
+//! - Environment variable substitution
+//!
+//! ## Additional Features
+//!
+//! - **Memory Management** ([`memory`]) - Long-term memory and context management
+//! - **Trajectory Recording** ([`trajectory`]) - Execution history tracking
+//! - **Plugin System** ([`plugins`]) - Extensibility through plugins
+//! - **Skills** ([`skills`]) - High-level task-specific capabilities
+//! - **MCP Integration** ([`mcp`]) - Model Context Protocol support
+//! - **Checkpoints** ([`checkpoints`]) - State snapshots and restoration
+//! - **Recovery** ([`recovery`]) - Error handling and retry policies
+//! - **Telemetry** ([`telemetry`]) - Metrics collection and monitoring
+//!
+//! # Examples
+//!
+//! For high-level usage, prefer using the [`sage-sdk`](https://docs.rs/sage-sdk) crate.
+//! This core library is intended for advanced use cases and custom integrations.
+//!
+//! ## Basic Agent Creation
+//!
+//! ```no_run
+//! use sage_core::{agent::base::BaseAgent, config::Config};
+//!
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! let config = Config::default();
+//! let agent = BaseAgent::new(config)?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Custom Tool Implementation
+//!
+//! ```no_run
+//! use sage_core::tools::{Tool, ToolCall, ToolResult};
+//! use async_trait::async_trait;
+//!
+//! struct CustomTool;
+//!
+//! #[async_trait]
+//! impl Tool for CustomTool {
+//!     fn name(&self) -> &str { "custom_tool" }
+//!     fn description(&self) -> &str { "A custom tool" }
+//!
+//!     async fn execute(&self, call: &ToolCall) -> ToolResult {
+//!         // Implementation
+//!         ToolResult::success("Result")
+//!     }
+//! }
+//! ```
+//!
+//! # Feature Flags
+//!
+//! This crate does not currently use feature flags, but future versions may add
+//! optional features for specific providers or advanced capabilities.
 
 // Allow common clippy lints that are stylistic preferences
 #![allow(clippy::collapsible_if)]
@@ -62,7 +156,8 @@ pub use agent::{
     Agent, AgentExecution, AgentLifecycle, AgentState, AgentStep, AutoResponse, ClaudeStyleAgent,
     ExecutionMode, ExecutionOptions, HookResult, LifecycleContext, LifecycleError, LifecycleHook,
     LifecycleHookRegistry, LifecycleManager, LifecyclePhase, LifecycleResult, LoggingHook,
-    MetricsHook, ReactiveAgent, ReactiveExecutionManager, ReactiveResponse,
+    MetricsHook, ReactiveAgent, ReactiveExecutionManager, ReactiveResponse, UnifiedExecutor,
+    UnifiedExecutorBuilder,
 };
 pub use builder::{BuilderError, SageBuilder, SageComponents};
 pub use cache::{CacheConfig, CacheEntry, CacheKey, CacheManager, LLMCache};

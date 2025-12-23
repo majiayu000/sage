@@ -723,4 +723,289 @@ mod tests {
         assert_eq!(config.cooldown, Duration::from_secs(30));
         assert_eq!(config.max_retries, 3);
     }
+
+    #[tokio::test]
+    async fn test_next_available_no_models() {
+        let chain = FallbackChain::new();
+        let model = chain.next_available(None).await;
+        assert_eq!(model, None);
+    }
+
+    #[tokio::test]
+    async fn test_next_available_all_unhealthy() {
+        let chain = FallbackChain::new();
+        let mut config = ModelConfig::new("model1", "p");
+        config.healthy = false;
+        chain.add_model(config).await;
+
+        let model = chain.next_available(None).await;
+        assert_eq!(model, None);
+    }
+
+    #[tokio::test]
+    async fn test_next_available_all_too_small_context() {
+        let chain = FallbackChain::new();
+        chain
+            .add_model(ModelConfig::new("small1", "p").with_max_context(1000))
+            .await;
+        chain
+            .add_model(ModelConfig::new("small2", "p").with_max_context(2000))
+            .await;
+
+        // Request requiring 10000 context
+        let model = chain.next_available(Some(10000)).await;
+        assert_eq!(model, None);
+    }
+
+    #[tokio::test]
+    async fn test_cooldown_period() {
+        let chain = FallbackChain::new();
+        chain
+            .add_model(
+                ModelConfig::new("model1", "p")
+                    .with_cooldown(Duration::from_millis(100))
+                    .with_max_retries(0),
+            )
+            .await;
+
+        // Trigger failure
+        chain
+            .record_failure("model1", FallbackReason::Timeout)
+            .await;
+
+        // Should be unavailable immediately
+        let stats = chain.get_stats().await;
+        assert!(!stats[0].available);
+
+        // Wait for cooldown
+        tokio::time::sleep(Duration::from_millis(150)).await;
+
+        // Should be available again
+        let model = chain.next_available(None).await;
+        assert_eq!(model, Some("model1".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_force_fallback_no_next_model() {
+        let chain = FallbackChain::new();
+        chain.add_model(ModelConfig::new("only_model", "p")).await;
+
+        let next = chain.force_fallback(FallbackReason::Manual).await;
+        assert_eq!(next, None);
+    }
+
+    #[tokio::test]
+    async fn test_force_fallback_skips_unhealthy() {
+        let chain = FallbackChain::new();
+        chain.add_model(ModelConfig::new("model1", "p")).await;
+
+        let mut unhealthy = ModelConfig::new("model2", "p");
+        unhealthy.healthy = false;
+        chain.add_model(unhealthy).await;
+
+        chain.add_model(ModelConfig::new("model3", "p")).await;
+
+        let next = chain.force_fallback(FallbackReason::Manual).await;
+        // Should skip unhealthy model2 and go to model3
+        assert_eq!(next, Some("model3".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_record_failure_nonexistent_model() {
+        let chain = FallbackChain::new();
+        chain.add_model(ModelConfig::new("model1", "p")).await;
+
+        // Record failure for model that doesn't exist
+        let next = chain
+            .record_failure("nonexistent", FallbackReason::Timeout)
+            .await;
+        assert_eq!(next, None);
+    }
+
+    #[tokio::test]
+    async fn test_record_success_nonexistent_model() {
+        let chain = FallbackChain::new();
+        chain.add_model(ModelConfig::new("model1", "p")).await;
+
+        // Record success for model that doesn't exist - should not panic
+        chain.record_success("nonexistent").await;
+
+        let stats = chain.get_stats().await;
+        assert_eq!(stats[0].total_requests, 0);
+    }
+
+    #[tokio::test]
+    async fn test_reset_model_nonexistent() {
+        let chain = FallbackChain::new();
+        chain.add_model(ModelConfig::new("model1", "p")).await;
+
+        // Reset nonexistent model - should not panic
+        chain.reset_model("nonexistent").await;
+    }
+
+    #[tokio::test]
+    async fn test_history_max_size() {
+        let chain = FallbackChain {
+            models: Arc::new(RwLock::new(Vec::new())),
+            current_index: Arc::new(RwLock::new(0)),
+            history: Arc::new(RwLock::new(Vec::new())),
+            max_history: 5,
+        };
+
+        chain
+            .add_model(ModelConfig::new("m1", "p").with_max_retries(0))
+            .await;
+        chain.add_model(ModelConfig::new("m2", "p")).await;
+
+        // Generate more than max_history events
+        for i in 0..10 {
+            chain
+                .record_failure(
+                    "m1",
+                    FallbackReason::Error(format!("error {}", i)),
+                )
+                .await;
+        }
+
+        let history = chain.get_history().await;
+        assert_eq!(history.len(), 5); // Should be capped at max_history
+    }
+
+    #[tokio::test]
+    async fn test_multiple_failures_before_fallback() {
+        let chain = FallbackChain::new();
+        chain
+            .add_model(ModelConfig::new("model1", "p").with_max_retries(3))
+            .await;
+        chain.add_model(ModelConfig::new("model2", "p")).await;
+
+        // First two failures should not trigger fallback
+        let next1 = chain
+            .record_failure("model1", FallbackReason::Timeout)
+            .await;
+        assert_eq!(next1, None);
+
+        let next2 = chain
+            .record_failure("model1", FallbackReason::Timeout)
+            .await;
+        assert_eq!(next2, None);
+
+        // Third failure should trigger fallback
+        let next3 = chain
+            .record_failure("model1", FallbackReason::Timeout)
+            .await;
+        assert_eq!(next3, Some("model2".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_success_resets_failure_count() {
+        let chain = FallbackChain::new();
+        chain
+            .add_model(ModelConfig::new("model1", "p").with_max_retries(2))
+            .await;
+
+        // Fail once
+        chain
+            .record_failure("model1", FallbackReason::Timeout)
+            .await;
+
+        // Then succeed
+        chain.record_success("model1").await;
+
+        // Check that failure count is reset
+        let stats = chain.get_stats().await;
+        assert_eq!(stats[0].failure_count, 0);
+    }
+
+    #[tokio::test]
+    async fn test_success_rate_calculation() {
+        let chain = FallbackChain::new();
+        chain.add_model(ModelConfig::new("model1", "p")).await;
+
+        // 7 successes, 3 failures = 0.7 success rate
+        for _ in 0..7 {
+            chain.record_success("model1").await;
+        }
+        for _ in 0..3 {
+            chain
+                .record_failure("model1", FallbackReason::Timeout)
+                .await;
+        }
+
+        let stats = chain.get_stats().await;
+        assert_eq!(stats[0].total_requests, 10);
+        assert_eq!(stats[0].successful_requests, 7);
+        assert!((stats[0].success_rate - 0.7).abs() < 0.01);
+    }
+
+    #[tokio::test]
+    async fn test_default_fallback_chain() {
+        let chain = FallbackChain::default();
+        assert!(chain.is_empty().await);
+    }
+
+    #[tokio::test]
+    async fn test_default_builder() {
+        let builder = FallbackChainBuilder::default();
+        let chain = builder.build().await;
+        assert!(chain.is_empty().await);
+    }
+
+    #[tokio::test]
+    async fn test_builder_add_method() {
+        let config = ModelConfig::new("test", "provider");
+        let chain = FallbackChainBuilder::new()
+            .add(config)
+            .build()
+            .await;
+
+        assert_eq!(chain.model_count().await, 1);
+    }
+
+    #[tokio::test]
+    async fn test_current_model_empty_chain() {
+        let chain = FallbackChain::new();
+        assert_eq!(chain.current_model().await, None);
+    }
+
+    #[tokio::test]
+    async fn test_list_models_empty() {
+        let chain = FallbackChain::new();
+        let models = chain.list_models().await;
+        assert!(models.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_stats_empty() {
+        let chain = FallbackChain::new();
+        let stats = chain.get_stats().await;
+        assert!(stats.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_history_empty() {
+        let chain = FallbackChain::new();
+        let history = chain.get_history().await;
+        assert!(history.is_empty());
+    }
+
+    #[test]
+    fn test_fallback_reason_equality() {
+        assert_eq!(FallbackReason::RateLimited, FallbackReason::RateLimited);
+        assert_ne!(FallbackReason::RateLimited, FallbackReason::Timeout);
+
+        let err1 = FallbackReason::Error("test".into());
+        let err2 = FallbackReason::Error("test".into());
+        assert_eq!(err1, err2);
+    }
+
+    #[test]
+    fn test_model_config_defaults() {
+        let config = ModelConfig::new("test", "provider");
+        assert_eq!(config.priority, 0);
+        assert_eq!(config.max_context, 128_000);
+        assert!(config.healthy);
+        assert_eq!(config.cooldown, Duration::from_secs(60));
+        assert_eq!(config.max_retries, 2);
+    }
 }

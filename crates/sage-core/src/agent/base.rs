@@ -832,3 +832,76 @@ impl Agent for BaseAgent {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_markdown_content_headers() {
+        assert!(BaseAgent::is_markdown_content("# Header"));
+        assert!(BaseAgent::is_markdown_content("## Sub Header"));
+        assert!(BaseAgent::is_markdown_content("### Sub Sub Header"));
+    }
+
+    #[test]
+    fn test_is_markdown_content_lists() {
+        assert!(BaseAgent::is_markdown_content("* Item 1\n* Item 2"));
+        assert!(BaseAgent::is_markdown_content("- Item 1\n- Item 2"));
+    }
+
+    #[test]
+    fn test_is_markdown_content_code_blocks() {
+        assert!(BaseAgent::is_markdown_content("```rust\nfn main() {}\n```"));
+        assert!(BaseAgent::is_markdown_content("Some `inline code` here"));
+    }
+
+    #[test]
+    fn test_is_markdown_content_formatting() {
+        assert!(BaseAgent::is_markdown_content("**bold text**"));
+        assert!(BaseAgent::is_markdown_content("*italic text*"));
+        assert!(BaseAgent::is_markdown_content("[link](https://example.com)"));
+        assert!(BaseAgent::is_markdown_content("> blockquote"));
+    }
+
+    #[test]
+    fn test_is_markdown_content_multiline() {
+        let multiline = "Line 1\nLine 2\nLine 3\nLine 4";
+        assert!(BaseAgent::is_markdown_content(multiline));
+    }
+
+    #[test]
+    fn test_is_not_markdown_content() {
+        assert!(!BaseAgent::is_markdown_content("Simple text"));
+        assert!(!BaseAgent::is_markdown_content("Just a sentence."));
+    }
+
+    #[test]
+    fn test_model_identity_display() {
+        let identity = ModelIdentity {
+            base_model_info: "Test model info".to_string(),
+            model_name: "test-model".to_string(),
+        };
+
+        assert_eq!(identity.base_model_info, "Test model info");
+        assert_eq!(identity.model_name, "test-model");
+    }
+
+    #[test]
+    fn test_markdown_edge_cases() {
+        // Test edge cases for markdown detection
+        // Empty string is not markdown
+        assert!(!BaseAgent::is_markdown_content(""));
+
+        // Single line without markdown
+        assert!(!BaseAgent::is_markdown_content("Hello"));
+
+        // Contains asterisk but is markdown
+        assert!(BaseAgent::is_markdown_content("* List item"));
+        assert!(BaseAgent::is_markdown_content("**bold**"));
+
+        // Multiple lines without markdown triggers multiline heuristic
+        let multiline_plain = "Line 1\nLine 2\nLine 3\nLine 4\nLine 5";
+        assert!(BaseAgent::is_markdown_content(multiline_plain));
+    }
+}
