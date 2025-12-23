@@ -102,15 +102,130 @@ pub trait Tool: Send + Sync {
     /// LLM understand when to use this tool.
     fn description(&self) -> &str;
 
-    /// Get the tool's JSON schema for input parameters
+    /// Get the tool's JSON schema for input parameters.
+    ///
+    /// The schema defines the structure and types of arguments this tool accepts.
+    /// It is used for validation and to generate prompts for LLMs.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_core::tools::{Tool, ToolSchema};
+    /// # use sage_core::tools::base::ToolError;
+    /// # use sage_core::tools::types::{ToolCall, ToolResult};
+    /// # use async_trait::async_trait;
+    ///
+    /// struct MyTool;
+    ///
+    /// #[async_trait]
+    /// impl Tool for MyTool {
+    ///     fn name(&self) -> &str { "my_tool" }
+    ///     fn description(&self) -> &str { "A custom tool" }
+    ///     fn schema(&self) -> ToolSchema {
+    ///         ToolSchema::new(self.name(), self.description(), vec![])
+    ///     }
+    ///     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
+    ///         Ok(ToolResult::success(&call.id, self.name(), "done"))
+    ///     }
+    /// }
+    /// ```
     fn schema(&self) -> ToolSchema;
 
-    /// Execute the tool with the given arguments
+    /// Execute the tool with the given arguments.
+    ///
+    /// This is the core method that implements the tool's functionality.
+    /// It receives a `ToolCall` containing validated arguments and should
+    /// return a `ToolResult` with the execution outcome.
+    ///
+    /// # Arguments
+    ///
+    /// * `call` - The tool call containing arguments and metadata
+    ///
+    /// # Errors
+    ///
+    /// Returns `ToolError` if:
+    /// - Arguments are invalid or missing
+    /// - Execution fails due to system errors
+    /// - Required resources are unavailable
+    /// - Permissions are denied
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_core::tools::{Tool, ToolSchema};
+    /// use sage_core::tools::base::ToolError;
+    /// use sage_core::tools::types::{ToolCall, ToolResult};
+    /// use async_trait::async_trait;
+    ///
+    /// struct EchoTool;
+    ///
+    /// #[async_trait]
+    /// impl Tool for EchoTool {
+    ///     fn name(&self) -> &str { "echo" }
+    ///     fn description(&self) -> &str { "Echoes input" }
+    ///     fn schema(&self) -> ToolSchema {
+    ///         ToolSchema::new(self.name(), self.description(), vec![])
+    ///     }
+    ///
+    ///     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
+    ///         let message = call.arguments.get("message")
+    ///             .and_then(|v| v.as_str())
+    ///             .ok_or_else(|| ToolError::InvalidArguments("message required".into()))?;
+    ///
+    ///         Ok(ToolResult::success(&call.id, self.name(), message))
+    ///     }
+    /// }
+    /// ```
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError>;
 
-    /// Validate the tool call arguments
+    /// Validate the tool call arguments.
     ///
-    /// Default implementation does nothing. Override for custom validation.
+    /// This method is called before `execute()` to verify that arguments
+    /// are valid. The default implementation accepts all arguments.
+    ///
+    /// # Arguments
+    ///
+    /// * `call` - The tool call to validate
+    ///
+    /// # Errors
+    ///
+    /// Returns `ToolError::InvalidArguments` if validation fails.
+    /// Returns `ToolError::ValidationFailed` for complex validation errors.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_core::tools::{Tool, ToolSchema};
+    /// use sage_core::tools::base::ToolError;
+    /// use sage_core::tools::types::{ToolCall, ToolResult};
+    /// use async_trait::async_trait;
+    ///
+    /// struct PositiveNumberTool;
+    ///
+    /// #[async_trait]
+    /// impl Tool for PositiveNumberTool {
+    ///     fn name(&self) -> &str { "positive" }
+    ///     fn description(&self) -> &str { "Requires positive number" }
+    ///     fn schema(&self) -> ToolSchema {
+    ///         ToolSchema::new(self.name(), self.description(), vec![])
+    ///     }
+    ///
+    ///     fn validate(&self, call: &ToolCall) -> Result<(), ToolError> {
+    ///         let num = call.arguments.get("number")
+    ///             .and_then(|v| v.as_i64())
+    ///             .ok_or_else(|| ToolError::InvalidArguments("number required".into()))?;
+    ///
+    ///         if num <= 0 {
+    ///             return Err(ToolError::ValidationFailed("number must be positive".into()));
+    ///         }
+    ///         Ok(())
+    ///     }
+    ///
+    ///     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
+    ///         Ok(ToolResult::success(&call.id, self.name(), "valid"))
+    ///     }
+    /// }
+    /// ```
     fn validate(&self, call: &ToolCall) -> Result<(), ToolError> {
         let _ = call;
         Ok(())
@@ -139,22 +254,157 @@ pub trait Tool: Send + Sync {
         ConcurrencyMode::Parallel
     }
 
-    /// Get the maximum execution time as Duration
+    /// Get the maximum execution time as Duration.
+    ///
+    /// Tools that exceed this duration will be terminated. The default
+    /// is 5 minutes (300 seconds). Return `None` for no timeout.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_core::tools::Tool;
+    /// use std::time::Duration;
+    /// # use sage_core::tools::{ToolSchema};
+    /// # use sage_core::tools::base::ToolError;
+    /// # use sage_core::tools::types::{ToolCall, ToolResult};
+    /// # use async_trait::async_trait;
+    ///
+    /// struct FastTool;
+    ///
+    /// #[async_trait]
+    /// impl Tool for FastTool {
+    ///     fn name(&self) -> &str { "fast" }
+    ///     fn description(&self) -> &str { "Fast operation" }
+    ///     fn schema(&self) -> ToolSchema {
+    ///         ToolSchema::new(self.name(), self.description(), vec![])
+    ///     }
+    ///
+    ///     fn max_execution_duration(&self) -> Option<Duration> {
+    ///         Some(Duration::from_secs(10))  // 10 second timeout
+    ///     }
+    ///
+    ///     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
+    ///         Ok(ToolResult::success(&call.id, self.name(), "done"))
+    ///     }
+    /// }
+    /// ```
     fn max_execution_duration(&self) -> Option<Duration> {
         Some(Duration::from_secs(300)) // Default 5 minutes
     }
 
-    /// Get the maximum execution time in seconds (for backwards compatibility)
+    /// Get the maximum execution time in seconds.
+    ///
+    /// This is a convenience method that converts `max_execution_duration()`
+    /// to seconds. Maintained for backwards compatibility.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_core::tools::Tool;
+    /// # use sage_core::tools::{ToolSchema};
+    /// # use sage_core::tools::base::ToolError;
+    /// # use sage_core::tools::types::{ToolCall, ToolResult};
+    /// # use async_trait::async_trait;
+    ///
+    /// struct MyTool;
+    ///
+    /// #[async_trait]
+    /// impl Tool for MyTool {
+    ///     fn name(&self) -> &str { "my_tool" }
+    ///     fn description(&self) -> &str { "A tool" }
+    ///     fn schema(&self) -> ToolSchema {
+    ///         ToolSchema::new(self.name(), self.description(), vec![])
+    ///     }
+    ///     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
+    ///         Ok(ToolResult::success(&call.id, self.name(), "done"))
+    ///     }
+    /// }
+    ///
+    /// # fn example() {
+    /// let tool = MyTool;
+    /// assert_eq!(tool.max_execution_time(), Some(300));  // Default 5 minutes
+    /// # }
+    /// ```
     fn max_execution_time(&self) -> Option<u64> {
         self.max_execution_duration().map(|d| d.as_secs())
     }
 
-    /// Whether this tool only reads data (no side effects)
+    /// Whether this tool only reads data without side effects.
+    ///
+    /// Read-only tools are safer to execute and may be given different
+    /// permission policies. Examples include file reading, listing directories,
+    /// or querying databases without modifications.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_core::tools::Tool;
+    /// # use sage_core::tools::{ToolSchema};
+    /// # use sage_core::tools::base::ToolError;
+    /// # use sage_core::tools::types::{ToolCall, ToolResult};
+    /// # use async_trait::async_trait;
+    ///
+    /// struct ReadFileTool;
+    ///
+    /// #[async_trait]
+    /// impl Tool for ReadFileTool {
+    ///     fn name(&self) -> &str { "read_file" }
+    ///     fn description(&self) -> &str { "Read file contents" }
+    ///     fn schema(&self) -> ToolSchema {
+    ///         ToolSchema::new(self.name(), self.description(), vec![])
+    ///     }
+    ///
+    ///     fn is_read_only(&self) -> bool {
+    ///         true  // Reading doesn't modify anything
+    ///     }
+    ///
+    ///     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
+    ///         Ok(ToolResult::success(&call.id, self.name(), "file contents"))
+    ///     }
+    /// }
+    /// ```
     fn is_read_only(&self) -> bool {
         false
     }
 
-    /// Whether this tool can be called in parallel with other tools
+    /// Whether this tool can be called in parallel with other tools.
+    ///
+    /// This is determined by the tool's `concurrency_mode()`. Tools with
+    /// `Parallel` or `Limited` modes support parallel execution, while
+    /// `Sequential` and `ExclusiveByType` modes do not.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_core::tools::{Tool, ToolSchema};
+    /// use sage_core::tools::base::{ToolError, ConcurrencyMode};
+    /// use sage_core::tools::types::{ToolCall, ToolResult};
+    /// use async_trait::async_trait;
+    ///
+    /// struct ParallelTool;
+    ///
+    /// #[async_trait]
+    /// impl Tool for ParallelTool {
+    ///     fn name(&self) -> &str { "parallel" }
+    ///     fn description(&self) -> &str { "Can run in parallel" }
+    ///     fn schema(&self) -> ToolSchema {
+    ///         ToolSchema::new(self.name(), self.description(), vec![])
+    ///     }
+    ///
+    ///     fn concurrency_mode(&self) -> ConcurrencyMode {
+    ///         ConcurrencyMode::Parallel
+    ///     }
+    ///
+    ///     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
+    ///         Ok(ToolResult::success(&call.id, self.name(), "done"))
+    ///     }
+    /// }
+    ///
+    /// # fn example() {
+    /// let tool = ParallelTool;
+    /// assert!(tool.supports_parallel_execution());
+    /// # }
+    /// ```
     fn supports_parallel_execution(&self) -> bool {
         matches!(
             self.concurrency_mode(),
@@ -162,7 +412,41 @@ pub trait Tool: Send + Sync {
         )
     }
 
-    /// Render the tool call for display to the user
+    /// Render the tool call for display to the user.
+    ///
+    /// Generates a human-readable representation of the tool call, typically
+    /// shown in logs or UI. The default implementation shows the tool name
+    /// and JSON-formatted arguments.
+    ///
+    /// Override this method to provide custom formatting for better readability.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_core::tools::{Tool, ToolSchema};
+    /// use sage_core::tools::base::ToolError;
+    /// use sage_core::tools::types::{ToolCall, ToolResult};
+    /// use async_trait::async_trait;
+    ///
+    /// struct CustomDisplayTool;
+    ///
+    /// #[async_trait]
+    /// impl Tool for CustomDisplayTool {
+    ///     fn name(&self) -> &str { "custom" }
+    ///     fn description(&self) -> &str { "Custom display" }
+    ///     fn schema(&self) -> ToolSchema {
+    ///         ToolSchema::new(self.name(), self.description(), vec![])
+    ///     }
+    ///
+    ///     fn render_call(&self, call: &ToolCall) -> String {
+    ///         format!("Executing {} with custom format", self.name())
+    ///     }
+    ///
+    ///     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
+    ///         Ok(ToolResult::success(&call.id, self.name(), "done"))
+    ///     }
+    /// }
+    /// ```
     fn render_call(&self, call: &ToolCall) -> String {
         format!(
             "{}({})",
@@ -171,7 +455,45 @@ pub trait Tool: Send + Sync {
         )
     }
 
-    /// Render the tool result for display to the user
+    /// Render the tool result for display to the user.
+    ///
+    /// Generates a human-readable representation of the tool's execution result.
+    /// The default implementation shows the output for successful executions
+    /// and formats error messages for failures.
+    ///
+    /// Override this method to provide custom result formatting.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_core::tools::{Tool, ToolSchema};
+    /// use sage_core::tools::base::ToolError;
+    /// use sage_core::tools::types::{ToolCall, ToolResult};
+    /// use async_trait::async_trait;
+    ///
+    /// struct CustomResultTool;
+    ///
+    /// #[async_trait]
+    /// impl Tool for CustomResultTool {
+    ///     fn name(&self) -> &str { "custom" }
+    ///     fn description(&self) -> &str { "Custom result display" }
+    ///     fn schema(&self) -> ToolSchema {
+    ///         ToolSchema::new(self.name(), self.description(), vec![])
+    ///     }
+    ///
+    ///     fn render_result(&self, result: &ToolResult) -> String {
+    ///         if result.success {
+    ///             format!("✓ Success: {}", result.output.as_deref().unwrap_or("done"))
+    ///         } else {
+    ///             format!("✗ Failed: {}", result.error.as_deref().unwrap_or("unknown"))
+    ///         }
+    ///     }
+    ///
+    ///     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
+    ///         Ok(ToolResult::success(&call.id, self.name(), "done"))
+    ///     }
+    /// }
+    /// ```
     fn render_result(&self, result: &ToolResult) -> String {
         if result.success {
             result.output.clone().unwrap_or_default()
@@ -196,7 +518,55 @@ pub trait Tool: Send + Sync {
         false
     }
 
-    /// Execute the tool with timing and error handling
+    /// Execute the tool with timing and error handling.
+    ///
+    /// This method wraps `execute()` with automatic validation, timing
+    /// measurement, and error conversion. It always returns a `ToolResult`,
+    /// converting any errors into failed results.
+    ///
+    /// The execution flow:
+    /// 1. Validates arguments using `validate()`
+    /// 2. Executes the tool using `execute()`
+    /// 3. Measures execution time
+    /// 4. Converts errors to `ToolResult::error`
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_core::tools::{Tool, ToolSchema};
+    /// use sage_core::tools::base::ToolError;
+    /// use sage_core::tools::types::{ToolCall, ToolResult};
+    /// use async_trait::async_trait;
+    /// use std::collections::HashMap;
+    ///
+    /// struct MyTool;
+    ///
+    /// #[async_trait]
+    /// impl Tool for MyTool {
+    ///     fn name(&self) -> &str { "my_tool" }
+    ///     fn description(&self) -> &str { "A tool" }
+    ///     fn schema(&self) -> ToolSchema {
+    ///         ToolSchema::new(self.name(), self.description(), vec![])
+    ///     }
+    ///     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
+    ///         Ok(ToolResult::success(&call.id, self.name(), "done"))
+    ///     }
+    /// }
+    ///
+    /// # async fn example() {
+    /// let tool = MyTool;
+    /// let call = ToolCall {
+    ///     id: "1".to_string(),
+    ///     name: "my_tool".to_string(),
+    ///     arguments: HashMap::new(),
+    ///     call_id: None,
+    /// };
+    ///
+    /// let result = tool.execute_with_timing(&call).await;
+    /// assert!(result.success);
+    /// assert!(result.execution_time_ms.is_some());
+    /// # }
+    /// ```
     async fn execute_with_timing(&self, call: &ToolCall) -> ToolResult {
         let start_time = Instant::now();
 
@@ -218,7 +588,36 @@ pub trait Tool: Send + Sync {
     }
 }
 
-/// Macro to help implement the Tool trait
+/// Macro to help implement the Tool trait.
+///
+/// This macro generates boilerplate implementations for:
+/// - `new()` constructor
+/// - `Default` trait
+/// - Basic `Tool` trait methods (`name()` and `description()`)
+///
+/// You still need to implement:
+/// - `schema()` - Define parameter schema
+/// - `execute()` - Implement tool logic
+/// - Optional trait methods (validation, permissions, etc.)
+///
+/// # Examples
+///
+/// ```ignore
+/// use sage_core::impl_tool;
+/// use sage_core::tools::Tool;
+///
+/// struct HelloTool;
+///
+/// // This macro implements new(), Default, and basic Tool trait (name, description)
+/// impl_tool!(HelloTool, "hello", "Says hello");
+///
+/// // NOTE: You still need to implement schema() and execute() for Tool trait
+/// // The macro only provides the name() and description() methods.
+///
+/// let tool = HelloTool::new();
+/// assert_eq!(tool.name(), "hello");
+/// assert_eq!(tool.description(), "Says hello");
+/// ```
 #[macro_export]
 macro_rules! impl_tool {
     ($tool_type:ty, $name:expr, $description:expr) => {
@@ -247,12 +646,106 @@ macro_rules! impl_tool {
     };
 }
 
-/// Helper trait for tools that need access to the file system
+/// Helper trait for tools that need access to the file system.
+///
+/// Provides common functionality for file-based tools including path resolution
+/// and security checks to prevent path traversal attacks.
+///
+/// # Security
+///
+/// The `is_safe_path()` method prevents malicious paths from escaping the
+/// working directory using techniques like `../../../etc/passwd` or symlinks.
+///
+/// # Examples
+///
+/// ```no_run
+/// use sage_core::tools::{Tool, ToolSchema};
+/// use sage_core::tools::base::{FileSystemTool, ToolError};
+/// use sage_core::tools::types::{ToolCall, ToolResult};
+/// use async_trait::async_trait;
+/// use std::path::{Path, PathBuf};
+///
+/// struct ReadTool {
+///     working_dir: PathBuf,
+/// }
+///
+/// #[async_trait]
+/// impl Tool for ReadTool {
+///     fn name(&self) -> &str { "read" }
+///     fn description(&self) -> &str { "Read files" }
+///     fn schema(&self) -> ToolSchema {
+///         ToolSchema::new(self.name(), self.description(), vec![])
+///     }
+///
+///     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
+///         let path_str = call.arguments.get("path")
+///             .and_then(|v| v.as_str())
+///             .ok_or_else(|| ToolError::InvalidArguments("path required".into()))?;
+///
+///         let path = self.resolve_path(path_str);
+///
+///         if !self.is_safe_path(&path) {
+///             return Err(ToolError::PermissionDenied("Path outside working directory".into()));
+///         }
+///
+///         // Read file...
+///         Ok(ToolResult::success(&call.id, self.name(), "file contents"))
+///     }
+/// }
+///
+/// impl FileSystemTool for ReadTool {
+///     fn working_directory(&self) -> &Path {
+///         &self.working_dir
+///     }
+/// }
+/// ```
 pub trait FileSystemTool: Tool {
-    /// Get the working directory for file operations
+    /// Get the working directory for file operations.
+    ///
+    /// All file paths should be resolved relative to this directory.
     fn working_directory(&self) -> &std::path::Path;
 
-    /// Resolve a relative path to an absolute path
+    /// Resolve a relative path to an absolute path.
+    ///
+    /// If the path is already absolute, it is returned unchanged.
+    /// Otherwise, it is joined with the working directory.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_core::tools::base::FileSystemTool;
+    /// # use sage_core::tools::{Tool, ToolSchema};
+    /// # use sage_core::tools::base::ToolError;
+    /// # use sage_core::tools::types::{ToolCall, ToolResult};
+    /// # use async_trait::async_trait;
+    /// # use std::path::{Path, PathBuf};
+    ///
+    /// # struct MyTool { working_dir: PathBuf }
+    /// # #[async_trait]
+    /// # impl Tool for MyTool {
+    /// #     fn name(&self) -> &str { "my_tool" }
+    /// #     fn description(&self) -> &str { "A tool" }
+    /// #     fn schema(&self) -> ToolSchema { ToolSchema::new(self.name(), self.description(), vec![]) }
+    /// #     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
+    /// #         Ok(ToolResult::success(&call.id, self.name(), "done"))
+    /// #     }
+    /// # }
+    /// # impl FileSystemTool for MyTool {
+    /// #     fn working_directory(&self) -> &Path { &self.working_dir }
+    /// # }
+    ///
+    /// # fn example() {
+    /// let tool = MyTool { working_dir: PathBuf::from("/home/user/project") };
+    ///
+    /// // Relative path gets joined with working dir
+    /// let resolved = tool.resolve_path("src/main.rs");
+    /// assert_eq!(resolved, PathBuf::from("/home/user/project/src/main.rs"));
+    ///
+    /// // Absolute path is unchanged
+    /// let resolved = tool.resolve_path("/etc/hosts");
+    /// assert_eq!(resolved, PathBuf::from("/etc/hosts"));
+    /// # }
+    /// ```
     fn resolve_path(&self, path: &str) -> std::path::PathBuf {
         let path = std::path::Path::new(path);
         if path.is_absolute() {
@@ -342,12 +835,111 @@ pub trait FileSystemTool: Tool {
     }
 }
 
-/// Helper trait for tools that execute commands
+/// Helper trait for tools that execute commands.
+///
+/// Provides functionality for command execution with security controls
+/// including command whitelisting and environment management.
+///
+/// # Security
+///
+/// The `is_command_allowed()` method restricts which commands can be executed
+/// to prevent malicious command injection.
+///
+/// # Examples
+///
+/// ```no_run
+/// use sage_core::tools::{Tool, ToolSchema};
+/// use sage_core::tools::base::{CommandTool, ToolError};
+/// use sage_core::tools::types::{ToolCall, ToolResult};
+/// use async_trait::async_trait;
+/// use std::path::{Path, PathBuf};
+/// use std::collections::HashMap;
+///
+/// struct ShellTool {
+///     working_dir: PathBuf,
+/// }
+///
+/// #[async_trait]
+/// impl Tool for ShellTool {
+///     fn name(&self) -> &str { "shell" }
+///     fn description(&self) -> &str { "Execute shell commands" }
+///     fn schema(&self) -> ToolSchema {
+///         ToolSchema::new(self.name(), self.description(), vec![])
+///     }
+///
+///     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
+///         let command = call.arguments.get("command")
+///             .and_then(|v| v.as_str())
+///             .ok_or_else(|| ToolError::InvalidArguments("command required".into()))?;
+///
+///         if !self.is_command_allowed(command) {
+///             return Err(ToolError::PermissionDenied("Command not allowed".into()));
+///         }
+///
+///         // Execute command...
+///         Ok(ToolResult::success(&call.id, self.name(), "output"))
+///     }
+/// }
+///
+/// impl CommandTool for ShellTool {
+///     fn allowed_commands(&self) -> Vec<&str> {
+///         vec!["ls", "cat", "grep"]  // Only allow safe commands
+///     }
+///
+///     fn command_working_directory(&self) -> &Path {
+///         &self.working_dir
+///     }
+/// }
+/// ```
 pub trait CommandTool: Tool {
-    /// Get the allowed commands for this tool
+    /// Get the allowed commands for this tool.
+    ///
+    /// Return an empty vector to allow all commands (not recommended).
+    /// Return a list of command names to whitelist specific commands.
     fn allowed_commands(&self) -> Vec<&str>;
 
-    /// Check if a command is allowed
+    /// Check if a command is allowed to execute.
+    ///
+    /// Compares the command against the whitelist from `allowed_commands()`.
+    /// If the whitelist is empty, all commands are allowed.
+    ///
+    /// # Arguments
+    ///
+    /// * `command` - The command string to check
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_core::tools::base::CommandTool;
+    /// # use sage_core::tools::{Tool, ToolSchema};
+    /// # use sage_core::tools::base::ToolError;
+    /// # use sage_core::tools::types::{ToolCall, ToolResult};
+    /// # use async_trait::async_trait;
+    /// # use std::path::{Path, PathBuf};
+    ///
+    /// # struct MyTool { working_dir: PathBuf }
+    /// # #[async_trait]
+    /// # impl Tool for MyTool {
+    /// #     fn name(&self) -> &str { "my_tool" }
+    /// #     fn description(&self) -> &str { "A tool" }
+    /// #     fn schema(&self) -> ToolSchema { ToolSchema::new(self.name(), self.description(), vec![]) }
+    /// #     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
+    /// #         Ok(ToolResult::success(&call.id, self.name(), "done"))
+    /// #     }
+    /// # }
+    /// # impl CommandTool for MyTool {
+    /// #     fn allowed_commands(&self) -> Vec<&str> { vec!["git", "npm"] }
+    /// #     fn command_working_directory(&self) -> &Path { &self.working_dir }
+    /// # }
+    ///
+    /// # fn example() {
+    /// let tool = MyTool { working_dir: PathBuf::from(".") };
+    ///
+    /// assert!(tool.is_command_allowed("git status"));
+    /// assert!(tool.is_command_allowed("npm install"));
+    /// assert!(!tool.is_command_allowed("rm -rf /"));
+    /// # }
+    /// ```
     fn is_command_allowed(&self, command: &str) -> bool {
         let allowed = self.allowed_commands();
         if allowed.is_empty() {
@@ -360,10 +952,49 @@ pub trait CommandTool: Tool {
         })
     }
 
-    /// Get the working directory for command execution
+    /// Get the working directory for command execution.
+    ///
+    /// Commands will be executed in this directory.
     fn command_working_directory(&self) -> &std::path::Path;
 
-    /// Get environment variables for command execution
+    /// Get environment variables for command execution.
+    ///
+    /// These variables will be added to the command's environment.
+    /// The default implementation returns an empty map.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_core::tools::base::CommandTool;
+    /// # use sage_core::tools::{Tool, ToolSchema};
+    /// # use sage_core::tools::base::ToolError;
+    /// # use sage_core::tools::types::{ToolCall, ToolResult};
+    /// # use async_trait::async_trait;
+    /// # use std::path::{Path, PathBuf};
+    /// use std::collections::HashMap;
+    ///
+    /// # struct MyTool { working_dir: PathBuf }
+    /// # #[async_trait]
+    /// # impl Tool for MyTool {
+    /// #     fn name(&self) -> &str { "my_tool" }
+    /// #     fn description(&self) -> &str { "A tool" }
+    /// #     fn schema(&self) -> ToolSchema { ToolSchema::new(self.name(), self.description(), vec![]) }
+    /// #     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
+    /// #         Ok(ToolResult::success(&call.id, self.name(), "done"))
+    /// #     }
+    /// # }
+    /// impl CommandTool for MyTool {
+    ///     fn allowed_commands(&self) -> Vec<&str> { vec![] }
+    ///     fn command_working_directory(&self) -> &Path { &self.working_dir }
+    ///
+    ///     fn command_environment(&self) -> HashMap<String, String> {
+    ///         let mut env = HashMap::new();
+    ///         env.insert("NODE_ENV".to_string(), "production".to_string());
+    ///         env.insert("DEBUG".to_string(), "false".to_string());
+    ///         env
+    ///     }
+    /// }
+    /// ```
     fn command_environment(&self) -> std::collections::HashMap<String, String> {
         std::collections::HashMap::new()
     }

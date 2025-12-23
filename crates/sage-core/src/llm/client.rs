@@ -9,7 +9,7 @@ use crate::llm::providers::{
     AzureProvider, OpenRouterProvider, OllamaProvider, DoubaoProvider, GlmProvider,
 };
 use crate::llm::rate_limiter::global as rate_limiter;
-use crate::llm::streaming::{LLMStream, StreamingLLMClient};
+use crate::llm::streaming::{LlmStream, StreamingLlmClient};
 use crate::tools::types::ToolSchema;
 use async_trait::async_trait;
 use reqwest::Client;
@@ -18,7 +18,47 @@ use tokio::time::sleep;
 use tracing::{debug, instrument, warn};
 use rand::Rng;
 
-/// LLM client for making requests to various providers
+/// LLM client for making requests to various providers.
+///
+/// Provides a unified interface for interacting with multiple LLM providers
+/// (OpenAI, Anthropic, Google, Azure, etc.) with automatic retry logic,
+/// rate limiting, and streaming support.
+///
+/// # Features
+///
+/// - **Multi-provider support**: OpenAI, Anthropic, Google, Azure, OpenRouter, Ollama, Doubao, GLM
+/// - **Automatic retries**: Exponential backoff with jitter for transient failures
+/// - **Rate limiting**: Global rate limiter prevents hitting API limits
+/// - **Streaming**: Support for streaming responses via `StreamingLlmClient` trait
+/// - **Timeout control**: Configurable connection and request timeouts
+/// - **Custom headers**: Support for custom HTTP headers
+///
+/// # Examples
+///
+/// ```no_run
+/// use sage_core::llm::client::LlmClient;
+/// use sage_core::llm::provider_types::{LlmProvider, ModelParameters};
+/// use sage_core::config::provider::ProviderConfig;
+/// use sage_core::llm::messages::LlmMessage;
+///
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// // Create client for Anthropic
+/// let provider = LlmProvider::Anthropic;
+/// let config = ProviderConfig::default();
+/// let params = ModelParameters {
+///     model: "claude-3-5-sonnet-20241022".to_string(),
+///     ..Default::default()
+/// };
+///
+/// let client = LlmClient::new(provider, config, params)?;
+///
+/// // Send a chat request
+/// let messages = vec![LlmMessage::user("Hello, world!")];
+/// let response = client.chat(&messages, None).await?;
+/// println!("Response: {}", response.content);
+/// # Ok(())
+/// # }
+/// ```
 pub struct LlmClient {
     provider: LlmProvider,
     config: ProviderConfig,
@@ -31,7 +71,47 @@ pub struct LlmClient {
 pub type LLMClient = LlmClient;
 
 impl LlmClient {
-    /// Create a new LLM client
+    /// Create a new LLM client.
+    ///
+    /// Initializes the client with provider-specific configuration, validates settings,
+    /// and sets up HTTP client with timeout and header configurations.
+    ///
+    /// # Arguments
+    ///
+    /// * `provider` - The LLM provider to use
+    /// * `config` - Provider-specific configuration (API endpoints, timeouts, etc.)
+    /// * `model_params` - Model parameters (model name, temperature, max tokens, etc.)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Configuration validation fails
+    /// - HTTP client creation fails
+    /// - Provider is not implemented (for custom providers)
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_core::llm::client::LlmClient;
+    /// use sage_core::llm::provider_types::{LlmProvider, ModelParameters};
+    /// use sage_core::config::provider::ProviderConfig;
+    ///
+    /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let provider = LlmProvider::OpenAI;
+    /// let mut config = ProviderConfig::default();
+    /// config.api_key = Some("your-api-key".to_string());
+    ///
+    /// let params = ModelParameters {
+    ///     model: "gpt-4".to_string(),
+    ///     temperature: Some(0.7),
+    ///     max_tokens: Some(2000),
+    ///     ..Default::default()
+    /// };
+    ///
+    /// let client = LlmClient::new(provider, config, params)?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn new(
         provider: LlmProvider,
         config: ProviderConfig,
@@ -40,7 +120,10 @@ impl LlmClient {
         // Validate configuration
         config
             .validate()
-            .map_err(|e| SageError::config(format!("Invalid provider config: {}", e)))?;
+            .map_err(|e| SageError::config_with_context(
+                format!("Invalid provider config: {}", e),
+                format!("Validating configuration for provider '{}'", provider.name())
+            ))?;
 
         // Get effective timeout configuration (handles legacy timeout field)
         let timeouts = config.get_effective_timeouts();
@@ -67,7 +150,10 @@ impl LlmClient {
 
         let http_client = client_builder
             .build()
-            .map_err(|e| SageError::llm(format!("Failed to create HTTP client: {}", e)))?;
+            .map_err(|e| SageError::llm_with_provider(
+                format!("Failed to create HTTP client: {}", e),
+                provider.name()
+            ))?;
 
         debug!(
             "Created LLM client for provider '{}' with timeouts: connection={}s, request={}s",
@@ -119,9 +205,10 @@ impl LlmClient {
                 http_client,
             )),
             LlmProvider::Custom(name) => {
-                return Err(SageError::llm(format!(
-                    "Custom provider '{name}' not implemented"
-                )))
+                return Err(SageError::llm_with_provider(
+                    format!("Custom provider not implemented. Consider using OpenRouter or Ollama for custom models."),
+                    name
+                ))
             }
         };
 
@@ -133,22 +220,110 @@ impl LlmClient {
         })
     }
 
-    /// Get the provider
+    /// Get the provider used by this client.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_core::llm::client::LlmClient;
+    /// use sage_core::llm::provider_types::LlmProvider;
+    /// # use sage_core::config::provider::ProviderConfig;
+    /// # use sage_core::llm::provider_types::ModelParameters;
+    ///
+    /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = LlmClient::new(
+    ///     LlmProvider::Anthropic,
+    ///     ProviderConfig::default(),
+    ///     ModelParameters::default()
+    /// )?;
+    ///
+    /// assert!(matches!(client.provider(), LlmProvider::Anthropic));
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn provider(&self) -> &LlmProvider {
         &self.provider
     }
 
-    /// Get the model name
+    /// Get the model name configured for this client.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_core::llm::client::LlmClient;
+    /// use sage_core::llm::provider_types::LlmProvider;
+    /// # use sage_core::config::provider::ProviderConfig;
+    /// # use sage_core::llm::provider_types::ModelParameters;
+    ///
+    /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let params = ModelParameters {
+    ///     model: "claude-3-5-sonnet-20241022".to_string(),
+    ///     ..Default::default()
+    /// };
+    ///
+    /// let client = LlmClient::new(
+    ///     LlmProvider::Anthropic,
+    ///     ProviderConfig::default(),
+    ///     params
+    /// )?;
+    ///
+    /// assert_eq!(client.model(), "claude-3-5-sonnet-20241022");
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn model(&self) -> &str {
         &self.model_params.model
     }
 
-    /// Get the provider configuration
+    /// Get the provider configuration.
+    ///
+    /// Returns a reference to the provider configuration containing
+    /// API endpoints, timeouts, headers, and other settings.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_core::llm::client::LlmClient;
+    /// use sage_core::llm::provider_types::LlmProvider;
+    /// # use sage_core::config::provider::ProviderConfig;
+    /// # use sage_core::llm::provider_types::ModelParameters;
+    ///
+    /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = LlmClient::new(
+    ///     LlmProvider::Anthropic,
+    ///     ProviderConfig::default(),
+    ///     ModelParameters::default()
+    /// )?;
+    ///
+    /// let config = client.config();
+    /// println!("Max retries: {:?}", config.max_retries);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn config(&self) -> &ProviderConfig {
         &self.config
     }
 
-    /// Execute a request with retry logic and exponential backoff
+    /// Execute a request with retry logic and exponential backoff.
+    ///
+    /// Automatically retries failed requests using exponential backoff with jitter.
+    /// Only retries errors that are likely transient (network issues, rate limits, etc.).
+    ///
+    /// # Retry Strategy
+    ///
+    /// - Base delay: 2^attempt seconds (1s, 2s, 4s, 8s, ...)
+    /// - Jitter: Random 0-500ms per second of delay
+    /// - Max retries: Configured in `ProviderConfig` (default: 3)
+    /// - Retryable errors: 429, 502, 503, 504, timeouts, network errors
+    ///
+    /// # Arguments
+    ///
+    /// * `operation` - Async closure that performs the LLM request
+    ///
+    /// # Errors
+    ///
+    /// Returns the last error if all retry attempts are exhausted.
+    /// Non-retryable errors (e.g., 400, 401) return immediately without retrying.
     #[instrument(skip(self, operation), fields(max_retries = %self.config.max_retries.unwrap_or(3)))]
     async fn execute_with_retry<F, Fut>(&self, operation: F) -> SageResult<LlmResponse>
     where
@@ -222,10 +397,53 @@ impl LlmClient {
             }
         }
 
-        Err(last_error.unwrap_or_else(|| SageError::llm("All retry attempts failed")))
+        Err(last_error.unwrap_or_else(|| {
+            SageError::llm_with_provider(
+                format!("All {} retry attempts failed without error details", max_retries + 1),
+                self.provider.name()
+            )
+        }))
     }
 
-    /// Check if an error is retryable
+    /// Check if an error is retryable.
+    ///
+    /// Determines whether an error should trigger automatic retry based on
+    /// error type and status code.
+    ///
+    /// # Retryable Errors
+    ///
+    /// - HTTP 429 (Too Many Requests)
+    /// - HTTP 502 (Bad Gateway)
+    /// - HTTP 503 (Service Unavailable)
+    /// - HTTP 504 (Gateway Timeout)
+    /// - Network/connection errors
+    /// - Timeout errors
+    /// - "Overloaded" messages
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_core::llm::client::LlmClient;
+    /// use sage_core::error::SageError;
+    /// # use sage_core::llm::provider_types::LlmProvider;
+    /// # use sage_core::config::provider::ProviderConfig;
+    /// # use sage_core::llm::provider_types::ModelParameters;
+    ///
+    /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = LlmClient::new(
+    ///     LlmProvider::Anthropic,
+    ///     ProviderConfig::default(),
+    ///     ModelParameters::default()
+    /// )?;
+    ///
+    /// let error = SageError::llm("503 Service Unavailable");
+    /// assert!(client.is_retryable_error(&error));
+    ///
+    /// let error = SageError::llm("401 Unauthorized");
+    /// assert!(!client.is_retryable_error(&error));
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn is_retryable_error(&self, error: &SageError) -> bool {
         match error {
             SageError::Llm { message: msg, .. } => {
@@ -244,7 +462,43 @@ impl LlmClient {
         }
     }
 
-    /// Check if an error should trigger provider fallback
+    /// Check if an error should trigger provider fallback.
+    ///
+    /// Determines whether the error indicates the provider is unavailable
+    /// and a fallback provider should be tried.
+    ///
+    /// # Fallback Triggers
+    ///
+    /// - HTTP 403 (Forbidden - typically quota/billing issues)
+    /// - HTTP 429 (Rate Limit Exceeded)
+    /// - Quota exceeded messages
+    /// - Rate limit messages
+    /// - Insufficient credit/balance messages
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_core::llm::client::LlmClient;
+    /// use sage_core::error::SageError;
+    /// # use sage_core::llm::provider_types::LlmProvider;
+    /// # use sage_core::config::provider::ProviderConfig;
+    /// # use sage_core::llm::provider_types::ModelParameters;
+    ///
+    /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = LlmClient::new(
+    ///     LlmProvider::Anthropic,
+    ///     ProviderConfig::default(),
+    ///     ModelParameters::default()
+    /// )?;
+    ///
+    /// let error = SageError::llm("429 Rate limit exceeded");
+    /// assert!(client.should_fallback_provider(&error));
+    ///
+    /// let error = SageError::llm("500 Internal Server Error");
+    /// assert!(!client.should_fallback_provider(&error));
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn should_fallback_provider(&self, error: &SageError) -> bool {
         match error {
             SageError::Llm { message: msg, .. } => {
@@ -265,7 +519,59 @@ impl LlmClient {
         }
     }
 
-    /// Send a chat completion request
+    /// Send a chat completion request.
+    ///
+    /// Sends a chat completion request to the configured LLM provider with
+    /// automatic retry logic and rate limiting.
+    ///
+    /// # Arguments
+    ///
+    /// * `messages` - Conversation history (system, user, assistant messages)
+    /// * `tools` - Optional tool schemas for function calling
+    ///
+    /// # Returns
+    ///
+    /// Returns the LLM response containing:
+    /// - Generated content
+    /// - Token usage statistics
+    /// - Tool calls (if any)
+    /// - Finish reason
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Request fails after all retry attempts
+    /// - Provider returns an error response
+    /// - Network connectivity issues
+    /// - API key is invalid
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_core::llm::client::LlmClient;
+    /// use sage_core::llm::messages::LlmMessage;
+    /// # use sage_core::llm::provider_types::LlmProvider;
+    /// # use sage_core::config::provider::ProviderConfig;
+    /// # use sage_core::llm::provider_types::ModelParameters;
+    ///
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = LlmClient::new(
+    ///     LlmProvider::Anthropic,
+    ///     ProviderConfig::default(),
+    ///     ModelParameters::default()
+    /// )?;
+    ///
+    /// let messages = vec![
+    ///     LlmMessage::system("You are a helpful assistant."),
+    ///     LlmMessage::user("What is the capital of France?"),
+    /// ];
+    ///
+    /// let response = client.chat(&messages, None).await?;
+    /// println!("Assistant: {}", response.content);
+    /// println!("Tokens used: {:?}", response.usage);
+    /// # Ok(())
+    /// # }
+    /// ```
     #[instrument(skip(self, messages, tools), fields(provider = %self.provider, model = %self.model_params.model))]
     pub async fn chat(
         &self,
@@ -294,14 +600,70 @@ impl LlmClient {
 
 // Streaming support implementation
 #[async_trait]
-impl StreamingLLMClient for LlmClient {
-    /// Send a streaming chat completion request
+impl StreamingLlmClient for LlmClient {
+    /// Send a streaming chat completion request.
+    ///
+    /// Initiates a streaming response from the LLM provider, allowing you to
+    /// process generated tokens as they arrive rather than waiting for the
+    /// complete response.
+    ///
+    /// # Arguments
+    ///
+    /// * `messages` - Conversation history (system, user, assistant messages)
+    /// * `tools` - Optional tool schemas for function calling
+    ///
+    /// # Returns
+    ///
+    /// Returns an `LlmStream` that yields chunks of the response as they're generated.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Stream initialization fails
+    /// - Provider doesn't support streaming
+    /// - Network connectivity issues
+    /// - API key is invalid
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sage_core::llm::client::LlmClient;
+    /// use sage_core::llm::messages::LlmMessage;
+    /// use sage_core::llm::streaming::StreamingLlmClient;
+    /// use futures::StreamExt;
+    /// # use sage_core::llm::provider_types::LlmProvider;
+    /// # use sage_core::config::provider::ProviderConfig;
+    /// # use sage_core::llm::provider_types::ModelParameters;
+    ///
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = LlmClient::new(
+    ///     LlmProvider::Anthropic,
+    ///     ProviderConfig::default(),
+    ///     ModelParameters::default()
+    /// )?;
+    ///
+    /// let messages = vec![LlmMessage::user("Tell me a story")];
+    /// let mut stream = client.chat_stream(&messages, None).await?;
+    ///
+    /// while let Some(chunk) = stream.next().await {
+    ///     match chunk {
+    ///         Ok(response) => {
+    ///             if let Some(content) = response.content {
+    ///                 print!("{}", content);
+    ///             }
+    ///         }
+    ///         Err(e) => eprintln!("Stream error: {}", e),
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     #[instrument(skip(self, messages, tools), fields(provider = %self.provider, model = %self.model_params.model))]
     async fn chat_stream(
         &self,
         messages: &[LlmMessage],
         tools: Option<&[ToolSchema]>,
-    ) -> SageResult<LLMStream> {
+    ) -> SageResult<LlmStream> {
         // Apply rate limiting before making the request
         let provider_name = self.provider.name();
         let limiter = rate_limiter::get_rate_limiter(provider_name).await;
