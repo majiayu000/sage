@@ -1,3 +1,9 @@
+// Allow common clippy lints that are stylistic preferences
+#![allow(clippy::collapsible_if)]
+#![allow(clippy::derivable_impls)]
+#![allow(clippy::type_complexity)]
+#![allow(clippy::too_many_arguments)]
+
 //! Sage Agent CLI application
 //!
 //! This CLI provides multiple execution modes for different use cases:

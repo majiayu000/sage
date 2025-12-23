@@ -1,5 +1,11 @@
 //! Tool implementations for Sage Agent
 
+// Allow common clippy lints that are stylistic preferences
+#![allow(clippy::collapsible_if)]
+#![allow(clippy::derivable_impls)]
+#![allow(clippy::type_complexity)]
+#![allow(clippy::too_many_arguments)]
+
 pub mod config;
 pub mod mcp_tools;
 pub mod tools;

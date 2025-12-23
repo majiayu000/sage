@@ -271,10 +271,8 @@ impl UnifiedExecutor {
 
         let msg = self.message_tracker.create_user_message(content);
 
-        if let Some(storage) = &self.jsonl_storage {
-            if let Some(session_id) = &self.current_session_id {
-                storage.append_message(session_id, &msg).await?;
-            }
+        if let (Some(storage), Some(session_id)) = (&self.jsonl_storage, &self.current_session_id) {
+            storage.append_message(session_id, &msg).await?;
         }
 
         Ok(Some(msg))
@@ -300,10 +298,8 @@ impl UnifiedExecutor {
             msg = msg.with_usage(u);
         }
 
-        if let Some(storage) = &self.jsonl_storage {
-            if let Some(session_id) = &self.current_session_id {
-                storage.append_message(session_id, &msg).await?;
-            }
+        if let (Some(storage), Some(session_id)) = (&self.jsonl_storage, &self.current_session_id) {
+            storage.append_message(session_id, &msg).await?;
         }
 
         Ok(Some(msg))
@@ -334,10 +330,8 @@ impl UnifiedExecutor {
 
         let snapshot = self.file_tracker.create_snapshot(message_uuid).await?;
 
-        if let Some(storage) = &self.jsonl_storage {
-            if let Some(session_id) = &self.current_session_id {
-                storage.append_snapshot(session_id, &snapshot).await?;
-            }
+        if let (Some(storage), Some(session_id)) = (&self.jsonl_storage, &self.current_session_id) {
+            storage.append_snapshot(session_id, &snapshot).await?;
         }
 
         // Clear tracker for next round
@@ -488,12 +482,10 @@ impl UnifiedExecutor {
                 step_number += 1;
 
                 // Check max_steps limit (None = unlimited)
-                if let Some(max) = max_steps {
-                    if step_number > max {
-                        tracing::warn!("Reached maximum steps: {}", max);
-                        execution.complete(false, Some("Reached maximum steps".to_string()));
-                        break 'execution_loop ExecutionOutcome::MaxStepsReached { execution };
-                    }
+                if let Some(max) = max_steps.filter(|&max| step_number > max) {
+                    tracing::warn!("Reached maximum steps: {}", max);
+                    execution.complete(false, Some("Reached maximum steps".to_string()));
+                    break 'execution_loop ExecutionOutcome::MaxStepsReached { execution };
                 }
 
                 // Check for interrupt before each step
@@ -518,53 +510,52 @@ impl UnifiedExecutor {
                         }
 
                         // Record assistant message in JSONL session
-                        if self.current_session_id.is_some() {
-                            if let Some(ref llm_response) = step.llm_response {
-                                // Convert tool calls if any exist
-                                let tool_calls = if !llm_response.tool_calls.is_empty() {
-                                    Some(
-                                        llm_response
-                                            .tool_calls
-                                            .iter()
-                                            .map(|c| EnhancedToolCall {
-                                                id: c.id.clone(),
-                                                name: c.name.clone(),
-                                                arguments: serde_json::to_value(&c.arguments)
-                                                    .unwrap_or(serde_json::Value::Object(
-                                                        Default::default(),
-                                                    )),
-                                            })
-                                            .collect(),
-                                    )
-                                } else {
-                                    None
-                                };
+                        if self.current_session_id.is_some() && step.llm_response.is_some() {
+                            let llm_response = step.llm_response.as_ref().unwrap();
+                            // Convert tool calls if any exist
+                            let tool_calls = if !llm_response.tool_calls.is_empty() {
+                                Some(
+                                    llm_response
+                                        .tool_calls
+                                        .iter()
+                                        .map(|c| EnhancedToolCall {
+                                            id: c.id.clone(),
+                                            name: c.name.clone(),
+                                            arguments: serde_json::to_value(&c.arguments)
+                                                .unwrap_or(serde_json::Value::Object(
+                                                    Default::default(),
+                                                )),
+                                        })
+                                        .collect(),
+                                )
+                            } else {
+                                None
+                            };
 
-                                // Convert usage if available
-                                let usage =
-                                    llm_response.usage.as_ref().map(|u| EnhancedTokenUsage {
-                                        input_tokens: u.prompt_tokens as u64,
-                                        output_tokens: u.completion_tokens as u64,
-                                        cache_read_tokens: u.cache_read_input_tokens.unwrap_or(0)
-                                            as u64,
-                                        cache_write_tokens: u
-                                            .cache_creation_input_tokens
-                                            .unwrap_or(0)
-                                            as u64,
-                                    });
+                            // Convert usage if available
+                            let usage =
+                                llm_response.usage.as_ref().map(|u| EnhancedTokenUsage {
+                                    input_tokens: u.prompt_tokens as u64,
+                                    output_tokens: u.completion_tokens as u64,
+                                    cache_read_tokens: u.cache_read_input_tokens.unwrap_or(0)
+                                        as u64,
+                                    cache_write_tokens: u
+                                        .cache_creation_input_tokens
+                                        .unwrap_or(0)
+                                        as u64,
+                                });
 
-                                // Record assistant message and get the message UUID
-                                if let Ok(Some(msg)) = self
-                                    .record_assistant_message(
-                                        &llm_response.content,
-                                        tool_calls,
-                                        usage,
-                                    )
-                                    .await
-                                {
-                                    // Record file snapshot if files were tracked
-                                    let _ = self.record_file_snapshot(&msg.uuid).await;
-                                }
+                            // Record assistant message and get the message UUID
+                            if let Ok(Some(msg)) = self
+                                .record_assistant_message(
+                                    &llm_response.content,
+                                    tool_calls,
+                                    usage,
+                                )
+                                .await
+                            {
+                                // Record file snapshot if files were tracked
+                                let _ = self.record_file_snapshot(&msg.uuid).await;
                             }
                         }
 

@@ -132,17 +132,13 @@ impl FileOperationTracker {
 
         match tool_name {
             "Write" => {
-                if let Some(file_path) = result.metadata.get("file_path") {
-                    if let Some(path) = file_path.as_str() {
-                        self.created_files.push(path.to_string());
-                    }
+                if let Some(path) = result.metadata.get("file_path").and_then(|v| v.as_str()) {
+                    self.created_files.push(path.to_string());
                 }
             }
             "Edit" => {
-                if let Some(file_path) = result.metadata.get("file_path") {
-                    if let Some(path) = file_path.as_str() {
-                        self.modified_files.push(path.to_string());
-                    }
+                if let Some(path) = result.metadata.get("file_path").and_then(|v| v.as_str()) {
+                    self.modified_files.push(path.to_string());
                 }
             }
             _ => {}
@@ -282,16 +278,14 @@ impl ClaudeStyleAgent {
     /// Check if we can continue execution (budget and step limits)
     fn can_continue(&self) -> Result<(), SageError> {
         // Check step limit (None = unlimited)
-        if let Some(max_steps) = self.config.max_steps {
-            if self.current_step >= max_steps {
-                return Err(SageError::agent(format!(
-                    "Max steps ({}) reached. Total tokens used: {} (input: {}, output: {})",
-                    max_steps,
-                    self.token_usage.total(),
-                    self.token_usage.input(),
-                    self.token_usage.output()
-                )));
-            }
+        if let Some(max_steps) = self.config.max_steps.filter(|&max| self.current_step >= max) {
+            return Err(SageError::agent(format!(
+                "Max steps ({}) reached. Total tokens used: {} (input: {}, output: {})",
+                max_steps,
+                self.token_usage.total(),
+                self.token_usage.input(),
+                self.token_usage.output()
+            )));
         }
 
         // Check token budget
@@ -512,14 +506,13 @@ impl ReactiveExecutionManager {
         // Continue if not completed and there's a continuation prompt
         // SAFETY: responses is never empty here since we just pushed a response above
         if !completed {
-            if let Some(last_response) = responses.last() {
-                if let Some(continuation) = &last_response.continuation_prompt {
-                    let follow_up = self
-                        .agent
-                        .continue_conversation(last_response, continuation)
-                        .await?;
-                    responses.push(follow_up);
-                }
+            if let Some(continuation) = responses.last().and_then(|r| r.continuation_prompt.as_ref()) {
+                let last_response = responses.last().unwrap();
+                let follow_up = self
+                    .agent
+                    .continue_conversation(last_response, continuation)
+                    .await?;
+                responses.push(follow_up);
             }
         }
 

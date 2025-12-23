@@ -13,6 +13,12 @@
 //! ## Version Compatibility
 //!
 //! The SDK maintains backward compatibility within the same MAJOR version.
+
+// Allow common clippy lints that are stylistic preferences
+#![allow(clippy::collapsible_if)]
+#![allow(clippy::derivable_impls)]
+#![allow(clippy::type_complexity)]
+#![allow(clippy::too_many_arguments)]
 //! Clients can check compatibility using [`version::is_compatible`] or
 //! [`version::negotiate_version`].
 //!

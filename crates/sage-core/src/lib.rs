@@ -3,6 +3,12 @@
 //! This crate provides the core functionality for the Sage Agent system,
 //! including agent execution, LLM integration, tool management, and configuration.
 
+// Allow common clippy lints that are stylistic preferences
+#![allow(clippy::collapsible_if)]
+#![allow(clippy::derivable_impls)]
+#![allow(clippy::type_complexity)]
+#![allow(clippy::too_many_arguments)]
+
 pub mod agent;
 pub mod builder;
 pub mod cache;

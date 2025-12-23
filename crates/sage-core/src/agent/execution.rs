@@ -114,15 +114,11 @@ impl AgentExecution {
         // Build cache info if available
         let cache_info = if self.total_usage.has_cache_metrics() {
             let mut parts = Vec::new();
-            if let Some(created) = self.total_usage.cache_creation_input_tokens {
-                if created > 0 {
-                    parts.push(format!("{} cache created", created));
-                }
+            if let Some(created) = self.total_usage.cache_creation_input_tokens.filter(|&c| c > 0) {
+                parts.push(format!("{} cache created", created));
             }
-            if let Some(read) = self.total_usage.cache_read_input_tokens {
-                if read > 0 {
-                    parts.push(format!("{} cache read", read));
-                }
+            if let Some(read) = self.total_usage.cache_read_input_tokens.filter(|&r| r > 0) {
+                parts.push(format!("{} cache read", read));
             }
             if !parts.is_empty() {
                 format!(", {}", parts.join(", "))
