@@ -28,7 +28,7 @@ impl ClaudeMode {
     pub async fn execute_command(&mut self, command: &str) -> SageResult<()> {
         let start_time = Instant::now();
         print!("🤖 Thinking... ");
-        io::stdout().flush().unwrap();
+        let _ = io::stdout().flush();
 
         let _response = match self.execution_manager.interactive_mode(command).await {
             Ok(response) => {
@@ -64,14 +64,16 @@ impl ClaudeMode {
             // In interactive mode, show continuation prompt and wait for user input
             println!("\n{}", continuation_prompt);
             print!("Continue? (y/n): ");
-            io::stdout().flush().unwrap();
+            let _ = io::stdout().flush();
 
             let mut input = String::new();
-            io::stdin().read_line(&mut input).unwrap();
+            if io::stdin().read_line(&mut input).is_err() {
+                return Ok(()); // Silently exit on input error
+            }
 
             if input.trim().to_lowercase() == "y" || input.trim().to_lowercase() == "yes" {
                 print!("🤖 Continuing... ");
-                io::stdout().flush().unwrap();
+                let _ = io::stdout().flush();
                 match self
                     .execution_manager
                     .continue_interactive(continuation_prompt)
@@ -91,7 +93,7 @@ impl ClaudeMode {
         } else {
             // In non-interactive mode, auto-continue
             print!("🤖 Continuing... ");
-            io::stdout().flush().unwrap();
+            let _ = io::stdout().flush();
             match self
                 .execution_manager
                 .continue_interactive(continuation_prompt)
@@ -145,7 +147,7 @@ impl ClaudeMode {
 
         loop {
             print!("sage> ");
-            io::stdout().flush().unwrap();
+            let _ = io::stdout().flush();
 
             let mut input = String::new();
             match io::stdin().read_line(&mut input) {
