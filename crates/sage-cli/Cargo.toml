@@ -37,6 +37,9 @@ serde_json = { workspace = true }
 # Utilities
 uuid = { workspace = true }
 
+# Synchronization
+parking_lot = { workspace = true }
+
 # Error handling
 anyhow = { workspace = true }
 
