@@ -11,8 +11,8 @@ use crate::config::model::{Config, ModelParameters};
 use crate::config::provider::ProviderConfig;
 use crate::error::{SageError, SageResult};
 use crate::events::EventBus;
-use crate::llm::client::LLMClient;
-use crate::llm::provider_types::{LLMProvider, TimeoutConfig};
+use crate::llm::client::LlmClient;
+use crate::llm::provider_types::{LlmProvider, TimeoutConfig};
 use crate::mcp::McpRegistry;
 use crate::mcp::transport::TransportConfig;
 use crate::tools::base::Tool;
@@ -323,8 +323,8 @@ impl SageBuilder {
         }
     }
 
-    /// Build an LLMClient
-    pub fn build_llm_client(&self) -> SageResult<LLMClient> {
+    /// Build an LlmClient
+    pub fn build_llm_client(&self) -> SageResult<LlmClient> {
         // Get provider configuration
         let provider_name = self
             .default_provider
@@ -356,7 +356,7 @@ impl SageBuilder {
             .ok_or_else(|| BuilderError::ProviderNotConfigured(provider_name.clone()))?;
 
         // Parse provider
-        let provider: LLMProvider = provider_name.parse().map_err(|_| {
+        let provider: LlmProvider = provider_name.parse().map_err(|_| {
             BuilderError::InvalidConfig(format!("Invalid provider: {}", provider_name))
         })?;
 
@@ -369,7 +369,7 @@ impl SageBuilder {
             ModelParameters::default().to_llm_parameters()
         };
 
-        LLMClient::new(provider, provider_config, model_params)
+        LlmClient::new(provider, provider_config, model_params)
     }
 
     /// Build an McpRegistry

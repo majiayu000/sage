@@ -3,10 +3,10 @@
 use crate::config::provider::ProviderConfig;
 use crate::error::{SageError, SageResult};
 use crate::llm::converters::{MessageConverter, ToolConverter};
-use crate::llm::messages::LLMMessage;
+use crate::llm::messages::LlmMessage;
 use crate::llm::parsers::ResponseParser;
 use crate::llm::provider_types::ModelParameters;
-use crate::llm::streaming::{LLMStream, StreamChunk};
+use crate::llm::streaming::{LlmStream, StreamChunk};
 use crate::tools::types::ToolSchema;
 use anyhow::Context;
 use futures::StreamExt;
@@ -35,9 +35,9 @@ impl OpenAIProvider {
     #[instrument(skip(self, messages, tools), level = "debug")]
     pub async fn chat(
         &self,
-        messages: &[LLMMessage],
+        messages: &[LlmMessage],
         tools: Option<&[ToolSchema]>,
-    ) -> SageResult<crate::llm::messages::LLMResponse> {
+    ) -> SageResult<crate::llm::messages::LlmResponse> {
         let url = format!("{}/chat/completions", self.config.get_base_url());
 
         let mut request_body = json!({
@@ -108,9 +108,9 @@ impl OpenAIProvider {
     /// OpenAI streaming chat completion
     pub async fn chat_stream(
         &self,
-        messages: &[LLMMessage],
+        messages: &[LlmMessage],
         tools: Option<&[ToolSchema]>,
-    ) -> SageResult<LLMStream> {
+    ) -> SageResult<LlmStream> {
         let url = format!("{}/chat/completions", self.config.get_base_url());
 
         let mut request_body = json!({

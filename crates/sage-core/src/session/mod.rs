@@ -63,7 +63,7 @@ pub use file_tracker::FileSnapshotTracker;
 pub use jsonl_storage::{JsonlSessionStorage, MessageChainTracker, SessionMetadata};
 pub use manager::SessionManager;
 pub use session_cache::{
-    MCPServerCache, MCPServerConfig, RecentSession, SessionCache, SessionCacheConfig,
+    McpServerCache, McpServerConfig, RecentSession, SessionCache, SessionCacheConfig,
     SessionCacheData, SessionCacheStats, ToolTrustSettings, UserPreferences,
 };
 pub use storage::{BoxedSessionStorage, FileSessionStorage, MemorySessionStorage, SessionStorage};

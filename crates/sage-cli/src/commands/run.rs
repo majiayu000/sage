@@ -1,7 +1,7 @@
 //! Run command implementation
 
 use crate::commands::session_resume::{SessionSelector, print_session_details};
-use crate::console::CLIConsole;
+use crate::console::CliConsole;
 use crate::signal_handler::start_global_signal_handling;
 use sage_core::commands::types::InteractiveCommand;
 use sage_core::commands::{CommandExecutor, CommandRegistry};
@@ -30,7 +30,7 @@ pub struct RunArgs {
 
 /// Execute the run command
 pub async fn execute(args: RunArgs) -> SageResult<()> {
-    let console = CLIConsole::new(args.verbose);
+    let console = CliConsole::new(args.verbose);
 
     // Initialize signal handling for task interruption
     if let Err(e) = start_global_signal_handling().await {
@@ -404,7 +404,7 @@ pub async fn execute(args: RunArgs) -> SageResult<()> {
 /// Handle interactive commands that require CLI interaction
 async fn handle_interactive_command(
     cmd: &InteractiveCommand,
-    console: &CLIConsole,
+    console: &CliConsole,
 ) -> SageResult<()> {
     match cmd {
         InteractiveCommand::Resume {
@@ -418,7 +418,7 @@ async fn handle_interactive_command(
 async fn handle_resume_command(
     session_id: Option<String>,
     show_all: bool,
-    console: &CLIConsole,
+    console: &CliConsole,
 ) -> SageResult<()> {
     let selector = SessionSelector::new()?.show_all_projects(show_all);
 

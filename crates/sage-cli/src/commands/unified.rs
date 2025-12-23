@@ -5,7 +5,7 @@
 //! - User input blocks inline via InputChannel
 //! - The execution loop never exits for user input
 
-use crate::console::CLIConsole;
+use crate::console::CliConsole;
 use crate::signal_handler::start_global_signal_handling;
 use sage_core::agent::{ExecutionMode, ExecutionOptions, ExecutionOutcome, UnifiedExecutor};
 use sage_core::commands::{CommandExecutor, CommandRegistry};
@@ -41,7 +41,7 @@ pub struct UnifiedArgs {
 
 /// Execute a task using the unified execution loop
 pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
-    let console = CLIConsole::new(args.verbose);
+    let console = CliConsole::new(args.verbose);
 
     // Initialize signal handling
     if let Err(e) = start_global_signal_handling().await {
@@ -216,7 +216,7 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
 
 /// Handle user input requests from the execution loop
 async fn handle_user_input(mut handle: InputChannelHandle, verbose: bool) {
-    let console = CLIConsole::new(verbose);
+    let console = CliConsole::new(verbose);
     while let Some(request) = handle.request_rx.recv().await {
         // Display the question based on request kind
         console.print_header("User Input Required");
@@ -314,7 +314,7 @@ async fn handle_user_input(mut handle: InputChannelHandle, verbose: bool) {
 
 /// Display execution outcome
 fn display_outcome(
-    console: &CLIConsole,
+    console: &CliConsole,
     outcome: &ExecutionOutcome,
     duration: std::time::Duration,
 ) {

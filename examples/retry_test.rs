@@ -6,7 +6,7 @@
 use sage_core::{
     config::provider::ProviderConfig,
     llm::{
-        LLMProvider, TimeoutConfig, client::LLMClient, messages::LLMMessage,
+        LlmProvider, TimeoutConfig, client::LlmClient, messages::LlmMessage,
         provider_types::ModelParameters,
     },
 };
@@ -29,10 +29,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_temperature(0.7);
 
     // Create LLM client
-    let client = LLMClient::new(LLMProvider::Google, provider_config, model_params)?;
+    let client = LlmClient::new(LlmProvider::Google, provider_config, model_params)?;
 
     // Create a simple message using the helper method
-    let messages = vec![LLMMessage::user("Hello, how are you?")];
+    let messages = vec![LlmMessage::user("Hello, how are you?")];
 
     println!("Testing LLM client with retry mechanism...");
 

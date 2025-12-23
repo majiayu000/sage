@@ -6,7 +6,7 @@ use crate::llm::messages::{LlmMessage, LlmResponse};
 use crate::llm::provider_types::{LlmProvider, ModelParameters};
 use crate::llm::providers::{
     AnthropicProvider, AzureProvider, DoubaoProvider, GlmProvider, GoogleProvider,
-    LLMProviderTrait, OllamaProvider, OpenAIProvider, OpenRouterProvider, ProviderInstance,
+    LlmProviderTrait, OllamaProvider, OpenAIProvider, OpenRouterProvider, ProviderInstance,
 };
 use crate::llm::rate_limiter::global as rate_limiter;
 use crate::llm::streaming::{LlmStream, StreamingLlmClient};
@@ -68,7 +68,7 @@ pub struct LlmClient {
 
 /// Deprecated: Use `LlmClient` instead
 #[deprecated(since = "0.2.0", note = "Use `LlmClient` instead")]
-pub type LLMClient = LlmClient;
+pub type LlmClient = LlmClient;
 
 impl LlmClient {
     /// Create a new LLM client.

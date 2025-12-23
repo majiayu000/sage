@@ -3,12 +3,12 @@
 use crate::config::provider::ProviderConfig;
 use crate::error::{SageError, SageResult};
 use crate::llm::converters::{MessageConverter, ToolConverter};
-use crate::llm::messages::LLMMessage;
+use crate::llm::messages::LlmMessage;
 use crate::llm::parsers::ResponseParser;
 use crate::llm::provider_types::ModelParameters;
-use crate::llm::streaming::{LLMStream, StreamChunk};
+use crate::llm::streaming::{LlmStream, StreamChunk};
 use crate::tools::types::ToolSchema;
-use crate::types::LLMUsage;
+use crate::types::LlmUsage;
 use anyhow::Context;
 use futures::StreamExt;
 use reqwest::Client;
@@ -40,9 +40,9 @@ impl AnthropicProvider {
     #[instrument(skip(self, messages, tools), level = "debug")]
     pub async fn chat(
         &self,
-        messages: &[LLMMessage],
+        messages: &[LlmMessage],
         tools: Option<&[ToolSchema]>,
-    ) -> SageResult<crate::llm::messages::LLMResponse> {
+    ) -> SageResult<crate::llm::messages::LlmResponse> {
         let url = format!("{}/v1/messages", self.config.get_base_url());
         let enable_caching = self.model_params.is_prompt_caching_enabled();
 
@@ -149,10 +149,10 @@ impl AnthropicProvider {
     /// Supports prompt caching when `enable_prompt_caching` is set in ModelParameters.
     pub async fn chat_stream(
         &self,
-        messages: &[LLMMessage],
+        messages: &[LlmMessage],
         tools: Option<&[ToolSchema]>,
-    ) -> SageResult<LLMStream> {
-        use crate::llm::sse_decoder::SSEDecoder;
+    ) -> SageResult<LlmStream> {
+        use crate::llm::sse_decoder::SseDecoder;
 
         let url = format!("{}/v1/messages", self.config.get_base_url());
         let enable_caching = self.model_params.is_prompt_caching_enabled();
@@ -235,7 +235,7 @@ impl AnthropicProvider {
 
         // State for accumulating tool calls
         struct StreamState {
-            decoder: SSEDecoder,
+            decoder: SseDecoder,
             // Current content block being built
             current_block_type: Option<String>,
             current_block_id: Option<String>,
@@ -245,11 +245,11 @@ impl AnthropicProvider {
             pending_tool_calls: Vec<crate::tools::types::ToolCall>,
             // Final message info
             stop_reason: Option<String>,
-            usage: Option<LLMUsage>,
+            usage: Option<LlmUsage>,
         }
 
         let state = std::sync::Arc::new(tokio::sync::Mutex::new(StreamState {
-            decoder: SSEDecoder::new(),
+            decoder: SseDecoder::new(),
             current_block_type: None,
             current_block_id: None,
             current_tool_name: None,
@@ -381,7 +381,7 @@ impl AnthropicProvider {
                                             .and_then(|v| v.as_u64())
                                             .map(|v| v as u32);
 
-                                        state.usage = Some(LLMUsage {
+                                        state.usage = Some(LlmUsage {
                                             prompt_tokens: 0, // Not provided in delta
                                             completion_tokens: output_tokens as u32,
                                             total_tokens: output_tokens as u32,

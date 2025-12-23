@@ -4,13 +4,13 @@
 mod tests {
     use crate::config::provider::ProviderConfig;
     use crate::llm::provider_fallback::ProviderFallbackClient;
-    use crate::llm::provider_types::{LLMProvider, ModelParameters};
+    use crate::llm::provider_types::{LlmProvider, ModelParameters};
 
     #[test]
     fn test_provider_fallback_creation() {
         let providers = vec![
             (
-                LLMProvider::Google,
+                LlmProvider::Google,
                 ProviderConfig::new("google").with_api_key("test_key"),
                 ModelParameters {
                     model: "gemini-pro".to_string(),
@@ -27,7 +27,7 @@ mod tests {
                 },
             ),
             (
-                LLMProvider::Anthropic,
+                LlmProvider::Anthropic,
                 ProviderConfig::new("anthropic").with_api_key("test_key"),
                 ModelParameters {
                     model: "claude-3-5-sonnet-20241022".to_string(),

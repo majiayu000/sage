@@ -59,7 +59,7 @@ pub struct LlmInteractionRecord {
 
 /// Deprecated: Use `LlmInteractionRecord` instead
 #[deprecated(since = "0.2.0", note = "Use `LlmInteractionRecord` instead")]
-pub type LLMInteractionRecord = LlmInteractionRecord;
+pub type LlmInteractionRecord = LlmInteractionRecord;
 
 /// LLM response record
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -78,7 +78,7 @@ pub struct LlmResponseRecord {
 
 /// Deprecated: Use `LlmResponseRecord` instead
 #[deprecated(since = "0.2.0", note = "Use `LlmResponseRecord` instead")]
-pub type LLMResponseRecord = LlmResponseRecord;
+pub type LlmResponseRecord = LlmResponseRecord;
 
 /// Token usage record
 #[derive(Debug, Clone, Serialize, Deserialize)]

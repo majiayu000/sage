@@ -17,7 +17,7 @@ pub struct LlmCache {
 
 /// Deprecated: Use `LlmCache` instead
 #[deprecated(since = "0.2.0", note = "Use `LlmCache` instead")]
-pub type LLMCache = LlmCache;
+pub type LlmCache = LlmCache;
 
 impl LlmCache {
     /// Create a new LLM cache
@@ -117,7 +117,7 @@ pub struct LlmCacheBuilder {
 
 /// Deprecated: Use `LlmCacheBuilder` instead
 #[deprecated(since = "0.2.0", note = "Use `LlmCacheBuilder` instead")]
-pub type LLMCacheBuilder = LlmCacheBuilder;
+pub type LlmCacheBuilder = LlmCacheBuilder;
 
 impl LlmCacheBuilder {
     /// Create a new builder
@@ -167,7 +167,7 @@ pub struct CachedLlmClient<T> {
 
 /// Deprecated: Use `CachedLlmClient` instead
 #[deprecated(since = "0.2.0", note = "Use `CachedLlmClient` instead")]
-pub type CachedLLMClient<T> = CachedLlmClient<T>;
+pub type CachedLlmClient<T> = CachedLlmClient<T>;
 
 impl<T> CachedLlmClient<T> {
     /// Create a new cached LLM client

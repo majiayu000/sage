@@ -32,7 +32,7 @@ impl ConfigValidator {
         }
 
         // Validate provider names
-        // All providers from LLMProvider enum in llm/providers.rs
+        // All providers from LlmProvider enum in llm/providers.rs
         let valid_providers: HashSet<&str> = [
             "openai",     // OpenAI (GPT models)
             "anthropic",  // Anthropic (Claude models)

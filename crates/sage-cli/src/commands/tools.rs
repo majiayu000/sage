@@ -1,11 +1,11 @@
 //! Tools command implementation
 
-use crate::console::CLIConsole;
+use crate::console::CliConsole;
 use sage_core::error::SageResult;
 
 /// Show available tools and their descriptions
 pub async fn show_tools() -> SageResult<()> {
-    let console = CLIConsole::new(true);
+    let console = CliConsole::new(true);
 
     console.print_header("Available Tools");
 

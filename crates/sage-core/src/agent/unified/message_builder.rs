@@ -1,7 +1,7 @@
 //! Message building utilities for the unified executor
 
 use crate::error::SageResult;
-use crate::llm::messages::LLMMessage;
+use crate::llm::messages::LlmMessage;
 use crate::prompts::SystemPromptBuilder;
 use tracing::instrument;
 
@@ -42,10 +42,10 @@ impl UnifiedExecutor {
         &self,
         system_prompt: &str,
         task_description: &str,
-    ) -> Vec<LLMMessage> {
+    ) -> Vec<LlmMessage> {
         vec![
-            LLMMessage::system(system_prompt),
-            LLMMessage::user(task_description),
+            LlmMessage::system(system_prompt),
+            LlmMessage::user(task_description),
         ]
     }
 }

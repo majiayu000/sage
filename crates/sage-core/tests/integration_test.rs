@@ -5,11 +5,11 @@
 
 use futures::{StreamExt, stream};
 use sage_core::{
-    cache::{CacheConfig, CacheManager, LLMCache},
+    cache::{CacheConfig, CacheManager, LlmCache},
     error::SageResult,
     llm::streaming::stream_utils,
-    llm::{LLMMessage, LLMResponse, MessageRole, StreamChunk},
-    types::LLMUsage,
+    llm::{LlmMessage, LlmResponse, MessageRole, StreamChunk},
+    types::LlmUsage,
 };
 use std::collections::HashMap;
 use std::time::Duration;
@@ -32,11 +32,11 @@ async fn test_cache_streaming_integration() -> SageResult<()> {
     };
 
     let cache_manager = CacheManager::new(cache_config)?;
-    let llm_cache = LLMCache::new(cache_manager, Some(Duration::from_secs(300)));
+    let llm_cache = LlmCache::new(cache_manager, Some(Duration::from_secs(300)));
 
     // 2. Create test messages
     let messages = vec![
-        LLMMessage {
+        LlmMessage {
             role: MessageRole::System,
             content: "You are a helpful assistant.".to_string(),
             tool_calls: None,
@@ -45,7 +45,7 @@ async fn test_cache_streaming_integration() -> SageResult<()> {
             name: None,
             metadata: HashMap::new(),
         },
-        LLMMessage {
+        LlmMessage {
             role: MessageRole::User,
             content: "Tell me about Rust programming.".to_string(),
             tool_calls: None,
@@ -77,7 +77,7 @@ async fn test_cache_streaming_integration() -> SageResult<()> {
         StreamChunk::content(" It was originally developed by Mozilla"),
         StreamChunk::content(" and has gained widespread adoption."),
         StreamChunk::final_chunk(
-            Some(LLMUsage {
+            Some(LlmUsage {
                 prompt_tokens: 25,
                 completion_tokens: 20,
                 total_tokens: 45,
@@ -128,7 +128,7 @@ async fn test_cache_streaming_integration() -> SageResult<()> {
     println!("Cache hit rate: {:.2}%", stats.hit_rate() * 100.0);
 
     // 8. Test different request (should be cache miss)
-    let different_messages = vec![LLMMessage {
+    let different_messages = vec![LlmMessage {
         role: MessageRole::User,
         content: "What is Python?".to_string(),
         tool_calls: None,
@@ -224,7 +224,7 @@ async fn test_stream_utilities() -> SageResult<()> {
         Ok(StreamChunk::content("Part 2 ")),
         Ok(StreamChunk::content("Part 3")),
         Ok(StreamChunk::final_chunk(
-            Some(LLMUsage {
+            Some(LlmUsage {
                 prompt_tokens: 10,
                 completion_tokens: 15,
                 total_tokens: 25,
@@ -260,12 +260,12 @@ async fn test_cache_performance() -> SageResult<()> {
     };
 
     let cache_manager = CacheManager::new(cache_config)?;
-    let llm_cache = LLMCache::new(cache_manager, Some(Duration::from_secs(60)));
+    let llm_cache = LlmCache::new(cache_manager, Some(Duration::from_secs(60)));
 
     // Generate test data
     let mut test_cases = Vec::new();
     for i in 0..50 {
-        let messages = vec![LLMMessage {
+        let messages = vec![LlmMessage {
             role: MessageRole::User,
             content: format!("Test message {}", i),
             tool_calls: None,
@@ -275,10 +275,10 @@ async fn test_cache_performance() -> SageResult<()> {
             metadata: HashMap::new(),
         }];
 
-        let response = LLMResponse {
+        let response = LlmResponse {
             content: format!("Response to test message {}", i),
             tool_calls: vec![],
-            usage: Some(LLMUsage {
+            usage: Some(LlmUsage {
                 prompt_tokens: 10,
                 completion_tokens: 15,
                 total_tokens: 25,

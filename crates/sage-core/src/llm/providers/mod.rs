@@ -18,4 +18,4 @@ pub use google::GoogleProvider;
 pub use ollama::OllamaProvider;
 pub use openai::OpenAIProvider;
 pub use openrouter::OpenRouterProvider;
-pub use provider_trait::{LLMProviderTrait, ProviderInstance};
+pub use provider_trait::{LlmProviderTrait, ProviderInstance};

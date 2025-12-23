@@ -1,7 +1,7 @@
 //! Message format conversion for different providers
 
 use crate::error::SageResult;
-use crate::llm::messages::{LLMMessage, MessageRole};
+use crate::llm::messages::{LlmMessage, MessageRole};
 use serde_json::{Value, json};
 
 /// Message format converter
@@ -9,7 +9,7 @@ pub struct MessageConverter;
 
 impl MessageConverter {
     /// Convert messages for OpenAI format
-    pub fn to_openai(messages: &[LLMMessage]) -> SageResult<Vec<Value>> {
+    pub fn to_openai(messages: &[LlmMessage]) -> SageResult<Vec<Value>> {
         let mut converted = Vec::new();
 
         for message in messages {
@@ -59,7 +59,7 @@ impl MessageConverter {
     /// - 2 for messages (last 2 messages only)
     ///
     /// This allows efficient caching with 90% cost savings on cache reads.
-    pub fn to_anthropic(messages: &[LLMMessage], enable_caching: bool) -> SageResult<Vec<Value>> {
+    pub fn to_anthropic(messages: &[LlmMessage], enable_caching: bool) -> SageResult<Vec<Value>> {
         let mut converted = Vec::new();
 
         // Filter out system messages first to get accurate count
@@ -156,7 +156,7 @@ impl MessageConverter {
     }
 
     /// Convert messages for GLM (Anthropic-compatible format without cache_control)
-    pub fn to_glm(messages: &[LLMMessage]) -> SageResult<Vec<Value>> {
+    pub fn to_glm(messages: &[LlmMessage]) -> SageResult<Vec<Value>> {
         let mut converted = Vec::new();
 
         // Filter out system messages
@@ -228,7 +228,7 @@ impl MessageConverter {
     }
 
     /// Convert messages for Google format
-    pub fn to_google(messages: &[LLMMessage]) -> SageResult<Vec<Value>> {
+    pub fn to_google(messages: &[LlmMessage]) -> SageResult<Vec<Value>> {
         tracing::debug!("Converting {} messages for Google", messages.len());
         for (i, msg) in messages.iter().enumerate() {
             tracing::debug!(
@@ -322,7 +322,7 @@ impl MessageConverter {
     }
 
     /// Extract system message from messages
-    pub fn extract_system_message(messages: &[LLMMessage]) -> (Option<String>, Vec<LLMMessage>) {
+    pub fn extract_system_message(messages: &[LlmMessage]) -> (Option<String>, Vec<LlmMessage>) {
         let mut system_content = None;
         let mut other_messages = Vec::new();
 

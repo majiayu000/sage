@@ -21,7 +21,7 @@ pub use conversation_cache::{
     CacheCheckpoint, CacheLookupResult, CachedConversation, ConversationCache,
     ConversationCacheConfig, ConversationCacheStats,
 };
-pub use llm_cache::LLMCache;
+pub use llm_cache::LlmCache;
 pub use storage::{CacheStorage, DiskStorage, MemoryStorage};
 pub use types::{CacheConfig, CacheEntry, CacheKey, CacheStatistics};
 

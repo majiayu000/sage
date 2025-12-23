@@ -3,7 +3,7 @@
 use crate::agent::{AgentState, AgentStep};
 use crate::error::{SageError, SageResult};
 use crate::interrupt::global_interrupt_manager;
-use crate::llm::messages::LLMMessage;
+use crate::llm::messages::LlmMessage;
 use crate::tools::types::ToolSchema;
 use crate::ui::animation::AnimationState;
 use crate::ui::DisplayManager;
@@ -18,10 +18,10 @@ impl UnifiedExecutor {
     pub(super) async fn execute_step(
         &mut self,
         step_number: u32,
-        messages: &[LLMMessage],
+        messages: &[LlmMessage],
         tool_schemas: &[ToolSchema],
         task_scope: &crate::interrupt::TaskScope,
-    ) -> SageResult<(AgentStep, Vec<LLMMessage>)> {
+    ) -> SageResult<(AgentStep, Vec<LlmMessage>)> {
         // Print step separator
         DisplayManager::print_separator(&format!("Step {} - AI Thinking", step_number), "blue");
 
@@ -74,7 +74,7 @@ impl UnifiedExecutor {
         // tool messages to reference via tool_call_id. OpenRouter/Anthropic API requires
         // each tool_result to have a corresponding tool_use in the previous message.
         if !llm_response.tool_calls.is_empty() || !llm_response.content.is_empty() {
-            let mut assistant_msg = LLMMessage::assistant(&llm_response.content);
+            let mut assistant_msg = LlmMessage::assistant(&llm_response.content);
             if !llm_response.tool_calls.is_empty() {
                 assistant_msg.tool_calls = Some(llm_response.tool_calls.clone());
             }
@@ -102,7 +102,7 @@ impl UnifiedExecutor {
     async fn handle_tool_calls(
         &mut self,
         step: &mut AgentStep,
-        new_messages: &mut Vec<LLMMessage>,
+        new_messages: &mut Vec<LlmMessage>,
         tool_calls: &[crate::tools::types::ToolCall],
         task_scope: &crate::interrupt::TaskScope,
     ) -> SageResult<()> {
@@ -154,9 +154,9 @@ impl UnifiedExecutor {
 
             step.tool_results.push(tool_result.clone());
 
-            // Add tool result to messages using LLMMessage::tool
+            // Add tool result to messages using LlmMessage::tool
             let tool_name = Some(tool_call.name.clone());
-            new_messages.push(LLMMessage::tool(
+            new_messages.push(LlmMessage::tool(
                 tool_result.output.clone().unwrap_or_default(),
                 tool_call.id.clone(),
                 tool_name,

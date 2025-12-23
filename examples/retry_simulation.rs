@@ -7,7 +7,7 @@ use sage_core::{
     config::provider::ProviderConfig,
     error::SageError,
     llm::{
-        LLMProvider, TimeoutConfig, client::LLMClient, messages::LLMMessage,
+        LlmProvider, TimeoutConfig, client::LlmClient, messages::LlmMessage,
         provider_types::ModelParameters,
     },
 };
@@ -31,9 +31,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_max_tokens(100)
         .with_temperature(0.7);
 
-    let client = LLMClient::new(LLMProvider::Google, provider_config, model_params.clone())?;
+    let client = LlmClient::new(LlmProvider::Google, provider_config, model_params.clone())?;
 
-    let messages = vec![LLMMessage::user("Hello, this is a test message.")];
+    let messages = vec![LlmMessage::user("Hello, this is a test message.")];
 
     println!("\n📡 测试1: 使用无效API密钥（应该不会重试）");
     let start = Instant::now();
@@ -61,7 +61,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_timeouts(TimeoutConfig::new().with_request_timeout_secs(30))
         .with_max_retries(2);
 
-    let real_client = LLMClient::new(LLMProvider::Google, real_config, model_params)?;
+    let real_client = LlmClient::new(LlmProvider::Google, real_config, model_params)?;
 
     let start = Instant::now();
     match real_client.chat(&messages, None).await {

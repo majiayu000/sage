@@ -13,7 +13,7 @@ impl UnifiedExecutor {
     pub(super) async fn run_execution_loop(
         &mut self,
         mut execution: AgentExecution,
-        mut messages: Vec<crate::llm::messages::LLMMessage>,
+        mut messages: Vec<crate::llm::messages::LlmMessage>,
         tool_schemas: Vec<crate::tools::types::ToolSchema>,
         task_scope: crate::interrupt::TaskScope,
         provider_name: String,

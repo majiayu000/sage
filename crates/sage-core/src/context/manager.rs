@@ -4,7 +4,7 @@
 //! message pruning, and conversation summarization to manage the LLM context window.
 
 use crate::error::SageResult;
-use crate::llm::{LLMClient, LLMMessage};
+use crate::llm::{LlmClient, LlmMessage};
 use crate::tools::types::ToolSchema;
 use std::sync::Arc;
 
@@ -47,7 +47,7 @@ impl ContextManager {
     }
 
     /// Create a context manager with an LLM client for summarization
-    pub fn with_llm_client(config: ContextConfig, llm_client: Arc<LLMClient>) -> Self {
+    pub fn with_llm_client(config: ContextConfig, llm_client: Arc<LlmClient>) -> Self {
         let estimator = TokenEstimator::new();
         let pruner = MessagePruner::new(config.clone());
         let summarizer = ConversationSummarizer::with_client(llm_client);
@@ -102,33 +102,33 @@ impl ContextManager {
     }
 
     /// Estimate tokens for a conversation
-    pub fn estimate_tokens(&self, messages: &[LLMMessage]) -> usize {
+    pub fn estimate_tokens(&self, messages: &[LlmMessage]) -> usize {
         self.estimator.estimate_conversation(messages)
     }
 
     /// Estimate total tokens including tools
     pub fn estimate_request_tokens(
         &self,
-        messages: &[LLMMessage],
+        messages: &[LlmMessage],
         tools: Option<&[ToolSchema]>,
     ) -> usize {
         self.estimator.estimate_request(messages, tools)
     }
 
     /// Check if context is approaching the limit
-    pub fn is_approaching_limit(&self, messages: &[LLMMessage]) -> bool {
+    pub fn is_approaching_limit(&self, messages: &[LlmMessage]) -> bool {
         let current_tokens = self.estimator.estimate_conversation(messages);
         current_tokens >= self.config.threshold_tokens()
     }
 
     /// Check if context exceeds the maximum
-    pub fn exceeds_limit(&self, messages: &[LLMMessage]) -> bool {
+    pub fn exceeds_limit(&self, messages: &[LlmMessage]) -> bool {
         let current_tokens = self.estimator.estimate_conversation(messages);
         current_tokens >= self.config.max_context_tokens
     }
 
     /// Get context usage statistics
-    pub fn get_usage_stats(&self, messages: &[LLMMessage]) -> ContextUsageStats {
+    pub fn get_usage_stats(&self, messages: &[LlmMessage]) -> ContextUsageStats {
         let current_tokens = self.estimator.estimate_conversation(messages);
         let max_tokens = self.config.max_context_tokens;
         let threshold_tokens = self.config.threshold_tokens();
@@ -152,7 +152,7 @@ impl ContextManager {
     /// 3. If over threshold, applies the configured overflow strategy
     pub async fn prepare_messages(
         &self,
-        messages: Vec<LLMMessage>,
+        messages: Vec<LlmMessage>,
         tools: Option<&[ToolSchema]>,
     ) -> SageResult<PrepareResult> {
         // Estimate current usage
@@ -210,7 +210,7 @@ impl ContextManager {
     /// Summarize old messages and compress context
     async fn summarize_and_compress(
         &self,
-        messages: Vec<LLMMessage>,
+        messages: Vec<LlmMessage>,
         original_tokens: usize,
         target_tokens: usize,
     ) -> SageResult<PrepareResult> {
@@ -253,7 +253,7 @@ impl ContextManager {
     /// Hybrid approach: summarize if beneficial, otherwise just prune
     async fn hybrid_compress(
         &self,
-        messages: Vec<LLMMessage>,
+        messages: Vec<LlmMessage>,
         original_tokens: usize,
         target_tokens: usize,
     ) -> SageResult<PrepareResult> {
@@ -309,12 +309,12 @@ impl ContextManager {
     }
 
     /// Force summarization of messages (useful for manual context management)
-    pub async fn force_summarize(&self, messages: &[LLMMessage]) -> SageResult<LLMMessage> {
+    pub async fn force_summarize(&self, messages: &[LlmMessage]) -> SageResult<LlmMessage> {
         self.summarizer.summarize(messages).await
     }
 
     /// Prune messages without summarization
-    pub fn prune(&self, messages: Vec<LLMMessage>, target_tokens: usize) -> PruneResult {
+    pub fn prune(&self, messages: Vec<LlmMessage>, target_tokens: usize) -> PruneResult {
         self.pruner.prune(messages, target_tokens)
     }
 }
@@ -323,7 +323,7 @@ impl ContextManager {
 #[derive(Debug, Clone)]
 pub struct PrepareResult {
     /// The prepared messages
-    pub messages: Vec<LLMMessage>,
+    pub messages: Vec<LlmMessage>,
     /// Whether messages were pruned
     pub was_pruned: bool,
     /// Whether summarization was applied
@@ -389,8 +389,8 @@ mod tests {
     use crate::llm::MessageRole;
     use std::collections::HashMap;
 
-    fn create_message(role: MessageRole, content: &str) -> LLMMessage {
-        LLMMessage {
+    fn create_message(role: MessageRole, content: &str) -> LlmMessage {
+        LlmMessage {
             role,
             content: content.to_string(),
             name: None,
@@ -401,7 +401,7 @@ mod tests {
         }
     }
 
-    fn create_test_messages(count: usize) -> Vec<LLMMessage> {
+    fn create_test_messages(count: usize) -> Vec<LlmMessage> {
         let mut messages = vec![create_message(
             MessageRole::System,
             "You are a helpful assistant.",

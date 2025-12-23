@@ -3,10 +3,10 @@
 use crate::config::provider::ProviderConfig;
 use crate::error::{SageError, SageResult};
 use crate::llm::converters::{MessageConverter, ToolConverter};
-use crate::llm::messages::{LLMMessage, LLMResponse};
+use crate::llm::messages::{LlmMessage, LlmResponse};
 use crate::llm::parsers::ResponseParser;
 use crate::llm::provider_types::ModelParameters;
-use crate::llm::streaming::LLMStream;
+use crate::llm::streaming::LlmStream;
 use crate::tools::types::ToolSchema;
 use anyhow::Context;
 use reqwest::Client;
@@ -34,9 +34,9 @@ impl OpenRouterProvider {
     #[instrument(skip(self, messages, tools), level = "debug")]
     pub async fn chat(
         &self,
-        messages: &[LLMMessage],
+        messages: &[LlmMessage],
         tools: Option<&[ToolSchema]>,
-    ) -> SageResult<LLMResponse> {
+    ) -> SageResult<LlmResponse> {
         let api_key = self
             .config
             .get_api_key()
@@ -126,9 +126,9 @@ impl OpenRouterProvider {
     /// OpenRouter streaming chat completion (not yet implemented)
     pub async fn chat_stream(
         &self,
-        _messages: &[LLMMessage],
+        _messages: &[LlmMessage],
         _tools: Option<&[ToolSchema]>,
-    ) -> SageResult<LLMStream> {
+    ) -> SageResult<LlmStream> {
         // TODO: Implement OpenRouter streaming
         Err(SageError::llm("OpenRouter streaming not yet implemented"))
     }

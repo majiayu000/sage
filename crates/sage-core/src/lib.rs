@@ -24,9 +24,9 @@
 //!
 //! The [`llm`] module provides multi-provider LLM support:
 //!
-//! - [`LLMClient`] - Async interface for LLM interactions
-//! - [`LLMProvider`] - Abstraction over different providers (Anthropic, OpenAI, Google)
-//! - [`LLMMessage`] - Unified message format
+//! - [`LlmClient`] - Async interface for LLM interactions
+//! - [`LlmProvider`] - Abstraction over different providers (Anthropic, OpenAI, Google)
+//! - [`LlmMessage`] - Unified message format
 //!
 //! ## Tool System
 //!
@@ -164,7 +164,7 @@ pub use agent::{
     UnifiedExecutorBuilder,
 };
 pub use builder::{BuilderError, SageBuilder, SageComponents};
-pub use cache::{CacheConfig, CacheEntry, CacheKey, CacheManager, LLMCache};
+pub use cache::{CacheConfig, CacheEntry, CacheKey, CacheManager, LlmCache};
 pub use concurrency::{
     AgentId, CancellationHierarchy, SessionId, SharedCancellationHierarchy, ToolCallId,
 };
@@ -185,7 +185,7 @@ pub use input::{
     InputChannel, InputChannelHandle, InputContext, InputOption, InputRequest, InputResponse,
 };
 pub use interrupt::{InterruptManager, InterruptReason, TaskScope};
-pub use llm::{LLMClient, LLMMessage, LLMProvider, LLMResponse};
+pub use llm::{LlmClient, LlmMessage, LlmProvider, LlmResponse};
 pub use mcp::{McpClient, McpError, McpRegistry, McpResource, McpTool, StdioTransport};
 pub use plugins::{
     Plugin, PluginCapability, PluginContext, PluginEntry, PluginError, PluginInfo, PluginLifecycle,

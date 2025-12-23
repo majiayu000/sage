@@ -123,7 +123,7 @@ pub struct McpServerCache {
 
 /// Deprecated: Use `McpServerCache` instead
 #[deprecated(since = "0.2.0", note = "Use `McpServerCache` instead")]
-pub type MCPServerCache = McpServerCache;
+pub type McpServerCache = McpServerCache;
 
 /// Cached MCP server configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -144,7 +144,7 @@ pub struct McpServerConfig {
 
 /// Deprecated: Use `McpServerConfig` instead
 #[deprecated(since = "0.2.0", note = "Use `McpServerConfig` instead")]
-pub type MCPServerConfig = McpServerConfig;
+pub type McpServerConfig = McpServerConfig;
 
 /// Recent session entry
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -190,7 +190,7 @@ pub struct SessionCacheData {
     /// Tool trust settings
     pub tool_trust: ToolTrustSettings,
     /// MCP server configurations
-    pub mcp_servers: MCPServerCache,
+    pub mcp_servers: McpServerCache,
     /// Recent sessions
     pub recent_sessions: Vec<RecentSession>,
     /// User preferences
@@ -419,7 +419,7 @@ impl SessionCache {
     }
 
     /// Get MCP server configurations
-    pub async fn get_mcp_servers(&self) -> MCPServerCache {
+    pub async fn get_mcp_servers(&self) -> McpServerCache {
         let global = self.global_cache.read().await;
         let mut servers = global.mcp_servers.clone();
 
@@ -434,7 +434,7 @@ impl SessionCache {
     }
 
     /// Add or update MCP server configuration
-    pub async fn set_mcp_server(&self, config: MCPServerConfig) -> SageResult<()> {
+    pub async fn set_mcp_server(&self, config: McpServerConfig) -> SageResult<()> {
         let mut cache = self.global_cache.write().await;
         cache
             .mcp_servers

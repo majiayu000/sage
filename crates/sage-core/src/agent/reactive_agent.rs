@@ -5,9 +5,9 @@
 
 use crate::config::model::Config;
 use crate::error::{SageError, SageResult};
-use crate::llm::client::LLMClient;
-use crate::llm::messages::LLMMessage;
-use crate::llm::provider_types::{LLMProvider, TimeoutConfig};
+use crate::llm::client::LlmClient;
+use crate::llm::messages::LlmMessage;
+use crate::llm::provider_types::{LlmProvider, TimeoutConfig};
 use crate::prompts::SystemPromptBuilder;
 use crate::tools::batch_executor::BatchToolExecutor;
 use crate::tools::types::{ToolCall, ToolResult};
@@ -161,9 +161,9 @@ pub struct ClaudeStyleAgent {
     #[allow(dead_code)]
     id: Id,
     config: Config,
-    llm_client: LLMClient,
+    llm_client: LlmClient,
     batch_executor: BatchToolExecutor,
-    conversation_history: Vec<LLMMessage>,
+    conversation_history: Vec<LlmMessage>,
     /// Token usage tracking
     token_usage: TokenUsage,
     /// Current step count
@@ -181,7 +181,7 @@ impl ClaudeStyleAgent {
             .context("Failed to retrieve default model parameters from configuration")?;
         let provider_name = config.get_default_provider();
 
-        let provider: LLMProvider = provider_name
+        let provider: LlmProvider = provider_name
             .parse()
             .map_err(|_| SageError::config(format!("Invalid provider: {}", provider_name)))
             .context(format!(
@@ -201,7 +201,7 @@ impl ClaudeStyleAgent {
 
         let model_params = default_params.to_llm_parameters();
         let llm_client =
-            LLMClient::new(provider, provider_config, model_params).context(format!(
+            LlmClient::new(provider, provider_config, model_params).context(format!(
                 "Failed to create LLM client for provider: {}",
                 provider_name
             ))?;
@@ -222,7 +222,7 @@ impl ClaudeStyleAgent {
     }
 
     /// Create system message for Claude Code style interaction using modular prompt system
-    fn create_system_message(&self, context: Option<&TaskMetadata>) -> LLMMessage {
+    fn create_system_message(&self, context: Option<&TaskMetadata>) -> LlmMessage {
         // Get tool schemas
         let tool_schemas = self.batch_executor.get_tool_schemas();
 
@@ -274,7 +274,7 @@ impl ClaudeStyleAgent {
             .with_security_policy(true)
             .build();
 
-        LLMMessage::system(system_prompt)
+        LlmMessage::system(system_prompt)
     }
 
     /// Get tool schemas from the batch executor
@@ -353,7 +353,7 @@ impl ClaudeStyleAgent {
         // Build conversation messages
         let mut messages = vec![self.create_system_message(context)];
         messages.extend(self.conversation_history.clone());
-        messages.push(LLMMessage::user(request));
+        messages.push(LlmMessage::user(request));
 
         // Get tool schemas
         let tool_schemas = self.batch_executor.get_tool_schemas();
@@ -368,11 +368,11 @@ impl ClaudeStyleAgent {
         }
 
         // Update conversation history
-        let mut assistant_msg = LLMMessage::assistant(&llm_response.content);
+        let mut assistant_msg = LlmMessage::assistant(&llm_response.content);
         if !llm_response.tool_calls.is_empty() {
             assistant_msg.tool_calls = Some(llm_response.tool_calls.clone());
         }
-        self.conversation_history.push(LLMMessage::user(request));
+        self.conversation_history.push(LlmMessage::user(request));
         self.conversation_history.push(assistant_msg);
 
         // Execute tools if present (batch execution)
@@ -398,7 +398,7 @@ impl ClaudeStyleAgent {
                         result.error.as_deref().unwrap_or("Unknown error")
                     )
                 };
-                self.conversation_history.push(LLMMessage::user(content));
+                self.conversation_history.push(LlmMessage::user(content));
             }
         }
 

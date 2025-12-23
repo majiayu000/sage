@@ -124,3 +124,16 @@ Tests are organized as:
 - Error handling with `anyhow` and `thiserror`
 - Logging with `tracing`
 - CLI built with `clap`
+
+## Code Style Rules
+
+### No Backward Compatibility
+- **NEVER add deprecated type aliases or shims for backward compatibility**
+- When renaming types, functions, or APIs, update all references directly
+- Do not preserve old names with `#[deprecated]` annotations
+- Breaking changes are acceptable - update the version number accordingly
+
+### Rust Naming Conventions (RFC 430)
+- Treat acronyms as words in PascalCase: `LlmClient` (not `LLMClient`), `HttpRequest` (not `HTTPRequest`)
+- Correct examples: `LlmProvider`, `SseDecoder`, `McpServer`, `CliConsole`
+- Keep files under 200 lines - split large modules into focused submodules

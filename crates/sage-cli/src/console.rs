@@ -14,7 +14,7 @@ pub struct CliConsole {
 
 /// Deprecated: Use `CliConsole` instead
 #[deprecated(since = "0.2.0", note = "Use `CliConsole` instead")]
-pub type CLIConsole = CliConsole;
+pub type CliConsole = CliConsole;
 
 impl CliConsole {
     /// Create a new CLI console
@@ -332,7 +332,7 @@ impl CliConsole {
     }
 }
 
-impl Default for CLIConsole {
+impl Default for CliConsole {
     fn default() -> Self {
         Self::new(true)
     }

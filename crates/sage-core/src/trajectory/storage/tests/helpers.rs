@@ -1,7 +1,7 @@
 //! Test helpers for trajectory storage tests
 
 use crate::trajectory::recorder::{
-    AgentStepRecord, LLMInteractionRecord, LLMResponseRecord, TokenUsageRecord, TrajectoryRecord,
+    AgentStepRecord, LlmInteractionRecord, LlmResponseRecord, TokenUsageRecord, TrajectoryRecord,
 };
 
 /// Helper function to create a sample trajectory record
@@ -14,12 +14,12 @@ pub(super) fn create_test_record() -> TrajectoryRecord {
         provider: "test-provider".to_string(),
         model: "test-model".to_string(),
         max_steps: Some(10),
-        llm_interactions: vec![LLMInteractionRecord {
+        llm_interactions: vec![LlmInteractionRecord {
             timestamp: "2024-01-01T00:00:00Z".to_string(),
             provider: "test-provider".to_string(),
             model: "test-model".to_string(),
             input_messages: vec![serde_json::json!({"role": "user", "content": "test"})],
-            response: LLMResponseRecord {
+            response: LlmResponseRecord {
                 content: "Test response".to_string(),
                 model: Some("test-model".to_string()),
                 finish_reason: Some("stop".to_string()),
@@ -39,7 +39,7 @@ pub(super) fn create_test_record() -> TrajectoryRecord {
             timestamp: "2024-01-01T00:00:00Z".to_string(),
             state: "Running".to_string(),
             llm_messages: Some(vec![serde_json::json!({"role": "user", "content": "test"})]),
-            llm_response: Some(LLMResponseRecord {
+            llm_response: Some(LlmResponseRecord {
                 content: "Test response".to_string(),
                 model: Some("test-model".to_string()),
                 finish_reason: Some("stop".to_string()),

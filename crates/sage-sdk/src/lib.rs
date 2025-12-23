@@ -58,7 +58,7 @@ pub use sage_core::{
     agent::{AgentExecution, AgentState, AgentStep},
     config::{Config, ModelParameters},
     error::{SageError, SageResult},
-    types::{LLMUsage, TaskMetadata},
+    types::{LlmUsage, TaskMetadata},
 };
 
 // Re-export version constants for convenience

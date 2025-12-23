@@ -4,7 +4,7 @@
 
 use sage_core::error::SageResult;
 use sage_core::trajectory::recorder::{
-    AgentStepRecord, LLMInteractionRecord, LLMResponseRecord, TokenUsageRecord, TrajectoryRecord,
+    AgentStepRecord, LlmInteractionRecord, LlmResponseRecord, TokenUsageRecord, TrajectoryRecord,
 };
 use sage_core::trajectory::storage::{FileStorage, TrajectoryStorage};
 use tempfile::TempDir;
@@ -100,7 +100,7 @@ fn create_sample_trajectory() -> TrajectoryRecord {
         provider: "anthropic".to_string(),
         model: "claude-sonnet-4".to_string(),
         max_steps: Some(20),
-        llm_interactions: vec![LLMInteractionRecord {
+        llm_interactions: vec![LlmInteractionRecord {
             timestamp: "2024-01-01T10:00:00Z".to_string(),
             provider: "anthropic".to_string(),
             model: "claude-sonnet-4".to_string(),
@@ -108,7 +108,7 @@ fn create_sample_trajectory() -> TrajectoryRecord {
                 "role": "user",
                 "content": "Add gzip compression support for trajectory files"
             })],
-            response: LLMResponseRecord {
+            response: LlmResponseRecord {
                 content: "I'll implement compression using the flate2 crate...".to_string(),
                 model: Some("claude-sonnet-4".to_string()),
                 finish_reason: Some("stop".to_string()),
@@ -134,7 +134,7 @@ fn create_sample_trajectory() -> TrajectoryRecord {
                 "role": "user",
                 "content": "Add compression configuration"
             })]),
-            llm_response: Some(LLMResponseRecord {
+            llm_response: Some(LlmResponseRecord {
                 content: "Adding compression configuration...".to_string(),
                 model: Some("claude-sonnet-4".to_string()),
                 finish_reason: Some("stop".to_string()),

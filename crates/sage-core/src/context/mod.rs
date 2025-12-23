@@ -18,7 +18,7 @@
 //!
 //! ```rust,ignore
 //! use sage_core::context::{ContextConfig, ContextManager, OverflowStrategy, AutoCompact};
-//! use sage_core::llm::LLMMessage;
+//! use sage_core::llm::LlmMessage;
 //!
 //! // Create context manager with default config
 //! let config = ContextConfig::for_provider("anthropic", "claude-3.5-sonnet");
@@ -26,9 +26,9 @@
 //!
 //! // Prepare messages for LLM call
 //! let messages = vec![
-//!     LLMMessage::system("You are a helpful assistant"),
-//!     LLMMessage::user("Hello!"),
-//!     LLMMessage::assistant("Hi there!"),
+//!     LlmMessage::system("You are a helpful assistant"),
+//!     LlmMessage::user("Hello!"),
+//!     LlmMessage::assistant("Hi there!"),
 //! ];
 //!
 //! let managed_messages = manager.prepare_messages(messages, None, "claude-3.5-sonnet").await?;

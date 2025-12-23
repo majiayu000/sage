@@ -1,13 +1,13 @@
 //! Interactive mode implementation
 
 use crate::commands::session_resume::{SessionSelector, print_session_details};
-use crate::console::CLIConsole;
+use crate::console::CliConsole;
 use crate::signal_handler::{AppState, set_global_app_state, start_global_signal_handling};
 use sage_core::agent::AgentExecution;
 use sage_core::commands::types::InteractiveCommand;
 use sage_core::commands::{CommandExecutor, CommandRegistry};
 use sage_core::error::{SageError, SageResult};
-use sage_core::llm::messages::LLMMessage;
+use sage_core::llm::messages::LlmMessage;
 use sage_core::types::TaskMetadata;
 use sage_core::ui::EnhancedConsole;
 use sage_sdk::{ExecutionErrorKind, ExecutionOutcome, RunOptions, SageAgentSDK};
@@ -20,7 +20,7 @@ use tokio::sync::RwLock;
 /// Conversation session manager for interactive mode
 struct ConversationSession {
     /// Current conversation messages
-    messages: Vec<LLMMessage>,
+    messages: Vec<LlmMessage>,
     /// Current task metadata
     task: Option<TaskMetadata>,
     /// Current agent execution
@@ -45,12 +45,12 @@ impl ConversationSession {
 
     /// Add a user message to the conversation
     fn add_user_message(&mut self, content: &str) {
-        self.messages.push(LLMMessage::user(content));
+        self.messages.push(LlmMessage::user(content));
     }
 
     /// Add an assistant message to the conversation
     fn add_assistant_message(&mut self, content: &str) {
-        self.messages.push(LLMMessage::assistant(content));
+        self.messages.push(LlmMessage::assistant(content));
     }
 
     /// Check if this is a new conversation (no messages yet)
@@ -87,7 +87,7 @@ pub struct InteractiveArgs {
 
 /// Execute interactive mode
 pub async fn execute(args: InteractiveArgs) -> SageResult<()> {
-    let console = CLIConsole::new(true);
+    let console = CliConsole::new(true);
 
     // Initialize signal handling for task interruption
     if let Err(e) = start_global_signal_handling().await {
@@ -296,7 +296,7 @@ fn is_critical_error(error: &SageError) -> bool {
 }
 
 /// Print help information
-fn print_help(console: &CLIConsole) {
+fn print_help(console: &CliConsole) {
     console.print_header("Available Commands");
     console.info("help, h          - Show this help message");
     console.info("config           - Show current configuration");
@@ -334,7 +334,7 @@ fn print_help(console: &CLIConsole) {
 }
 
 /// Print input troubleshooting help
-fn print_input_help(console: &CLIConsole) {
+fn print_input_help(console: &CliConsole) {
     console.print_header("退格键问题解决方案");
 
     console.info("如果遇到退格键删除后仍显示字符的问题：");
@@ -363,7 +363,7 @@ fn print_input_help(console: &CLIConsole) {
 }
 
 /// Print current configuration
-fn print_config(console: &CLIConsole, sdk: &SageAgentSDK) {
+fn print_config(console: &CliConsole, sdk: &SageAgentSDK) {
     console.print_header("Current Configuration");
     let config = sdk.config();
 
@@ -390,7 +390,7 @@ fn print_config(console: &CLIConsole, sdk: &SageAgentSDK) {
 }
 
 /// Print system status
-fn print_status(console: &CLIConsole, sdk: &SageAgentSDK) {
+fn print_status(console: &CliConsole, sdk: &SageAgentSDK) {
     console.print_header("Agent Status");
 
     let config = sdk.config();
@@ -452,7 +452,7 @@ fn print_status(console: &CLIConsole, sdk: &SageAgentSDK) {
 
 /// Handle conversation mode - supports continuous dialogue
 async fn handle_conversation(
-    console: &CLIConsole,
+    console: &CliConsole,
     sdk: &SageAgentSDK,
     conversation: &mut ConversationSession,
     user_input: &str,
@@ -500,7 +500,7 @@ async fn handle_conversation(
 
 /// Execute a new conversation task
 async fn execute_conversation_task(
-    console: &CLIConsole,
+    console: &CliConsole,
     sdk: &SageAgentSDK,
     conversation: &mut ConversationSession,
     task: &TaskMetadata,
@@ -654,7 +654,7 @@ async fn execute_conversation_task(
 
 /// Execute conversation continuation (for follow-up messages)
 async fn execute_conversation_continuation(
-    console: &CLIConsole,
+    console: &CliConsole,
     sdk: &SageAgentSDK,
     conversation: &mut ConversationSession,
     _task: &TaskMetadata,
@@ -746,7 +746,7 @@ async fn execute_conversation_continuation(
 /// Handle slash commands in interactive mode
 /// Returns Ok(true) if the command was handled, Ok(false) if it should be treated as conversation
 async fn handle_slash_command(
-    console: &CLIConsole,
+    console: &CliConsole,
     sdk: &SageAgentSDK,
     conversation: &mut ConversationSession,
     input: &str,
@@ -816,7 +816,7 @@ async fn handle_slash_command(
 /// Handle interactive commands that require CLI interaction
 async fn handle_interactive_command(
     cmd: &InteractiveCommand,
-    console: &CLIConsole,
+    console: &CliConsole,
 ) -> SageResult<()> {
     match cmd {
         InteractiveCommand::Resume {
@@ -830,7 +830,7 @@ async fn handle_interactive_command(
 async fn handle_resume_command(
     session_id: Option<String>,
     show_all: bool,
-    console: &CLIConsole,
+    console: &CliConsole,
 ) -> SageResult<()> {
     let selector = SessionSelector::new()?.show_all_projects(show_all);
 

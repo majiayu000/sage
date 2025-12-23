@@ -4,7 +4,7 @@
 //! Since exact tokenization varies by provider, we use approximations based on
 //! character counts with provider-specific adjustments.
 
-use crate::llm::LLMMessage;
+use crate::llm::LlmMessage;
 use crate::tools::ToolCall;
 use crate::tools::types::ToolSchema;
 
@@ -52,7 +52,7 @@ impl TokenEstimator {
     }
 
     /// Estimate tokens for a single message
-    pub fn estimate_message(&self, message: &LLMMessage) -> usize {
+    pub fn estimate_message(&self, message: &LlmMessage) -> usize {
         let content_chars = message.content.len();
         let content_tokens = (content_chars as f32 / self.chars_per_token).ceil() as usize;
 
@@ -79,7 +79,7 @@ impl TokenEstimator {
     }
 
     /// Estimate tokens for a conversation (list of messages)
-    pub fn estimate_conversation(&self, messages: &[LLMMessage]) -> usize {
+    pub fn estimate_conversation(&self, messages: &[LlmMessage]) -> usize {
         messages.iter().map(|m| self.estimate_message(m)).sum()
     }
 
@@ -101,7 +101,7 @@ impl TokenEstimator {
     }
 
     /// Estimate total tokens for a request (messages + tools)
-    pub fn estimate_request(&self, messages: &[LLMMessage], tools: Option<&[ToolSchema]>) -> usize {
+    pub fn estimate_request(&self, messages: &[LlmMessage], tools: Option<&[ToolSchema]>) -> usize {
         let message_tokens = self.estimate_conversation(messages);
         let tool_tokens = tools.map(|t| self.estimate_tools(t)).unwrap_or(0);
         message_tokens + tool_tokens + 10 // Request overhead
@@ -119,8 +119,8 @@ mod tests {
     use crate::llm::MessageRole;
     use std::collections::HashMap;
 
-    fn create_message(role: MessageRole, content: &str) -> LLMMessage {
-        LLMMessage {
+    fn create_message(role: MessageRole, content: &str) -> LlmMessage {
+        LlmMessage {
             role,
             content: content.to_string(),
             name: None,

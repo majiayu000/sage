@@ -4,8 +4,8 @@
 mod tests {
     use crate::config::provider::ProviderConfig;
     use crate::error::SageError;
-    use crate::llm::client::LLMClient;
-    use crate::llm::provider_types::{LLMProvider, ModelParameters, TimeoutConfig};
+    use crate::llm::client::LlmClient;
+    use crate::llm::provider_types::{LlmProvider, ModelParameters, TimeoutConfig};
 
     #[test]
     fn test_llm_client_creation() {
@@ -20,11 +20,11 @@ mod tests {
             ..Default::default()
         };
 
-        let client = LLMClient::new(LLMProvider::OpenAI, config, model_params);
+        let client = LlmClient::new(LlmProvider::OpenAI, config, model_params);
         assert!(client.is_ok());
 
         let client = client.unwrap();
-        assert_eq!(client.provider(), &LLMProvider::OpenAI);
+        assert_eq!(client.provider(), &LlmProvider::OpenAI);
         assert_eq!(client.model(), "gpt-4");
     }
 
@@ -41,9 +41,9 @@ mod tests {
         };
 
         let client =
-            LLMClient::new(LLMProvider::Anthropic, config.clone(), model_params.clone()).unwrap();
+            LlmClient::new(LlmProvider::Anthropic, config.clone(), model_params.clone()).unwrap();
 
-        assert_eq!(client.provider(), &LLMProvider::Anthropic);
+        assert_eq!(client.provider(), &LlmProvider::Anthropic);
         assert_eq!(client.model(), "claude-3-opus-20240229");
         assert_eq!(client.config().name, "anthropic");
     }
@@ -52,7 +52,7 @@ mod tests {
     fn test_is_retryable_error_503() {
         let config = ProviderConfig::new("openai").with_api_key("test-key");
         let model_params = ModelParameters::default();
-        let client = LLMClient::new(LLMProvider::OpenAI, config, model_params).unwrap();
+        let client = LlmClient::new(LlmProvider::OpenAI, config, model_params).unwrap();
 
         let error = SageError::llm("Service returned 503 error");
         assert!(client.is_retryable_error(&error));
@@ -62,7 +62,7 @@ mod tests {
     fn test_is_retryable_error_429() {
         let config = ProviderConfig::new("openai").with_api_key("test-key");
         let model_params = ModelParameters::default();
-        let client = LLMClient::new(LLMProvider::OpenAI, config, model_params).unwrap();
+        let client = LlmClient::new(LlmProvider::OpenAI, config, model_params).unwrap();
 
         let error = SageError::llm("429 Too Many Requests");
         assert!(client.is_retryable_error(&error));
@@ -72,7 +72,7 @@ mod tests {
     fn test_is_retryable_error_timeout() {
         let config = ProviderConfig::new("openai").with_api_key("test-key");
         let model_params = ModelParameters::default();
-        let client = LLMClient::new(LLMProvider::OpenAI, config, model_params).unwrap();
+        let client = LlmClient::new(LlmProvider::OpenAI, config, model_params).unwrap();
 
         let error = SageError::llm("Request timeout occurred");
         assert!(client.is_retryable_error(&error));
@@ -82,7 +82,7 @@ mod tests {
     fn test_is_retryable_error_overloaded() {
         let config = ProviderConfig::new("openai").with_api_key("test-key");
         let model_params = ModelParameters::default();
-        let client = LLMClient::new(LLMProvider::OpenAI, config, model_params).unwrap();
+        let client = LlmClient::new(LlmProvider::OpenAI, config, model_params).unwrap();
 
         let error = SageError::llm("Server is overloaded, please try again");
         assert!(client.is_retryable_error(&error));
@@ -92,7 +92,7 @@ mod tests {
     fn test_is_not_retryable_error() {
         let config = ProviderConfig::new("openai").with_api_key("test-key");
         let model_params = ModelParameters::default();
-        let client = LLMClient::new(LLMProvider::OpenAI, config, model_params).unwrap();
+        let client = LlmClient::new(LlmProvider::OpenAI, config, model_params).unwrap();
 
         let error = SageError::llm("Invalid API key");
         assert!(!client.is_retryable_error(&error));
@@ -105,7 +105,7 @@ mod tests {
     fn test_http_error_is_retryable() {
         let config = ProviderConfig::new("openai").with_api_key("test-key");
         let model_params = ModelParameters::default();
-        let client = LLMClient::new(LLMProvider::OpenAI, config, model_params).unwrap();
+        let client = LlmClient::new(LlmProvider::OpenAI, config, model_params).unwrap();
 
         let error = SageError::http("Network error".to_string());
         assert!(client.is_retryable_error(&error));
@@ -118,7 +118,7 @@ mod tests {
             .with_header("X-Custom-Header", "custom-value");
 
         let model_params = ModelParameters::default();
-        let client = LLMClient::new(LLMProvider::OpenAI, config, model_params);
+        let client = LlmClient::new(LlmProvider::OpenAI, config, model_params);
         assert!(client.is_ok());
     }
 
@@ -129,7 +129,7 @@ mod tests {
             .with_timeouts(TimeoutConfig::new().with_request_timeout_secs(120));
 
         let model_params = ModelParameters::default();
-        let client = LLMClient::new(LLMProvider::OpenAI, config, model_params);
+        let client = LlmClient::new(LlmProvider::OpenAI, config, model_params);
         assert!(client.is_ok());
     }
 
@@ -140,7 +140,7 @@ mod tests {
             .with_max_retries(5);
 
         let model_params = ModelParameters::default();
-        let client = LLMClient::new(LLMProvider::OpenAI, config, model_params).unwrap();
+        let client = LlmClient::new(LlmProvider::OpenAI, config, model_params).unwrap();
 
         assert_eq!(client.config().max_retries, Some(5));
     }
@@ -163,7 +163,7 @@ mod tests {
             enable_prompt_caching: None,
         };
 
-        let client = LLMClient::new(LLMProvider::OpenAI, config, model_params.clone()).unwrap();
+        let client = LlmClient::new(LlmProvider::OpenAI, config, model_params.clone()).unwrap();
 
         assert_eq!(client.model(), "gpt-4");
     }
@@ -171,20 +171,20 @@ mod tests {
     #[test]
     fn test_multiple_providers() {
         let providers = vec![
-            LLMProvider::OpenAI,
-            LLMProvider::Anthropic,
-            LLMProvider::Google,
-            LLMProvider::Azure,
-            LLMProvider::OpenRouter,
-            LLMProvider::Doubao,
-            LLMProvider::Ollama,
-            LLMProvider::Glm,
+            LlmProvider::OpenAI,
+            LlmProvider::Anthropic,
+            LlmProvider::Google,
+            LlmProvider::Azure,
+            LlmProvider::OpenRouter,
+            LlmProvider::Doubao,
+            LlmProvider::Ollama,
+            LlmProvider::Glm,
         ];
 
         for provider in providers {
             let config = ProviderConfig::new(provider.name()).with_api_key("test-key");
             let model_params = ModelParameters::default();
-            let client = LLMClient::new(provider.clone(), config, model_params);
+            let client = LlmClient::new(provider.clone(), config, model_params);
             assert!(client.is_ok());
         }
     }
@@ -193,7 +193,7 @@ mod tests {
     fn test_error_retryability_502() {
         let config = ProviderConfig::new("openai").with_api_key("test-key");
         let model_params = ModelParameters::default();
-        let client = LLMClient::new(LLMProvider::OpenAI, config, model_params).unwrap();
+        let client = LlmClient::new(LlmProvider::OpenAI, config, model_params).unwrap();
 
         let error = SageError::llm("502 Bad Gateway");
         assert!(client.is_retryable_error(&error));
@@ -203,7 +203,7 @@ mod tests {
     fn test_error_retryability_504() {
         let config = ProviderConfig::new("openai").with_api_key("test-key");
         let model_params = ModelParameters::default();
-        let client = LLMClient::new(LLMProvider::OpenAI, config, model_params).unwrap();
+        let client = LlmClient::new(LlmProvider::OpenAI, config, model_params).unwrap();
 
         let error = SageError::llm("504 Gateway Timeout");
         assert!(client.is_retryable_error(&error));
@@ -213,7 +213,7 @@ mod tests {
     fn test_error_retryability_connection() {
         let config = ProviderConfig::new("openai").with_api_key("test-key");
         let model_params = ModelParameters::default();
-        let client = LLMClient::new(LLMProvider::OpenAI, config, model_params).unwrap();
+        let client = LlmClient::new(LlmProvider::OpenAI, config, model_params).unwrap();
 
         let error = SageError::llm("Connection refused");
         assert!(client.is_retryable_error(&error));
@@ -223,7 +223,7 @@ mod tests {
     fn test_should_fallback_provider_403() {
         let config = ProviderConfig::new("openai").with_api_key("test-key");
         let model_params = ModelParameters::default();
-        let client = LLMClient::new(LLMProvider::OpenAI, config, model_params).unwrap();
+        let client = LlmClient::new(LlmProvider::OpenAI, config, model_params).unwrap();
         let error = SageError::http_with_status("Forbidden", 403);
         assert!(client.should_fallback_provider(&error));
     }
@@ -232,7 +232,7 @@ mod tests {
     fn test_should_fallback_provider_429() {
         let config = ProviderConfig::new("openai").with_api_key("test-key");
         let model_params = ModelParameters::default();
-        let client = LLMClient::new(LLMProvider::OpenAI, config, model_params).unwrap();
+        let client = LlmClient::new(LlmProvider::OpenAI, config, model_params).unwrap();
         let error = SageError::http_with_status("Rate limited", 429);
         assert!(client.should_fallback_provider(&error));
     }
@@ -241,7 +241,7 @@ mod tests {
     fn test_should_fallback_provider_quota_message() {
         let config = ProviderConfig::new("openai").with_api_key("test-key");
         let model_params = ModelParameters::default();
-        let client = LLMClient::new(LLMProvider::OpenAI, config, model_params).unwrap();
+        let client = LlmClient::new(LlmProvider::OpenAI, config, model_params).unwrap();
         let error = SageError::llm("Quota exceeded");
         assert!(client.should_fallback_provider(&error));
     }
@@ -250,7 +250,7 @@ mod tests {
     fn test_should_fallback_provider_rate_limit_message() {
         let config = ProviderConfig::new("openai").with_api_key("test-key");
         let model_params = ModelParameters::default();
-        let client = LLMClient::new(LLMProvider::OpenAI, config, model_params).unwrap();
+        let client = LlmClient::new(LlmProvider::OpenAI, config, model_params).unwrap();
         let error = SageError::llm("Rate limit exceeded");
         assert!(client.should_fallback_provider(&error));
     }
@@ -259,7 +259,7 @@ mod tests {
     fn test_should_not_fallback_provider_non_quota_error() {
         let config = ProviderConfig::new("openai").with_api_key("test-key");
         let model_params = ModelParameters::default();
-        let client = LLMClient::new(LLMProvider::OpenAI, config, model_params).unwrap();
+        let client = LlmClient::new(LlmProvider::OpenAI, config, model_params).unwrap();
         let error = SageError::llm("500 Internal Server Error");
         assert!(!client.should_fallback_provider(&error));
     }
@@ -268,7 +268,7 @@ mod tests {
     fn test_should_fallback_provider_insufficient_quota() {
         let config = ProviderConfig::new("anthropic").with_api_key("test-key");
         let model_params = ModelParameters::default();
-        let client = LLMClient::new(LLMProvider::Anthropic, config, model_params).unwrap();
+        let client = LlmClient::new(LlmProvider::Anthropic, config, model_params).unwrap();
         let error = SageError::llm("Insufficient quota");
         assert!(client.should_fallback_provider(&error));
     }
@@ -277,7 +277,7 @@ mod tests {
     fn test_should_fallback_provider_exceeded_message() {
         let config = ProviderConfig::new("openai").with_api_key("test-key");
         let model_params = ModelParameters::default();
-        let client = LLMClient::new(LLMProvider::OpenAI, config, model_params).unwrap();
+        let client = LlmClient::new(LlmProvider::OpenAI, config, model_params).unwrap();
         let error = SageError::llm("Token quota exceeded");
         assert!(client.should_fallback_provider(&error));
     }
@@ -286,7 +286,7 @@ mod tests {
     fn test_should_fallback_provider_not_enough_message() {
         let config = ProviderConfig::new("google").with_api_key("test-key");
         let model_params = ModelParameters::default();
-        let client = LLMClient::new(LLMProvider::Google, config, model_params).unwrap();
+        let client = LlmClient::new(LlmProvider::Google, config, model_params).unwrap();
         let error = SageError::llm("Not enough credits");
         assert!(client.should_fallback_provider(&error));
     }
@@ -294,20 +294,20 @@ mod tests {
     #[test]
     fn test_client_creation_all_providers() {
         let providers = vec![
-            ("openai", LLMProvider::OpenAI),
-            ("anthropic", LLMProvider::Anthropic),
-            ("google", LLMProvider::Google),
-            ("azure", LLMProvider::Azure),
-            ("openrouter", LLMProvider::OpenRouter),
-            ("doubao", LLMProvider::Doubao),
-            ("ollama", LLMProvider::Ollama),
-            ("glm", LLMProvider::Glm),
+            ("openai", LlmProvider::OpenAI),
+            ("anthropic", LlmProvider::Anthropic),
+            ("google", LlmProvider::Google),
+            ("azure", LlmProvider::Azure),
+            ("openrouter", LlmProvider::OpenRouter),
+            ("doubao", LlmProvider::Doubao),
+            ("ollama", LlmProvider::Ollama),
+            ("glm", LlmProvider::Glm),
         ];
 
         for (name, provider) in providers {
             let config = ProviderConfig::new(name).with_api_key("test-key");
             let model_params = ModelParameters::default();
-            let client = LLMClient::new(provider.clone(), config, model_params);
+            let client = LlmClient::new(provider.clone(), config, model_params);
             assert!(
                 client.is_ok(),
                 "Failed to create client for provider: {}",
@@ -320,8 +320,8 @@ mod tests {
     fn test_custom_provider_not_implemented() {
         let config = ProviderConfig::new("custom").with_api_key("test-key");
         let model_params = ModelParameters::default();
-        let client = LLMClient::new(
-            LLMProvider::Custom("my_custom_provider".to_string()),
+        let client = LlmClient::new(
+            LlmProvider::Custom("my_custom_provider".to_string()),
             config,
             model_params,
         );
@@ -337,7 +337,7 @@ mod tests {
         let config = ProviderConfig::new("openai");
         let model_params = ModelParameters::default();
 
-        let client = LLMClient::new(LLMProvider::OpenAI, config, model_params);
+        let client = LlmClient::new(LlmProvider::OpenAI, config, model_params);
         assert!(client.is_err());
     }
 
@@ -345,7 +345,7 @@ mod tests {
     fn test_is_retryable_network_error() {
         let config = ProviderConfig::new("openai").with_api_key("test-key");
         let model_params = ModelParameters::default();
-        let client = LLMClient::new(LLMProvider::OpenAI, config, model_params).unwrap();
+        let client = LlmClient::new(LlmProvider::OpenAI, config, model_params).unwrap();
 
         let error = SageError::llm("Network connection failed");
         assert!(client.is_retryable_error(&error));
@@ -355,7 +355,7 @@ mod tests {
     fn test_retryable_error_case_insensitive() {
         let config = ProviderConfig::new("openai").with_api_key("test-key");
         let model_params = ModelParameters::default();
-        let client = LLMClient::new(LLMProvider::OpenAI, config, model_params).unwrap();
+        let client = LlmClient::new(LlmProvider::OpenAI, config, model_params).unwrap();
 
         // Test that error detection is case-insensitive
         let error = SageError::llm("SERVICE RETURNED 503 ERROR");
@@ -374,7 +374,7 @@ mod tests {
             .with_header("X-Custom-3", "value3");
 
         let model_params = ModelParameters::default();
-        let client = LLMClient::new(LLMProvider::OpenAI, config, model_params);
+        let client = LlmClient::new(LlmProvider::OpenAI, config, model_params);
         assert!(client.is_ok());
     }
 
@@ -396,10 +396,10 @@ mod tests {
             enable_prompt_caching: Some(true),
         };
 
-        let client = LLMClient::new(LLMProvider::Anthropic, config, model_params.clone()).unwrap();
+        let client = LlmClient::new(LlmProvider::Anthropic, config, model_params.clone()).unwrap();
 
         assert_eq!(client.model(), "claude-3-opus-20240229");
-        assert_eq!(client.provider(), &LLMProvider::Anthropic);
+        assert_eq!(client.provider(), &LlmProvider::Anthropic);
     }
 
     #[test]
@@ -413,7 +413,7 @@ mod tests {
             );
 
         let model_params = ModelParameters::default();
-        let client = LLMClient::new(LLMProvider::OpenAI, config, model_params);
+        let client = LlmClient::new(LlmProvider::OpenAI, config, model_params);
         assert!(client.is_ok());
 
         let client = client.unwrap();
@@ -432,7 +432,7 @@ mod tests {
             ..Default::default()
         };
 
-        let client = LLMClient::new(LLMProvider::Ollama, config, model_params);
+        let client = LlmClient::new(LlmProvider::Ollama, config, model_params);
         // Ollama should work without API key
         assert!(client.is_ok() || client.is_err()); // Depends on validation rules
     }
@@ -448,7 +448,7 @@ mod tests {
             ..Default::default()
         };
 
-        let client = LLMClient::new(LLMProvider::Azure, config, model_params);
+        let client = LlmClient::new(LlmProvider::Azure, config, model_params);
         assert!(client.is_ok());
     }
 
@@ -456,7 +456,7 @@ mod tests {
     fn test_is_retryable_error_auth_error() {
         let config = ProviderConfig::new("openai").with_api_key("test-key");
         let model_params = ModelParameters::default();
-        let client = LLMClient::new(LLMProvider::OpenAI, config, model_params).unwrap();
+        let client = LlmClient::new(LlmProvider::OpenAI, config, model_params).unwrap();
 
         // Auth errors should NOT be retryable
         let error = SageError::llm("401 Unauthorized");

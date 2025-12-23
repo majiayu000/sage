@@ -50,7 +50,7 @@ async fn demonstrate_streaming_concepts() -> SageResult<()> {
         StreamChunk::content(" real-time"),
         StreamChunk::content(" feedback!"),
         StreamChunk::final_chunk(
-            Some(sage_core::types::LLMUsage {
+            Some(sage_core::types::LlmUsage {
                 prompt_tokens: 20,
                 completion_tokens: 15,
                 total_tokens: 35,
@@ -177,14 +177,14 @@ async fn example_real_usage() -> SageResult<()> {
 
     /*
     let config = Config::load_from_file("config.json")?;
-    let client = LLMClient::new(
-        LLMProvider::OpenAI,
+    let client = LlmClient::new(
+        LlmProvider::OpenAI,
         config.get_provider_config("openai")?,
         config.model_parameters.clone(),
     )?;
 
     let messages = vec![
-        LLMMessage {
+        LlmMessage {
             role: MessageRole::User,
             content: "Write a short story about a robot learning to paint.".to_string(),
             tool_calls: None,
@@ -233,23 +233,23 @@ async fn example_real_usage() -> SageResult<()> {
 #[allow(dead_code)]
 async fn example_streaming_with_cache() -> SageResult<()> {
     /*
-    use sage_core::cache::{CacheManager, CacheConfig, LLMCache};
+    use sage_core::cache::{CacheManager, CacheConfig, LlmCache};
 
     // Set up cache
     let cache_config = CacheConfig::default();
     let cache_manager = CacheManager::new(cache_config)?;
-    let llm_cache = LLMCache::new(cache_manager, None);
+    let llm_cache = LlmCache::new(cache_manager, None);
 
     // Set up client
     let config = Config::load_from_file("config.json")?;
-    let client = LLMClient::new(
-        LLMProvider::OpenAI,
+    let client = LlmClient::new(
+        LlmProvider::OpenAI,
         config.get_provider_config("openai")?,
         config.model_parameters.clone(),
     )?;
 
     let messages = vec![
-        LLMMessage {
+        LlmMessage {
             role: MessageRole::User,
             content: "Explain quantum computing".to_string(),
             tool_calls: None,
@@ -291,7 +291,7 @@ async fn example_streaming_with_cache() -> SageResult<()> {
                     println!("\n");
 
                     // Cache the complete response
-                    let complete_response = sage_core::llm::LLMResponse {
+                    let complete_response = sage_core::llm::LlmResponse {
                         content: full_content,
                         tool_calls: vec![],
                         usage: chunk.usage,

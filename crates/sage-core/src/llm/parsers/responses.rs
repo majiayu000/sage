@@ -1,8 +1,8 @@
 //! Response parsing for different providers
 
 use crate::error::{SageError, SageResult};
-use crate::llm::messages::LLMResponse;
-use crate::types::LLMUsage;
+use crate::llm::messages::LlmResponse;
+use crate::types::LlmUsage;
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -11,7 +11,7 @@ pub struct ResponseParser;
 
 impl ResponseParser {
     /// Parse OpenAI response
-    pub fn parse_openai(response: Value) -> SageResult<LLMResponse> {
+    pub fn parse_openai(response: Value) -> SageResult<LlmResponse> {
         let choice = response["choices"][0].clone();
         let message = &choice["message"];
 
@@ -42,7 +42,7 @@ impl ResponseParser {
             }
         }
 
-        let usage = response["usage"].as_object().map(|usage_data| LLMUsage {
+        let usage = response["usage"].as_object().map(|usage_data| LlmUsage {
             prompt_tokens: usage_data
                 .get("prompt_tokens")
                 .and_then(|v| v.as_u64())
@@ -60,7 +60,7 @@ impl ResponseParser {
             cache_read_input_tokens: None,
         });
 
-        Ok(LLMResponse {
+        Ok(LlmResponse {
             content,
             tool_calls,
             usage,
@@ -80,7 +80,7 @@ impl ResponseParser {
     /// When prompt caching is enabled, the usage object may also contain:
     /// - cache_creation_input_tokens: Tokens written to cache
     /// - cache_read_input_tokens: Tokens read from cache
-    pub fn parse_anthropic(response: Value) -> SageResult<LLMResponse> {
+    pub fn parse_anthropic(response: Value) -> SageResult<LlmResponse> {
         let mut content = String::new();
         let mut tool_calls = Vec::new();
 
@@ -164,7 +164,7 @@ impl ResponseParser {
                 + cache_read_input_tokens.unwrap_or(0) as u64;
             let total_input = input_tokens + cache_tokens;
 
-            Some(LLMUsage {
+            Some(LlmUsage {
                 prompt_tokens: total_input as u32, // Include all cache tokens
                 completion_tokens: output_tokens as u32,
                 total_tokens: (total_input + output_tokens) as u32,
@@ -176,7 +176,7 @@ impl ResponseParser {
             None
         };
 
-        Ok(LLMResponse {
+        Ok(LlmResponse {
             content,
             tool_calls,
             usage,
@@ -188,7 +188,7 @@ impl ResponseParser {
     }
 
     /// Parse Google response
-    pub fn parse_google(response: Value, model: &str) -> SageResult<LLMResponse> {
+    pub fn parse_google(response: Value, model: &str) -> SageResult<LlmResponse> {
         let candidates = response["candidates"]
             .as_array()
             .ok_or_else(|| SageError::llm("No candidates in Google response"))?;
@@ -254,7 +254,7 @@ impl ResponseParser {
                 .unwrap_or((prompt_tokens + completion_tokens) as u64)
                 as u32;
 
-            Some(LLMUsage {
+            Some(LlmUsage {
                 prompt_tokens,
                 completion_tokens,
                 total_tokens,
@@ -266,7 +266,7 @@ impl ResponseParser {
             None
         };
 
-        Ok(LLMResponse {
+        Ok(LlmResponse {
             content,
             tool_calls,
             usage,

@@ -46,7 +46,7 @@ use tracing::instrument;
 // Re-export types for convenience
 use crate::agent::ExecutionOptions;
 use crate::config::model::Config;
-use crate::llm::client::LLMClient;
+use crate::llm::client::LlmClient;
 
 /// Unified executor that implements the Claude Code style execution loop
 pub struct UnifiedExecutor {
@@ -55,7 +55,7 @@ pub struct UnifiedExecutor {
     /// Configuration
     config: Config,
     /// LLM client for model interactions
-    llm_client: LLMClient,
+    llm_client: LlmClient,
     /// Tool executor for running tools
     tool_executor: ToolExecutor,
     /// Execution options

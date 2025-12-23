@@ -4,9 +4,9 @@
 //! to improve performance and reduce API costs.
 
 use sage_core::{
-    cache::{CacheConfig, CacheManager, LLMCache},
+    cache::{CacheConfig, CacheManager, LlmCache},
     error::SageResult,
-    llm::{LLMMessage, MessageRole},
+    llm::{LlmMessage, MessageRole},
 };
 use std::time::Duration;
 
@@ -42,7 +42,7 @@ async fn main() -> SageResult<()> {
 
     // 3. Create LLM cache
     println!("\n💾 3. Setting up LLM cache");
-    let llm_cache = LLMCache::new(
+    let llm_cache = LlmCache::new(
         cache_manager,
         Some(Duration::from_secs(3600)), // 1 hour default TTL
     );
@@ -52,7 +52,7 @@ async fn main() -> SageResult<()> {
     println!("\n🤖 4. Simulating LLM requests");
 
     let messages = vec![
-        LLMMessage {
+        LlmMessage {
             role: MessageRole::System,
             content: "You are a helpful assistant.".to_string(),
             tool_calls: None,
@@ -61,7 +61,7 @@ async fn main() -> SageResult<()> {
             cache_control: None,
             metadata: std::collections::HashMap::new(),
         },
-        LLMMessage {
+        LlmMessage {
             role: MessageRole::User,
             content: "What is the capital of France?".to_string(),
             tool_calls: None,
@@ -88,10 +88,10 @@ async fn main() -> SageResult<()> {
 
         // Simulate an LLM response (normally this would come from actual API call)
         println!("📡 Simulating API call...");
-        let simulated_response = sage_core::llm::LLMResponse {
+        let simulated_response = sage_core::llm::LlmResponse {
             content: "The capital of France is Paris.".to_string(),
             tool_calls: Vec::new(),
-            usage: Some(sage_core::types::LLMUsage {
+            usage: Some(sage_core::types::LlmUsage {
                 prompt_tokens: 25,
                 completion_tokens: 8,
                 total_tokens: 33,
@@ -159,7 +159,7 @@ async fn main() -> SageResult<()> {
 
     // 7. Test different requests
     println!("\n🔄 7. Testing different requests");
-    let different_messages = vec![LLMMessage {
+    let different_messages = vec![LlmMessage {
         role: MessageRole::User,
         content: "What is 2 + 2?".to_string(),
         tool_calls: None,

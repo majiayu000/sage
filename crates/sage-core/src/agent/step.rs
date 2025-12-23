@@ -1,9 +1,9 @@
 //! Agent step representation
 
 use crate::agent::state::AgentState;
-use crate::llm::LLMResponse;
+use crate::llm::LlmResponse;
 use crate::tools::{ToolCall, ToolResult};
-use crate::types::{Id, LLMUsage};
+use crate::types::{Id, LlmUsage};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -30,13 +30,13 @@ pub struct AgentStep {
     /// Results from tool executions
     pub tool_results: Vec<ToolResult>,
     /// LLM response for this step
-    pub llm_response: Option<LLMResponse>,
+    pub llm_response: Option<LlmResponse>,
     /// Reflection or analysis of the step
     pub reflection: Option<String>,
     /// Error message if the step failed
     pub error: Option<String>,
     /// Token usage for this step
-    pub llm_usage: Option<LLMUsage>,
+    pub llm_usage: Option<LlmUsage>,
     /// Additional metadata
     pub metadata: HashMap<String, serde_json::Value>,
 }
@@ -80,7 +80,7 @@ impl AgentStep {
     }
 
     /// Add an LLM response to this step
-    pub fn with_llm_response(mut self, response: LLMResponse) -> Self {
+    pub fn with_llm_response(mut self, response: LlmResponse) -> Self {
         // Extract tool calls from the response
         self.tool_calls = response.tool_calls.clone();
 

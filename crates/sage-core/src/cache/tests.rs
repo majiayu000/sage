@@ -3,8 +3,8 @@
 #[cfg(test)]
 mod tests {
     use super::super::*;
-    use crate::llm::{LLMMessage, LLMResponse, MessageRole};
-    use crate::types::LLMUsage;
+    use crate::llm::{LlmMessage, LlmResponse, MessageRole};
+    use crate::types::LlmUsage;
     use std::time::Duration;
     use tokio::fs;
 
@@ -39,9 +39,9 @@ mod tests {
         };
 
         let cache_manager = CacheManager::new(cache_config).unwrap();
-        let llm_cache = LLMCache::new(cache_manager, Some(Duration::from_secs(60)));
+        let llm_cache = LlmCache::new(cache_manager, Some(Duration::from_secs(60)));
 
-        let messages = vec![LLMMessage {
+        let messages = vec![LlmMessage {
             role: MessageRole::User,
             content: "Test message".to_string(),
             tool_calls: None,
@@ -51,10 +51,10 @@ mod tests {
             metadata: std::collections::HashMap::new(),
         }];
 
-        let response = LLMResponse {
+        let response = LlmResponse {
             content: "Test response".to_string(),
             tool_calls: Vec::new(),
-            usage: Some(LLMUsage {
+            usage: Some(LlmUsage {
                 prompt_tokens: 10,
                 completion_tokens: 5,
                 total_tokens: 15,
@@ -173,7 +173,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_key_generation() {
-        let _messages = vec![LLMMessage {
+        let _messages = vec![LlmMessage {
             role: MessageRole::User,
             content: "Test message".to_string(),
             tool_calls: None,

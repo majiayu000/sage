@@ -7,11 +7,11 @@
 
 use futures::stream;
 use sage_core::{
-    cache::{CacheConfig, CacheManager, LLMCache},
+    cache::{CacheConfig, CacheManager, LlmCache},
     error::SageResult,
     llm::streaming::{sse, stream_utils},
-    llm::{LLMMessage, LLMResponse, MessageRole, StreamChunk},
-    types::LLMUsage,
+    llm::{LlmMessage, LlmResponse, MessageRole, StreamChunk},
+    types::LlmUsage,
 };
 use std::collections::HashMap;
 use std::io::{self, Write};
@@ -60,7 +60,7 @@ async fn test_caching_performance() -> SageResult<()> {
     };
 
     let cache_manager = CacheManager::new(cache_config)?;
-    let llm_cache = LLMCache::new(cache_manager, Some(Duration::from_secs(3600)));
+    let llm_cache = LlmCache::new(cache_manager, Some(Duration::from_secs(3600)));
 
     // Simulate common queries
     let common_queries = vec![
@@ -79,7 +79,7 @@ async fn test_caching_performance() -> SageResult<()> {
     let mut total_cost = 0.0;
 
     for (i, query) in common_queries.iter().enumerate() {
-        let messages = vec![LLMMessage {
+        let messages = vec![LlmMessage {
             role: MessageRole::User,
             content: query.to_string(),
             tool_calls: None,
@@ -98,10 +98,10 @@ async fn test_caching_performance() -> SageResult<()> {
             // Simulate API call delay and cost
             tokio::time::sleep(Duration::from_millis(500)).await; // Simulate network latency
 
-            let response = LLMResponse {
+            let response = LlmResponse {
                 content: format!("Detailed answer about: {}", query),
                 tool_calls: vec![],
-                usage: Some(LLMUsage {
+                usage: Some(LlmUsage {
                     prompt_tokens: 20 + (i * 5) as u32,
                     completion_tokens: 100 + (i * 10) as u32,
                     total_tokens: 120 + (i * 15) as u32,
@@ -141,7 +141,7 @@ async fn test_caching_performance() -> SageResult<()> {
     let mut cache_hits = 0;
 
     for query in &common_queries {
-        let messages = vec![LLMMessage {
+        let messages = vec![LlmMessage {
             role: MessageRole::User,
             content: query.to_string(),
             tool_calls: None,
@@ -228,7 +228,7 @@ async fn test_streaming_experience() -> SageResult<()> {
         stream_chunks.push(Ok(StreamChunk::content(*chunk_text)));
     }
     stream_chunks.push(Ok(StreamChunk::final_chunk(
-        Some(LLMUsage {
+        Some(LlmUsage {
             prompt_tokens: 15,
             completion_tokens: 85,
             total_tokens: 100,
@@ -301,9 +301,9 @@ async fn test_cache_streaming_combo() -> SageResult<()> {
 
     let cache_config = CacheConfig::default();
     let cache_manager = CacheManager::new(cache_config)?;
-    let llm_cache = LLMCache::new(cache_manager, Some(Duration::from_secs(300)));
+    let llm_cache = LlmCache::new(cache_manager, Some(Duration::from_secs(300)));
 
-    let messages = vec![LLMMessage {
+    let messages = vec![LlmMessage {
         role: MessageRole::User,
         content: "Explain quantum computing in simple terms".to_string(),
         tool_calls: None,
@@ -320,7 +320,7 @@ async fn test_cache_streaming_combo() -> SageResult<()> {
         StreamChunk::content(" that harnesses quantum mechanics"),
         StreamChunk::content(" to process information in fundamentally new ways."),
         StreamChunk::final_chunk(
-            Some(LLMUsage {
+            Some(LlmUsage {
                 prompt_tokens: 12,
                 completion_tokens: 25,
                 total_tokens: 37,
@@ -398,12 +398,12 @@ async fn test_memory_efficiency() -> SageResult<()> {
     };
 
     let cache_manager = CacheManager::new(cache_config)?;
-    let llm_cache = LLMCache::new(cache_manager, Some(Duration::from_secs(60)));
+    let llm_cache = LlmCache::new(cache_manager, Some(Duration::from_secs(60)));
 
     // Add more entries than capacity to test LRU eviction
     println!("📝 Adding 15 entries to cache with capacity of 10...");
     for i in 0..15 {
-        let messages = vec![LLMMessage {
+        let messages = vec![LlmMessage {
             role: MessageRole::User,
             content: format!("Query number {}", i),
             tool_calls: None,
@@ -413,10 +413,10 @@ async fn test_memory_efficiency() -> SageResult<()> {
             metadata: HashMap::new(),
         }];
 
-        let response = LLMResponse {
+        let response = LlmResponse {
             content: format!("Response {}", i),
             tool_calls: vec![],
-            usage: Some(LLMUsage {
+            usage: Some(LlmUsage {
                 prompt_tokens: 10,
                 completion_tokens: 20,
                 total_tokens: 30,

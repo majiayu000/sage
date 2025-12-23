@@ -87,7 +87,7 @@ pub struct LlmMessage {
 
 /// Deprecated: Use `LlmMessage` instead
 #[deprecated(since = "0.2.0", note = "Use `LlmMessage` instead")]
-pub type LLMMessage = LlmMessage;
+pub type LlmMessage = LlmMessage;
 
 impl LlmMessage {
     /// Create a new system message
@@ -213,7 +213,7 @@ pub struct LlmResponse {
 
 /// Deprecated: Use `LlmResponse` instead
 #[deprecated(since = "0.2.0", note = "Use `LlmResponse` instead")]
-pub type LLMResponse = LlmResponse;
+pub type LlmResponse = LlmResponse;
 
 impl LlmResponse {
     /// Create a new LLM response

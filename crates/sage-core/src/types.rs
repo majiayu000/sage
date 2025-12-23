@@ -29,7 +29,7 @@ pub struct LlmUsage {
 
 /// Deprecated: Use `LlmUsage` instead
 #[deprecated(since = "0.2.0", note = "Use `LlmUsage` instead")]
-pub type LLMUsage = LlmUsage;
+pub type LlmUsage = LlmUsage;
 
 impl LlmUsage {
     /// Create a new LlmUsage instance

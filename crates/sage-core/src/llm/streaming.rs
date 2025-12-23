@@ -71,7 +71,7 @@ pub type LlmStream = Pin<Box<dyn Stream<Item = SageResult<StreamChunk>> + Send>>
 
 /// Deprecated: Use `LlmStream` instead
 #[deprecated(since = "0.2.0", note = "Use `LlmStream` instead")]
-pub type LLMStream = LlmStream;
+pub type LlmStream = LlmStream;
 
 /// Trait for streaming LLM clients
 #[async_trait]
@@ -86,7 +86,7 @@ pub trait StreamingLlmClient {
 
 /// Deprecated: Use `StreamingLlmClient` instead
 #[deprecated(since = "0.2.0", note = "Use `StreamingLlmClient` instead")]
-pub trait StreamingLLMClient {
+pub trait StreamingLlmClient {
     /// Send a streaming chat completion request
     async fn chat_stream(
         &self,
@@ -252,7 +252,7 @@ pub mod sse {
 
     /// SSE event for streaming responses
     #[derive(Debug, Clone)]
-    pub struct SSEEvent {
+    pub struct SseEvent {
         /// Event type
         pub event: Option<String>,
         /// Event data
@@ -263,7 +263,7 @@ pub mod sse {
         pub retry: Option<u64>,
     }
 
-    impl SSEEvent {
+    impl SseEvent {
         /// Create a new SSE event
         pub fn new(data: impl Into<String>) -> Self {
             Self {
@@ -293,7 +293,7 @@ pub mod sse {
         }
     }
 
-    impl fmt::Display for SSEEvent {
+    impl fmt::Display for SseEvent {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             if let Some(event) = &self.event {
                 writeln!(f, "event: {}", event)?;
@@ -311,7 +311,7 @@ pub mod sse {
     }
 
     /// Convert a stream chunk to SSE event
-    pub fn chunk_to_sse(chunk: StreamChunk) -> SageResult<SSEEvent> {
+    pub fn chunk_to_sse(chunk: StreamChunk) -> SageResult<SseEvent> {
         let data = serde_json::to_string(&chunk)?;
 
         let event_type = if chunk.is_final {
@@ -322,13 +322,13 @@ pub mod sse {
             "chunk"
         };
 
-        Ok(SSEEvent::new(data).with_event(event_type))
+        Ok(SseEvent::new(data).with_event(event_type))
     }
 
     /// Convert a stream to SSE events
     pub fn stream_to_sse(
         stream: LlmStream,
-    ) -> Pin<Box<dyn Stream<Item = SageResult<SSEEvent>> + Send>> {
+    ) -> Pin<Box<dyn Stream<Item = SageResult<SseEvent>> + Send>> {
         Box::pin(stream.map(|chunk_result| chunk_result.and_then(chunk_to_sse)))
     }
 }

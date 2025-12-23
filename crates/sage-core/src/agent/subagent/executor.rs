@@ -8,11 +8,11 @@ use tokio_util::sync::CancellationToken;
 use super::registry::AgentRegistry;
 use super::types::{AgentDefinition, AgentType, SubAgentResult};
 use crate::error::{SageError, SageResult};
-use crate::llm::client::LLMClient;
-use crate::llm::messages::{LLMMessage, MessageRole};
+use crate::llm::client::LlmClient;
+use crate::llm::messages::{LlmMessage, MessageRole};
 use crate::tools::base::Tool;
 use crate::tools::types::{ToolCall, ToolResult};
-use crate::types::LLMUsage;
+use crate::types::LlmUsage;
 
 /// Configuration for sub-agent execution
 #[derive(Debug, Clone)]
@@ -119,7 +119,7 @@ enum StepResult {
 /// Sub-agent executor
 pub struct SubAgentExecutor {
     registry: Arc<AgentRegistry>,
-    llm_client: Arc<LLMClient>,
+    llm_client: Arc<LlmClient>,
     all_tools: Vec<Arc<dyn Tool>>,
     max_steps: usize,
 }
@@ -128,7 +128,7 @@ impl SubAgentExecutor {
     /// Create a new sub-agent executor
     pub fn new(
         registry: Arc<AgentRegistry>,
-        llm_client: Arc<LLMClient>,
+        llm_client: Arc<LlmClient>,
         tools: Vec<Arc<dyn Tool>>,
     ) -> Self {
         Self {
@@ -167,7 +167,7 @@ impl SubAgentExecutor {
 
         // Add system prompt
         if !definition.system_prompt.is_empty() {
-            messages.push(LLMMessage::system(&definition.system_prompt));
+            messages.push(LlmMessage::system(&definition.system_prompt));
         }
 
         // Add context if provided
@@ -176,7 +176,7 @@ impl SubAgentExecutor {
         } else {
             format!("{}\n\nTask: {}", definition.description, config.task)
         };
-        messages.push(LLMMessage::user(user_message));
+        messages.push(LlmMessage::user(user_message));
 
         // Determine max steps
         let max_steps = config.max_steps.unwrap_or(self.max_steps);
@@ -184,7 +184,7 @@ impl SubAgentExecutor {
         // Track execution
         let mut steps_taken = 0;
         let mut tool_calls_count = 0;
-        let mut total_usage = LLMUsage::default();
+        let mut total_usage = LlmUsage::default();
 
         // Execute steps
         loop {
@@ -214,7 +214,7 @@ impl SubAgentExecutor {
             if let Some(usage) = messages
                 .last()
                 .and_then(|m| m.metadata.get("usage"))
-                .and_then(|v| serde_json::from_value::<LLMUsage>(v.clone()).ok())
+                .and_then(|v| serde_json::from_value::<LlmUsage>(v.clone()).ok())
             {
                 total_usage.add(&usage);
             }
@@ -300,7 +300,7 @@ impl SubAgentExecutor {
     /// Execute single step
     async fn execute_step(
         &self,
-        messages: &mut Vec<LLMMessage>,
+        messages: &mut Vec<LlmMessage>,
         tools: &[Arc<dyn Tool>],
         cancel: &CancellationToken,
     ) -> SageResult<StepResult> {
@@ -321,7 +321,7 @@ impl SubAgentExecutor {
         // Check if there are tool calls
         if !response.tool_calls.is_empty() {
             // Add assistant message with tool calls
-            let assistant_msg = LLMMessage {
+            let assistant_msg = LlmMessage {
                 role: MessageRole::Assistant,
                 content: response.content.clone(),
                 tool_calls: Some(response.tool_calls.clone()),
@@ -337,7 +337,7 @@ impl SubAgentExecutor {
                 let result = self.execute_tool_call(call, tools, cancel).await?;
 
                 // Add tool result message
-                let tool_msg = LLMMessage::tool(
+                let tool_msg = LlmMessage::tool(
                     result.output.unwrap_or_else(|| result.error.unwrap_or_default()),
                     call.id.clone(),
                     Some(call.name.clone()),
@@ -348,7 +348,7 @@ impl SubAgentExecutor {
             Ok(StepResult::Continue)
         } else {
             // No tool calls - this is the final response
-            let assistant_msg = LLMMessage::assistant(&response.content);
+            let assistant_msg = LlmMessage::assistant(&response.content);
             messages.push(assistant_msg);
 
             // Check if this indicates completion
@@ -489,7 +489,7 @@ mod tests {
         ];
 
         // Mock LLM client (won't be used in this test)
-        use crate::llm::provider_types::{LLMProvider, ModelParameters};
+        use crate::llm::provider_types::{LlmProvider, ModelParameters};
         use crate::config::provider::ProviderConfig;
 
         let llm_config = ProviderConfig {
@@ -504,7 +504,7 @@ mod tests {
         };
 
         let llm_client = Arc::new(
-            LLMClient::new(LLMProvider::OpenAI, llm_config, model_params).unwrap()
+            LlmClient::new(LlmProvider::OpenAI, llm_config, model_params).unwrap()
         );
 
         let executor = SubAgentExecutor::new(registry.clone(), llm_client, tools);

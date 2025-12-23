@@ -1,27 +1,27 @@
 //! Provider trait and unified enum
 
 use crate::error::SageResult;
-use crate::llm::messages::{LLMMessage, LLMResponse};
-use crate::llm::streaming::LLMStream;
+use crate::llm::messages::{LlmMessage, LlmResponse};
+use crate::llm::streaming::LlmStream;
 use crate::tools::types::ToolSchema;
 use async_trait::async_trait;
 
 /// Unified trait for all LLM providers
 #[async_trait]
-pub trait LLMProviderTrait: Send + Sync {
+pub trait LlmProviderTrait: Send + Sync {
     /// Send a chat completion request
     async fn chat(
         &self,
-        messages: &[LLMMessage],
+        messages: &[LlmMessage],
         tools: Option<&[ToolSchema]>,
-    ) -> SageResult<LLMResponse>;
+    ) -> SageResult<LlmResponse>;
 
     /// Send a streaming chat completion request
     async fn chat_stream(
         &self,
-        messages: &[LLMMessage],
+        messages: &[LlmMessage],
         tools: Option<&[ToolSchema]>,
-    ) -> SageResult<LLMStream>;
+    ) -> SageResult<LlmStream>;
 }
 
 /// Unified provider enum that wraps all provider implementations
@@ -37,12 +37,12 @@ pub enum ProviderInstance {
 }
 
 #[async_trait]
-impl LLMProviderTrait for ProviderInstance {
+impl LlmProviderTrait for ProviderInstance {
     async fn chat(
         &self,
-        messages: &[LLMMessage],
+        messages: &[LlmMessage],
         tools: Option<&[ToolSchema]>,
-    ) -> SageResult<LLMResponse> {
+    ) -> SageResult<LlmResponse> {
         match self {
             Self::OpenAI(p) => p.chat(messages, tools).await,
             Self::Anthropic(p) => p.chat(messages, tools).await,
@@ -57,9 +57,9 @@ impl LLMProviderTrait for ProviderInstance {
 
     async fn chat_stream(
         &self,
-        messages: &[LLMMessage],
+        messages: &[LlmMessage],
         tools: Option<&[ToolSchema]>,
-    ) -> SageResult<LLMStream> {
+    ) -> SageResult<LlmStream> {
         match self {
             Self::OpenAI(p) => p.chat_stream(messages, tools).await,
             Self::Anthropic(p) => p.chat_stream(messages, tools).await,

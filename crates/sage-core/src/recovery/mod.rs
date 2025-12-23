@@ -316,11 +316,11 @@ mod tests {
 
     #[test]
     fn test_error_context() {
-        let ctx = ErrorContext::new("LLMClient", "chat_stream")
+        let ctx = ErrorContext::new("LlmClient", "chat_stream")
             .with_metadata("model", "claude-3-opus")
             .with_metadata("attempt", "3");
 
-        assert_eq!(ctx.component, Some("LLMClient".to_string()));
+        assert_eq!(ctx.component, Some("LlmClient".to_string()));
         assert_eq!(ctx.operation, Some("chat_stream".to_string()));
         assert_eq!(
             ctx.metadata.get("model"),

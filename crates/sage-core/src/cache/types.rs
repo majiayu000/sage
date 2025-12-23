@@ -246,7 +246,7 @@ pub mod hash_utils {
     }
 
     /// Generate hash for a slice of messages
-    pub fn hash_messages(messages: &[crate::llm::LLMMessage]) -> u64 {
+    pub fn hash_messages(messages: &[crate::llm::LlmMessage]) -> u64 {
         let mut hasher = DefaultHasher::new();
         for message in messages {
             // Hash the role and content

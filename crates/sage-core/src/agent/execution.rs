@@ -1,7 +1,7 @@
 //! Agent execution representation
 
 use crate::agent::AgentStep;
-use crate::types::{Id, LLMUsage, TaskMetadata};
+use crate::types::{Id, LlmUsage, TaskMetadata};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -20,7 +20,7 @@ pub struct AgentExecution {
     /// Whether the execution was successful
     pub success: bool,
     /// Total token usage across all steps
-    pub total_usage: LLMUsage,
+    pub total_usage: LlmUsage,
     /// Execution start time
     pub started_at: DateTime<Utc>,
     /// Execution end time
@@ -52,7 +52,7 @@ impl AgentExecution {
             steps: Vec::new(),
             final_result: None,
             success: false,
-            total_usage: LLMUsage::default(),
+            total_usage: LlmUsage::default(),
             started_at: Utc::now(),
             completed_at: None,
             metadata: HashMap::new(),
@@ -242,7 +242,7 @@ pub struct ExecutionStatistics {
 mod tests {
     use super::*;
     use crate::agent::AgentState;
-    use crate::types::LLMUsage;
+    use crate::types::LlmUsage;
 
     fn create_test_task() -> TaskMetadata {
         TaskMetadata::new("Test task", ".")
@@ -279,7 +279,7 @@ mod tests {
         let mut execution = AgentExecution::new(task);
 
         let mut step = AgentStep::new(1, AgentState::Thinking);
-        step.llm_usage = Some(LLMUsage {
+        step.llm_usage = Some(LlmUsage {
             prompt_tokens: 100,
             completion_tokens: 50,
             total_tokens: 150,
@@ -351,7 +351,7 @@ mod tests {
         let mut execution = AgentExecution::new(task);
 
         let mut step = AgentStep::new(1, AgentState::Thinking);
-        step.llm_usage = Some(LLMUsage {
+        step.llm_usage = Some(LlmUsage {
             prompt_tokens: 100,
             completion_tokens: 50,
             total_tokens: 150,
@@ -394,7 +394,7 @@ mod tests {
         let mut execution = AgentExecution::new(task);
 
         let mut step1 = AgentStep::new(1, AgentState::Thinking);
-        step1.llm_usage = Some(LLMUsage {
+        step1.llm_usage = Some(LlmUsage {
             prompt_tokens: 100,
             completion_tokens: 50,
             total_tokens: 150,

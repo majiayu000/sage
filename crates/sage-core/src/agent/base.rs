@@ -4,9 +4,9 @@ use crate::agent::{AgentExecution, AgentState, AgentStep, ExecutionError, Execut
 use crate::config::model::Config;
 use crate::error::{SageError, SageResult};
 use crate::interrupt::{global_interrupt_manager, reset_global_interrupt_manager};
-use crate::llm::client::LLMClient;
-use crate::llm::messages::LLMMessage;
-use crate::llm::provider_types::{LLMProvider, TimeoutConfig};
+use crate::llm::client::LlmClient;
+use crate::llm::messages::LlmMessage;
+use crate::llm::provider_types::{LlmProvider, TimeoutConfig};
 use crate::prompts::SystemPromptBuilder;
 use crate::tools::executor::ToolExecutor;
 use crate::tools::types::ToolSchema;
@@ -57,7 +57,7 @@ pub trait Agent: Send + Sync {
 pub struct BaseAgent {
     id: Id,
     config: Config,
-    llm_client: LLMClient,
+    llm_client: LlmClient,
     tool_executor: ToolExecutor,
     trajectory_recorder: Option<Arc<Mutex<TrajectoryRecorder>>>,
     max_steps: u32,
@@ -96,7 +96,7 @@ impl BaseAgent {
         tracing::info!("API key set: {}", default_params.api_key.is_some());
 
         // Parse provider
-        let provider: LLMProvider = provider_name
+        let provider: LlmProvider = provider_name
             .parse()
             .map_err(|_| SageError::config(format!("Invalid provider: {}", provider_name)))
             .context(format!(
@@ -122,7 +122,7 @@ impl BaseAgent {
 
         // Create LLM client
         let llm_client =
-            LLMClient::new(provider, provider_config, model_params).context(format!(
+            LlmClient::new(provider, provider_config, model_params).context(format!(
                 "Failed to create LLM client for provider: {}",
                 provider_name
             ))?;
@@ -213,7 +213,7 @@ impl BaseAgent {
     }
 
     /// Create initial system message using the new modular prompt system
-    fn create_system_message(&self, task: &TaskMetadata) -> LLMMessage {
+    fn create_system_message(&self, task: &TaskMetadata) -> LlmMessage {
         // Get current model info for the identity section
         let model_info = self.get_model_identity();
 
@@ -264,7 +264,7 @@ impl BaseAgent {
             .with_security_policy(true)
             .build();
 
-        LLMMessage::system(system_prompt)
+        LlmMessage::system(system_prompt)
     }
 
     /// Get tool schemas from the executor
@@ -277,7 +277,7 @@ impl BaseAgent {
     async fn execute_step(
         &mut self,
         step_number: u32,
-        messages: &[LLMMessage],
+        messages: &[LlmMessage],
         tools: &[ToolSchema],
     ) -> SageResult<AgentStep> {
         // Print step separator
@@ -323,7 +323,7 @@ impl BaseAgent {
                 .map(|msg| serde_json::to_value(msg).unwrap_or_default())
                 .collect();
 
-            let response_record = crate::trajectory::recorder::LLMResponseRecord {
+            let response_record = crate::trajectory::recorder::LlmResponseRecord {
                 content: llm_response.content.clone(),
                 model: llm_response.model.clone(),
                 finish_reason: llm_response.finish_reason.clone(),
@@ -559,19 +559,19 @@ impl BaseAgent {
     fn build_messages(
         &self,
         execution: &AgentExecution,
-        system_message: &LLMMessage,
-    ) -> Vec<LLMMessage> {
+        system_message: &LlmMessage,
+    ) -> Vec<LlmMessage> {
         let mut messages = vec![system_message.clone()];
 
         // ALWAYS add the initial task as the first user message
         // This ensures the conversation history is complete when continuing
-        let initial_user_message = LLMMessage::user(&execution.task.description);
+        let initial_user_message = LlmMessage::user(&execution.task.description);
         messages.push(initial_user_message);
 
         for step in &execution.steps {
             // Add LLM response as assistant message
             if let Some(response) = &step.llm_response {
-                let mut assistant_msg = LLMMessage::assistant(&response.content);
+                let mut assistant_msg = LlmMessage::assistant(&response.content);
                 if !response.tool_calls.is_empty() {
                     assistant_msg.tool_calls = Some(response.tool_calls.clone());
                 }
@@ -588,8 +588,8 @@ impl BaseAgent {
                             result.error.as_deref().unwrap_or("Unknown error")
                         )
                     };
-                    // Use LLMMessage::tool to properly link to the tool call
-                    let tool_msg = LLMMessage::tool(
+                    // Use LlmMessage::tool to properly link to the tool call
+                    let tool_msg = LlmMessage::tool(
                         content,
                         result.call_id.clone(),
                         Some(result.tool_name.clone()),
@@ -788,7 +788,7 @@ impl Agent for BaseAgent {
 
         // Build messages including the new user message
         let mut messages = self.build_messages(execution, &system_message);
-        messages.push(LLMMessage::user(user_message));
+        messages.push(LlmMessage::user(user_message));
 
         // Continue execution from where we left off
         let start_step = (execution.steps.len() + 1) as u32;

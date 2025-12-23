@@ -8,7 +8,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use sage_core::error::{SageError, SageResult};
-use sage_core::llm::messages::LLMMessage;
+use sage_core::llm::messages::LlmMessage;
 use sage_sdk::{RunOptions, SageAgentSDK};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -155,10 +155,10 @@ impl SageRpcImpl {
         // Extract the response content
         let response_content = result.messages
             .iter()
-            .filter(|msg| matches!(msg, LLMMessage::Assistant { .. }))
+            .filter(|msg| matches!(msg, LlmMessage::Assistant { .. }))
             .last()
             .map(|msg| match msg {
-                LLMMessage::Assistant { content, .. } => content.clone(),
+                LlmMessage::Assistant { content, .. } => content.clone(),
                 _ => "No response".to_string(),
             })
             .unwrap_or_else(|| "No response from agent".to_string());

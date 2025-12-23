@@ -5,7 +5,7 @@
 //! important information.
 
 use crate::error::SageResult;
-use crate::llm::{LLMClient, LLMMessage, MessageRole};
+use crate::llm::{LlmClient, LlmMessage, MessageRole};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -13,7 +13,7 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct ConversationSummarizer {
     /// LLM client for generating summaries
-    llm_client: Option<Arc<LLMClient>>,
+    llm_client: Option<Arc<LlmClient>>,
     /// Maximum tokens for the summary
     max_summary_tokens: usize,
     /// Model to use for summarization (if different from default)
@@ -31,7 +31,7 @@ impl ConversationSummarizer {
     }
 
     /// Create a summarizer with an LLM client
-    pub fn with_client(client: Arc<LLMClient>) -> Self {
+    pub fn with_client(client: Arc<LlmClient>) -> Self {
         Self {
             llm_client: Some(client),
             max_summary_tokens: 500,
@@ -52,7 +52,7 @@ impl ConversationSummarizer {
     }
 
     /// Summarize a list of messages
-    pub async fn summarize(&self, messages: &[LLMMessage]) -> SageResult<LLMMessage> {
+    pub async fn summarize(&self, messages: &[LlmMessage]) -> SageResult<LlmMessage> {
         if messages.is_empty() {
             return Ok(self.create_empty_summary());
         }
@@ -67,12 +67,12 @@ impl ConversationSummarizer {
     /// Create summary using LLM
     async fn summarize_with_llm(
         &self,
-        client: &LLMClient,
-        messages: &[LLMMessage],
-    ) -> SageResult<LLMMessage> {
+        client: &LlmClient,
+        messages: &[LlmMessage],
+    ) -> SageResult<LlmMessage> {
         let prompt = self.build_summarization_prompt(messages);
 
-        let summary_request = vec![LLMMessage {
+        let summary_request = vec![LlmMessage {
             role: MessageRole::User,
             content: prompt,
             name: None,
@@ -84,7 +84,7 @@ impl ConversationSummarizer {
 
         let response = client.chat(&summary_request, None).await?;
 
-        Ok(LLMMessage {
+        Ok(LlmMessage {
             role: MessageRole::System,
             content: format!(
                 "# Previous Conversation Summary\n\n{}\n\n---\n*Summarized {} messages*",
@@ -100,7 +100,7 @@ impl ConversationSummarizer {
     }
 
     /// Build the prompt for summarization
-    fn build_summarization_prompt(&self, messages: &[LLMMessage]) -> String {
+    fn build_summarization_prompt(&self, messages: &[LlmMessage]) -> String {
         let conversation = self.format_messages_for_summary(messages);
 
         format!(
@@ -126,7 +126,7 @@ Provide a structured summary:"#,
     }
 
     /// Format messages for the summarization prompt
-    fn format_messages_for_summary(&self, messages: &[LLMMessage]) -> String {
+    fn format_messages_for_summary(&self, messages: &[LlmMessage]) -> String {
         messages
             .iter()
             .filter(|m| m.role != MessageRole::System) // Skip system messages
@@ -166,7 +166,7 @@ Provide a structured summary:"#,
     }
 
     /// Create a simple summary without LLM
-    fn create_simple_summary(&self, messages: &[LLMMessage]) -> LLMMessage {
+    fn create_simple_summary(&self, messages: &[LlmMessage]) -> LlmMessage {
         let user_count = messages
             .iter()
             .filter(|m| m.role == MessageRole::User)
@@ -218,7 +218,7 @@ Provide a structured summary:"#,
             messages.len()
         );
 
-        LLMMessage {
+        LlmMessage {
             role: MessageRole::System,
             content: summary,
             name: None,
@@ -230,8 +230,8 @@ Provide a structured summary:"#,
     }
 
     /// Create an empty summary message
-    fn create_empty_summary(&self) -> LLMMessage {
-        LLMMessage {
+    fn create_empty_summary(&self) -> LlmMessage {
+        LlmMessage {
             role: MessageRole::System,
             content: "# Previous Conversation Summary\n\nNo previous conversation to summarize."
                 .to_string(),
@@ -254,9 +254,9 @@ impl Default for ConversationSummarizer {
 mod tests {
     use super::*;
 
-    fn create_test_messages() -> Vec<LLMMessage> {
+    fn create_test_messages() -> Vec<LlmMessage> {
         vec![
-            LLMMessage {
+            LlmMessage {
                 role: MessageRole::User,
                 content: "Hello, can you help me with a coding task?".to_string(),
                 name: None,
@@ -265,7 +265,7 @@ mod tests {
                 cache_control: None,
                 metadata: HashMap::new(),
             },
-            LLMMessage {
+            LlmMessage {
                 role: MessageRole::Assistant,
                 content: "Of course! I'd be happy to help. What are you working on?".to_string(),
                 name: None,
@@ -274,7 +274,7 @@ mod tests {
                 cache_control: None,
                 metadata: HashMap::new(),
             },
-            LLMMessage {
+            LlmMessage {
                 role: MessageRole::User,
                 content: "I need to implement a function that sorts an array.".to_string(),
                 name: None,
@@ -283,7 +283,7 @@ mod tests {
                 cache_control: None,
                 metadata: HashMap::new(),
             },
-            LLMMessage {
+            LlmMessage {
                 role: MessageRole::Assistant,
                 content: "Here's a simple sorting function...".to_string(),
                 name: None,

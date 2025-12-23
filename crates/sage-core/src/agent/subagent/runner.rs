@@ -15,9 +15,9 @@ use super::types::{
 use crate::config::model::Config;
 use crate::config::provider::ProviderConfig;
 use crate::error::{SageError, SageResult};
-use crate::llm::client::LLMClient;
-use crate::llm::messages::{LLMMessage, MessageRole};
-use crate::llm::provider_types::{LLMProvider, TimeoutConfig};
+use crate::llm::client::LlmClient;
+use crate::llm::messages::{LlmMessage, MessageRole};
+use crate::llm::provider_types::{LlmProvider, TimeoutConfig};
 use crate::tools::base::Tool;
 use crate::tools::types::{ToolCall, ToolResult, ToolSchema};
 use anyhow::Context;
@@ -25,7 +25,7 @@ use anyhow::Context;
 /// Sub-agent runner that executes agents with filtered tools
 pub struct SubAgentRunner {
     /// LLM client for model interactions
-    llm_client: LLMClient,
+    llm_client: LlmClient,
     /// All available tools
     all_tools: Vec<Arc<dyn Tool>>,
     /// Maximum steps per agent execution
@@ -42,7 +42,7 @@ impl SubAgentRunner {
         let provider_name = config.get_default_provider();
 
         // Parse provider
-        let provider: LLMProvider = provider_name
+        let provider: LlmProvider = provider_name
             .parse()
             .map_err(|_| SageError::config(format!("Invalid provider: {}", provider_name)))
             .context(format!(
@@ -66,7 +66,7 @@ impl SubAgentRunner {
 
         // Create LLM client
         let llm_client =
-            LLMClient::new(provider, provider_config, model_params).context(format!(
+            LlmClient::new(provider, provider_config, model_params).context(format!(
                 "Failed to create LLM client for sub-agent runner with provider: {}",
                 provider_name
             ))?;
@@ -116,7 +116,7 @@ impl SubAgentRunner {
 
         // Add system prompt
         if !definition.system_prompt.is_empty() {
-            messages.push(LLMMessage::system(&definition.system_prompt));
+            messages.push(LlmMessage::system(&definition.system_prompt));
         }
 
         // Add user task with thoroughness context for Explore agents
@@ -131,7 +131,7 @@ impl SubAgentRunner {
         } else {
             format!("{}\n\nTask: {}", definition.description, config.prompt)
         };
-        messages.push(LLMMessage::user(user_message));
+        messages.push(LlmMessage::user(user_message));
 
         // Track execution
         let mut progress = AgentProgress::new();
@@ -213,7 +213,7 @@ impl SubAgentRunner {
     /// Execute a single step
     async fn execute_step(
         &self,
-        messages: &mut Vec<LLMMessage>,
+        messages: &mut Vec<LlmMessage>,
         tools: &[Arc<dyn Tool>],
         progress: &mut AgentProgress,
         metadata: &mut ExecutionMetadata,
@@ -234,7 +234,7 @@ impl SubAgentRunner {
         // Check if there are tool calls
         if !response.tool_calls.is_empty() {
             // Add assistant message with tool calls
-            let assistant_msg = LLMMessage {
+            let assistant_msg = LlmMessage {
                 role: MessageRole::Assistant,
                 content: response.content.clone(),
                 tool_calls: Some(response.tool_calls.clone()),
@@ -255,7 +255,7 @@ impl SubAgentRunner {
                 let result = self.execute_tool_call(call, tools).await;
 
                 // Add tool result message
-                let tool_msg = LLMMessage::tool(
+                let tool_msg = LlmMessage::tool(
                     result
                         .output
                         .unwrap_or_else(|| result.error.unwrap_or_default()),
@@ -268,7 +268,7 @@ impl SubAgentRunner {
             Ok(StepResult::Continue)
         } else {
             // No tool calls - this is the final response
-            let assistant_msg = LLMMessage::assistant(&response.content);
+            let assistant_msg = LlmMessage::assistant(&response.content);
             messages.push(assistant_msg);
 
             Ok(StepResult::Completed(response.content))

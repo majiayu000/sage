@@ -160,7 +160,7 @@ pub enum LlmProvider {
 
 /// Deprecated: Use `LlmProvider` instead
 #[deprecated(since = "0.2.0", note = "Use `LlmProvider` instead")]
-pub type LLMProvider = LlmProvider;
+pub type LlmProvider = LlmProvider;
 
 impl LlmProvider {
     /// Get the provider name as a string

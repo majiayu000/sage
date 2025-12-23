@@ -3,7 +3,7 @@
 //! This module provides different strategies for pruning conversation history
 //! while preserving important context.
 
-use crate::llm::{LLMMessage, MessageRole};
+use crate::llm::{LlmMessage, MessageRole};
 
 use super::config::{ContextConfig, OverflowStrategy};
 use super::estimator::TokenEstimator;
@@ -33,7 +33,7 @@ impl MessagePruner {
     ///
     /// Returns the pruned messages and optionally the messages that were removed
     /// (for potential summarization)
-    pub fn prune(&self, messages: Vec<LLMMessage>, target_tokens: usize) -> PruneResult {
+    pub fn prune(&self, messages: Vec<LlmMessage>, target_tokens: usize) -> PruneResult {
         match self.config.overflow_strategy {
             OverflowStrategy::Truncate => self.prune_truncate(messages, target_tokens),
             OverflowStrategy::SlidingWindow => self.prune_sliding_window(messages, target_tokens),
@@ -44,7 +44,7 @@ impl MessagePruner {
     }
 
     /// Simple truncation - keep most recent messages
-    fn prune_truncate(&self, messages: Vec<LLMMessage>, target_tokens: usize) -> PruneResult {
+    fn prune_truncate(&self, messages: Vec<LlmMessage>, target_tokens: usize) -> PruneResult {
         let mut result = Vec::new();
         let mut removed = Vec::new();
         let mut current_tokens = 0;
@@ -100,7 +100,7 @@ impl MessagePruner {
     /// Sliding window - keep first N and last M messages
     fn prune_sliding_window(
         &self,
-        messages: Vec<LLMMessage>,
+        messages: Vec<LlmMessage>,
         _target_tokens: usize,
     ) -> PruneResult {
         let (system_msgs, other_msgs): (Vec<_>, Vec<_>) = messages
@@ -160,7 +160,7 @@ impl MessagePruner {
     /// Prune for summarization - separate old messages for summarization
     fn prune_for_summarization(
         &self,
-        messages: Vec<LLMMessage>,
+        messages: Vec<LlmMessage>,
         _target_tokens: usize,
     ) -> PruneResult {
         let (system_msgs, other_msgs): (Vec<_>, Vec<_>) = messages
@@ -213,12 +213,12 @@ impl MessagePruner {
     }
 
     /// Check if a message is related to tool calls
-    fn is_tool_message(&self, message: &LLMMessage) -> bool {
+    fn is_tool_message(&self, message: &LlmMessage) -> bool {
         message.tool_calls.is_some() || message.tool_call_id.is_some()
     }
 
     /// Check if a message should never be pruned
-    pub fn is_important(&self, message: &LLMMessage) -> bool {
+    pub fn is_important(&self, message: &LlmMessage) -> bool {
         // System messages are always important
         if message.role == MessageRole::System {
             return true;
@@ -237,9 +237,9 @@ impl MessagePruner {
 #[derive(Debug, Clone)]
 pub struct PruneResult {
     /// Messages that were kept
-    pub kept: Vec<LLMMessage>,
+    pub kept: Vec<LlmMessage>,
     /// Messages that were removed (available for summarization)
-    pub removed: Vec<LLMMessage>,
+    pub removed: Vec<LlmMessage>,
     /// Estimated tokens in kept messages
     pub kept_tokens: usize,
 }
@@ -261,8 +261,8 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
 
-    fn create_messages(count: usize) -> Vec<LLMMessage> {
-        let mut messages = vec![LLMMessage {
+    fn create_messages(count: usize) -> Vec<LlmMessage> {
+        let mut messages = vec![LlmMessage {
             role: MessageRole::System,
             content: "You are a helpful assistant.".to_string(),
             name: None,
@@ -273,7 +273,7 @@ mod tests {
         }];
 
         for i in 0..count {
-            messages.push(LLMMessage {
+            messages.push(LlmMessage {
                 role: if i % 2 == 0 {
                     MessageRole::User
                 } else {
@@ -372,7 +372,7 @@ mod tests {
         let config = ContextConfig::new().with_preserve_tools(true);
         let pruner = MessagePruner::new(config);
 
-        let system = LLMMessage {
+        let system = LlmMessage {
             role: MessageRole::System,
             content: "System".to_string(),
             name: None,
@@ -382,7 +382,7 @@ mod tests {
             metadata: HashMap::new(),
         };
 
-        let user = LLMMessage {
+        let user = LlmMessage {
             role: MessageRole::User,
             content: "User".to_string(),
             name: None,
@@ -392,7 +392,7 @@ mod tests {
             metadata: HashMap::new(),
         };
 
-        let tool_result = LLMMessage {
+        let tool_result = LlmMessage {
             role: MessageRole::Tool,
             content: "Tool result".to_string(),
             name: None,

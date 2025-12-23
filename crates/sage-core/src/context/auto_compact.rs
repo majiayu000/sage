@@ -28,7 +28,7 @@
 //! ```
 
 use crate::error::SageResult;
-use crate::llm::{LLMClient, LLMMessage, MessageRole};
+use crate::llm::{LlmClient, LlmMessage, MessageRole};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -179,7 +179,7 @@ pub struct AutoCompact {
     /// Configuration
     config: AutoCompactConfig,
     /// LLM client for generating summaries
-    llm_client: Option<Arc<LLMClient>>,
+    llm_client: Option<Arc<LlmClient>>,
     /// Statistics
     stats: AutoCompactStats,
 }
@@ -210,7 +210,7 @@ impl AutoCompact {
     }
 
     /// Create with an LLM client for intelligent summarization
-    pub fn with_llm_client(config: AutoCompactConfig, llm_client: Arc<LLMClient>) -> Self {
+    pub fn with_llm_client(config: AutoCompactConfig, llm_client: Arc<LlmClient>) -> Self {
         Self {
             config,
             llm_client: Some(llm_client),
@@ -234,7 +234,7 @@ impl AutoCompact {
     }
 
     /// Estimate token count for messages (simple estimation)
-    fn estimate_tokens(&self, messages: &[LLMMessage]) -> usize {
+    fn estimate_tokens(&self, messages: &[LlmMessage]) -> usize {
         messages
             .iter()
             .map(|m| {
@@ -245,7 +245,7 @@ impl AutoCompact {
     }
 
     /// Check if compaction is needed based on current token usage
-    pub fn needs_compaction(&self, messages: &[LLMMessage]) -> bool {
+    pub fn needs_compaction(&self, messages: &[LlmMessage]) -> bool {
         if !self.config.enabled {
             return false;
         }
@@ -255,7 +255,7 @@ impl AutoCompact {
     }
 
     /// Get current context usage as a percentage
-    pub fn get_usage_percentage(&self, messages: &[LLMMessage]) -> f32 {
+    pub fn get_usage_percentage(&self, messages: &[LlmMessage]) -> f32 {
         let current_tokens = self.estimate_tokens(messages);
         (current_tokens as f32 / self.config.max_context_tokens as f32) * 100.0
     }
@@ -266,7 +266,7 @@ impl AutoCompact {
     /// Call this before each LLM request to ensure context stays within limits.
     pub async fn check_and_compact(
         &mut self,
-        messages: &mut Vec<LLMMessage>,
+        messages: &mut Vec<LlmMessage>,
     ) -> SageResult<CompactResult> {
         let tokens_before = self.estimate_tokens(messages);
         let messages_before = messages.len();
@@ -288,7 +288,7 @@ impl AutoCompact {
     /// Compact with custom instructions (like `/compact Focus on code samples`)
     pub async fn compact_with_instructions(
         &mut self,
-        messages: &mut Vec<LLMMessage>,
+        messages: &mut Vec<LlmMessage>,
         instructions: &str,
     ) -> SageResult<CompactResult> {
         self.compact_internal(messages, Some(instructions)).await
@@ -297,7 +297,7 @@ impl AutoCompact {
     /// Force compaction regardless of current usage
     pub async fn force_compact(
         &mut self,
-        messages: &mut Vec<LLMMessage>,
+        messages: &mut Vec<LlmMessage>,
     ) -> SageResult<CompactResult> {
         self.compact_internal(messages, None).await
     }
@@ -305,7 +305,7 @@ impl AutoCompact {
     /// Internal compaction logic
     async fn compact_internal(
         &mut self,
-        messages: &mut Vec<LLMMessage>,
+        messages: &mut Vec<LlmMessage>,
         custom_instructions: Option<&str>,
     ) -> SageResult<CompactResult> {
         let tokens_before = self.estimate_tokens(messages);
@@ -368,7 +368,7 @@ impl AutoCompact {
     }
 
     /// Partition messages into those to keep and those to compact
-    fn partition_messages(&self, messages: &[LLMMessage]) -> (Vec<LLMMessage>, Vec<LLMMessage>) {
+    fn partition_messages(&self, messages: &[LlmMessage]) -> (Vec<LlmMessage>, Vec<LlmMessage>) {
         let mut to_keep = Vec::new();
         let mut to_compact = Vec::new();
 
@@ -398,17 +398,17 @@ impl AutoCompact {
     /// Generate a summary of messages
     async fn generate_summary(
         &self,
-        messages: &[LLMMessage],
+        messages: &[LlmMessage],
         custom_instructions: Option<&str>,
-    ) -> SageResult<LLMMessage> {
+    ) -> SageResult<LlmMessage> {
         if let Some(client) = &self.llm_client {
             // Use LLM for intelligent summarization
             let prompt = self.build_summarization_prompt(messages, custom_instructions);
 
-            let summary_request = vec![LLMMessage::user(prompt)];
+            let summary_request = vec![LlmMessage::user(prompt)];
             let response = client.chat(&summary_request, None).await?;
 
-            Ok(LLMMessage::system(format!(
+            Ok(LlmMessage::system(format!(
                 "# Previous Conversation Summary\n\n{}\n\n---\n*Summarized {} messages via auto-compact*",
                 response.content,
                 messages.len()
@@ -422,7 +422,7 @@ impl AutoCompact {
     /// Build the summarization prompt
     fn build_summarization_prompt(
         &self,
-        messages: &[LLMMessage],
+        messages: &[LlmMessage],
         custom_instructions: Option<&str>,
     ) -> String {
         let mut prompt = String::from(
@@ -449,7 +449,7 @@ impl AutoCompact {
     }
 
     /// Create a simple summary without LLM
-    fn create_simple_summary(&self, messages: &[LLMMessage]) -> LLMMessage {
+    fn create_simple_summary(&self, messages: &[LlmMessage]) -> LlmMessage {
         let mut user_count = 0;
         let mut assistant_count = 0;
         let mut tool_count = 0;
@@ -504,7 +504,7 @@ impl AutoCompact {
             messages.len()
         );
 
-        LLMMessage::system(summary)
+        LlmMessage::system(summary)
     }
 }
 
@@ -528,8 +528,8 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
 
-    fn create_message(role: MessageRole, content: &str) -> LLMMessage {
-        LLMMessage {
+    fn create_message(role: MessageRole, content: &str) -> LlmMessage {
+        LlmMessage {
             role,
             content: content.to_string(),
             name: None,
@@ -540,7 +540,7 @@ mod tests {
         }
     }
 
-    fn create_test_messages(count: usize) -> Vec<LLMMessage> {
+    fn create_test_messages(count: usize) -> Vec<LlmMessage> {
         let mut messages = vec![create_message(
             MessageRole::System,
             "You are a helpful assistant.",

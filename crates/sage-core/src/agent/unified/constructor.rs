@@ -4,8 +4,8 @@ use crate::agent::ExecutionOptions;
 use crate::config::model::Config;
 use crate::config::provider::ProviderConfig;
 use crate::error::{SageError, SageResult};
-use crate::llm::client::LLMClient;
-use crate::llm::provider_types::{LLMProvider, TimeoutConfig};
+use crate::llm::client::LlmClient;
+use crate::llm::provider_types::{LlmProvider, TimeoutConfig};
 use crate::session::{
     FileSnapshotTracker, JsonlSessionStorage, MessageChainTracker, SessionContext,
 };
@@ -37,7 +37,7 @@ impl UnifiedExecutor {
         );
 
         // Parse provider
-        let provider: LLMProvider = provider_name
+        let provider: LlmProvider = provider_name
             .parse()
             .map_err(|_| SageError::config(format!("Invalid provider: {}", provider_name)))
             .context(format!(
@@ -61,7 +61,7 @@ impl UnifiedExecutor {
 
         // Create LLM client
         let llm_client =
-            LLMClient::new(provider, provider_config, model_params).context(format!(
+            LlmClient::new(provider, provider_config, model_params).context(format!(
                 "Failed to create LLM client for provider: {}",
                 provider_name
             ))?;

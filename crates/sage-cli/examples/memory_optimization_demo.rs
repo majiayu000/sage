@@ -6,12 +6,12 @@
 //! - Efficient memory usage tracking
 
 use sage_core::{
-    cache::{CacheConfig, CacheManager, LLMCache},
+    cache::{CacheConfig, CacheManager, LlmCache},
     error::SageResult,
-    llm::{LLMMessage, LLMResponse, MessageRole},
+    llm::{LlmMessage, LlmResponse, MessageRole},
     trajectory::memory_optimized::{MemoryOptimizedConfig, MemoryOptimizedRecorder},
     trajectory::recorder::TrajectoryRecord,
-    types::{Id, LLMUsage},
+    types::{Id, LlmUsage},
 };
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -52,13 +52,13 @@ async fn test_lru_cache_eviction() -> SageResult<()> {
     };
 
     let cache_manager = CacheManager::new(cache_config)?;
-    let llm_cache = LLMCache::new(cache_manager, Some(Duration::from_secs(300)));
+    let llm_cache = LlmCache::new(cache_manager, Some(Duration::from_secs(300)));
 
     println!("📝 Adding 10 entries to cache with capacity of 5...");
 
     // Add more entries than capacity
     for i in 1..=10 {
-        let messages = vec![LLMMessage {
+        let messages = vec![LlmMessage {
             role: MessageRole::User,
             content: format!("Query {}", i),
             tool_calls: None,
@@ -68,10 +68,10 @@ async fn test_lru_cache_eviction() -> SageResult<()> {
             metadata: HashMap::new(),
         }];
 
-        let response = LLMResponse {
+        let response = LlmResponse {
             content: format!("Response to query {}", i),
             tool_calls: vec![],
-            usage: Some(LLMUsage {
+            usage: Some(LlmUsage {
                 prompt_tokens: 10,
                 completion_tokens: 20,
                 total_tokens: 30,
@@ -114,7 +114,7 @@ async fn test_lru_cache_eviction() -> SageResult<()> {
     // Test that recent entries are still accessible
     println!("\n🔍 Testing access to recent entries...");
     for i in 6..=10 {
-        let messages = vec![LLMMessage {
+        let messages = vec![LlmMessage {
             role: MessageRole::User,
             content: format!("Query {}", i),
             tool_calls: None,
@@ -258,7 +258,7 @@ async fn test_memory_usage_monitoring() -> SageResult<()> {
     };
 
     let cache_manager = CacheManager::new(cache_config)?;
-    let llm_cache = LLMCache::new(cache_manager, Some(Duration::from_secs(60)));
+    let llm_cache = LlmCache::new(cache_manager, Some(Duration::from_secs(60)));
 
     println!("📊 Monitoring memory usage during high-load scenario...");
 
@@ -271,7 +271,7 @@ async fn test_memory_usage_monitoring() -> SageResult<()> {
 
         for i in 1..=10 {
             let entry_id = batch * 10 + i;
-            let messages = vec![LLMMessage {
+            let messages = vec![LlmMessage {
                 role: MessageRole::User,
                 content: format!(
                     "Large query {} with lots of context: {}",
@@ -285,10 +285,10 @@ async fn test_memory_usage_monitoring() -> SageResult<()> {
                 metadata: HashMap::new(),
             }];
 
-            let response = LLMResponse {
+            let response = LlmResponse {
                 content: format!("Large response {}: {}", entry_id, "data ".repeat(200)),
                 tool_calls: vec![],
-                usage: Some(LLMUsage {
+                usage: Some(LlmUsage {
                     prompt_tokens: 500,
                     completion_tokens: 800,
                     total_tokens: 1300,

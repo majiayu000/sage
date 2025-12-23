@@ -87,10 +87,10 @@ impl SageHttpServer {
                 // Extract the response content
                 let response_content = result.messages
                     .iter()
-                    .filter(|msg| matches!(msg, sage_core::llm::messages::LLMMessage::Assistant { .. }))
+                    .filter(|msg| matches!(msg, sage_core::llm::messages::LlmMessage::Assistant { .. }))
                     .last()
                     .map(|msg| match msg {
-                        sage_core::llm::messages::LLMMessage::Assistant { content, .. } => content.clone(),
+                        sage_core::llm::messages::LlmMessage::Assistant { content, .. } => content.clone(),
                         _ => "No response".to_string(),
                     })
                     .unwrap_or_else(|| "No response from agent".to_string());

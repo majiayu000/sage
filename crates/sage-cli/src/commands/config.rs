@@ -1,6 +1,6 @@
 //! Configuration management commands
 
-use crate::console::CLIConsole;
+use crate::console::CliConsole;
 use colored::*;
 use sage_core::{
     config::{
@@ -13,7 +13,7 @@ use std::path::Path;
 
 /// Show current configuration
 pub async fn show(config_file: &str) -> SageResult<()> {
-    let console = CLIConsole::new(true);
+    let console = CliConsole::new(true);
 
     console.print_header("Configuration");
 
@@ -35,7 +35,7 @@ pub async fn show(config_file: &str) -> SageResult<()> {
 
 /// Validate configuration
 pub async fn validate(config_file: &str) -> SageResult<()> {
-    let console = CLIConsole::new(true);
+    let console = CliConsole::new(true);
 
     console.print_header("Configuration Validation");
 
@@ -89,7 +89,7 @@ pub async fn validate(config_file: &str) -> SageResult<()> {
 
 /// Initialize a new configuration file
 pub async fn init(config_file: &str, force: bool) -> SageResult<()> {
-    let console = CLIConsole::new(true);
+    let console = CliConsole::new(true);
 
     console.print_header("Configuration Initialization");
 
@@ -115,7 +115,7 @@ pub async fn init(config_file: &str, force: bool) -> SageResult<()> {
 }
 
 /// Print configuration details
-fn print_config(console: &CLIConsole, config: &Config) {
+fn print_config(console: &CliConsole, config: &Config) {
     console.info(&format!(
         "Default Provider: {}",
         config.default_provider.green()

@@ -2,24 +2,24 @@
 
 use crate::config::provider::ProviderConfig;
 use crate::error::{SageError, SageResult};
-use crate::llm::client::LLMClient;
-use crate::llm::messages::{LLMMessage, LLMResponse};
-use crate::llm::provider_types::{LLMProvider, ModelParameters};
+use crate::llm::client::LlmClient;
+use crate::llm::messages::{LlmMessage, LlmResponse};
+use crate::llm::provider_types::{LlmProvider, ModelParameters};
 use crate::tools::types::ToolSchema;
 use tracing::{info, warn};
 
 /// Provider fallback client that switches providers on quota errors
 pub struct ProviderFallbackClient {
-    clients: Vec<LLMClient>,
+    clients: Vec<LlmClient>,
     current_index: usize,
 }
 
 impl ProviderFallbackClient {
     /// Create a new provider fallback client
-    pub fn new(providers: Vec<(LLMProvider, ProviderConfig, ModelParameters)>) -> SageResult<Self> {
+    pub fn new(providers: Vec<(LlmProvider, ProviderConfig, ModelParameters)>) -> SageResult<Self> {
         let mut clients = Vec::new();
         for (provider, config, params) in providers {
-            clients.push(LLMClient::new(provider, config, params)?);
+            clients.push(LlmClient::new(provider, config, params)?);
         }
 
         if clients.is_empty() {
@@ -35,9 +35,9 @@ impl ProviderFallbackClient {
     /// Send a chat request with automatic provider fallback
     pub async fn chat(
         &mut self,
-        messages: &[LLMMessage],
+        messages: &[LlmMessage],
         tools: Option<&[ToolSchema]>,
-    ) -> SageResult<LLMResponse> {
+    ) -> SageResult<LlmResponse> {
         let mut last_error = None;
 
         for attempt in 0..self.clients.len() {

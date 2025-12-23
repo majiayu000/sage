@@ -3,7 +3,7 @@
 //! Provides multi-dimensional verification of task completion,
 //! inspired by Claude Code's approach.
 
-use crate::llm::messages::LLMResponse;
+use crate::llm::messages::LlmResponse;
 use crate::tools::types::ToolResult;
 use std::collections::HashSet;
 
@@ -263,7 +263,7 @@ impl CompletionChecker {
     }
 
     /// Check completion status
-    pub fn check(&self, response: &LLMResponse, tool_results: &[ToolResult]) -> CompletionStatus {
+    pub fn check(&self, response: &LlmResponse, tool_results: &[ToolResult]) -> CompletionStatus {
         // Check if task_done was called
         if let Some(summary) = self.find_task_done_summary(tool_results) {
             // For code tasks, verify file operations were performed
@@ -301,7 +301,7 @@ impl CompletionChecker {
     }
 
     /// Quick check if we should continue
-    pub fn should_continue(&self, response: &LLMResponse, tool_results: &[ToolResult]) -> bool {
+    pub fn should_continue(&self, response: &LlmResponse, tool_results: &[ToolResult]) -> bool {
         matches!(
             self.check(response, tool_results),
             CompletionStatus::Continue { .. }
