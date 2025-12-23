@@ -64,6 +64,9 @@ python run_agent.py \
 - `--timeout`: 每个实例超时时间（默认: 600s）
 - `--output`: 输出文件名
 
+环境变量：
+- `SAGE_SWEBENCH_RUN_DIR`: 指定运行输出目录（默认: `./swebench_runs`）
+
 ### run_evaluation.py - 运行官方评估
 
 ```bash

@@ -15,6 +15,7 @@ use super::statistics;
 use super::structure;
 
 /// Workspace analyzer
+#[derive(Clone)]
 pub struct WorkspaceAnalyzer {
     root: PathBuf,
     config: WorkspaceConfig,
@@ -90,6 +91,14 @@ impl WorkspaceAnalyzer {
             git_info,
             analysis_duration_ms: start.elapsed().as_millis() as u64,
         })
+    }
+
+    /// Perform full analysis on a blocking thread
+    pub async fn analyze_async(&self) -> Result<AnalysisResult, WorkspaceError> {
+        let analyzer = self.clone();
+        tokio::task::spawn_blocking(move || analyzer.analyze())
+            .await
+            .map_err(|e| WorkspaceError::AnalysisFailed(format!("Analysis task failed: {}", e)))?
     }
 
     /// Quick detection (just project type)

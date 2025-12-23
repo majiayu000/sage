@@ -92,7 +92,11 @@ class SageEvaluator:
         max_retries: int = 1,
     ):
         self.sage_binary = sage_binary or self._find_sage_binary()
-        self.work_dir = Path(work_dir) if work_dir else Path.cwd() / "swebench_runs"
+        if work_dir:
+            self.work_dir = Path(work_dir)
+        else:
+            env_dir = os.environ.get("SAGE_SWEBENCH_RUN_DIR")
+            self.work_dir = Path(env_dir) if env_dir else Path.cwd() / "swebench_runs"
         self.max_steps = max_steps
         self.timeout = timeout
         self.max_retries = max_retries  # Number of retry attempts if no patch generated

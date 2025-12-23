@@ -2,14 +2,25 @@
 
 use std::path::Path;
 
+use glob::Pattern;
+
 use super::models::{FileStats, WorkspaceConfig, WorkspaceError};
 
 /// Collect file statistics for a workspace
 pub fn collect_stats(root: &Path, config: &WorkspaceConfig) -> Result<FileStats, WorkspaceError> {
     let mut stats = FileStats::default();
     let mut files_scanned = 0;
+    let exclude_patterns = build_exclude_patterns(config);
 
-    scan_directory(root, root, 0, &mut stats, &mut files_scanned, config)?;
+    scan_directory(
+        root,
+        root,
+        0,
+        &mut stats,
+        &mut files_scanned,
+        config,
+        &exclude_patterns,
+    )?;
 
     // Sort largest files
     stats.largest_files.sort_by(|a, b| b.1.cmp(&a.1));
@@ -26,6 +37,7 @@ pub fn scan_directory(
     stats: &mut FileStats,
     files_scanned: &mut usize,
     config: &WorkspaceConfig,
+    exclude_patterns: &[ExcludePattern],
 ) -> Result<(), WorkspaceError> {
     if depth > config.max_depth || *files_scanned >= config.max_files {
         return Ok(());
@@ -44,14 +56,23 @@ pub fn scan_directory(
         }
 
         // Skip excluded patterns
-        if should_exclude(file_name, config) {
+        if should_exclude(file_name, exclude_patterns) {
             continue;
         }
 
-        if path.is_dir() {
+        let file_type = entry.file_type()?;
+        if file_type.is_dir() {
             stats.total_directories += 1;
-            scan_directory(root, &path, depth + 1, stats, files_scanned, config)?;
-        } else if path.is_file() {
+            scan_directory(
+                root,
+                &path,
+                depth + 1,
+                stats,
+                files_scanned,
+                config,
+                exclude_patterns,
+            )?;
+        } else if file_type.is_file() {
             stats.total_files += 1;
             *files_scanned += 1;
 
@@ -85,16 +106,32 @@ pub fn scan_directory(
 }
 
 /// Check if a file/directory should be excluded
-fn should_exclude(name: &str, config: &WorkspaceConfig) -> bool {
-    config.exclude_patterns.iter().any(|p| {
-        if p.contains('*') {
-            glob::Pattern::new(p)
-                .map(|pat| pat.matches(name))
-                .unwrap_or(false)
-        } else {
-            name == p
-        }
+fn should_exclude(name: &str, exclude_patterns: &[ExcludePattern]) -> bool {
+    exclude_patterns.iter().any(|pattern| match pattern {
+        ExcludePattern::Exact(exact) => name == exact,
+        ExcludePattern::Glob(glob) => glob.matches(name),
     })
+}
+
+fn build_exclude_patterns(config: &WorkspaceConfig) -> Vec<ExcludePattern> {
+    config
+        .exclude_patterns
+        .iter()
+        .filter_map(|pattern| {
+            if pattern.contains('*') {
+                Pattern::new(pattern)
+                    .ok()
+                    .map(ExcludePattern::Glob)
+            } else {
+                Some(ExcludePattern::Exact(pattern.clone()))
+            }
+        })
+        .collect()
+}
+
+enum ExcludePattern {
+    Exact(String),
+    Glob(Pattern),
 }
 
 /// Map file extension to programming language

@@ -269,12 +269,13 @@ impl JsonlSessionStorage {
         let json = serde_json::to_string(message)
             .map_err(|e| SageError::json(format!("Failed to serialize message: {}", e)))?;
 
-        file.write_all(json.as_bytes())
+        let mut json_line = String::with_capacity(json.len() + 1);
+        json_line.push_str(&json);
+        json_line.push('\n');
+
+        file.write_all(json_line.as_bytes())
             .await
             .map_err(|e| SageError::io(format!("Failed to write message: {}", e)))?;
-        file.write_all(b"\n")
-            .await
-            .map_err(|e| SageError::io(format!("Failed to write newline: {}", e)))?;
 
         debug!("Appended message {} to session {}", message.uuid, id);
         Ok(())
@@ -299,12 +300,13 @@ impl JsonlSessionStorage {
         let json = serde_json::to_string(snapshot)
             .map_err(|e| SageError::json(format!("Failed to serialize snapshot: {}", e)))?;
 
-        file.write_all(json.as_bytes())
+        let mut json_line = String::with_capacity(json.len() + 1);
+        json_line.push_str(&json);
+        json_line.push('\n');
+
+        file.write_all(json_line.as_bytes())
             .await
             .map_err(|e| SageError::io(format!("Failed to write snapshot: {}", e)))?;
-        file.write_all(b"\n")
-            .await
-            .map_err(|e| SageError::io(format!("Failed to write newline: {}", e)))?;
 
         debug!(
             "Appended snapshot for message {} to session {}",
@@ -461,8 +463,45 @@ impl JsonlSessionStorage {
         session_id: &SessionId,
         message_uuid: &str,
     ) -> SageResult<Option<EnhancedMessage>> {
-        let messages = self.load_messages(session_id).await?;
-        Ok(messages.into_iter().find(|m| m.uuid == message_uuid))
+        let path = self.messages_path(session_id);
+
+        if !path.exists() {
+            return Ok(None);
+        }
+
+        let file = File::open(&path)
+            .await
+            .map_err(|e| SageError::io(format!("Failed to open messages file: {}", e)))?;
+
+        let reader = BufReader::new(file);
+        let mut lines = reader.lines();
+
+        while let Some(line) = lines
+            .next_line()
+            .await
+            .map_err(|e| SageError::io(format!("Failed to read line: {}", e)))?
+        {
+            if line.trim().is_empty() {
+                continue;
+            }
+
+            match serde_json::from_str::<EnhancedMessage>(&line) {
+                Ok(msg) => {
+                    if msg.uuid == message_uuid {
+                        return Ok(Some(msg));
+                    }
+                }
+                Err(e) => {
+                    warn!(
+                        "Failed to parse message: {} - line: {}",
+                        e,
+                        &line[..50.min(line.len())]
+                    );
+                }
+            }
+        }
+
+        Ok(None)
     }
 
     /// Get messages up to a specific UUID (for undo)
@@ -471,13 +510,44 @@ impl JsonlSessionStorage {
         session_id: &SessionId,
         message_uuid: &str,
     ) -> SageResult<Vec<EnhancedMessage>> {
-        let messages = self.load_messages(session_id).await?;
+        let path = self.messages_path(session_id);
+
+        if !path.exists() {
+            return Ok(Vec::new());
+        }
+
+        let file = File::open(&path)
+            .await
+            .map_err(|e| SageError::io(format!("Failed to open messages file: {}", e)))?;
+
+        let reader = BufReader::new(file);
+        let mut lines = reader.lines();
         let mut result = Vec::new();
 
-        for msg in messages {
-            result.push(msg.clone());
-            if msg.uuid == message_uuid {
-                break;
+        while let Some(line) = lines
+            .next_line()
+            .await
+            .map_err(|e| SageError::io(format!("Failed to read line: {}", e)))?
+        {
+            if line.trim().is_empty() {
+                continue;
+            }
+
+            match serde_json::from_str::<EnhancedMessage>(&line) {
+                Ok(msg) => {
+                    let is_target = msg.uuid == message_uuid;
+                    result.push(msg);
+                    if is_target {
+                        break;
+                    }
+                }
+                Err(e) => {
+                    warn!(
+                        "Failed to parse message: {} - line: {}",
+                        e,
+                        &line[..50.min(line.len())]
+                    );
+                }
             }
         }
 
