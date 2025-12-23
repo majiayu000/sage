@@ -8,7 +8,8 @@ use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolResult, ToolSchema};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+use parking_lot::RwLock;
 
 /// Todo item status
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -56,19 +57,19 @@ impl TodoList {
 
     /// Replace the entire todo list
     pub fn set_todos(&self, todos: Vec<TodoItem>) {
-        let mut list = self.todos.write().unwrap();
+        let mut list = self.todos.write();
         *list = todos;
     }
 
     /// Get all todos
     pub fn get_todos(&self) -> Vec<TodoItem> {
-        let list = self.todos.read().unwrap();
+        let list = self.todos.read();
         list.clone()
     }
 
     /// Get the current in-progress task
     pub fn get_current_task(&self) -> Option<TodoItem> {
-        let list = self.todos.read().unwrap();
+        let list = self.todos.read();
         list.iter()
             .find(|t| t.status == TodoStatus::InProgress)
             .cloned()
@@ -76,7 +77,7 @@ impl TodoList {
 
     /// Format todos for display
     pub fn format_display(&self) -> String {
-        let list = self.todos.read().unwrap();
+        let list = self.todos.read();
         if list.is_empty() {
             return "No tasks in todo list.".to_string();
         }
@@ -95,7 +96,7 @@ impl TodoList {
 
     /// Get completion stats
     pub fn get_stats(&self) -> (usize, usize, usize) {
-        let list = self.todos.read().unwrap();
+        let list = self.todos.read();
         let total = list.len();
         let completed = list
             .iter()

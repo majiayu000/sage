@@ -41,7 +41,7 @@ impl ThinkingSpinner {
                     message.blue().bold(),
                     "...".dimmed()
                 );
-                io::stdout().flush().unwrap();
+                let _ = io::stdout().flush();
 
                 frame_idx = (frame_idx + 1) % frames.len();
                 sleep(Duration::from_millis(100)).await;
@@ -49,7 +49,7 @@ impl ThinkingSpinner {
 
             // Clear the line
             print!("\r{}\r", " ".repeat(80));
-            io::stdout().flush().unwrap();
+            let _ = io::stdout().flush();
         });
     }
 

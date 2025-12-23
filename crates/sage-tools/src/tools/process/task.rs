@@ -10,7 +10,8 @@ use sage_core::tools::types::{ToolCall, ToolResult, ToolSchema};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+use parking_lot::RwLock;
 use uuid::Uuid;
 
 /// Task request for subagent execution
@@ -73,20 +74,20 @@ impl TaskRegistry {
     /// Add a new task
     pub fn add_task(&self, task: TaskRequest) -> String {
         let id = task.id.clone();
-        let mut tasks = self.tasks.write().unwrap();
+        let mut tasks = self.tasks.write();
         tasks.insert(id.clone(), task);
         id
     }
 
     /// Get a task by ID
     pub fn get_task(&self, id: &str) -> Option<TaskRequest> {
-        let tasks = self.tasks.read().unwrap();
+        let tasks = self.tasks.read();
         tasks.get(id).cloned()
     }
 
     /// Update task status
     pub fn update_status(&self, id: &str, status: TaskStatus, result: Option<String>) {
-        let mut tasks = self.tasks.write().unwrap();
+        let mut tasks = self.tasks.write();
         if let Some(task) = tasks.get_mut(id) {
             task.status = status;
             task.result = result;
@@ -95,7 +96,7 @@ impl TaskRegistry {
 
     /// Get all pending tasks
     pub fn get_pending_tasks(&self) -> Vec<TaskRequest> {
-        let tasks = self.tasks.read().unwrap();
+        let tasks = self.tasks.read();
         tasks
             .values()
             .filter(|t| t.status == TaskStatus::Pending)
@@ -105,7 +106,7 @@ impl TaskRegistry {
 
     /// Get task result (blocks until complete or timeout)
     pub fn get_result(&self, id: &str) -> Option<String> {
-        let tasks = self.tasks.read().unwrap();
+        let tasks = self.tasks.read();
         tasks.get(id).and_then(|t| t.result.clone())
     }
 }
