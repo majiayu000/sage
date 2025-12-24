@@ -298,6 +298,83 @@ impl BashTool {
 
         Ok(())
     }
+
+    /// Check if a command is destructive and requires user confirmation
+    ///
+    /// Returns Some(reason) if confirmation is required, None otherwise
+    pub fn requires_user_confirmation(command: &str) -> Option<String> {
+        let command_lower = command.to_lowercase();
+        let command_trimmed = command_lower.trim();
+
+        // rm command - file/directory deletion
+        if command_trimmed.starts_with("rm ") || command_trimmed == "rm" {
+            // rm -rf is especially dangerous
+            if command_lower.contains("-rf") || command_lower.contains("-r") {
+                return Some(format!(
+                    "This command will recursively delete files/directories: '{}'",
+                    command
+                ));
+            }
+            return Some(format!("This command will delete files: '{}'", command));
+        }
+
+        // rmdir - directory deletion
+        if command_trimmed.starts_with("rmdir ") {
+            return Some(format!(
+                "This command will delete directories: '{}'",
+                command
+            ));
+        }
+
+        // git push --force
+        if command_lower.contains("git") && command_lower.contains("push") {
+            if command_lower.contains("--force") || command_lower.contains("-f") {
+                return Some(format!(
+                    "This command will force push, potentially overwriting remote history: '{}'",
+                    command
+                ));
+            }
+        }
+
+        // git reset --hard
+        if command_lower.contains("git")
+            && command_lower.contains("reset")
+            && command_lower.contains("--hard")
+        {
+            return Some(format!(
+                "This command will discard all local changes: '{}'",
+                command
+            ));
+        }
+
+        // DROP DATABASE / DROP TABLE
+        if command_lower.contains("drop database") || command_lower.contains("drop table") {
+            return Some(format!(
+                "This command will drop database objects: '{}'",
+                command
+            ));
+        }
+
+        // truncate / delete from without where
+        if command_lower.contains("truncate ") {
+            return Some(format!(
+                "This command will truncate a table: '{}'",
+                command
+            ));
+        }
+
+        // docker system prune
+        if command_lower.contains("docker")
+            && (command_lower.contains("prune") || command_lower.contains("rm"))
+        {
+            return Some(format!(
+                "This command will remove Docker resources: '{}'",
+                command
+            ));
+        }
+
+        None
+    }
 }
 
 impl Default for BashTool {
@@ -347,6 +424,12 @@ Use task_output(shell_id) to retrieve output and kill_shell(shell_id) to termina
                     "shell_id",
                     "Optional custom ID for background shell (auto-generated if not provided)",
                 ),
+                ToolParameter::boolean(
+                    "user_confirmed",
+                    "Set to true ONLY after getting explicit user confirmation via ask_user_question tool for destructive commands (rm, rmdir, git push --force, etc.)",
+                )
+                .optional()
+                .with_default(false),
             ],
         )
     }
@@ -361,6 +444,28 @@ Use task_output(shell_id) to retrieve output and kill_shell(shell_id) to termina
             return Err(ToolError::InvalidArguments(
                 "Command cannot be empty".to_string(),
             ));
+        }
+
+        // Check if this is a destructive command that requires user confirmation
+        // The agent must explicitly acknowledge by setting user_confirmed=true
+        let user_confirmed = call.get_bool("user_confirmed").unwrap_or(false);
+        if let Some(reason) = Self::requires_user_confirmation(&command) {
+            if !user_confirmed {
+                return Err(ToolError::ConfirmationRequired(format!(
+                    "⚠️  DESTRUCTIVE COMMAND BLOCKED\n\n\
+                    {}\n\n\
+                    Before executing this command, you MUST:\n\
+                    1. Use the ask_user_question tool to get explicit user confirmation\n\
+                    2. Wait for the user's response\n\
+                    3. Only if user confirms, call this tool again with user_confirmed=true\n\n\
+                    DO NOT proceed without user confirmation!",
+                    reason
+                )));
+            }
+            tracing::info!(
+                command = %command,
+                "executing confirmed destructive command"
+            );
         }
 
         let run_in_background = call.get_bool("run_in_background").unwrap_or(false);

@@ -29,6 +29,11 @@ pub enum ToolError {
     #[error("Validation failed: {0}")]
     ValidationFailed(String),
 
+    /// User confirmation required for destructive operations
+    /// The agent must first ask the user for confirmation using ask_user_question tool
+    #[error("Confirmation required: {0}")]
+    ConfirmationRequired(String),
+
     /// IO error
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
@@ -55,6 +60,7 @@ impl crate::error::UnifiedError for ToolError {
             ToolError::Timeout => "TOOL_TIMEOUT",
             ToolError::PermissionDenied(_) => "TOOL_PERMISSION_DENIED",
             ToolError::ValidationFailed(_) => "TOOL_VALIDATION_FAILED",
+            ToolError::ConfirmationRequired(_) => "TOOL_CONFIRMATION_REQUIRED",
             ToolError::Io(_) => "TOOL_IO_ERROR",
             ToolError::Json(_) => "TOOL_JSON_ERROR",
             ToolError::Cancelled => "TOOL_CANCELLED",
@@ -70,6 +76,7 @@ impl crate::error::UnifiedError for ToolError {
             ToolError::Timeout => "Tool execution timeout",
             ToolError::PermissionDenied(msg) => msg,
             ToolError::ValidationFailed(msg) => msg,
+            ToolError::ConfirmationRequired(msg) => msg,
             ToolError::Io(_) => "IO error occurred",
             ToolError::Json(_) => "JSON error occurred",
             ToolError::Cancelled => "Tool execution cancelled",
@@ -91,6 +98,7 @@ impl From<ToolError> for SageError {
             ToolError::Timeout => SageError::tool("unknown", "Tool execution timeout"),
             ToolError::PermissionDenied(msg) => SageError::tool("unknown", msg),
             ToolError::ValidationFailed(msg) => SageError::tool("unknown", msg),
+            ToolError::ConfirmationRequired(msg) => SageError::tool("bash", msg),
             ToolError::Io(err) => SageError::tool("unknown", err.to_string()),
             ToolError::Json(err) => SageError::tool("unknown", err.to_string()),
             ToolError::Cancelled => SageError::tool("unknown", "Cancelled"),

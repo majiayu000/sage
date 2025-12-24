@@ -4,8 +4,9 @@ use crate::agent::{AgentState, AgentStep};
 use crate::error::{SageError, SageResult};
 use crate::interrupt::global_interrupt_manager;
 use crate::llm::messages::LlmMessage;
-use crate::tools::types::ToolSchema;
+use crate::tools::types::{ToolCall, ToolSchema};
 use crate::ui::animation::AnimationState;
+use crate::ui::prompt::{show_permission_dialog, PermissionChoice, PermissionDialogConfig};
 use crate::ui::DisplayManager;
 use tokio::select;
 use tracing::instrument;
@@ -88,10 +89,20 @@ impl UnifiedExecutor {
         }
 
         // Check for completion indicator in response
-        if llm_response.finish_reason == Some("end_turn".to_string())
-            && llm_response.tool_calls.is_empty()
-        {
-            tracing::info!("step indicates task completion");
+        // Support multiple LLM providers with different finish_reason values:
+        // - Anthropic: "end_turn"
+        // - OpenAI/GLM/others: "stop"
+        // - Google: "STOP"
+        let is_natural_end = match llm_response.finish_reason.as_deref() {
+            Some("end_turn") | Some("stop") | Some("STOP") => true,
+            _ => false,
+        };
+
+        if is_natural_end && llm_response.tool_calls.is_empty() {
+            tracing::info!(
+                finish_reason = ?llm_response.finish_reason,
+                "step indicates task completion (natural end)"
+            );
             step.state = AgentState::Completed;
         }
 
@@ -103,7 +114,7 @@ impl UnifiedExecutor {
         &mut self,
         step: &mut AgentStep,
         new_messages: &mut Vec<LlmMessage>,
-        tool_calls: &[crate::tools::types::ToolCall],
+        tool_calls: &[ToolCall],
         task_scope: &crate::interrupt::TaskScope,
     ) -> SageResult<()> {
         tracing::info!(tool_count = tool_calls.len(), "executing tools");
@@ -121,7 +132,7 @@ impl UnifiedExecutor {
             }
 
             // Track files before file-modifying tools execute (for undo capability)
-            if matches!(tool_call.name.as_str(), "edit" | "write" | "multi_edit") {
+            if crate::tools::names::is_file_modifying_tool(&tool_call.name) {
                 if let Some(file_path) = tool_call
                     .arguments
                     .get("file_path")
@@ -148,8 +159,8 @@ impl UnifiedExecutor {
                 // For now, just execute normally - can be extended later
                 self.tool_executor.execute_tool(tool_call).await
             } else {
-                // Normal tool execution
-                self.tool_executor.execute_tool(tool_call).await
+                // Normal tool execution - may require permission confirmation
+                self.execute_tool_with_permission_check(tool_call).await
             };
 
             step.tool_results.push(tool_result.clone());
@@ -167,5 +178,106 @@ impl UnifiedExecutor {
         step.state = AgentState::ToolExecution;
 
         Ok(())
+    }
+
+    /// Execute a tool with permission check for dangerous operations
+    ///
+    /// If the tool returns ConfirmationRequired error, this will:
+    /// 1. Stop the animation
+    /// 2. Show a permission dialog to the user
+    /// 3. If user confirms, re-execute with user_confirmed=true
+    /// 4. If user denies, return a rejection message
+    async fn execute_tool_with_permission_check(
+        &mut self,
+        tool_call: &ToolCall,
+    ) -> crate::tools::types::ToolResult {
+        // First attempt - may fail with ConfirmationRequired
+        let result = self.tool_executor.execute_tool(tool_call).await;
+
+        // Check if the result indicates confirmation is required
+        // The error message will be in the output field for failed results
+        if !result.success {
+            if let Some(ref error_msg) = result.error {
+                if error_msg.contains("DESTRUCTIVE COMMAND BLOCKED")
+                    || error_msg.contains("Confirmation required")
+                {
+                    // Stop animation to show dialog
+                    self.animation_manager.stop_animation().await;
+
+                    // Extract command from tool call
+                    let command = tool_call
+                        .arguments
+                        .get("command")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("unknown command");
+
+                    // Show permission dialog
+                    let config = PermissionDialogConfig::new(
+                        &tool_call.name,
+                        command,
+                        "This is a destructive operation that may delete files or make irreversible changes.",
+                    );
+
+                    let choice = show_permission_dialog(&config);
+
+                    // Restart animation
+                    self.animation_manager
+                        .start_animation(
+                            AnimationState::ExecutingTools,
+                            "Executing tools",
+                            "green",
+                        )
+                        .await;
+
+                    match choice {
+                        PermissionChoice::YesOnce | PermissionChoice::YesAlways => {
+                            // User confirmed - re-execute with user_confirmed=true
+                            let mut confirmed_call = tool_call.clone();
+                            confirmed_call
+                                .arguments
+                                .insert("user_confirmed".to_string(), serde_json::Value::Bool(true));
+
+                            tracing::info!(
+                                tool = %tool_call.name,
+                                command = %command,
+                                "user confirmed destructive operation"
+                            );
+
+                            return self.tool_executor.execute_tool(&confirmed_call).await;
+                        }
+                        PermissionChoice::NoOnce | PermissionChoice::NoAlways => {
+                            tracing::info!(
+                                tool = %tool_call.name,
+                                command = %command,
+                                "user rejected destructive operation"
+                            );
+
+                            return crate::tools::types::ToolResult::error(
+                                &tool_call.id,
+                                &tool_call.name,
+                                format!(
+                                    "Operation cancelled by user. The user rejected the command: {}",
+                                    command
+                                ),
+                            );
+                        }
+                        PermissionChoice::Cancelled => {
+                            tracing::info!(
+                                tool = %tool_call.name,
+                                "user cancelled permission dialog"
+                            );
+
+                            return crate::tools::types::ToolResult::error(
+                                &tool_call.id,
+                                &tool_call.name,
+                                "Operation cancelled by user (Ctrl+C or empty input).",
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        result
     }
 }
