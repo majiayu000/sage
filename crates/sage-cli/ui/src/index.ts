@@ -150,11 +150,25 @@ async function main() {
     process.exit(1);
   }
 
+  // Check if raw mode is supported (required for interactive mode)
+  const isRawModeSupported = process.stdin.isTTY && typeof process.stdin.setRawMode === 'function';
+
   // Determine if we should run in interactive mode
-  const shouldBeInteractive = 
-    !argv.command || 
-    argv.command === 'interactive' || 
-    (process.stdin.isTTY && !argv.task);
+  const shouldBeInteractive =
+    isRawModeSupported && (
+      !argv.command ||
+      argv.command === 'interactive' ||
+      !argv.task
+    );
+
+  if (!isRawModeSupported && (argv.command === 'interactive' || !argv.command)) {
+    console.error('Error: Interactive mode requires a TTY with raw mode support.');
+    console.error('Please run this command in a real terminal, not through a non-interactive shell.');
+    console.error('');
+    console.error('Alternatively, you can use the Rust CLI:');
+    console.error('  sage interactive --claude-style');
+    process.exit(1);
+  }
 
   if (shouldBeInteractive) {
     // Render the Ink UI
