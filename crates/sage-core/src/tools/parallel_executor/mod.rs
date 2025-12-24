@@ -21,6 +21,7 @@ mod tests {
     use crate::tools::permission::{PermissionResult, ToolContext};
     use crate::tools::types::{ToolCall, ToolResult, ToolSchema};
     use async_trait::async_trait;
+    use std::collections::HashMap;
     use std::sync::atomic::{AtomicU32, Ordering};
     use std::sync::Arc;
     use std::time::Duration;
@@ -55,12 +56,7 @@ mod tests {
         }
 
         fn schema(&self) -> ToolSchema {
-            ToolSchema {
-                name: self.name.clone(),
-                description: "Test tool".to_string(),
-                parameters: serde_json::json!({}),
-                required: vec![],
-            }
+            ToolSchema::new(self.name.clone(), "Test tool".to_string(), vec![])
         }
 
         async fn execute(&self, _call: &ToolCall) -> Result<ToolResult, ToolError> {
@@ -84,11 +80,7 @@ mod tests {
         let tool = Arc::new(TestTool::new("test", Duration::from_millis(10), ConcurrencyMode::Parallel));
         executor.register_tool(tool);
 
-        let call = ToolCall {
-            id: "1".to_string(),
-            name: "test".to_string(),
-            arguments: serde_json::json!({}),
-        };
+        let call = ToolCall::new("1", "test", HashMap::new());
 
         let result = executor.execute_tool(&call).await;
         assert!(result.result.success);
@@ -101,11 +93,7 @@ mod tests {
         executor.register_tool(tool.clone());
 
         let calls: Vec<_> = (0..5)
-            .map(|i| ToolCall {
-                id: i.to_string(),
-                name: "test".to_string(),
-                arguments: serde_json::json!({}),
-            })
+            .map(|i| ToolCall::new(i.to_string(), "test".to_string(), HashMap::new()))
             .collect();
 
         let start = std::time::Instant::now();
@@ -122,15 +110,11 @@ mod tests {
     async fn test_tool_not_found() {
         let executor = ParallelToolExecutor::new();
 
-        let call = ToolCall {
-            id: "1".to_string(),
-            name: "nonexistent".to_string(),
-            arguments: serde_json::json!({}),
-        };
+        let call = ToolCall::new("1", "nonexistent", HashMap::new());
 
         let result = executor.execute_tool(&call).await;
         assert!(!result.result.success);
-        assert!(result.result.output.contains("not found"));
+        assert!(result.result.error.as_ref().map_or(false, |e| e.contains("not found")));
     }
 
     #[tokio::test]
