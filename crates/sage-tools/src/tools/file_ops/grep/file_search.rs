@@ -17,13 +17,21 @@ impl GrepTool {
         lines_after: usize,
         output_mode: GrepOutputMode,
     ) -> Result<Option<String>, ToolError> {
-        let content = std::fs::read_to_string(path).map_err(|e| {
-            // Skip files that can't be read as text (likely binary)
-            if e.kind() == std::io::ErrorKind::InvalidData {
-                return ToolError::Other("Binary file".to_string());
+        // Read file content, silently skip binary files
+        let content = match std::fs::read_to_string(path) {
+            Ok(content) => content,
+            Err(e) => {
+                // Skip files that can't be read as text (binary files, encoding issues)
+                if e.kind() == std::io::ErrorKind::InvalidData {
+                    return Ok(None);
+                }
+                // Skip permission denied errors silently
+                if e.kind() == std::io::ErrorKind::PermissionDenied {
+                    return Ok(None);
+                }
+                return Err(ToolError::Io(e));
             }
-            ToolError::Io(e)
-        })?;
+        };
 
         let lines: Vec<&str> = content.lines().collect();
         let mut matching_lines = Vec::new();

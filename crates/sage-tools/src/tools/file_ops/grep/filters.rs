@@ -82,39 +82,32 @@ pub fn should_skip_file(path: &Path) -> bool {
         if let Some(ext) = get_extension(path) {
             if matches!(
                 ext.as_str(),
-                "exe"
-                    | "dll"
-                    | "so"
-                    | "dylib"
-                    | "a"
-                    | "o"
-                    | "obj"
-                    | "bin"
-                    | "dat"
-                    | "db"
-                    | "sqlite"
-                    | "png"
-                    | "jpg"
-                    | "jpeg"
-                    | "gif"
-                    | "ico"
-                    | "svg"
-                    | "pdf"
-                    | "zip"
-                    | "tar"
-                    | "gz"
-                    | "bz2"
-                    | "xz"
-                    | "rar"
-                    | "7z"
-                    | "mp3"
-                    | "mp4"
-                    | "avi"
-                    | "mov"
-                    | "woff"
-                    | "woff2"
-                    | "ttf"
-                    | "eot"
+                // Executables and libraries
+                "exe" | "dll" | "so" | "dylib" | "a" | "o" | "obj" | "bin"
+                    // Data files
+                    | "dat" | "db" | "sqlite" | "sqlite3"
+                    // Images
+                    | "png" | "jpg" | "jpeg" | "gif" | "ico" | "svg" | "bmp" | "tiff" | "webp"
+                    // Documents
+                    | "pdf" | "doc" | "docx" | "xls" | "xlsx" | "ppt" | "pptx"
+                    // Archives
+                    | "zip" | "tar" | "gz" | "bz2" | "xz" | "rar" | "7z" | "tgz"
+                    // Media
+                    | "mp3" | "mp4" | "avi" | "mov" | "mkv" | "wav" | "flac" | "ogg" | "webm"
+                    // Fonts
+                    | "woff" | "woff2" | "ttf" | "eot" | "otf"
+                    // Python compiled
+                    | "pyc" | "pyo" | "pyd"
+                    // Java compiled
+                    | "class" | "jar" | "war" | "ear"
+                    // .NET compiled
+                    | "pdb"
+                    // Gettext compiled
+                    | "mo"
+                    // Node/npm
+                    | "node"
+                    // Misc binary
+                    | "wasm"
             ) {
                 return true;
             }
