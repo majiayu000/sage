@@ -47,6 +47,7 @@ tracing-subscriber = { workspace = true }
 # Utilities
 dirs = { workspace = true }
 chrono = { workspace = true }
+uuid = { workspace = true }
 
 # Signal handling
 signal-hook = { workspace = true }

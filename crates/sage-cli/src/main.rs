@@ -50,6 +50,7 @@
 mod claude_mode;
 mod commands;
 mod console;
+mod ipc;
 mod progress;
 mod signal_handler;
 mod ui_backend;
@@ -385,6 +386,29 @@ enum Commands {
         #[arg(long)]
         non_interactive: bool,
     },
+
+    /// Run as IPC backend for Modern UI (internal use)
+    ///
+    /// This command starts the agent in IPC mode, communicating via stdin/stdout
+    /// using JSON-Lines protocol. This is used by the Modern UI (Node.js/Ink)
+    /// when it spawns Sage as a subprocess.
+    ///
+    /// You typically don't need to run this directly - use `sage interactive --modern-ui`
+    /// instead, which will automatically manage the IPC backend.
+    ///
+    /// Protocol:
+    ///   - Requests: JSON objects on stdin (one per line)
+    ///   - Events: JSON objects on stdout (one per line)
+    ///
+    /// Examples:
+    ///   sage ipc                              # Start IPC server with default config
+    ///   sage ipc --config-file custom.json   # Use custom config
+    #[command(verbatim_doc_comment)]
+    Ipc {
+        /// Path to configuration file
+        #[arg(long, default_value = "sage_config.json")]
+        config_file: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -597,6 +621,10 @@ async fn main() -> SageResult<()> {
                 non_interactive,
             })
             .await
+        }
+
+        Some(Commands::Ipc { config_file }) => {
+            ipc::run_ipc_mode(Some(&config_file)).await
         }
     }
 }

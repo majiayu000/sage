@@ -559,4 +559,9 @@ impl ReactiveExecutionManager {
             .continue_conversation(&dummy_previous, user_input)
             .await
     }
+
+    /// Get tool schemas from the underlying agent
+    pub fn get_tool_schemas(&self) -> Vec<crate::tools::types::ToolSchema> {
+        self.agent.get_tool_schemas()
+    }
 }
