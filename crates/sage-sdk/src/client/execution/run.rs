@@ -95,7 +95,8 @@ impl SageAgentSdk {
         let max_steps = options.max_steps.or(self.config.max_steps);
         let exec_options = ExecutionOptions::default()
             .with_mode(ExecutionMode::interactive())
-            .with_max_steps(max_steps);
+            .with_max_steps(max_steps)
+            .with_working_directory(&working_dir);
 
         // Create unified executor
         let mut executor = UnifiedExecutor::with_options(self.config.clone(), exec_options)?;
