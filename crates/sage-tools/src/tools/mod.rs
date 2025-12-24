@@ -49,7 +49,7 @@ pub mod network {
 }
 
 // Re-export all tools for easy access
-// Note: JsonEditTool, CodebaseRetrievalTool, MultiEditTool are Sage-specific and currently disabled
+// Note: JsonEditTool, MultiEditTool are Sage-specific and currently disabled
 pub use diagnostics::{
     DiagnosticsTool, LearnTool, LearningPatternsTool, RememberTool, RenderMermaidTool,
     SearchUntruncatedTool, SessionNotesTool, ViewRangeUntruncatedTool, get_global_learning_engine,
@@ -57,7 +57,7 @@ pub use diagnostics::{
     init_global_learning_engine, init_global_memory_manager,
 };
 pub use extensions::{SkillTool, SlashCommandTool};
-pub use file_ops::{EditTool, GlobTool, GrepTool, NotebookEditTool, ReadTool, WriteTool};
+pub use file_ops::{CodebaseRetrievalTool, EditTool, GlobTool, GrepTool, NotebookEditTool, ReadTool, WriteTool};
 pub use infrastructure::{CloudTool, KubernetesTool, TerraformTool};
 pub use interaction::AskUserQuestionTool;
 pub use monitoring::{LogAnalyzerTool, TestGeneratorTool};
@@ -94,7 +94,8 @@ pub fn get_default_tools() -> Vec<Arc<dyn Tool>> {
         Arc::new(GlobTool::new()),
         Arc::new(GrepTool::new()),
         Arc::new(NotebookEditTool::new()),
-        // Disabled Sage-specific tools: JsonEditTool, CodebaseRetrievalTool, MultiEditTool
+        Arc::new(CodebaseRetrievalTool::new()), // Smart codebase search
+        // Disabled Sage-specific tools: JsonEditTool, MultiEditTool
 
         // Process tools
         Arc::new(BashTool::new()),
@@ -157,7 +158,8 @@ pub fn get_file_ops_tools() -> Vec<Arc<dyn Tool>> {
         Arc::new(GlobTool::new()),
         Arc::new(GrepTool::new()),
         Arc::new(NotebookEditTool::new()),
-        // Disabled Sage-specific tools: JsonEditTool, CodebaseRetrievalTool, MultiEditTool
+        Arc::new(CodebaseRetrievalTool::new()),
+        // Disabled Sage-specific tools: JsonEditTool, MultiEditTool
     ]
 }
 

@@ -74,7 +74,7 @@ impl SubAgentRunner {
         Ok(Self {
             llm_client,
             all_tools: tools,
-            max_steps: 20, // Default max steps for subagents
+            max_steps: usize::MAX, // No limit by default
         })
     }
 

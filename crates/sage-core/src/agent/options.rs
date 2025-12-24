@@ -16,7 +16,7 @@
 //!
 //! ```ignore
 //! let options = ExecutionOptions::interactive()
-//!     .with_max_steps(100)
+//!     .with_step_limit(200)  // Optional: set a step limit
 //!     .with_execution_timeout(Duration::from_secs(3600))
 //!     .with_trajectory(true);
 //!
@@ -224,7 +224,7 @@ impl Default for ExecutionOptions {
     fn default() -> Self {
         Self {
             mode: ExecutionMode::Interactive,
-            max_steps: Some(100), // Default limit to prevent infinite loops
+            max_steps: None, // No limit by default - use CLI flag to set limit
             execution_timeout: None,
             prompt_timeout: None,
             record_trajectory: false,

@@ -135,7 +135,7 @@ impl SubAgentExecutor {
             registry,
             llm_client,
             all_tools: tools,
-            max_steps: 50, // Default max steps
+            max_steps: usize::MAX, // No limit by default
         }
     }
 

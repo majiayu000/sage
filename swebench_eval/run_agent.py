@@ -87,8 +87,8 @@ class SageEvaluator:
         self,
         sage_binary: str = None,
         work_dir: str = None,
-        max_steps: int = 25,
-        timeout: int = 600,
+        max_steps: int = 0,  # 0 = unlimited (no step limit)
+        timeout: int = 900,  # Increased timeout for complex tasks
         max_retries: int = 1,
     ):
         self.sage_binary = sage_binary or self._find_sage_binary()
@@ -390,14 +390,14 @@ def main():
     parser.add_argument(
         "--max-steps",
         type=int,
-        default=25,
-        help="Maximum steps for agent (default: 25)",
+        default=0,
+        help="Maximum steps for agent (0 = unlimited, default: 0)",
     )
     parser.add_argument(
         "--timeout",
         type=int,
-        default=600,
-        help="Timeout per instance in seconds (default: 600)",
+        default=900,
+        help="Timeout per instance in seconds (default: 900)",
     )
     parser.add_argument(
         "--max-retries",

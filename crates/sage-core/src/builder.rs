@@ -410,7 +410,7 @@ impl SageBuilder {
             trajectory_recorder,
             mcp_registry,
             config: self.config.clone(),
-            max_steps: self.max_steps.unwrap_or(20),
+            max_steps: self.max_steps.unwrap_or(u32::MAX), // No limit by default
             working_dir: self.working_dir.clone(),
         })
     }

@@ -80,7 +80,7 @@ impl BaseAgent {
             llm_client,
             tool_executor,
             trajectory_recorder: None,
-            max_steps: 20,
+            max_steps: u32::MAX, // No limit by default
             animation_manager: AnimationManager::new(),
         })
     }

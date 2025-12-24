@@ -181,7 +181,7 @@ impl SageRpcImpl {
         Ok(ConfigInfo {
             provider: config.llm.provider.clone(),
             model: config.llm.model.clone(),
-            max_steps: config.max_steps.unwrap_or(50),
+            max_steps: config.max_steps.unwrap_or(u32::MAX), // No limit by default
             working_directory: config.working_directory
                 .as_ref()
                 .map(|p| p.to_string_lossy().to_string())
