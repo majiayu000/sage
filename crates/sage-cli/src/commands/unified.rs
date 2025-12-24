@@ -157,16 +157,21 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
     }
 
     // Set up session recording - always enabled, stored in ~/.sage/projects/{cwd}/
-    if config.trajectory.is_enabled() {
+    let session_recorder = if config.trajectory.is_enabled() {
         match SessionRecorder::new(&working_dir) {
             Ok(recorder) => {
-                executor.set_session_recorder(Arc::new(Mutex::new(recorder)));
+                let recorder = Arc::new(Mutex::new(recorder));
+                executor.set_session_recorder(recorder.clone());
+                Some(recorder)
             }
             Err(e) => {
                 console.warn(&format!("Failed to initialize session recorder: {}", e));
+                None
             }
         }
-    }
+    } else {
+        None
+    };
 
     // Set up input channel for interactive mode
     let verbose = args.verbose;
@@ -199,7 +204,15 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
 
     // Display results
     console.print_separator();
-    display_outcome(&console, &outcome, duration);
+
+    // Get session file path before displaying outcome
+    let session_path = if let Some(recorder) = &session_recorder {
+        Some(recorder.lock().await.file_path().to_path_buf())
+    } else {
+        None
+    };
+
+    display_outcome(&console, &outcome, duration, session_path.as_ref());
 
     Ok(())
 }
@@ -307,6 +320,7 @@ fn display_outcome(
     console: &CliConsole,
     outcome: &ExecutionOutcome,
     duration: std::time::Duration,
+    session_path: Option<&PathBuf>,
 ) {
     match outcome {
         ExecutionOutcome::Success(_) => {
@@ -342,15 +356,15 @@ fn display_outcome(
         }
     }
 
-    console.info(&format!("Execution time: {:.2}s", duration.as_secs_f64()));
-    console.info(&format!(
-        "Steps executed: {}",
-        outcome.execution().steps.len()
-    ));
+    // Always show key execution stats
+    println!("ℹ Execution time: {:.2}s", duration.as_secs_f64());
+    println!("ℹ Steps: {}", outcome.execution().steps.len());
+    println!("ℹ Tokens: {}", outcome.execution().total_usage.total_tokens);
 
-    // Show token usage
-    let usage = &outcome.execution().total_usage;
-    console.info(&format!("Total tokens: {}", usage.total_tokens));
+    // Show session file path if available
+    if let Some(path) = session_path {
+        println!("ℹ Session: {}", path.display());
+    }
 
     // Show final result if available
     if let Some(final_result) = &outcome.execution().final_result {

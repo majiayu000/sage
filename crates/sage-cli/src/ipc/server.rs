@@ -2,14 +2,21 @@
 //!
 //! This module implements the Rust side of the IPC communication,
 //! receiving requests from stdin and sending events to stdout.
+//!
+//! # Architecture
+//!
+//! The IPC Server uses `UnifiedExecutor` - the same execution engine used by
+//! the CLI. This ensures consistent behavior across all interfaces and avoids
+//! duplicating execution logic.
 
 use super::protocol::{
     ChatParams, ConfigInfo, IpcEvent, IpcRequest, ToolCallInfo, ToolInfo, ToolResultInfo,
 };
+use sage_core::agent::{ExecutionMode, ExecutionOptions, ExecutionOutcome, UnifiedExecutor};
 use sage_core::config::Config;
 use sage_core::error::{SageError, SageResult};
 use sage_core::tools::types::ToolSchema;
-use sage_core::ReactiveExecutionManager;
+use sage_core::types::TaskMetadata;
 use sage_tools::get_default_tools;
 use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
@@ -22,7 +29,7 @@ use uuid::Uuid;
 /// IPC Server that handles communication with Node.js UI
 pub struct IpcServer {
     config: Config,
-    execution_manager: Arc<Mutex<Option<ReactiveExecutionManager>>>,
+    executor: Arc<Mutex<Option<UnifiedExecutor>>>,
     event_tx: mpsc::UnboundedSender<IpcEvent>,
 }
 
@@ -34,21 +41,32 @@ impl IpcServer {
         Ok((
             Self {
                 config,
-                execution_manager: Arc::new(Mutex::new(None)),
+                executor: Arc::new(Mutex::new(None)),
                 event_tx,
             },
             event_rx,
         ))
     }
 
-    /// Initialize the execution manager lazily
-    async fn ensure_execution_manager(&self) -> SageResult<()> {
-        let mut manager = self.execution_manager.lock().await;
-        if manager.is_none() {
-            let mut mgr = ReactiveExecutionManager::new(self.config.clone())?;
-            // Register default tools - this is critical for tool execution!
-            mgr.register_tools(get_default_tools());
-            *manager = Some(mgr);
+    /// Initialize the unified executor lazily
+    async fn ensure_executor(&self) -> SageResult<()> {
+        let mut executor = self.executor.lock().await;
+        if executor.is_none() {
+            // Create execution options for interactive mode
+            let options = ExecutionOptions::default()
+                .with_mode(ExecutionMode::non_interactive()); // IPC handles interaction
+
+            let mut exec = UnifiedExecutor::with_options(self.config.clone(), options)?;
+
+            // Register default tools - same as unified.rs
+            exec.register_tools(get_default_tools());
+
+            // Initialize sub-agent support
+            if let Err(e) = exec.init_subagent_support() {
+                eprintln!("[IPC] Warning: Failed to initialize sub-agent support: {}", e);
+            }
+
+            *executor = Some(exec);
         }
         Ok(())
     }
@@ -73,40 +91,54 @@ impl IpcServer {
             request_id: request_id.clone(),
         });
 
-        // Ensure execution manager is initialized
-        self.ensure_execution_manager().await?;
+        // Ensure executor is initialized
+        self.ensure_executor().await?;
 
-        // Execute the chat
-        let mut manager = self.execution_manager.lock().await;
-        let manager = manager
+        // Get working directory
+        let working_dir = params
+            .working_dir
+            .unwrap_or_else(|| ".".to_string());
+
+        // Create task metadata
+        let task = TaskMetadata::new(&params.message, &working_dir);
+
+        // Execute using UnifiedExecutor
+        let mut executor_guard = self.executor.lock().await;
+        let executor = executor_guard
             .as_mut()
-            .ok_or_else(|| SageError::agent("Execution manager not initialized".to_string()))?;
+            .ok_or_else(|| SageError::agent("Executor not initialized".to_string()))?;
 
-        match manager.interactive_mode(&params.message).await {
-            Ok(response) => {
-                // Send tool events
-                for (i, tool_call) in response.tool_calls.iter().enumerate() {
-                    let tool_id = format!("{}-tool-{}", request_id, i);
+        match executor.execute(task).await {
+            Ok(outcome) => {
+                // Extract information from outcome
+                let execution = outcome.execution();
 
-                    // Tool started
-                    self.send_event(IpcEvent::ToolStarted {
-                        request_id: request_id.clone(),
-                        tool_id: tool_id.clone(),
-                        tool_name: tool_call.name.clone(),
-                        args: Some(
-                            serde_json::to_value(&tool_call.arguments).unwrap_or_default(),
-                        ),
-                    });
+                // Send tool events for each step
+                for step in &execution.steps {
+                    // Send tool started/completed events
+                    for tool_call in &step.tool_calls {
+                        let tool_id = format!("{}-{}", request_id, tool_call.id);
 
-                    // Tool completed (with result if available)
-                    if let Some(result) = response.tool_results.get(i) {
-                        self.send_event(IpcEvent::ToolCompleted {
+                        self.send_event(IpcEvent::ToolStarted {
                             request_id: request_id.clone(),
                             tool_id: tool_id.clone(),
-                            success: result.success,
-                            output: result.output.clone(),
-                            error: result.error.clone(),
-                            duration_ms: result
+                            tool_name: tool_call.name.clone(),
+                            args: Some(
+                                serde_json::to_value(&tool_call.arguments).unwrap_or_default(),
+                            ),
+                        });
+                    }
+
+                    for tool_result in &step.tool_results {
+                        let tool_id = format!("{}-{}", request_id, tool_result.call_id);
+
+                        self.send_event(IpcEvent::ToolCompleted {
+                            request_id: request_id.clone(),
+                            tool_id,
+                            success: tool_result.success,
+                            output: tool_result.output.clone(),
+                            error: tool_result.error.clone(),
+                            duration_ms: tool_result
                                 .metadata
                                 .get("duration_ms")
                                 .and_then(|v| v.as_u64())
@@ -115,43 +147,53 @@ impl IpcServer {
                     }
                 }
 
+                // Get final content
+                let content = execution.final_result.clone().unwrap_or_default();
+
                 // Send LLM done event
+                let tool_calls: Vec<ToolCallInfo> = execution
+                    .steps
+                    .iter()
+                    .flat_map(|s| &s.tool_calls)
+                    .map(|tc| ToolCallInfo {
+                        id: tc.id.clone(),
+                        name: tc.name.clone(),
+                        args: tc.arguments.clone(),
+                    })
+                    .collect();
+
                 self.send_event(IpcEvent::LlmDone {
                     request_id: request_id.clone(),
-                    content: response.content.clone(),
-                    tool_calls: response
-                        .tool_calls
-                        .iter()
-                        .map(|tc| ToolCallInfo {
-                            id: tc.id.clone(),
-                            name: tc.name.clone(),
-                            args: tc.arguments.clone(),
-                        })
-                        .collect(),
+                    content: content.clone(),
+                    tool_calls,
                 });
 
                 // Send final completion event
+                let tool_results: Vec<ToolResultInfo> = execution
+                    .steps
+                    .iter()
+                    .flat_map(|s| &s.tool_results)
+                    .map(|r| ToolResultInfo {
+                        tool_id: r.call_id.clone(),
+                        tool_name: r.tool_name.clone(),
+                        success: r.success,
+                        output: r.output.clone(),
+                        error: r.error.clone(),
+                        duration_ms: r
+                            .metadata
+                            .get("duration_ms")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0),
+                    })
+                    .collect();
+
+                let completed = matches!(outcome, ExecutionOutcome::Success(_));
+
                 self.send_event(IpcEvent::ChatCompleted {
                     request_id,
-                    content: response.content,
-                    completed: response.completed,
-                    tool_results: response
-                        .tool_results
-                        .iter()
-                        .enumerate()
-                        .map(|(i, r)| ToolResultInfo {
-                            tool_id: format!("tool-{}", i),
-                            tool_name: r.tool_name.clone(),
-                            success: r.success,
-                            output: r.output.clone(),
-                            error: r.error.clone(),
-                            duration_ms: r
-                                .metadata
-                                .get("duration_ms")
-                                .and_then(|v| v.as_u64())
-                                .unwrap_or(0),
-                        })
-                        .collect(),
+                    content,
+                    completed,
+                    tool_results,
                     duration_ms: start_time.elapsed().as_millis() as u64,
                 });
             }
@@ -190,19 +232,15 @@ impl IpcServer {
 
     /// Handle list tools request
     async fn handle_list_tools(&self) -> SageResult<()> {
-        self.ensure_execution_manager().await?;
-
-        let manager = self.execution_manager.lock().await;
-        let tools: Vec<ToolInfo> = if let Some(mgr) = manager.as_ref() {
-            // Get tool schemas from the agent
-            let schemas = mgr.get_tool_schemas();
-            schemas
-                .iter()
-                .map(|schema| schema_to_tool_info(schema))
-                .collect()
-        } else {
-            Vec::new()
-        };
+        // Get tool schemas directly from the default tools
+        // This doesn't require initializing the executor
+        let tools: Vec<ToolInfo> = get_default_tools()
+            .iter()
+            .map(|tool| {
+                let schema = tool.schema();
+                schema_to_tool_info(&schema)
+            })
+            .collect();
 
         self.send_event(IpcEvent::Tools { tools });
 
@@ -243,7 +281,7 @@ impl IpcServer {
             }
             "cancel" => {
                 let task_id = request.get_task_id().unwrap_or_default();
-                // TODO: Implement task cancellation
+                // TODO: Implement task cancellation using interrupt manager
                 self.send_event(IpcEvent::Error {
                     request_id: Some(task_id),
                     code: "not_implemented".to_string(),
@@ -262,23 +300,18 @@ impl IpcServer {
         }
     }
 
-    /// Get tool schemas (delegate to execution manager)
+    /// Get tool schemas
     #[allow(dead_code)]
     pub async fn get_tool_schemas(&self) -> Vec<ToolSchema> {
-        if self.ensure_execution_manager().await.is_ok() {
-            let manager = self.execution_manager.lock().await;
-            if let Some(mgr) = manager.as_ref() {
-                return mgr.get_tool_schemas();
-            }
-        }
-        Vec::new()
+        get_default_tools()
+            .iter()
+            .map(|tool| tool.schema())
+            .collect()
     }
 }
 
 /// Convert a ToolSchema to ToolInfo for IPC protocol
 fn schema_to_tool_info(schema: &ToolSchema) -> ToolInfo {
-    // The schema.parameters is a JSON Value with JSON Schema format
-    // We'll extract parameter info from it
     let parameters = extract_parameters_from_schema(&schema.parameters);
 
     ToolInfo {
