@@ -9,6 +9,12 @@ import { spawn, ChildProcess } from 'child_process';
 import { EventEmitter } from 'events';
 import * as readline from 'readline';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
+import { existsSync } from 'fs';
+
+// ESM compatible __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Request types
 export interface ChatRequest {
@@ -174,16 +180,25 @@ export class IpcClient extends EventEmitter {
   private findBinaryPath(): string {
     // Try common locations
     const candidates = [
-      // Development: relative to ui directory
+      // Development: relative to ui directory (dist/utils -> ../../../../target)
+      path.join(__dirname, '../../../../../target/debug/sage'),
+      path.join(__dirname, '../../../../../target/release/sage'),
+      // Also try from src directory structure
       path.join(__dirname, '../../../../target/debug/sage'),
       path.join(__dirname, '../../../../target/release/sage'),
       // Installed globally
       'sage',
     ];
 
-    // For now, use the first one (development path)
-    // In production, we'd check which one exists
-    return candidates[0];
+    // Find the first existing binary
+    for (const candidate of candidates) {
+      if (candidate === 'sage' || existsSync(candidate)) {
+        return candidate;
+      }
+    }
+
+    // Fallback to 'sage' and hope it's in PATH
+    return 'sage';
   }
 
   /**
