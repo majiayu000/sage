@@ -3,9 +3,9 @@
 //! Provides security validation to prevent SSRF attacks and other
 //! network-based vulnerabilities.
 
-use std::net::{IpAddr, ToSocketAddrs};
+use std::net::IpAddr;
 
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 
 /// Validate URL to prevent SSRF attacks
 ///
@@ -15,8 +15,7 @@ use anyhow::{Result, anyhow};
 /// - No localhost or internal hostnames
 /// - No private IP addresses
 /// - No cloud metadata endpoints
-pub fn validate_url_security(url_str: &str) -> Result<()> {
-    // Parse the URL
+pub async fn validate_url_security(url_str: &str) -> Result<()> {
     let url = url::Url::parse(url_str).map_err(|e| anyhow!("Invalid URL format: {}", e))?;
 
     // Only allow http and https schemes
@@ -30,7 +29,6 @@ pub fn validate_url_security(url_str: &str) -> Result<()> {
         }
     }
 
-    // Get the host
     let host = url
         .host_str()
         .ok_or_else(|| anyhow!("URL must have a host"))?;
@@ -54,8 +52,8 @@ pub fn validate_url_security(url_str: &str) -> Result<()> {
         ));
     }
 
-    // Try to resolve the hostname and check if it's a private IP
-    if let Ok(addrs) = format!("{}:80", host).to_socket_addrs() {
+    // Try to resolve the hostname asynchronously and check if it's a private IP
+    if let Ok(addrs) = tokio::net::lookup_host(format!("{}:80", host)).await {
         for addr in addrs {
             if is_private_ip(&addr.ip()) {
                 return Err(anyhow!(
@@ -122,45 +120,45 @@ mod tests {
     use super::*;
     use std::net::Ipv4Addr;
 
-    #[test]
-    fn test_url_validation_allows_valid_urls() {
-        assert!(validate_url_security("https://example.com/api").is_ok());
-        assert!(validate_url_security("http://api.github.com/users").is_ok());
-        assert!(validate_url_security("https://httpbin.org/get").is_ok());
+    #[tokio::test]
+    async fn test_url_validation_allows_valid_urls() {
+        assert!(validate_url_security("https://example.com/api").await.is_ok());
+        assert!(validate_url_security("http://api.github.com/users").await.is_ok());
+        assert!(validate_url_security("https://httpbin.org/get").await.is_ok());
     }
 
-    #[test]
-    fn test_url_validation_blocks_localhost() {
-        assert!(validate_url_security("http://localhost/api").is_err());
-        assert!(validate_url_security("http://127.0.0.1/api").is_err());
-        assert!(validate_url_security("http://localhost:8080/api").is_err());
+    #[tokio::test]
+    async fn test_url_validation_blocks_localhost() {
+        assert!(validate_url_security("http://localhost/api").await.is_err());
+        assert!(validate_url_security("http://127.0.0.1/api").await.is_err());
+        assert!(validate_url_security("http://localhost:8080/api").await.is_err());
     }
 
-    #[test]
-    fn test_url_validation_blocks_internal_hostnames() {
-        assert!(validate_url_security("http://server.local/api").is_err());
-        assert!(validate_url_security("http://db.internal/api").is_err());
-        assert!(validate_url_security("http://service.localhost/api").is_err());
+    #[tokio::test]
+    async fn test_url_validation_blocks_internal_hostnames() {
+        assert!(validate_url_security("http://server.local/api").await.is_err());
+        assert!(validate_url_security("http://db.internal/api").await.is_err());
+        assert!(validate_url_security("http://service.localhost/api").await.is_err());
     }
 
-    #[test]
-    fn test_url_validation_blocks_metadata_endpoints() {
-        assert!(validate_url_security("http://169.254.169.254/latest/meta-data/").is_err());
-        assert!(validate_url_security("http://metadata.google.internal/computeMetadata/").is_err());
+    #[tokio::test]
+    async fn test_url_validation_blocks_metadata_endpoints() {
+        assert!(validate_url_security("http://169.254.169.254/latest/meta-data/").await.is_err());
+        assert!(validate_url_security("http://metadata.google.internal/computeMetadata/").await.is_err());
     }
 
-    #[test]
-    fn test_url_validation_blocks_non_http_schemes() {
-        assert!(validate_url_security("file:///etc/passwd").is_err());
-        assert!(validate_url_security("ftp://example.com/file").is_err());
-        assert!(validate_url_security("gopher://example.com/").is_err());
+    #[tokio::test]
+    async fn test_url_validation_blocks_non_http_schemes() {
+        assert!(validate_url_security("file:///etc/passwd").await.is_err());
+        assert!(validate_url_security("ftp://example.com/file").await.is_err());
+        assert!(validate_url_security("gopher://example.com/").await.is_err());
     }
 
-    #[test]
-    fn test_url_validation_blocks_private_ips() {
-        assert!(validate_url_security("http://10.0.0.1/api").is_err());
-        assert!(validate_url_security("http://192.168.1.1/api").is_err());
-        assert!(validate_url_security("http://172.16.0.1/api").is_err());
+    #[tokio::test]
+    async fn test_url_validation_blocks_private_ips() {
+        assert!(validate_url_security("http://10.0.0.1/api").await.is_err());
+        assert!(validate_url_security("http://192.168.1.1/api").await.is_err());
+        assert!(validate_url_security("http://172.16.0.1/api").await.is_err());
     }
 
     #[test]
@@ -175,9 +173,7 @@ mod tests {
         assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(172, 31, 255, 255))));
 
         // Link-local
-        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(
-            169, 254, 169, 254
-        ))));
+        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(169, 254, 1, 1))));
 
         // Public IPs should return false
         assert!(!is_private_ip(&IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8))));
