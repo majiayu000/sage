@@ -282,6 +282,16 @@ impl ClaudeStyleAgent {
         self.batch_executor.get_tool_schemas()
     }
 
+    /// Register a tool with the batch executor
+    pub fn register_tool(&mut self, tool: std::sync::Arc<dyn crate::tools::base::Tool>) {
+        self.batch_executor.register_tool(tool);
+    }
+
+    /// Register multiple tools with the batch executor
+    pub fn register_tools(&mut self, tools: Vec<std::sync::Arc<dyn crate::tools::base::Tool>>) {
+        self.batch_executor.register_tools(tools);
+    }
+
     /// Check if we can continue execution (budget and step limits)
     fn can_continue(&self) -> Result<(), SageError> {
         // Check step limit (None = unlimited)
@@ -563,5 +573,15 @@ impl ReactiveExecutionManager {
     /// Get tool schemas from the underlying agent
     pub fn get_tool_schemas(&self) -> Vec<crate::tools::types::ToolSchema> {
         self.agent.get_tool_schemas()
+    }
+
+    /// Register a tool with the underlying agent
+    pub fn register_tool(&mut self, tool: std::sync::Arc<dyn crate::tools::base::Tool>) {
+        self.agent.register_tool(tool);
+    }
+
+    /// Register multiple tools with the underlying agent
+    pub fn register_tools(&mut self, tools: Vec<std::sync::Arc<dyn crate::tools::base::Tool>>) {
+        self.agent.register_tools(tools);
     }
 }

@@ -10,6 +10,7 @@ use sage_core::config::Config;
 use sage_core::error::{SageError, SageResult};
 use sage_core::tools::types::ToolSchema;
 use sage_core::ReactiveExecutionManager;
+use sage_tools::get_default_tools;
 use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -44,7 +45,10 @@ impl IpcServer {
     async fn ensure_execution_manager(&self) -> SageResult<()> {
         let mut manager = self.execution_manager.lock().await;
         if manager.is_none() {
-            *manager = Some(ReactiveExecutionManager::new(self.config.clone())?);
+            let mut mgr = ReactiveExecutionManager::new(self.config.clone())?;
+            // Register default tools - this is critical for tool execution!
+            mgr.register_tools(get_default_tools());
+            *manager = Some(mgr);
         }
         Ok(())
     }

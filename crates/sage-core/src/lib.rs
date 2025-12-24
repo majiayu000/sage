@@ -15,7 +15,6 @@
 //!
 //! The [`agent`] module provides the core agent execution engine:
 //!
-//! - [`Agent`] - Main trait for agent implementations
 //! - [`AgentExecution`] - Tracks execution state across multiple steps
 //! - [`ExecutionMode`] - Controls interactive vs. non-interactive execution
 //! - [`UnifiedExecutor`] - Unified execution loop (Claude Code style)
@@ -60,14 +59,14 @@
 //! For high-level usage, prefer using the [`sage-sdk`](https://docs.rs/sage-sdk) crate.
 //! This core library is intended for advanced use cases and custom integrations.
 //!
-//! ## Basic Agent Creation
+//! ## Basic Executor Creation
 //!
 //! ```no_run
-//! use sage_core::{agent::base::BaseAgent, config::Config};
+//! use sage_core::{agent::UnifiedExecutor, config::Config};
 //!
-//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! # fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let config = Config::default();
-//! let agent = BaseAgent::new(config)?;
+//! let executor = UnifiedExecutor::new(config)?;
 //! # Ok(())
 //! # }
 //! ```
@@ -157,7 +156,7 @@ pub mod workspace;
 
 // Re-export commonly used types
 pub use agent::{
-    Agent, AgentExecution, AgentLifecycle, AgentState, AgentStep, AutoResponse, ClaudeStyleAgent,
+    AgentExecution, AgentLifecycle, AgentState, AgentStep, AutoResponse, ClaudeStyleAgent,
     ExecutionMode, ExecutionOptions, HookResult, LifecycleContext, LifecycleError, LifecycleHook,
     LifecycleHookRegistry, LifecycleManager, LifecyclePhase, LifecycleResult, LoggingHook,
     MetricsHook, ReactiveAgent, ReactiveExecutionManager, ReactiveResponse, UnifiedExecutor,
