@@ -24,9 +24,6 @@ impl UnifiedExecutor {
         tool_schemas: &[ToolSchema],
         task_scope: &crate::interrupt::TaskScope,
     ) -> SageResult<(AgentStep, Vec<LlmMessage>)> {
-        // Print step separator
-        DisplayManager::print_separator(&format!("Step {} - AI Thinking", step_number), "blue");
-
         let mut step = AgentStep::new(step_number, AgentState::Thinking);
 
         // Start thinking animation
