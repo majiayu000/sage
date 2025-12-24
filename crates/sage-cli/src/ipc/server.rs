@@ -399,10 +399,23 @@ pub async fn run_ipc_server(config: Config) -> SageResult<()> {
 pub async fn run_ipc_mode(config_file: Option<&str>) -> SageResult<()> {
     let config_path = config_file.unwrap_or("sage_config.json");
 
+    eprintln!("[IPC] Looking for config at: {}", config_path);
+
     let config = if std::path::Path::new(config_path).exists() {
+        eprintln!("[IPC] Config file found, loading...");
         let content = std::fs::read_to_string(config_path)?;
-        serde_json::from_str(&content)?
+        let cfg: Config = serde_json::from_str(&content)?;
+        eprintln!(
+            "[IPC] Loaded config: provider={}, has_api_key={}",
+            cfg.get_default_provider(),
+            cfg.model_providers
+                .get(cfg.get_default_provider())
+                .map(|p| p.api_key.is_some())
+                .unwrap_or(false)
+        );
+        cfg
     } else {
+        eprintln!("[IPC] Config file not found, using defaults");
         Config::default()
     };
 

@@ -44,6 +44,10 @@ export const InteractiveMode: React.FC<InteractiveModeProps> = ({ config, args }
 
     const initClient = async () => {
       try {
+        // Debug: log args
+        console.error('[UI] args.configFile:', args.configFile);
+        console.error('[UI] Full args:', JSON.stringify(args, null, 2));
+
         const client = await createIpcClient(args.configFile);
 
         if (!mounted) {

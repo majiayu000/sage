@@ -209,27 +209,30 @@ export class IpcClient extends EventEmitter {
       throw new Error('IPC client already started');
     }
 
-    const args = ['ipc'];
-    if (configFile) {
-      // Convert to absolute path if needed
-      const absoluteConfigPath = path.isAbsolute(configFile)
-        ? configFile
-        : path.resolve(process.cwd(), configFile);
-      args.push('--config-file', absoluteConfigPath);
-    }
-
     // Find project root (where sage_config.json typically lives)
     // Go up from ui directory to find the project root
-    let cwd = process.cwd();
+    let projectRoot = process.cwd();
 
     // If we're in the ui directory, go up to find the project root
-    if (cwd.includes('crates/sage-cli/ui')) {
-      cwd = path.resolve(cwd, '../../..');
+    if (projectRoot.includes('crates/sage-cli/ui')) {
+      projectRoot = path.resolve(projectRoot, '../../..');
+    }
+
+    console.error('[IPC Client] Project root:', projectRoot);
+
+    const args = ['ipc'];
+    if (configFile) {
+      // Convert to absolute path relative to project root
+      const absoluteConfigPath = path.isAbsolute(configFile)
+        ? configFile
+        : path.resolve(projectRoot, configFile);
+      console.error('[IPC Client] Config file path:', absoluteConfigPath);
+      args.push('--config-file', absoluteConfigPath);
     }
 
     this.process = spawn(this.binaryPath, args, {
       stdio: ['pipe', 'pipe', 'pipe'],
-      cwd, // Run in project root
+      cwd: projectRoot, // Run in project root
     });
 
     // Handle stderr (for debugging)
