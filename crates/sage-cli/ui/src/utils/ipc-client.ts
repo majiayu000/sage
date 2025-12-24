@@ -211,11 +211,25 @@ export class IpcClient extends EventEmitter {
 
     const args = ['ipc'];
     if (configFile) {
-      args.push('--config-file', configFile);
+      // Convert to absolute path if needed
+      const absoluteConfigPath = path.isAbsolute(configFile)
+        ? configFile
+        : path.resolve(process.cwd(), configFile);
+      args.push('--config-file', absoluteConfigPath);
+    }
+
+    // Find project root (where sage_config.json typically lives)
+    // Go up from ui directory to find the project root
+    let cwd = process.cwd();
+
+    // If we're in the ui directory, go up to find the project root
+    if (cwd.includes('crates/sage-cli/ui')) {
+      cwd = path.resolve(cwd, '../../..');
     }
 
     this.process = spawn(this.binaryPath, args, {
       stdio: ['pipe', 'pipe', 'pipe'],
+      cwd, // Run in project root
     });
 
     // Handle stderr (for debugging)
