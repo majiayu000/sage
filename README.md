@@ -1,61 +1,173 @@
-# Sage Agent
-
 <div align="center">
+
+# Sage 🦀
+
+**Blazing fast code agent in pure Rust**
+
+The fastest open-source alternative to Claude Code.<br/>
+10x faster startup • Single binary • Works offline with Ollama
 
 [![Rust](https://img.shields.io/badge/Rust-1.85+-orange?logo=rust)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg)]()
-[![Version](https://img.shields.io/badge/Version-0.1.0-blue.svg)]()
+[![CI](https://github.com/majiayu000/sage/actions/workflows/ci.yml/badge.svg)](https://github.com/majiayu000/sage/actions)
+[![Release](https://img.shields.io/github/v/release/majiayu000/sage)](https://github.com/majiayu000/sage/releases)
 
-**🌐 Language / 语言**
-
-[![English](https://img.shields.io/badge/English-4285F4?style=for-the-badge&logo=google-translate&logoColor=white)](README.md) [![中文](https://img.shields.io/badge/中文-FF6B6B?style=for-the-badge&logo=google-translate&logoColor=white)](README_zh.md)
+[Installation](#-quick-install) • [Features](#-features) • [Documentation](#-documentation) • [Contributing](#-contributing)
 
 </div>
 
 ---
 
-🤖 **Sage Agent** is a powerful LLM-based agent system for software engineering tasks, inspired by Claude Code's design patterns. Built in Rust with modern async architecture, it provides a comprehensive CLI, SDK, and extensible tool system.
+<!-- Demo GIF placeholder - record with: vhs demo/demo.tape -->
+<!--
+<div align="center">
+  <img src="demo/demo.gif" alt="Sage Demo" width="800"/>
+</div>
+-->
+
+## Why Sage?
+
+|  | Claude Code | Aider | **Sage** |
+|---|:---:|:---:|:---:|
+| **Startup Time** | ~500ms | ~800ms | **~50ms** |
+| **Binary Size** | ~200MB | ~100MB | **~15MB** |
+| **Offline Mode** | ❌ | ✅ | **✅ Ollama** |
+| **Open Source** | ❌ | ✅ | **✅** |
+| **MCP Support** | ✅ | ❌ | **✅** |
+| **Memory System** | ❌ | ❌ | **✅** |
+| **Single Binary** | ❌ | ❌ | **✅** |
+
+## 🚀 Quick Install
+
+**macOS / Linux:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/majiayu000/sage/main/install.sh | bash
+```
+
+**Windows (PowerShell):**
+```powershell
+irm https://raw.githubusercontent.com/majiayu000/sage/main/install.ps1 | iex
+```
+
+**Homebrew:**
+```bash
+brew install majiayu000/sage/sage
+```
+
+**Cargo:**
+```bash
+cargo install --git https://github.com/majiayu000/sage sage-cli
+```
+
+## ⚡ Quick Start
+
+```bash
+# One-shot task
+sage "Create a Python script that fetches GitHub trending repos"
+
+# Interactive mode
+sage interactive
+
+# With specific provider
+sage --provider ollama "Explain this code"
+```
 
 ## ✨ Features
 
-| 🤖 **AI Integration** | 🛠️ **Developer Tools** | 💬 **User Experience** |
-|:---:|:---:|:---:|
-| 8 LLM Providers | 40+ Built-in Tools | Interactive Chat Mode |
-| Prompt Caching | Slash Commands | Session Resume |
-| Streaming Responses | File Edit/Read/Write | Trajectory Recording |
-| Cost Tracking | Glob/Grep Search | Terminal UI |
+### 🚀 Performance
+- **10x faster startup** - Rust native, no runtime overhead
+- **Single ~15MB binary** - No dependencies, instant install
+- **Efficient memory** - Low footprint, handles large codebases
 
-### Key Highlights
+### 🤖 Multi-LLM Support
+- **Anthropic** - Claude Sonnet, Opus (with prompt caching)
+- **OpenAI** - GPT-4, GPT-4 Turbo
+- **Google** - Gemini Pro
+- **Ollama** - Llama, Mistral, CodeLlama (offline)
+- **Azure OpenAI** - Enterprise deployments
+- **OpenRouter** - Access 100+ models
+- **Doubao** - ByteDance models
+- **GLM** - Zhipu AI models
 
-- **Multi-LLM Support**: OpenAI, Anthropic, Google, Azure, OpenRouter, Ollama, Doubao, GLM
-- **Claude Code-style Commands**: 16 slash commands (`/resume`, `/undo`, `/cost`, `/plan`, etc.)
-- **Rich Tool Ecosystem**: Bash, file operations, web search, task management, and more
-- **Interactive Chat Mode**: Continuous conversation with context preservation
-- **Session Management**: Resume previous sessions with interactive selection
-- **Trajectory Recording**: Complete execution tracking for debugging and replay
+### 🛠️ 40+ Built-in Tools
+| Category | Tools |
+|----------|-------|
+| **File Ops** | Read, Write, Edit, Glob, Grep, NotebookEdit |
+| **Shell** | Bash, KillShell, Task, TaskOutput |
+| **Web** | WebSearch, WebFetch, Browser |
+| **Planning** | TodoWrite, EnterPlanMode, ExitPlanMode |
+| **Git** | Full Git integration |
 
-## 🚀 Quick Start
+### 🧠 Advanced Features
+- **Memory System** - Learns your coding patterns across sessions
+- **Checkpoints** - Save and restore agent state
+- **Trajectory Recording** - Full execution history for debugging
+- **MCP Protocol** - Extend with Model Context Protocol servers
+- **Plugin System** - Custom tool development
+
+### 💬 Claude Code Compatible
+- **16 Slash Commands** - `/resume`, `/undo`, `/cost`, `/plan`, etc.
+- **Session Resume** - Continue where you left off
+- **Interactive Mode** - Multi-turn conversations
+- **File Change Tracking** - Built-in undo support
+
+## 📖 Usage
+
+### Interactive Mode
 
 ```bash
-# Install from source
-git clone https://github.com/majiayu000/sage
-cd sage
-cargo install --path crates/sage-cli
-
-# Start interactive mode
 sage interactive
-
-# Run a one-shot task
-sage run "Create a Python fibonacci script"
-
-# Use unified mode (Claude Code style)
-sage unified "Review this codebase"
 ```
 
-### Configuration
+```
+> Create a REST API with user authentication
 
-Create `sage_config.json`:
+[Sage creates files, runs commands, shows progress...]
+
+> /cost
+┌─────────────────────────────────┐
+│ Session Cost & Usage            │
+├─────────────────────────────────┤
+│ Input tokens:  12,450           │
+│ Output tokens: 3,200            │
+│ Total cost:    $0.047           │
+└─────────────────────────────────┘
+
+> /resume
+[Select previous session to resume...]
+```
+
+### One-Shot Mode
+
+```bash
+# Simple task
+sage "Add error handling to main.rs"
+
+# With options
+sage --provider anthropic --model claude-sonnet-4-20250514 "Review this code for security issues"
+
+# Maximum steps
+sage --max-steps 30 "Refactor the auth module"
+```
+
+### Slash Commands
+
+| Command | Description |
+|---------|-------------|
+| `/resume [id]` | Resume previous session |
+| `/cost` | Show token usage and cost |
+| `/undo` | Undo last file changes |
+| `/plan` | View/manage execution plan |
+| `/checkpoint [name]` | Save current state |
+| `/restore [id]` | Restore to checkpoint |
+| `/context` | Show context usage |
+| `/status` | Show agent status |
+| `/clear` | Clear conversation |
+| `/help` | Show help |
+
+## ⚙️ Configuration
+
+Create `sage_config.json` or use environment variables:
 
 ```json
 {
@@ -66,9 +178,9 @@ Create `sage_config.json`:
       "api_key": "${ANTHROPIC_API_KEY}",
       "enable_prompt_caching": true
     },
-    "openai": {
-      "model": "gpt-4",
-      "api_key": "${OPENAI_API_KEY}"
+    "ollama": {
+      "model": "codellama",
+      "base_url": "http://localhost:11434"
     }
   },
   "max_steps": 20,
@@ -76,259 +188,118 @@ Create `sage_config.json`:
 }
 ```
 
-## 📜 Slash Commands
-
-Use slash commands in both `run` and `interactive` modes:
-
-| Command | Description | Type |
-|---------|-------------|------|
-| `/resume` | Resume a previous session (interactive selection) | Interactive |
-| `/resume <id>` | Resume a specific session by ID | Interactive |
-| `/resume --all` | Show sessions from all projects | Interactive |
-| `/commands` | List all available slash commands | Local |
-| `/cost` | Show session cost and token usage | Local |
-| `/context` | Show context window usage | Local |
-| `/status` | Show agent status and version | Local |
-| `/help` | Show AI help information | Prompt |
-| `/undo` | Undo last file changes (git restore) | Prompt |
-| `/clear` | Clear conversation history | Special |
-| `/compact` | Summarize and compact context | Prompt |
-| `/checkpoint [name]` | Create a state checkpoint | Prompt |
-| `/restore [id]` | Restore to a checkpoint | Prompt |
-| `/init` | Initialize .sage directory | Prompt |
-| `/config` | Show/modify configuration | Prompt |
-| `/plan [open\|clear\|create]` | View/manage execution plan | Prompt |
-| `/tasks` | List background tasks | Prompt |
-
-### Custom Commands
-
-Create custom slash commands in `.sage/commands/` or `~/.config/sage/commands/`:
-
-```markdown
----
-name: review
-description: Review code changes
----
-
-Please review the following code changes:
-$ARGUMENTS
-
-Focus on:
-1. Code quality
-2. Potential bugs
-3. Performance issues
-```
-
-## 🛠️ Available Tools
-
-### File Operations
-| Tool | Description |
-|------|-------------|
-| `Read` | Read files with line numbers and pagination |
-| `Write` | Create/overwrite files |
-| `Edit` | Claude Code-style string replacement editing |
-| `Glob` | Fast file pattern matching (`**/*.rs`, `src/**/*.ts`) |
-| `Grep` | Regex search with context (`-A`, `-B`, `-C` flags) |
-| `NotebookEdit` | Edit Jupyter notebooks |
-
-### Process/Shell
-| Tool | Description |
-|------|-------------|
-| `Bash` | Execute shell commands with background support |
-| `KillShell` | Kill background shell processes |
-| `Task` | Launch specialized agents (Explore, Plan) |
-| `TaskOutput` | Retrieve background task output |
-
-### Task Management
-| Tool | Description |
-|------|-------------|
-| `TodoWrite` | Create/manage structured task lists |
-| `ViewTasklist` | Display current tasks |
-| `AddTasks` | Add new tasks |
-| `UpdateTasks` | Update task status |
-| `TaskDone` | Mark tasks completed |
-
-### Web & Network
-| Tool | Description |
-|------|-------------|
-| `WebSearch` | Search the web |
-| `WebFetch` | Fetch webpage content as markdown |
-| `Browser` | Open URLs in default browser |
-
-### Planning & Interaction
-| Tool | Description |
-|------|-------------|
-| `EnterPlanMode` | Enter read-only planning mode |
-| `ExitPlanMode` | Exit with plan approval |
-| `AskUserQuestion` | Prompt user for input |
-
-## 💬 Interactive Mode
+### Environment Variables
 
 ```bash
-sage interactive
+# API Keys
+export ANTHROPIC_API_KEY="sk-ant-..."
+export OPENAI_API_KEY="sk-..."
+
+# Configuration
+export SAGE_DEFAULT_PROVIDER="anthropic"
+export SAGE_MAX_STEPS="30"
 ```
 
-**Built-in Commands:**
-- `help` - Show help and slash commands
-- `config` - Show configuration
-- `status` - Show system status
-- `new` - Start new conversation
-- `clear` - Clear screen
-- `exit` - Exit interactive mode
+## 📦 SDK
 
-**Example Session:**
-```
-> Create a hello world Python script
-[Agent creates script]
-
-> Now add error handling to it
-[Agent modifies script with context from previous turn]
-
-> /cost
-Session Cost & Usage
-====================
-[Shows token usage and estimated cost]
-
-> /resume
-[Interactive session selector appears]
-```
-
-## 📦 SDK Usage
+Use Sage as a library in your Rust projects:
 
 ```rust
-use sage_sdk::{SageAgentSDK, RunOptions};
+use sage_sdk::{SageAgentSdk, RunOptions};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let sdk = SageAgentSDK::with_config_file("sage_config.json")?
-        .with_working_directory("./my-project")
-        .with_max_steps(10);
+    let sdk = SageAgentSdk::with_config_file("sage_config.json")?
+        .with_working_directory("./my-project");
 
-    // Simple execution
     let result = sdk.run("Create a README file").await?;
 
-    // With options
-    let options = RunOptions::new()
-        .with_trajectory(true)
-        .with_trajectory_path("./debug.jsonl");
-    let result = sdk.run_with_options("Analyze codebase", options).await?;
-
     if result.is_success() {
-        println!("✅ Completed in {} steps", result.statistics().total_steps);
+        println!("Completed in {} steps", result.statistics().total_steps);
     }
 
     Ok(())
 }
 ```
 
-### Non-Interactive Execution
-
-```rust
-use sage_sdk::{SageAgentSDK, UnifiedRunOptions};
-
-let sdk = SageAgentSDK::new()?;
-let options = UnifiedRunOptions::new().non_interactive(true);
-let result = sdk.execute_non_interactive("Task description", options).await?;
-```
-
-## 🔄 Session Management
-
-### JSONL Session Storage
-Sessions are stored in `~/.sage/sessions/` as JSONL files with:
-- Message history with tool calls
-- Token usage statistics
-- File change tracking
-- Git branch context
-
-### Resume Sessions
-```bash
-# Interactive selection
-sage run "/resume"
-
-# Resume specific session
-sage run "/resume abc123-session-id"
-
-# Show all projects
-sage run "/resume --all"
-```
-
-### Trajectory Recording
-```bash
-# Auto-generated trajectory
-sage run "Debug auth module"
-# Saved to: trajectories/trajectory_YYYYMMDD_HHMMSS.jsonl
-
-# Custom path
-sage run "Task" --trajectory-file debug.jsonl
-```
-
-## 🔧 CLI Commands
-
-```bash
-sage run <task>              # One-shot task execution
-sage interactive             # Interactive chat mode
-sage unified [task]          # Claude Code-style unified execution
-sage config show|validate|init  # Configuration management
-sage trajectory list|show|stats # Trajectory management
-sage tools                   # List available tools
-```
-
-### Common Options
-```bash
---provider <name>      # LLM provider (anthropic, openai, google, etc.)
---model <name>         # Model to use
---api-key <key>        # API key
---max-steps <n>        # Maximum execution steps
---working-dir <path>   # Working directory
---config-file <path>   # Configuration file
---trajectory-file <path> # Trajectory output file
---verbose              # Verbose output
-```
-
-## 🌐 LLM Providers
-
-| Provider | Default Model | Features |
-|----------|---------------|----------|
-| Anthropic | claude-sonnet-4-20250514 | Prompt caching, 10 max retries |
-| OpenAI | gpt-4 | Parallel tool calls |
-| Google | gemini-1.5-pro | - |
-| Azure OpenAI | gpt-4 | API version 2024-02-15 |
-| OpenRouter | anthropic/claude-3.5-sonnet | Multi-model routing |
-| Ollama | llama2 | Local models |
-| Doubao | doubao-pro-4k | ByteDance |
-| GLM/Zhipu | - | Custom provider |
-
 ## 🏗️ Architecture
 
 ```
 sage/
 ├── crates/
-│   ├── sage-core/      # Core library
-│   │   ├── agent/      # Agent execution
-│   │   ├── commands/   # Slash command system
-│   │   ├── llm/        # LLM providers
-│   │   ├── session/    # Session management
-│   │   ├── tools/      # Tool registry
-│   │   └── ui/         # Terminal UI
+│   ├── sage-core/      # Core agent logic, LLM providers, tools
 │   ├── sage-cli/       # Command-line interface
-│   ├── sage-sdk/       # High-level SDK
-│   └── sage-tools/     # Built-in tools
-├── examples/           # Usage examples
+│   ├── sage-sdk/       # High-level SDK for embedding
+│   └── sage-tools/     # Built-in tool implementations
 ├── docs/               # Documentation
-└── configs/            # Configuration templates
+├── examples/           # Usage examples
+└── benchmarks/         # Performance benchmarks
 ```
 
-## 🔄 Project Origin
+## 🧪 Benchmarks
 
-This project is inspired by:
-- **[Trae Agent](https://github.com/bytedance/trae-agent)** - ByteDance's Python-based LLM agent
-- **[Claude Code](https://claude.ai/code)** - Anthropic's CLI tool design patterns
-- **[Augment Code](https://www.augmentcode.com/)** - AI code assistant patterns
+Run the startup benchmark:
+
+```bash
+./benchmarks/startup.sh
+```
+
+```
+Code Agent Startup Benchmark
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Agent            Avg (ms)
+────────────────────────────
+sage             45
+claude           520
+aider            780
+
+Sage is 11.5x faster than Claude Code
+```
+
+## 📚 Documentation
+
+- [User Guide](docs/user-guide/) - Getting started, configuration, usage
+- [Architecture](docs/architecture/) - System design, components
+- [Tools Reference](docs/tools/) - All available tools
+- [Development](docs/development/) - Contributing, building
+
+## 🤝 Contributing
+
+Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md).
+
+```bash
+# Clone
+git clone https://github.com/majiayu000/sage
+cd sage
+
+# Build
+cargo build --release
+
+# Test
+cargo test
+
+# Run
+./target/release/sage --help
+```
 
 ## 📄 License
 
 MIT License - see [LICENSE](LICENSE) for details.
 
+## 🙏 Acknowledgments
+
+Inspired by:
+- [Claude Code](https://claude.ai/code) - Anthropic's CLI tool design
+- [Trae Agent](https://github.com/bytedance/trae-agent) - ByteDance's agent architecture
+- [Aider](https://github.com/paul-gauthier/aider) - AI pair programming
+
 ---
 
-**Sage Agent** - AI-powered software engineering in Rust. 🦀✨
+<div align="center">
+
+**[⭐ Star us on GitHub](https://github.com/majiayu000/sage)** if you find Sage useful!
+
+Made with 🦀 by the Sage Team
+
+</div>

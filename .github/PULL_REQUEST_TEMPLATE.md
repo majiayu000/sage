@@ -1,57 +1,45 @@
-# 📦 This Project is Archived
+## Description
 
-**Sage Agent** has been archived as of July 2025 and is **no longer accepting pull requests**.
+Brief description of the changes in this PR.
 
-## ❌ Pull Requests Not Accepted
+## Type of Change
 
-This repository is in **read-only mode** for archival purposes. We are not reviewing or merging:
+- [ ] Bug fix (non-breaking change which fixes an issue)
+- [ ] New feature (non-breaking change which adds functionality)
+- [ ] Breaking change (fix or feature that would cause existing functionality to change)
+- [ ] Documentation update
+- [ ] Performance improvement
+- [ ] Code refactoring (no functional changes)
 
-- 🐛 Bug fixes
-- ✨ New features
-- 📝 Documentation updates
-- 🔧 Code improvements
-- 🧪 Test additions
+## Related Issues
 
-## ✅ What You Can Do Instead
+Fixes #(issue number)
 
-### Fork and Continue Development
-```bash
-# Fork this repository and continue development
-git clone https://github.com/YOUR_USERNAME/sage-agent
-cd sage-agent
-# Make your changes in your fork
-```
+## Changes Made
 
-### Use as Reference
-- Study the implementation patterns
-- Learn from the architecture decisions
-- Apply insights to your own projects
+- Change 1
+- Change 2
+- Change 3
 
-### Consider Alternatives
-Based on our analysis, consider:
-1. **TypeScript/Node.js** for AI agent development
-2. **Hybrid approach** (TypeScript + Rust components)
-3. **WebAssembly** for browser/Node.js integration
+## Testing
 
-## 📚 Learning Resources
+- [ ] I have tested this locally
+- [ ] I have added tests that prove my fix is effective or that my feature works
+- [ ] New and existing unit tests pass locally with my changes
 
-This archived project demonstrates:
-- ✅ Modern Rust async/await patterns
-- ✅ Concurrent tool execution systems
-- ✅ Terminal UI with React + Ink
-- ✅ Clean architecture principles
-- ✅ Multi-LLM provider integration
+## Checklist
 
-## 🙏 Thank You
+- [ ] My code follows the project's style guidelines
+- [ ] I have performed a self-review of my own code
+- [ ] I have commented my code, particularly in hard-to-understand areas
+- [ ] I have made corresponding changes to the documentation
+- [ ] My changes generate no new warnings
+- [ ] Any dependent changes have been merged and published
 
-We appreciate your interest in contributing to Sage Agent. While we can't accept this PR, we encourage you to:
+## Screenshots (if applicable)
 
-- **Fork the repository** for your own development
-- **Share your insights** in the discussions
-- **Build upon these ideas** in your own projects
+Add screenshots to help explain your changes.
 
----
+## Additional Notes
 
-**Happy coding!** 🚀
-
-*"Every archived project teaches us something valuable for the next one."*
+Any additional information that reviewers should know.
