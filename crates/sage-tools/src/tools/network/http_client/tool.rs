@@ -34,7 +34,9 @@ impl HttpClientTool {
                 .map_err(|e| ToolError::ExecutionFailed(e.to_string()))?;
             self.client = Some(client);
         }
-        Ok(self.client.as_ref().expect("client should be initialized"))
+        // SAFETY: client is guaranteed to be Some after the above initialization
+        self.client.as_ref()
+            .ok_or_else(|| ToolError::ExecutionFailed("Client initialization failed".to_string()))
     }
 }
 

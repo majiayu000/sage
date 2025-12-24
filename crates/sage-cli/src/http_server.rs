@@ -77,9 +77,11 @@ impl SageHttpServer {
 
     async fn process_chat_request(&self, request: ChatRequest) -> SageResult<ChatResponse> {
         self.get_or_create_sdk(&request.config_file).await?;
-        
+
         let sdk_guard = self.sdk.lock().await;
-        let sdk = sdk_guard.as_ref().unwrap();
+        // SAFETY: get_or_create_sdk ensures sdk is Some after successful return
+        let sdk = sdk_guard.as_ref()
+            .ok_or_else(|| SageError::config_error("SDK not initialized"))?;
 
         // Execute the task
         match sdk.run(&request.message).await {
