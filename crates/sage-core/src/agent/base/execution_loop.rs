@@ -6,7 +6,7 @@ use crate::llm::client::LlmClient;
 use crate::llm::messages::LlmMessage;
 use crate::tools::executor::ToolExecutor;
 use crate::tools::types::ToolSchema;
-use crate::trajectory::recorder::TrajectoryRecorder;
+use crate::trajectory::SessionRecorder;
 use crate::ui::{AnimationManager, DisplayManager};
 use crate::config::model::Config;
 use colored::*;
@@ -25,7 +25,7 @@ pub(super) async fn execute_task_loop(
     llm_client: &mut LlmClient,
     tool_executor: &ToolExecutor,
     animation_manager: &mut AnimationManager,
-    trajectory_recorder: &Option<Arc<Mutex<TrajectoryRecorder>>>,
+    session_recorder: &Option<Arc<Mutex<SessionRecorder>>>,
     config: &Config,
     provider_name: &str,
 ) -> ExecutionOutcome {
@@ -40,18 +40,18 @@ pub(super) async fn execute_task_loop(
 
                 // Print interruption message
                 DisplayManager::print_separator("Task Interrupted", "yellow");
-                println!("{}", "🛑 Task interrupted by user (Ctrl+C)".yellow().bold());
+                println!("{}", "Task interrupted by user (Ctrl+C)".yellow().bold());
                 println!("{}", "   Task execution stopped gracefully.".dimmed());
 
                 let interrupt_step = AgentStep::new(step_number, AgentState::Error)
                     .with_error("Task interrupted by user".to_string());
 
-                // Record interrupt step
-                if let Some(recorder) = trajectory_recorder {
+                // Record interrupt error
+                if let Some(recorder) = session_recorder {
                     let _ = recorder
                         .lock()
                         .await
-                        .record_step(interrupt_step.clone())
+                        .record_error("interrupted", "Task interrupted by user")
                         .await;
                 }
 
@@ -71,7 +71,7 @@ pub(super) async fn execute_task_loop(
                 llm_client,
                 tool_executor,
                 animation_manager,
-                trajectory_recorder,
+                session_recorder,
                 config,
             )
             .await
@@ -90,11 +90,6 @@ pub(super) async fn execute_task_loop(
                         .as_ref()
                         .map(|r| r.content.clone())
                         .unwrap_or_default();
-
-                    // Record step in trajectory
-                    if let Some(recorder) = trajectory_recorder {
-                        let _ = recorder.lock().await.record_step(step.clone()).await;
-                    }
 
                     execution.add_step(step);
 
@@ -127,13 +122,17 @@ pub(super) async fn execute_task_loop(
                         "execution step failed"
                     );
 
+                    // Record error
+                    if let Some(recorder) = session_recorder {
+                        let _ = recorder
+                            .lock()
+                            .await
+                            .record_error("execution_error", &e.to_string())
+                            .await;
+                    }
+
                     let error_step =
                         AgentStep::new(step_number, AgentState::Error).with_error(e.to_string());
-
-                    // Record error step
-                    if let Some(recorder) = trajectory_recorder {
-                        let _ = recorder.lock().await.record_step(error_step.clone()).await;
-                    }
 
                     execution.add_step(error_step);
                     execution.complete(false, Some(format!("Task failed: {}", e)));

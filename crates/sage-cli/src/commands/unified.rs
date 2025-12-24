@@ -12,7 +12,7 @@ use sage_core::commands::{CommandExecutor, CommandRegistry};
 use sage_core::config::{Config, load_config_from_file};
 use sage_core::error::{SageError, SageResult};
 use sage_core::input::{InputChannel, InputChannelHandle, InputRequestKind, InputResponse};
-use sage_core::trajectory::TrajectoryRecorder;
+use sage_core::trajectory::SessionRecorder;
 use sage_core::types::TaskMetadata;
 use sage_tools::get_default_tools;
 use std::io::Write;
@@ -27,8 +27,6 @@ pub struct UnifiedArgs {
     pub task: Option<String>,
     /// Path to configuration file
     pub config_file: String,
-    /// Path to save trajectory file
-    pub trajectory_file: Option<PathBuf>,
     /// Working directory for the agent
     pub working_dir: Option<PathBuf>,
     /// Maximum number of execution steps
@@ -93,14 +91,14 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
         return Err(SageError::config("No task provided"));
     }
 
+    // Determine working directory
+    let working_dir = args
+        .working_dir
+        .clone()
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
     // Process slash commands if the task starts with /
     let task_description = if CommandExecutor::is_command(&task_description) {
-        let working_dir = args
-            .working_dir
-            .as_ref()
-            .cloned()
-            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
-
         let mut registry = CommandRegistry::new(&working_dir);
         registry.register_builtins();
         if let Err(e) = registry.discover().await {
@@ -145,12 +143,7 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
     if let Some(max_steps) = args.max_steps {
         options = options.with_step_limit(max_steps);
     }
-    if let Some(working_dir) = &args.working_dir {
-        options = options.with_working_directory(working_dir);
-    }
-    if let Some(trajectory_path) = &args.trajectory_file {
-        options = options.with_trajectory_path(trajectory_path);
-    }
+    options = options.with_working_directory(&working_dir);
 
     // Create the unified executor
     let mut executor = UnifiedExecutor::with_options(config.clone(), options)?;
@@ -163,22 +156,17 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
         console.warn(&format!("Failed to initialize sub-agent support: {}", e));
     }
 
-    // Set up trajectory recording - always enabled
-    // Use command-line arg if provided, otherwise use config directory
-    let trajectory_path = args.trajectory_file.clone().unwrap_or_else(|| {
-        let trajectory_dir = config.trajectory.directory.clone();
-        let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
-        let filename = format!("sage_{}.json", timestamp);
-        trajectory_dir.join(filename)
-    });
-
-    // Ensure trajectory directory exists
-    if let Some(parent) = trajectory_path.parent() {
-        std::fs::create_dir_all(parent)?;
+    // Set up session recording - always enabled, stored in ~/.sage/projects/{cwd}/
+    if config.trajectory.is_enabled() {
+        match SessionRecorder::new(&working_dir) {
+            Ok(recorder) => {
+                executor.set_session_recorder(Arc::new(Mutex::new(recorder)));
+            }
+            Err(e) => {
+                console.warn(&format!("Failed to initialize session recorder: {}", e));
+            }
+        }
     }
-
-    let recorder = TrajectoryRecorder::new(&trajectory_path)?;
-    executor.set_trajectory_recorder(Arc::new(Mutex::new(recorder)));
 
     // Set up input channel for interactive mode
     let verbose = args.verbose;
@@ -202,16 +190,7 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
     console.print_separator();
 
     // Create task metadata
-    let working_dir = args
-        .working_dir
-        .as_ref()
-        .map(|p| p.display().to_string())
-        .unwrap_or_else(|| {
-            std::env::current_dir()
-                .map(|p| p.display().to_string())
-                .unwrap_or_else(|_| ".".to_string())
-        });
-    let task = TaskMetadata::new(&task_description, &working_dir);
+    let task = TaskMetadata::new(&task_description, &working_dir.display().to_string());
 
     // Execute the task
     let start_time = std::time::Instant::now();
@@ -356,7 +335,7 @@ fn display_outcome(
             }
         }
         ExecutionOutcome::NeedsUserInput { last_response, .. } => {
-            console.info("💬 AI is waiting for user input");
+            console.info("AI is waiting for user input");
             if !last_response.is_empty() {
                 console.info(&format!("Last response: {}", last_response));
             }
@@ -389,7 +368,6 @@ mod tests {
         let args = UnifiedArgs {
             task: None,
             config_file: "sage_config.json".to_string(),
-            trajectory_file: None,
             working_dir: None,
             max_steps: None,
             verbose: false,

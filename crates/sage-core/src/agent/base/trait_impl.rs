@@ -23,14 +23,14 @@ impl Agent for BaseAgent {
         // Reset the global interrupt manager for this new task
         reset_global_interrupt_manager();
 
-        // Start trajectory recording if available
-        if let Some(recorder) = &self.trajectory_recorder {
+        // Start session recording if available
+        if let Some(recorder) = &self.session_recorder {
             let provider = self.config.get_default_provider().to_string();
             let model = self.config.default_model_parameters()?.model.clone();
             recorder
                 .lock()
                 .await
-                .start_recording(task.clone(), provider, model, self.config.max_steps)
+                .record_session_start(&task.description, &provider, &model)
                 .await?;
         }
 
@@ -47,22 +47,22 @@ impl Agent for BaseAgent {
             &mut self.llm_client,
             &self.tool_executor,
             &mut self.animation_manager,
-            &self.trajectory_recorder,
+            &self.session_recorder,
             &self.config,
             &provider_name,
         )
         .await;
 
-        // Finalize trajectory recording
-        if let Some(recorder) = &self.trajectory_recorder {
-            recorder
+        // Finalize session recording
+        if let Some(recorder) = &self.session_recorder {
+            let _ = recorder
                 .lock()
                 .await
-                .finalize_recording(
+                .record_session_end(
                     final_outcome.is_success(),
                     final_outcome.execution().final_result.clone(),
                 )
-                .await?;
+                .await;
         }
 
         Ok(final_outcome)
@@ -93,7 +93,7 @@ impl Agent for BaseAgent {
             &mut self.llm_client,
             &self.tool_executor,
             &mut self.animation_manager,
-            &self.trajectory_recorder,
+            &self.session_recorder,
             &self.config,
         )
         .await

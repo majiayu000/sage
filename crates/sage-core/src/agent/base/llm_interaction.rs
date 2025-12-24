@@ -7,7 +7,7 @@ use crate::interrupt::global_interrupt_manager;
 use crate::llm::client::LlmClient;
 use crate::llm::messages::LlmMessage;
 use crate::tools::types::ToolSchema;
-use crate::trajectory::recorder::TrajectoryRecorder;
+use crate::trajectory::{SessionRecorder, TokenUsage};
 use crate::ui::animation::AnimationState;
 use crate::ui::{AnimationManager, DisplayManager};
 use std::sync::Arc;
@@ -23,7 +23,7 @@ pub(super) async fn execute_llm_call(
     tools: &[ToolSchema],
     llm_client: &mut LlmClient,
     animation_manager: &mut AnimationManager,
-    trajectory_recorder: &Option<Arc<Mutex<TrajectoryRecorder>>>,
+    session_recorder: &Option<Arc<Mutex<SessionRecorder>>>,
     config: &Config,
 ) -> SageResult<AgentStep> {
     // Print step separator
@@ -31,12 +31,26 @@ pub(super) async fn execute_llm_call(
 
     let mut step = AgentStep::new(step_number, AgentState::Thinking);
 
+    // Record LLM request before sending
+    if let Some(recorder) = session_recorder {
+        let input_messages: Vec<serde_json::Value> = messages
+            .iter()
+            .map(|msg| serde_json::to_value(msg).unwrap_or_default())
+            .collect();
+        let tools_available: Vec<String> = tools.iter().map(|t| t.name.clone()).collect();
+        let _ = recorder
+            .lock()
+            .await
+            .record_llm_request(input_messages, Some(tools_available))
+            .await;
+    }
+
     // Get LLM response with timing and animation
     let start_time = std::time::Instant::now();
 
     // Start thinking animation
     animation_manager
-        .start_animation(AnimationState::Thinking, "🤖 Thinking", "blue")
+        .start_animation(AnimationState::Thinking, "Thinking", "blue")
         .await;
 
     // Get cancellation token for interrupt handling
@@ -58,69 +72,44 @@ pub(super) async fn execute_llm_call(
 
     // Stop animation and show timing
     animation_manager.stop_animation().await;
-    DisplayManager::print_timing("🤖 AI Response", api_duration);
+    DisplayManager::print_timing("AI Response", api_duration);
 
     step = step.with_llm_response(llm_response.clone());
 
-    // Record LLM interaction in trajectory
-    if let Some(recorder) = trajectory_recorder {
-        let input_messages: Vec<serde_json::Value> = messages
-            .iter()
-            .map(|msg| serde_json::to_value(msg).unwrap_or_default())
-            .collect();
-
-        let response_record = crate::trajectory::recorder::LlmResponseRecord {
-            content: llm_response.content.clone(),
-            model: llm_response.model.clone(),
-            finish_reason: llm_response.finish_reason.clone(),
-            usage: llm_response.usage.as_ref().map(|u| {
-                crate::trajectory::recorder::TokenUsageRecord {
-                    input_tokens: u.prompt_tokens,
-                    output_tokens: u.completion_tokens,
-                    cache_creation_input_tokens: None,
-                    cache_read_input_tokens: None,
-                    reasoning_tokens: None,
-                }
-            }),
-            tool_calls: if llm_response.tool_calls.is_empty() {
-                None
-            } else {
-                Some(
-                    llm_response
-                        .tool_calls
-                        .iter()
-                        .map(|tc| serde_json::to_value(tc).unwrap_or_default())
-                        .collect(),
-                )
-            },
-        };
-
-        let tools_available: Vec<String> = tools.iter().map(|t| t.name.clone()).collect();
-        let provider = config.get_default_provider().to_string();
+    // Record LLM response
+    if let Some(recorder) = session_recorder {
         let model = config.default_model_parameters()?.model.clone();
-
-        // Clone the recorder to avoid holding the reference across await
-        let recorder_clone = recorder.clone();
-        recorder_clone
+        let usage = llm_response.usage.as_ref().map(|u| TokenUsage {
+            input_tokens: u.prompt_tokens as u64,
+            output_tokens: u.completion_tokens as u64,
+            cache_read_tokens: None,
+            cache_write_tokens: None,
+        });
+        let tool_calls = if llm_response.tool_calls.is_empty() {
+            None
+        } else {
+            Some(
+                llm_response
+                    .tool_calls
+                    .iter()
+                    .map(|tc| serde_json::to_value(tc).unwrap_or_default())
+                    .collect(),
+            )
+        };
+        let _ = recorder
             .lock()
             .await
-            .record_llm_interaction(
-                provider,
-                model,
-                input_messages,
-                response_record,
-                Some(tools_available),
-            )
-            .await?;
+            .record_llm_response(&llm_response.content, &model, usage, tool_calls)
+            .await;
     }
 
     // Show AI response with markdown rendering
     if !llm_response.content.is_empty() {
         if is_markdown_content(&llm_response.content) {
-            println!("\n🤖 AI Response:");
+            println!("\nAI Response:");
             DisplayManager::print_markdown(&llm_response.content);
         } else {
-            println!("\n🤖 {}", llm_response.content.trim());
+            println!("\n{}", llm_response.content.trim());
         }
     }
 

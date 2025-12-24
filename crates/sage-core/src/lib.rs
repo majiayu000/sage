@@ -211,7 +211,9 @@ pub use tools::{
     BackgroundTaskSummary, BatchStrategy, BatchToolExecutor, Tool, ToolCall, ToolExecutor,
     ToolResult,
 };
-pub use trajectory::TrajectoryRecorder;
+pub use trajectory::{SessionEntry, SessionInfo, SessionRecorder, SessionReplayer};
+pub use trajectory::SessionSummary as TrajectorySessionSummary;
+pub use trajectory::TokenUsage as TrajectoryTokenUsage;
 pub use types::*;
 // Note: SessionId is re-exported from concurrency module
 pub use checkpoints::{

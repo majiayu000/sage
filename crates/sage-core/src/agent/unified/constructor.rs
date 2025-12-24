@@ -95,7 +95,7 @@ impl UnifiedExecutor {
             tool_executor,
             options,
             input_channel,
-            trajectory_recorder: None,
+            session_recorder: None,
             animation_manager,
             jsonl_storage,
             message_tracker,

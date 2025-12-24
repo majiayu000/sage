@@ -7,7 +7,7 @@ use crate::llm::client::LlmClient;
 use crate::llm::messages::LlmMessage;
 use crate::tools::executor::ToolExecutor;
 use crate::tools::types::ToolSchema;
-use crate::trajectory::recorder::TrajectoryRecorder;
+use crate::trajectory::SessionRecorder;
 use crate::ui::{AnimationManager, DisplayManager};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -17,7 +17,7 @@ use super::llm_interaction::execute_llm_call;
 use super::tool_execution::execute_tools;
 
 /// Execute a single agent step
-#[instrument(skip(llm_client, tool_executor, animation_manager, trajectory_recorder, config, messages, tools), fields(step_number = %step_number))]
+#[instrument(skip(llm_client, tool_executor, animation_manager, session_recorder, config, messages, tools), fields(step_number = %step_number))]
 pub(super) async fn execute_step(
     step_number: u32,
     messages: &[LlmMessage],
@@ -25,7 +25,7 @@ pub(super) async fn execute_step(
     llm_client: &mut LlmClient,
     tool_executor: &ToolExecutor,
     animation_manager: &mut AnimationManager,
-    trajectory_recorder: &Option<Arc<Mutex<TrajectoryRecorder>>>,
+    session_recorder: &Option<Arc<Mutex<SessionRecorder>>>,
     config: &Config,
 ) -> SageResult<AgentStep> {
     // Execute LLM call
@@ -35,13 +35,13 @@ pub(super) async fn execute_step(
         tools,
         llm_client,
         animation_manager,
-        trajectory_recorder,
+        session_recorder,
         config,
     )
     .await?;
 
     // Execute tools if any
-    step = execute_tools(step, animation_manager, tool_executor).await?;
+    step = execute_tools(step, animation_manager, tool_executor, session_recorder).await?;
 
     // Check if task is completed
     if let Some(response) = &step.llm_response {

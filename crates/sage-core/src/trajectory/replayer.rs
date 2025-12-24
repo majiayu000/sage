@@ -1,461 +1,318 @@
-//! Trajectory replay implementation
-//!
-//! Provides functionality to load and replay recorded agent trajectories.
-//! Useful for debugging, testing, and analyzing agent behavior.
+//! Session replayer for JSONL trajectory files
 
-use crate::error::{SageError, SageResult};
-use crate::tools::types::ToolResult;
-use crate::trajectory::recorder::{AgentStepRecord, TrajectoryRecord};
-use crate::trajectory::storage::TrajectoryStorage;
+use crate::error::SageResult;
+use crate::trajectory::entry::{SessionEntry, TokenUsage};
+use crate::trajectory::session::{SessionInfo, SessionRecorder};
 use std::path::Path;
-use std::sync::Arc;
-use tokio::fs;
-use tracing::{debug, info, instrument, warn};
 
-/// Replay mode determines how the trajectory is replayed
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ReplayMode {
-    /// Just display the recorded steps without re-execution
-    DryRun,
-    /// Re-execute tool calls and compare with recorded results
-    LiveReplay,
-    /// Step through one step at a time
-    Interactive,
-}
-
-/// Result of replaying a single step
-#[derive(Debug, Clone)]
-pub struct StepReplayResult {
-    /// Step number
-    pub step_number: u32,
-    /// Whether the step was replayed successfully
-    pub success: bool,
-    /// The recorded tool calls
-    pub recorded_tool_calls: Vec<serde_json::Value>,
-    /// The recorded tool results
-    pub recorded_tool_results: Vec<serde_json::Value>,
-    /// The replayed tool results (if live replay)
-    pub replayed_tool_results: Option<Vec<ToolResult>>,
-    /// Whether the replayed results match the recorded results
-    pub results_match: Option<bool>,
-    /// Any differences detected
-    pub differences: Vec<String>,
-}
-
-/// Summary of a trajectory replay
-#[derive(Debug, Clone)]
-pub struct ReplaySummary {
-    /// Trajectory ID
-    pub trajectory_id: String,
-    /// Original task description
-    pub task: String,
-    /// Total steps in trajectory
-    pub total_steps: usize,
-    /// Steps successfully replayed
-    pub steps_replayed: usize,
-    /// Steps that matched recorded results
-    pub steps_matched: usize,
-    /// Total tool calls made
-    pub total_tool_calls: usize,
-    /// Original execution time
-    pub original_execution_time: f64,
-    /// Replay execution time
-    pub replay_execution_time: Option<f64>,
-    /// Overall success
-    pub success: bool,
-    /// Errors encountered
+/// Session summary statistics
+#[derive(Debug, Clone, Default)]
+pub struct SessionSummary {
+    /// Session ID
+    pub session_id: Option<uuid::Uuid>,
+    /// Task description
+    pub task: Option<String>,
+    /// Provider used
+    pub provider: Option<String>,
+    /// Model used
+    pub model: Option<String>,
+    /// Working directory
+    pub cwd: Option<String>,
+    /// Git branch
+    pub git_branch: Option<String>,
+    /// Total LLM requests
+    pub llm_request_count: u32,
+    /// Total LLM responses
+    pub llm_response_count: u32,
+    /// Total tool calls
+    pub tool_call_count: u32,
+    /// Successful tool calls
+    pub successful_tool_calls: u32,
+    /// Failed tool calls
+    pub failed_tool_calls: u32,
+    /// Total input tokens
+    pub total_input_tokens: u64,
+    /// Total output tokens
+    pub total_output_tokens: u64,
+    /// Total execution time in seconds
+    pub execution_time_secs: Option<f64>,
+    /// Whether session completed successfully
+    pub success: Option<bool>,
+    /// Final result
+    pub final_result: Option<String>,
+    /// Error messages
     pub errors: Vec<String>,
+    /// Start timestamp
+    pub start_time: Option<String>,
+    /// End timestamp
+    pub end_time: Option<String>,
 }
 
-/// Trajectory replayer for loading and replaying agent trajectories
-pub struct TrajectoryReplayer {
-    storage: Option<Arc<dyn TrajectoryStorage>>,
-}
+/// Session replayer for loading and analyzing JSONL session files
+pub struct SessionReplayer;
 
-impl TrajectoryReplayer {
-    /// Create a new trajectory replayer
-    pub fn new() -> Self {
-        Self { storage: None }
+impl SessionReplayer {
+    /// Load all entries from a session file
+    pub async fn load(path: impl AsRef<Path>) -> SageResult<Vec<SessionEntry>> {
+        SessionRecorder::load_entries(path).await
     }
 
-    /// Create a trajectory replayer with storage backend
-    pub fn with_storage(storage: Arc<dyn TrajectoryStorage>) -> Self {
-        Self {
-            storage: Some(storage),
-        }
+    /// List all sessions for a project
+    pub async fn list_sessions(working_dir: impl AsRef<Path>) -> SageResult<Vec<SessionInfo>> {
+        SessionRecorder::list_sessions(working_dir).await
     }
 
-    /// Load a trajectory from a file path
-    #[instrument(skip(self), fields(path = %path.as_ref().display()))]
-    pub async fn load_from_file<P: AsRef<Path>>(&self, path: P) -> SageResult<TrajectoryRecord> {
-        let path = path.as_ref();
-        debug!("Loading trajectory from file: {:?}", path);
+    /// Get session summary from entries
+    pub fn summarize(entries: &[SessionEntry]) -> SessionSummary {
+        let mut summary = SessionSummary::default();
 
-        if !path.exists() {
-            return Err(SageError::config(format!(
-                "Trajectory file not found: {:?}",
-                path
-            )));
-        }
-
-        let content = fs::read_to_string(path).await.map_err(|e| {
-            SageError::config(format!("Failed to read trajectory file {:?}: {}", path, e))
-        })?;
-
-        let record: TrajectoryRecord = serde_json::from_str(&content)
-            .map_err(|e| SageError::config(format!("Failed to parse trajectory JSON: {}", e)))?;
-
-        info!(
-            "Loaded trajectory: {} steps, task: {}",
-            record.agent_steps.len(),
-            record.task
-        );
-
-        Ok(record)
-    }
-
-    /// Load a trajectory by ID from storage
-    #[instrument(skip(self))]
-    pub async fn load_by_id(&self, id: uuid::Uuid) -> SageResult<Option<TrajectoryRecord>> {
-        let storage = self
-            .storage
-            .as_ref()
-            .ok_or_else(|| SageError::config("No storage backend configured for replayer"))?;
-
-        storage.load(id).await
-    }
-
-    /// List all available trajectories in a directory
-    #[instrument(skip(self), fields(dir = %dir.as_ref().display()))]
-    pub async fn list_trajectories<P: AsRef<Path>>(
-        &self,
-        dir: P,
-    ) -> SageResult<Vec<TrajectoryInfo>> {
-        let dir = dir.as_ref();
-        debug!("Listing trajectories in: {:?}", dir);
-
-        if !dir.exists() {
-            return Ok(Vec::new());
-        }
-
-        let mut trajectories = Vec::new();
-        let mut entries = fs::read_dir(dir)
-            .await
-            .map_err(|e| SageError::config(format!("Failed to read directory {:?}: {}", dir, e)))?;
-
-        while let Some(entry) = entries
-            .next_entry()
-            .await
-            .map_err(|e| SageError::config(format!("Failed to read directory entry: {}", e)))?
-        {
-            let path = entry.path();
-            if path.extension().map_or(false, |ext| ext == "json") {
-                match self.load_from_file(&path).await {
-                    Ok(record) => {
-                        trajectories.push(TrajectoryInfo {
-                            path: path.clone(),
-                            id: record.id.to_string(),
-                            task: record.task.clone(),
-                            start_time: record.start_time.clone(),
-                            end_time: record.end_time.clone(),
-                            steps: record.agent_steps.len(),
-                            success: record.success,
-                            execution_time: record.execution_time,
-                        });
+        for entry in entries {
+            match entry {
+                SessionEntry::SessionStart {
+                    session_id,
+                    task,
+                    provider,
+                    model,
+                    cwd,
+                    git_branch,
+                    timestamp,
+                } => {
+                    summary.session_id = Some(*session_id);
+                    summary.task = Some(task.clone());
+                    summary.provider = Some(provider.clone());
+                    summary.model = Some(model.clone());
+                    summary.cwd = Some(cwd.clone());
+                    summary.git_branch = git_branch.clone();
+                    summary.start_time = Some(timestamp.clone());
+                }
+                SessionEntry::LlmRequest { .. } => {
+                    summary.llm_request_count += 1;
+                }
+                SessionEntry::LlmResponse { usage, .. } => {
+                    summary.llm_response_count += 1;
+                    if let Some(usage) = usage {
+                        summary.total_input_tokens += usage.input_tokens;
+                        summary.total_output_tokens += usage.output_tokens;
                     }
-                    Err(e) => {
-                        warn!("Skipping invalid trajectory file {:?}: {}", path, e);
+                }
+                SessionEntry::ToolCall { .. } => {
+                    summary.tool_call_count += 1;
+                }
+                SessionEntry::ToolResult { success, .. } => {
+                    if *success {
+                        summary.successful_tool_calls += 1;
+                    } else {
+                        summary.failed_tool_calls += 1;
                     }
+                }
+                SessionEntry::Error { message, .. } => {
+                    summary.errors.push(message.clone());
+                }
+                SessionEntry::SessionEnd {
+                    success,
+                    final_result,
+                    execution_time_secs,
+                    timestamp,
+                    ..
+                } => {
+                    summary.success = Some(*success);
+                    summary.final_result = final_result.clone();
+                    summary.execution_time_secs = Some(*execution_time_secs);
+                    summary.end_time = Some(timestamp.clone());
+                }
+                SessionEntry::User { .. } => {}
+            }
+        }
+
+        summary
+    }
+
+    /// Get a brief description of a session from its entries
+    pub fn get_session_preview(entries: &[SessionEntry]) -> Option<String> {
+        for entry in entries {
+            if let SessionEntry::SessionStart { task, .. } = entry {
+                let preview = if task.len() > 100 {
+                    format!("{}...", &task[..100])
+                } else {
+                    task.clone()
+                };
+                return Some(preview);
+            }
+        }
+        None
+    }
+
+    /// Extract all tool names used in a session
+    pub fn get_tools_used(entries: &[SessionEntry]) -> Vec<String> {
+        let mut tools: Vec<String> = entries
+            .iter()
+            .filter_map(|entry| {
+                if let SessionEntry::ToolCall { tool_name, .. } = entry {
+                    Some(tool_name.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        tools.sort();
+        tools.dedup();
+        tools
+    }
+
+    /// Get token usage breakdown
+    pub fn get_token_usage(entries: &[SessionEntry]) -> TokenUsage {
+        let mut usage = TokenUsage {
+            input_tokens: 0,
+            output_tokens: 0,
+            cache_read_tokens: None,
+            cache_write_tokens: None,
+        };
+
+        for entry in entries {
+            if let SessionEntry::LlmResponse {
+                usage: Some(entry_usage),
+                ..
+            } = entry
+            {
+                usage.input_tokens += entry_usage.input_tokens;
+                usage.output_tokens += entry_usage.output_tokens;
+                if let Some(cache_read) = entry_usage.cache_read_tokens {
+                    *usage.cache_read_tokens.get_or_insert(0) += cache_read;
+                }
+                if let Some(cache_write) = entry_usage.cache_write_tokens {
+                    *usage.cache_write_tokens.get_or_insert(0) += cache_write;
                 }
             }
         }
 
-        // Sort by start time (newest first)
-        trajectories.sort_by(|a, b| b.start_time.cmp(&a.start_time));
-
-        Ok(trajectories)
+        usage
     }
 
-    /// Get a summary of a trajectory without full replay
-    pub fn summarize(&self, record: &TrajectoryRecord) -> ReplaySummary {
-        let total_tool_calls: usize = record
-            .agent_steps
+    /// Find entries by type
+    pub fn filter_by_type<'a>(
+        entries: &'a [SessionEntry],
+        entry_type: &str,
+    ) -> Vec<&'a SessionEntry> {
+        entries
             .iter()
-            .map(|step| {
-                step.tool_calls
-                    .as_ref()
-                    .map(|calls| calls.len())
-                    .unwrap_or(0)
-            })
-            .sum();
-
-        ReplaySummary {
-            trajectory_id: record.id.to_string(),
-            task: record.task.clone(),
-            total_steps: record.agent_steps.len(),
-            steps_replayed: 0,
-            steps_matched: 0,
-            total_tool_calls,
-            original_execution_time: record.execution_time,
-            replay_execution_time: None,
-            success: record.success,
-            errors: Vec::new(),
-        }
-    }
-
-    /// Analyze a trajectory step by step (dry run mode)
-    #[instrument(skip(self, record))]
-    pub fn analyze_steps(&self, record: &TrajectoryRecord) -> Vec<StepAnalysis> {
-        record
-            .agent_steps
-            .iter()
-            .map(|step| self.analyze_step(step))
+            .filter(|e| e.entry_type() == entry_type)
             .collect()
     }
 
-    /// Analyze a single step
-    fn analyze_step(&self, step: &AgentStepRecord) -> StepAnalysis {
-        let tool_calls = step.tool_calls.clone().unwrap_or_default();
-        let tool_results = step.tool_results.clone().unwrap_or_default();
-
-        // Extract tool names from tool calls
-        let tool_names: Vec<String> = tool_calls
+    /// Get the last error in a session
+    pub fn get_last_error(entries: &[SessionEntry]) -> Option<&SessionEntry> {
+        entries
             .iter()
-            .filter_map(|call| {
-                call.get("name")
-                    .and_then(|n| n.as_str())
-                    .map(|s| s.to_string())
-            })
-            .collect();
-
-        // Check for errors in results
-        let has_errors = tool_results.iter().any(|result| {
-            result
-                .get("success")
-                .and_then(|s| s.as_bool())
-                .map(|s| !s)
-                .unwrap_or(false)
-        });
-
-        StepAnalysis {
-            step_number: step.step_number,
-            timestamp: step.timestamp.clone(),
-            state: step.state.clone(),
-            tool_names,
-            tool_call_count: tool_calls.len(),
-            tool_result_count: tool_results.len(),
-            has_llm_response: step.llm_response.is_some(),
-            has_errors,
-            error_message: step.error.clone(),
-            reflection: step.reflection.clone(),
-        }
+            .rev()
+            .find(|e| matches!(e, SessionEntry::Error { .. }))
     }
-
-    /// Get the LLM response content for a step
-    pub fn get_step_llm_response(&self, step: &AgentStepRecord) -> Option<String> {
-        step.llm_response.as_ref().map(|r| r.content.clone())
-    }
-
-    /// Get tool calls for a step as structured data
-    pub fn get_step_tool_calls(&self, step: &AgentStepRecord) -> Vec<ToolCallInfo> {
-        step.tool_calls
-            .as_ref()
-            .map(|calls| {
-                calls
-                    .iter()
-                    .filter_map(|call| {
-                        let name = call.get("name")?.as_str()?.to_string();
-                        let id = call
-                            .get("id")
-                            .and_then(|i| i.as_str())
-                            .unwrap_or("unknown")
-                            .to_string();
-                        let arguments = call.get("arguments").cloned();
-
-                        Some(ToolCallInfo {
-                            id,
-                            name,
-                            arguments,
-                        })
-                    })
-                    .collect()
-            })
-            .unwrap_or_default()
-    }
-
-    /// Get tool results for a step
-    pub fn get_step_tool_results(&self, step: &AgentStepRecord) -> Vec<ToolResultInfo> {
-        step.tool_results
-            .as_ref()
-            .map(|results| {
-                results
-                    .iter()
-                    .map(|result| {
-                        let call_id = result
-                            .get("call_id")
-                            .and_then(|i| i.as_str())
-                            .unwrap_or("unknown")
-                            .to_string();
-                        let tool_name = result
-                            .get("tool_name")
-                            .and_then(|n| n.as_str())
-                            .unwrap_or("unknown")
-                            .to_string();
-                        let success = result
-                            .get("success")
-                            .and_then(|s| s.as_bool())
-                            .unwrap_or(false);
-                        let output = result
-                            .get("output")
-                            .and_then(|o| o.as_str())
-                            .map(|s| s.to_string());
-
-                        ToolResultInfo {
-                            call_id,
-                            tool_name,
-                            success,
-                            output,
-                        }
-                    })
-                    .collect()
-            })
-            .unwrap_or_default()
-    }
-
-    /// Calculate token usage statistics from the trajectory
-    pub fn calculate_token_usage(&self, record: &TrajectoryRecord) -> TokenUsageStats {
-        let mut total_input = 0u32;
-        let mut total_output = 0u32;
-        let mut total_cache_creation = 0u32;
-        let mut total_cache_read = 0u32;
-
-        for interaction in &record.llm_interactions {
-            if let Some(usage) = &interaction.response.usage {
-                total_input += usage.input_tokens;
-                total_output += usage.output_tokens;
-                total_cache_creation += usage.cache_creation_input_tokens.unwrap_or(0);
-                total_cache_read += usage.cache_read_input_tokens.unwrap_or(0);
-            }
-        }
-
-        TokenUsageStats {
-            total_input_tokens: total_input,
-            total_output_tokens: total_output,
-            total_tokens: total_input + total_output,
-            cache_creation_tokens: total_cache_creation,
-            cache_read_tokens: total_cache_read,
-            interactions_count: record.llm_interactions.len(),
-        }
-    }
-}
-
-impl Default for TrajectoryReplayer {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Information about a trajectory file
-#[derive(Debug, Clone)]
-pub struct TrajectoryInfo {
-    /// File path
-    pub path: std::path::PathBuf,
-    /// Trajectory ID
-    pub id: String,
-    /// Task description
-    pub task: String,
-    /// Start time
-    pub start_time: String,
-    /// End time
-    pub end_time: String,
-    /// Number of steps
-    pub steps: usize,
-    /// Whether successful
-    pub success: bool,
-    /// Execution time in seconds
-    pub execution_time: f64,
-}
-
-/// Analysis of a single step
-#[derive(Debug, Clone)]
-pub struct StepAnalysis {
-    /// Step number
-    pub step_number: u32,
-    /// Timestamp
-    pub timestamp: String,
-    /// Agent state
-    pub state: String,
-    /// Tool names used
-    pub tool_names: Vec<String>,
-    /// Number of tool calls
-    pub tool_call_count: usize,
-    /// Number of tool results
-    pub tool_result_count: usize,
-    /// Whether step has LLM response
-    pub has_llm_response: bool,
-    /// Whether any tool results were errors
-    pub has_errors: bool,
-    /// Error message if any
-    pub error_message: Option<String>,
-    /// Agent reflection if any
-    pub reflection: Option<String>,
-}
-
-/// Information about a tool call
-#[derive(Debug, Clone)]
-pub struct ToolCallInfo {
-    /// Call ID
-    pub id: String,
-    /// Tool name
-    pub name: String,
-    /// Arguments as JSON
-    pub arguments: Option<serde_json::Value>,
-}
-
-/// Information about a tool result
-#[derive(Debug, Clone)]
-pub struct ToolResultInfo {
-    /// Call ID this result is for
-    pub call_id: String,
-    /// Tool name
-    pub tool_name: String,
-    /// Whether successful
-    pub success: bool,
-    /// Output content
-    pub output: Option<String>,
-}
-
-/// Token usage statistics
-#[derive(Debug, Clone, Default)]
-pub struct TokenUsageStats {
-    /// Total input tokens
-    pub total_input_tokens: u32,
-    /// Total output tokens
-    pub total_output_tokens: u32,
-    /// Total tokens (input + output)
-    pub total_tokens: u32,
-    /// Cache creation tokens
-    pub cache_creation_tokens: u32,
-    /// Cache read tokens
-    pub cache_read_tokens: u32,
-    /// Number of LLM interactions
-    pub interactions_count: usize,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use uuid::Uuid;
 
-    #[test]
-    fn test_replayer_creation() {
-        let replayer = TrajectoryReplayer::new();
-        assert!(replayer.storage.is_none());
+    fn create_test_entries() -> Vec<SessionEntry> {
+        vec![
+            SessionEntry::SessionStart {
+                session_id: Uuid::new_v4(),
+                task: "Test task".to_string(),
+                provider: "glm".to_string(),
+                model: "glm-4.7".to_string(),
+                cwd: "/test".to_string(),
+                git_branch: Some("main".to_string()),
+                timestamp: "2024-01-01T00:00:00Z".to_string(),
+            },
+            SessionEntry::LlmRequest {
+                uuid: Uuid::new_v4(),
+                parent_uuid: None,
+                messages: vec![],
+                tools: Some(vec!["bash".to_string()]),
+                timestamp: "2024-01-01T00:00:01Z".to_string(),
+            },
+            SessionEntry::LlmResponse {
+                uuid: Uuid::new_v4(),
+                parent_uuid: None,
+                content: "Hello".to_string(),
+                model: "glm-4.7".to_string(),
+                usage: Some(TokenUsage {
+                    input_tokens: 100,
+                    output_tokens: 50,
+                    cache_read_tokens: None,
+                    cache_write_tokens: None,
+                }),
+                tool_calls: None,
+                timestamp: "2024-01-01T00:00:02Z".to_string(),
+            },
+            SessionEntry::ToolCall {
+                uuid: Uuid::new_v4(),
+                parent_uuid: None,
+                tool_name: "bash".to_string(),
+                tool_input: serde_json::json!({"command": "ls"}),
+                timestamp: "2024-01-01T00:00:03Z".to_string(),
+            },
+            SessionEntry::ToolResult {
+                uuid: Uuid::new_v4(),
+                parent_uuid: None,
+                tool_name: "bash".to_string(),
+                success: true,
+                output: Some("file1\nfile2".to_string()),
+                error: None,
+                execution_time_ms: 100,
+                timestamp: "2024-01-01T00:00:04Z".to_string(),
+            },
+            SessionEntry::SessionEnd {
+                uuid: Uuid::new_v4(),
+                parent_uuid: None,
+                success: true,
+                final_result: Some("Done".to_string()),
+                total_steps: 1,
+                execution_time_secs: 5.0,
+                timestamp: "2024-01-01T00:00:05Z".to_string(),
+            },
+        ]
     }
 
     #[test]
-    fn test_token_usage_stats_default() {
-        let stats = TokenUsageStats::default();
-        assert_eq!(stats.total_tokens, 0);
-        assert_eq!(stats.interactions_count, 0);
+    fn test_summarize() {
+        let entries = create_test_entries();
+        let summary = SessionReplayer::summarize(&entries);
+
+        assert!(summary.session_id.is_some());
+        assert_eq!(summary.task, Some("Test task".to_string()));
+        assert_eq!(summary.provider, Some("glm".to_string()));
+        assert_eq!(summary.llm_request_count, 1);
+        assert_eq!(summary.llm_response_count, 1);
+        assert_eq!(summary.tool_call_count, 1);
+        assert_eq!(summary.successful_tool_calls, 1);
+        assert_eq!(summary.total_input_tokens, 100);
+        assert_eq!(summary.total_output_tokens, 50);
+        assert_eq!(summary.success, Some(true));
+    }
+
+    #[test]
+    fn test_get_tools_used() {
+        let entries = create_test_entries();
+        let tools = SessionReplayer::get_tools_used(&entries);
+
+        assert_eq!(tools, vec!["bash".to_string()]);
+    }
+
+    #[test]
+    fn test_get_session_preview() {
+        let entries = create_test_entries();
+        let preview = SessionReplayer::get_session_preview(&entries);
+
+        assert_eq!(preview, Some("Test task".to_string()));
+    }
+
+    #[test]
+    fn test_filter_by_type() {
+        let entries = create_test_entries();
+        let tool_calls = SessionReplayer::filter_by_type(&entries, "tool_call");
+
+        assert_eq!(tool_calls.len(), 1);
     }
 }

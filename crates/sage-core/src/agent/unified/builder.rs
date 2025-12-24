@@ -4,7 +4,7 @@ use crate::agent::{ExecutionMode, ExecutionOptions};
 use crate::config::model::Config;
 use crate::error::SageResult;
 use crate::input::InputChannel;
-use crate::trajectory::recorder::TrajectoryRecorder;
+use crate::trajectory::SessionRecorder;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -15,7 +15,7 @@ pub struct UnifiedExecutorBuilder {
     config: Config,
     options: ExecutionOptions,
     input_channel: Option<InputChannel>,
-    trajectory_recorder: Option<Arc<Mutex<TrajectoryRecorder>>>,
+    session_recorder: Option<Arc<Mutex<SessionRecorder>>>,
 }
 
 impl UnifiedExecutorBuilder {
@@ -25,7 +25,7 @@ impl UnifiedExecutorBuilder {
             config,
             options: ExecutionOptions::default(),
             input_channel: None,
-            trajectory_recorder: None,
+            session_recorder: None,
         }
     }
 
@@ -47,9 +47,9 @@ impl UnifiedExecutorBuilder {
         self
     }
 
-    /// Set trajectory recorder
-    pub fn with_trajectory_recorder(mut self, recorder: Arc<Mutex<TrajectoryRecorder>>) -> Self {
-        self.trajectory_recorder = Some(recorder);
+    /// Set session recorder
+    pub fn with_session_recorder(mut self, recorder: Arc<Mutex<SessionRecorder>>) -> Self {
+        self.session_recorder = Some(recorder);
         self
     }
 
@@ -79,8 +79,8 @@ impl UnifiedExecutorBuilder {
             executor.set_input_channel(channel);
         }
 
-        if let Some(recorder) = self.trajectory_recorder {
-            executor.set_trajectory_recorder(recorder);
+        if let Some(recorder) = self.session_recorder {
+            executor.set_session_recorder(recorder);
         }
 
         Ok(executor)

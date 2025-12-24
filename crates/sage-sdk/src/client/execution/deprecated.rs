@@ -5,7 +5,7 @@ use sage_core::{
     agent::{Agent, AgentExecution, base::BaseAgent},
     error::SageResult,
     tools::executor::ToolExecutorBuilder,
-    trajectory::recorder::TrajectoryRecorder,
+    trajectory::SessionRecorder,
 };
 use sage_tools::get_default_tools;
 use std::sync::Arc;
@@ -39,12 +39,12 @@ impl SageAgentSdk {
 
         agent.set_tool_executor(tool_executor);
 
-        // Set up trajectory recording if enabled
-        if let Some(trajectory_path) = &self.trajectory_path {
-            let recorder = Arc::new(Mutex::new(TrajectoryRecorder::new(
-                trajectory_path.clone(),
-            )?));
-            agent.set_trajectory_recorder(recorder);
+        // Set up session recording if enabled
+        let working_dir = execution.task.working_dir.clone();
+        if self.config.trajectory.is_enabled() {
+            if let Ok(recorder) = SessionRecorder::new(&working_dir) {
+                agent.set_session_recorder(Arc::new(Mutex::new(recorder)));
+            }
         }
 
         // Continue the execution

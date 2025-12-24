@@ -6,7 +6,7 @@ use crate::llm::client::LlmClient;
 use crate::llm::messages::LlmMessage;
 use crate::tools::executor::ToolExecutor;
 use crate::tools::types::ToolSchema;
-use crate::trajectory::recorder::TrajectoryRecorder;
+use crate::trajectory::SessionRecorder;
 use crate::ui::AnimationManager;
 use crate::config::model::Config;
 use std::sync::Arc;
@@ -25,9 +25,15 @@ pub(super) async fn continue_execution_impl(
     llm_client: &mut LlmClient,
     tool_executor: &ToolExecutor,
     animation_manager: &mut AnimationManager,
-    trajectory_recorder: &Option<Arc<Mutex<TrajectoryRecorder>>>,
+    session_recorder: &Option<Arc<Mutex<SessionRecorder>>>,
     config: &Config,
 ) -> SageResult<()> {
+    // Record user message if session recorder is active
+    if let Some(recorder) = session_recorder {
+        let content = serde_json::json!({"role": "user", "content": user_message});
+        let _ = recorder.lock().await.record_user_message(content).await;
+    }
+
     // Build messages including the new user message
     let mut messages = build_messages(execution, system_message);
     messages.push(LlmMessage::user(user_message));
@@ -44,18 +50,13 @@ pub(super) async fn continue_execution_impl(
             llm_client,
             tool_executor,
             animation_manager,
-            trajectory_recorder,
+            session_recorder,
             config,
         )
         .await
         {
             Ok(step) => {
                 let is_completed = step.state == AgentState::Completed;
-
-                // Record step in trajectory
-                if let Some(recorder) = trajectory_recorder {
-                    recorder.lock().await.record_step(step.clone()).await?;
-                }
 
                 execution.add_step(step);
 
@@ -76,17 +77,13 @@ pub(super) async fn continue_execution_impl(
                 // Stop animation on error
                 animation_manager.stop_animation().await;
 
+                // Record error
+                if let Some(recorder) = session_recorder {
+                    let _ = recorder.lock().await.record_error("execution_error", &e.to_string()).await;
+                }
+
                 let error_step =
                     AgentStep::new(step_number, AgentState::Error).with_error(e.to_string());
-
-                // Record error step
-                if let Some(recorder) = trajectory_recorder {
-                    recorder
-                        .lock()
-                        .await
-                        .record_step(error_step.clone())
-                        .await?;
-                }
 
                 execution.add_step(error_step);
                 execution.complete(

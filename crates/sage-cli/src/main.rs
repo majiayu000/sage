@@ -364,10 +364,6 @@ enum Commands {
         #[arg(long, default_value = "sage_config.json")]
         config_file: String,
 
-        /// Path to save trajectory file
-        #[arg(long)]
-        trajectory_file: Option<PathBuf>,
-
         /// Working directory for the agent
         #[arg(long)]
         working_dir: Option<PathBuf>,
@@ -605,7 +601,6 @@ async fn main() -> SageResult<()> {
         Some(Commands::Unified {
             task,
             config_file,
-            trajectory_file,
             working_dir,
             max_steps,
             verbose,
@@ -614,7 +609,6 @@ async fn main() -> SageResult<()> {
             commands::unified_execute(commands::UnifiedArgs {
                 task,
                 config_file,
-                trajectory_file,
                 working_dir,
                 max_steps,
                 verbose,

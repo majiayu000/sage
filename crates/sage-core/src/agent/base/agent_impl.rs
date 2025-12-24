@@ -6,7 +6,7 @@ use crate::llm::client::LlmClient;
 use crate::llm::provider_types::{LlmProvider, TimeoutConfig};
 use crate::tools::executor::ToolExecutor;
 use crate::tools::types::ToolSchema;
-use crate::trajectory::recorder::TrajectoryRecorder;
+use crate::trajectory::SessionRecorder;
 use crate::types::Id;
 use crate::ui::AnimationManager;
 use anyhow::Context;
@@ -20,7 +20,7 @@ pub struct BaseAgent {
     pub(super) config: Config,
     pub(super) llm_client: LlmClient,
     pub(super) tool_executor: ToolExecutor,
-    pub(super) trajectory_recorder: Option<Arc<Mutex<TrajectoryRecorder>>>,
+    pub(super) session_recorder: Option<Arc<Mutex<SessionRecorder>>>,
     pub(super) max_steps: u32,
     pub(super) animation_manager: AnimationManager,
 }
@@ -79,15 +79,15 @@ impl BaseAgent {
             config,
             llm_client,
             tool_executor,
-            trajectory_recorder: None,
+            session_recorder: None,
             max_steps: u32::MAX, // No limit by default
             animation_manager: AnimationManager::new(),
         })
     }
 
-    /// Set trajectory recorder
-    pub fn set_trajectory_recorder(&mut self, recorder: Arc<Mutex<TrajectoryRecorder>>) {
-        self.trajectory_recorder = Some(recorder);
+    /// Set session recorder
+    pub fn set_session_recorder(&mut self, recorder: Arc<Mutex<SessionRecorder>>) {
+        self.session_recorder = Some(recorder);
     }
 
     /// Set tool executor
