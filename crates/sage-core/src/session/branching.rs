@@ -351,6 +351,7 @@ impl BranchManager {
     }
 
     /// Recursively build tree nodes
+    #[allow(clippy::only_used_in_recursion)]
     fn build_tree_recursive(
         &self,
         branches: &HashMap<BranchId, BranchSnapshot>,

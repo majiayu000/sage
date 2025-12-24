@@ -129,8 +129,11 @@ fn build_exclude_patterns(config: &WorkspaceConfig) -> Vec<ExcludePattern> {
         .collect()
 }
 
-enum ExcludePattern {
+/// Pattern for excluding files from workspace scanning
+pub enum ExcludePattern {
+    /// Exact string match
     Exact(String),
+    /// Glob pattern match
     Glob(Pattern),
 }
 

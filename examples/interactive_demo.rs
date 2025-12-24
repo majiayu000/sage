@@ -140,7 +140,7 @@ async fn test_basic_functionality(
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("🧪 Running basic functionality test...");
 
-    let test_requests = vec![
+    let test_requests = [
         "Hello, introduce yourself",
         "What is the current working directory?",
         "List files in the current directory",

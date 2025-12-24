@@ -69,11 +69,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n📋 Demo 3: Multiple Task Scopes");
     reset_global_interrupt_manager();
 
-    let manager = global_interrupt_manager().lock();
-    let scope1 = manager.create_task_scope();
-    let scope2 = manager.create_task_scope();
-    let scope3 = manager.create_task_scope();
-    drop(manager);
+    let (scope1, scope2, scope3) = {
+        let manager = global_interrupt_manager().lock();
+        (
+            manager.create_task_scope(),
+            manager.create_task_scope(),
+            manager.create_task_scope(),
+        )
+    };
 
     println!("Created 3 task scopes");
     println!("Scope 1 cancelled: {}", scope1.is_cancelled());
@@ -95,9 +98,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n📋 Demo 4: Different Interrupt Reasons");
     reset_global_interrupt_manager();
 
-    let manager = global_interrupt_manager().lock();
-    let _receiver = manager.subscribe();
-    drop(manager);
+    let _receiver = {
+        let manager = global_interrupt_manager().lock();
+        manager.subscribe()
+    };
 
     // Test different interrupt reasons
     let reasons = vec![

@@ -45,10 +45,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("⏱️  耗时: {:?}", duration);
 
             // 检查是否是认证错误（不应该重试）
-            if let SageError::Llm { message: msg, .. } = &error {
-                if msg.contains("401") || msg.contains("403") || msg.contains("API key") {
-                    println!("✅ 正确：认证错误没有触发重试");
-                }
+            if let SageError::Llm { message: msg, .. } = &error
+                && (msg.contains("401") || msg.contains("403") || msg.contains("API key"))
+            {
+                println!("✅ 正确：认证错误没有触发重试");
             }
         }
     }
@@ -80,10 +80,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("⏱️  总耗时: {:?}", duration);
 
             // 检查是否是可重试的错误
-            if let SageError::Llm { message: msg, .. } = &error {
-                if msg.contains("503") || msg.contains("overloaded") || msg.contains("429") {
-                    println!("✅ 正确：服务过载错误触发了重试机制");
-                }
+            if let SageError::Llm { message: msg, .. } = &error
+                && (msg.contains("503") || msg.contains("overloaded") || msg.contains("429"))
+            {
+                println!("✅ 正确：服务过载错误触发了重试机制");
             }
         }
     }

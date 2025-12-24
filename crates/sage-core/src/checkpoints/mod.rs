@@ -56,13 +56,17 @@
 //!     {content_hash}.dat      # Compressed large file content
 //! ```
 
+pub mod config;
 pub mod diff;
 pub mod manager;
+pub mod restore;
 pub mod storage;
 pub mod types;
 
+pub use config::CheckpointManagerConfig;
 pub use diff::{ChangeDetector, DiffHunk, DiffLine, FileChange, TextDiff};
-pub use manager::{CheckpointManager, CheckpointManagerConfig, RestorePreview};
+pub use manager::CheckpointManager;
+pub use restore::RestorePreview;
 pub use storage::{
     CheckpointStorage, CheckpointSummary, FileCheckpointStorage, MemoryCheckpointStorage,
 };
