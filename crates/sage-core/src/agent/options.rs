@@ -224,7 +224,7 @@ impl Default for ExecutionOptions {
     fn default() -> Self {
         Self {
             mode: ExecutionMode::Interactive,
-            max_steps: None, // None = unlimited
+            max_steps: Some(100), // Default limit to prevent infinite loops
             execution_timeout: None,
             prompt_timeout: None,
             record_trajectory: false,

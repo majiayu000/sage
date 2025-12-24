@@ -121,18 +121,19 @@ impl FileOperationTracker {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
+        use crate::tools::names::file_ops;
         match tool_name {
-            "Write" => {
+            file_ops::WRITE => {
                 if let Some(path) = file_path {
                     self.created_files.insert(path);
                 }
             }
-            "Edit" => {
+            file_ops::EDIT | file_ops::MULTI_EDIT => {
                 if let Some(path) = file_path {
                     self.modified_files.insert(path);
                 }
             }
-            "Read" => {
+            file_ops::READ => {
                 if let Some(path) = file_path {
                     self.read_files.insert(path);
                 }
@@ -256,9 +257,10 @@ impl CompletionChecker {
 
     /// Check if task_done was called in tool results
     fn find_task_done_summary(&self, results: &[ToolResult]) -> Option<String> {
+        use crate::tools::names::task_mgmt;
         results
             .iter()
-            .find(|r| r.tool_name == "task_done" && r.success)
+            .find(|r| r.tool_name == task_mgmt::TASK_DONE && r.success)
             .and_then(|r| r.output.clone())
     }
 
@@ -286,8 +288,16 @@ impl CompletionChecker {
             };
         }
 
-        // Check for natural completion (no tool calls, end_turn)
-        if response.tool_calls.is_empty() && response.finish_reason.as_deref() == Some("end_turn") {
+        // Check for natural completion (no tool calls, natural end)
+        // Support multiple LLM providers with different finish_reason values:
+        // - Anthropic: "end_turn"
+        // - OpenAI/GLM/others: "stop"
+        // - Google: "STOP"
+        let is_natural_end = matches!(
+            response.finish_reason.as_deref(),
+            Some("end_turn") | Some("stop") | Some("STOP")
+        );
+        if response.tool_calls.is_empty() && is_natural_end {
             // This might be a conversational response, allow it to continue
             return CompletionStatus::Continue {
                 reason: "Response ended without tool calls".to_string(),

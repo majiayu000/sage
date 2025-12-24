@@ -630,3 +630,109 @@ async fn test_bash_execution_time() {
         result.execution_time_ms.unwrap()
     );
 }
+
+#[tokio::test]
+async fn test_destructive_command_requires_confirmation() {
+    let tool = BashTool::new();
+
+    println!("\n=== Test 31: Destructive commands require confirmation ===");
+
+    // Test rm command without confirmation - should return error
+    let call = create_tool_call(
+        "test-31a",
+        "bash",
+        json!({
+            "command": "rm test_file.txt"
+        }),
+    );
+
+    let result = tool.execute(&call).await;
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(err.to_string().contains("DESTRUCTIVE COMMAND BLOCKED"));
+    println!("✓ rm command blocked without confirmation");
+
+    // Test rmdir command without confirmation
+    let call = create_tool_call(
+        "test-31b",
+        "bash",
+        json!({
+            "command": "rmdir empty_dir"
+        }),
+    );
+
+    let result = tool.execute(&call).await;
+    assert!(result.is_err());
+    println!("✓ rmdir command blocked without confirmation");
+
+    // Test git push --force without confirmation
+    let call = create_tool_call(
+        "test-31c",
+        "bash",
+        json!({
+            "command": "git push --force origin main"
+        }),
+    );
+
+    let result = tool.execute(&call).await;
+    assert!(result.is_err());
+    println!("✓ git push --force blocked without confirmation");
+}
+
+#[tokio::test]
+async fn test_destructive_command_with_confirmation() {
+    let tool = BashTool::new();
+
+    println!("\n=== Test 32: Destructive commands allowed with confirmation ===");
+
+    // Create a temp directory and file
+    let temp_dir = TempDir::new().unwrap();
+    let test_file = temp_dir.path().join("test_delete.txt");
+    fs::write(&test_file, "test content").await.unwrap();
+    assert!(test_file.exists());
+
+    // Test rm command with user_confirmed=true - should execute
+    let call = create_tool_call(
+        "test-32",
+        "bash",
+        json!({
+            "command": format!("rm {}", test_file.to_string_lossy()),
+            "user_confirmed": true
+        }),
+    );
+
+    let result = tool.execute(&call).await.unwrap();
+    assert!(result.success);
+    assert!(!test_file.exists());
+    println!("✓ rm command executed with user confirmation");
+}
+
+#[tokio::test]
+async fn test_safe_commands_no_confirmation_needed() {
+    let tool = BashTool::new();
+
+    println!("\n=== Test 33: Safe commands need no confirmation ===");
+
+    // These commands should execute without user_confirmed
+    let safe_commands = vec![
+        "ls -la",
+        "pwd",
+        "echo hello",
+        "git status",
+        "cargo --version",
+    ];
+
+    for (i, cmd) in safe_commands.iter().enumerate() {
+        let call = create_tool_call(
+            &format!("test-33-{}", i),
+            "bash",
+            json!({
+                "command": cmd
+            }),
+        );
+
+        let result = tool.execute(&call).await.unwrap();
+        assert!(result.success, "Command '{}' should succeed", cmd);
+        println!("✓ '{}' executed without confirmation", cmd);
+    }
+}
