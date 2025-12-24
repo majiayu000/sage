@@ -5,6 +5,7 @@ use crate::error::{SageError, SageResult};
 use crate::interrupt::global_interrupt_manager;
 use crate::llm::messages::LlmMessage;
 use crate::tools::types::{ToolCall, ToolSchema};
+use crate::trajectory::TokenUsage;
 use crate::ui::animation::AnimationState;
 use crate::ui::prompt::{show_permission_dialog, PermissionChoice, PermissionDialogConfig};
 use crate::ui::DisplayManager;
@@ -33,6 +34,20 @@ impl UnifiedExecutor {
             .start_animation(AnimationState::Thinking, "Thinking", "blue")
             .await;
 
+        // Record LLM request before sending
+        if let Some(recorder) = &self.session_recorder {
+            let input_messages: Vec<serde_json::Value> = messages
+                .iter()
+                .map(|msg| serde_json::to_value(msg).unwrap_or_default())
+                .collect();
+            let tools_available: Vec<String> = tool_schemas.iter().map(|t| t.name.clone()).collect();
+            let _ = recorder
+                .lock()
+                .await
+                .record_llm_request(input_messages, Some(tools_available))
+                .await;
+        }
+
         // Get cancellation token for interrupt handling
         let cancellation_token = global_interrupt_manager().lock().cancellation_token();
 
@@ -49,6 +64,37 @@ impl UnifiedExecutor {
 
         // Stop animation
         self.animation_manager.stop_animation().await;
+
+        // Record LLM response
+        if let Some(recorder) = &self.session_recorder {
+            let model = self
+                .config
+                .default_model_parameters()
+                .map(|p| p.model.clone())
+                .unwrap_or_default();
+            let usage = llm_response.usage.as_ref().map(|u| TokenUsage {
+                input_tokens: u.prompt_tokens as u64,
+                output_tokens: u.completion_tokens as u64,
+                cache_read_tokens: u.cache_read_input_tokens.map(|v| v as u64),
+                cache_write_tokens: u.cache_creation_input_tokens.map(|v| v as u64),
+            });
+            let tool_calls = if llm_response.tool_calls.is_empty() {
+                None
+            } else {
+                Some(
+                    llm_response
+                        .tool_calls
+                        .iter()
+                        .map(|tc| serde_json::to_value(tc).unwrap_or_default())
+                        .collect(),
+                )
+            };
+            let _ = recorder
+                .lock()
+                .await
+                .record_llm_response(&llm_response.content, &model, usage, tool_calls)
+                .await;
+        }
 
         // Convert messages to JSON for recording
         let messages_json: Vec<serde_json::Value> = messages
@@ -143,6 +189,18 @@ impl UnifiedExecutor {
                 }
             }
 
+            // Record tool call before execution
+            if let Some(recorder) = &self.session_recorder {
+                let tool_input = serde_json::to_value(&tool_call.arguments).unwrap_or_default();
+                let _ = recorder
+                    .lock()
+                    .await
+                    .record_tool_call(&tool_call.name, tool_input)
+                    .await;
+            }
+
+            let tool_start_time = std::time::Instant::now();
+
             // Check if this tool requires user interaction (blocking input)
             let requires_interaction = self
                 .tool_executor
@@ -162,6 +220,22 @@ impl UnifiedExecutor {
                 // Normal tool execution - may require permission confirmation
                 self.execute_tool_with_permission_check(tool_call).await
             };
+
+            // Record tool result after execution
+            if let Some(recorder) = &self.session_recorder {
+                let execution_time_ms = tool_start_time.elapsed().as_millis() as u64;
+                let _ = recorder
+                    .lock()
+                    .await
+                    .record_tool_result(
+                        &tool_call.name,
+                        tool_result.success,
+                        tool_result.output.clone(),
+                        tool_result.error.clone(),
+                        execution_time_ms,
+                    )
+                    .await;
+            }
 
             step.tool_results.push(tool_result.clone());
 
