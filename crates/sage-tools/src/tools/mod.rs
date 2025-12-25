@@ -35,14 +35,13 @@ pub mod vcs {
 // Network module with only working tools
 pub mod network {
     pub mod browser;
-    // http_client has URL validation for SSRF prevention but needs Tool trait update
-    // pub mod http_client;
+    pub mod http_client;
     pub mod validation;
     pub mod web_fetch;
     pub mod web_search;
 
     pub use browser::BrowserTool;
-    // pub use http_client::HttpClientTool;  // TODO: Update to new Tool trait
+    pub use http_client::HttpClientTool;
     pub use validation::validate_url_security;
     pub use web_fetch::WebFetchTool;
     pub use web_search::WebSearchTool;
@@ -63,7 +62,7 @@ pub use file_ops::{
 pub use infrastructure::{CloudTool, KubernetesTool, TerraformTool};
 pub use interaction::AskUserQuestionTool;
 pub use monitoring::{LogAnalyzerTool, TestGeneratorTool};
-pub use network::{BrowserTool, WebFetchTool, WebSearchTool};
+pub use network::{BrowserTool, HttpClientTool, WebFetchTool, WebSearchTool};
 pub use planning::{EnterPlanModeTool, ExitPlanModeTool};
 pub use process::{
     BashTool, KillShellTool, TaskOutputTool, TaskRequest, TaskStatus, TaskTool, get_pending_tasks,
@@ -127,6 +126,7 @@ pub fn get_default_tools() -> Vec<Arc<dyn Tool>> {
         Arc::new(WebSearchTool::new()),
         Arc::new(WebFetchTool::new()),
         Arc::new(BrowserTool::new()),
+        Arc::new(HttpClientTool::new()),
         // Diagnostics
         Arc::new(DiagnosticsTool::new()),
         Arc::new(ViewRangeUntruncatedTool::new()),
@@ -206,6 +206,7 @@ pub fn get_network_tools() -> Vec<Arc<dyn Tool>> {
         Arc::new(WebSearchTool::new()),
         Arc::new(WebFetchTool::new()),
         Arc::new(BrowserTool::new()),
+        Arc::new(HttpClientTool::new()),
     ]
 }
 

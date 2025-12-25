@@ -58,8 +58,11 @@ impl Tool for DiagnosticsTool {
             .get_argument("paths")
             .ok_or_else(|| ToolError::InvalidArguments("Missing 'paths' parameter".to_string()))?;
 
-        // TODO: Implement actual IDE diagnostics integration
-        // This is a placeholder implementation
+        // NOTE: This returns placeholder diagnostics. Actual IDE integration requires:
+        // 1. Language Server Protocol (LSP) client implementation
+        // 2. Integration with rust-analyzer, typescript-language-server, etc.
+        // 3. Real-time diagnostic collection from running language servers
+        // For now, agents should rely on compile/test output via BashTool instead.
         let mut issues = Vec::new();
 
         for path in &paths {

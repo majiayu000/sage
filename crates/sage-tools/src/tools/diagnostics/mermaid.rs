@@ -63,10 +63,14 @@ impl Tool for RenderMermaidTool {
             .get_string("title")
             .unwrap_or_else(|| "Mermaid Diagram".to_string());
 
-        // TODO: Implement actual Mermaid rendering
-        // This is a placeholder implementation
+        // NOTE: This returns markdown with mermaid code blocks for terminal display.
+        // Interactive rendering requires:
+        // 1. Web browser integration for HTML/SVG output (via BrowserTool)
+        // 2. Mermaid CLI for static image generation (mermaid-cli npm package)
+        // 3. Or terminal UI component that renders mermaid (complex)
+        // Current markdown format works with GitHub, many IDEs, and documentation tools.
         let rendered_output = format!(
-            "# {}\n\n```mermaid\n{}\n```\n\n*Diagram would be rendered interactively in the actual implementation*",
+            "# {}\n\n```mermaid\n{}\n```\n\n*Note: Mermaid diagram displayed as code block. View in GitHub, VS Code, or compatible markdown viewer for rendering.*",
             title, diagram_definition
         );
 

@@ -330,10 +330,15 @@ pub async fn execute(args: RunArgs) -> SageResult<()> {
             }
 
             // Handle patch creation
+            // Patch creation requires:
+            // 1. Detecting all file modifications made during execution (track via file tool results)
+            // 2. Generating unified diff format for each modified file
+            // 3. Combining diffs into a single patch file
+            // 4. Writing patch to specified path or auto-generated location
+            // This feature is planned but not yet implemented
             if args.must_patch || args.patch_path.is_some() {
-                console.info("Creating patch...");
-                // TODO: Implement patch creation
-                console.warn("Patch creation not yet implemented in Rust version");
+                console.warn("Patch creation feature not yet implemented");
+                console.info("Files were modified during execution but patch generation is not available");
             }
 
             // Print statistics if verbose
@@ -468,7 +473,12 @@ async fn handle_resume_command(
                         }
                     }
 
-                    // TODO: Actually resume the session by loading messages into agent context
+                    // Session resumption requires loading previous messages into agent context:
+                    // 1. Load all messages from the session storage
+                    // 2. Create or extend the agent's message history with loaded messages
+                    // 3. Pass the extended history to the SDK's run method
+                    // 4. Ensure tool results and context are properly reconstructed
+                    // This feature requires SDK changes to support pre-loading conversation history
                     console.info("\nTo continue this session, run:");
                     console.info(&format!(
                         "  sage run --session {} \"<your message>\"",

@@ -76,8 +76,12 @@ impl Tool for WebSearchTool {
 
         let _num_results = call.get_argument::<u32>("num_results").unwrap_or(5);
 
-        // TODO: Implement actual web search functionality
-        // This is a placeholder implementation - actual search API not configured
+        // NOTE: This returns placeholder results to guide the agent to use its built-in knowledge.
+        // Actual web search requires external API integration (e.g., Google Search API, Bing API).
+        // To implement real search:
+        // 1. Add API credentials to configuration
+        // 2. Integrate with search provider (reqwest + API endpoints)
+        // 3. Parse and format results as markdown with links
         let markdown = format!(
             r#"# Web Search: {}
 

@@ -324,10 +324,15 @@ resource "kubernetes_deployment" "example" {
 }
 "#
             }
-            _ => &format!(
-                "# Terraform configuration for {}\n# TODO: Add specific configuration",
-                resource_type
-            ),
+            _ => {
+                // For unknown resource types, provide a basic template
+                &format!(
+                    "# Terraform configuration for {}\n\
+                    # Please specify a supported resource type: aws_ec2, gcp_vm, azure_vm, kubernetes\n\
+                    # Or add custom Terraform configuration here",
+                    resource_type
+                )
+            }
         };
 
         let config_path = format!("{}/main.tf", working_dir);

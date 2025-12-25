@@ -117,13 +117,115 @@ impl AzureProvider {
     }
 
     /// Azure OpenAI streaming chat completion
-    /// Note: Streaming not yet implemented for Azure
     pub async fn chat_stream(
         &self,
-        _messages: &[LlmMessage],
-        _tools: Option<&[ToolSchema]>,
+        messages: &[LlmMessage],
+        tools: Option<&[ToolSchema]>,
     ) -> SageResult<LlmStream> {
-        // TODO: Implement Azure streaming (similar to OpenAI)
-        Err(SageError::llm("Azure streaming not yet implemented"))
+        use futures::StreamExt;
+        use crate::llm::streaming::StreamChunk;
+
+        let api_key = self
+            .config
+            .get_api_key()
+            .ok_or_else(|| SageError::llm("Azure API key not provided"))?;
+
+        let url = format!(
+            "{}/openai/deployments/{}/chat/completions?api-version={}",
+            self.config.get_base_url(),
+            self.model_params.model,
+            self.config
+                .api_version
+                .as_deref()
+                .unwrap_or("2025-02-15-preview")
+        );
+
+        let mut request_body = json!({
+            "messages": MessageConverter::to_openai(messages)?,
+            "stream": true,
+        });
+
+        // Add optional parameters
+        if let Some(max_tokens) = self.model_params.max_tokens {
+            request_body["max_tokens"] = json!(max_tokens);
+        }
+        if let Some(temperature) = self.model_params.temperature {
+            request_body["temperature"] = json!(temperature);
+        }
+        if let Some(top_p) = self.model_params.top_p {
+            request_body["top_p"] = json!(top_p);
+        }
+
+        // Add tools if provided
+        if let Some(tools) = tools {
+            request_body["tools"] = json!(ToolConverter::to_openai(tools)?);
+        }
+
+        let request = self
+            .http_client
+            .post(&url)
+            .header("api-key", &api_key)
+            .header("Content-Type", "application/json")
+            .json(&request_body);
+
+        tracing::debug!(
+            "Azure API streaming request: {}",
+            serde_json::to_string_pretty(&request_body).unwrap_or_default()
+        );
+
+        let response = request
+            .send()
+            .await
+            .map_err(|e| SageError::llm(format!("Azure streaming request failed: {}", e)))
+            .context("Failed to send HTTP request to Azure streaming API")?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(SageError::llm(format!(
+                "Azure streaming API error: {}",
+                error_text
+            )));
+        }
+
+        // Convert response to stream
+        let byte_stream = response.bytes_stream();
+
+        let stream = byte_stream.filter_map(|chunk_result| async move {
+            match chunk_result {
+                Ok(chunk) => {
+                    // Convert bytes to string and process lines
+                    let chunk_str = String::from_utf8_lossy(&chunk);
+                    for line in chunk_str.lines() {
+                        if let Some(data) = line.strip_prefix("data: ") {
+                            // Remove "data: " prefix
+                            if data == "[DONE]" {
+                                return Some(Ok(StreamChunk::final_chunk(
+                                    None,
+                                    Some("stop".to_string()),
+                                )));
+                            }
+
+                            if let Ok(json_data) = serde_json::from_str::<Value>(data) {
+                                if let Some(choices) = json_data["choices"].as_array() {
+                                    if let Some(choice) = choices.first() {
+                                        if let Some(delta) = choice["delta"].as_object() {
+                                            if let Some(content) =
+                                                delta.get("content").and_then(|v| v.as_str())
+                                            {
+                                                return Some(Ok(StreamChunk::content(content)));
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    None
+                }
+                Err(e) => Some(Err(SageError::llm(format!("Stream error: {}", e)))),
+            }
+        });
+
+        Ok(Box::pin(stream))
     }
 }

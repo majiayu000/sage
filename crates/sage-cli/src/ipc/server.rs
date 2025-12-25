@@ -283,11 +283,15 @@ impl IpcServer {
             }
             "cancel" => {
                 let task_id = request.get_task_id().unwrap_or_default();
-                // TODO: Implement task cancellation using interrupt manager
+                // Trigger task cancellation via global interrupt manager
+                sage_core::interrupt::interrupt_current_task(
+                    sage_core::interrupt::InterruptReason::Manual
+                );
+
                 self.send_event(IpcEvent::Error {
                     request_id: Some(task_id),
-                    code: "not_implemented".to_string(),
-                    message: "Task cancellation not yet implemented".to_string(),
+                    code: "cancelled".to_string(),
+                    message: "Task cancellation requested".to_string(),
                 });
                 Ok(false)
             }

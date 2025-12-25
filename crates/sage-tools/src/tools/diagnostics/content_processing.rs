@@ -63,9 +63,14 @@ impl Tool for ViewRangeUntruncatedTool {
             ToolError::InvalidArguments("Missing 'end_line' parameter".to_string())
         })?;
 
-        // TODO: Implement actual untruncated content viewing
+        // NOTE: This tool requires a content storage backend to retrieve untruncated content.
+        // Implementation needs:
+        // 1. Global storage registry mapping reference_ids to full content
+        // 2. Content stored when truncation occurs in other tools
+        // 3. Line-based indexing for efficient range retrieval
+        // Currently returns placeholder. Use ReadTool with file paths instead.
         let content = format!(
-            "Lines {}-{} from reference {}:\n\n[Placeholder content would be shown here]",
+            "Lines {}-{} from reference {}:\n\n[Untruncated content viewing not yet implemented. Use ReadTool with offset/limit instead]",
             start_line, end_line, reference_id
         );
 
@@ -139,9 +144,14 @@ impl Tool for SearchUntruncatedTool {
         })?;
         let context_lines: u32 = call.get_argument("context_lines").unwrap_or(2);
 
-        // TODO: Implement actual search in untruncated content
+        // NOTE: This tool requires a content storage backend to search untruncated content.
+        // Implementation needs:
+        // 1. Global storage registry mapping reference_ids to full content
+        // 2. Full-text search capability (regex or plain text)
+        // 3. Context extraction around matches
+        // Currently returns placeholder. Use GrepTool for file-based search instead.
         let content = format!(
-            "Search results for '{}' in reference {} (with {} context lines):\n\n[Placeholder search results would be shown here]",
+            "Search results for '{}' in reference {} (with {} context lines):\n\n[Untruncated search not yet implemented. Use GrepTool for file-based search instead]",
             search_term, reference_id, context_lines
         );
 

@@ -2,11 +2,10 @@
 
 use std::sync::Arc;
 use std::time::Instant;
-use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 use super::super::registry::AgentRegistry;
-use super::super::types::{AgentDefinition, SubAgentResult};
+use super::super::types::{AgentDefinition, ExecutionMetadata, SubAgentResult};
 use super::handlers::StepExecutor;
 use super::types::{ExecutorMessage, StepResult, SubAgentConfig};
 use crate::error::{SageError, SageResult};
@@ -85,13 +84,13 @@ impl SubAgentExecutor {
             // Check step limit
             if steps_taken >= max_steps {
                 let duration_secs = start_time.elapsed().as_secs_f64();
+                let metadata = Self::create_metadata(&total_usage, tool_calls_count, duration_secs);
 
-                return Ok(SubAgentResult::failure(
-                    definition.id(),
-                    "Task incomplete: maximum steps reached".to_string(),
-                    duration_secs,
-                    steps_taken,
-                ));
+                return Ok(SubAgentResult {
+                    agent_id: definition.id(),
+                    content: "Task incomplete: maximum steps reached".to_string(),
+                    metadata,
+                });
             }
 
             steps_taken += 1;
@@ -116,18 +115,13 @@ impl SubAgentExecutor {
                 StepResult::Completed(output) => {
                     // Task completed successfully
                     let duration_secs = start_time.elapsed().as_secs_f64();
-                    let result_data = serde_json::json!({
-                        "output": output,
-                        "token_usage": total_usage,
-                        "tool_calls_count": tool_calls_count,
-                    });
+                    let metadata = Self::create_metadata(&total_usage, tool_calls_count, duration_secs);
 
-                    return Ok(SubAgentResult::success(
-                        definition.id(),
-                        result_data,
-                        duration_secs,
-                        steps_taken,
-                    ));
+                    return Ok(SubAgentResult {
+                        agent_id: definition.id(),
+                        content: output,
+                        metadata,
+                    });
                 }
                 StepResult::NeedsMoreSteps => {
                     // Continue to next iteration
@@ -135,31 +129,6 @@ impl SubAgentExecutor {
                 }
             }
         }
-    }
-
-    /// Execute in background, returning channel for progress updates
-    pub async fn execute_background(
-        &self,
-        config: SubAgentConfig,
-    ) -> SageResult<(String, mpsc::Receiver<ExecutorMessage>)> {
-        let (tx, rx) = mpsc::channel(100);
-        let cancel = CancellationToken::new();
-        let executor = Arc::new(self.clone());
-        let execution_id = uuid::Uuid::new_v4().to_string();
-
-        let cancel_clone = cancel.clone();
-        tokio::spawn(async move {
-            let result = executor.execute(config, cancel_clone).await;
-
-            let msg = match result {
-                Ok(result) => ExecutorMessage::Completed(result),
-                Err(e) => ExecutorMessage::Failed(e.to_string()),
-            };
-
-            let _ = tx.send(msg).await;
-        });
-
-        Ok((execution_id, rx))
     }
 
     /// Filter tools based on agent definition
@@ -195,19 +164,18 @@ impl SubAgentExecutor {
         messages
     }
 
-    /// Build system prompt for agent (unused for now)
-    #[allow(dead_code)]
-    fn build_system_prompt(&self, definition: &AgentDefinition, tools: &[Arc<dyn Tool>]) -> String {
-        let mut prompt = definition.system_prompt.clone();
-
-        if !tools.is_empty() {
-            prompt.push_str("\n\nAvailable tools:\n");
-            for tool in tools {
-                prompt.push_str(&format!("- {}: {}\n", tool.name(), tool.description()));
-            }
+    /// Create execution metadata from current state
+    fn create_metadata(
+        total_usage: &LlmUsage,
+        tool_calls_count: usize,
+        duration_secs: f64,
+    ) -> ExecutionMetadata {
+        ExecutionMetadata {
+            total_tokens: total_usage.total_tokens,
+            total_tool_uses: tool_calls_count as u32,
+            execution_time_ms: (duration_secs * 1000.0) as u64,
+            tools_used: Vec::new(),
         }
-
-        prompt
     }
 }
 

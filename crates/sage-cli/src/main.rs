@@ -531,8 +531,14 @@ async fn main() -> SageResult<()> {
             verbose,
             modern_ui: _,
         }) => {
-            // For now, Run command doesn't use modern UI
-            // TODO: Add modern UI support for run command
+            // Modern UI support for run command requires architectural changes:
+            // - The run command executes synchronously and exits immediately after completion
+            // - Modern UI (Ink/React) expects an IPC backend for event streaming
+            // - To support modern UI in run mode, we would need to:
+            //   1. Launch the IPC backend in a separate process
+            //   2. Stream execution events through IPC protocol
+            //   3. Handle the one-shot nature of run command in the UI
+            // For now, use `sage interactive --modern-ui` for modern UI experience
             commands::run::execute(commands::run::RunArgs {
                 task,
                 provider,

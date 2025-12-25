@@ -21,7 +21,7 @@ pub async fn discover_from_source(
 /// Extract enabled servers from config
 fn extract_servers_from_config(config: McpConfig) -> (McpConfig, Vec<(String, McpServerConfig)>) {
     let servers = if config.enabled {
-        config.enabled_servers()
+        config.enabled_servers().collect()
     } else {
         Vec::new()
     };
