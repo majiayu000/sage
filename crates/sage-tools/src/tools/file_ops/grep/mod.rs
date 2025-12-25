@@ -1,6 +1,10 @@
 //! Grep tool for searching file contents with regex patterns
+//!
+//! Uses the ripgrep library crates for high-performance searching:
+//! - `grep-searcher`: File searching with binary detection
+//! - `grep-regex`: Regex pattern matching
+//! - `ignore`: Directory walking with .gitignore support
 
-mod file_search;
 mod filters;
 mod output;
 mod params;

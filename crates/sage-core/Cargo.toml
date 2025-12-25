@@ -82,10 +82,6 @@ name = "markdown_demo"
 path = "../../examples/markdown_demo.rs"
 
 [[example]]
-name = "test_markdown_agent"
-path = "../../examples/test_markdown_agent.rs"
-
-[[example]]
 name = "ui_demo"
 path = "../../examples/ui_demo.rs"
 

@@ -456,9 +456,10 @@ mod tests {
     #[test]
     fn test_is_approaching_limit() {
         // Create a config with very low limit for testing
+        // reserved_for_response: 50 tokens, threshold = 100 - 50 = 50 tokens
         let config = ContextConfig::new()
             .with_max_tokens(100)
-            .with_threshold(0.5); // 50 tokens threshold
+            .with_reserved_tokens(50);
 
         let manager = ContextManager::new(config);
 
@@ -507,9 +508,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_prepare_messages_over_threshold_truncate() {
+        // reserved_for_response: 50 tokens, threshold = 100 - 50 = 50 tokens
         let config = ContextConfig::new()
             .with_max_tokens(100)
-            .with_threshold(0.5)
+            .with_reserved_tokens(50)
             .with_strategy(OverflowStrategy::Truncate)
             .with_min_messages(2);
 
@@ -524,9 +526,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_prepare_messages_sliding_window() {
+        // reserved_for_response: 50 tokens, threshold = 100 - 50 = 50 tokens
         let mut config = ContextConfig::new()
             .with_max_tokens(100)
-            .with_threshold(0.5)
+            .with_reserved_tokens(50)
             .with_strategy(OverflowStrategy::SlidingWindow);
         config.sliding_window_first = 2;
         config.sliding_window_last = 2;

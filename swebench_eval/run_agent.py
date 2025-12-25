@@ -160,17 +160,10 @@ class SageEvaluator:
 
         print(f"  Setting up {instance_id}...")
 
-        # Clone repo
+        # Clone repo (full clone to ensure we have all commits)
         repo_url = f"https://github.com/{repo}.git"
         subprocess.run(
-            ["git", "clone", "--depth", "1", repo_url, str(instance_dir)],
-            capture_output=True,
-            check=True,
-        )
-
-        # Fetch the specific commit
-        subprocess.run(
-            ["git", "-C", str(instance_dir), "fetch", "--depth", "100", "origin", base_commit],
+            ["git", "clone", repo_url, str(instance_dir)],
             capture_output=True,
             check=True,
         )
@@ -204,21 +197,18 @@ class SageEvaluator:
         """
         print(f"  Running agent{'  (retry)' if is_retry else ''}...")
 
-        # Create trajectory file path for this instance
-        trajectory_file = instance_dir / f"trajectory_{instance_id}.json"
-
         # Build the full prompt with SWE-bench specific instructions
         full_prompt = SWEBENCH_PROMPT_PREFIX + problem_statement
         if is_retry:
             full_prompt += SWEBENCH_RETRY_PROMPT
 
         try:
-            # Build command - note: max_steps is now unlimited by default
+            # Build command
+            # Note: Session recording is now automatic to ~/.sage/projects/
             cmd = [
                 self.sage_binary,
                 "unified",
                 full_prompt,
-                "--trajectory-file", str(trajectory_file),
                 "--non-interactive",  # Auto-respond to questions
             ]
 
@@ -233,12 +223,6 @@ class SageEvaluator:
                 text=True,
                 timeout=self.timeout,
             )
-
-            # Check if trajectory was created
-            if trajectory_file.exists():
-                print(f"  📝 Trajectory saved: {trajectory_file.name}")
-            else:
-                print(f"  ⚠️ No trajectory file created")
 
             return result.returncode == 0
         except subprocess.TimeoutExpired:

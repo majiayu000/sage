@@ -388,3 +388,220 @@ async fn test_error_handling() -> SageResult<()> {
     println!("✅ Error handling test passed!");
     Ok(())
 }
+
+/// Test auto-compact with boundary system (Claude Code style)
+#[tokio::test]
+async fn test_auto_compact_boundary_system() -> SageResult<()> {
+    use sage_core::context::{
+        is_compact_boundary, slice_from_last_compact_boundary, AutoCompact, AutoCompactConfig,
+    };
+
+    println!("🧪 Testing auto-compact boundary system");
+
+    // 1. Create config with low threshold for easier testing
+    // Using reserved_for_response: 1000 tokens reserved, threshold = 2000 - 1000 = 1000 tokens
+    let config = AutoCompactConfig {
+        max_context_tokens: 2000,
+        reserved_for_response: 1000, // Threshold at 1000 tokens (50%)
+        min_messages_to_keep: 3,
+        preserve_recent_count: 2,
+        preserve_system_messages: true,
+        preserve_tool_messages: false,
+        ..Default::default()
+    };
+
+    let mut auto_compact = AutoCompact::new(config);
+
+    // 2. Create messages that exceed threshold
+    println!("📝 Creating test messages...");
+    let mut messages: Vec<LlmMessage> = vec![
+        LlmMessage {
+            role: MessageRole::System,
+            content: "You are a helpful assistant.".to_string(),
+            tool_calls: None,
+            tool_call_id: None,
+            cache_control: None,
+            name: None,
+            metadata: HashMap::new(),
+        },
+    ];
+
+    // Add enough messages to trigger compact
+    for i in 0..20 {
+        messages.push(LlmMessage {
+            role: if i % 2 == 0 {
+                MessageRole::User
+            } else {
+                MessageRole::Assistant
+            },
+            content: format!(
+                "Message {} with some content to fill the context window quickly",
+                i
+            ),
+            tool_calls: None,
+            tool_call_id: None,
+            cache_control: None,
+            name: None,
+            metadata: HashMap::new(),
+        });
+    }
+
+    let original_count = messages.len();
+    println!("📊 Original message count: {}", original_count);
+
+    // 3. Force compact
+    println!("🗜️ Forcing compact...");
+    let result = auto_compact.force_compact(&mut messages).await?;
+
+    assert!(result.was_compacted, "Should have compacted");
+    assert!(result.compact_id.is_some(), "Should have compact ID");
+    assert!(
+        result.messages_after < result.messages_before,
+        "Should have fewer messages after compact"
+    );
+    println!(
+        "✅ Compacted: {} -> {} messages (saved {} tokens)",
+        result.messages_before,
+        result.messages_after,
+        result.tokens_saved()
+    );
+
+    // 4. Verify boundary marker exists
+    println!("🔍 Checking boundary marker...");
+    let has_boundary = messages.iter().any(|m| is_compact_boundary(m));
+    assert!(has_boundary, "Should have a compact boundary marker");
+    println!("✅ Boundary marker found");
+
+    // 5. Verify slice_from_last_compact_boundary works
+    let sliced = slice_from_last_compact_boundary(&messages);
+    assert!(
+        sliced.len() <= messages.len(),
+        "Sliced messages should be <= total"
+    );
+    assert!(
+        is_compact_boundary(&sliced[0]),
+        "First message in slice should be boundary"
+    );
+    println!(
+        "✅ Slice from boundary: {} messages (boundary + summary + kept)",
+        sliced.len()
+    );
+
+    // 6. Add more messages after compact
+    println!("📝 Adding messages after compact...");
+    for i in 0..5 {
+        messages.push(LlmMessage {
+            role: MessageRole::User,
+            content: format!("New message {} after compact", i),
+            tool_calls: None,
+            tool_call_id: None,
+            cache_control: None,
+            name: None,
+            metadata: HashMap::new(),
+        });
+    }
+
+    // 7. Check if needs compaction (should only consider post-boundary messages)
+    let needs_compact = auto_compact.needs_compaction(&messages);
+    println!(
+        "📊 Needs compaction after adding 5 messages: {}",
+        needs_compact
+    );
+    // With only 5 new messages, shouldn't need compact yet
+    assert!(
+        !needs_compact,
+        "Should not need compaction with few new messages"
+    );
+
+    // 8. Test second compact creates new boundary
+    println!("📝 Adding more messages to trigger second compact...");
+    for i in 0..30 {
+        messages.push(LlmMessage {
+            role: MessageRole::User,
+            content: format!("Bulk message {} to trigger second compact", i),
+            tool_calls: None,
+            tool_call_id: None,
+            cache_control: None,
+            name: None,
+            metadata: HashMap::new(),
+        });
+    }
+
+    let result2 = auto_compact.force_compact(&mut messages).await?;
+    assert!(result2.was_compacted, "Second compact should work");
+    assert_ne!(
+        result.compact_id, result2.compact_id,
+        "Should have different compact IDs"
+    );
+    println!(
+        "✅ Second compact: {} -> {} messages (ID: {:?})",
+        result2.messages_before,
+        result2.messages_after,
+        result2.compact_id.map(|id| id.to_string()[..8].to_string())
+    );
+
+    // 9. Verify stats
+    let stats = auto_compact.stats();
+    assert_eq!(stats.total_compactions, 2, "Should have 2 compactions");
+    assert!(stats.total_tokens_saved > 0, "Should have saved tokens");
+    println!(
+        "📊 Stats: {} compactions, {} tokens saved",
+        stats.total_compactions, stats.total_tokens_saved
+    );
+
+    println!("✅ Auto-compact boundary system test passed!");
+    Ok(())
+}
+
+/// Test compact with custom instructions
+#[tokio::test]
+async fn test_compact_with_custom_instructions() -> SageResult<()> {
+    use sage_core::context::{AutoCompact, AutoCompactConfig};
+
+    println!("🧪 Testing compact with custom instructions");
+
+    // reserved_for_response: 350 tokens, threshold = 500 - 350 = 150 tokens (30%)
+    let config = AutoCompactConfig {
+        max_context_tokens: 500,
+        reserved_for_response: 350,
+        ..Default::default()
+    };
+
+    let mut auto_compact = AutoCompact::new(config);
+
+    // Create messages
+    let mut messages: Vec<LlmMessage> = (0..15)
+        .map(|i| LlmMessage {
+            role: if i % 2 == 0 {
+                MessageRole::User
+            } else {
+                MessageRole::Assistant
+            },
+            content: format!("Test message {} with TypeScript code: const x = {}", i, i),
+            tool_calls: None,
+            tool_call_id: None,
+            cache_control: None,
+            name: None,
+            metadata: HashMap::new(),
+        })
+        .collect();
+
+    // Compact with custom instructions
+    let result = auto_compact
+        .compact_with_instructions(&mut messages, "Focus on TypeScript code changes")
+        .await?;
+
+    assert!(result.was_compacted, "Should have compacted");
+    assert!(
+        result.summary_preview.is_some(),
+        "Should have summary preview"
+    );
+
+    // The summary should include our conversation (simple summary without LLM)
+    let preview = result.summary_preview.unwrap();
+    assert!(!preview.is_empty(), "Summary preview should not be empty");
+    println!("✅ Summary preview: {}...", &preview[..preview.len().min(100)]);
+
+    println!("✅ Custom instructions test passed!");
+    Ok(())
+}

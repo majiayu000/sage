@@ -50,6 +50,7 @@
 mod claude_mode;
 mod commands;
 mod console;
+mod ipc;
 mod progress;
 mod signal_handler;
 mod ui_backend;
@@ -363,10 +364,6 @@ enum Commands {
         #[arg(long, default_value = "sage_config.json")]
         config_file: String,
 
-        /// Path to save trajectory file
-        #[arg(long)]
-        trajectory_file: Option<PathBuf>,
-
         /// Working directory for the agent
         #[arg(long)]
         working_dir: Option<PathBuf>,
@@ -384,6 +381,29 @@ enum Commands {
         /// make decisions autonomously
         #[arg(long)]
         non_interactive: bool,
+    },
+
+    /// Run as IPC backend for Modern UI (internal use)
+    ///
+    /// This command starts the agent in IPC mode, communicating via stdin/stdout
+    /// using JSON-Lines protocol. This is used by the Modern UI (Node.js/Ink)
+    /// when it spawns Sage as a subprocess.
+    ///
+    /// You typically don't need to run this directly - use `sage interactive --modern-ui`
+    /// instead, which will automatically manage the IPC backend.
+    ///
+    /// Protocol:
+    ///   - Requests: JSON objects on stdin (one per line)
+    ///   - Events: JSON objects on stdout (one per line)
+    ///
+    /// Examples:
+    ///   sage ipc                              # Start IPC server with default config
+    ///   sage ipc --config-file custom.json   # Use custom config
+    #[command(verbatim_doc_comment)]
+    Ipc {
+        /// Path to configuration file
+        #[arg(long, default_value = "sage_config.json")]
+        config_file: String,
     },
 }
 
@@ -581,7 +601,6 @@ async fn main() -> SageResult<()> {
         Some(Commands::Unified {
             task,
             config_file,
-            trajectory_file,
             working_dir,
             max_steps,
             verbose,
@@ -590,13 +609,16 @@ async fn main() -> SageResult<()> {
             commands::unified_execute(commands::UnifiedArgs {
                 task,
                 config_file,
-                trajectory_file,
                 working_dir,
                 max_steps,
                 verbose,
                 non_interactive,
             })
             .await
+        }
+
+        Some(Commands::Ipc { config_file }) => {
+            ipc::run_ipc_mode(Some(&config_file)).await
         }
     }
 }

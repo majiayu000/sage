@@ -4,7 +4,6 @@ use crate::agent::{AgentExecution, AgentState, AgentStep, ExecutionError, Execut
 use crate::error::{SageError, SageResult};
 use crate::session::{EnhancedTokenUsage, EnhancedToolCall};
 use crate::ui::DisplayManager;
-use anyhow::Context;
 
 use super::UnifiedExecutor;
 
@@ -89,18 +88,8 @@ impl UnifiedExecutor {
 
                         let is_completed = step.state == AgentState::Completed;
 
-                        // Record step in trajectory
-                        if let Some(recorder) = &self.trajectory_recorder {
-                            recorder
-                                .lock()
-                                .await
-                                .record_step(step.clone())
-                                .await
-                                .context(format!(
-                                    "Failed to record execution step {} in trajectory",
-                                    step_number
-                                ))?;
-                        }
+                        // Session recording is handled by llm_interaction.rs and tool_execution.rs
+                        // which record each request/response/tool_call/tool_result individually
 
                         // Record assistant message in JSONL session
                         self.record_step_in_session(&step).await?;
@@ -131,16 +120,13 @@ impl UnifiedExecutor {
                         let error_step = AgentStep::new(step_number, AgentState::Error)
                             .with_error(e.to_string());
 
-                        if let Some(recorder) = &self.trajectory_recorder {
-                            recorder
+                        // Record error in session
+                        if let Some(recorder) = &self.session_recorder {
+                            let _ = recorder
                                 .lock()
                                 .await
-                                .record_step(error_step.clone())
-                                .await
-                                .context(format!(
-                                    "Failed to record error step {} in trajectory",
-                                    step_number
-                                ))?;
+                                .record_error("execution_error", &e.to_string())
+                                .await;
                         }
 
                         execution.add_step(error_step);

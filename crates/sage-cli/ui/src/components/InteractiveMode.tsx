@@ -1,18 +1,24 @@
 /**
- * Interactive mode component
+ * Interactive mode component with IPC-based backend communication
  */
 
-import React, { useState, useEffect } from 'react';
-import { Box, Text, useInput } from 'ink';
+import React, { useState, useEffect, useRef } from 'react';
+import { Box, Text, useInput, useApp } from 'ink';
 import TextInput from 'ink-text-input';
 import { SageConfig, CliArgs, ConversationMessage, ToolCall as ConfigToolCall } from '../types/config.js';
 import { useTheme } from '../contexts/ThemeContext.js';
 import { LoadingIndicator } from './LoadingIndicator.js';
 import { MessageDisplay } from './MessageDisplay.js';
 import { StreamingChatResponse } from './StreamingChatResponse.js';
-
-import { createRpcClient, ChatRequest } from '../utils/rpc-client.js';
-import { createDenoClient, isDenoEnvironment, ToolCallStatus } from '../utils/deno-client.js';
+import {
+  IpcClient,
+  createIpcClient,
+  ToolStartedEvent,
+  ToolCompletedEvent,
+  LlmThinkingEvent,
+  ChatCompletedEvent,
+  ErrorEvent,
+} from '../utils/ipc-client.js';
 
 interface InteractiveModeProps {
   config: SageConfig;
@@ -26,49 +32,116 @@ export const InteractiveMode: React.FC<InteractiveModeProps> = ({ config, args }
   const [showInput, setShowInput] = useState(true);
   const [currentToolCalls, setCurrentToolCalls] = useState<ConfigToolCall[]>([]);
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
-  const [client] = useState(() => {
-    // For now, use a direct backend client instead of RPC
-    return createDirectBackendClient();
-  });
+  const [isConnecting, setIsConnecting] = useState(true);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const clientRef = useRef<IpcClient | null>(null);
   const theme = useTheme();
+  const { exit } = useApp();
 
-  // Convert ToolCallStatus to ToolCall
-  const convertToolCallStatus = (status: ToolCallStatus): ConfigToolCall => ({
-    id: status.id,
-    name: status.name,
-    args: status.args,
-    status: status.status,
-    startTime: status.start_time,
-    endTime: status.end_time,
-    result: status.result,
-    error: status.error,
-  });
-
-
-
-  // Add welcome message
+  // Initialize IPC client
   useEffect(() => {
-    const welcomeMessage: ConversationMessage = {
-      role: 'assistant',
-      content: `Welcome to Sage Agent Interactive Mode!
+    let mounted = true;
+
+    const initClient = async () => {
+      try {
+        // Debug: log args
+        console.error('[UI] args.configFile:', args.configFile);
+        console.error('[UI] Full args:', JSON.stringify(args, null, 2));
+
+        const client = await createIpcClient(args.configFile);
+
+        if (!mounted) {
+          await client.shutdown();
+          return;
+        }
+
+        clientRef.current = client;
+
+        // Set up event listeners for real-time updates
+        client.on('tool_started', (event: ToolStartedEvent) => {
+          setCurrentToolCalls(prev => [
+            ...prev,
+            {
+              id: event.tool_id,
+              name: event.tool_name,
+              args: event.args,
+              status: 'running',
+            },
+          ]);
+        });
+
+        client.on('tool_completed', (event: ToolCompletedEvent) => {
+          setCurrentToolCalls(prev =>
+            prev.map(tc =>
+              tc.id === event.tool_id
+                ? {
+                    ...tc,
+                    status: event.success ? 'completed' : 'failed',
+                    result: event.output,
+                    error: event.error,
+                    endTime: Date.now(),
+                  }
+                : tc
+            )
+          );
+        });
+
+        client.on('llm_thinking', (_event: LlmThinkingEvent) => {
+          // Could show a thinking indicator here
+        });
+
+        client.on('error', (event: ErrorEvent) => {
+          console.error('IPC Error:', event.message);
+        });
+
+        client.on('exit', (code: number) => {
+          if (mounted) {
+            setConnectionError(`Backend exited with code ${code}`);
+          }
+        });
+
+        setIsConnecting(false);
+
+        // Add welcome message
+        const welcomeMessage: ConversationMessage = {
+          role: 'assistant',
+          content: `Welcome to Sage Agent Interactive Mode!
 
 I'm your AI assistant for software engineering tasks. I can help you with:
 • Code analysis and refactoring
-• Bug fixing and debugging  
+• Bug fixing and debugging
 • Documentation generation
 • Project setup and configuration
 • And much more!
 
 Type your request below, or type 'help' for more information.`,
-      timestamp: new Date().toISOString(),
+          timestamp: new Date().toISOString(),
+        };
+
+        setMessages([welcomeMessage]);
+      } catch (error) {
+        if (mounted) {
+          setConnectionError(
+            error instanceof Error ? error.message : 'Failed to connect to backend'
+          );
+          setIsConnecting(false);
+        }
+      }
     };
-    
-    setMessages([welcomeMessage]);
-  }, []);
+
+    initClient();
+
+    return () => {
+      mounted = false;
+      if (clientRef.current) {
+        clientRef.current.shutdown().catch(() => {});
+      }
+    };
+  }, [args.configFile]);
 
   // Handle input submission
   const handleSubmit = async (input: string) => {
-    if (!input.trim()) return;
+    if (!input.trim() || !clientRef.current) return;
 
     // Add user message
     const userMessage: ConversationMessage = {
@@ -76,14 +149,15 @@ Type your request below, or type 'help' for more information.`,
       content: input.trim(),
       timestamp: new Date().toISOString(),
     };
-    
+
     setMessages(prev => [...prev, userMessage]);
     setCurrentInput('');
     setIsProcessing(true);
     setShowInput(false);
+    setCurrentToolCalls([]);
 
     try {
-      // Handle special commands
+      // Handle special commands locally
       if (input.trim().toLowerCase() === 'help') {
         const helpMessage: ConversationMessage = {
           role: 'assistant',
@@ -96,7 +170,7 @@ Type your request below, or type 'help' for more information.`,
 You can also ask me to perform any software engineering task!`,
           timestamp: new Date().toISOString(),
         };
-        
+
         setMessages(prev => [...prev, helpMessage]);
         setIsProcessing(false);
         setShowInput(true);
@@ -110,17 +184,23 @@ You can also ask me to perform any software engineering task!`,
         return;
       }
 
+      if (input.trim().toLowerCase() === 'exit') {
+        await clientRef.current.shutdown();
+        exit();
+        return;
+      }
+
       if (input.trim().toLowerCase() === 'config') {
         try {
-          const configInfo = await client.getConfig(args.configFile);
+          const configInfo = await clientRef.current.getConfig(args.configFile);
           const configMessage: ConversationMessage = {
             role: 'assistant',
             content: `Current Configuration:
 • Provider: ${configInfo.provider}
 • Model: ${configInfo.model}
-• Max Steps: ${configInfo.max_steps}
+• Max Steps: ${configInfo.max_steps ?? 'unlimited'}
 • Working Directory: ${configInfo.working_directory}
-• Verbose: ${configInfo.verbose ? 'Enabled' : 'Disabled'}`,
+• Token Budget: ${configInfo.total_token_budget ?? 'unlimited'}`,
             timestamp: new Date().toISOString(),
           };
 
@@ -139,52 +219,47 @@ You can also ask me to perform any software engineering task!`,
         return;
       }
 
-      // Call the actual Sage Agent backend
-      const chatRequest: ChatRequest = {
+      // Send chat request to backend
+      const messageId = Date.now().toString();
+      setStreamingMessageId(messageId);
+
+      const response = await clientRef.current.chat({
         message: input.trim(),
         config_file: args.configFile,
         working_dir: args.workingDir,
+      });
+
+      // Create response message with tool results
+      const responseMessage: ConversationMessage = {
+        role: 'assistant',
+        content: response.content || '',
+        timestamp: new Date().toISOString(),
+        metadata: {
+          toolCalls: response.tool_results?.map((tr) => ({
+            id: tr.tool_id,
+            name: tr.tool_name,
+            args: {},
+            status: tr.success ? 'completed' as const : 'failed' as const,
+            result: tr.output,
+            error: tr.error,
+            endTime: Date.now(),
+          })) || [],
+        },
       };
 
-      const response = await client.chat(chatRequest);
-
-      if (response.success) {
-        const responseMessage: ConversationMessage = {
-          role: (response.role as 'user' | 'assistant' | 'system') || 'assistant',
-          content: response.content || '',
-          timestamp: response.timestamp || new Date().toISOString(),
-          metadata: {
-            toolCalls: response.tool_calls?.map(convertToolCallStatus) || [],
-          },
-        };
-
-        // Set tool calls for real-time display
-        if (response.tool_calls && response.tool_calls.length > 0) {
-          setCurrentToolCalls(response.tool_calls.map(convertToolCallStatus));
-          setStreamingMessageId(responseMessage.timestamp); // Use timestamp as ID
-        }
-
-        setMessages(prev => [...prev, responseMessage]);
-      } else {
-        const errorMessage: ConversationMessage = {
-          role: 'assistant',
-          content: `Sorry, I encountered an error: ${response.error || 'Unknown error'}`,
-          timestamp: new Date().toISOString(),
-        };
-
-        setMessages(prev => [...prev, errorMessage]);
-      }
+      setMessages(prev => [...prev, responseMessage]);
     } catch (error) {
       const errorMessage: ConversationMessage = {
         role: 'assistant',
         content: `Sorry, I encountered an error: ${error instanceof Error ? error.message : 'Unknown error'}`,
         timestamp: new Date().toISOString(),
       };
-      
+
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsProcessing(false);
       setShowInput(true);
+      setStreamingMessageId(null);
     }
   };
 
@@ -206,7 +281,11 @@ You can also ask me to perform any software engineering task!`,
           return;
         }
       }
-      process.exit(0);
+      // Clean shutdown
+      if (clientRef.current) {
+        clientRef.current.shutdown().catch(() => {});
+      }
+      exit();
     }
 
     if (key.ctrl && input === 'l') {
@@ -214,16 +293,38 @@ You can also ask me to perform any software engineering task!`,
     }
   });
 
+  // Show connecting state
+  if (isConnecting) {
+    return (
+      <Box flexDirection="column" height="100%" justifyContent="center" alignItems="center">
+        <LoadingIndicator message="Connecting to Sage backend..." showTimer={true} />
+      </Box>
+    );
+  }
+
+  // Show connection error
+  if (connectionError) {
+    return (
+      <Box flexDirection="column" height="100%" padding={1}>
+        <Text color="red" bold>Connection Error</Text>
+        <Text color="red">{connectionError}</Text>
+        <Text> </Text>
+        <Text>Please ensure the Sage backend is properly installed.</Text>
+        <Text>Try running: cargo build -p sage-cli</Text>
+      </Box>
+    );
+  }
+
   return (
     <Box flexDirection="column" height="100%">
       {/* Messages area */}
       <Box flexDirection="column" flexGrow={1} paddingX={1}>
         {messages.map((message, index) => {
-          const isStreaming = streamingMessageId === message.timestamp && isProcessing;
+          const isStreaming = streamingMessageId !== null && index === messages.length - 1 && isProcessing;
           const toolCalls = message.metadata?.toolCalls || [];
 
           // Use StreamingChatResponse for messages with tool calls or streaming
-          if (toolCalls.length > 0 || isStreaming) {
+          if (toolCalls.length > 0 || (isStreaming && currentToolCalls.length > 0)) {
             return (
               <StreamingChatResponse
                 key={index}
@@ -243,11 +344,11 @@ You can also ask me to perform any software engineering task!`,
             />
           );
         })}
-        
+
         {isProcessing && (
           <Box marginY={1}>
-            <LoadingIndicator 
-              message="Processing your request..." 
+            <LoadingIndicator
+              message="Processing your request..."
               showTimer={true}
             />
           </Box>
@@ -256,8 +357,8 @@ You can also ask me to perform any software engineering task!`,
 
       {/* Input area */}
       {showInput && (
-        <Box 
-          borderStyle="single" 
+        <Box
+          borderStyle="single"
           borderColor={theme.colors.border}
           paddingX={1}
           marginX={1}

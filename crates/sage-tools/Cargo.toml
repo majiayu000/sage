@@ -65,6 +65,12 @@ url = "2.5"
 glob = "0.3"
 walkdir = "2"
 
+# ripgrep library crates for high-performance search
+grep-regex = "0.1"
+grep-searcher = "0.1"
+grep-matcher = "0.1"
+ignore = "0.4"
+
 # Process control (Unix only)
 [target.'cfg(unix)'.dependencies]
 nix = { workspace = true }

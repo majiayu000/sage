@@ -82,87 +82,24 @@ pub async fn execute_conversation_task(
 }
 
 /// Execute conversation continuation (for follow-up messages)
+///
+/// Note: With the unified executor, each message is treated as a new task.
+/// The conversation context is maintained through the session, not through
+/// the executor's internal state.
 pub async fn execute_conversation_continuation(
     console: &CliConsole,
     sdk: &SageAgentSdk,
     conversation: &mut ConversationSession,
-    _task: &TaskMetadata,
+    task: &TaskMetadata,
 ) -> SageResult<()> {
-    let start_time = std::time::Instant::now();
-
-    console.info("🤔 Continuing conversation...");
-
+    // With unified executor, continuation is just a new task execution
+    // The user's follow-up message becomes the new task description
     let user_message = conversation
         .messages
         .last()
-        .map(|msg| msg.content.as_str())
-        .unwrap_or("No message");
+        .map(|msg| msg.content.clone())
+        .unwrap_or_else(|| task.description.clone());
 
-    set_global_app_state(AppState::ExecutingTask);
-
-    if let Some(execution) = &mut conversation.execution {
-        #[allow(deprecated)]
-        match tokio::time::timeout(
-            std::time::Duration::from_secs(300),
-            sdk.continue_execution(execution, user_message),
-        )
-        .await
-        {
-            Ok(result) => {
-                match result {
-                    Ok(()) => {
-                        let duration = start_time.elapsed();
-
-                        let final_result = execution.final_result.clone();
-                        let steps_len = execution.steps.len();
-                        let total_tokens = execution.total_usage.total_tokens;
-
-                        if let Some(final_result) = final_result {
-                            conversation.add_assistant_message(&final_result);
-                        }
-
-                        console.success("✓ Conversation continued successfully!");
-                        console.info(&format!("ℹ Execution time: {:.2}s", duration.as_secs_f64()));
-                        console.info(&format!("ℹ Steps: {}", steps_len));
-                        console.info(&format!("ℹ Tokens: {}", total_tokens));
-
-                        Ok(())
-                    }
-                    Err(e) => {
-                        let duration = start_time.elapsed();
-
-                        if e.to_string().contains("interrupted") {
-                            console.warn("🛑 Task interrupted by user");
-                            console
-                                .info(&format!("ℹ Execution time: {:.2}s", duration.as_secs_f64()));
-                            console
-                                .info("ℹ You can continue with a new task or type 'exit' to quit");
-                            Ok(())
-                        } else {
-                            console.error("✗ Conversation continuation failed!");
-                            console.error(&format!(
-                                "ℹ Execution time: {:.2}s",
-                                duration.as_secs_f64()
-                            ));
-                            console.error(&format!("ℹ Error: {e}"));
-                            Err(e)
-                        }
-                    }
-                }
-            }
-            Err(_) => {
-                let duration = start_time.elapsed();
-                console.error(&format!(
-                    "Conversation continuation timed out after {:.2}s",
-                    duration.as_secs_f64()
-                ));
-                Err(SageError::timeout(300))
-            }
-        }
-    } else {
-        console.error("No existing execution to continue");
-        Err(SageError::invalid_input(
-            "No existing execution to continue",
-        ))
-    }
+    let new_task = TaskMetadata::new(&user_message, &task.working_dir);
+    execute_conversation_task(console, sdk, conversation, &new_task).await
 }

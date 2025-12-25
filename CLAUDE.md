@@ -41,7 +41,11 @@ make test-int
 # Run the CLI in dev mode
 make dev
 # or
-cargo run --bin sage
+cargo run -p sage-cli
+
+# Run with arguments
+cargo run -p sage-cli -- interactive
+cargo run -p sage-cli -- run "your task"
 
 # Code quality checks
 make clippy        # Linting

@@ -27,16 +27,16 @@ impl UnifiedExecutor {
         // Initialize execution state
         let execution = AgentExecution::new(task.clone());
 
-        // Start trajectory recording if available
-        if let Some(recorder) = &self.trajectory_recorder {
+        // Start session recording if available
+        if let Some(recorder) = &self.session_recorder {
             let provider = self.config.get_default_provider().to_string();
             let model = self.config.default_model_parameters()?.model.clone();
             recorder
                 .lock()
                 .await
-                .start_recording(task.clone(), provider, model, self.options.max_steps)
+                .record_session_start(&task.description, &provider, &model)
                 .await
-                .context("Failed to start trajectory recording")?;
+                .context("Failed to start session recording")?;
         }
 
         // Build system prompt
@@ -71,16 +71,16 @@ impl UnifiedExecutor {
         // Stop any running animations
         self.animation_manager.stop_animation().await;
 
-        // Finalize trajectory recording
-        if let Some(recorder) = &self.trajectory_recorder {
-            recorder
+        // Finalize session recording
+        if let Some(recorder) = &self.session_recorder {
+            let _ = recorder
                 .lock()
                 .await
-                .finalize_recording(
+                .record_session_end(
                     outcome.is_success(),
                     outcome.execution().final_result.clone(),
                 )
-                .await?;
+                .await;
         }
 
         Ok(outcome)

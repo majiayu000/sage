@@ -1,6 +1,5 @@
 //! Agent system for Sage Agent
 
-pub mod base;
 pub mod completion;
 pub mod execution;
 pub mod lifecycle;
@@ -12,7 +11,6 @@ pub mod step;
 pub mod subagent;
 pub mod unified;
 
-pub use base::Agent;
 pub use completion::{
     CompletionChecker, CompletionStatus, FileOperationTracker, LimitType, TaskType,
 };

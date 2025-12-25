@@ -39,6 +39,7 @@
 //! ```
 
 pub mod auto_compact;
+pub mod compact;
 pub mod config;
 pub mod estimator;
 pub mod manager;
@@ -46,7 +47,16 @@ pub mod pruner;
 pub mod streaming;
 pub mod summarizer;
 
-pub use auto_compact::{AutoCompact, AutoCompactConfig, AutoCompactStats, CompactResult};
+pub use auto_compact::{
+    AutoCompact, AutoCompactConfig, AutoCompactStats, CompactResult,
+    AUTOCOMPACT_PCT_OVERRIDE_ENV, DEFAULT_RESERVED_FOR_RESPONSE,
+};
+pub use compact::{
+    build_summary_prompt, create_compact_boundary, create_compact_summary,
+    find_last_compact_boundary_index, is_compact_boundary, slice_from_last_compact_boundary,
+    CompactOperationResult, SummaryPromptConfig, COMPACT_BOUNDARY_KEY, COMPACT_ID_KEY,
+    COMPACT_SUMMARY_KEY, COMPACT_TIMESTAMP_KEY,
+};
 pub use config::{ContextConfig, OverflowStrategy};
 pub use estimator::TokenEstimator;
 pub use manager::{ContextManager, ContextUsageStats, PrepareResult};

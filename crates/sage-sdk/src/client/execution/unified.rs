@@ -5,7 +5,7 @@ use sage_core::{
     agent::{ExecutionMode, ExecutionOptions, UnifiedExecutor},
     error::SageResult,
     input::{InputChannel, InputChannelHandle},
-    trajectory::recorder::TrajectoryRecorder,
+    trajectory::SessionRecorder,
     types::TaskMetadata,
 };
 use sage_tools::get_default_tools;
@@ -61,13 +61,10 @@ impl SageAgentSdk {
         };
 
         let max_steps = options.max_steps.or(self.config.max_steps);
-        let mut exec_options = ExecutionOptions::default()
+        let exec_options = ExecutionOptions::default()
             .with_mode(mode)
-            .with_max_steps(max_steps);
-
-        if let Some(dir) = &options.working_directory {
-            exec_options = exec_options.with_working_directory(dir);
-        }
+            .with_max_steps(max_steps)
+            .with_working_directory(&working_dir);
 
         // Create the unified executor
         let mut executor = UnifiedExecutor::with_options(self.config.clone(), exec_options)?;
@@ -89,24 +86,12 @@ impl SageAgentSdk {
             None
         };
 
-        // Trajectory recording is always enabled
-        let trajectory_path = {
-            let path = options
-                .trajectory_path
-                .clone()
-                .or_else(|| self.trajectory_path.clone())
-                .unwrap_or_else(|| {
-                    let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
-                    self.config
-                        .trajectory
-                        .directory
-                        .join(format!("sage_{}.json", timestamp))
-                });
-
-            let recorder = TrajectoryRecorder::new(&path)?;
-            executor.set_trajectory_recorder(Arc::new(Mutex::new(recorder)));
-            Some(path)
-        };
+        // Session recording - always enabled, stored in ~/.sage/projects/{cwd}/
+        if self.config.trajectory.is_enabled() {
+            if let Ok(recorder) = SessionRecorder::new(&working_dir) {
+                executor.set_session_recorder(Arc::new(Mutex::new(recorder)));
+            }
+        }
 
         let config_used = self.config.clone();
 
@@ -115,7 +100,7 @@ impl SageAgentSdk {
             let outcome = executor.execute(task).await?;
             Ok(ExecutionResult::new(
                 outcome,
-                trajectory_path,
+                None, // No longer returning trajectory path
                 config_used,
             ))
         };

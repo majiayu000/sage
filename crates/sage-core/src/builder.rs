@@ -18,7 +18,7 @@ use crate::mcp::transport::TransportConfig;
 use crate::tools::base::Tool;
 use crate::tools::batch_executor::BatchToolExecutor;
 use crate::tools::executor::ToolExecutor;
-use crate::trajectory::recorder::TrajectoryRecorder;
+use crate::trajectory::SessionRecorder;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -313,13 +313,17 @@ impl SageBuilder {
         CancellationHierarchy::new()
     }
 
-    /// Build a TrajectoryRecorder
-    pub fn build_trajectory_recorder(&self) -> SageResult<Option<Arc<Mutex<TrajectoryRecorder>>>> {
-        if let Some(path) = &self.trajectory_path {
-            let recorder = TrajectoryRecorder::new(path.clone())?;
+    /// Build a SessionRecorder
+    pub fn build_session_recorder(&self) -> SageResult<Option<Arc<Mutex<SessionRecorder>>>> {
+        // SessionRecorder uses working directory, not trajectory path
+        // It stores in ~/.sage/projects/{escaped-cwd}/
+        if let Some(working_dir) = &self.working_dir {
+            let recorder = SessionRecorder::new(working_dir)?;
             Ok(Some(Arc::new(Mutex::new(recorder))))
         } else {
-            Ok(None)
+            // Use current directory as fallback
+            let recorder = SessionRecorder::new(std::env::current_dir()?)?;
+            Ok(Some(Arc::new(Mutex::new(recorder))))
         }
     }
 
@@ -398,7 +402,7 @@ impl SageBuilder {
         let lifecycle_manager = self.build_lifecycle_manager().await?;
         let event_bus = self.build_event_bus();
         let cancellation = self.build_cancellation_hierarchy();
-        let trajectory_recorder = self.build_trajectory_recorder()?;
+        let session_recorder = self.build_session_recorder()?;
         let mcp_registry = self.build_mcp_registry().await?;
 
         Ok(SageComponents {
@@ -407,7 +411,7 @@ impl SageBuilder {
             lifecycle_manager,
             event_bus,
             cancellation,
-            trajectory_recorder,
+            session_recorder,
             mcp_registry,
             config: self.config.clone(),
             max_steps: self.max_steps.unwrap_or(u32::MAX), // No limit by default
@@ -428,8 +432,8 @@ pub struct SageComponents {
     pub event_bus: EventBus,
     /// Cancellation hierarchy for graceful shutdown
     pub cancellation: CancellationHierarchy,
-    /// Optional trajectory recorder
-    pub trajectory_recorder: Option<Arc<Mutex<TrajectoryRecorder>>>,
+    /// Optional session recorder
+    pub session_recorder: Option<Arc<Mutex<SessionRecorder>>>,
     /// MCP registry for external tool servers
     pub mcp_registry: McpRegistry,
     /// Configuration
@@ -628,9 +632,9 @@ mod tests {
     }
 
     #[test]
-    fn test_builder_with_trajectory() {
-        let builder = SageBuilder::new().with_trajectory_path("/tmp/test.json");
-        assert!(builder.trajectory_path.is_some());
+    fn test_builder_with_working_dir() {
+        let builder = SageBuilder::new().with_working_dir("/tmp");
+        assert!(builder.working_dir.is_some());
     }
 
     #[test]
@@ -684,9 +688,9 @@ mod tests {
     }
 
     #[test]
-    fn test_builder_build_trajectory() {
-        let builder = SageBuilder::new().with_trajectory_path("/tmp/test.json");
-        let recorder = builder.build_trajectory_recorder().unwrap();
+    fn test_builder_build_session_recorder() {
+        let builder = SageBuilder::new().with_working_dir("/tmp");
+        let recorder = builder.build_session_recorder().unwrap();
         assert!(recorder.is_some());
     }
 

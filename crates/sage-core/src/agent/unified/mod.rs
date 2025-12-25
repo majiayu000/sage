@@ -36,7 +36,7 @@ use crate::session::{
     FileSnapshotTracker, JsonlSessionStorage, MessageChainTracker,
 };
 use crate::tools::executor::ToolExecutor;
-use crate::trajectory::recorder::TrajectoryRecorder;
+use crate::trajectory::SessionRecorder;
 use crate::types::Id;
 use crate::ui::AnimationManager;
 use std::sync::Arc;
@@ -62,8 +62,8 @@ pub struct UnifiedExecutor {
     options: ExecutionOptions,
     /// Input channel for blocking user input (None for batch mode)
     input_channel: Option<InputChannel>,
-    /// Trajectory recorder
-    trajectory_recorder: Option<Arc<Mutex<TrajectoryRecorder>>>,
+    /// Session recorder
+    session_recorder: Option<Arc<Mutex<SessionRecorder>>>,
     /// Animation manager
     animation_manager: AnimationManager,
     /// JSONL session storage for enhanced messages
@@ -82,9 +82,9 @@ impl UnifiedExecutor {
         self.input_channel = Some(channel);
     }
 
-    /// Set trajectory recorder
-    pub fn set_trajectory_recorder(&mut self, recorder: Arc<Mutex<TrajectoryRecorder>>) {
-        self.trajectory_recorder = Some(recorder);
+    /// Set session recorder
+    pub fn set_session_recorder(&mut self, recorder: Arc<Mutex<SessionRecorder>>) {
+        self.session_recorder = Some(recorder);
     }
 
     /// Get current session ID
@@ -152,15 +152,15 @@ impl UnifiedExecutor {
         // Stop any animations
         self.animation_manager.stop_animation().await;
 
-        // Finalize trajectory recording if present
-        if let Some(recorder) = &self.trajectory_recorder {
-            tracing::debug!("Finalizing trajectory recording");
+        // Finalize session recording if present
+        if let Some(recorder) = &self.session_recorder {
+            tracing::debug!("Finalizing session recording");
             let mut recorder_guard = recorder.lock().await;
             if let Err(e) = recorder_guard
-                .finalize_recording(false, Some("Shutdown".to_string()))
+                .record_session_end(false, Some("Shutdown".to_string()))
                 .await
             {
-                tracing::warn!("Failed to finalize trajectory recording: {}", e);
+                tracing::warn!("Failed to finalize session recording: {}", e);
             }
         }
 
