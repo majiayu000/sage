@@ -12,7 +12,9 @@ mod types;
 #[cfg(test)]
 mod tests;
 
-use crate::storage::backend::{BackendType, DatabaseBackend, DatabaseError, DatabaseValue, QueryResult};
+use crate::storage::backend::{
+    BackendType, DatabaseBackend, DatabaseError, DatabaseValue, QueryResult,
+};
 use crate::storage::config::StorageConfig;
 use crate::storage::schema::{MigrationRunner, default_migrations};
 use serde::{Deserialize, Serialize};

@@ -1,7 +1,7 @@
 //! Branch query and list operations
 
-use super::core::BranchManager;
 use super::super::types::{BranchId, BranchSnapshot};
+use super::core::BranchManager;
 
 impl BranchManager {
     /// Get current branch

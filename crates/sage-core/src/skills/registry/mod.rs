@@ -3,10 +3,10 @@
 //! This module provides the skill registry for discovering and
 //! managing AI-activated skills.
 
-mod types;
-mod lookup;
 mod builtins;
 mod discovery;
+mod lookup;
+mod types;
 
 #[cfg(test)]
 mod tests;

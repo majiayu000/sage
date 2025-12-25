@@ -1,9 +1,7 @@
 //! Core parallel tool executor implementation
 
 use crate::tools::base::{ConcurrencyMode, Tool};
-use crate::tools::permission::{
-    PermissionCache, SharedPermissionHandler, ToolContext,
-};
+use crate::tools::permission::{PermissionCache, SharedPermissionHandler, ToolContext};
 use crate::tools::types::{ToolCall, ToolResult};
 use dashmap::DashMap;
 use std::sync::Arc;

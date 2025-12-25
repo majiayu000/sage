@@ -14,6 +14,6 @@ mod tests;
 // Re-export public items
 pub use tool::TaskTool;
 pub use types::{
-    TaskRegistry, TaskRequest, TaskStatus, get_pending_tasks, get_task, update_task_status,
-    GLOBAL_TASK_REGISTRY,
+    GLOBAL_TASK_REGISTRY, TaskRegistry, TaskRequest, TaskStatus, get_pending_tasks, get_task,
+    update_task_status,
 };

@@ -6,9 +6,7 @@ use std::collections::HashMap;
 /// Cleanup oldest conversations when at capacity
 ///
 /// Removes conversations with lowest hit rates, breaking ties by creation time.
-pub async fn cleanup_oldest_conversations(
-    conversations: &mut HashMap<String, CachedConversation>,
-) {
+pub async fn cleanup_oldest_conversations(conversations: &mut HashMap<String, CachedConversation>) {
     // Remove conversations with lowest hit rates
     let mut conv_stats: Vec<_> = conversations
         .iter()

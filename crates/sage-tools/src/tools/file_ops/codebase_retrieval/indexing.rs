@@ -5,8 +5,8 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use super::types::SearchAnalysis;
 use super::CodebaseRetrievalTool;
+use super::types::SearchAnalysis;
 
 impl CodebaseRetrievalTool {
     /// Find all relevant files in the directory

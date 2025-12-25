@@ -57,8 +57,8 @@ pub fn extract_style_patterns(
 
     for style in style_patterns {
         if style.samples >= min_observations && style.confidence >= 0.6 {
-            let pattern =
-                Pattern::coding_style(&style.aspect, &style.preference).with_confidence(style.confidence);
+            let pattern = Pattern::coding_style(&style.aspect, &style.preference)
+                .with_confidence(style.confidence);
             patterns.push(pattern);
         }
     }

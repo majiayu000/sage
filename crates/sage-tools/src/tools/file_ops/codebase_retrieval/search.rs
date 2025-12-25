@@ -4,8 +4,8 @@ use sage_core::tools::base::ToolError;
 use std::fs;
 use std::path::Path;
 
-use super::types::{SearchAnalysis, SearchResult};
 use super::CodebaseRetrievalTool;
+use super::types::{SearchAnalysis, SearchResult};
 
 impl CodebaseRetrievalTool {
     /// Search within a single file for relevant content

@@ -12,4 +12,4 @@ mod tests;
 // Re-export public types and functions
 pub use config::{MemoryConfig, MemoryStats};
 pub use core::MemoryManager;
-pub use helpers::{create_memory_manager, SharedMemoryManager};
+pub use helpers::{SharedMemoryManager, create_memory_manager};

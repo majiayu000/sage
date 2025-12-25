@@ -1,7 +1,7 @@
 //! Query analysis and pattern detection
 
-use super::types::SearchAnalysis;
 use super::CodebaseRetrievalTool;
+use super::types::SearchAnalysis;
 
 impl CodebaseRetrievalTool {
     /// Analyze the search query to extract meaningful terms and patterns

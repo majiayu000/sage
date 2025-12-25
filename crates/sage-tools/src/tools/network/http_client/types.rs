@@ -1,7 +1,7 @@
 //! HTTP client type definitions
 
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// HTTP methods
 #[derive(Debug, Clone, Serialize, Deserialize)]

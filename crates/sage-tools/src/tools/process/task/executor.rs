@@ -38,8 +38,8 @@ pub async fn execute_task_sync(
     registry.add_task(task);
 
     // Execute subagent
-    let config = SubAgentConfig::new(agent_type, task_params.prompt.clone())
-        .with_thoroughness(thoroughness);
+    let config =
+        SubAgentConfig::new(agent_type, task_params.prompt.clone()).with_thoroughness(thoroughness);
 
     match execute_subagent(config).await {
         Ok(result) => {
@@ -78,7 +78,10 @@ pub async fn execute_task_sync(
                     let mut meta = HashMap::new();
                     meta.insert("task_id".to_string(), json!(task_id));
                     meta.insert("agent_id".to_string(), json!(result.agent_id));
-                    meta.insert("subagent_type".to_string(), json!(task_params.subagent_type));
+                    meta.insert(
+                        "subagent_type".to_string(),
+                        json!(task_params.subagent_type),
+                    );
                     meta.insert("tools_used".to_string(), json!(result.metadata.tools_used));
                     meta.insert(
                         "total_tool_uses".to_string(),
@@ -115,7 +118,10 @@ pub async fn execute_task_sync(
                 metadata: {
                     let mut meta = HashMap::new();
                     meta.insert("task_id".to_string(), json!(task_id));
-                    meta.insert("subagent_type".to_string(), json!(task_params.subagent_type));
+                    meta.insert(
+                        "subagent_type".to_string(),
+                        json!(task_params.subagent_type),
+                    );
                     meta
                 },
             })
@@ -156,11 +162,7 @@ pub fn execute_task_background(
          Agent type: {}\n\
          Task ID: {}\n\n\
          Use TaskOutput with task_id=\"{}\" to retrieve results when ready.",
-        task_params.description,
-        task_id,
-        task_params.subagent_type,
-        task_id,
-        task_id
+        task_params.description, task_id, task_params.subagent_type, task_id, task_id
     );
 
     Ok(ToolResult {
@@ -174,7 +176,10 @@ pub fn execute_task_background(
         metadata: {
             let mut meta = HashMap::new();
             meta.insert("task_id".to_string(), json!(task_id));
-            meta.insert("subagent_type".to_string(), json!(task_params.subagent_type));
+            meta.insert(
+                "subagent_type".to_string(),
+                json!(task_params.subagent_type),
+            );
             meta.insert("run_in_background".to_string(), json!(true));
             meta
         },
@@ -191,7 +196,9 @@ struct TaskParameters {
 }
 
 /// Parse task parameters from tool call
-fn parse_task_parameters(call: &ToolCall) -> Result<(TaskParameters, AgentType, Thoroughness), String> {
+fn parse_task_parameters(
+    call: &ToolCall,
+) -> Result<(TaskParameters, AgentType, Thoroughness), String> {
     let description = call
         .arguments
         .get("description")

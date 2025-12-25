@@ -129,9 +129,8 @@ impl ValidationRule {
                 if let Some(s) = value.as_str() {
                     // Basic URL validation
                     static URL_RE: OnceLock<Regex> = OnceLock::new();
-                    let url_re = URL_RE.get_or_init(|| {
-                        Regex::new(r"^https?://[^\s/$.?#].[^\s]*$").unwrap()
-                    });
+                    let url_re =
+                        URL_RE.get_or_init(|| Regex::new(r"^https?://[^\s/$.?#].[^\s]*$").unwrap());
                     if !url_re.is_match(s) {
                         return Err(format!("'{}' is not a valid URL", s));
                     }

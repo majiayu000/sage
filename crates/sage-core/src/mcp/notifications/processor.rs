@@ -1,6 +1,8 @@
 //! Notification processing and dispatching
 
-use super::handlers::{CollectorHandler, LoggingHandler, NotificationHandler, CacheInvalidationHandler};
+use super::handlers::{
+    CacheInvalidationHandler, CollectorHandler, LoggingHandler, NotificationHandler,
+};
 use super::types::{LogLevel, NotificationEvent};
 use std::sync::Arc;
 use tokio::sync::{RwLock, broadcast};
@@ -87,7 +89,11 @@ impl NotificationDispatcher {
     }
 
     /// Create a notification event and dispatch it
-    pub async fn notify(&self, server_name: &str, notification: &crate::mcp::protocol::McpNotification) {
+    pub async fn notify(
+        &self,
+        server_name: &str,
+        notification: &crate::mcp::protocol::McpNotification,
+    ) {
         let event = NotificationEvent::new(server_name, notification);
         self.dispatch(event).await;
     }

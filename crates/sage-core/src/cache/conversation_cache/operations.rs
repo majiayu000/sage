@@ -1,7 +1,7 @@
 //! Main conversation cache operations
 
 use super::eviction::{cleanup_expired_checkpoints, cleanup_oldest_conversations};
-use super::storage::{compute_prefix_hash, CachedConversation};
+use super::storage::{CachedConversation, compute_prefix_hash};
 use super::types::{
     CacheCheckpoint, CacheLookupResult, ConversationCacheConfig, ConversationCacheStats,
 };

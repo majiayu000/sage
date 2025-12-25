@@ -35,9 +35,8 @@ fn extract_servers_from_config(config: McpConfig) -> (McpConfig, Vec<(String, Mc
 async fn discover_from_environment(
     var_name: &str,
 ) -> Result<(McpConfig, Vec<(String, McpServerConfig)>), McpError> {
-    let value = std::env::var(var_name).map_err(|_| {
-        McpError::connection(format!("Environment variable {} not set", var_name))
-    })?;
+    let value = std::env::var(var_name)
+        .map_err(|_| McpError::connection(format!("Environment variable {} not set", var_name)))?;
 
     let config: McpConfig = serde_json::from_str(&value)
         .map_err(|e| McpError::protocol(format!("Invalid JSON in {}: {}", var_name, e)))?;
@@ -60,8 +59,8 @@ async fn discover_from_file(
 }
 
 /// Discover servers from standard paths
-async fn discover_from_standard_paths(
-) -> Result<(McpConfig, Vec<(String, McpServerConfig)>), McpError> {
+async fn discover_from_standard_paths()
+-> Result<(McpConfig, Vec<(String, McpServerConfig)>), McpError> {
     let standard_paths = get_standard_mcp_paths();
 
     for path in standard_paths {

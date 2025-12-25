@@ -106,9 +106,8 @@ impl SageUiBackend {
                     .flat_map(|step| {
                         step.tool_calls.iter().map(move |call| {
                             // Find corresponding result for this tool call
-                            let tool_result = step.tool_results
-                                .iter()
-                                .find(|r| r.call_id == call.id);
+                            let tool_result =
+                                step.tool_results.iter().find(|r| r.call_id == call.id);
 
                             ToolCallStatus {
                                 id: call.id.clone(),

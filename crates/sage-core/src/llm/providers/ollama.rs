@@ -115,8 +115,8 @@ impl OllamaProvider {
         messages: &[LlmMessage],
         tools: Option<&[ToolSchema]>,
     ) -> SageResult<LlmStream> {
-        use futures::StreamExt;
         use crate::llm::streaming::StreamChunk;
+        use futures::StreamExt;
 
         let url = format!("{}/v1/chat/completions", self.config.get_base_url());
 

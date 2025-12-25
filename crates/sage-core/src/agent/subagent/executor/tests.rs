@@ -2,8 +2,8 @@
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
     use async_trait::async_trait;
+    use std::sync::Arc;
 
     use super::super::executor::SubAgentExecutor;
     use super::super::types::{AgentProgress, SubAgentConfig};
@@ -94,8 +94,8 @@ mod tests {
         ];
 
         // Mock LLM client (won't be used in this test)
-        use crate::llm::provider_types::{LlmProvider, ModelParameters};
         use crate::config::provider::ProviderConfig;
+        use crate::llm::provider_types::{LlmProvider, ModelParameters};
 
         let llm_config = ProviderConfig {
             base_url: Some("http://localhost".to_string()),
@@ -109,7 +109,8 @@ mod tests {
         };
 
         let llm_client = Arc::new(
-            crate::llm::client::LlmClient::new(LlmProvider::OpenAI, llm_config, model_params).unwrap()
+            crate::llm::client::LlmClient::new(LlmProvider::OpenAI, llm_config, model_params)
+                .unwrap(),
         );
 
         let executor = SubAgentExecutor::new(registry.clone(), llm_client, tools);
@@ -137,7 +138,10 @@ mod tests {
 
         assert_eq!(config.agent_type, AgentType::Explore);
         assert_eq!(config.task, "Find all Rust files");
-        assert_eq!(config.context, Some("Working in /src directory".to_string()));
+        assert_eq!(
+            config.context,
+            Some("Working in /src directory".to_string())
+        );
         assert_eq!(config.max_steps, Some(10));
         assert_eq!(config.temperature, Some(0.5));
     }

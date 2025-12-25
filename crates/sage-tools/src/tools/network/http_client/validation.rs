@@ -1,13 +1,12 @@
 //! URL validation and security checks for HTTP client
 
-use std::net::IpAddr;
 use anyhow::{Result, anyhow};
+use std::net::IpAddr;
 use url::Url;
 
 /// Validate URL to prevent SSRF attacks
 pub async fn validate_url_security(url_str: &str) -> Result<()> {
-    let url = Url::parse(url_str)
-        .map_err(|e| anyhow!("Invalid URL format: {}", e))?;
+    let url = Url::parse(url_str).map_err(|e| anyhow!("Invalid URL format: {}", e))?;
 
     // Only allow http and https schemes
     match url.scheme() {
@@ -20,7 +19,8 @@ pub async fn validate_url_security(url_str: &str) -> Result<()> {
         }
     }
 
-    let host = url.host_str()
+    let host = url
+        .host_str()
         .ok_or_else(|| anyhow!("URL must have a host"))?;
 
     // Block localhost variants
@@ -112,43 +112,95 @@ mod tests {
 
     #[tokio::test]
     async fn test_url_validation_allows_valid_urls() {
-        assert!(validate_url_security("https://example.com/api").await.is_ok());
-        assert!(validate_url_security("http://api.github.com/users").await.is_ok());
-        assert!(validate_url_security("https://httpbin.org/get").await.is_ok());
+        assert!(
+            validate_url_security("https://example.com/api")
+                .await
+                .is_ok()
+        );
+        assert!(
+            validate_url_security("http://api.github.com/users")
+                .await
+                .is_ok()
+        );
+        assert!(
+            validate_url_security("https://httpbin.org/get")
+                .await
+                .is_ok()
+        );
     }
 
     #[tokio::test]
     async fn test_url_validation_blocks_localhost() {
         assert!(validate_url_security("http://localhost/api").await.is_err());
         assert!(validate_url_security("http://127.0.0.1/api").await.is_err());
-        assert!(validate_url_security("http://localhost:8080/api").await.is_err());
+        assert!(
+            validate_url_security("http://localhost:8080/api")
+                .await
+                .is_err()
+        );
     }
 
     #[tokio::test]
     async fn test_url_validation_blocks_internal_hostnames() {
-        assert!(validate_url_security("http://server.local/api").await.is_err());
-        assert!(validate_url_security("http://db.internal/api").await.is_err());
-        assert!(validate_url_security("http://service.localhost/api").await.is_err());
+        assert!(
+            validate_url_security("http://server.local/api")
+                .await
+                .is_err()
+        );
+        assert!(
+            validate_url_security("http://db.internal/api")
+                .await
+                .is_err()
+        );
+        assert!(
+            validate_url_security("http://service.localhost/api")
+                .await
+                .is_err()
+        );
     }
 
     #[tokio::test]
     async fn test_url_validation_blocks_metadata_endpoints() {
-        assert!(validate_url_security("http://169.254.169.254/latest/meta-data/").await.is_err());
-        assert!(validate_url_security("http://metadata.google.internal/computeMetadata/").await.is_err());
+        assert!(
+            validate_url_security("http://169.254.169.254/latest/meta-data/")
+                .await
+                .is_err()
+        );
+        assert!(
+            validate_url_security("http://metadata.google.internal/computeMetadata/")
+                .await
+                .is_err()
+        );
     }
 
     #[tokio::test]
     async fn test_url_validation_blocks_non_http_schemes() {
         assert!(validate_url_security("file:///etc/passwd").await.is_err());
-        assert!(validate_url_security("ftp://example.com/file").await.is_err());
-        assert!(validate_url_security("gopher://example.com/").await.is_err());
+        assert!(
+            validate_url_security("ftp://example.com/file")
+                .await
+                .is_err()
+        );
+        assert!(
+            validate_url_security("gopher://example.com/")
+                .await
+                .is_err()
+        );
     }
 
     #[tokio::test]
     async fn test_url_validation_blocks_private_ips() {
         assert!(validate_url_security("http://10.0.0.1/api").await.is_err());
-        assert!(validate_url_security("http://192.168.1.1/api").await.is_err());
-        assert!(validate_url_security("http://172.16.0.1/api").await.is_err());
+        assert!(
+            validate_url_security("http://192.168.1.1/api")
+                .await
+                .is_err()
+        );
+        assert!(
+            validate_url_security("http://172.16.0.1/api")
+                .await
+                .is_err()
+        );
     }
 
     #[test]

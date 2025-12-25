@@ -338,7 +338,9 @@ pub async fn execute(args: RunArgs) -> SageResult<()> {
             // This feature is planned but not yet implemented
             if args.must_patch || args.patch_path.is_some() {
                 console.warn("Patch creation feature not yet implemented");
-                console.info("Files were modified during execution but patch generation is not available");
+                console.info(
+                    "Files were modified during execution but patch generation is not available",
+                );
             }
 
             // Print statistics if verbose

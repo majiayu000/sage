@@ -285,7 +285,7 @@ impl IpcServer {
                 let task_id = request.get_task_id().unwrap_or_default();
                 // Trigger task cancellation via global interrupt manager
                 sage_core::interrupt::interrupt_current_task(
-                    sage_core::interrupt::InterruptReason::Manual
+                    sage_core::interrupt::InterruptReason::Manual,
                 );
 
                 self.send_event(IpcEvent::Error {

@@ -35,7 +35,10 @@ pub struct NotificationEvent {
 
 impl NotificationEvent {
     /// Create a new notification event
-    pub fn new(server_name: impl Into<String>, notification: &super::super::protocol::McpNotification) -> Self {
+    pub fn new(
+        server_name: impl Into<String>,
+        notification: &super::super::protocol::McpNotification,
+    ) -> Self {
         Self {
             server_name: server_name.into(),
             method: notification.method.clone(),

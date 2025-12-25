@@ -3,8 +3,8 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use super::types::SearchResult;
 use super::CodebaseRetrievalTool;
+use super::types::SearchResult;
 
 impl CodebaseRetrievalTool {
     pub(super) fn format_no_results_message(&self, query: &str) -> String {

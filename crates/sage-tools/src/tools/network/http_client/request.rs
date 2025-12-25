@@ -13,30 +13,21 @@ use super::validation::validate_url_security;
 /// Build request with authentication
 pub fn add_auth(request: reqwest::RequestBuilder, auth: &AuthType) -> reqwest::RequestBuilder {
     match auth {
-        AuthType::Bearer { token } => {
-            request.header("Authorization", format!("Bearer {}", token))
-        }
-        AuthType::Basic { username, password } => {
-            request.basic_auth(username, Some(password))
-        }
-        AuthType::ApiKey { key, value } => {
-            request.header(key, value)
-        }
+        AuthType::Bearer { token } => request.header("Authorization", format!("Bearer {}", token)),
+        AuthType::Basic { username, password } => request.basic_auth(username, Some(password)),
+        AuthType::ApiKey { key, value } => request.header(key, value),
     }
 }
 
 /// Add request body
-pub fn add_body(request: reqwest::RequestBuilder, body: &RequestBody) -> Result<reqwest::RequestBuilder> {
+pub fn add_body(
+    request: reqwest::RequestBuilder,
+    body: &RequestBody,
+) -> Result<reqwest::RequestBuilder> {
     match body {
-        RequestBody::Json(json) => {
-            Ok(request.json(json))
-        }
-        RequestBody::Text(text) => {
-            Ok(request.body(text.clone()))
-        }
-        RequestBody::Form(form) => {
-            Ok(request.form(form))
-        }
+        RequestBody::Json(json) => Ok(request.json(json)),
+        RequestBody::Text(text) => Ok(request.body(text.clone())),
+        RequestBody::Form(form) => Ok(request.form(form)),
         RequestBody::Binary(data) => {
             use base64::Engine;
             let bytes = base64::engine::general_purpose::STANDARD
@@ -48,7 +39,10 @@ pub fn add_body(request: reqwest::RequestBuilder, body: &RequestBody) -> Result<
 }
 
 /// Create GraphQL request body
-pub fn create_graphql_request(query: &str, variables: Option<&serde_json::Value>) -> serde_json::Value {
+pub fn create_graphql_request(
+    query: &str,
+    variables: Option<&serde_json::Value>,
+) -> serde_json::Value {
     let mut graphql_body = serde_json::json!({
         "query": query
     });
@@ -74,7 +68,11 @@ pub fn to_reqwest_method(method: &HttpMethod) -> reqwest::Method {
 }
 
 /// Create HTTP client with configuration
-pub fn create_client(verify_ssl: bool, follow_redirects: bool, timeout_secs: u64) -> Result<reqwest::Client> {
+pub fn create_client(
+    verify_ssl: bool,
+    follow_redirects: bool,
+    timeout_secs: u64,
+) -> Result<reqwest::Client> {
     reqwest::Client::builder()
         .danger_accept_invalid_certs(!verify_ssl)
         .redirect(if follow_redirects {
@@ -89,7 +87,10 @@ pub fn create_client(verify_ssl: bool, follow_redirects: bool, timeout_secs: u64
 }
 
 /// Execute HTTP request with full configuration
-pub async fn execute_request(client: &reqwest::Client, params: HttpClientParams) -> Result<HttpResponse> {
+pub async fn execute_request(
+    client: &reqwest::Client,
+    params: HttpClientParams,
+) -> Result<HttpResponse> {
     validate_url_security(&params.url).await?;
 
     let timeout_secs = params.timeout.unwrap_or(30);
@@ -133,21 +134,26 @@ pub async fn execute_request(client: &reqwest::Client, params: HttpClientParams)
         }
     }
 
-    let content_type = response.headers()
+    let content_type = response
+        .headers()
         .get("content-type")
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string());
 
-    let content_length = response.headers()
+    let content_length = response
+        .headers()
         .get("content-length")
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.parse().ok());
 
-    let body = response.text().await
+    let body = response
+        .text()
+        .await
         .context("Failed to read response body")?;
 
     if let Some(file_path) = &params.save_to_file {
-        tokio::fs::write(file_path, &body).await
+        tokio::fs::write(file_path, &body)
+            .await
             .context("Failed to save response to file")?;
         info!("Response saved to: {}", file_path);
     }
@@ -185,7 +191,9 @@ pub fn format_response(response: &HttpResponse) -> String {
     if let Some(content_type) = &response.content_type {
         if content_type.contains("application/json") {
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(&response.body) {
-                output.push_str(&serde_json::to_string_pretty(&json).unwrap_or_else(|_| response.body.clone()));
+                output.push_str(
+                    &serde_json::to_string_pretty(&json).unwrap_or_else(|_| response.body.clone()),
+                );
                 return output;
             }
         }
@@ -215,6 +223,9 @@ mod tests {
         assert_eq!(to_reqwest_method(&HttpMethod::Get), reqwest::Method::GET);
         assert_eq!(to_reqwest_method(&HttpMethod::Post), reqwest::Method::POST);
         assert_eq!(to_reqwest_method(&HttpMethod::Put), reqwest::Method::PUT);
-        assert_eq!(to_reqwest_method(&HttpMethod::Delete), reqwest::Method::DELETE);
+        assert_eq!(
+            to_reqwest_method(&HttpMethod::Delete),
+            reqwest::Method::DELETE
+        );
     }
 }

@@ -2,8 +2,8 @@
 
 use super::limits::apply_unix_limits;
 use super::types::{ExecutionResourceUsage, SandboxedExecution};
-use crate::sandbox::limits::ResourceLimits;
 use crate::sandbox::SandboxError;
+use crate::sandbox::limits::ResourceLimits;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Stdio;

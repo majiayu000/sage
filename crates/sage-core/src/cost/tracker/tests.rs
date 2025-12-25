@@ -2,8 +2,8 @@
 
 #![cfg(test)]
 
-use super::types::{CostStatus, UsageRecord, UsageStats};
 use super::tracker::CostTracker;
+use super::types::{CostStatus, UsageRecord, UsageStats};
 use crate::cost::pricing::TokenPrice;
 
 #[test]

@@ -129,8 +129,8 @@ impl OpenRouterProvider {
         messages: &[LlmMessage],
         tools: Option<&[ToolSchema]>,
     ) -> SageResult<LlmStream> {
-        use futures::StreamExt;
         use crate::llm::streaming::StreamChunk;
+        use futures::StreamExt;
 
         let api_key = self
             .config

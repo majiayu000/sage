@@ -7,7 +7,7 @@ use tokio::sync::RwLock;
 
 use super::persistence::{load_cache_file, save_cache_file};
 use super::types::{
-    SessionCacheConfig, SessionCacheData, CACHE_FILE_NAME, GLOBAL_CACHE_DIR, PROJECT_CACHE_DIR,
+    CACHE_FILE_NAME, GLOBAL_CACHE_DIR, PROJECT_CACHE_DIR, SessionCacheConfig, SessionCacheData,
 };
 
 /// Session cache manager

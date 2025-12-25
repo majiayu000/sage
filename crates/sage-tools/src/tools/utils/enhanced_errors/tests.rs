@@ -2,7 +2,7 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::tools::utils::enhanced_errors::{helpers, EnhancedToolError, ErrorCategory};
+    use crate::tools::utils::enhanced_errors::{EnhancedToolError, ErrorCategory, helpers};
     use sage_core::tools::base::ToolError;
     use std::error::Error;
 

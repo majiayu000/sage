@@ -1,7 +1,9 @@
 //! Main settings structure
 
-use super::{HooksSettings, ModelSettings, PermissionSettings, ToolSettings, UiSettings, WorkspaceSettings};
 use super::permissions::PermissionBehavior;
+use super::{
+    HooksSettings, ModelSettings, PermissionSettings, ToolSettings, UiSettings, WorkspaceSettings,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

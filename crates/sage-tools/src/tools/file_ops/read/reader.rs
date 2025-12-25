@@ -67,11 +67,7 @@ pub async fn read_file<T: FileSystemTool>(
         Err(e) => {
             // If read_to_string fails, it might be a binary file
             if e.kind() == std::io::ErrorKind::InvalidData {
-                return Ok(create_binary_result(
-                    file_path,
-                    metadata.len(),
-                    tool_name,
-                ));
+                return Ok(create_binary_result(file_path, metadata.len(), tool_name));
             }
             return Err(ToolError::Io(e));
         }

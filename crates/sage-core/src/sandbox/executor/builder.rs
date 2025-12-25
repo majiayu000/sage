@@ -2,8 +2,8 @@
 
 use super::executor::SandboxExecutor;
 use super::types::SandboxedExecution;
-use crate::sandbox::limits::ResourceLimits;
 use crate::sandbox::SandboxError;
+use crate::sandbox::limits::ResourceLimits;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;

@@ -103,7 +103,11 @@ pub fn format_search_results(patterns: &[Pattern], query: &str) -> String {
         return format!("No patterns found matching '{}'.", query);
     }
 
-    let mut output = format!("Found {} patterns matching '{}':\n\n", patterns.len(), query);
+    let mut output = format!(
+        "Found {} patterns matching '{}':\n\n",
+        patterns.len(),
+        query
+    );
     for (i, p) in patterns.iter().enumerate() {
         output.push_str(&format_pattern_search(p, i + 1));
     }

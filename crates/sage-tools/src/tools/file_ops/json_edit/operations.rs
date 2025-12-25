@@ -2,9 +2,9 @@
 
 use super::types::JsonEditTool;
 use jsonpath_rust::JsonPathFinder;
+use sage_core::tools::ToolError;
 use sage_core::tools::base::FileSystemTool;
 use sage_core::tools::types::ToolResult;
-use sage_core::tools::ToolError;
 use tokio::fs;
 
 impl JsonEditTool {
@@ -101,8 +101,7 @@ impl JsonEditTool {
         })?;
 
         // Parse the new value
-        let new_val: serde_json::Value = if new_value.starts_with('"') && new_value.ends_with('"')
-        {
+        let new_val: serde_json::Value = if new_value.starts_with('"') && new_value.ends_with('"') {
             // String value
             serde_json::Value::String(new_value[1..new_value.len() - 1].to_string())
         } else if new_value == "true" || new_value == "false" {

@@ -2,9 +2,9 @@
 
 #[cfg(test)]
 mod tests {
-    use super::super::types::CheckpointManager;
     use super::super::super::config::CheckpointManagerConfig;
     use super::super::super::types::{CheckpointType, RestoreOptions};
+    use super::super::types::CheckpointManager;
     use tempfile::TempDir;
     use tokio::fs;
     use tokio::fs::File;

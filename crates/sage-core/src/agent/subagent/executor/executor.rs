@@ -52,10 +52,9 @@ impl SubAgentExecutor {
         let start_time = Instant::now();
 
         // Get agent definition
-        let definition = self
-            .registry
-            .get(&config.agent_type)
-            .ok_or_else(|| SageError::agent(format!("Agent type {:?} not found", config.agent_type)))?;
+        let definition = self.registry.get(&config.agent_type).ok_or_else(|| {
+            SageError::agent(format!("Agent type {:?} not found", config.agent_type))
+        })?;
 
         // Filter tools based on agent definition
         let tools = self.filter_tools(&definition);
@@ -96,7 +95,9 @@ impl SubAgentExecutor {
             steps_taken += 1;
 
             // Execute step
-            let step_result = step_executor.execute_step(&mut messages, &tools, &cancel).await?;
+            let step_result = step_executor
+                .execute_step(&mut messages, &tools, &cancel)
+                .await?;
 
             // Update usage if available
             if let Some(usage) = messages
@@ -115,7 +116,8 @@ impl SubAgentExecutor {
                 StepResult::Completed(output) => {
                     // Task completed successfully
                     let duration_secs = start_time.elapsed().as_secs_f64();
-                    let metadata = Self::create_metadata(&total_usage, tool_calls_count, duration_secs);
+                    let metadata =
+                        Self::create_metadata(&total_usage, tool_calls_count, duration_secs);
 
                     return Ok(SubAgentResult {
                         agent_id: definition.id(),
@@ -155,7 +157,10 @@ impl SubAgentExecutor {
 
         // Add context if provided
         let user_message = if let Some(context) = &config.context {
-            format!("{}\n\nContext:\n{}\n\nTask: {}", definition.description, context, config.task)
+            format!(
+                "{}\n\nContext:\n{}\n\nTask: {}",
+                definition.description, context, config.task
+            )
         } else {
             format!("{}\n\nTask: {}", definition.description, config.task)
         };

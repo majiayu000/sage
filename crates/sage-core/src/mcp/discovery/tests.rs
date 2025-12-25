@@ -14,9 +14,10 @@ mod tests {
 
         match config.transport.as_str() {
             "stdio" => {
-                let command = config.command.as_ref().ok_or_else(|| {
-                    McpError::invalid_request("Stdio transport requires command")
-                })?;
+                let command = config
+                    .command
+                    .as_ref()
+                    .ok_or_else(|| McpError::invalid_request("Stdio transport requires command"))?;
 
                 Ok(TransportConfig::Stdio {
                     command: command.clone(),

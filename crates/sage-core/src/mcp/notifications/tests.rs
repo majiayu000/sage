@@ -2,8 +2,12 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::mcp::notifications::handlers::{CollectorHandler, FnHandler, LoggingHandler, NotificationHandler};
-    use crate::mcp::notifications::processor::{NotificationDispatcher, NotificationDispatcherBuilder};
+    use crate::mcp::notifications::handlers::{
+        CollectorHandler, FnHandler, LoggingHandler, NotificationHandler,
+    };
+    use crate::mcp::notifications::processor::{
+        NotificationDispatcher, NotificationDispatcherBuilder,
+    };
     use crate::mcp::notifications::types::{LogLevel, NotificationEvent, methods};
     use crate::mcp::protocol::McpNotification;
     use std::sync::Arc;

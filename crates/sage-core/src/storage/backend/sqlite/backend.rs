@@ -9,9 +9,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use crate::storage::backend::r#trait::DatabaseBackend;
-use crate::storage::backend::types::{
-    BackendType, DatabaseError, DatabaseValue, QueryResult,
-};
+use crate::storage::backend::types::{BackendType, DatabaseError, DatabaseValue, QueryResult};
 
 use super::handlers::QueryHandler;
 

@@ -87,11 +87,8 @@ impl CacheEntry {
     /// Create a new cache entry
     pub fn new(data: serde_json::Value, ttl: Option<Duration>) -> Self {
         let now = Utc::now();
-        let expires_at = ttl.and_then(|duration| {
-            chrono::Duration::from_std(duration)
-                .ok()
-                .map(|d| now + d)
-        });
+        let expires_at =
+            ttl.and_then(|duration| chrono::Duration::from_std(duration).ok().map(|d| now + d));
         let size_bytes = data.to_string().len();
 
         Self {

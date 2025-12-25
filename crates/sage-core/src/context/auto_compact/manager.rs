@@ -213,7 +213,10 @@ impl AutoCompact {
     }
 
     /// Partition messages into those to keep and those to compact
-    pub(crate) fn partition_messages(&self, messages: &[LlmMessage]) -> (Vec<LlmMessage>, Vec<LlmMessage>) {
+    pub(crate) fn partition_messages(
+        &self,
+        messages: &[LlmMessage],
+    ) -> (Vec<LlmMessage>, Vec<LlmMessage>) {
         partition::partition_messages(
             messages,
             self.config.preserve_recent_count,

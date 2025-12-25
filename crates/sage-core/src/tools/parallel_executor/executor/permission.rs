@@ -1,7 +1,9 @@
 //! Permission checking logic for tool execution
 
 use crate::tools::base::Tool;
-use crate::tools::permission::{PermissionCache, PermissionDecision, PermissionRequest, PermissionResult};
+use crate::tools::permission::{
+    PermissionCache, PermissionDecision, PermissionRequest, PermissionResult,
+};
 use crate::tools::types::{ToolCall, ToolResult};
 use std::sync::Arc;
 use std::time::Duration;

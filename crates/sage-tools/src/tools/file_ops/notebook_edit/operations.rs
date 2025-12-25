@@ -43,9 +43,7 @@ pub async fn replace_cell(
             .cells
             .iter()
             .position(|c| c.id.as_deref() == Some(id))
-            .ok_or_else(|| {
-                ToolError::ExecutionFailed(format!("Cell with id '{}' not found", id))
-            })?
+            .ok_or_else(|| ToolError::ExecutionFailed(format!("Cell with id '{}' not found", id)))?
     } else {
         return Err(ToolError::InvalidArguments(
             "cell_id is required for replace operation".to_string(),

@@ -5,8 +5,8 @@ use crate::config::provider::ProviderConfig;
 use crate::error::{SageError, SageResult};
 use crate::llm::provider_types::{LlmProvider, ModelParameters};
 use crate::llm::providers::{
-    AnthropicProvider, AzureProvider, DoubaoProvider, GlmProvider, GoogleProvider,
-    OllamaProvider, OpenAiProvider, OpenRouterProvider, ProviderInstance,
+    AnthropicProvider, AzureProvider, DoubaoProvider, GlmProvider, GoogleProvider, OllamaProvider,
+    OpenAiProvider, OpenRouterProvider, ProviderInstance,
 };
 use reqwest::Client;
 use tracing::debug;

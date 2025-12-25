@@ -3,8 +3,8 @@
 //! This module contains the core Session struct representing a conversation
 //! with context, along with all its methods.
 
-use super::base::{SessionId, SessionState, TokenUsage};
 use super::super::conversation::ConversationMessage;
+use super::base::{SessionId, SessionState, TokenUsage};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

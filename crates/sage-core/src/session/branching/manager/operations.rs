@@ -1,7 +1,7 @@
 //! Branch creation, deletion, and modification operations
 
-use super::core::BranchManager;
 use super::super::types::{BranchId, BranchSnapshot, SerializedMessage, SerializedToolCall};
+use super::core::BranchManager;
 
 impl BranchManager {
     /// Create a new branch at current state

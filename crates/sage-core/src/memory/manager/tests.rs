@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod manager_tests {
     use super::super::helpers::calculate_similarity;
-    use crate::memory::manager::{create_memory_manager, MemoryConfig, MemoryManager};
+    use crate::memory::manager::{MemoryConfig, MemoryManager, create_memory_manager};
     use crate::memory::types::{Memory, MemorySource, MemoryType};
 
     #[tokio::test]

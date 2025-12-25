@@ -2,9 +2,9 @@
 
 #[cfg(test)]
 mod tests {
+    use crate::storage::backend::BackendType;
     use crate::storage::config::{FallbackStrategy, StorageConfig};
     use crate::storage::manager::{ConnectionStatus, StorageManager};
-    use crate::storage::backend::BackendType;
     use serde::{Deserialize, Serialize};
 
     #[tokio::test]

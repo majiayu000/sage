@@ -3,8 +3,8 @@
 #[cfg(test)]
 mod tests {
     use super::super::{FieldError, ValidationError, Validator};
-    use crate::validation::schema::{FieldSchema, FieldType, ValidationSchema};
     use crate::validation::SchemaBuilder;
+    use crate::validation::schema::{FieldSchema, FieldType, ValidationSchema};
 
     #[test]
     fn test_validate_required_fields() {

@@ -8,8 +8,8 @@ mod tests {
     use super::super::types::{SupervisionEvent, SupervisionPolicy, SupervisionResult};
     use crate::error::SageError;
     use crate::recovery::RecoveryError;
-    use std::sync::atomic::{AtomicU32, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicU32, Ordering};
     use std::time::Duration;
 
     #[tokio::test]

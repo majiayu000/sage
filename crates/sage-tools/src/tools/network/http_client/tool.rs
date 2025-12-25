@@ -22,20 +22,27 @@ impl HttpClientTool {
     pub fn new() -> Self {
         Self {
             name: "http_client".to_string(),
-            description: "HTTP client for REST API interactions, GraphQL queries, and web requests".to_string(),
+            description: "HTTP client for REST API interactions, GraphQL queries, and web requests"
+                .to_string(),
             client: None,
         }
     }
 
     /// Get or create HTTP client
-    fn get_or_create_client(&mut self, verify_ssl: bool, follow_redirects: bool, timeout_secs: u64) -> Result<&reqwest::Client, ToolError> {
+    fn get_or_create_client(
+        &mut self,
+        verify_ssl: bool,
+        follow_redirects: bool,
+        timeout_secs: u64,
+    ) -> Result<&reqwest::Client, ToolError> {
         if self.client.is_none() {
             let client = create_client(verify_ssl, follow_redirects, timeout_secs)
                 .map_err(|e| ToolError::ExecutionFailed(e.to_string()))?;
             self.client = Some(client);
         }
         // SAFETY: client is guaranteed to be Some after the above initialization
-        self.client.as_ref()
+        self.client
+            .as_ref()
             .ok_or_else(|| ToolError::ExecutionFailed("Client initialization failed".to_string()))
     }
 }
@@ -61,8 +68,7 @@ impl Tool for HttpClientTool {
             self.name(),
             self.description(),
             vec![
-                ToolParameter::string("method", "HTTP method")
-                    .with_default("GET".to_string()),
+                ToolParameter::string("method", "HTTP method").with_default("GET".to_string()),
                 ToolParameter::string("url", "Request URL"),
                 ToolParameter::optional_string("headers", "Request headers as JSON object string"),
                 ToolParameter::optional_string("body", "Request body as JSON string"),
@@ -78,13 +84,18 @@ impl Tool for HttpClientTool {
                     .with_default(true),
                 ToolParameter::optional_string("save_to_file", "Save response to file"),
                 ToolParameter::optional_string("graphql_query", "GraphQL query string"),
-                ToolParameter::optional_string("graphql_variables", "GraphQL variables as JSON string"),
+                ToolParameter::optional_string(
+                    "graphql_variables",
+                    "GraphQL variables as JSON string",
+                ),
             ],
         )
     }
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
-        let method_str = call.get_string("method").unwrap_or_else(|| "GET".to_string());
+        let method_str = call
+            .get_string("method")
+            .unwrap_or_else(|| "GET".to_string());
         let method = match method_str.to_uppercase().as_str() {
             "GET" => HttpMethod::Get,
             "POST" => HttpMethod::Post,
@@ -93,31 +104,43 @@ impl Tool for HttpClientTool {
             "PATCH" => HttpMethod::Patch,
             "HEAD" => HttpMethod::Head,
             "OPTIONS" => HttpMethod::Options,
-            _ => return Err(ToolError::InvalidArguments(format!("Invalid HTTP method: {}", method_str))),
+            _ => {
+                return Err(ToolError::InvalidArguments(format!(
+                    "Invalid HTTP method: {}",
+                    method_str
+                )));
+            }
         };
 
-        let url = call.get_string("url")
+        let url = call
+            .get_string("url")
             .ok_or_else(|| ToolError::InvalidArguments("Missing 'url' parameter".to_string()))?;
 
-        let headers = call.get_string("headers")
+        let headers = call
+            .get_string("headers")
             .map(|s| serde_json::from_str(&s))
             .transpose()
             .map_err(|e| ToolError::InvalidArguments(format!("Invalid headers JSON: {}", e)))?;
 
-        let body = call.get_string("body")
+        let body = call
+            .get_string("body")
             .map(|s| serde_json::from_str(&s))
             .transpose()
             .map_err(|e| ToolError::InvalidArguments(format!("Invalid body JSON: {}", e)))?;
 
-        let auth = call.get_string("auth")
+        let auth = call
+            .get_string("auth")
             .map(|s| serde_json::from_str(&s))
             .transpose()
             .map_err(|e| ToolError::InvalidArguments(format!("Invalid auth JSON: {}", e)))?;
 
-        let graphql_variables = call.get_string("graphql_variables")
+        let graphql_variables = call
+            .get_string("graphql_variables")
             .map(|s| serde_json::from_str(&s))
             .transpose()
-            .map_err(|e| ToolError::InvalidArguments(format!("Invalid graphql_variables JSON: {}", e)))?;
+            .map_err(|e| {
+                ToolError::InvalidArguments(format!("Invalid graphql_variables JSON: {}", e))
+            })?;
 
         let params = HttpClientParams {
             method,
@@ -141,14 +164,18 @@ impl Tool for HttpClientTool {
         let timeout_secs = params.timeout.unwrap_or(30);
 
         let client = tool.get_or_create_client(verify_ssl, follow_redirects, timeout_secs)?;
-        let response = execute_request(client, params).await
+        let response = execute_request(client, params)
+            .await
             .map_err(|e| ToolError::ExecutionFailed(format!("HTTP request failed: {}", e)))?;
 
         let output = format_response(&response);
 
         let mut result = ToolResult::success(&call.id, self.name(), output)
             .with_metadata("status", serde_json::Value::Number(response.status.into()))
-            .with_metadata("response_time_ms", serde_json::Value::Number(response.response_time.into()))
+            .with_metadata(
+                "response_time_ms",
+                serde_json::Value::Number(response.response_time.into()),
+            )
             .with_metadata("url", serde_json::Value::String(url));
 
         if let Some(content_type) = response.content_type {
@@ -156,7 +183,10 @@ impl Tool for HttpClientTool {
         }
 
         if let Some(content_length) = response.content_length {
-            result = result.with_metadata("content_length", serde_json::Value::Number(content_length.into()));
+            result = result.with_metadata(
+                "content_length",
+                serde_json::Value::Number(content_length.into()),
+            );
         }
 
         result.call_id = call.id.clone();

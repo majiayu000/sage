@@ -247,9 +247,7 @@ impl McpCache {
         &self.prompts
     }
 
-    pub(super) fn resource_content_map(
-        &self,
-    ) -> &DashMap<String, CacheEntry<McpResourceContent>> {
+    pub(super) fn resource_content_map(&self) -> &DashMap<String, CacheEntry<McpResourceContent>> {
         &self.resource_content
     }
 

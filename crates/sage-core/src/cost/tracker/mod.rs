@@ -8,6 +8,4 @@ mod tracker;
 mod types;
 
 pub use tracker::CostTracker;
-pub use types::{
-    CostStatus, ModelStats, ProviderStats, TrackResult, UsageRecord, UsageStats,
-};
+pub use types::{CostStatus, ModelStats, ProviderStats, TrackResult, UsageRecord, UsageStats};

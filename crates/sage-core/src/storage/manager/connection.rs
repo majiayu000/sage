@@ -1,7 +1,9 @@
 //! Database connection establishment and fallback logic
 
 use super::types::{ConnectionStatus, StorageStats};
-use crate::storage::backend::{BackendType, DatabaseBackend, DatabaseError, PostgresBackend, SqliteBackend};
+use crate::storage::backend::{
+    BackendType, DatabaseBackend, DatabaseError, PostgresBackend, SqliteBackend,
+};
 use crate::storage::config::{FallbackStrategy, StorageConfig};
 use chrono::Utc;
 use std::sync::Arc;
@@ -122,8 +124,7 @@ pub async fn connect_postgres_with_retry(
         }
     }
 
-    Err(last_error
-        .unwrap_or_else(|| DatabaseError::Connection("Max retries exceeded".to_string())))
+    Err(last_error.unwrap_or_else(|| DatabaseError::Connection("Max retries exceeded".to_string())))
 }
 
 /// Connect to SQLite

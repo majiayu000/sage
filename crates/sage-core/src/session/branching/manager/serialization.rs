@@ -1,7 +1,7 @@
 //! Branch export, import, and merge operations
 
-use super::core::BranchManager;
 use super::super::types::{BranchId, BranchSnapshot};
+use super::core::BranchManager;
 
 impl BranchManager {
     /// Export branches to JSON

@@ -1,8 +1,6 @@
 //! Running agent management methods
 
-use super::super::types::{
-    AgentProgress, AgentStatus, AgentType, RunningAgent, SubAgentConfig,
-};
+use super::super::types::{AgentProgress, AgentStatus, AgentType, RunningAgent, SubAgentConfig};
 use super::types::AgentRegistry;
 use crate::error::{SageError, SageResult};
 use tokio_util::sync::CancellationToken;

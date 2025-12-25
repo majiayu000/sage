@@ -98,7 +98,12 @@ impl McpServerManager {
         for (name, server_config) in config.enabled_servers() {
             match self
                 .connection_manager
-                .connect_server(name, server_config.clone(), &self.registry, &self.health_tracker)
+                .connect_server(
+                    name,
+                    server_config.clone(),
+                    &self.registry,
+                    &self.health_tracker,
+                )
                 .await
             {
                 Ok(_) => {

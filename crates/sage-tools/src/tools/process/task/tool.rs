@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use super::executor::{execute_task_background, execute_task_sync};
 use super::schema::{task_tool_description, task_tool_schema};
-use super::types::{TaskRegistry, GLOBAL_TASK_REGISTRY};
+use super::types::{GLOBAL_TASK_REGISTRY, TaskRegistry};
 
 /// Task tool for spawning subagents
 pub struct TaskTool {

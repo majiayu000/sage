@@ -37,10 +37,7 @@ impl StepExecutor {
         let tool_schemas: Vec<_> = tools.iter().map(|t| t.schema()).collect();
 
         // Call LLM
-        let response = self
-            .llm_client
-            .chat(messages, Some(&tool_schemas))
-            .await?;
+        let response = self.llm_client.chat(messages, Some(&tool_schemas)).await?;
 
         // Check if there are tool calls
         if !response.tool_calls.is_empty() {
@@ -62,7 +59,9 @@ impl StepExecutor {
 
                 // Add tool result message
                 let tool_msg = LlmMessage::tool(
-                    result.output.unwrap_or_else(|| result.error.unwrap_or_default()),
+                    result
+                        .output
+                        .unwrap_or_else(|| result.error.unwrap_or_default()),
                     call.id.clone(),
                     Some(call.name.clone()),
                 );
@@ -103,9 +102,7 @@ impl StepExecutor {
             .ok_or_else(|| SageError::tool(&call.name, "Tool not found"))?;
 
         // Execute the tool
-        let result = tool
-            .execute_with_timing(call)
-            .await;
+        let result = tool.execute_with_timing(call).await;
 
         Ok(result)
     }
