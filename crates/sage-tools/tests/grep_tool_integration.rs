@@ -328,7 +328,8 @@ async fn test_grep_count_mode() {
     if let Some(output) = &result.output {
         assert!(output.contains("file1.txt:3"));
         assert!(output.contains("file2.txt:2"));
-        assert!(output.contains("Total matches: 2"));
+        // Total matches is sum of all matches: 3 + 2 = 5
+        assert!(output.contains("Total matches: 5"));
     }
     println!("✓ Count mode showed match counts per file");
 }

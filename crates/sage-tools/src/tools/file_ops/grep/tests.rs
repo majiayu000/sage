@@ -270,4 +270,44 @@ mod grep_tests {
         assert_eq!(schema.name, "Grep");
         assert!(!schema.description.is_empty());
     }
+
+    #[tokio::test]
+    async fn test_grep_skips_binary_files() {
+        let temp_dir = TempDir::new().unwrap();
+
+        // Create text file with searchable content
+        let text_file = temp_dir.path().join("text.txt");
+        fs::write(&text_file, "hello world\nsearchable text")
+            .await
+            .unwrap();
+
+        // Create binary file with NUL bytes (grep-searcher will detect as binary)
+        let binary_file = temp_dir.path().join("binary.dat");
+        let binary_content: Vec<u8> = vec![0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x00, 0x77, 0x6f, 0x72, 0x6c, 0x64]; // "hello\0world"
+        std::fs::write(&binary_file, &binary_content).unwrap();
+
+        // Create a .pyc file (should be skipped by extension filter)
+        let pyc_file = temp_dir.path().join("cache.pyc");
+        std::fs::write(&pyc_file, b"hello binary").unwrap();
+
+        let tool = GrepTool::with_working_directory(temp_dir.path());
+        let call = create_tool_call(
+            "test-binary",
+            "Grep",
+            json!({
+                "pattern": "hello",
+                "output_mode": "files_with_matches"
+            }),
+        );
+
+        let result = tool.execute(&call).await.unwrap();
+        assert!(result.success);
+
+        let output = result.output.as_ref().unwrap();
+        // Should find the text file
+        assert!(output.contains("text.txt"), "Should find text.txt");
+        // Should NOT find binary files
+        assert!(!output.contains("binary.dat"), "Should skip binary.dat (NUL byte detection)");
+        assert!(!output.contains("cache.pyc"), "Should skip cache.pyc (extension filter)");
+    }
 }
