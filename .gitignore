@@ -79,6 +79,10 @@ wheels/
 venv/
 env/
 ENV/
+.venv/
+
+# Python package manager lock files
+uv.lock
 
 # Jupyter Notebook
 .ipynb_checkpoints
