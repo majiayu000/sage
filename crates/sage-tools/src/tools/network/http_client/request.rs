@@ -38,7 +38,9 @@ pub fn add_body(request: reqwest::RequestBuilder, body: &RequestBody) -> Result<
             Ok(request.form(form))
         }
         RequestBody::Binary(data) => {
-            let bytes = base64::decode(data)
+            use base64::Engine;
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(data)
                 .context("Failed to decode base64 binary data")?;
             Ok(request.body(bytes))
         }
