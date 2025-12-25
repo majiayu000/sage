@@ -110,12 +110,11 @@ jobs:
     needs: [fmt, clippy, test]
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
           - os: macos-latest
-            target: x86_64-apple-darwin
+            target: aarch64-apple-darwin
     steps:
       - uses: actions/checkout@v4
 
@@ -131,9 +130,9 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-build-
+            ${{ runner.os }}-${{ matrix.target }}-cargo-build-
 
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }}
