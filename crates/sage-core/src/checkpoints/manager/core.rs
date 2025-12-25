@@ -3,7 +3,7 @@
 use crate::checkpoints::restore::RestorePreview;
 use crate::checkpoints::storage::CheckpointSummary;
 use crate::checkpoints::types::{
-    Checkpoint, CheckpointId, CheckpointType, ConversationSnapshot, RestoreOptions, RestoreResult,
+    Checkpoint, CheckpointId, ConversationSnapshot, RestoreOptions, RestoreResult,
     ToolExecutionRecord,
 };
 use crate::error::{SageError, SageResult};

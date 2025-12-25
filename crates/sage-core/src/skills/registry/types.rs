@@ -4,7 +4,7 @@ use crate::error::SageResult;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use super::super::types::{Skill, SkillContext, SkillSource};
+use super::super::types::{Skill, SkillSource};
 
 /// Skill registry for managing skills
 pub struct SkillRegistry {

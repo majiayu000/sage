@@ -1,6 +1,5 @@
 //! Core translation logic between Sage and MCP schemas
 
-use super::types::*;
 use crate::mcp::types::{McpContent, McpTool, McpToolResult};
 use crate::tools::types::{ToolCall, ToolResult, ToolSchema};
 use serde_json::Value;

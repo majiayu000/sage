@@ -1,6 +1,5 @@
 //! Pattern detection and analysis for learning
 
-use super::super::types::{Confidence, PatternType};
 use super::extractor::{
     extract_correction_patterns, extract_file_type_patterns, extract_style_patterns,
     extract_tool_patterns,
@@ -9,8 +8,8 @@ use super::matcher::{
     detect_brace_style, detect_indentation_style, detect_naming_convention, detect_quote_style,
     detect_semicolon_style,
 };
-use super::types::{CorrectionRecord, CorrectionStats, PreferenceIndicator, StylePattern};
 use super::super::types::Pattern;
+use super::types::{CorrectionRecord, CorrectionStats, StylePattern};
 use std::collections::HashMap;
 
 /// Pattern detector for analyzing interactions and extracting patterns

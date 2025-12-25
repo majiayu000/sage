@@ -7,7 +7,7 @@ use tokio_util::sync::CancellationToken;
 use super::super::registry::AgentRegistry;
 use super::super::types::{AgentDefinition, ExecutionMetadata, SubAgentResult};
 use super::handlers::StepExecutor;
-use super::types::{ExecutorMessage, StepResult, SubAgentConfig};
+use super::types::{StepResult, SubAgentConfig};
 use crate::error::{SageError, SageResult};
 use crate::llm::client::LlmClient;
 use crate::llm::messages::LlmMessage;
