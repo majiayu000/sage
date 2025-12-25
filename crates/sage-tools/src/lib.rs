@@ -1,4 +1,51 @@
 //! Tool implementations for Sage Agent
+//!
+//! This crate provides a comprehensive collection of tools for the Sage Agent system,
+//! organized into functional categories for code manipulation, process execution,
+//! file operations, and more.
+//!
+//! # Tool Categories
+//!
+//! ## File Operations ([`tools::file_ops`])
+//! - **Read** - Read file contents with line numbers
+//! - **Write** - Create or overwrite files
+//! - **Edit** - Precise text replacement in files
+//! - **Glob** - Pattern-based file discovery
+//! - **Grep** - Content search with regex support
+//! - **MultiEdit** - Batch file editing operations
+//! - **JsonEdit** - JSON file manipulation with JSONPath
+//!
+//! ## Process Execution ([`tools::process`])
+//! - **Bash** - Shell command execution with sandboxing
+//! - **TaskOutput** - Retrieve background task results
+//! - **KillShell** - Terminate running shell processes
+//!
+//! ## Code Intelligence ([`tools::code`])
+//! - **LSP** - Language Server Protocol integration
+//! - **TestGenerator** - Automated test generation
+//! - **CodebaseRetrieval** - Semantic code search
+//!
+//! ## Network Operations ([`tools::network`])
+//! - **WebFetch** - HTTP content fetching
+//! - **WebSearch** - Web search integration
+//! - **HttpClient** - Full-featured HTTP client
+//!
+//! ## Diagnostics ([`tools::diagnostics`])
+//! - **Learning** - Pattern learning from user interactions
+//! - **Memory** - Long-term memory management
+//!
+//! ## Extensions ([`tools::extensions`])
+//! - **Skill** - Skill invocation
+//! - **SlashCommand** - Slash command handling
+//!
+//! # Usage
+//!
+//! ```rust,ignore
+//! use sage_tools::get_default_tools;
+//!
+//! // Get all default tools
+//! let tools = get_default_tools();
+//! ```
 
 // Allow common clippy lints that are stylistic preferences
 #![allow(clippy::collapsible_if)]

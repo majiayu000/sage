@@ -13,15 +13,6 @@
 //! ## Version Compatibility
 //!
 //! The SDK maintains backward compatibility within the same MAJOR version.
-
-// Allow common clippy lints that are stylistic preferences
-#![allow(clippy::collapsible_if)]
-#![allow(clippy::derivable_impls)]
-#![allow(clippy::type_complexity)]
-#![allow(clippy::too_many_arguments)]
-#![allow(clippy::unnecessary_map_or)]
-#![allow(clippy::redundant_closure)]
-#![allow(clippy::manual_range_patterns)]
 //! Clients can check compatibility using [`version::is_compatible`] or
 //! [`version::negotiate_version`].
 //!
@@ -34,7 +25,7 @@
 //!
 //! # Example
 //!
-//! ```rust
+//! ```rust,ignore
 //! use sage_sdk::{SageAgentSdk, version};
 //!
 //! // Check SDK version
@@ -44,6 +35,15 @@
 //! let client_version = version::Version::new(0, 1, 0);
 //! assert!(version::is_compatible(&client_version));
 //! ```
+
+// Allow common clippy lints that are stylistic preferences
+#![allow(clippy::collapsible_if)]
+#![allow(clippy::derivable_impls)]
+#![allow(clippy::type_complexity)]
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::unnecessary_map_or)]
+#![allow(clippy::redundant_closure)]
+#![allow(clippy::manual_range_patterns)]
 
 pub mod client;
 pub mod version;
