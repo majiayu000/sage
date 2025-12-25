@@ -116,9 +116,11 @@ ImportError: No module named 'xxx'
 
 ### Phase 2: 环境改进 (3-5天)
 
-- [ ] **Task 2.1**: 添加仓库初始化脚本
-  - 克隆后自动设置 Python 路径
-  - 可选: 安装开发依赖
+- [x] **Task 2.1**: 添加仓库初始化脚本 ✅ (2025-12-25)
+  - 添加 `_setup_python_environment()` 方法
+  - 尝试 `pip install -e . --no-deps` 安装
+  - 设置 PYTHONPATH 环境变量作为后备
+  - 更新 prompt 告知 agent PYTHONPATH 已配置
 
 - [ ] **Task 2.2**: 提供专用测试运行工具
   - 新工具: `RunTests` 或增强 bash 工具

@@ -33,21 +33,6 @@ SWEBENCH_PROMPT_PREFIX = """
 
 You are tasked with FIXING A BUG in the codebase. This is NOT an analysis task - you MUST implement the fix.
 
-### ENVIRONMENT NOTES (IMPORTANT):
-This is an isolated SWE-bench environment. You have special permissions:
-
-**Bash Tool with Command Chaining:**
-You can use command chaining (&&, ;, ||) by setting `dangerously_disable_sandbox=true`:
-```json
-{"command": "cd /repo && python -c 'import module; print(module.__version__)'", "dangerously_disable_sandbox": true}
-```
-
-**Common patterns for this environment:**
-- Change directory and run: `cd path && command`
-- Run Python with imports: `cd /repo && python -c "import module; ..."`
-- Run tests: `cd /repo && python -m pytest tests/test_file.py`
-- Install in dev mode: `cd /repo && pip install -e .`
-
 ### REQUIREMENTS:
 1. You MUST modify existing source code files to fix the bug
 2. You MUST use the Edit tool to make changes (NOT Write tool for new files)
@@ -160,7 +145,7 @@ class SageEvaluator:
         return instances
 
     def setup_instance(self, instance: Dict[str, Any]) -> Path:
-        """Set up a test instance (clone repo, checkout commit)."""
+        """Set up a test instance (clone repo, checkout commit, install deps)."""
         instance_id = instance["instance_id"]
         repo = instance["repo"]
         base_commit = instance["base_commit"]
@@ -199,7 +184,47 @@ class SageEvaluator:
         if config_src.exists():
             shutil.copy(config_src, instance_dir / "sage_config.json")
 
+        # Initialize Python environment for the instance
+        self._setup_python_environment(instance_dir, repo)
+
         return instance_dir
+
+    def _setup_python_environment(self, instance_dir: Path, repo: str):
+        """Set up Python environment for the instance.
+
+        This tries multiple strategies:
+        1. pip install -e . (if setup.py or pyproject.toml exists)
+        2. Set PYTHONPATH as fallback
+        """
+        print(f"  Setting up Python environment...")
+
+        # Check if this is a Python project
+        has_setup_py = (instance_dir / "setup.py").exists()
+        has_pyproject = (instance_dir / "pyproject.toml").exists()
+
+        if has_setup_py or has_pyproject:
+            # Try to install in development mode
+            try:
+                result = subprocess.run(
+                    ["pip", "install", "-e", ".", "--quiet", "--no-deps"],
+                    cwd=str(instance_dir),
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                )
+                if result.returncode == 0:
+                    print(f"  ✓ Installed {repo} in development mode")
+                    return
+                else:
+                    print(f"  ⚠ pip install -e . failed, using PYTHONPATH fallback")
+            except subprocess.TimeoutExpired:
+                print(f"  ⚠ pip install timed out, using PYTHONPATH fallback")
+            except Exception as e:
+                print(f"  ⚠ pip install failed: {e}, using PYTHONPATH fallback")
+
+        # Create a .env file with PYTHONPATH for the agent to source
+        env_file = instance_dir / ".swebench_env"
+        env_file.write_text(f"export PYTHONPATH={instance_dir}:$PYTHONPATH\n")
 
     def run_agent(self, instance_dir: Path, problem_statement: str, instance_id: str, is_retry: bool = False) -> bool:
         """Run Sage agent on the instance.
@@ -231,12 +256,18 @@ class SageEvaluator:
             if self.max_steps and self.max_steps > 0:
                 cmd.extend(["--max-steps", str(self.max_steps)])
 
+            # Set up environment with PYTHONPATH for the instance
+            env = os.environ.copy()
+            current_pythonpath = env.get("PYTHONPATH", "")
+            env["PYTHONPATH"] = f"{instance_dir}:{current_pythonpath}" if current_pythonpath else str(instance_dir)
+
             result = subprocess.run(
                 cmd,
                 cwd=str(instance_dir),
                 capture_output=True,
                 text=True,
                 timeout=self.timeout,
+                env=env,
             )
 
             return result.returncode == 0

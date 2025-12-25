@@ -6,8 +6,10 @@ use sage_core::tools::base::ToolError;
 ///
 /// This checks for:
 /// - Dangerous command patterns (system destruction, privilege escalation)
-/// - Shell operators that could enable command injection
-/// - Command substitution attempts
+/// - Fork bombs and disk destruction commands
+///
+/// Note: Command chaining (&&, ;, ||) and command substitution ($(), ``) are allowed
+/// as they are commonly needed for development workflows.
 pub fn validate_command_security(command: &str) -> Result<(), ToolError> {
     let command_lower = command.to_lowercase();
 
@@ -18,8 +20,11 @@ pub fn validate_command_security(command: &str) -> Result<(), ToolError> {
         "rm -rf ~",
         ":(){ :|:& };:", // Fork bomb
         ":(){:|:&};:",   // Fork bomb variant (no spaces)
-        "dd if=/dev/zero",
-        "dd if=/dev/random",
+        "dd if=/dev/zero of=/dev/sda",
+        "dd if=/dev/random of=/dev/sda",
+        "> /dev/sda",
+        "mv /* /dev/null",
+        "chmod -r 000 /",
         "mkfs",
         "fdisk",
         "parted",
@@ -30,10 +35,6 @@ pub fn validate_command_security(command: &str) -> Result<(), ToolError> {
         "init 0",
         "init 6",
         "telinit 0",
-        "> /dev/sda",
-        "mv /* /dev/null",
-        "chmod -r 000 /",
-        "chown -r",
     ];
 
     for pattern in &dangerous_commands {
@@ -58,98 +59,11 @@ pub fn validate_command_security(command: &str) -> Result<(), ToolError> {
         }
     }
 
-    // Check for command substitution which could bypass validation
-    // These allow executing arbitrary commands within the main command
-    let substitution_patterns = [
-        "$(", // Modern command substitution
-        "`",  // Legacy command substitution (backticks)
-        "${", // Variable expansion with commands
-    ];
-
-    for pattern in &substitution_patterns {
-        if command.contains(pattern) {
-            return Err(ToolError::PermissionDenied(format!(
-                "Command substitution not allowed: {}",
-                pattern
-            )));
-        }
-    }
-
-    // Check for dangerous shell operators that enable command chaining
-    // Note: We allow pipes (|) and redirects (>, <) as they are commonly needed
-    // but block command separators that could run arbitrary commands
-    let dangerous_operators = [
-        ";",  // Command separator - runs multiple commands
-        "&&", // Logical AND - runs second command if first succeeds
-        "||", // Logical OR - runs second command if first fails
-    ];
-
-    for op in &dangerous_operators {
-        if command.contains(op) {
-            return Err(ToolError::PermissionDenied(format!(
-                "Command chaining operator not allowed: '{}'",
-                op
-            )));
-        }
-    }
-
-    // Check for process backgrounding which could escape control
-    if command.trim().ends_with('&') && !command.trim().ends_with("&&") {
-        return Err(ToolError::PermissionDenied(
-            "Background process operator (&) not allowed at end of command".to_string(),
-        ));
-    }
-
-    Ok(())
-}
-
-/// Permissive command security validation for isolated environments (SWE-bench, Docker, etc.)
-///
-/// This allows command chaining operators (&&, ;, ||) and command substitution,
-/// but still blocks the most dangerous commands that could destroy the system.
-pub fn validate_command_security_permissive(command: &str) -> Result<(), ToolError> {
-    let command_lower = command.to_lowercase();
-
-    // Even in permissive mode, block absolutely dangerous commands
-    let dangerous_commands = [
-        "rm -rf /",
-        "rm -rf /*",
-        ":(){ :|:& };:", // Fork bomb
-        ":(){:|:&};:",   // Fork bomb variant (no spaces)
-        "dd if=/dev/zero of=/dev/sda",
-        "dd if=/dev/random of=/dev/sda",
-        "> /dev/sda",
-        "mv /* /dev/null",
-        "chmod -r 000 /",
-        "mkfs",
-        "fdisk",
-        "parted",
-    ];
-
-    for pattern in &dangerous_commands {
-        if command_lower.contains(pattern) {
-            return Err(ToolError::PermissionDenied(format!(
-                "Dangerous command pattern detected: {}",
-                pattern
-            )));
-        }
-    }
-
-    // Block privilege escalation even in permissive mode
-    let privilege_commands = ["sudo ", "su ", "doas ", "pkexec "];
-    for pattern in &privilege_commands {
-        if command_lower.starts_with(pattern)
-            || command_lower.contains(&format!(" {}", pattern.trim()))
-        {
-            return Err(ToolError::PermissionDenied(format!(
-                "Privilege escalation command not allowed: {}",
-                pattern.trim()
-            )));
-        }
-    }
-
-    // In permissive mode: Allow &&, ;, ||, $(), `, ${}
-    // These are commonly needed for development workflows
+    // Note: We now allow:
+    // - Command chaining: &&, ;, || (commonly needed for development)
+    // - Command substitution: $(), `` (commonly needed for scripting)
+    // - Variable expansion: ${} (commonly needed)
+    // - Pipes and redirects: |, >, < (always allowed)
 
     Ok(())
 }
