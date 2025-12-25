@@ -20,10 +20,10 @@
 //! - **TaskOutput** - Retrieve background task results
 //! - **KillShell** - Terminate running shell processes
 //!
-//! ## Code Intelligence ([`tools::code`])
-//! - **LSP** - Language Server Protocol integration
-//! - **TestGenerator** - Automated test generation
-//! - **CodebaseRetrieval** - Semantic code search
+//! ## Code Intelligence
+//! - **LSP** - Language Server Protocol integration (in [`tools::file_ops`])
+//! - **TestGenerator** - Automated test generation (in [`tools::file_ops`])
+//! - **CodebaseRetrieval** - Semantic code search (in [`tools::file_ops`])
 //!
 //! ## Network Operations ([`tools::network`])
 //! - **WebFetch** - HTTP content fetching

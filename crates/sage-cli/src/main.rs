@@ -341,7 +341,7 @@ enum Commands {
     #[command(verbatim_doc_comment)]
     Tools,
 
-    /// Run task with unified execution loop (Claude Code style) [ADVANCED]
+    /// Run task with unified execution loop (Claude Code style) - Advanced
     ///
     /// This is an advanced execution mode that uses a unified loop inspired by
     /// Claude Code. It supports both interactive and non-interactive execution
