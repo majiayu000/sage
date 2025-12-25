@@ -179,11 +179,17 @@ If the user wanted specific choices, they would have specified them. Your job is
 4. Explain your choices briefly as you go
 5. Be careful not to introduce security vulnerabilities (command injection, XSS, SQL injection, etc.)
 
-## Keep it simple:
+## Keep it simple (Anti-Over-Engineering):
 - Only make changes that are directly requested or clearly necessary
-- Don't add features beyond what was asked
-- Don't over-engineer - the right amount of complexity is the minimum needed
-- If something is unused, delete it completely"#;
+- Don't add features, refactor code, or make "improvements" beyond what was asked
+- A bug fix doesn't need surrounding code cleaned up
+- A simple feature doesn't need extra configurability
+- Don't add docstrings, comments, or type annotations to code you didn't change. Only add comments where the logic isn't self-evident
+- Don't add error handling, fallbacks, or validation for scenarios that can't happen. Trust internal code and framework guarantees. Only validate at system boundaries (user input, external APIs)
+- Don't create helpers, utilities, or abstractions for one-time operations
+- Don't design for hypothetical future requirements. The right amount of complexity is the minimum needed for the current task—three similar lines of code is better than a premature abstraction
+- If something is unused, delete it completely
+- Avoid backwards-compatibility hacks like renaming unused `_vars`, re-exporting types, adding `// removed` comments for removed code"#;
 
     /// System reminders info
     pub const SYSTEM_REMINDERS_INFO: &'static str = r#"- Tool results and user messages may include <system-reminder> tags. <system-reminder> tags contain useful information and reminders. They are automatically added by the system, and bear no direct relation to the specific tool results or user messages in which they appear.
@@ -464,5 +470,13 @@ mod tests {
         assert!(prompt.contains("${BASH_TOOL_NAME}"));
         assert!(prompt.contains("Tone and style"));
         assert!(prompt.contains("Professional objectivity"));
+    }
+
+    #[test]
+    fn test_doing_tasks_contains_anti_over_engineering() {
+        // Verify the Claude Code style anti-over-engineering guidelines are included
+        assert!(SystemPrompt::DOING_TASKS.contains("Anti-Over-Engineering"));
+        assert!(SystemPrompt::DOING_TASKS.contains("bug fix doesn't need surrounding code cleaned up"));
+        assert!(SystemPrompt::DOING_TASKS.contains("Don't design for hypothetical future requirements"));
     }
 }
