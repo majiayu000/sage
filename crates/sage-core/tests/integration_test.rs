@@ -399,9 +399,10 @@ async fn test_auto_compact_boundary_system() -> SageResult<()> {
     println!("🧪 Testing auto-compact boundary system");
 
     // 1. Create config with low threshold for easier testing
+    // Using reserved_for_response: 1000 tokens reserved, threshold = 2000 - 1000 = 1000 tokens
     let config = AutoCompactConfig {
-        max_context_tokens: 2000,   // Higher limit
-        threshold_percentage: 0.5,  // 50% = 1000 tokens threshold
+        max_context_tokens: 2000,
+        reserved_for_response: 1000, // Threshold at 1000 tokens (50%)
         min_messages_to_keep: 3,
         preserve_recent_count: 2,
         preserve_system_messages: true,
@@ -559,9 +560,10 @@ async fn test_compact_with_custom_instructions() -> SageResult<()> {
 
     println!("🧪 Testing compact with custom instructions");
 
+    // reserved_for_response: 350 tokens, threshold = 500 - 350 = 150 tokens (30%)
     let config = AutoCompactConfig {
         max_context_tokens: 500,
-        threshold_percentage: 0.3,
+        reserved_for_response: 350,
         ..Default::default()
     };
 
