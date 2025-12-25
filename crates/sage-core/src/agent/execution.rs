@@ -7,6 +7,17 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Complete execution of an agent task
+///
+/// # Future Enhancements
+///
+/// The following features are planned for future versions:
+///
+/// - **Error Recovery**: Track failed steps and retry attempts, intelligent retry
+///   strategies, rollback capabilities for failed operations
+/// - **Execution Checkpoints**: Pause/resume support, state serialization for
+///   persistence, checkpoint-based recovery
+/// - **Execution Metrics**: Performance metrics per step, resource usage monitoring,
+///   execution analytics and insights
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentExecution {
     /// Unique identifier for this execution
@@ -27,20 +38,6 @@ pub struct AgentExecution {
     pub completed_at: Option<DateTime<Utc>>,
     /// Additional metadata
     pub metadata: HashMap<String, serde_json::Value>,
-    // TODO: Add error recovery mechanism
-    // - Track failed steps and retry attempts
-    // - Implement intelligent retry strategies
-    // - Add rollback capabilities for failed operations
-
-    // TODO: Add execution checkpoints
-    // - Support for pausing and resuming execution
-    // - Implement state serialization for persistence
-    // - Add checkpoint-based recovery
-
-    // TODO: Add execution metrics
-    // - Track performance metrics per step
-    // - Monitor resource usage during execution
-    // - Generate execution analytics and insights
 }
 
 impl AgentExecution {

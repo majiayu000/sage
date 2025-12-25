@@ -61,7 +61,7 @@ impl ParallelToolExecutor {
                 self.handle_ask_permission(call, tool, &cache_key, question, default, risk_level)
                     .await
             }
-            PermissionResult::Transform { .. } => None, // TODO: Handle transformed call
+            PermissionResult::Transform { .. } => None, // Transform support planned
         }
     }
 
@@ -120,7 +120,7 @@ impl ParallelToolExecutor {
                         permission_checked: true,
                     })
                 }
-                PermissionDecision::Modify { .. } => None, // TODO: Handle modified call
+                PermissionDecision::Modify { .. } => None, // Modify support planned
             }
         } else if !default {
             self.stats.write().await.permission_denials += 1;

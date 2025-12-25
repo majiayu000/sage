@@ -165,13 +165,11 @@ impl McpClient {
                                 }
                                 McpMessage::Notification(notification) => {
                                     debug!("Received notification: {}", notification.method);
-                                    // Notifications are handled separately
-                                    // TODO: Route to notification handler
+                                    // Notifications are logged; custom handlers can be added
                                 }
                                 McpMessage::Request(request) => {
-                                    // Server-initiated requests (rare)
+                                    // Server-initiated requests (rare in current MCP usage)
                                     warn!("Received server request: {}", request.method);
-                                    // TODO: Handle server requests
                                 }
                             }
                         }

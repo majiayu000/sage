@@ -154,7 +154,7 @@ pub mod validation;
 pub mod workspace;
 
 // Plugin system is implemented in plugins module
-// TODO: Add plugin marketplace integration
+// Note: Plugin marketplace integration is planned for future versions
 
 // Re-export commonly used types
 pub use agent::{

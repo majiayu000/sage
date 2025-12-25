@@ -281,7 +281,7 @@ impl HookExecutor {
         _input: &HookInput,
         _cancel: &CancellationToken,
     ) -> HookExecutionResult {
-        // TODO: Integrate with LLM client when available
+        // Prompt hooks require LLM client integration (planned feature)
         warn!("Prompt hooks are not yet implemented");
         HookExecutionResult::Error("Prompt hooks are not yet implemented".to_string())
     }

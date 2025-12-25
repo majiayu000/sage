@@ -11,24 +11,21 @@ use tokio::time::timeout;
 use tracing::instrument;
 
 /// Tool executor that manages and executes tools
+///
+/// # Future Enhancements
+///
+/// The following features are planned for future versions:
+///
+/// - **Tool Dependency Management**: Track dependencies and execution order,
+///   implement dependency resolution, support conditional execution
+/// - **Resource Management**: Resource pooling, memory/CPU limits per tool,
+///   execution queuing and prioritization
+/// - **Tool Security and Sandboxing**: Permission system, environment isolation,
+///   capability restrictions
 pub struct ToolExecutor {
     tools: HashMap<String, Arc<dyn Tool>>,
     max_execution_time: Duration,
     allow_parallel_execution: bool,
-    // TODO: Add tool dependency management
-    // - Track tool dependencies and execution order
-    // - Implement dependency resolution algorithm
-    // - Support conditional tool execution based on dependencies
-
-    // TODO: Add resource management
-    // - Implement resource pooling for expensive tools
-    // - Add memory and CPU usage limits per tool
-    // - Support tool execution queuing and prioritization
-
-    // TODO: Add tool security and sandboxing
-    // - Implement tool permission system
-    // - Add execution environment isolation
-    // - Support tool capability restrictions
 }
 
 impl ToolExecutor {
