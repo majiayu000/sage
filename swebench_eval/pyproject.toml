@@ -1,7 +1,7 @@
 [project]
 name = "swebench-eval"
 version = "0.1.0"
-description = "Add your description here"
+description = "SWE-bench evaluation runner for Sage Agent"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = ["datasets"]

@@ -2,9 +2,9 @@
 
 #![cfg(test)]
 
+use crate::error::SageError;
 use crate::tools::base::concurrency::ConcurrencyMode;
 use crate::tools::base::error::ToolError;
-use crate::error::SageError;
 
 #[test]
 fn test_tool_error_conversions() {

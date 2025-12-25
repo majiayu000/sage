@@ -62,11 +62,7 @@ pub fn load_from_env() -> SageResult<Config> {
 }
 
 /// Load provider configuration from environment variables
-fn load_provider_from_env(
-    config: &mut Config,
-    provider: &str,
-    env_prefix: &str,
-) -> SageResult<()> {
+fn load_provider_from_env(config: &mut Config, provider: &str, env_prefix: &str) -> SageResult<()> {
     let mut params = ModelParameters::default();
     let mut has_config = false;
 

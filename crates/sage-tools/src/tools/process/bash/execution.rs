@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use sage_core::tools::base::{CommandTool, ToolError};
 use sage_core::tools::types::ToolResult;
-use sage_core::tools::{BackgroundShellTask, BACKGROUND_REGISTRY};
+use sage_core::tools::{BACKGROUND_REGISTRY, BackgroundShellTask};
 use tokio::process::Command;
 use tokio_util::sync::CancellationToken;
 use tracing::instrument;

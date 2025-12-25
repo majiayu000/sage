@@ -44,11 +44,11 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             default_provider: "anthropic".to_string(),
-            max_steps: None,                        // None = unlimited steps
-            total_token_budget: None,               // No limit by default
+            max_steps: None,          // None = unlimited steps
+            total_token_budget: None, // No limit by default
             model_providers: create_default_providers(),
             lakeview_config: None,
-            enable_lakeview: true,                  // Python version defaults to true
+            enable_lakeview: true, // Python version defaults to true
             working_directory: None,
             tools: ToolConfig::default(),
             logging: LoggingConfig::default(),

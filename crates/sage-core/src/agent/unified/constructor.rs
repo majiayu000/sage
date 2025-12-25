@@ -14,7 +14,7 @@ use crate::ui::AnimationManager;
 use anyhow::Context;
 use std::sync::Arc;
 
-use super::{input_channel, UnifiedExecutor};
+use super::{UnifiedExecutor, input_channel};
 
 impl UnifiedExecutor {
     /// Create a new unified executor with default options

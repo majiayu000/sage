@@ -32,9 +32,7 @@ pub use builder::UnifiedExecutorBuilder;
 use crate::agent::subagent::init_global_runner_from_config;
 use crate::error::{SageError, SageResult};
 use crate::input::{InputChannel, InputRequest, InputResponse};
-use crate::session::{
-    FileSnapshotTracker, JsonlSessionStorage, MessageChainTracker,
-};
+use crate::session::{FileSnapshotTracker, JsonlSessionStorage, MessageChainTracker};
 use crate::tools::executor::ToolExecutor;
 use crate::trajectory::SessionRecorder;
 use crate::types::Id;

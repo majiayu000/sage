@@ -112,8 +112,7 @@ impl TodoList {
 }
 
 // Global todo list instance
-pub static GLOBAL_TODO_LIST: Lazy<Arc<TodoList>> =
-    Lazy::new(|| Arc::new(TodoList::new()));
+pub static GLOBAL_TODO_LIST: Lazy<Arc<TodoList>> = Lazy::new(|| Arc::new(TodoList::new()));
 
 /// TodoWrite tool - Claude Code compatible
 pub struct TodoWriteTool {

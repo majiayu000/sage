@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
 
-use super::hook_types::{default_continue, PermissionDecision};
+use super::hook_types::{PermissionDecision, default_continue};
 
 /// Output from a hook
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

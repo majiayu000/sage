@@ -173,7 +173,8 @@ impl ContextConfig {
     /// This follows Claude Code's design: trigger summarization when
     /// current tokens >= max_context_tokens - reserved_for_response
     pub fn threshold_tokens(&self) -> usize {
-        self.max_context_tokens.saturating_sub(self.reserved_for_response)
+        self.max_context_tokens
+            .saturating_sub(self.reserved_for_response)
     }
 
     /// Get the threshold as a percentage (for display/logging)

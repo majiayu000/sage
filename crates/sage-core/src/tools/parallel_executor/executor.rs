@@ -302,7 +302,11 @@ impl ParallelToolExecutor {
                 if !cached {
                     self.stats.write().await.permission_denials += 1;
                     return Some(ExecutionResult {
-                        result: ToolResult::error(&call.id, &call.name, "Permission denied (cached)"),
+                        result: ToolResult::error(
+                            &call.id,
+                            &call.name,
+                            "Permission denied (cached)",
+                        ),
                         wait_time: Duration::ZERO,
                         execution_time: Duration::ZERO,
                         permission_checked: true,
@@ -328,8 +332,13 @@ impl ParallelToolExecutor {
                     permission_checked: true,
                 })
             }
-            PermissionResult::Ask { question, default, risk_level } => {
-                self.handle_ask_permission(call, tool, &cache_key, question, default, risk_level).await
+            PermissionResult::Ask {
+                question,
+                default,
+                risk_level,
+            } => {
+                self.handle_ask_permission(call, tool, &cache_key, question, default, risk_level)
+                    .await
             }
             PermissionResult::Transform { .. } => None, // TODO: Handle transformed call
         }
@@ -361,7 +370,11 @@ impl ParallelToolExecutor {
                 PermissionDecision::Deny => {
                     self.stats.write().await.permission_denials += 1;
                     Some(ExecutionResult {
-                        result: ToolResult::error(&call.id, &call.name, "Permission denied by user"),
+                        result: ToolResult::error(
+                            &call.id,
+                            &call.name,
+                            "Permission denied by user",
+                        ),
                         wait_time: Duration::ZERO,
                         execution_time: Duration::ZERO,
                         permission_checked: true,
@@ -370,10 +383,16 @@ impl ParallelToolExecutor {
                 PermissionDecision::DenyAlways => {
                     self.stats.write().await.permission_denials += 1;
                     if self.config.use_permission_cache {
-                        self.permission_cache.set(cache_key.to_string(), false).await;
+                        self.permission_cache
+                            .set(cache_key.to_string(), false)
+                            .await;
                     }
                     Some(ExecutionResult {
-                        result: ToolResult::error(&call.id, &call.name, "Permission denied (permanently)"),
+                        result: ToolResult::error(
+                            &call.id,
+                            &call.name,
+                            "Permission denied (permanently)",
+                        ),
                         wait_time: Duration::ZERO,
                         execution_time: Duration::ZERO,
                         permission_checked: true,
@@ -437,17 +456,19 @@ impl ParallelToolExecutor {
             }
             ConcurrencyMode::ExclusiveByType => {
                 if let Some(semaphore) = self.type_semaphores.get(tool.name()) {
-                    let permit = semaphore.clone().acquire_owned().await.map_err(|_| {
-                        ToolError::Other("Failed to acquire type permit".into())
-                    })?;
+                    let permit =
+                        semaphore.clone().acquire_owned().await.map_err(|_| {
+                            ToolError::Other("Failed to acquire type permit".into())
+                        })?;
                     permits.add_type(permit);
                 }
             }
             ConcurrencyMode::Limited(_) => {
                 if let Some(semaphore) = self.limited_semaphores.get(tool.name()) {
-                    let permit = semaphore.clone().acquire_owned().await.map_err(|_| {
-                        ToolError::Other("Failed to acquire limited permit".into())
-                    })?;
+                    let permit =
+                        semaphore.clone().acquire_owned().await.map_err(|_| {
+                            ToolError::Other("Failed to acquire limited permit".into())
+                        })?;
                     permits.add_limited(permit);
                 }
             }

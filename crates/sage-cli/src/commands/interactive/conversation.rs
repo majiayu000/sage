@@ -1,8 +1,8 @@
 //! Conversation execution and handling
 
-use crate::console::CliConsole;
 use super::execution::{execute_conversation_continuation, execute_conversation_task};
 use super::session::ConversationSession;
+use crate::console::CliConsole;
 use sage_core::error::SageResult;
 use sage_core::types::TaskMetadata;
 use sage_sdk::SageAgentSdk;

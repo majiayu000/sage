@@ -1,10 +1,10 @@
 //! Slash command handling
 
-use crate::console::CliConsole;
-use crate::signal_handler::{AppState, set_global_app_state};
 use super::conversation::handle_conversation;
 use super::resume::handle_resume_command;
 use super::session::ConversationSession;
+use crate::console::CliConsole;
+use crate::signal_handler::{AppState, set_global_app_state};
 use sage_core::commands::types::InteractiveCommand;
 use sage_core::commands::{CommandExecutor, CommandRegistry};
 use sage_core::error::SageResult;

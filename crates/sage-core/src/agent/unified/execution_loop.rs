@@ -65,10 +65,8 @@ impl UnifiedExecutor {
                                 };
 
                                 // Count how many recent outputs are similar
-                                let repetition_count = recent_outputs
-                                    .iter()
-                                    .filter(|o| *o == &output_key)
-                                    .count();
+                                let repetition_count =
+                                    recent_outputs.iter().filter(|o| *o == &output_key).count();
 
                                 if repetition_count >= REPETITION_THRESHOLD {
                                     tracing::warn!(

@@ -7,7 +7,9 @@ use super::filters;
 use super::output::GrepOutputMode;
 use crate::tools::file_ops::grep::GrepTool;
 use grep_regex::RegexMatcherBuilder;
-use grep_searcher::{BinaryDetection, SearcherBuilder, Sink, SinkContext, SinkContextKind, SinkMatch};
+use grep_searcher::{
+    BinaryDetection, SearcherBuilder, Sink, SinkContext, SinkContextKind, SinkMatch,
+};
 use ignore::WalkBuilder;
 use sage_core::tools::base::{FileSystemTool, ToolError};
 use sage_core::tools::types::ToolResult;
@@ -54,13 +56,21 @@ impl MatchCollector {
 impl Sink for MatchCollector {
     type Error = io::Error;
 
-    fn matched(&mut self, _searcher: &grep_searcher::Searcher, mat: &SinkMatch<'_>) -> Result<bool, Self::Error> {
+    fn matched(
+        &mut self,
+        _searcher: &grep_searcher::Searcher,
+        mat: &SinkMatch<'_>,
+    ) -> Result<bool, Self::Error> {
         self.match_count += 1;
 
         if self.collect_content {
             let content = String::from_utf8_lossy(mat.bytes()).trim_end().to_string();
             self.matches.push(MatchLine {
-                line_number: if self.show_line_numbers { mat.line_number() } else { None },
+                line_number: if self.show_line_numbers {
+                    mat.line_number()
+                } else {
+                    None
+                },
                 content,
                 is_context: false,
             });
@@ -69,12 +79,20 @@ impl Sink for MatchCollector {
         Ok(true)
     }
 
-    fn context(&mut self, _searcher: &grep_searcher::Searcher, ctx: &SinkContext<'_>) -> Result<bool, Self::Error> {
+    fn context(
+        &mut self,
+        _searcher: &grep_searcher::Searcher,
+        ctx: &SinkContext<'_>,
+    ) -> Result<bool, Self::Error> {
         if self.collect_content {
             let content = String::from_utf8_lossy(ctx.bytes()).trim_end().to_string();
             let is_context = !matches!(ctx.kind(), SinkContextKind::Other);
             self.matches.push(MatchLine {
-                line_number: if self.show_line_numbers { ctx.line_number() } else { None },
+                line_number: if self.show_line_numbers {
+                    ctx.line_number()
+                } else {
+                    None
+                },
                 content,
                 is_context,
             });
@@ -248,26 +266,24 @@ impl GrepTool {
             format!("No matches found for pattern: {}", pattern)
         } else {
             match output_mode {
-                GrepOutputMode::Content => {
-                    results
-                        .iter()
-                        .map(|r| {
-                            let lines: Vec<String> = r
-                                .matches
-                                .iter()
-                                .map(|m| {
-                                    if let Some(line_num) = m.line_number {
-                                        format!("{}:\t{}", line_num, m.content)
-                                    } else {
-                                        m.content.clone()
-                                    }
-                                })
-                                .collect();
-                            format!("{}:\n{}", r.path, lines.join("\n"))
-                        })
-                        .collect::<Vec<_>>()
-                        .join("\n\n")
-                }
+                GrepOutputMode::Content => results
+                    .iter()
+                    .map(|r| {
+                        let lines: Vec<String> = r
+                            .matches
+                            .iter()
+                            .map(|m| {
+                                if let Some(line_num) = m.line_number {
+                                    format!("{}:\t{}", line_num, m.content)
+                                } else {
+                                    m.content.clone()
+                                }
+                            })
+                            .collect();
+                        format!("{}:\n{}", r.path, lines.join("\n"))
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n\n"),
                 GrepOutputMode::FilesWithMatches => {
                     format!(
                         "{}\n\nTotal: {} file(s) with matches",

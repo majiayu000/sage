@@ -54,13 +54,13 @@ pub mod matcher;
 pub mod registry;
 
 // Type modules (split from the original large types.rs)
-pub mod hook_types;
-pub mod command_hook;
-pub mod prompt_hook;
 pub mod callback_hook;
+pub mod command_hook;
 pub mod hook_config;
 pub mod hook_input;
 pub mod hook_output;
+pub mod hook_types;
+pub mod prompt_hook;
 
 // Backwards compatibility: keep types module as an alias
 #[allow(deprecated)]
@@ -88,6 +88,6 @@ pub use hook_config::{HookConfig, HookMatcher};
 pub use hook_input::HookInput;
 pub use hook_output::HookOutput;
 pub use hook_types::{HookImplementation, HookType, HookVariant, PermissionDecision};
-pub use matcher::{matches, PatternMatcher};
+pub use matcher::{PatternMatcher, matches};
 pub use prompt_hook::PromptHook;
 pub use registry::{HookRegistry, HooksConfig};

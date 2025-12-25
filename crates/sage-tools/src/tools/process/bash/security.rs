@@ -126,10 +126,7 @@ pub fn requires_user_confirmation(command: &str) -> Option<String> {
 
     // truncate / delete from without where
     if command_lower.contains("truncate ") {
-        return Some(format!(
-            "This command will truncate a table: '{}'",
-            command
-        ));
+        return Some(format!("This command will truncate a table: '{}'", command));
     }
 
     // docker system prune

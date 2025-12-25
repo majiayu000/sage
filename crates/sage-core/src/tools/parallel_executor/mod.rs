@@ -22,8 +22,8 @@ mod tests {
     use crate::tools::types::{ToolCall, ToolResult, ToolSchema};
     use async_trait::async_trait;
     use std::collections::HashMap;
-    use std::sync::atomic::{AtomicU32, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicU32, Ordering};
     use std::time::Duration;
 
     // Simple test tool
@@ -59,17 +59,21 @@ mod tests {
             ToolSchema::new(self.name.clone(), "Test tool".to_string(), vec![])
         }
 
-        async fn execute(&self, _call: &ToolCall) -> Result<ToolResult, ToolError> {
+        async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
             self.call_count.fetch_add(1, Ordering::SeqCst);
             tokio::time::sleep(self.delay).await;
-            Ok(ToolResult::success("test_id", &self.name, "done"))
+            Ok(ToolResult::success(&call.id, &self.name, "done"))
         }
 
         fn concurrency_mode(&self) -> ConcurrencyMode {
             self.concurrency_mode.clone()
         }
 
-        async fn check_permission(&self, _call: &ToolCall, _context: &ToolContext) -> PermissionResult {
+        async fn check_permission(
+            &self,
+            _call: &ToolCall,
+            _context: &ToolContext,
+        ) -> PermissionResult {
             PermissionResult::Allow
         }
     }
@@ -77,7 +81,11 @@ mod tests {
     #[tokio::test]
     async fn test_basic_execution() {
         let executor = ParallelToolExecutor::new();
-        let tool = Arc::new(TestTool::new("test", Duration::from_millis(10), ConcurrencyMode::Parallel));
+        let tool = Arc::new(TestTool::new(
+            "test",
+            Duration::from_millis(10),
+            ConcurrencyMode::Parallel,
+        ));
         executor.register_tool(tool);
 
         let call = ToolCall::new("1", "test", HashMap::new());
@@ -89,7 +97,11 @@ mod tests {
     #[tokio::test]
     async fn test_parallel_execution() {
         let executor = ParallelToolExecutor::new();
-        let tool = Arc::new(TestTool::new("test", Duration::from_millis(50), ConcurrencyMode::Parallel));
+        let tool = Arc::new(TestTool::new(
+            "test",
+            Duration::from_millis(50),
+            ConcurrencyMode::Parallel,
+        ));
         executor.register_tool(tool.clone());
 
         let calls: Vec<_> = (0..5)
@@ -114,12 +126,22 @@ mod tests {
 
         let result = executor.execute_tool(&call).await;
         assert!(!result.result.success);
-        assert!(result.result.error.as_ref().map_or(false, |e| e.contains("not found")));
+        assert!(
+            result
+                .result
+                .error
+                .as_ref()
+                .map_or(false, |e| e.contains("not found"))
+        );
     }
 
     #[tokio::test]
     async fn test_builder() {
-        let tool = Arc::new(TestTool::new("test", Duration::from_millis(10), ConcurrencyMode::Parallel));
+        let tool = Arc::new(TestTool::new(
+            "test",
+            Duration::from_millis(10),
+            ConcurrencyMode::Parallel,
+        ));
 
         let executor = ParallelExecutorBuilder::new()
             .with_max_concurrency(8)

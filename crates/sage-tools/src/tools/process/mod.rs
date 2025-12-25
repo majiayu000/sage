@@ -6,7 +6,7 @@ pub mod task;
 pub mod task_output;
 
 // Re-export tools
-pub use bash::{requires_user_confirmation, validate_command_security, BashTool};
+pub use bash::{BashTool, requires_user_confirmation, validate_command_security};
 pub use kill_shell::KillShellTool;
 pub use task::{
     TaskRegistry, TaskRequest, TaskStatus, TaskTool, get_pending_tasks, get_task,

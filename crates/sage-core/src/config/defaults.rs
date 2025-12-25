@@ -159,11 +159,8 @@ mod tests {
 
         let overrides = HashMap::from([("max_steps".to_string(), "200".to_string())]);
 
-        let config = load_config_with_overrides(
-            Some(config_path.to_str().unwrap()),
-            overrides,
-        )
-        .unwrap();
+        let config =
+            load_config_with_overrides(Some(config_path.to_str().unwrap()), overrides).unwrap();
 
         // Override should take precedence
         assert_eq!(config.max_steps, Some(200));

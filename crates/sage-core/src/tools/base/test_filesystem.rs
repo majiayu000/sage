@@ -2,8 +2,8 @@
 
 #![cfg(test)]
 
-use crate::tools::base::filesystem_tool::FileSystemTool;
 use super::test_mocks::MockTool;
+use crate::tools::base::filesystem_tool::FileSystemTool;
 
 #[test]
 fn test_filesystem_tool_resolve_absolute_path() {

@@ -2,8 +2,8 @@
 
 #![cfg(test)]
 
-use crate::tools::base::command_tool::CommandTool;
 use super::test_mocks::MockCommandTool;
+use crate::tools::base::command_tool::CommandTool;
 
 #[test]
 fn test_command_tool_no_restrictions() {

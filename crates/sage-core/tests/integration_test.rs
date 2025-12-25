@@ -393,7 +393,7 @@ async fn test_error_handling() -> SageResult<()> {
 #[tokio::test]
 async fn test_auto_compact_boundary_system() -> SageResult<()> {
     use sage_core::context::{
-        is_compact_boundary, slice_from_last_compact_boundary, AutoCompact, AutoCompactConfig,
+        AutoCompact, AutoCompactConfig, is_compact_boundary, slice_from_last_compact_boundary,
     };
 
     println!("🧪 Testing auto-compact boundary system");
@@ -414,17 +414,15 @@ async fn test_auto_compact_boundary_system() -> SageResult<()> {
 
     // 2. Create messages that exceed threshold
     println!("📝 Creating test messages...");
-    let mut messages: Vec<LlmMessage> = vec![
-        LlmMessage {
-            role: MessageRole::System,
-            content: "You are a helpful assistant.".to_string(),
-            tool_calls: None,
-            tool_call_id: None,
-            cache_control: None,
-            name: None,
-            metadata: HashMap::new(),
-        },
-    ];
+    let mut messages: Vec<LlmMessage> = vec![LlmMessage {
+        role: MessageRole::System,
+        content: "You are a helpful assistant.".to_string(),
+        tool_calls: None,
+        tool_call_id: None,
+        cache_control: None,
+        name: None,
+        metadata: HashMap::new(),
+    }];
 
     // Add enough messages to trigger compact
     for i in 0..20 {
@@ -600,7 +598,10 @@ async fn test_compact_with_custom_instructions() -> SageResult<()> {
     // The summary should include our conversation (simple summary without LLM)
     let preview = result.summary_preview.unwrap();
     assert!(!preview.is_empty(), "Summary preview should not be empty");
-    println!("✅ Summary preview: {}...", &preview[..preview.len().min(100)]);
+    println!(
+        "✅ Summary preview: {}...",
+        &preview[..preview.len().min(100)]
+    );
 
     println!("✅ Custom instructions test passed!");
     Ok(())

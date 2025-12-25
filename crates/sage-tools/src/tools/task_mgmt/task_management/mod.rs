@@ -11,7 +11,7 @@ mod tests;
 
 // Re-export public APIs
 pub use add_tool::AddTasksTool;
-pub use task_list::{TaskList, GLOBAL_TASK_LIST};
+pub use task_list::{GLOBAL_TASK_LIST, TaskList};
 pub use types::{Task, TaskState};
 pub use update_tool::UpdateTasksTool;
 pub use view_tool::ViewTasklistTool;

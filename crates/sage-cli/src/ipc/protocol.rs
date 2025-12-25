@@ -212,7 +212,10 @@ impl IpcEvent {
     /// Serialize event to JSON line (with newline)
     pub fn to_json_line(&self) -> String {
         let json = serde_json::to_string(self).unwrap_or_else(|e| {
-            format!(r#"{{"type":"error","code":"serialize_error","message":"{}"}}"#, e)
+            format!(
+                r#"{{"type":"error","code":"serialize_error","message":"{}"}}"#,
+                e
+            )
         });
         format!("{}\n", json)
     }

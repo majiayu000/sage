@@ -3,22 +3,22 @@
 //! This module provides comprehensive validation for all configuration aspects including
 //! providers, models, limits, paths, tools, and logging settings.
 
-mod provider;
-mod model;
-mod limits;
-mod paths;
-mod tools;
-mod logging;
 mod lakeview;
+mod limits;
+mod logging;
+mod model;
+mod paths;
+mod provider;
+mod tools;
 
 // Re-export validation functions to maintain backward compatibility
-pub use provider::validate_providers;
-pub use model::validate_models;
-pub use limits::validate_limits;
-pub use paths::validate_paths;
-pub use tools::validate_tools;
-pub use logging::validate_logging;
 pub use lakeview::validate_lakeview;
+pub use limits::validate_limits;
+pub use logging::validate_logging;
+pub use model::validate_models;
+pub use paths::validate_paths;
+pub use provider::validate_providers;
+pub use tools::validate_tools;
 
 use crate::config::model::Config;
 use crate::error::SageResult;

@@ -71,8 +71,14 @@ pub fn slice_from_last_compact_boundary(messages: &[LlmMessage]) -> Vec<LlmMessa
 pub fn create_compact_boundary(compact_id: Uuid, timestamp: DateTime<Utc>) -> LlmMessage {
     let mut metadata = HashMap::new();
     metadata.insert(COMPACT_BOUNDARY_KEY.to_string(), serde_json::json!(true));
-    metadata.insert(COMPACT_ID_KEY.to_string(), serde_json::json!(compact_id.to_string()));
-    metadata.insert(COMPACT_TIMESTAMP_KEY.to_string(), serde_json::json!(timestamp.to_rfc3339()));
+    metadata.insert(
+        COMPACT_ID_KEY.to_string(),
+        serde_json::json!(compact_id.to_string()),
+    );
+    metadata.insert(
+        COMPACT_TIMESTAMP_KEY.to_string(),
+        serde_json::json!(timestamp.to_rfc3339()),
+    );
 
     LlmMessage {
         role: MessageRole::System,
@@ -99,9 +105,18 @@ pub fn create_compact_summary(
 ) -> LlmMessage {
     let mut metadata = HashMap::new();
     metadata.insert(COMPACT_SUMMARY_KEY.to_string(), serde_json::json!(true));
-    metadata.insert(COMPACT_ID_KEY.to_string(), serde_json::json!(compact_id.to_string()));
-    metadata.insert("messages_compacted".to_string(), serde_json::json!(messages_compacted));
-    metadata.insert("tokens_before".to_string(), serde_json::json!(tokens_before));
+    metadata.insert(
+        COMPACT_ID_KEY.to_string(),
+        serde_json::json!(compact_id.to_string()),
+    );
+    metadata.insert(
+        "messages_compacted".to_string(),
+        serde_json::json!(messages_compacted),
+    );
+    metadata.insert(
+        "tokens_before".to_string(),
+        serde_json::json!(tokens_before),
+    );
     metadata.insert("tokens_after".to_string(), serde_json::json!(tokens_after));
 
     LlmMessage {
@@ -400,13 +415,8 @@ mod tests {
 
     #[test]
     fn test_create_compact_summary() {
-        let summary = create_compact_summary(
-            "Test summary".to_string(),
-            Uuid::new_v4(),
-            50,
-            10000,
-            2000,
-        );
+        let summary =
+            create_compact_summary("Test summary".to_string(), Uuid::new_v4(), 50, 10000, 2000);
 
         assert_eq!(summary.role, MessageRole::System);
         assert_eq!(summary.content, "Test summary");

@@ -119,9 +119,7 @@ fn build_exclude_patterns(config: &WorkspaceConfig) -> Vec<ExcludePattern> {
         .iter()
         .filter_map(|pattern| {
             if pattern.contains('*') {
-                Pattern::new(pattern)
-                    .ok()
-                    .map(ExcludePattern::Glob)
+                Pattern::new(pattern).ok().map(ExcludePattern::Glob)
             } else {
                 Some(ExcludePattern::Exact(pattern.clone()))
             }

@@ -162,7 +162,7 @@ pub use agent::{
     MetricsHook, ReactiveAgent, ReactiveExecutionManager, ReactiveResponse, UnifiedExecutor,
     UnifiedExecutorBuilder,
 };
-pub use builder::{BuilderError, SageBuilder, SageComponents};
+pub use builder::{BuilderError, ConfigBuilderExt, SageBuilder, SageComponents};
 pub use cache::{CacheConfig, CacheEntry, CacheKey, CacheManager, LlmCache};
 pub use concurrency::{
     AgentId, CancellationHierarchy, SessionId, SharedCancellationHierarchy, ToolCallId,
@@ -210,9 +210,9 @@ pub use tools::{
     BackgroundTaskSummary, BatchStrategy, BatchToolExecutor, Tool, ToolCall, ToolExecutor,
     ToolResult,
 };
-pub use trajectory::{SessionEntry, SessionInfo, SessionRecorder, SessionReplayer};
 pub use trajectory::SessionSummary as TrajectorySessionSummary;
 pub use trajectory::TokenUsage as TrajectoryTokenUsage;
+pub use trajectory::{SessionEntry, SessionInfo, SessionRecorder, SessionReplayer};
 pub use types::*;
 // Note: SessionId is re-exported from concurrency module
 pub use checkpoints::{

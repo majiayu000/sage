@@ -1,7 +1,7 @@
 //! Execution outcome handling
 
-use crate::console::CliConsole;
 use super::session::ConversationSession;
+use crate::console::CliConsole;
 use sage_core::error::SageResult;
 use sage_sdk::{ExecutionErrorKind, ExecutionOutcome};
 

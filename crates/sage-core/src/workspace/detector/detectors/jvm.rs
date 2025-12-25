@@ -1,8 +1,6 @@
 //! JVM languages project detection (Java, Kotlin, Scala)
 
-use crate::workspace::detector::types::{
-    BuildSystem, LanguageType, ProjectType, RuntimeType,
-};
+use crate::workspace::detector::types::{BuildSystem, LanguageType, ProjectType, RuntimeType};
 use std::path::Path;
 
 /// Detects Java/JVM projects via Maven, Gradle, or sbt

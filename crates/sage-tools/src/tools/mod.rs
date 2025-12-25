@@ -57,7 +57,9 @@ pub use diagnostics::{
     init_global_learning_engine, init_global_memory_manager,
 };
 pub use extensions::{SkillTool, SlashCommandTool};
-pub use file_ops::{CodebaseRetrievalTool, EditTool, GlobTool, GrepTool, NotebookEditTool, ReadTool, WriteTool};
+pub use file_ops::{
+    CodebaseRetrievalTool, EditTool, GlobTool, GrepTool, NotebookEditTool, ReadTool, WriteTool,
+};
 pub use infrastructure::{CloudTool, KubernetesTool, TerraformTool};
 pub use interaction::AskUserQuestionTool;
 pub use monitoring::{LogAnalyzerTool, TestGeneratorTool};

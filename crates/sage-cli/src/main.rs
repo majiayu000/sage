@@ -617,8 +617,6 @@ async fn main() -> SageResult<()> {
             .await
         }
 
-        Some(Commands::Ipc { config_file }) => {
-            ipc::run_ipc_mode(Some(&config_file)).await
-        }
+        Some(Commands::Ipc { config_file }) => ipc::run_ipc_mode(Some(&config_file)).await,
     }
 }

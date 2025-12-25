@@ -13,6 +13,6 @@ mod types;
 mod tests;
 
 // Re-export public types for backward compatibility
-pub use builder::{anthropic_fallback_chain, openai_fallback_chain, FallbackChainBuilder};
+pub use builder::{FallbackChainBuilder, anthropic_fallback_chain, openai_fallback_chain};
 pub use manager::FallbackChain;
 pub use types::{FallbackEvent, FallbackReason, ModelConfig, ModelStats};

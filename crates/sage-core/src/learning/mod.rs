@@ -29,15 +29,20 @@ pub mod engine;
 pub mod patterns;
 pub mod types;
 
-// Re-export main types
-pub use engine::{
-    LearningEngine, LearningError, SharedLearningEngine, create_learning_engine,
+// Re-export main types from engine module
+pub use engine::core::{
+    LearningEngine, SharedLearningEngine, create_learning_engine,
     create_learning_engine_with_memory,
 };
+pub use engine::error::LearningError;
+
+// Re-export from patterns module
 pub use patterns::{
     CorrectionRecord, CorrectionStats, PatternDetector, PreferenceIndicator, StylePattern,
     analyze_user_message,
 };
+
+// Re-export from types module
 pub use types::{
     Confidence, LearningConfig, LearningEvent, LearningEventType, LearningStats, Pattern,
     PatternId, PatternSource, PatternType,

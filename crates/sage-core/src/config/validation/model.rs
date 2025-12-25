@@ -108,7 +108,9 @@ pub fn validate_models(config: &Config) -> SageResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::model::{LoggingConfig, McpConfig, ModelParameters, ToolConfig, TrajectoryConfig};
+    use crate::config::model::{
+        LoggingConfig, McpConfig, ModelParameters, ToolConfig, TrajectoryConfig,
+    };
     use std::collections::HashMap;
 
     fn create_minimal_config(params: ModelParameters) -> Config {
@@ -143,48 +145,105 @@ mod tests {
 
     #[test]
     fn test_validate_models_empty_model_name() {
-        let params = ModelParameters { model: "".to_string(), api_key: Some("key".to_string()), ..Default::default() };
+        let params = ModelParameters {
+            model: "".to_string(),
+            api_key: Some("key".to_string()),
+            ..Default::default()
+        };
         assert!(validate_models(&create_minimal_config(params)).is_err());
     }
 
     #[test]
     fn test_validate_models_invalid_temperature() {
-        let params = ModelParameters { model: "m".to_string(), api_key: Some("k".to_string()), temperature: Some(3.0), ..Default::default() };
+        let params = ModelParameters {
+            model: "m".to_string(),
+            api_key: Some("k".to_string()),
+            temperature: Some(3.0),
+            ..Default::default()
+        };
         let result = validate_models(&create_minimal_config(params));
         assert!(result.is_err() && result.unwrap_err().to_string().contains("Temperature"));
     }
 
     #[test]
     fn test_validate_models_zero_max_tokens() {
-        let params = ModelParameters { model: "m".to_string(), api_key: Some("k".to_string()), max_tokens: Some(0), ..Default::default() };
+        let params = ModelParameters {
+            model: "m".to_string(),
+            api_key: Some("k".to_string()),
+            max_tokens: Some(0),
+            ..Default::default()
+        };
         let result = validate_models(&create_minimal_config(params));
-        assert!(result.is_err() && result.unwrap_err().to_string().contains("Max tokens must be greater than 0"));
+        assert!(
+            result.is_err()
+                && result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("Max tokens must be greater than 0")
+        );
     }
 
     #[test]
     fn test_validate_models_excessive_max_tokens() {
-        let params = ModelParameters { model: "m".to_string(), api_key: Some("k".to_string()), max_tokens: Some(2_000_000), ..Default::default() };
+        let params = ModelParameters {
+            model: "m".to_string(),
+            api_key: Some("k".to_string()),
+            max_tokens: Some(2_000_000),
+            ..Default::default()
+        };
         let result = validate_models(&create_minimal_config(params));
-        assert!(result.is_err() && result.unwrap_err().to_string().contains("Max tokens seems too large"));
+        assert!(
+            result.is_err()
+                && result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("Max tokens seems too large")
+        );
     }
 
     #[test]
     fn test_validate_models_zero_top_k() {
-        let params = ModelParameters { model: "m".to_string(), api_key: Some("k".to_string()), top_k: Some(0), ..Default::default() };
+        let params = ModelParameters {
+            model: "m".to_string(),
+            api_key: Some("k".to_string()),
+            top_k: Some(0),
+            ..Default::default()
+        };
         let result = validate_models(&create_minimal_config(params));
-        assert!(result.is_err() && result.unwrap_err().to_string().contains("Top-k must be greater than 0"));
+        assert!(
+            result.is_err()
+                && result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("Top-k must be greater than 0")
+        );
     }
 
     #[test]
     fn test_validate_models_invalid_base_url() {
-        let params = ModelParameters { model: "m".to_string(), api_key: Some("k".to_string()), base_url: Some("invalid".to_string()), ..Default::default() };
+        let params = ModelParameters {
+            model: "m".to_string(),
+            api_key: Some("k".to_string()),
+            base_url: Some("invalid".to_string()),
+            ..Default::default()
+        };
         let result = validate_models(&create_minimal_config(params));
-        assert!(result.is_err() && result.unwrap_err().to_string().contains("Base URL must start with http"));
+        assert!(
+            result.is_err()
+                && result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("Base URL must start with http")
+        );
     }
 
     #[test]
     fn test_validate_models_missing_api_key_cloud_provider() {
-        let params = ModelParameters { model: "m".to_string(), api_key: None, ..Default::default() };
+        let params = ModelParameters {
+            model: "m".to_string(),
+            api_key: None,
+            ..Default::default()
+        };
         // SAFETY: Test code in single-threaded context
         unsafe {
             std::env::remove_var("ANTHROPIC_API_KEY");
@@ -192,6 +251,12 @@ mod tests {
             std::env::remove_var("GOOGLE_API_KEY");
         }
         let result = validate_models(&create_minimal_config(params));
-        assert!(result.is_err() && result.unwrap_err().to_string().contains("API key is required"));
+        assert!(
+            result.is_err()
+                && result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("API key is required")
+        );
     }
 }

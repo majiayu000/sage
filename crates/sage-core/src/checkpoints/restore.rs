@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 
-use crate::error::{SageError, SageResult};
 use super::types::{FileSnapshot, FileState};
+use crate::error::{SageError, SageResult};
 
 /// Preview of what will happen during restore
 #[derive(Debug, Clone)]

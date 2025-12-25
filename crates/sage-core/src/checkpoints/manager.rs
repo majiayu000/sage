@@ -8,12 +8,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use super::config::CheckpointManagerConfig;
-use super::diff::{ChangeDetector, FileChange};
-use super::restore::{restore_file, RestorePreview};
+use super::diff::{ChangeDetector, FileChange, changes_to_snapshots, compare_snapshots};
+use super::restore::{RestorePreview, restore_file};
 use super::storage::{CheckpointStorage, CheckpointSummary, FileCheckpointStorage};
 use super::types::{
-    Checkpoint, CheckpointId, CheckpointType, ConversationSnapshot, FileSnapshot,
-    RestoreOptions, RestoreResult, ToolExecutionRecord,
+    Checkpoint, CheckpointId, CheckpointType, ConversationSnapshot, FileSnapshot, RestoreOptions,
+    RestoreResult, ToolExecutionRecord,
 };
 
 /// Checkpoint manager for creating and restoring checkpoints
@@ -102,7 +102,11 @@ impl CheckpointManager {
         checkpoint_type: CheckpointType,
     ) -> SageResult<Checkpoint> {
         let description = description.into();
-        tracing::info!("Creating full {} checkpoint: {}", checkpoint_type, description);
+        tracing::info!(
+            "Creating full {} checkpoint: {}",
+            checkpoint_type,
+            description
+        );
 
         let snapshots = self
             .change_detector
@@ -138,7 +142,7 @@ impl CheckpointManager {
             .await?;
 
         let last_states = self.last_states.read().await;
-        let changes = ChangeDetector::compare_snapshots(&last_states, &current_snapshots);
+        let changes = compare_snapshots(&last_states, &current_snapshots);
         drop(last_states);
 
         if changes.is_empty() {
@@ -148,8 +152,9 @@ impl CheckpointManager {
             }
         }
 
-        let change_snapshots = ChangeDetector::changes_to_snapshots(&changes);
-        let checkpoint = Checkpoint::new(&description, checkpoint_type).with_files(change_snapshots);
+        let change_snapshots = changes_to_snapshots(&changes);
+        let checkpoint =
+            Checkpoint::new(&description, checkpoint_type).with_files(change_snapshots);
 
         self.storage.save(&checkpoint).await?;
         self.update_last_states(&current_snapshots).await;
@@ -171,14 +176,22 @@ impl CheckpointManager {
         affected_files: &[PathBuf],
     ) -> SageResult<Checkpoint> {
         let description = format!("Pre-{} checkpoint", tool_name);
-        self.create_checkpoint(description, CheckpointType::PreTool, affected_files.to_vec())
-            .await
+        self.create_checkpoint(
+            description,
+            CheckpointType::PreTool,
+            affected_files.to_vec(),
+        )
+        .await
     }
 
     /// Create session start checkpoint
-    pub async fn create_session_start_checkpoint(&self, session_id: &str) -> SageResult<Checkpoint> {
+    pub async fn create_session_start_checkpoint(
+        &self,
+        session_id: &str,
+    ) -> SageResult<Checkpoint> {
         let description = format!("Session start: {}", &session_id[..8.min(session_id.len())]);
-        self.create_full_checkpoint(description, CheckpointType::SessionStart).await
+        self.create_full_checkpoint(description, CheckpointType::SessionStart)
+            .await
     }
 
     /// Add conversation snapshot to a checkpoint
@@ -306,7 +319,7 @@ impl CheckpointManager {
             .await?;
 
         let last_states = self.last_states.read().await;
-        Ok(ChangeDetector::compare_snapshots(&last_states, &current_snapshots))
+        Ok(compare_snapshots(&last_states, &current_snapshots))
     }
 
     /// Preview what would be restored
@@ -318,7 +331,8 @@ impl CheckpointManager {
         let mut previews = Vec::new();
 
         for snapshot in &checkpoint.files {
-            let preview = super::restore::preview_file_restore(&self.config.project_root, snapshot).await?;
+            let preview =
+                super::restore::preview_file_restore(&self.config.project_root, snapshot).await?;
             previews.push(preview);
         }
 
@@ -328,9 +342,10 @@ impl CheckpointManager {
     // Private helper methods
 
     async fn load_checkpoint_or_error(&self, id: &CheckpointId) -> SageResult<Checkpoint> {
-        self.storage.load(id).await?.ok_or_else(|| {
-            SageError::not_found(format!("Checkpoint {} not found", id))
-        })
+        self.storage
+            .load(id)
+            .await?
+            .ok_or_else(|| SageError::not_found(format!("Checkpoint {} not found", id)))
     }
 
     async fn update_last_states(&self, snapshots: &[FileSnapshot]) {
@@ -361,8 +376,7 @@ impl CheckpointManager {
     ) {
         for file_snapshot in &checkpoint.files {
             // Check file filter
-            if !options.file_filter.is_empty()
-                && !options.file_filter.contains(&file_snapshot.path)
+            if !options.file_filter.is_empty() && !options.file_filter.contains(&file_snapshot.path)
             {
                 continue;
             }
@@ -399,7 +413,9 @@ mod tests {
         fs::create_dir_all(&src_dir).await.unwrap();
 
         let mut main = File::create(src_dir.join("main.rs")).await.unwrap();
-        main.write_all(b"fn main() { println!(\"Hello\"); }").await.unwrap();
+        main.write_all(b"fn main() { println!(\"Hello\"); }")
+            .await
+            .unwrap();
 
         let mut lib = File::create(src_dir.join("lib.rs")).await.unwrap();
         lib.write_all(b"pub mod utils;").await.unwrap();
@@ -438,8 +454,14 @@ mod tests {
     async fn test_list_checkpoints() {
         let (_temp_dir, manager) = setup_test_project().await;
 
-        manager.create_full_checkpoint("First", CheckpointType::Manual).await.unwrap();
-        manager.create_full_checkpoint("Second", CheckpointType::Auto).await.unwrap();
+        manager
+            .create_full_checkpoint("First", CheckpointType::Manual)
+            .await
+            .unwrap();
+        manager
+            .create_full_checkpoint("Second", CheckpointType::Auto)
+            .await
+            .unwrap();
 
         let list = manager.list_checkpoints().await.unwrap();
         assert_eq!(list.len(), 2);
@@ -457,11 +479,16 @@ mod tests {
         // Modify a file
         let main_path = temp_dir.path().join("src/main.rs");
         let mut file = File::create(&main_path).await.unwrap();
-        file.write_all(b"fn main() { println!(\"Modified!\"); }").await.unwrap();
+        file.write_all(b"fn main() { println!(\"Modified!\"); }")
+            .await
+            .unwrap();
 
         // Restore
         let result = manager
-            .restore(&checkpoint.id, RestoreOptions::files_only().without_backup())
+            .restore(
+                &checkpoint.id,
+                RestoreOptions::files_only().without_backup(),
+            )
             .await
             .unwrap();
 

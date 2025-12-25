@@ -355,7 +355,11 @@ mod tests {
 
         for cmd in chained_commands {
             let result = validate_command_security(cmd);
-            assert!(result.is_ok(), "Command chaining should be allowed: {}", cmd);
+            assert!(
+                result.is_ok(),
+                "Command chaining should be allowed: {}",
+                cmd
+            );
         }
     }
 
@@ -366,7 +370,11 @@ mod tests {
 
         for cmd in subst_commands {
             let result = validate_command_security(cmd);
-            assert!(result.is_ok(), "Command substitution should be allowed: {}", cmd);
+            assert!(
+                result.is_ok(),
+                "Command substitution should be allowed: {}",
+                cmd
+            );
         }
     }
 
@@ -397,7 +405,11 @@ mod tests {
 
         for cmd in dangerous_chained {
             let result = validate_command_security(cmd);
-            assert!(result.is_err(), "Dangerous command should still be blocked: {}", cmd);
+            assert!(
+                result.is_err(),
+                "Dangerous command should still be blocked: {}",
+                cmd
+            );
         }
     }
 }

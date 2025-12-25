@@ -283,7 +283,9 @@ mod grep_tests {
 
         // Create binary file with NUL bytes (grep-searcher will detect as binary)
         let binary_file = temp_dir.path().join("binary.dat");
-        let binary_content: Vec<u8> = vec![0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x00, 0x77, 0x6f, 0x72, 0x6c, 0x64]; // "hello\0world"
+        let binary_content: Vec<u8> = vec![
+            0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x00, 0x77, 0x6f, 0x72, 0x6c, 0x64,
+        ]; // "hello\0world"
         std::fs::write(&binary_file, &binary_content).unwrap();
 
         // Create a .pyc file (should be skipped by extension filter)
@@ -307,7 +309,13 @@ mod grep_tests {
         // Should find the text file
         assert!(output.contains("text.txt"), "Should find text.txt");
         // Should NOT find binary files
-        assert!(!output.contains("binary.dat"), "Should skip binary.dat (NUL byte detection)");
-        assert!(!output.contains("cache.pyc"), "Should skip cache.pyc (extension filter)");
+        assert!(
+            !output.contains("binary.dat"),
+            "Should skip binary.dat (NUL byte detection)"
+        );
+        assert!(
+            !output.contains("cache.pyc"),
+            "Should skip cache.pyc (extension filter)"
+        );
     }
 }

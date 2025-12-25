@@ -6,9 +6,9 @@ use crate::interrupt::global_interrupt_manager;
 use crate::llm::messages::LlmMessage;
 use crate::tools::types::{ToolCall, ToolSchema};
 use crate::trajectory::TokenUsage;
-use crate::ui::animation::AnimationState;
-use crate::ui::prompt::{show_permission_dialog, PermissionChoice, PermissionDialogConfig};
 use crate::ui::DisplayManager;
+use crate::ui::animation::AnimationState;
+use crate::ui::prompt::{PermissionChoice, PermissionDialogConfig, show_permission_dialog};
 use tokio::select;
 use tracing::instrument;
 
@@ -37,7 +37,8 @@ impl UnifiedExecutor {
                 .iter()
                 .map(|msg| serde_json::to_value(msg).unwrap_or_default())
                 .collect();
-            let tools_available: Vec<String> = tool_schemas.iter().map(|t| t.name.clone()).collect();
+            let tools_available: Vec<String> =
+                tool_schemas.iter().map(|t| t.name.clone()).collect();
             let _ = recorder
                 .lock()
                 .await
@@ -127,8 +128,13 @@ impl UnifiedExecutor {
 
         // Handle tool calls
         if !llm_response.tool_calls.is_empty() {
-            self.handle_tool_calls(&mut step, &mut new_messages, &llm_response.tool_calls, task_scope)
-                .await?;
+            self.handle_tool_calls(
+                &mut step,
+                &mut new_messages,
+                &llm_response.tool_calls,
+                task_scope,
+            )
+            .await?;
         }
 
         // Check for completion indicator in response
@@ -293,20 +299,17 @@ impl UnifiedExecutor {
 
                     // Restart animation
                     self.animation_manager
-                        .start_animation(
-                            AnimationState::ExecutingTools,
-                            "Executing tools",
-                            "green",
-                        )
+                        .start_animation(AnimationState::ExecutingTools, "Executing tools", "green")
                         .await;
 
                     match choice {
                         PermissionChoice::YesOnce | PermissionChoice::YesAlways => {
                             // User confirmed - re-execute with user_confirmed=true
                             let mut confirmed_call = tool_call.clone();
-                            confirmed_call
-                                .arguments
-                                .insert("user_confirmed".to_string(), serde_json::Value::Bool(true));
+                            confirmed_call.arguments.insert(
+                                "user_confirmed".to_string(),
+                                serde_json::Value::Bool(true),
+                            );
 
                             tracing::info!(
                                 tool = %tool_call.name,

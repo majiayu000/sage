@@ -377,7 +377,10 @@ impl SessionRecorder {
                                 .modified()
                                 .ok()
                                 .and_then(|t| t.elapsed().ok())
-                                .map(|d| chrono::Utc::now() - chrono::Duration::from_std(d).unwrap_or_default());
+                                .map(|d| {
+                                    chrono::Utc::now()
+                                        - chrono::Duration::from_std(d).unwrap_or_default()
+                                });
 
                             sessions.push(SessionInfo {
                                 session_id,

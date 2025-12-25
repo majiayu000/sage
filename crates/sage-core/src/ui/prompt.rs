@@ -23,7 +23,10 @@ pub enum PermissionChoice {
 impl PermissionChoice {
     /// Check if this choice allows the operation
     pub fn is_allowed(&self) -> bool {
-        matches!(self, PermissionChoice::YesOnce | PermissionChoice::YesAlways)
+        matches!(
+            self,
+            PermissionChoice::YesOnce | PermissionChoice::YesAlways
+        )
     }
 
     /// Check if this choice should be remembered
@@ -293,10 +296,7 @@ pub fn confirm(message: &str) -> bool {
 
 /// Print a success message with border
 pub fn print_success(message: &str) {
-    println!(
-        "{}",
-        format!("✅ {}", message).bright_green().bold()
-    );
+    println!("{}", format!("✅ {}", message).bright_green().bold());
 }
 
 /// Print an error message with border
@@ -306,10 +306,7 @@ pub fn print_error(message: &str) {
 
 /// Print a warning message with border
 pub fn print_warning(message: &str) {
-    println!(
-        "{}",
-        format!("⚠️  {}", message).bright_yellow().bold()
-    );
+    println!("{}", format!("⚠️  {}", message).bright_yellow().bold());
 }
 
 /// Print an info message
@@ -341,7 +338,8 @@ mod tests {
 
     #[test]
     fn test_permission_dialog_config_new() {
-        let config = PermissionDialogConfig::new("bash", "rm -rf ./build", "This will delete files");
+        let config =
+            PermissionDialogConfig::new("bash", "rm -rf ./build", "This will delete files");
         assert_eq!(config.tool_name, "bash");
         assert_eq!(config.operation, "rm -rf ./build");
         assert!(config.show_remember_options);

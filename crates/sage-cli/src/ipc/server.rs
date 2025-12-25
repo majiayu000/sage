@@ -22,8 +22,8 @@ use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
-use tokio::sync::mpsc;
 use tokio::sync::Mutex;
+use tokio::sync::mpsc;
 use uuid::Uuid;
 
 /// IPC Server that handles communication with Node.js UI
@@ -53,8 +53,7 @@ impl IpcServer {
         let mut executor = self.executor.lock().await;
         if executor.is_none() {
             // Create execution options for interactive mode
-            let options = ExecutionOptions::default()
-                .with_mode(ExecutionMode::non_interactive()); // IPC handles interaction
+            let options = ExecutionOptions::default().with_mode(ExecutionMode::non_interactive()); // IPC handles interaction
 
             let mut exec = UnifiedExecutor::with_options(self.config.clone(), options)?;
 
@@ -63,7 +62,10 @@ impl IpcServer {
 
             // Initialize sub-agent support
             if let Err(e) = exec.init_subagent_support() {
-                eprintln!("[IPC] Warning: Failed to initialize sub-agent support: {}", e);
+                eprintln!(
+                    "[IPC] Warning: Failed to initialize sub-agent support: {}",
+                    e
+                );
             }
 
             *executor = Some(exec);
@@ -78,7 +80,9 @@ impl IpcServer {
 
     /// Handle a chat request
     async fn handle_chat(&self, params: ChatParams) -> SageResult<()> {
-        let request_id = params.request_id.unwrap_or_else(|| Uuid::new_v4().to_string());
+        let request_id = params
+            .request_id
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
         let start_time = Instant::now();
 
         // Acknowledge the request
@@ -95,9 +99,7 @@ impl IpcServer {
         self.ensure_executor().await?;
 
         // Get working directory
-        let working_dir = params
-            .working_dir
-            .unwrap_or_else(|| ".".to_string());
+        let working_dir = params.working_dir.unwrap_or_else(|| ".".to_string());
 
         // Create task metadata
         let task = TaskMetadata::new(&params.message, &working_dir);
@@ -403,24 +405,22 @@ pub async fn run_ipc_server(config: Config) -> SageResult<()> {
         })
         .await
         {
-            Ok(Some(line)) if !line.trim().is_empty() => {
-                match IpcRequest::from_json_line(&line) {
-                    Ok(request) => {
-                        let should_shutdown = server.process_request(request).await?;
-                        if should_shutdown {
-                            break;
-                        }
-                    }
-                    Err(e) => {
-                        server.send_event(IpcEvent::Error {
-                            request_id: None,
-                            code: "parse_error".to_string(),
-                            message: format!("Failed to parse request: {}", e),
-                        });
+            Ok(Some(line)) if !line.trim().is_empty() => match IpcRequest::from_json_line(&line) {
+                Ok(request) => {
+                    let should_shutdown = server.process_request(request).await?;
+                    if should_shutdown {
+                        break;
                     }
                 }
-            }
-            Ok(Some(_)) => continue, // Empty line
+                Err(e) => {
+                    server.send_event(IpcEvent::Error {
+                        request_id: None,
+                        code: "parse_error".to_string(),
+                        message: format!("Failed to parse request: {}", e),
+                    });
+                }
+            },
+            Ok(Some(_)) => continue,    // Empty line
             Ok(None) | Err(_) => break, // EOF or error
         }
     }

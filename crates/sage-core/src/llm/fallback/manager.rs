@@ -149,7 +149,6 @@ impl FallbackChain {
 
         None
     }
-
 }
 
 impl Default for FallbackChain {

@@ -45,7 +45,11 @@ impl WebFetchTool {
         debug!("Fetching URL: {}", url);
 
         let client = get_client();
-        let response = client.get(url).send().await.context("Failed to fetch URL")?;
+        let response = client
+            .get(url)
+            .send()
+            .await
+            .context("Failed to fetch URL")?;
 
         let status = response.status();
         if !status.is_success() {
@@ -59,7 +63,10 @@ impl WebFetchTool {
             .unwrap_or("text/html")
             .to_string();
 
-        let body = response.text().await.context("Failed to read response body")?;
+        let body = response
+            .text()
+            .await
+            .context("Failed to read response body")?;
 
         // Convert HTML to Markdown if it's HTML content
         if content_type.contains("text/html") {

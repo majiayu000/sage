@@ -39,7 +39,11 @@ Automatically skips:
     }
 
     fn schema(&self) -> ToolSchema {
-        ToolSchema::new(self.name(), self.description(), params::get_tool_parameters())
+        ToolSchema::new(
+            self.name(),
+            self.description(),
+            params::get_tool_parameters(),
+        )
     }
 
     #[instrument(skip(self, call), fields(call_id = %call.id, pattern = call.get_string("pattern").as_deref().unwrap_or("<missing>")))]

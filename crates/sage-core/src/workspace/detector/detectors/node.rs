@@ -3,9 +3,7 @@
 use crate::workspace::detector::framework_detection::{
     detect_node_frameworks, detect_node_test_frameworks,
 };
-use crate::workspace::detector::types::{
-    BuildSystem, LanguageType, ProjectType, RuntimeType,
-};
+use crate::workspace::detector::types::{BuildSystem, LanguageType, ProjectType, RuntimeType};
 use std::path::Path;
 
 /// Detects Node.js/TypeScript projects via package.json

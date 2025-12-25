@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-use super::hook_types::{default_enabled, default_timeout, HookImplementation, HookType};
+use super::hook_types::{HookImplementation, HookType, default_enabled, default_timeout};
 
 /// Hook matcher - combines a pattern with hook configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]

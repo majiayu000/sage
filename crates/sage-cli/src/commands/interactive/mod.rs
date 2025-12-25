@@ -161,7 +161,10 @@ pub async fn execute(args: InteractiveArgs) -> SageResult<()> {
                 }
             }
             Err(e) => {
-                if matches!(e.kind(), std::io::ErrorKind::UnexpectedEof | std::io::ErrorKind::Interrupted) {
+                if matches!(
+                    e.kind(),
+                    std::io::ErrorKind::UnexpectedEof | std::io::ErrorKind::Interrupted
+                ) {
                     break;
                 }
                 console.error(&format!("Input error: {e}"));
