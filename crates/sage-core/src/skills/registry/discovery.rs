@@ -92,18 +92,12 @@ impl SkillRegistry {
         if let Some(triggers) = metadata.get("triggers") {
             for trigger in triggers.split(',') {
                 let trigger = trigger.trim();
-                if trigger.starts_with("keyword:") {
-                    skill = skill.with_trigger(SkillTrigger::Keyword(
-                        trigger.strip_prefix("keyword:").unwrap().to_string(),
-                    ));
-                } else if trigger.starts_with("extension:") {
-                    skill = skill.with_trigger(SkillTrigger::FileExtension(
-                        trigger.strip_prefix("extension:").unwrap().to_string(),
-                    ));
-                } else if trigger.starts_with("regex:") {
-                    skill = skill.with_trigger(SkillTrigger::Regex(
-                        trigger.strip_prefix("regex:").unwrap().to_string(),
-                    ));
+                if let Some(keyword) = trigger.strip_prefix("keyword:") {
+                    skill = skill.with_trigger(SkillTrigger::Keyword(keyword.to_string()));
+                } else if let Some(extension) = trigger.strip_prefix("extension:") {
+                    skill = skill.with_trigger(SkillTrigger::FileExtension(extension.to_string()));
+                } else if let Some(regex) = trigger.strip_prefix("regex:") {
+                    skill = skill.with_trigger(SkillTrigger::Regex(regex.to_string()));
                 }
             }
         }

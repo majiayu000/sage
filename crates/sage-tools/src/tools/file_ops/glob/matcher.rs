@@ -1,7 +1,7 @@
 //! File matching logic for glob patterns
 
 use glob::glob as glob_pattern;
-use sage_core::tools::base::{FileSystemTool, ToolError};
+use sage_core::tools::base::{FileSystemTool, Tool, ToolError};
 use sage_core::tools::types::ToolResult;
 use std::fs;
 use std::path::PathBuf;

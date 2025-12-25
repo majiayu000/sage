@@ -32,7 +32,24 @@ impl Tool for RememberTool {
     }
 
     fn description(&self) -> &str {
-        remember_schema().description
+        r#"Store information in long-term memory that persists across sessions.
+
+Use this tool when:
+- User explicitly asks you to remember something
+- You learn an important fact about the user's preferences
+- You discover something important about the codebase or project
+- You learn lessons from mistakes or successes
+
+Memory types:
+- fact: General facts about the user, project, or codebase
+- preference: User preferences for coding style, tools, etc.
+- lesson: Lessons learned from tasks
+- note: General session notes
+
+Do NOT use for:
+- Temporary information that's only relevant to the current task
+- Information that's already in files (use the codebase instead)
+- Sensitive information (passwords, secrets, etc.)"#
     }
 
     fn schema(&self) -> ToolSchema {
@@ -143,7 +160,14 @@ impl Tool for SessionNotesTool {
     }
 
     fn description(&self) -> &str {
-        session_notes_schema().description
+        r#"View, search, or manage session notes and memories.
+
+Actions:
+- list: Show all memories (optionally filtered by type)
+- search: Search memories by text
+- delete: Delete a memory by ID
+- clear: Clear all memories (use with caution)
+- stats: Show memory statistics"#
     }
 
     fn schema(&self) -> ToolSchema {

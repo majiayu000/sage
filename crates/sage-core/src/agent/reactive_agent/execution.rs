@@ -35,18 +35,15 @@ impl ReactiveExecutionManager {
         responses.push(response);
 
         // Continue if not completed and there's a continuation prompt
-        // SAFETY: responses is never empty here since we just pushed a response above
         if !completed {
-            if let Some(continuation) = responses
-                .last()
-                .and_then(|r| r.continuation_prompt.as_ref())
-            {
-                let last_response = responses.last().unwrap();
-                let follow_up = self
-                    .agent
-                    .continue_conversation(last_response, continuation)
-                    .await?;
-                responses.push(follow_up);
+            if let Some(last_response) = responses.last() {
+                if let Some(continuation) = &last_response.continuation_prompt {
+                    let follow_up = self
+                        .agent
+                        .continue_conversation(last_response, continuation)
+                        .await?;
+                    responses.push(follow_up);
+                }
             }
         }
 

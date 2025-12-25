@@ -32,8 +32,8 @@ pub fn get_git_info(root: &Path) -> Option<GitInfo> {
     if let Ok(content) = std::fs::read_to_string(config) {
         for line in content.lines() {
             let line = line.trim();
-            if line.starts_with("url = ") {
-                info.remote_url = Some(line.strip_prefix("url = ").unwrap().to_string());
+            if let Some(url) = line.strip_prefix("url = ") {
+                info.remote_url = Some(url.to_string());
                 break;
             }
         }

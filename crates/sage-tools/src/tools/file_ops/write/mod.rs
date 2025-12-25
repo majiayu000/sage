@@ -5,7 +5,6 @@
 //! proper validation and security checks.
 
 mod schema;
-mod tool;
 mod types;
 mod writer;
 

@@ -31,8 +31,12 @@ pub fn partition_messages(
     }
 
     // Ensure we keep minimum messages
-    while to_keep.len() < min_messages_to_keep && !to_compact.is_empty() {
-        to_keep.insert(0, to_compact.pop().unwrap());
+    while to_keep.len() < min_messages_to_keep {
+        if let Some(msg) = to_compact.pop() {
+            to_keep.insert(0, msg);
+        } else {
+            break;
+        }
     }
 
     (to_keep, to_compact)

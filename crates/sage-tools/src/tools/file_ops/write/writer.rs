@@ -1,7 +1,7 @@
 //! Core write logic and file operations
 
 use super::types::WriteTool;
-use sage_core::tools::base::{FileSystemTool, ToolError};
+use sage_core::tools::base::{FileSystemTool, Tool, ToolError};
 use sage_core::tools::types::ToolResult;
 use tokio::fs;
 

@@ -33,7 +33,24 @@ impl Tool for LearnTool {
     }
 
     fn description(&self) -> &str {
-        learn_tool_schema().description
+        r#"Learn from user corrections and preferences to improve future interactions.
+
+Use this tool when:
+- User explicitly corrects your behavior ("don't do X, do Y instead")
+- User states a preference ("I prefer X over Y")
+- You discover a pattern in the user's workflow
+- User teaches you something about their codebase or project
+
+Pattern types:
+- correction: User corrected something you did wrong
+- preference: User preference for tool usage or workflow
+- style: Coding style preference (formatting, naming)
+- workflow: Workflow preference (commit frequency, testing approach)
+
+Do NOT use for:
+- One-off instructions that won't apply to future interactions
+- Sensitive information
+- Project-specific facts (use Remember tool instead)"#
     }
 
     fn schema(&self) -> ToolSchema {

@@ -3,7 +3,8 @@
 use super::types::JsonEditTool;
 use jsonpath_rust::JsonPathFinder;
 use sage_core::tools::base::FileSystemTool;
-use sage_core::tools::types::{ToolError, ToolResult};
+use sage_core::tools::types::ToolResult;
+use sage_core::tools::ToolError;
 use tokio::fs;
 
 impl JsonEditTool {

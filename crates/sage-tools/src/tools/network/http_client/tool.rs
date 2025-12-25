@@ -83,31 +83,6 @@ impl Tool for HttpClientTool {
         )
     }
 
-    fn parameters_json_schema_legacy(&self) -> serde_json::Value {
-        serde_json::json!({
-            "type": "object",
-            "properties": {
-                "method": {
-                    "type": "string",
-                    "enum": ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"],
-                    "description": "HTTP method"
-                },
-                "url": { "type": "string", "description": "Request URL" },
-                "headers": { "type": "object", "description": "Request headers" },
-                "body": { "type": "object", "description": "Request body" },
-                "auth": { "type": "object", "description": "Authentication" },
-                "timeout": { "type": "integer", "minimum": 1, "maximum": 300, "default": 30 },
-                "follow_redirects": { "type": "boolean", "default": true },
-                "verify_ssl": { "type": "boolean", "default": true },
-                "save_to_file": { "type": "string", "description": "Save response to file" },
-                "graphql_query": { "type": "string", "description": "GraphQL query string" },
-                "graphql_variables": { "type": "object", "description": "GraphQL variables" }
-            },
-            "required": ["method", "url"],
-            "additionalProperties": false
-        })
-    }
-
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
         let method_str = call.get_string("method").unwrap_or_else(|| "GET".to_string());
         let method = match method_str.to_uppercase().as_str() {

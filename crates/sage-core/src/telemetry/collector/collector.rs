@@ -1,6 +1,6 @@
 //! Core metrics collector implementation
 
-use super::super::metrics::{Counter, Gauge, Histogram};
+use super::super::metrics::{Counter, Gauge, Histogram, Metric};
 use super::types::MetricsSnapshot;
 use chrono::Utc;
 use std::collections::HashMap;

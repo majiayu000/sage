@@ -35,7 +35,15 @@ impl Tool for LearningPatternsTool {
     }
 
     fn description(&self) -> &str {
-        learning_patterns_tool_schema().description
+        r#"View, search, or manage learned patterns.
+
+Actions:
+- list: Show all patterns (optionally filtered by type)
+- search: Search patterns by text
+- delete: Delete a pattern by ID
+- clear: Clear all patterns (use with caution)
+- stats: Show learning statistics
+- apply_decay: Apply time-based decay to patterns"#
     }
 
     fn schema(&self) -> ToolSchema {

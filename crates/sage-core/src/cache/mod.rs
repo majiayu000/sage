@@ -187,7 +187,19 @@ pub trait Cache {
 
 impl Default for CacheManager {
     fn default() -> Self {
-        let config = CacheConfig::default();
-        Self::new(config).expect("Failed to create default cache manager")
+        // Create a safe default without disk cache to avoid I/O errors
+        let config = CacheConfig {
+            enable_disk_cache: false,
+            ..CacheConfig::default()
+        };
+        // Safe to unwrap since disk cache is disabled
+        Self::new(config.clone()).unwrap_or_else(|_| {
+            // Fallback to minimal configuration
+            Self {
+                memory_cache: MemoryStorage::new(1000),
+                disk_cache: None,
+                config,
+            }
+        })
     }
 }

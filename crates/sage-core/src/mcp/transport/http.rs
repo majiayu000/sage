@@ -92,11 +92,11 @@ impl HttpTransport {
         let mut header_map = reqwest::header::HeaderMap::new();
         header_map.insert(
             reqwest::header::CONTENT_TYPE,
-            "application/json".parse().unwrap(),
+            reqwest::header::HeaderValue::from_static("application/json"),
         );
         header_map.insert(
             reqwest::header::ACCEPT,
-            "application/json, text/event-stream".parse().unwrap(),
+            reqwest::header::HeaderValue::from_static("application/json, text/event-stream"),
         );
 
         for (key, value) in &config.headers {

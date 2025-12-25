@@ -488,7 +488,7 @@ mod tests {
             client_info: ClientInfo::default(),
         };
 
-        let json = serde_json::to_string(&params).unwrap();
+        let json = serde_json::to_string(&params).expect("Failed to serialize test params");
         assert!(json.contains("protocolVersion"));
         assert!(json.contains("sage-agent"));
     }

@@ -171,7 +171,7 @@ impl SubAgentExecutor {
         duration_secs: f64,
     ) -> ExecutionMetadata {
         ExecutionMetadata {
-            total_tokens: total_usage.total_tokens,
+            total_tokens: total_usage.total_tokens as u64,
             total_tool_uses: tool_calls_count as u32,
             execution_time_ms: (duration_secs * 1000.0) as u64,
             tools_used: Vec::new(),

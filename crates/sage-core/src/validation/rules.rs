@@ -3,6 +3,7 @@
 use super::schema::{FieldSchema, FieldType};
 use regex::Regex;
 use serde_json::Value;
+use std::sync::OnceLock;
 
 /// Validation rule types
 #[derive(Debug, Clone)]
@@ -113,8 +114,10 @@ impl ValidationRule {
             ValidationRule::Email => {
                 if let Some(s) = value.as_str() {
                     // Basic email validation
-                    let email_re =
-                        Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$").unwrap();
+                    static EMAIL_RE: OnceLock<Regex> = OnceLock::new();
+                    let email_re = EMAIL_RE.get_or_init(|| {
+                        Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$").unwrap()
+                    });
                     if !email_re.is_match(s) {
                         return Err(format!("'{}' is not a valid email address", s));
                     }
@@ -125,7 +128,10 @@ impl ValidationRule {
             ValidationRule::Url => {
                 if let Some(s) = value.as_str() {
                     // Basic URL validation
-                    let url_re = Regex::new(r"^https?://[^\s/$.?#].[^\s]*$").unwrap();
+                    static URL_RE: OnceLock<Regex> = OnceLock::new();
+                    let url_re = URL_RE.get_or_init(|| {
+                        Regex::new(r"^https?://[^\s/$.?#].[^\s]*$").unwrap()
+                    });
                     if !url_re.is_match(s) {
                         return Err(format!("'{}' is not a valid URL", s));
                     }
