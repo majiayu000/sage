@@ -10,7 +10,7 @@ use tokio::sync::RwLock;
 
 use crate::storage::backend::r#trait::DatabaseBackend;
 use crate::storage::backend::types::{
-    BackendType, DatabaseError, DatabaseRow, DatabaseValue, QueryResult,
+    BackendType, DatabaseError, DatabaseValue, QueryResult,
 };
 
 use super::handlers::QueryHandler;

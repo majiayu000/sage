@@ -76,6 +76,7 @@ mockall = { workspace = true }
 tokio-test = "0.4"
 tracing-subscriber = { workspace = true }
 tempfile = "3.10"
+serial_test = "3"
 
 [[example]]
 name = "markdown_demo"

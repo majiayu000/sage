@@ -122,15 +122,18 @@ fn load_provider_from_env(config: &mut Config, provider: &str, env_prefix: &str)
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     /// Clean up any leftover env vars from other tests that might run in parallel
     fn clean_test_env() {
         unsafe {
             std::env::remove_var("GOOGLE_TEMPERATURE");
+            std::env::remove_var("GOOGLE_API_KEY");
         }
     }
 
     #[test]
+    #[serial]
     fn test_load_from_env_basic() {
         clean_test_env();
         unsafe {
@@ -149,6 +152,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_load_from_env_with_provider() {
         clean_test_env();
         unsafe {
@@ -172,6 +176,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_load_provider_temperature_and_tokens() {
         clean_test_env();
         unsafe {
@@ -197,7 +202,9 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_load_provider_invalid_temperature() {
+        clean_test_env();
         unsafe {
             std::env::set_var("GOOGLE_API_KEY", "test_key");
             std::env::set_var("GOOGLE_TEMPERATURE", "invalid");
@@ -213,6 +220,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_load_provider_base_url() {
         clean_test_env();
         unsafe {

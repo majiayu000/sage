@@ -33,6 +33,7 @@ pub use config::{
     ConnectionPool, FallbackStrategy, PostgresConfig, RetryConfig, SqliteConfig, StorageConfig,
 };
 pub use manager::{
-    ConnectionStatus, SharedStorageManager, StorageManager, StorageStats, create_storage_manager,
+    ConnectionStatus, HealthInfo, SharedStorageManager, StorageManager, StorageStats,
+    create_storage_manager,
 };
 pub use schema::{Migration, MigrationRunner, SchemaVersion};
