@@ -114,6 +114,8 @@
 #![allow(clippy::match_like_matches_macro)]
 #![allow(clippy::field_reassign_with_default)]
 #![allow(clippy::filter_map_identity)]
+// Allow module inception pattern (executor/executor.rs) used for organized module structure
+#![allow(clippy::module_inception)]
 
 pub mod agent;
 pub mod builder;
