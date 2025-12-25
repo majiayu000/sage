@@ -22,7 +22,7 @@ pub struct PatternDetector {
     /// File type preferences
     file_preferences: HashMap<String, HashMap<String, u32>>,
     /// Detected coding style patterns
-    style_patterns: Vec<StylePattern>,
+    pub(crate) style_patterns: Vec<StylePattern>,
 }
 
 impl PatternDetector {

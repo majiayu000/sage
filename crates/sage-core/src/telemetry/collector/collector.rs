@@ -38,9 +38,9 @@ pub struct MetricsCollector {
     pub context_tokens: Gauge,
 
     // Custom metrics
-    custom_counters: Arc<RwLock<HashMap<String, Counter>>>,
-    custom_gauges: Arc<RwLock<HashMap<String, Gauge>>>,
-    custom_histograms: Arc<RwLock<HashMap<String, Histogram>>>,
+    pub(crate) custom_counters: Arc<RwLock<HashMap<String, Counter>>>,
+    pub(crate) custom_gauges: Arc<RwLock<HashMap<String, Gauge>>>,
+    pub(crate) custom_histograms: Arc<RwLock<HashMap<String, Histogram>>>,
 
     // Collection start time
     started_at: chrono::DateTime<Utc>,

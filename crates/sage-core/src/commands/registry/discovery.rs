@@ -97,7 +97,7 @@ impl CommandRegistry {
     }
 
     /// Parse command file with optional YAML frontmatter
-    fn parse_command_file(&self, content: &str) -> (HashMap<String, String>, String) {
+    pub(crate) fn parse_command_file(&self, content: &str) -> (HashMap<String, String>, String) {
         let mut metadata = HashMap::new();
 
         // Check for YAML frontmatter (--- ... ---)

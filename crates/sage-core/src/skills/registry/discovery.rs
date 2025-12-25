@@ -130,7 +130,7 @@ impl SkillRegistry {
     }
 
     /// Parse skill file with YAML frontmatter
-    fn parse_skill_file(&self, content: &str) -> (HashMap<String, String>, String) {
+    pub(crate) fn parse_skill_file(&self, content: &str) -> (HashMap<String, String>, String) {
         let mut metadata = HashMap::new();
 
         if let Some(after_prefix) = content.strip_prefix("---") {

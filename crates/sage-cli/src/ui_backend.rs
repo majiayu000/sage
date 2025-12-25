@@ -99,13 +99,14 @@ impl SageUiBackend {
 
                 // Convert tool execution results to UI format
                 // Extract from execution steps to get both calls and results with proper timing
-                let tool_calls: Vec<ToolCallStatus> = execution
+                let tool_calls: Vec<ToolCallStatus> = result
+                    .execution()
                     .steps
                     .iter()
                     .flat_map(|step| {
                         step.tool_calls.iter().map(move |call| {
                             // Find corresponding result for this tool call
-                            let result = step.tool_results
+                            let tool_result = step.tool_results
                                 .iter()
                                 .find(|r| r.call_id == call.id);
 
@@ -113,15 +114,15 @@ impl SageUiBackend {
                                 id: call.id.clone(),
                                 name: call.name.clone(),
                                 args: serde_json::to_value(&call.arguments).unwrap_or_default(),
-                                status: if result.map(|r| r.success).unwrap_or(false) {
+                                status: if tool_result.map(|r| r.success).unwrap_or(false) {
                                     "completed".to_string()
                                 } else {
                                     "failed".to_string()
                                 },
                                 start_time: Some(step.started_at.timestamp_millis() as u64),
                                 end_time: step.completed_at.map(|t| t.timestamp_millis() as u64),
-                                result: result.and_then(|r| r.output.clone()),
-                                error: result.and_then(|r| r.error.clone()),
+                                result: tool_result.and_then(|r| r.output.clone()),
+                                error: tool_result.and_then(|r| r.error.clone()),
                             }
                         })
                     })

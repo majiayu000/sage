@@ -99,7 +99,7 @@ mod tests {
 
         let llm_config = ProviderConfig {
             base_url: Some("http://localhost".to_string()),
-            api_key: None,
+            api_key: Some("test-api-key".to_string()),
             ..Default::default()
         };
 
