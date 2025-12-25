@@ -68,7 +68,7 @@ impl SubAgentExecutor {
 
         // Track execution
         let mut steps_taken = 0;
-        let mut tool_calls_count = 0;
+        let tool_calls_count = 0;
         let mut total_usage = LlmUsage::default();
 
         // Create step executor
