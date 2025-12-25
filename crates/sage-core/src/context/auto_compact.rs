@@ -8,7 +8,8 @@
 //!
 //! - Automatic activation when context exceeds capacity threshold
 //! - Configurable threshold (default 95% of max context)
-//! - Preserves recent messages and important context
+//! - Compact boundary markers for recovery and chaining
+//! - Claude Code style 9-section summary prompt
 //! - Optional custom summarization instructions
 //! - Manual trigger via `/compact` equivalent
 //!
@@ -27,11 +28,16 @@
 //! auto_compact.compact_with_instructions(&mut messages, "Focus on code samples").await?;
 //! ```
 
+use super::compact::{
+    build_summary_prompt, create_compact_boundary, create_compact_summary,
+    slice_from_last_compact_boundary, CompactOperationResult, SummaryPromptConfig,
+};
 use crate::error::SageResult;
 use crate::llm::{LlmClient, LlmMessage, MessageRole};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use uuid::Uuid;
 
 /// Configuration for auto-compact feature
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -142,6 +148,8 @@ pub struct CompactResult {
     pub compacted_at: Option<DateTime<Utc>>,
     /// Summary that was generated (if any)
     pub summary_preview: Option<String>,
+    /// Compact operation ID (for tracking)
+    pub compact_id: Option<Uuid>,
 }
 
 impl CompactResult {
@@ -156,6 +164,7 @@ impl CompactResult {
             messages_compacted: 0,
             compacted_at: None,
             summary_preview: None,
+            compact_id: None,
         }
     }
 
@@ -197,6 +206,8 @@ pub struct AutoCompactStats {
     pub skipped_count: u64,
     /// Last compaction time
     pub last_compaction: Option<DateTime<Utc>>,
+    /// Last compact ID
+    pub last_compact_id: Option<Uuid>,
 }
 
 impl AutoCompact {
@@ -245,18 +256,23 @@ impl AutoCompact {
     }
 
     /// Check if compaction is needed based on current token usage
+    ///
+    /// Note: This only checks messages after the last compact boundary
     pub fn needs_compaction(&self, messages: &[LlmMessage]) -> bool {
         if !self.config.enabled {
             return false;
         }
 
-        let current_tokens = self.estimate_tokens(messages);
+        // Only consider messages after the last compact boundary
+        let active_messages = slice_from_last_compact_boundary(messages);
+        let current_tokens = self.estimate_tokens(&active_messages);
         current_tokens >= self.config.threshold_tokens()
     }
 
     /// Get current context usage as a percentage
     pub fn get_usage_percentage(&self, messages: &[LlmMessage]) -> f32 {
-        let current_tokens = self.estimate_tokens(messages);
+        let active_messages = slice_from_last_compact_boundary(messages);
+        let current_tokens = self.estimate_tokens(&active_messages);
         (current_tokens as f32 / self.config.max_context_tokens as f32) * 100.0
     }
 
@@ -268,8 +284,10 @@ impl AutoCompact {
         &mut self,
         messages: &mut Vec<LlmMessage>,
     ) -> SageResult<CompactResult> {
-        let tokens_before = self.estimate_tokens(messages);
-        let messages_before = messages.len();
+        // Only work with messages after the last boundary
+        let active_messages = slice_from_last_compact_boundary(messages);
+        let tokens_before = self.estimate_tokens(&active_messages);
+        let messages_before = active_messages.len();
 
         if !self.needs_compaction(messages) {
             self.stats.skipped_count += 1;
@@ -308,32 +326,71 @@ impl AutoCompact {
         messages: &mut Vec<LlmMessage>,
         custom_instructions: Option<&str>,
     ) -> SageResult<CompactResult> {
-        let tokens_before = self.estimate_tokens(messages);
-        let messages_before = messages.len();
+        // Work with messages after the last boundary
+        let active_messages = slice_from_last_compact_boundary(messages);
+        let tokens_before = self.estimate_tokens(&active_messages);
+        let messages_before = active_messages.len();
 
-        if messages.is_empty() {
+        if active_messages.is_empty() {
             return Ok(CompactResult::not_needed(0, 0));
         }
 
         // Separate messages to keep vs compact
-        let (to_keep, to_compact) = self.partition_messages(messages);
+        let (to_keep, to_compact) = self.partition_messages(&active_messages);
 
         if to_compact.is_empty() {
             return Ok(CompactResult::not_needed(messages_before, tokens_before));
         }
 
-        // Generate summary
-        let summary = self
+        // Generate compact ID and timestamp
+        let compact_id = Uuid::new_v4();
+        let timestamp = Utc::now();
+
+        // Generate summary using Claude Code style prompt
+        let summary_content = self
             .generate_summary(&to_compact, custom_instructions)
             .await?;
-        let summary_preview = summary.content.chars().take(200).collect::<String>();
+        let summary_preview = summary_content.chars().take(200).collect::<String>();
 
-        // Rebuild messages: summary + kept messages
-        let mut new_messages = vec![summary];
-        new_messages.extend(to_keep);
+        // Create boundary and summary messages
+        let boundary_message = create_compact_boundary(compact_id, timestamp);
+        let summary_message = create_compact_summary(
+            summary_content,
+            compact_id,
+            to_compact.len(),
+            tokens_before,
+            self.estimate_tokens(&to_keep),
+        );
 
-        let tokens_after = self.estimate_tokens(&new_messages);
+        // Build result
+        let operation_result = CompactOperationResult {
+            compact_id,
+            timestamp,
+            messages_before,
+            messages_after: to_keep.len() + 2, // +2 for boundary and summary
+            tokens_before,
+            tokens_after: self.estimate_tokens(&to_keep)
+                + self.estimate_tokens(&[boundary_message.clone()])
+                + self.estimate_tokens(&[summary_message.clone()]),
+            boundary_message: boundary_message.clone(),
+            summary_message: summary_message.clone(),
+            messages_to_keep: to_keep.clone(),
+        };
+
+        let tokens_after = operation_result.tokens_after;
         let messages_compacted = to_compact.len();
+
+        // Build new message list: keep messages before active + new compacted messages
+        let boundary_index = super::compact::find_last_compact_boundary_index(messages);
+        let mut new_messages = if let Some(idx) = boundary_index {
+            // Keep everything before (and including) the old boundary
+            messages[..=idx].to_vec()
+        } else {
+            Vec::new()
+        };
+
+        // Add new compacted messages
+        new_messages.extend(operation_result.build_compacted_messages());
 
         // Update messages in place
         *messages = new_messages;
@@ -342,7 +399,8 @@ impl AutoCompact {
         self.stats.total_compactions += 1;
         self.stats.total_tokens_saved += tokens_before.saturating_sub(tokens_after) as u64;
         self.stats.total_messages_compacted += messages_compacted as u64;
-        self.stats.last_compaction = Some(Utc::now());
+        self.stats.last_compaction = Some(timestamp);
+        self.stats.last_compact_id = Some(compact_id);
 
         let result = CompactResult {
             was_compacted: true,
@@ -351,17 +409,19 @@ impl AutoCompact {
             tokens_before,
             tokens_after,
             messages_compacted,
-            compacted_at: Some(Utc::now()),
+            compacted_at: Some(timestamp),
             summary_preview: Some(summary_preview),
+            compact_id: Some(compact_id),
         };
 
         tracing::info!(
-            "Auto-compact complete: {} -> {} messages, {} -> {} tokens (saved {})",
+            "Auto-compact complete: {} -> {} messages, {} -> {} tokens (saved {}, ID: {})",
             result.messages_before,
             result.messages_after,
             result.tokens_before,
             result.tokens_after,
-            result.tokens_saved()
+            result.tokens_saved(),
+            &compact_id.to_string()[..8]
         );
 
         Ok(result)
@@ -380,7 +440,10 @@ impl AutoCompact {
             let is_system = msg.role == MessageRole::System && self.config.preserve_system_messages;
             let is_tool = msg.role == MessageRole::Tool && self.config.preserve_tool_messages;
 
-            if is_recent || is_system || is_tool {
+            // Also check if this is a compact boundary - always keep
+            let is_boundary = super::compact::is_compact_boundary(msg);
+
+            if is_recent || is_system || is_tool || is_boundary {
                 to_keep.push(msg.clone());
             } else {
                 to_compact.push(msg.clone());
@@ -395,92 +458,126 @@ impl AutoCompact {
         (to_keep, to_compact)
     }
 
-    /// Generate a summary of messages
+    /// Generate a summary of messages using Claude Code style prompt
     async fn generate_summary(
         &self,
         messages: &[LlmMessage],
         custom_instructions: Option<&str>,
-    ) -> SageResult<LlmMessage> {
+    ) -> SageResult<String> {
         if let Some(client) = &self.llm_client {
-            // Use LLM for intelligent summarization
-            let prompt = self.build_summarization_prompt(messages, custom_instructions);
+            // Use LLM for intelligent summarization with Claude Code style prompt
+            let prompt_config = SummaryPromptConfig {
+                custom_instructions: custom_instructions.map(|s| s.to_string()),
+            };
+            let prompt = build_summary_prompt(&prompt_config);
 
-            let summary_request = vec![LlmMessage::user(prompt)];
+            // Format conversation for the prompt
+            let conversation = self.format_messages_for_summary(messages);
+            let full_prompt = format!(
+                "{}\n\n---\nCONVERSATION TO SUMMARIZE:\n{}\n---",
+                prompt, conversation
+            );
+
+            let summary_request = vec![LlmMessage::user(full_prompt)];
             let response = client.chat(&summary_request, None).await?;
 
-            Ok(LlmMessage::system(format!(
+            // Extract summary from response (handle <summary> tags if present)
+            let summary = self.extract_summary(&response.content);
+
+            Ok(format!(
                 "# Previous Conversation Summary\n\n{}\n\n---\n*Summarized {} messages via auto-compact*",
-                response.content,
+                summary,
                 messages.len()
-            )))
+            ))
         } else {
             // Fallback to simple extraction
             Ok(self.create_simple_summary(messages))
         }
     }
 
-    /// Build the summarization prompt
-    fn build_summarization_prompt(
-        &self,
-        messages: &[LlmMessage],
-        custom_instructions: Option<&str>,
-    ) -> String {
-        let mut prompt = String::from(
-            "Summarize the following conversation concisely, preserving:\n\
-             - Key decisions and conclusions\n\
-             - Important code snippets or technical details\n\
-             - Action items or next steps\n\
-             - Any errors or issues encountered\n\n",
-        );
-
-        if let Some(instructions) = custom_instructions {
-            prompt.push_str(&format!("Additional focus: {}\n\n", instructions));
+    /// Extract summary from LLM response, handling <summary> tags
+    fn extract_summary(&self, response: &str) -> String {
+        // Try to extract content between <summary> tags
+        if let Some(start) = response.find("<summary>") {
+            if let Some(end) = response.find("</summary>") {
+                let summary_start = start + "<summary>".len();
+                if summary_start < end {
+                    return response[summary_start..end].trim().to_string();
+                }
+            }
         }
+        // If no tags, return the whole response
+        response.trim().to_string()
+    }
 
-        prompt.push_str("Conversation to summarize:\n\n");
+    /// Format messages for the summarization prompt
+    fn format_messages_for_summary(&self, messages: &[LlmMessage]) -> String {
+        messages
+            .iter()
+            .filter(|m| m.role != MessageRole::System)
+            .map(|m| {
+                let role = match m.role {
+                    MessageRole::User => "USER",
+                    MessageRole::Assistant => "ASSISTANT",
+                    MessageRole::Tool => "TOOL",
+                    MessageRole::System => "SYSTEM",
+                };
 
-        for msg in messages {
-            prompt.push_str(&format!("[{}]: {}\n\n", msg.role, msg.content));
+                let content = self.truncate_content(&m.content, 1000);
+
+                // Include tool info if present
+                let tool_info = if let Some(ref tool_calls) = m.tool_calls {
+                    let tools: Vec<_> = tool_calls.iter().map(|tc| tc.name.as_str()).collect();
+                    format!(" [Tools: {}]", tools.join(", "))
+                } else if let Some(ref tool_id) = m.tool_call_id {
+                    format!(" [Response to: {}]", tool_id)
+                } else {
+                    String::new()
+                };
+
+                format!("[{}{}]: {}", role, tool_info, content)
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n")
+    }
+
+    /// Truncate content to max characters
+    fn truncate_content(&self, content: &str, max_chars: usize) -> String {
+        if content.len() <= max_chars {
+            content.to_string()
+        } else {
+            format!("{}...", &content[..max_chars.saturating_sub(3)])
         }
-
-        prompt.push_str("\nProvide a clear, structured summary:");
-
-        prompt
     }
 
     /// Create a simple summary without LLM
-    fn create_simple_summary(&self, messages: &[LlmMessage]) -> LlmMessage {
+    fn create_simple_summary(&self, messages: &[LlmMessage]) -> String {
         let mut user_count = 0;
         let mut assistant_count = 0;
         let mut tool_count = 0;
-
-        let mut key_points = Vec::new();
+        let mut user_messages = Vec::new();
 
         for msg in messages {
             match msg.role {
                 MessageRole::User => {
                     user_count += 1;
-                    // Extract first line as key point
+                    // Collect user messages (Claude Code requires all user messages)
                     if let Some(first_line) = msg.content.lines().next() {
-                        if first_line.len() > 10 && key_points.len() < 5 {
-                            key_points.push(format!("- User: {}", truncate(first_line, 100)));
+                        if first_line.len() > 10 && user_messages.len() < 10 {
+                            user_messages.push(format!(
+                                "- {}",
+                                self.truncate_content(first_line, 100)
+                            ));
                         }
                     }
                 }
-                MessageRole::Assistant => {
-                    assistant_count += 1;
-                    if let Some(first_line) = msg.content.lines().next() {
-                        if first_line.len() > 10 && key_points.len() < 5 {
-                            key_points.push(format!("- Assistant: {}", truncate(first_line, 100)));
-                        }
-                    }
-                }
+                MessageRole::Assistant => assistant_count += 1,
                 MessageRole::Tool => tool_count += 1,
                 _ => {}
             }
         }
 
-        let summary = format!(
+        format!(
             r#"# Previous Conversation Summary
 
 ## Overview
@@ -488,7 +585,7 @@ impl AutoCompact {
 - {} assistant responses
 - {} tool interactions
 
-## Key Points
+## User Messages
 {}
 
 ---
@@ -496,24 +593,13 @@ impl AutoCompact {
             user_count,
             assistant_count,
             tool_count,
-            if key_points.is_empty() {
-                "- (No key points extracted)".to_string()
+            if user_messages.is_empty() {
+                "- (No significant user messages captured)".to_string()
             } else {
-                key_points.join("\n")
+                user_messages.join("\n")
             },
             messages.len()
-        );
-
-        LlmMessage::system(summary)
-    }
-}
-
-/// Truncate a string to a maximum length
-fn truncate(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
-        s.to_string()
-    } else {
-        format!("{}...", &s[..max_len.saturating_sub(3)])
+        )
     }
 }
 
@@ -628,6 +714,7 @@ mod tests {
         assert!(result.was_compacted);
         assert!(result.messages_after < result.messages_before);
         assert!(result.tokens_after < result.tokens_before);
+        assert!(result.compact_id.is_some());
     }
 
     #[test]
@@ -655,9 +742,49 @@ mod tests {
             messages_compacted: 80,
             compacted_at: Some(Utc::now()),
             summary_preview: Some("Test summary...".to_string()),
+            compact_id: Some(Uuid::new_v4()),
         };
 
         assert_eq!(result.tokens_saved(), 40000);
         assert!((result.compression_ratio() - 0.2).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_needs_compaction_respects_boundary() {
+        let mut config = AutoCompactConfig::default();
+        config.max_context_tokens = 100;
+        config.threshold_percentage = 0.5;
+
+        let auto_compact = AutoCompact::new(config);
+
+        // Create messages with a boundary in the middle
+        let old_large = create_message(MessageRole::User, &"x".repeat(500));
+        let boundary = create_compact_boundary(Uuid::new_v4(), Utc::now());
+        let new_small = create_message(MessageRole::User, "small");
+
+        let messages = vec![old_large, boundary, new_small];
+
+        // Should only consider messages after boundary, so no compaction needed
+        assert!(!auto_compact.needs_compaction(&messages));
+    }
+
+    #[test]
+    fn test_extract_summary() {
+        let auto_compact = AutoCompact::default();
+
+        // Test with tags
+        let with_tags =
+            "<analysis>thinking...</analysis>\n<summary>The actual summary</summary>\nextra";
+        assert_eq!(
+            auto_compact.extract_summary(with_tags),
+            "The actual summary"
+        );
+
+        // Test without tags
+        let without_tags = "Just a plain summary";
+        assert_eq!(
+            auto_compact.extract_summary(without_tags),
+            "Just a plain summary"
+        );
     }
 }
