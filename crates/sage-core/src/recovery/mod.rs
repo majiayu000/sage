@@ -14,7 +14,10 @@ pub mod retry;
 pub mod supervisor;
 
 pub use backoff::{BackoffConfig, BackoffStrategy, ExponentialBackoff};
-pub use circuit_breaker::{CircuitBreaker, CircuitBreakerConfig, CircuitState};
+pub use circuit_breaker::{
+    CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError, CircuitBreakerRegistry,
+    CircuitBreakerStats, CircuitState,
+};
 pub use rate_limiter::{
     RateLimitError, RateLimitGuard, RateLimiter, RateLimiterConfig, SlidingWindowRateLimiter,
 };

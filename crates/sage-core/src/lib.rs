@@ -191,10 +191,11 @@ pub use plugins::{
     PluginManifest, PluginPermission, PluginRegistry, PluginResult, PluginState,
 };
 pub use recovery::{
-    BackoffConfig, BackoffStrategy, CircuitBreaker, CircuitBreakerConfig, CircuitState, ErrorClass,
-    RateLimitError, RateLimitGuard, RateLimiter, RateLimiterConfig, RecoverableError,
-    RecoveryError, RetryConfig, RetryPolicy, RetryResult, SlidingWindowRateLimiter,
-    SupervisionPolicy, SupervisionResult, Supervisor, TaskSupervisor,
+    BackoffConfig, BackoffStrategy, CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError,
+    CircuitBreakerRegistry, CircuitBreakerStats, CircuitState, ErrorClass, RateLimitError,
+    RateLimitGuard, RateLimiter, RateLimiterConfig, RecoverableError, RecoveryError, RetryConfig,
+    RetryPolicy, RetryResult, SlidingWindowRateLimiter, SupervisionPolicy, SupervisionResult,
+    Supervisor, TaskSupervisor,
 };
 pub use sandbox::{
     DefaultSandbox, ResourceLimits, ResourceUsage, Sandbox, SandboxBuilder, SandboxConfig,

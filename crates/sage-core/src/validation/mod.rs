@@ -10,7 +10,7 @@
 mod rules;
 mod sanitizer;
 mod schema;
-mod validator;
+pub mod validator;
 
 pub use rules::{CommonRules, RuleSet, ValidationRule};
 pub use sanitizer::{InputSanitizer, SanitizeOptions};

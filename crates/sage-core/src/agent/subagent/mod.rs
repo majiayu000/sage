@@ -25,7 +25,7 @@
 //! ```
 
 pub mod builtin;
-// pub mod executor; // Temporarily disabled - has compilation errors
+pub mod executor;
 pub mod registry;
 pub mod runner;
 pub mod types;
@@ -33,7 +33,7 @@ pub mod types;
 pub use builtin::{
     explore_agent, general_purpose_agent, get_builtin_agents, plan_agent, register_builtin_agents,
 };
-// pub use executor::{ExecutorMessage, SubAgentExecutor};
+pub use executor::{ExecutorMessage, SubAgentExecutor};
 pub use registry::AgentRegistry;
 pub use runner::{
     SubAgentRunner, execute_subagent, get_global_runner, init_global_runner,
