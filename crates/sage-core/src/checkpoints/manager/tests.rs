@@ -88,6 +88,11 @@ mod tests {
         file.write_all(b"fn main() { println!(\"Modified!\"); }")
             .await
             .unwrap();
+        file.flush().await.unwrap();
+        drop(file);
+
+        // Small delay to ensure file system sync
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
         // Restore
         let result = manager
@@ -100,6 +105,9 @@ mod tests {
 
         assert!(result.is_success());
         assert!(!result.restored_files.is_empty());
+
+        // Small delay after restore
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
         let content = fs::read_to_string(&main_path).await.unwrap();
         assert!(content.contains("Hello"));
