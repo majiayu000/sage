@@ -1,40 +1,11 @@
 //! Simple HTTP server for UI communication
 
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use crate::api_types::{ChatRequest, ChatResponse, ToolCallStatus};
 use sage_core::error::{SageError, SageResult};
 use sage_sdk::SageAgentSdk;
-use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use warp::Filter;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ChatRequest {
-    pub message: String,
-    pub config_file: String,
-    pub working_dir: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ChatResponse {
-    pub role: String,
-    pub content: String,
-    pub timestamp: String,
-    pub success: bool,
-    pub error: Option<String>,
-    pub tool_calls: Vec<ToolCallStatus>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ToolCallStatus {
-    pub id: String,
-    pub name: String,
-    pub args: serde_json::Value,
-    pub status: String,
-    pub start_time: Option<u64>,
-    pub end_time: Option<u64>,
-    pub result: Option<String>,
-    pub error: Option<String>,
-}
 
 pub struct SageHttpServer {
     sdk: Arc<Mutex<Option<SageAgentSdk>>>,

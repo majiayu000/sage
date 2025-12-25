@@ -1,5 +1,6 @@
 //! UI Backend Interface - Gemini CLI style architecture
 
+use crate::api_types::{ChatRequest, ChatResponse, ToolCallStatus};
 use chrono::Utc;
 use sage_core::error::SageResult;
 use sage_sdk::SageAgentSdk;
@@ -7,35 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ChatRequest {
-    pub message: String,
-    pub config_file: String,
-    pub working_dir: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ChatResponse {
-    pub role: String,
-    pub content: String,
-    pub timestamp: String,
-    pub success: bool,
-    pub error: Option<String>,
-    pub tool_calls: Vec<ToolCallStatus>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ToolCallStatus {
-    pub id: String,
-    pub name: String,
-    pub args: serde_json::Value,
-    pub status: String,
-    pub start_time: Option<u64>,
-    pub end_time: Option<u64>,
-    pub result: Option<String>,
-    pub error: Option<String>,
-}
-
+/// Configuration information for UI display
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConfigInfo {
     pub model: String,
