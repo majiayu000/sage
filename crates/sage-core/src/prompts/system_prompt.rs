@@ -476,7 +476,11 @@ mod tests {
     fn test_doing_tasks_contains_anti_over_engineering() {
         // Verify the Claude Code style anti-over-engineering guidelines are included
         assert!(SystemPrompt::DOING_TASKS.contains("Anti-Over-Engineering"));
-        assert!(SystemPrompt::DOING_TASKS.contains("bug fix doesn't need surrounding code cleaned up"));
-        assert!(SystemPrompt::DOING_TASKS.contains("Don't design for hypothetical future requirements"));
+        assert!(
+            SystemPrompt::DOING_TASKS.contains("bug fix doesn't need surrounding code cleaned up")
+        );
+        assert!(
+            SystemPrompt::DOING_TASKS.contains("Don't design for hypothetical future requirements")
+        );
     }
 }
