@@ -4,7 +4,9 @@ mod execution;
 mod security;
 mod types;
 
-pub use security::{requires_user_confirmation, validate_command_security};
+pub use security::{
+    requires_user_confirmation, validate_command_security, validate_command_security_permissive,
+};
 pub use types::BashTool;
 
 use async_trait::async_trait;
@@ -56,6 +58,12 @@ Use task_output(shell_id) to retrieve output and kill_shell(shell_id) to termina
                 ToolParameter::boolean(
                     "user_confirmed",
                     "Set to true ONLY after getting explicit user confirmation via ask_user_question tool for destructive commands (rm, rmdir, git push --force, etc.)",
+                )
+                .optional()
+                .with_default(false),
+                ToolParameter::boolean(
+                    "dangerously_disable_sandbox",
+                    "Disable security restrictions including command chaining (&&, ;, ||). Use only in isolated environments like SWE-bench.",
                 )
                 .optional()
                 .with_default(false),
@@ -134,8 +142,14 @@ Use task_output(shell_id) to retrieve output and kill_shell(shell_id) to termina
             ));
         }
 
-        // Validate the command for security issues
-        validate_command_security(&command)?;
+        // Skip security validation if sandbox is disabled (for SWE-bench and similar)
+        // Note: This still validates dangerous commands in validate_command_security_permissive
+        let disable_sandbox = call.get_bool("dangerously_disable_sandbox").unwrap_or(false);
+        if disable_sandbox {
+            validate_command_security_permissive(&command)?;
+        } else {
+            validate_command_security(&command)?;
+        }
 
         Ok(())
     }
@@ -390,5 +404,81 @@ mod tests {
             let result = validate_command_security(cmd);
             assert!(result.is_ok(), "Command should be allowed: {}", cmd);
         }
+    }
+
+    // Permissive mode tests (for SWE-bench and similar environments)
+    #[test]
+    fn test_permissive_allows_command_chaining() {
+        // Test that permissive mode allows &&, ;, ||
+        let chained_commands = vec![
+            "cd /tmp && ls",
+            "echo hello; echo world",
+            "false || echo 'failed'",
+            "cd /repo && python -c 'import sys; print(sys.version)'",
+        ];
+
+        for cmd in chained_commands {
+            let result = validate_command_security_permissive(cmd);
+            assert!(result.is_ok(), "Permissive should allow: {}", cmd);
+        }
+    }
+
+    #[test]
+    fn test_permissive_allows_command_substitution() {
+        // Test that permissive mode allows $(), ``, ${}
+        let subst_commands = vec![
+            "echo $(pwd)",
+            "echo `date`",
+            "echo ${HOME}",
+        ];
+
+        for cmd in subst_commands {
+            let result = validate_command_security_permissive(cmd);
+            assert!(result.is_ok(), "Permissive should allow: {}", cmd);
+        }
+    }
+
+    #[test]
+    fn test_permissive_still_blocks_dangerous() {
+        // Test that even permissive mode blocks truly dangerous commands
+        let dangerous_commands = vec![
+            "rm -rf /",
+            ":(){ :|:& };:",
+            "sudo rm -rf /tmp",
+            "mkfs.ext4 /dev/sda",
+        ];
+
+        for cmd in dangerous_commands {
+            let result = validate_command_security_permissive(cmd);
+            assert!(result.is_err(), "Permissive should block: {}", cmd);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_bash_tool_with_sandbox_disabled() {
+        let tool = BashTool::new();
+
+        // Command with && should fail in normal mode
+        let call = create_tool_call(
+            "test-sandbox-1",
+            "bash",
+            json!({
+                "command": "echo hello && echo world"
+            }),
+        );
+        let validate_result = tool.validate(&call);
+        assert!(validate_result.is_err(), "Should block && in normal mode");
+
+        // But should pass with sandbox disabled
+        let call_permissive = create_tool_call(
+            "test-sandbox-2",
+            "bash",
+            json!({
+                "command": "echo hello && echo world",
+                "dangerously_disable_sandbox": true
+            }),
+        );
+        let validate_result = tool.validate(&call_permissive);
+        assert!(validate_result.is_ok(), "Should allow && with sandbox disabled");
     }
 }

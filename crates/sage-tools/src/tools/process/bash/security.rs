@@ -103,6 +103,57 @@ pub fn validate_command_security(command: &str) -> Result<(), ToolError> {
     Ok(())
 }
 
+/// Permissive command security validation for isolated environments (SWE-bench, Docker, etc.)
+///
+/// This allows command chaining operators (&&, ;, ||) and command substitution,
+/// but still blocks the most dangerous commands that could destroy the system.
+pub fn validate_command_security_permissive(command: &str) -> Result<(), ToolError> {
+    let command_lower = command.to_lowercase();
+
+    // Even in permissive mode, block absolutely dangerous commands
+    let dangerous_commands = [
+        "rm -rf /",
+        "rm -rf /*",
+        ":(){ :|:& };:", // Fork bomb
+        ":(){:|:&};:",   // Fork bomb variant (no spaces)
+        "dd if=/dev/zero of=/dev/sda",
+        "dd if=/dev/random of=/dev/sda",
+        "> /dev/sda",
+        "mv /* /dev/null",
+        "chmod -r 000 /",
+        "mkfs",
+        "fdisk",
+        "parted",
+    ];
+
+    for pattern in &dangerous_commands {
+        if command_lower.contains(pattern) {
+            return Err(ToolError::PermissionDenied(format!(
+                "Dangerous command pattern detected: {}",
+                pattern
+            )));
+        }
+    }
+
+    // Block privilege escalation even in permissive mode
+    let privilege_commands = ["sudo ", "su ", "doas ", "pkexec "];
+    for pattern in &privilege_commands {
+        if command_lower.starts_with(pattern)
+            || command_lower.contains(&format!(" {}", pattern.trim()))
+        {
+            return Err(ToolError::PermissionDenied(format!(
+                "Privilege escalation command not allowed: {}",
+                pattern.trim()
+            )));
+        }
+    }
+
+    // In permissive mode: Allow &&, ;, ||, $(), `, ${}
+    // These are commonly needed for development workflows
+
+    Ok(())
+}
+
 /// Check if a command is destructive and requires user confirmation
 ///
 /// Returns Some(reason) if confirmation is required, None otherwise
