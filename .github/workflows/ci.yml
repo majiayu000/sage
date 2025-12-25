@@ -134,7 +134,7 @@ jobs:
             ${{ runner.os }}-cargo-registry-
 
       - name: Build release binary
-        run: cargo build --release --target ${{ matrix.target }}
+        run: cargo build --release --target ${{ matrix.target }} -p sage-cli
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
