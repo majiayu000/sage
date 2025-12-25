@@ -103,13 +103,16 @@ ImportError: No module named 'xxx'
 
 ### Phase 1: 紧急修复 (1-2天)
 
-- [ ] **Task 1.1**: 为 SWE-bench 模式添加 bash 命令链支持
-  - 文件: `crates/sage-tools/src/tools/process/bash.rs`
-  - 添加 `--allow-chaining` 或 `swebench_mode` 标志
+- [x] **Task 1.1**: 为 SWE-bench 模式添加 bash 命令链支持 ✅ (2025-12-25)
+  - 文件: `crates/sage-tools/src/tools/process/bash/security.rs`
+  - 添加 `dangerously_disable_sandbox` 参数
+  - 新增 `validate_command_security_permissive()` 函数
+  - 允许 `&&`, `;`, `||` 和命令替换，但仍阻止危险命令
 
-- [ ] **Task 1.2**: 更新 SWE-bench system prompt
+- [x] **Task 1.2**: 更新 SWE-bench system prompt ✅ (2025-12-25)
   - 文件: `swebench_eval/run_agent.py`
-  - 说明命令执行限制和替代方法
+  - 添加 `dangerously_disable_sandbox=true` 使用说明
+  - 提供常用命令模式示例
 
 ### Phase 2: 环境改进 (3-5天)
 

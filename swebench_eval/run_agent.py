@@ -33,6 +33,21 @@ SWEBENCH_PROMPT_PREFIX = """
 
 You are tasked with FIXING A BUG in the codebase. This is NOT an analysis task - you MUST implement the fix.
 
+### ENVIRONMENT NOTES (IMPORTANT):
+This is an isolated SWE-bench environment. You have special permissions:
+
+**Bash Tool with Command Chaining:**
+You can use command chaining (&&, ;, ||) by setting `dangerously_disable_sandbox=true`:
+```json
+{"command": "cd /repo && python -c 'import module; print(module.__version__)'", "dangerously_disable_sandbox": true}
+```
+
+**Common patterns for this environment:**
+- Change directory and run: `cd path && command`
+- Run Python with imports: `cd /repo && python -c "import module; ..."`
+- Run tests: `cd /repo && python -m pytest tests/test_file.py`
+- Install in dev mode: `cd /repo && pip install -e .`
+
 ### REQUIREMENTS:
 1. You MUST modify existing source code files to fix the bug
 2. You MUST use the Edit tool to make changes (NOT Write tool for new files)
