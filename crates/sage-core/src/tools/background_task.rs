@@ -345,25 +345,24 @@ mod tests {
         let cancel_token = CancellationToken::new();
         let task = BackgroundShellTask::spawn(
             "test_shell_3".to_string(),
-            "echo 'line1'; sleep 0.1; echo 'line2'",
+            "echo 'line1'; sleep 0.2; echo 'line2'",
             &PathBuf::from("/tmp"),
             cancel_token,
         )
         .await
         .unwrap();
 
-        // Wait for first line
-        tokio::time::sleep(Duration::from_millis(50)).await;
+        // Wait for first line (increased for CI stability)
+        tokio::time::sleep(Duration::from_millis(100)).await;
 
         let (stdout1, _) = task.get_incremental_output().await;
 
-        // Wait for second line
-        tokio::time::sleep(Duration::from_millis(150)).await;
+        // Wait for second line (increased for CI stability)
+        tokio::time::sleep(Duration::from_millis(300)).await;
 
         let (stdout2, _) = task.get_incremental_output().await;
 
         // Incremental should not repeat first line
-        // Note: timing-dependent, might need adjustment
         let total = format!("{}{}", stdout1, stdout2);
         assert!(total.contains("line1"));
         assert!(total.contains("line2"));

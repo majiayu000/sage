@@ -81,14 +81,4 @@ tokio-test = "0.4"
 tempfile = "3.8"
 serial_test = "2.0"
 
-[[example]]
-name = "grep_demo"
-path = "../../examples/grep_demo.rs"
-
-[[example]]
-name = "kill_shell_demo"
-path = "../../examples/kill_shell_demo.rs"
-
-[[example]]
-name = "notebook_edit_demo"
-path = "../../examples/notebook_edit_demo.rs"
+# Note: Examples are defined in the root workspace package to avoid filename collisions

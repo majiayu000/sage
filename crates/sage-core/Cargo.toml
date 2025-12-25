@@ -78,26 +78,4 @@ tracing-subscriber = { workspace = true }
 tempfile = "3.10"
 serial_test = "3"
 
-[[example]]
-name = "markdown_demo"
-path = "../../examples/markdown_demo.rs"
-
-[[example]]
-name = "ui_demo"
-path = "../../examples/ui_demo.rs"
-
-[[example]]
-name = "retry_test"
-path = "../../examples/retry_test.rs"
-
-[[example]]
-name = "retry_simulation"
-path = "../../examples/retry_simulation.rs"
-
-[[example]]
-name = "interrupt_demo"
-path = "../../examples/interrupt_demo.rs"
-
-[[example]]
-name = "builtin_agents_demo"
-path = "../../examples/builtin_agents_demo.rs"
+# Note: Examples are defined in the root workspace package to avoid filename collisions
