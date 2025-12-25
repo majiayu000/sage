@@ -98,7 +98,7 @@ impl McpServerManager {
         for (name, server_config) in config.enabled_servers() {
             match self
                 .connection_manager
-                .connect_server(&name, server_config.clone(), &self.registry, &self.health_tracker)
+                .connect_server(name, server_config.clone(), &self.registry, &self.health_tracker)
                 .await
             {
                 Ok(_) => {
@@ -108,7 +108,7 @@ impl McpServerManager {
                 Err(e) => {
                     error!("Failed to connect to MCP server '{}': {}", name, e);
                     self.health_tracker
-                        .update_health(&name, ServerStatus::Failed(e.to_string()))
+                        .update_health(name, ServerStatus::Failed(e.to_string()))
                         .await;
                 }
             }

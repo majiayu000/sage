@@ -4,6 +4,8 @@ use sage_core::tools::{ToolParameter, ToolSchema};
 use serde::{Deserialize, Serialize};
 
 /// Input structure for Remember tool
+/// Reserved for future typed input deserialization
+#[allow(dead_code)]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RememberInput {
     pub memory: String,

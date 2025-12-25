@@ -8,8 +8,8 @@ use crate::error::SageResult;
 use super::types::CommandExecutor;
 use crate::commands::types::{CommandInvocation, CommandResult, SlashCommand};
 
-pub(in crate::commands::executor) use advanced::*;
-pub(in crate::commands::executor) use basic::*;
+use advanced::*;
+use basic::*;
 
 /// Execute a built-in command
 pub(super) async fn execute_builtin(
