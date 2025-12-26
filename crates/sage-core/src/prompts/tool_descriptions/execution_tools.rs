@@ -12,14 +12,16 @@ Before executing the command, please follow these steps:
 1. Directory Verification:
    - If the command will create new directories or files, first use `ls` to verify the parent directory exists and is the correct location
    - For example, before running "mkdir foo/bar", first use `ls foo` to check that "foo" exists and is the intended parent directory
+   - Before running a script or accessing a file, verify it exists using `ls` or the file tools
 
 2. Command Execution:
    - Always quote file paths that contain spaces with double quotes (e.g., cd "path with spaces/file.txt")
    - Examples of proper quoting:
      - cd "/Users/name/My Documents" (correct)
      - cd /Users/name/My Documents (incorrect - will fail)
-     - python "/path/with spaces/script.py" (correct)
+     - python3 "/path/with spaces/script.py" (correct)
      - python /path/with spaces/script.py (incorrect - will fail)
+   - IMPORTANT: Always use `python3` instead of `python` on macOS/Linux, as `python` may not be available or may point to Python 2.
    - After ensuring proper quoting, execute the command.
    - Capture the output of the command.
 
@@ -29,6 +31,7 @@ Usage notes:
   - It is very helpful if you write a clear, concise description of what this command does in 5-10 words.
   - If the output exceeds 30000 characters, output will be truncated before being returned to you.
   - You can use the `run_in_background` parameter to run the command in the background, which allows you to continue working while the command runs. You can monitor the output using the ${BASH_TOOL_NAME} tool as it becomes available. You do not need to use '&' at the end of the command when using this parameter.
+  - NEVER use privilege escalation commands like `sudo`, `su`, `doas`, or `pkexec`. These commands are blocked for security reasons. If a task requires elevated privileges, inform the user and let them run the command manually.
 
   - Avoid using Bash with the `find`, `grep`, `cat`, `head`, `tail`, `sed`, `awk`, or `echo` commands, unless explicitly instructed or when these commands are truly necessary for the task. Instead, always prefer using the dedicated tools for these commands:
     - File search: Use ${GLOB_TOOL_NAME} (NOT find or ls)
