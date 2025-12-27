@@ -158,5 +158,16 @@ impl CommandRegistry {
             .builtin(),
             CommandSource::Builtin,
         );
+
+        // Title command - set custom session title (Claude Code style)
+        self.register(
+            SlashCommand::new(
+                "title",
+                "Set a custom title for the current session. Usage: /title <title>",
+            )
+            .with_description("Set session title")
+            .builtin(),
+            CommandSource::Builtin,
+        );
     }
 }

@@ -101,6 +101,7 @@ impl UnifiedExecutor {
             message_tracker,
             current_session_id: None,
             file_tracker: FileSnapshotTracker::default_tracker(),
+            last_summary_msg_count: 0,
         })
     }
 }

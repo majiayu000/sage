@@ -19,6 +19,10 @@ pub struct ResumeResult {
     pub metadata: SessionMetadata,
     /// Working directory of the session
     pub working_directory: PathBuf,
+    /// Whether this is a cross-project resume
+    pub is_cross_project: bool,
+    /// Command to run for cross-project resume
+    pub cross_project_command: Option<String>,
 }
 
 /// Interactive session selector
@@ -106,11 +110,7 @@ impl SessionSelector {
         match selection {
             Some(idx) if idx < sessions.len() => {
                 let session = &sessions[idx];
-                Ok(Some(ResumeResult {
-                    session_id: session.id.clone(),
-                    metadata: session.clone(),
-                    working_directory: session.working_directory.clone(),
-                }))
+                Ok(Some(self.create_resume_result(session)))
             }
             _ => {
                 println!("{}", "Resume cancelled.".dimmed());
@@ -123,15 +123,40 @@ impl SessionSelector {
     pub async fn resume_by_id(&self, session_id: &str) -> SageResult<Option<ResumeResult>> {
         let id = session_id.to_string();
         match self.storage.load_metadata(&id).await? {
-            Some(metadata) => Ok(Some(ResumeResult {
-                session_id: session_id.to_string(),
-                metadata: metadata.clone(),
-                working_directory: metadata.working_directory,
-            })),
+            Some(metadata) => Ok(Some(self.create_resume_result(&metadata))),
             None => {
                 println!("{}", format!("Session '{}' not found.", session_id).red());
                 Ok(None)
             }
+        }
+    }
+
+    /// Create a ResumeResult with cross-project detection
+    fn create_resume_result(&self, metadata: &SessionMetadata) -> ResumeResult {
+        let current_dir = std::env::current_dir().ok();
+        let session_dir = &metadata.working_directory;
+
+        let is_cross_project = current_dir
+            .as_ref()
+            .map(|cd| cd != session_dir)
+            .unwrap_or(false);
+
+        let cross_project_command = if is_cross_project {
+            Some(format!(
+                "cd {} && sage session resume {}",
+                session_dir.display(),
+                &metadata.id[..8]
+            ))
+        } else {
+            None
+        };
+
+        ResumeResult {
+            session_id: metadata.id.clone(),
+            metadata: metadata.clone(),
+            working_directory: metadata.working_directory.clone(),
+            is_cross_project,
+            cross_project_command,
         }
     }
 
@@ -145,12 +170,12 @@ impl SessionSelector {
 fn format_session_item(session: &SessionMetadata) -> String {
     let time_str = format_relative_time(session.updated_at);
 
-    // Truncate session name or ID for display
-    let name = session.name.as_deref().unwrap_or(&session.id);
-    let display_name = if name.len() > 40 {
-        format!("{}...", &name[..37])
+    // Use display_title() for Claude Code-style title display
+    let display_name = session.display_title();
+    let display_name = if display_name.len() > 40 {
+        format!("{}...", &display_name[..37])
     } else {
-        name.to_string()
+        display_name.to_string()
     };
 
     // Get working directory basename
@@ -163,9 +188,17 @@ fn format_session_item(session: &SessionMetadata) -> String {
     // Format with model and message count
     let model_str = session.model.as_deref().unwrap_or("unknown");
 
+    // Format branch info
+    let branch_str = session
+        .git_branch
+        .as_ref()
+        .map(|b| format!(" [{}]", b))
+        .unwrap_or_default();
+
     format!(
-        "{} {} {} {} {}",
+        "{}{} {} {} {} {}",
         display_name.bright_white(),
+        branch_str.green(),
         format!("[{}]", dir_name).dimmed(),
         format!("({})", model_str).cyan(),
         format!("{} msgs", session.message_count).dimmed(),
@@ -207,26 +240,56 @@ fn format_relative_time(time: DateTime<Utc>) -> String {
 pub fn print_session_details(session: &SessionMetadata) {
     println!("\n{}", "Session Details".bold().underline());
     println!("  {} {}", "ID:".dimmed(), session.id.bright_white());
-    if let Some(name) = &session.name {
-        println!("  {} {}", "Name:".dimmed(), name.bright_white());
+
+    // Show title hierarchy (Claude Code style)
+    println!(
+        "  {} {}",
+        "Title:".dimmed(),
+        session.display_title().bright_white()
+    );
+
+    if let Some(ref custom_title) = session.custom_title {
+        println!("  {} {}", "Custom Title:".dimmed(), custom_title.bright_white());
     }
+
+    if let Some(ref summary) = session.summary {
+        println!("  {} {}", "Summary:".dimmed(), summary.italic());
+    }
+
+    if let Some(ref first_prompt) = session.first_prompt {
+        println!("  {} {}", "First Prompt:".dimmed(), first_prompt.dimmed());
+    }
+
     println!(
         "  {} {}",
         "Directory:".dimmed(),
         session.working_directory.display().to_string().cyan()
     );
+
     if let Some(branch) = &session.git_branch {
         println!("  {} {}", "Git Branch:".dimmed(), branch.green());
     }
+
     if let Some(model) = &session.model {
         println!("  {} {}", "Model:".dimmed(), model.cyan());
     }
+
     println!(
         "  {} {}",
         "Messages:".dimmed(),
         session.message_count.to_string().yellow()
     );
+
     println!("  {} {}", "State:".dimmed(), format_state(&session.state));
+
+    // Show sidechain info if applicable
+    if session.is_sidechain {
+        println!("  {} {}", "Type:".dimmed(), "Sidechain (branched)".magenta());
+        if let Some(ref parent_id) = session.parent_session_id {
+            println!("  {} {}", "Parent:".dimmed(), parent_id.dimmed());
+        }
+    }
+
     println!(
         "  {} {}",
         "Created:".dimmed(),

@@ -33,7 +33,7 @@ pub async fn handle_slash_command(
     match cmd_executor.process(input).await {
         Ok(Some(result)) => {
             if let Some(interactive_cmd) = &result.interactive {
-                handle_interactive_command(interactive_cmd, console).await?;
+                handle_interactive_command(interactive_cmd, console, conversation).await?;
                 return Ok(true);
             }
 
@@ -76,11 +76,48 @@ pub async fn handle_slash_command(
 async fn handle_interactive_command(
     cmd: &InteractiveCommand,
     console: &CliConsole,
+    conversation: &mut ConversationSession,
 ) -> SageResult<()> {
     match cmd {
         InteractiveCommand::Resume {
             session_id,
             show_all,
         } => handle_resume_command(session_id.clone(), *show_all, console).await,
+        InteractiveCommand::Title { title } => {
+            handle_title_command(title, console, conversation).await
+        }
     }
+}
+
+/// Handle /title command - set custom session title
+async fn handle_title_command(
+    title: &str,
+    console: &CliConsole,
+    conversation: &ConversationSession,
+) -> SageResult<()> {
+    use sage_core::session::JsonlSessionStorage;
+
+    // Get current session ID
+    let session_id = match conversation.session_id() {
+        Some(id) => id.to_string(),
+        None => {
+            console.warn("No active session. Start a conversation first.");
+            return Ok(());
+        }
+    };
+
+    // Update session metadata with custom title
+    let storage = JsonlSessionStorage::default_path()?;
+    if let Ok(Some(mut metadata)) = storage.load_metadata(&session_id).await {
+        metadata.set_custom_title(title);
+        if storage.save_metadata(&session_id, &metadata).await.is_ok() {
+            console.success(&format!("Session title set to: {}", title));
+        } else {
+            console.warn("Failed to save session title.");
+        }
+    } else {
+        console.warn("Could not load session metadata.");
+    }
+
+    Ok(())
 }

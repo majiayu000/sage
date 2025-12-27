@@ -17,6 +17,8 @@ pub struct ConversationSession {
     pub metadata: HashMap<String, serde_json::Value>,
     /// Whether this is the first message in the conversation
     is_first_message: bool,
+    /// Current JSONL session ID for persistence
+    session_id: Option<String>,
 }
 
 impl ConversationSession {
@@ -28,7 +30,18 @@ impl ConversationSession {
             execution: None,
             metadata: HashMap::new(),
             is_first_message: true,
+            session_id: None,
         }
+    }
+
+    /// Get the current session ID
+    pub fn session_id(&self) -> Option<&str> {
+        self.session_id.as_deref()
+    }
+
+    /// Set the session ID
+    pub fn set_session_id(&mut self, id: impl Into<String>) {
+        self.session_id = Some(id.into());
     }
 
     /// Add a user message to the conversation
@@ -58,6 +71,7 @@ impl ConversationSession {
         self.execution = None;
         self.metadata.clear();
         self.is_first_message = true;
+        self.session_id = None;
     }
 
     /// Get conversation summary

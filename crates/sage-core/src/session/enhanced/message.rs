@@ -8,6 +8,13 @@ use std::collections::HashMap;
 use std::fmt;
 
 /// Enhanced message type identifier
+///
+/// Following Claude Code's message type design:
+/// - User/Assistant/System: Core conversation messages
+/// - ToolResult: Tool execution results
+/// - Summary: Auto-generated conversation summaries
+/// - CustomTitle: User-defined session titles
+/// - FileHistorySnapshot: File state backups for restoration
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EnhancedMessageType {
@@ -19,7 +26,11 @@ pub enum EnhancedMessageType {
     ToolResult,
     /// System message
     System,
-    /// File history snapshot
+    /// Auto-generated conversation summary
+    Summary,
+    /// User-defined custom title
+    CustomTitle,
+    /// File history snapshot for restoration
     FileHistorySnapshot,
 }
 
@@ -30,8 +41,28 @@ impl fmt::Display for EnhancedMessageType {
             Self::Assistant => write!(f, "assistant"),
             Self::ToolResult => write!(f, "tool_result"),
             Self::System => write!(f, "system"),
+            Self::Summary => write!(f, "summary"),
+            Self::CustomTitle => write!(f, "custom_title"),
             Self::FileHistorySnapshot => write!(f, "file_history_snapshot"),
         }
+    }
+}
+
+impl EnhancedMessageType {
+    /// Check if this is a metadata message type (not part of conversation)
+    pub fn is_metadata(&self) -> bool {
+        matches!(
+            self,
+            Self::Summary | Self::CustomTitle | Self::FileHistorySnapshot
+        )
+    }
+
+    /// Check if this is a conversation message type
+    pub fn is_conversation(&self) -> bool {
+        matches!(
+            self,
+            Self::User | Self::Assistant | Self::ToolResult | Self::System
+        )
     }
 }
 

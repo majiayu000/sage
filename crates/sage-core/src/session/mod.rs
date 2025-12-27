@@ -52,6 +52,7 @@ pub mod jsonl_storage;
 pub mod manager;
 pub mod session_cache;
 pub mod storage;
+pub mod summary;
 pub mod types;
 
 // Re-export main types
@@ -66,7 +67,10 @@ pub use session_cache::{
     McpServerCache, McpServerConfig, RecentSession, SessionCache, SessionCacheConfig,
     SessionCacheData, SessionCacheStats, ToolTrustSettings, UserPreferences,
 };
-pub use storage::{BoxedSessionStorage, FileSessionStorage, MemorySessionStorage, SessionStorage};
+pub use storage::{
+    BoxedSessionStorage, FileSessionStorage, MemorySessionStorage, SessionFilter, SessionStorage,
+};
+pub use summary::SummaryGenerator;
 pub use types::{
     ConversationMessage,
     // Enhanced types (Claude Code-inspired)
