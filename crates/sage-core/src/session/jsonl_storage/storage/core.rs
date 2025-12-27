@@ -95,6 +95,42 @@ impl JsonlSessionStorage {
         Ok(metadata)
     }
 
+    /// Initialize a new sidechain session (branched from a parent session)
+    ///
+    /// Creates a new session and marks it as a sidechain of the parent session.
+    /// This is used for conversation branching (Claude Code style).
+    pub async fn create_sidechain_session(
+        &self,
+        id: impl Into<String>,
+        parent_session_id: impl Into<String>,
+        working_directory: PathBuf,
+    ) -> SageResult<SessionMetadata> {
+        let id = id.into();
+        let parent_id = parent_session_id.into();
+        self.ensure_session_dir(&id).await?;
+
+        let mut metadata = SessionMetadata::new(&id, working_directory.clone());
+
+        // Detect git branch
+        let mut context = SessionContext::new(working_directory);
+        context.detect_git_branch();
+        if let Some(branch) = context.git_branch {
+            metadata = metadata.with_git_branch(branch);
+        }
+
+        // Mark as sidechain with parent reference
+        metadata = metadata.as_sidechain(&parent_id);
+
+        // Save initial metadata
+        self.save_metadata(&id, &metadata).await?;
+
+        info!(
+            "Created sidechain session: {} (parent: {})",
+            id, parent_id
+        );
+        Ok(metadata)
+    }
+
     /// Delete a session
     pub async fn delete_session(&self, id: &SessionId) -> SageResult<()> {
         let dir = self.session_dir(id);

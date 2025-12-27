@@ -29,6 +29,9 @@ pub struct Session {
     pub updated_at: DateTime<Utc>,
     /// Working directory for this session
     pub working_directory: PathBuf,
+    /// Associated Git branch (for branch-based session filtering)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub git_branch: Option<String>,
     /// Conversation messages
     pub messages: Vec<ConversationMessage>,
     /// Token usage statistics
@@ -56,6 +59,7 @@ impl Session {
             created_at: now,
             updated_at: now,
             working_directory,
+            git_branch: None,
             messages: Vec::new(),
             token_usage: TokenUsage::default(),
             state: SessionState::Active,
@@ -74,6 +78,7 @@ impl Session {
             created_at: now,
             updated_at: now,
             working_directory,
+            git_branch: None,
             messages: Vec::new(),
             token_usage: TokenUsage::default(),
             state: SessionState::Active,
@@ -81,6 +86,12 @@ impl Session {
             model: None,
             metadata: HashMap::new(),
         }
+    }
+
+    /// Set the git branch
+    pub fn with_git_branch(mut self, branch: impl Into<String>) -> Self {
+        self.git_branch = Some(branch.into());
+        self
     }
 
     /// Set the session name

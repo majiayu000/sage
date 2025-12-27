@@ -135,3 +135,19 @@ If no plan exists:
         }
     }
 }
+
+/// Execute /title command - set custom session title (Claude Code style)
+pub(super) async fn execute_title(invocation: &CommandInvocation) -> SageResult<CommandResult> {
+    // Join all arguments as the title
+    let title = invocation.arguments.join(" ");
+
+    if title.is_empty() {
+        Ok(CommandResult::local(
+            "Usage: /title <title>\n\nSet a custom title for the current session.\nExample: /title Fix authentication bug",
+        ))
+    } else {
+        // Return an interactive command that the CLI will handle
+        Ok(CommandResult::interactive(InteractiveCommand::Title { title })
+            .with_status("Setting session title..."))
+    }
+}

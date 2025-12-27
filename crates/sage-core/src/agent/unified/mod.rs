@@ -72,6 +72,8 @@ pub struct UnifiedExecutor {
     current_session_id: Option<String>,
     /// File snapshot tracker for undo capability
     file_tracker: FileSnapshotTracker,
+    /// Message count at last summary update (for throttling summary generation)
+    last_summary_msg_count: usize,
 }
 
 impl UnifiedExecutor {

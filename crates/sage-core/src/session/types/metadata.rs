@@ -27,6 +27,8 @@ pub struct SessionSummary {
     pub updated_at: DateTime<Utc>,
     /// Working directory
     pub working_directory: PathBuf,
+    /// Associated Git branch
+    pub git_branch: Option<String>,
     /// Number of messages
     pub message_count: usize,
     /// Session state
@@ -43,6 +45,7 @@ impl From<&Session> for SessionSummary {
             created_at: session.created_at,
             updated_at: session.updated_at,
             working_directory: session.working_directory.clone(),
+            git_branch: session.git_branch.clone(),
             message_count: session.messages.len(),
             state: session.state,
             model: session.model.clone(),

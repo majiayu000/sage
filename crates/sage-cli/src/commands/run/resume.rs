@@ -16,6 +16,10 @@ pub async fn handle_interactive_command(
             session_id,
             show_all,
         } => handle_resume_command(session_id.clone(), *show_all, console).await,
+        InteractiveCommand::Title { .. } => {
+            console.warn("The /title command is only available in interactive mode.");
+            Ok(())
+        }
     }
 }
 

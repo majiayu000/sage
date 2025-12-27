@@ -230,6 +230,10 @@ pub enum InteractiveCommand {
         session_id: Option<String>,
         show_all: bool,
     },
+    /// Set custom title for current session (Claude Code style)
+    Title {
+        title: String,
+    },
 }
 
 /// Command execution result
