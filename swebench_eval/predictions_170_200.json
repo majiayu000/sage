@@ -1,0 +1,152 @@
+[
+  {
+    "instance_id": "pytest-dev__pytest-5221",
+    "model_patch": "diff --git a/src/_pytest/python.py b/src/_pytest/python.py\nindex 377357846..a30f14fb6 100644\n--- a/src/_pytest/python.py\n+++ b/src/_pytest/python.py\n@@ -1347,6 +1347,7 @@ def _showfixtures_main(config, session):\n         else:\n             funcargspec = argname\n         tw.line(funcargspec, green=True)\n+        tw.line(\"    scope: %s\" % (fixturedef.scope,), yellow=True)\n         loc = getlocation(fixturedef.func, curdir)\n         doc = fixturedef.func.__doc__ or \"\"\n         if doc:",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "pytest-dev__pytest-5227",
+    "model_patch": "diff --git a/src/_pytest/logging.py b/src/_pytest/logging.py\nindex 757cb2797..08670d2b2 100644\n--- a/src/_pytest/logging.py\n+++ b/src/_pytest/logging.py\n@@ -15,7 +15,7 @@ from _pytest.compat import dummy_context_manager\n from _pytest.config import create_terminal_writer\n from _pytest.pathlib import Path\n \n-DEFAULT_LOG_FORMAT = \"%(filename)-25s %(lineno)4d %(levelname)-8s %(message)s\"\n+DEFAULT_LOG_FORMAT = \"%(levelname)-8s %(name)s:%(filename)s:%(lineno)d %(message)s\"\n DEFAULT_LOG_DATE_FORMAT = \"%H:%M:%S\"",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "pytest-dev__pytest-5413",
+    "model_patch": "diff --git a/src/_pytest/_code/code.py b/src/_pytest/_code/code.py\nindex c4ed961ac..d270e4eb6 100644\n--- a/src/_pytest/_code/code.py\n+++ b/src/_pytest/_code/code.py\n@@ -539,7 +539,8 @@ class ExceptionInfo:\n             return repr(self)\n         entry = self.traceback[-1]\n         loc = ReprFileLocation(entry.path, entry.lineno + 1, self.exconly())\n-        return str(loc)\n+        # Return the full exception message, not truncated by ReprFileLocation\n+        return str(self.value)\n \n     def match(self, regexp):\n         \"\"\"",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "pytest-dev__pytest-5495",
+    "model_patch": "diff --git a/src/_pytest/assertion/util.py b/src/_pytest/assertion/util.py\nindex 762e5761d..34d757c52 100644\n--- a/src/_pytest/assertion/util.py\n+++ b/src/_pytest/assertion/util.py\n@@ -268,20 +268,28 @@ def _compare_eq_sequence(left, right, verbose=0):\n     if len_diff:\n         if len_diff > 0:\n             dir_with_more = \"Left\"\n-            extra = saferepr(left[len_right])\n+            extra = left[len_right]\n         else:\n             len_diff = 0 - len_diff\n             dir_with_more = \"Right\"\n-            extra = saferepr(right[len_left])\n+            extra = right[len_left]\n+\n+        # Format bytes values more clearly\n+        if isinstance(extra, int) and isinstance(left, (bytes, bytearray)):\n+            extra_repr = \"{!r} ({})\".format(bytes([extra]), extra)\n+        elif isinstance(extra, int) and isinstance(right, (bytes, bytearray)):\n+            extra_repr = \"{!r} ({})\".format(bytes([extra]), extra)\n+        else:\n+            extra_repr = saferepr(extra)\n \n         if len_diff == 1:\n             explanation += [\n-                \"{} contains one more item: {}\".format(dir_with_more, extra)\n+                \"{} contains one more item: {}\".format(dir_with_more, extra_repr)\n             ]\n         else:\n             explanation += [\n                 \"%s contains %d more items, first extra item: %s\"\n-                % (dir_with_more, len_diff, extra)\n+                % (dir_with_more, len_diff, extra_repr)\n             ]\n     return explanation",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "pytest-dev__pytest-5692",
+    "model_patch": "diff --git a/src/_pytest/junitxml.py b/src/_pytest/junitxml.py\nindex 15c630b1d..15f4b43c6 100644\n--- a/src/_pytest/junitxml.py\n+++ b/src/_pytest/junitxml.py\n@@ -11,6 +11,7 @@ src/main/resources/org/jenkinsci/plugins/xunit/types/model/xsd/junit-10.xsd\n import functools\n import os\n import re\n+import socket\n import sys\n import time\n \n@@ -666,6 +667,8 @@ class LogXML:\n             skipped=self.stats[\"skipped\"],\n             tests=numtests,\n             time=\"%.3f\" % suite_time_delta,\n+            timestamp=time.strftime(\"%Y-%m-%dT%H:%M:%S\", time.gmtime(self.suite_start_time)),\n+            hostname=socket.gethostname(),\n         )\n         logfile.write(Junit.testsuites([suite_node]).unicode(indent=0))\n         logfile.close()",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "pytest-dev__pytest-6116",
+    "model_patch": "diff --git a/src/_pytest/main.py b/src/_pytest/main.py\nindex 843c5b5f7..78c580395 100644\n--- a/src/_pytest/main.py\n+++ b/src/_pytest/main.py\n@@ -107,6 +107,7 @@ def pytest_addoption(parser):\n \n     group = parser.getgroup(\"collect\", \"collection\")\n     group.addoption(\n+        \"-C\",\n         \"--collectonly\",\n         \"--collect-only\",\n         action=\"store_true\",",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "pytest-dev__pytest-7168",
+    "model_patch": "diff --git a/src/_pytest/_io/saferepr.py b/src/_pytest/_io/saferepr.py\nindex 23af4d0bb..25f1d0e12 100644\n--- a/src/_pytest/_io/saferepr.py\n+++ b/src/_pytest/_io/saferepr.py\n@@ -19,8 +19,21 @@ def _format_repr_exception(exc: BaseException, obj: Any) -> str:\n         raise\n     except BaseException as exc:\n         exc_info = \"unpresentable exception ({})\".format(_try_repr_or_str(exc))\n+    # Protect against __getattribute__ and other failures when accessing object attributes\n+    try:\n+        class_name = obj.__class__.__name__\n+    except (KeyboardInterrupt, SystemExit):\n+        raise\n+    except BaseException:\n+        class_name = \"<unknown type>\"\n+    try:\n+        obj_id = id(obj)\n+    except (KeyboardInterrupt, SystemExit):\n+        raise\n+    except BaseException:\n+        obj_id = 0\n     return \"<[{} raised in repr()] {} object at 0x{:x}>\".format(\n-        exc_info, obj.__class__.__name__, id(obj)\n+        exc_info, class_name, obj_id\n     )\n \n \ndiff --git a/testing/io/test_saferepr.py b/testing/io/test_saferepr.py\nindex 06084202e..2e4583c57 100644\n--- a/testing/io/test_saferepr.py\n+++ b/testing/io/test_saferepr.py\n@@ -154,3 +154,19 @@ def test_pformat_dispatch():\n     assert _pformat_dispatch(\"a\") == \"'a'\"\n     assert _pformat_dispatch(\"a\" * 10, width=5) == \"'aaaaaaaaaa'\"\n     assert _pformat_dispatch(\"foo bar\", width=5) == \"('foo '\\n 'bar')\"\n+\n+\n+def test_broken_getattribute():\n+    \"\"\"Test saferepr() when both __getattribute__ and __repr__ raise exceptions.\"\"\"\n+    class SomeClass:\n+        def __getattribute__(self, attr):\n+            raise\n+\n+        def __repr__(self):\n+            raise\n+\n+    # This should not raise INTERNALERROR\n+    s = saferepr(SomeClass())\n+    # Should contain the class name or fallback\n+    assert \"SomeClass\" in s or \"<unknown type>\" in s\n+    assert \"0x\" in s  # Should contain hex address",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "pytest-dev__pytest-7220",
+    "model_patch": "diff --git a/src/_pytest/_code/code.py b/src/_pytest/_code/code.py\nindex 7b17d7612..35a8b541f 100644\n--- a/src/_pytest/_code/code.py\n+++ b/src/_pytest/_code/code.py\n@@ -575,6 +575,7 @@ class ExceptionInfo(Generic[_E]):\n         funcargs: bool = False,\n         truncate_locals: bool = True,\n         chain: bool = True,\n+        initialpaths: Optional[Tuple[Any, ...]] = None,\n     ) -> Union[\"ReprExceptionInfo\", \"ExceptionChainRepr\"]:\n         \"\"\"\n         Return str()able representation of this exception info.\n@@ -600,6 +601,10 @@ class ExceptionInfo(Generic[_E]):\n \n         :param bool chain: if chained exceptions in Python 3 should be shown.\n \n+        :param initialpaths:\n+            Optional tuple of initial paths for computing relative paths.\n+            This ensures paths remain consistent even if tests change the working directory.\n+\n         .. versionchanged:: 3.9\n \n             Added the ``chain`` parameter.\n@@ -623,6 +628,7 @@ class ExceptionInfo(Generic[_E]):\n             truncate_locals=truncate_locals,\n             chain=chain,\n         )\n+        fmt._initialpaths = initialpaths\n         return fmt.repr_excinfo(self)\n \n     def match(self, regexp: \"Union[str, Pattern]\") -> \"Literal[True]\":\n@@ -656,6 +662,9 @@ class FormattedExcinfo:\n     truncate_locals = attr.ib(type=bool, default=True)\n     chain = attr.ib(type=bool, default=True)\n     astcache = attr.ib(default=attr.Factory(dict), init=False, repr=False)\n+    # The directory where pytest was invoked - used for computing relative paths\n+    # to ensure paths remain consistent even if tests change the working directory.\n+    _initialpaths = attr.ib(type=Optional[Tuple[Any, ...]], default=None, init=False, repr=False)\n \n     def _getindent(self, source: \"Source\") -> int:\n         # figure out indent for given source\n@@ -790,8 +799,17 @@ class FormattedExcinfo:\n \n     def _makepath(self, path):\n         if not self.abspath:\n+            # Use the initial working directory (invocation directory) for computing\n+            # relative paths to ensure paths remain consistent even if tests change\n+            # the working directory via fixtures.\n             try:\n-                np = py.path.local().bestrelpath(path)\n+                if self._initialpaths:\n+                    # Use the first initial path as the base directory for relative paths\n+                    base = self._initialpaths[0]\n+                    np = base.bestrelpath(path)\n+                else:\n+                    # Fallback to current directory if no initial paths available\n+                    np = py.path.local().bestrelpath(path)\n             except OSError:\n                 return path\n             if len(np) < len(str(path)):\ndiff --git a/src/_pytest/config/__init__.py b/src/_pytest/config/__init__.py\nindex bb5034ab1..898eb6037 100644\n--- a/src/_pytest/config/__init__.py\n+++ b/src/_pytest/config/__init__.py\n@@ -897,7 +897,10 @@ class Config:\n         else:\n             style = \"native\"\n         excrepr = excinfo.getrepr(\n-            funcargs=True, showlocals=getattr(option, \"showlocals\", False), style=style\n+            funcargs=True,\n+            showlocals=getattr(option, \"showlocals\", False),\n+            style=style,\n+            initialpaths=self.getinitialnodes(),\n         )\n         res = self.hook.pytest_internalerror(excrepr=excrepr, excinfo=excinfo)\n         if not any(res):\ndiff --git a/src/_pytest/nodes.py b/src/_pytest/nodes.py\nindex 4a79bc861..28128a991 100644\n--- a/src/_pytest/nodes.py\n+++ b/src/_pytest/nodes.py\n@@ -374,6 +374,7 @@ class Node(metaclass=NodeMeta):\n             style=style,\n             tbfilter=False,  # pruned already, or in --fulltrace mode.\n             truncate_locals=truncate_locals,\n+            initialpaths=self.config.getinitialnodes(),\n         )\n \n     def repr_failure(\ndiff --git a/src/_pytest/python.py b/src/_pytest/python.py\nindex 76fccb4a1..635de36fb 100644\n--- a/src/_pytest/python.py\n+++ b/src/_pytest/python.py\n@@ -515,7 +515,11 @@ class Module(nodes.File, PyCollector):\n         try:\n             mod = self.fspath.pyimport(ensuresyspath=importmode)\n         except SyntaxError:\n-            raise self.CollectError(ExceptionInfo.from_current().getrepr(style=\"short\"))\n+            raise self.CollectError(\n+                ExceptionInfo.from_current().getrepr(\n+                    style=\"short\", initialpaths=self.config.getinitialnodes()\n+                )\n+            )\n         except self.fspath.ImportMismatchError as e:\n             raise self.CollectError(\n                 \"import file mismatch:\\n\"\n@@ -531,7 +535,7 @@ class Module(nodes.File, PyCollector):\n             if self.config.getoption(\"verbose\") < 2:\n                 exc_info.traceback = exc_info.traceback.filter(filter_traceback)\n             exc_repr = (\n-                exc_info.getrepr(style=\"short\")\n+                exc_info.getrepr(style=\"short\", initialpaths=self.config.getinitialnodes())\n                 if exc_info.traceback\n                 else exc_info.exconly()\n             )\ndiff --git a/src/_pytest/terminal.py b/src/_pytest/terminal.py\nindex 8ecb5a16b..250fbeda1 100644\n--- a/src/_pytest/terminal.py\n+++ b/src/_pytest/terminal.py\n@@ -754,7 +754,9 @@ class TerminalReporter:\n         self.summary_warnings()\n \n     def pytest_keyboard_interrupt(self, excinfo):\n-        self._keyboardinterrupt_memo = excinfo.getrepr(funcargs=True)\n+        self._keyboardinterrupt_memo = excinfo.getrepr(\n+            funcargs=True, initialpaths=self.config.getinitialnodes()\n+        )\n \n     def pytest_unconfigure(self):\n         if hasattr(self, \"_keyboardinterrupt_memo\"):",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "pytest-dev__pytest-7373",
+    "model_patch": "diff --git a/src/_pytest/mark/evaluate.py b/src/_pytest/mark/evaluate.py\nindex 759191668..7bed8084e 100644\n--- a/src/_pytest/mark/evaluate.py\n+++ b/src/_pytest/mark/evaluate.py\n@@ -10,25 +10,7 @@ from typing import Optional\n from ..outcomes import fail\n from ..outcomes import TEST_OUTCOME\n from .structures import Mark\n-from _pytest.config import Config\n from _pytest.nodes import Item\n-from _pytest.store import StoreKey\n-\n-\n-evalcache_key = StoreKey[Dict[str, Any]]()\n-\n-\n-def cached_eval(config: Config, expr: str, d: Dict[str, object]) -> Any:\n-    default = {}  # type: Dict[str, object]\n-    evalcache = config._store.setdefault(evalcache_key, default)\n-    try:\n-        return evalcache[expr]\n-    except KeyError:\n-        import _pytest._code\n-\n-        exprcode = _pytest._code.compile(expr, mode=\"eval\")\n-        evalcache[expr] = x = eval(exprcode, d)\n-        return x\n \n \n class MarkEvaluator:\n@@ -98,7 +80,10 @@ class MarkEvaluator:\n                     self.expr = expr\n                     if isinstance(expr, str):\n                         d = self._getglobals()\n-                        result = cached_eval(self.item.config, expr, d)\n+                        import _pytest._code\n+\n+                        exprcode = _pytest._code.compile(expr, mode=\"eval\")\n+                        result = eval(exprcode, d)\n                     else:\n                         if \"reason\" not in mark.kwargs:\n                             # XXX better be checked at collection time",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "pytest-dev__pytest-7432",
+    "model_patch": "diff --git a/src/_pytest/skipping.py b/src/_pytest/skipping.py\nindex 7bd975e5a..a3c9d53b4 100644\n--- a/src/_pytest/skipping.py\n+++ b/src/_pytest/skipping.py\n@@ -270,29 +270,29 @@ def pytest_runtest_makereport(item: Item, call: CallInfo[None]):\n         else:\n             rep.longrepr = \"Unexpected success\"\n         rep.outcome = \"failed\"\n-    elif item.config.option.runxfail:\n-        pass  # don't interfere\n-    elif call.excinfo and isinstance(call.excinfo.value, xfail.Exception):\n-        assert call.excinfo.value.msg is not None\n-        rep.wasxfail = \"reason: \" + call.excinfo.value.msg\n-        rep.outcome = \"skipped\"\n-    elif not rep.skipped and xfailed:\n-        if call.excinfo:\n-            raises = xfailed.raises\n-            if raises is not None and not isinstance(call.excinfo.value, raises):\n-                rep.outcome = \"failed\"\n-            else:\n-                rep.outcome = \"skipped\"\n-                rep.wasxfail = xfailed.reason\n-        elif call.when == \"call\":\n-            if xfailed.strict:\n-                rep.outcome = \"failed\"\n-                rep.longrepr = \"[XPASS(strict)] \" + xfailed.reason\n-            else:\n-                rep.outcome = \"passed\"\n-                rep.wasxfail = xfailed.reason\n-    elif (\n-        item._store.get(skipped_by_mark_key, True)\n+    elif not item.config.option.runxfail:\n+        if call.excinfo and isinstance(call.excinfo.value, xfail.Exception):\n+            assert call.excinfo.value.msg is not None\n+            rep.wasxfail = \"reason: \" + call.excinfo.value.msg\n+            rep.outcome = \"skipped\"\n+        elif not rep.skipped and xfailed:\n+            if call.excinfo:\n+                raises = xfailed.raises\n+                if raises is not None and not isinstance(call.excinfo.value, raises):\n+                    rep.outcome = \"failed\"\n+                else:\n+                    rep.outcome = \"skipped\"\n+                    rep.wasxfail = xfailed.reason\n+            elif call.when == \"call\":\n+                if xfailed.strict:\n+                    rep.outcome = \"failed\"\n+                    rep.longrepr = \"[XPASS(strict)] \" + xfailed.reason\n+                else:\n+                    rep.outcome = \"passed\"\n+                    rep.wasxfail = xfailed.reason\n+\n+    if (\n+        item._store.get(skipped_by_mark_key, False)\n         and rep.skipped\n         and type(rep.longrepr) is tuple\n     ):",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "pytest-dev__pytest-7490",
+    "model_patch": "diff --git a/src/_pytest/skipping.py b/src/_pytest/skipping.py\nindex 335e10996..11a82ba2d 100644\n--- a/src/_pytest/skipping.py\n+++ b/src/_pytest/skipping.py\n@@ -238,10 +238,9 @@ def pytest_runtest_setup(item: Item) -> None:\n         item._store[skipped_by_mark_key] = True\n         skip(skipped.reason)\n \n-    if not item.config.option.runxfail:\n-        item._store[xfailed_key] = xfailed = evaluate_xfail_marks(item)\n-        if xfailed and not xfailed.run:\n-            xfail(\"[NOTRUN] \" + xfailed.reason)\n+    item._store[xfailed_key] = xfailed = evaluate_xfail_marks(item)\n+    if xfailed and not item.config.option.runxfail and not xfailed.run:\n+        xfail(\"[NOTRUN] \" + xfailed.reason)\n \n \n @hookimpl(hookwrapper=True)\n@@ -250,12 +249,16 @@ def pytest_runtest_call(item: Item) -> Generator[None, None, None]:\n     if xfailed is None:\n         item._store[xfailed_key] = xfailed = evaluate_xfail_marks(item)\n \n-    if not item.config.option.runxfail:\n-        if xfailed and not xfailed.run:\n-            xfail(\"[NOTRUN] \" + xfailed.reason)\n+    if xfailed and not item.config.option.runxfail and not xfailed.run:\n+        xfail(\"[NOTRUN] \" + xfailed.reason)\n \n     yield\n \n+    # The test run may have added an xfail mark dynamically.\n+    xfailed = item._store.get(xfailed_key, None)\n+    if xfailed is None:\n+        item._store[xfailed_key] = xfailed = evaluate_xfail_marks(item)\n+\n \n @hookimpl(hookwrapper=True)\n def pytest_runtest_makereport(item: Item, call: CallInfo[None]):",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "pytest-dev__pytest-8365",
+    "model_patch": "diff --git a/src/_pytest/tmpdir.py b/src/_pytest/tmpdir.py\nindex 29c7e19d7..038b724b7 100644\n--- a/src/_pytest/tmpdir.py\n+++ b/src/_pytest/tmpdir.py\n@@ -154,7 +154,12 @@ def get_user() -> Optional[str]:\n     import getpass\n \n     try:\n-        return getpass.getuser()\n+        # Sanitize the username to only include characters valid for\n+        # directory names (#8365).\n+        user = getpass.getuser()\n+        # Replace any character that is not alphanumeric or underscore with underscore\n+        user = re.sub(r\"[^\\w]\", \"_\", user)\n+        return user\n     except (ImportError, KeyError):\n         return None\n \ndiff --git a/testing/test_tmpdir.py b/testing/test_tmpdir.py\nindex d123287aa..1c01617dd 100644\n--- a/testing/test_tmpdir.py\n+++ b/testing/test_tmpdir.py\n@@ -246,6 +246,32 @@ def test_get_user(monkeypatch):\n     assert get_user() is None\n \n \n+def test_get_user_with_illegal_characters(monkeypatch, tmp_path):\n+    \"\"\"Test that get_user() sanitizes usernames with illegal characters (#8365).\"\"\"\n+    # Mock getpass.getuser to return a username with illegal characters\n+    import getpass\n+\n+    # Test with a domain username like \"contoso\\john_doe\"\n+    monkeypatch.setattr(getpass, \"getuser\", lambda: \"contoso\\\\john_doe\")\n+    assert get_user() == \"contoso_john_doe\"\n+\n+    # Test with other illegal characters\n+    monkeypatch.setattr(getpass, \"getuser\", lambda: \"user/name:with*illegal?chars\")\n+    assert get_user() == \"user_name_with_illegal_chars\"\n+\n+    # Test that valid usernames are unchanged\n+    monkeypatch.setattr(getpass, \"getuser\", lambda: \"john_doe\")\n+    assert get_user() == \"john_doe\"\n+\n+    # Test that the sanitized username can be used to create a directory\n+    monkeypatch.setattr(getpass, \"getuser\", lambda: \"contoso\\\\john_doe\")\n+    config = cast(Config, FakeConfig(tmp_path))\n+    t = TempPathFactory.from_config(config, _ispytest=True)\n+    # This should not raise an error\n+    basetemp = t.getbasetemp()\n+    assert basetemp.exists()\n+\n+\n class TestNumberedDir:\n     PREFIX = \"fun-\"",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "pytest-dev__pytest-8906",
+    "model_patch": "diff --git a/src/_pytest/python.py b/src/_pytest/python.py\nindex 79dfb7320..0d0729c86 100644\n--- a/src/_pytest/python.py\n+++ b/src/_pytest/python.py\n@@ -610,8 +610,9 @@ class Module(nodes.File, PyCollector):\n             raise self.CollectError(\n                 \"Using pytest.skip outside of a test is not allowed. \"\n                 \"To decorate a test function, use the @pytest.mark.skip \"\n-                \"or @pytest.mark.skipif decorators instead, and to skip a \"\n-                \"module use `pytestmark = pytest.mark.{skip,skipif}.\"\n+                \"or @pytest.mark.skipif decorators instead. \"\n+                \"To skip a module, use `pytest.skip(..., allow_module_level=True)` \"\n+                \"or `pytestmark = pytest.mark.{skip,skipif}.\"\n             ) from e\n         self.config.pluginmanager.consider_module(mod)\n         return mod",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "pytest-dev__pytest-9359",
+    "model_patch": "diff --git a/src/_pytest/_code/source.py b/src/_pytest/_code/source.py\nindex 6f54057c0..53c941eda 100644\n--- a/src/_pytest/_code/source.py\n+++ b/src/_pytest/_code/source.py\n@@ -149,7 +149,20 @@ def get_statement_startend2(lineno: int, node: ast.AST) -> Tuple[int, Optional[i\n     values: List[int] = []\n     for x in ast.walk(node):\n         if isinstance(x, (ast.stmt, ast.ExceptHandler)):\n-            values.append(x.lineno - 1)\n+            # For functions, async functions, and classes with decorators,\n+            # the lineno points to the first decorator in Python 3.9.0-3.9.4.\n+            # We need to use the line of the actual definition instead.\n+            if isinstance(x, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):\n+                if x.decorator_list:\n+                    # Use the line of the first decorator (1-indexed).\n+                    # This ensures that decorators are not included in the\n+                    # statement range of the previous statement.\n+                    # Convert to 0-indexed by subtracting 1.\n+                    values.append(x.decorator_list[0].lineno - 1)\n+                else:\n+                    values.append(x.lineno - 1)\n+            else:\n+                values.append(x.lineno - 1)\n             for name in (\"finalbody\", \"orelse\"):\n                 val: Optional[List[ast.stmt]] = getattr(x, name, None)\n                 if val:",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "scikit-learn__scikit-learn-10297",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "scikit-learn__scikit-learn-10508",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "scikit-learn__scikit-learn-10949",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "scikit-learn__scikit-learn-11040",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "scikit-learn__scikit-learn-11281",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "scikit-learn__scikit-learn-12471",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "scikit-learn__scikit-learn-13142",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "scikit-learn__scikit-learn-13241",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "scikit-learn__scikit-learn-13439",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "scikit-learn__scikit-learn-13496",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "scikit-learn__scikit-learn-13497",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "scikit-learn__scikit-learn-13584",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "scikit-learn__scikit-learn-13779",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "scikit-learn__scikit-learn-14087",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "scikit-learn__scikit-learn-14092",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "scikit-learn__scikit-learn-14894",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  }
+]

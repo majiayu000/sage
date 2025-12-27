@@ -1,0 +1,247 @@
+[
+  {
+    "instance_id": "scikit-learn__scikit-learn-14983",
+    "model_patch": "diff --git a/sklearn/model_selection/_split.py b/sklearn/model_selection/_split.py\nindex c49a3ce6ae..bfd30dae5a 100644\n--- a/sklearn/model_selection/_split.py\n+++ b/sklearn/model_selection/_split.py\n@@ -1163,6 +1163,9 @@ class _RepeatedSplits(metaclass=ABCMeta):\n                      **self.cvargs)\n         return cv.get_n_splits(X, y, groups) * self.n_repeats\n \n+    def __repr__(self):\n+        return _build_repr(self)\n+\n \n class RepeatedKFold(_RepeatedSplits):\n     \"\"\"Repeated K-Fold cross validator.",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "scikit-learn__scikit-learn-15512",
+    "model_patch": "diff --git a/sklearn/cluster/_affinity_propagation.py b/sklearn/cluster/_affinity_propagation.py\nindex 4806afee90..26bd25490d 100644\n--- a/sklearn/cluster/_affinity_propagation.py\n+++ b/sklearn/cluster/_affinity_propagation.py\n@@ -151,6 +151,7 @@ def affinity_propagation(S, preference=None, convergence_iter=15, max_iter=200,\n     e = np.zeros((n_samples, convergence_iter))\n \n     ind = np.arange(n_samples)\n+    converged = False\n \n     for it in range(max_iter):\n         # tmp = A + S; compute responsibilities\n@@ -193,10 +194,14 @@ def affinity_propagation(S, preference=None, convergence_iter=15, max_iter=200,\n             se = np.sum(e, axis=1)\n             unconverged = (np.sum((se == convergence_iter) + (se == 0))\n                            != n_samples)\n-            if (not unconverged and (K > 0)) or (it == max_iter):\n+            if (not unconverged and (K > 0)):\n+                converged = True\n                 if verbose:\n                     print(\"Converged after %d iterations.\" % it)\n                 break\n+            elif it == max_iter - 1:\n+                # Reached max_iter without convergence\n+                break\n     else:\n         if verbose:\n             print(\"Did not converge\")\n@@ -204,7 +209,7 @@ def affinity_propagation(S, preference=None, convergence_iter=15, max_iter=200,\n     I = np.flatnonzero(E)\n     K = I.size  # Identify exemplars\n \n-    if K > 0:\n+    if K > 0 and converged:\n         c = np.argmax(S[:, I], axis=1)\n         c[I] = np.arange(K)  # Identify clusters\n         # Refine the final set of exemplars and clusters and return results",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "scikit-learn__scikit-learn-15535",
+    "model_patch": "diff --git a/sklearn/metrics/cluster/_supervised.py b/sklearn/metrics/cluster/_supervised.py\nindex 4bddae35c9..869237f566 100644\n--- a/sklearn/metrics/cluster/_supervised.py\n+++ b/sklearn/metrics/cluster/_supervised.py\n@@ -43,10 +43,10 @@ def check_clusterings(labels_true, labels_pred):\n         The predicted labels.\n     \"\"\"\n     labels_true = check_array(\n-        labels_true, ensure_2d=False, ensure_min_samples=0\n+        labels_true, ensure_2d=False, ensure_min_samples=0, dtype=None\n     )\n     labels_pred = check_array(\n-        labels_pred, ensure_2d=False, ensure_min_samples=0\n+        labels_pred, ensure_2d=False, ensure_min_samples=0, dtype=None\n     )\n \n     # input checks",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "scikit-learn__scikit-learn-25500",
+    "model_patch": "diff --git a/sklearn/calibration.py b/sklearn/calibration.py\nindex 2c4a33616d..34aadd2e9b 100644\n--- a/sklearn/calibration.py\n+++ b/sklearn/calibration.py\n@@ -760,7 +760,7 @@ class _CalibratedClassifier:\n                 # When binary, `predictions` consists only of predictions for\n                 # clf.classes_[1] but `pos_class_indices` = 0\n                 class_idx += 1\n-            proba[:, class_idx] = calibrator.predict(this_pred)\n+            proba[:, class_idx] = np.asarray(calibrator.predict(this_pred)).ravel()\n \n         # Normalize the probabilities\n         if n_classes == 2:",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "scikit-learn__scikit-learn-25570",
+    "model_patch": "diff --git a/sklearn/compose/_column_transformer.py b/sklearn/compose/_column_transformer.py\nindex a261451177..52e653222a 100644\n--- a/sklearn/compose/_column_transformer.py\n+++ b/sklearn/compose/_column_transformer.py\n@@ -381,18 +381,18 @@ class ColumnTransformer(TransformerMixin, _BaseComposition):\n         output_config = _get_output_config(\"transform\", self)\n         for name, trans, columns in transformers:\n             if replace_strings:\n-                # replace 'passthrough' with identity transformer and\n-                # skip in case of 'drop'\n+                # skip in case of 'drop' or empty column selection\n+                if trans == \"drop\":\n+                    continue\n+                if _is_empty_column_selection(columns):\n+                    continue\n+                # replace 'passthrough' with identity transformer\n                 if trans == \"passthrough\":\n                     trans = FunctionTransformer(\n                         accept_sparse=True,\n                         check_inverse=False,\n                         feature_names_out=\"one-to-one\",\n                     ).set_output(transform=output_config[\"dense\"])\n-                elif trans == \"drop\":\n-                    continue\n-                elif _is_empty_column_selection(columns):\n-                    continue\n \n             if column_as_strings:\n                 # Convert all columns to using their string labels",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "scikit-learn__scikit-learn-25638",
+    "model_patch": "diff --git a/sklearn/utils/multiclass.py b/sklearn/utils/multiclass.py\nindex 5eaef2fde8..bdf74667ba 100644\n--- a/sklearn/utils/multiclass.py\n+++ b/sklearn/utils/multiclass.py\n@@ -340,9 +340,24 @@ def type_of_target(y, input_name=\"\"):\n             return \"binary\"  # []\n         # 2-D empty array: [[]]\n         return \"unknown\"\n-    if not issparse(y) and y.dtype == object and not isinstance(y.flat[0], str):\n-        # [obj_1] and not [\"label_1\"]\n-        return \"unknown\"\n+    if not issparse(y) and y.dtype == object:\n+        if not isinstance(y.flat[0], str):\n+            # Check if this is a pandas nullable dtype array with numeric/boolean values\n+            # Try to infer the appropriate dtype by checking if all elements are numeric\n+            try:\n+                # Try to convert to float - this will work for numeric values from nullable dtypes\n+                y_converted = xp.asarray(y, dtype=float)\n+                # Check if the conversion preserved the data (not all NaN)\n+                if not xp.all(xp.isnan(y_converted)):\n+                    # Conversion successful - use the converted array\n+                    y = y_converted\n+            except (TypeError, ValueError):\n+                # Conversion failed - these are actual objects, not numeric\n+                pass\n+\n+        if y.dtype == object:\n+            # [obj_1] and not [\"label_1\"]\n+            return \"unknown\"\n \n     # Check if multioutput\n     if y.ndim == 2 and y.shape[1] > 1:",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "scikit-learn__scikit-learn-25747",
+    "model_patch": "diff --git a/sklearn/utils/_set_output.py b/sklearn/utils/_set_output.py\nindex 335773c6af..bdd917dd9d 100644\n--- a/sklearn/utils/_set_output.py\n+++ b/sklearn/utils/_set_output.py\n@@ -55,7 +55,7 @@ def _wrap_in_pandas_container(\n     if isinstance(data_to_wrap, pd.DataFrame):\n         if columns is not None:\n             data_to_wrap.columns = columns\n-        if index is not None:\n+        if index is not None and len(data_to_wrap.index) == len(index):\n             data_to_wrap.index = index\n         return data_to_wrap",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sphinx-doc__sphinx-10325",
+    "model_patch": "diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py\nindex 62631f7ff..d1a83ed69 100644\n--- a/sphinx/ext/autodoc/__init__.py\n+++ b/sphinx/ext/autodoc/__init__.py\n@@ -109,12 +109,12 @@ def exclude_members_option(arg: Any) -> Union[object, Set[str]]:\n     return {x.strip() for x in arg.split(',') if x.strip()}\n \n \n-def inherited_members_option(arg: Any) -> Union[object, Set[str]]:\n-    \"\"\"Used to convert the :members: option to auto directives.\"\"\"\n+def inherited_members_option(arg: Any) -> Union[object, List[str]]:\n+    \"\"\"Used to convert the :inherited-members: option to auto directives.\"\"\"\n     if arg in (None, True):\n-        return 'object'\n+        return ['object']\n     else:\n-        return arg\n+        return [x.strip() for x in arg.split(',') if x.strip()]\n \n \n def member_order_option(arg: Any) -> Optional[str]:\n@@ -682,7 +682,7 @@ class Documenter:\n         def is_filtered_inherited_member(name: str, obj: Any) -> bool:\n             if inspect.isclass(self.object):\n                 for cls in self.object.__mro__:\n-                    if cls.__name__ == self.options.inherited_members and cls != self.object:\n+                    if cls.__name__ in self.options.inherited_members and cls != self.object:\n                         # given member is a member of specified *super class*\n                         return True\n                     elif name in cls.__dict__:",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sphinx-doc__sphinx-10451",
+    "model_patch": "diff --git a/sphinx/ext/autodoc/typehints.py b/sphinx/ext/autodoc/typehints.py\nindex d912cd7d5..39878b5e1 100644\n--- a/sphinx/ext/autodoc/typehints.py\n+++ b/sphinx/ext/autodoc/typehints.py\n@@ -115,7 +115,15 @@ def modify_field_list(node: nodes.field_list, annotations: Dict[str, str],\n         if name == 'return':\n             continue\n \n+        # Check if this parameter is already documented, handling *args and **kwargs\n+        # The annotations dict uses 'args' and 'kwargs' (without * and **)\n+        # but docstrings may use '*args' and '**kwargs'\n         arg = arguments.get(name, {})\n+        if name == 'args' and '*args' in arguments:\n+            arg = arguments['*args']\n+        elif name == 'kwargs' and '**kwargs' in arguments:\n+            arg = arguments['**kwargs']\n+\n         if not arg.get('type'):\n             field = nodes.field()\n             field += nodes.field_name('', 'type ' + name)\n@@ -170,7 +178,17 @@ def augment_descriptions_with_types(\n     for name in annotations:\n         if name in ('return', 'returns'):\n             continue\n-        if name in has_description and name not in has_type:\n+\n+        # Check if the parameter has a description, handling *args and **kwargs\n+        # The annotations dict uses 'args' and 'kwargs' (without * and **)\n+        # but docstrings may use '*args' and '**kwargs'\n+        has_param_description = (\n+            name in has_description or\n+            (name == 'args' and '*args' in has_description) or\n+            (name == 'kwargs' and '**kwargs' in has_description)\n+        )\n+\n+        if has_param_description and name not in has_type:\n             field = nodes.field()\n             field += nodes.field_name('', 'type ' + name)\n             field += nodes.field_body('', nodes.paragraph('', annotations[name]))\ndiff --git a/tests/roots/test-ext-autodoc/target/typehints.py b/tests/roots/test-ext-autodoc/target/typehints.py\nindex 6b0d6142c..d04a2e2b8 100644\n--- a/tests/roots/test-ext-autodoc/target/typehints.py\n+++ b/tests/roots/test-ext-autodoc/target/typehints.py\n@@ -99,3 +99,15 @@ class _ClassWithDocumentedInit:\n \n         :param x: Some integer\n         \"\"\"\n+\n+\n+class _ClassWithDocumentedInitAndStarArgs:\n+    \"\"\"Class docstring.\"\"\"\n+\n+    def __init__(self, x: int, *args: int, **kwargs: int) -> None:\n+        \"\"\"Init docstring.\n+\n+        :param x: Some integer\n+        :param *args: Some integer\n+        :param **kwargs: Some integer\n+        \"\"\"\ndiff --git a/tests/test_ext_autodoc_configs.py b/tests/test_ext_autodoc_configs.py\nindex c075a8e2d..847b70f07 100644\n--- a/tests/test_ext_autodoc_configs.py\n+++ b/tests/test_ext_autodoc_configs.py\n@@ -1108,6 +1108,53 @@ def test_autodoc_typehints_description_for_invalid_node(app):\n     restructuredtext.parse(app, text)  # raises no error\n \n \n+@pytest.mark.sphinx('text', testroot='ext-autodoc',\n+                    confoverrides={'autodoc_typehints': \"description\"})\n+def test_autodoc_typehints_description_with_star_args(app):\n+    \"\"\"Test that *args and **kwargs are not duplicated when documented.\"\"\"\n+    (app.srcdir / 'index.rst').write_text(\n+        '.. autoclass:: target.typehints._ClassWithDocumentedInitAndStarArgs\\n'\n+        '   :special-members: __init__\\n',\n+        encoding='utf8'\n+    )\n+    app.build()\n+    context = (app.outdir / 'index.txt').read_text(encoding='utf8')\n+    # Check that *args and **kwargs appear with their types, not duplicated\n+    assert ('class target.typehints._ClassWithDocumentedInitAndStarArgs(x, *args, **kwargs)\\n'\n+            '\\n'\n+            '   Class docstring.\\n'\n+            '\\n'\n+            '   Parameters:\\n'\n+            '      **x** (*int*) --\\n'\n+            '\\n'\n+            '      ***args** (*int*) --\\n'\n+            '\\n'\n+            '      ****kwargs** (*int*) --\\n'\n+            '\\n'\n+            '   Return type:\\n'\n+            '      None\\n'\n+            '\\n'\n+            '   __init__(x, *args, **kwargs)\\n'\n+            '\\n'\n+            '      Init docstring.\\n'\n+            '\\n'\n+            '      Parameters:\\n'\n+            '         **x** (*int*) -- Some integer\\n'\n+            '\\n'\n+            '         ***args** (*int*) --\\n'\n+            '\\n'\n+            '            Some integer\\n'\n+            '\\n'\n+            '         ****kwargs** (*int*) --\\n'\n+            '\\n'\n+            '            Some integer\\n'\n+            '\\n'\n+            '      Return type:\\n'\n+            '         None\\n' == context)\n+    # Ensure no duplication (e.g., both '**args**' and '***args**' should not appear)\n+    assert '**args** (*int*) --\\n' not in context  # Should be ***args**, not **args**\n+\n+\n @pytest.mark.sphinx('text', testroot='ext-autodoc',\n                     confoverrides={'autodoc_typehints': \"both\"})\n def test_autodoc_typehints_both(app):",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sphinx-doc__sphinx-11445",
+    "model_patch": "diff --git a/sphinx/util/rst.py b/sphinx/util/rst.py\nindex 7a1538325..fe3ab99cf 100644\n--- a/sphinx/util/rst.py\n+++ b/sphinx/util/rst.py\n@@ -25,7 +25,7 @@ except ImportError:\n \n logger = logging.getLogger(__name__)\n \n-docinfo_re = re.compile(':\\\\w+:.*?')\n+docinfo_re = re.compile(r'^:\\w+:.*$')\n symbols_re = re.compile(r'([!-\\-/:-@\\[-`{-~])')  # symbols without dot(0x2e)\n SECTIONING_CHARS = ['=', '-', '~']\n \n@@ -80,7 +80,7 @@ def prepend_prolog(content: StringList, prolog: str) -> None:\n     if prolog:\n         pos = 0\n         for line in content:\n-            if docinfo_re.match(line):\n+            if docinfo_re.match(line) and '`' not in line:\n                 pos += 1\n             else:\n                 break\ndiff --git a/tests/test_util_rst.py b/tests/test_util_rst.py\nindex 40a2ee68b..12e1cb77a 100644\n--- a/tests/test_util_rst.py\n+++ b/tests/test_util_rst.py\n@@ -78,6 +78,33 @@ def test_prepend_prolog_without_CR(app):\n                                       ('dummy.rst', 1, 'Sphinx is a document generator')]\n \n \n+def test_prepend_prolog_with_domain_directive_heading(app):\n+    # Test that domain directive headings are not treated as docinfo\n+    # This is a regression test for issue #11445\n+    prolog = '.. |psf| replace:: Python Software Foundation\\n'\n+    content = StringList([':mod:`mypackage2`',\n+                          '=================',\n+                          '',\n+                          'Content',\n+                          '',\n+                          'Subheading',\n+                          '----------'],\n+                         'mypackage.rst')\n+    prepend_prolog(content, prolog)\n+\n+    # The prolog should be inserted at the beginning, NOT after the heading\n+    # The heading and its underline must remain consecutive\n+    assert list(content.xitems()) == [('<rst_prolog>', 0, '.. |psf| replace:: Python Software Foundation'),\n+                                      ('<generated>', 0, ''),\n+                                      ('mypackage.rst', 0, ':mod:`mypackage2`'),\n+                                      ('mypackage.rst', 1, '================='),\n+                                      ('mypackage.rst', 2, ''),\n+                                      ('mypackage.rst', 3, 'Content'),\n+                                      ('mypackage.rst', 4, ''),\n+                                      ('mypackage.rst', 5, 'Subheading'),\n+                                      ('mypackage.rst', 6, '----------')]\n+\n+\n def test_textwidth():\n     assert textwidth('Hello') == 5\n     assert textwidth('\u0440\u0443\u0441\u0441\u043a\u0438\u0439 \u044f\u0437\u044b\u043a') == 12",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sphinx-doc__sphinx-7686",
+    "model_patch": "diff --git a/sphinx/ext/autosummary/generate.py b/sphinx/ext/autosummary/generate.py\nindex a57c73fb7..d498275ea 100644\n--- a/sphinx/ext/autosummary/generate.py\n+++ b/sphinx/ext/autosummary/generate.py\n@@ -246,7 +246,13 @@ def generate_autosummary_content(name: str, obj: Any, parent: Any,\n     ns.update(context)\n \n     if doc.objtype == 'module':\n-        ns['members'] = dir(obj)\n+        # Filter members based on imported_members setting\n+        if imported_members:\n+            ns['members'] = dir(obj)\n+        else:\n+            # Only include members that are defined in this module\n+            ns['members'] = [name for name in dir(obj)\n+                            if getattr(safe_getattr(obj, name, None), '__module__', None) == obj.__name__]\n         ns['functions'], ns['all_functions'] = \\\n             get_members(obj, {'function'}, imported=imported_members)\n         ns['classes'], ns['all_classes'] = \\",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sphinx-doc__sphinx-7738",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sphinx-doc__sphinx-7975",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sphinx-doc__sphinx-8273",
+    "model_patch": "diff --git a/sphinx/builders/manpage.py b/sphinx/builders/manpage.py\nindex 4166dece9..d8c093c8f 100644\n--- a/sphinx/builders/manpage.py\n+++ b/sphinx/builders/manpage.py\n@@ -8,6 +8,7 @@\n     :license: BSD, see LICENSE for details.\n \"\"\"\n \n+import os\n from os import path\n from typing import Any, Dict, List, Set, Tuple, Union\n \n@@ -82,8 +83,13 @@ class ManualPageBuilder(Builder):\n \n             targetname = '%s.%s' % (name, section)\n             logger.info(darkgreen(targetname) + ' { ', nonl=True)\n+\n+            # Create section subdirectory (e.g., man1, man3, etc.)\n+            sectiondir = path.join(self.outdir, 'man%s' % section)\n+            if not path.exists(sectiondir):\n+                os.makedirs(sectiondir)\n             destination = FileOutput(\n-                destination_path=path.join(self.outdir, targetname),\n+                destination_path=path.join(sectiondir, targetname),\n                 encoding='utf-8')\n \n             tree = self.env.get_doctree(docname)\ndiff --git a/tests/test_build_manpage.py b/tests/test_build_manpage.py\nindex c3c41a2ae..6cc7cdb39 100644\n--- a/tests/test_build_manpage.py\n+++ b/tests/test_build_manpage.py\n@@ -17,9 +17,9 @@ from sphinx.config import Config\n @pytest.mark.sphinx('man')\n def test_all(app, status, warning):\n     app.builder.build_all()\n-    assert (app.outdir / 'sphinxtests.1').exists()\n+    assert (app.outdir / 'man1' / 'sphinxtests.1').exists()\n \n-    content = (app.outdir / 'sphinxtests.1').read_text()\n+    content = (app.outdir / 'man1' / 'sphinxtests.1').read_text()\n     assert r'\\fBprint \\fP\\fIi\\fP\\fB\\en\\fP' in content\n     assert r'\\fBmanpage\\en\\fP' in content\n \n@@ -33,7 +33,7 @@ def test_all(app, status, warning):\n @pytest.mark.sphinx('man', testroot='directive-code')\n def test_captioned_code_block(app, status, warning):\n     app.builder.build_all()\n-    content = (app.outdir / 'python.1').read_text()\n+    content = (app.outdir / 'man1' / 'python.1').read_text()\n \n     assert ('.sp\\n'\n             'caption \\\\fItest\\\\fP rb\\n'\n@@ -64,5 +64,5 @@ def test_default_man_pages():\n @pytest.mark.sphinx('man', testroot='markup-rubric')\n def test_rubric(app, status, warning):\n     app.build()\n-    content = (app.outdir / 'python.1').read_text()\n+    content = (app.outdir / 'man1' / 'python.1').read_text()\n     assert 'This is a rubric\\n' in content\ndiff --git a/tests/test_smartquotes.py b/tests/test_smartquotes.py\nindex 6276e6a74..f3a889468 100644\n--- a/tests/test_smartquotes.py\n+++ b/tests/test_smartquotes.py\n@@ -33,7 +33,7 @@ def test_text_builder(app, status, warning):\n def test_man_builder(app, status, warning):\n     app.build()\n \n-    content = (app.outdir / 'python.1').read_text()\n+    content = (app.outdir / 'man1' / 'python.1').read_text()\n     assert '\\\\-\\\\- \"Sphinx\" is a tool that makes it easy ...' in content\n \n \n@@ -88,5 +88,5 @@ def test_smartquotes_excludes_language(app, status, warning):\n def test_smartquotes_excludes_builders(app, status, warning):\n     app.build()\n \n-    content = (app.outdir / 'python.1').read_text()\n+    content = (app.outdir / 'man1' / 'python.1').read_text()\n     assert '\u2013 \u201cSphinx\u201d is a tool that makes it easy \u2026' in content",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sphinx-doc__sphinx-8282",
+    "model_patch": "diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py\nindex 978fd5df8..baf631aea 100644\n--- a/sphinx/ext/autodoc/__init__.py\n+++ b/sphinx/ext/autodoc/__init__.py\n@@ -1266,6 +1266,9 @@ class FunctionDocumenter(DocstringSignatureMixin, ModuleLevelDocumenter):  # typ\n                 overload = evaluate_signature(overload, __globals__,\n                                               self.env.config.autodoc_type_aliases)\n \n+                if self.env.config.autodoc_typehints in ('none', 'description'):\n+                    kwargs.setdefault('show_annotation', False)\n+\n                 sig = stringify_signature(overload, **kwargs)\n                 sigs.append(sig)",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sphinx-doc__sphinx-8435",
+    "model_patch": "diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py\nindex 171a3e7b0..5c958ad05 100644\n--- a/sphinx/ext/autodoc/__init__.py\n+++ b/sphinx/ext/autodoc/__init__.py\n@@ -1702,7 +1702,7 @@ class DataDocumenter(ModuleLevelDocumenter):\n         if not self.options.annotation:\n             # obtain annotation for this data\n             try:\n-                annotations = get_type_hints(self.parent)\n+                annotations = get_type_hints(self.parent, None, self.config.autodoc_type_aliases)\n             except NameError:\n                 # Failed to evaluate ForwardRef (maybe TYPE_CHECKING)\n                 annotations = safe_getattr(self.parent, '__annotations__', {})\n@@ -2093,7 +2093,7 @@ class AttributeDocumenter(DocstringStripSignatureMixin, ClassLevelDocumenter):\n         if not self.options.annotation:\n             # obtain type annotation for this attribute\n             try:\n-                annotations = get_type_hints(self.parent)\n+                annotations = get_type_hints(self.parent, None, self.config.autodoc_type_aliases)\n             except NameError:\n                 # Failed to evaluate ForwardRef (maybe TYPE_CHECKING)\n                 annotations = safe_getattr(self.parent, '__annotations__', {})",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sphinx-doc__sphinx-8474",
+    "model_patch": "diff --git a/sphinx/domains/std.py b/sphinx/domains/std.py\nindex 4bde57930..8d4857888 100644\n--- a/sphinx/domains/std.py\n+++ b/sphinx/domains/std.py\n@@ -852,8 +852,9 @@ class StandardDomain(Domain):\n             if fignumber is None:\n                 return contnode\n         except ValueError:\n-            logger.warning(__(\"no number is assigned for %s: %s\"), figtype, labelid,\n-                           location=node)\n+            logger.warning(__(\"Failed to create a cross reference. Any number is not \"\n+                              \"assigned: %s\"),\n+                           labelid, location=node)\n             return contnode\n \n         try:\ndiff --git a/tests/test_build_html.py b/tests/test_build_html.py\nindex 6b66a2c67..42de6f356 100644\n--- a/tests/test_build_html.py\n+++ b/tests/test_build_html.py\n@@ -660,7 +660,7 @@ def test_numfig_without_numbered_toctree_warn(app, warning):\n \n     warnings = warning.getvalue()\n     assert 'index.rst:47: WARNING: numfig is disabled. :numref: is ignored.' not in warnings\n-    assert 'index.rst:55: WARNING: no number is assigned for section: index' in warnings\n+    assert 'index.rst:55: WARNING: Failed to create a cross reference. Any number is not assigned: index' in warnings\n     assert 'index.rst:56: WARNING: invalid numfig_format: invalid' in warnings\n     assert 'index.rst:57: WARNING: invalid numfig_format: Fig %s %s' in warnings\n \n@@ -768,7 +768,7 @@ def test_numfig_with_numbered_toctree_warn(app, warning):\n     app.build()\n     warnings = warning.getvalue()\n     assert 'index.rst:47: WARNING: numfig is disabled. :numref: is ignored.' not in warnings\n-    assert 'index.rst:55: WARNING: no number is assigned for section: index' in warnings\n+    assert 'index.rst:55: WARNING: Failed to create a cross reference. Any number is not assigned: index' in warnings\n     assert 'index.rst:56: WARNING: invalid numfig_format: invalid' in warnings\n     assert 'index.rst:57: WARNING: invalid numfig_format: Fig %s %s' in warnings\n \n@@ -873,7 +873,7 @@ def test_numfig_with_prefix_warn(app, warning):\n     app.build()\n     warnings = warning.getvalue()\n     assert 'index.rst:47: WARNING: numfig is disabled. :numref: is ignored.' not in warnings\n-    assert 'index.rst:55: WARNING: no number is assigned for section: index' in warnings\n+    assert 'index.rst:55: WARNING: Failed to create a cross reference. Any number is not assigned: index' in warnings\n     assert 'index.rst:56: WARNING: invalid numfig_format: invalid' in warnings\n     assert 'index.rst:57: WARNING: invalid numfig_format: Fig %s %s' in warnings\n \n@@ -979,7 +979,7 @@ def test_numfig_with_secnum_depth_warn(app, warning):\n     app.build()\n     warnings = warning.getvalue()\n     assert 'index.rst:47: WARNING: numfig is disabled. :numref: is ignored.' not in warnings\n-    assert 'index.rst:55: WARNING: no number is assigned for section: index' in warnings\n+    assert 'index.rst:55: WARNING: Failed to create a cross reference. Any number is not assigned: index' in warnings\n     assert 'index.rst:56: WARNING: invalid numfig_format: invalid' in warnings\n     assert 'index.rst:57: WARNING: invalid numfig_format: Fig %s %s' in warnings",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sphinx-doc__sphinx-8506",
+    "model_patch": "diff --git a/sphinx/domains/std.py b/sphinx/domains/std.py\nindex c87217c56..6cacfc4e8 100644\n--- a/sphinx/domains/std.py\n+++ b/sphinx/domains/std.py\n@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)\n \n \n # RE for option descriptions\n-option_desc_re = re.compile(r'((?:/|--|-|\\+)?[^\\s=[]+)(=?\\s*.*)')\n+option_desc_re = re.compile(r'((?:/|--|-|\\+)?[^\\s=]+)(=?\\s*.*)')\n # RE for grammar tokens\n token_re = re.compile(r'`(\\w+)`', re.U)",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sphinx-doc__sphinx-8595",
+    "model_patch": "diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py\nindex d85d79617..c9f90acca 100644\n--- a/sphinx/ext/autodoc/__init__.py\n+++ b/sphinx/ext/autodoc/__init__.py\n@@ -1074,7 +1074,7 @@ class ModuleDocumenter(Documenter):\n     def get_object_members(self, want_all: bool) -> Tuple[bool, ObjectMembers]:\n         members = self.get_module_members()\n         if want_all:\n-            if not self.__all__:\n+            if self.__all__ is None:\n                 # for implicit module members, check __module__ to avoid\n                 # documenting imported objects\n                 return True, list(members.values())",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sphinx-doc__sphinx-8627",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sphinx-doc__sphinx-8713",
+    "model_patch": "diff --git a/sphinx/ext/napoleon/docstring.py b/sphinx/ext/napoleon/docstring.py\nindex 755088ca5..a5a986e49 100644\n--- a/sphinx/ext/napoleon/docstring.py\n+++ b/sphinx/ext/napoleon/docstring.py\n@@ -682,7 +682,13 @@ class GoogleDocstring:\n         return self._parse_generic_section(_('Notes'), use_admonition)\n \n     def _parse_other_parameters_section(self, section: str) -> List[str]:\n-        return self._format_fields(_('Other Parameters'), self._consume_fields())\n+        if self._config.napoleon_use_param:\n+            # Allow to declare multiple parameters at once (ex: x, y: int)\n+            fields = self._consume_fields(multiple=True)\n+            return self._format_docutils_params(fields)\n+        else:\n+            fields = self._consume_fields()\n+            return self._format_fields(_('Other Parameters'), fields)\n \n     def _parse_parameters_section(self, section: str) -> List[str]:\n         if self._config.napoleon_use_param:",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sphinx-doc__sphinx-8721",
+    "model_patch": "diff --git a/sphinx/ext/viewcode.py b/sphinx/ext/viewcode.py\nindex a7d52a91c..060604e25 100644\n--- a/sphinx/ext/viewcode.py\n+++ b/sphinx/ext/viewcode.py\n@@ -182,6 +182,8 @@ def collect_pages(app: Sphinx) -> Generator[Tuple[str, Dict[str, Any], str], Non\n     env = app.builder.env\n     if not hasattr(env, '_viewcode_modules'):\n         return\n+    if app.builder.name.startswith(\"epub\") and not env.config.viewcode_enable_epub:\n+        return\n     highlighter = app.builder.highlighter  # type: ignore\n     urito = app.builder.get_relative_uri",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sphinx-doc__sphinx-8801",
+    "model_patch": "diff --git a/sphinx/ext/autodoc/importer.py b/sphinx/ext/autodoc/importer.py\nindex 477aae247..a936410b1 100644\n--- a/sphinx/ext/autodoc/importer.py\n+++ b/sphinx/ext/autodoc/importer.py\n@@ -307,9 +307,13 @@ def get_class_members(subject: Any, objpath: List[str], attrgetter: Callable\n                 analyzer = ModuleAnalyzer.for_module(modname)\n                 analyzer.analyze()\n                 for (ns, name), docstring in analyzer.attr_docs.items():\n-                    if ns == qualname and name not in members:\n-                        members[name] = ObjectMember(name, INSTANCEATTR, class_=cls,\n-                                                     docstring='\\n'.join(docstring))\n+                    if ns == qualname:\n+                        if name not in members:\n+                            members[name] = ObjectMember(name, INSTANCEATTR, class_=cls,\n+                                                         docstring='\\n'.join(docstring))\n+                        elif members[name].docstring is None:\n+                            # Update docstring for annotation-only member\n+                            members[name].docstring = '\\n'.join(docstring)\n             except (AttributeError, PycodeError):\n                 pass\n     except AttributeError:\ndiff --git a/tests/roots/test-ext-autodoc/target/annotations.py b/tests/roots/test-ext-autodoc/target/annotations.py\nindex ef600e2af..0543f21ab 100644\n--- a/tests/roots/test-ext-autodoc/target/annotations.py\n+++ b/tests/roots/test-ext-autodoc/target/annotations.py\n@@ -39,3 +39,10 @@ class Foo:\n \n     def __init__(self):\n         self.attr2: myint = None  #: docstring\n+\n+\n+class Bar(Foo):\n+    \"\"\"docstring\"\"\"\n+\n+    #: docstring for Bar\n+    attr3: myint\ndiff --git a/tests/test_ext_autodoc_autoclass.py b/tests/test_ext_autodoc_autoclass.py\nindex 488b72263..9673bbc58 100644\n--- a/tests/test_ext_autodoc_autoclass.py\n+++ b/tests/test_ext_autodoc_autoclass.py\n@@ -191,3 +191,33 @@ def test_class_alias(app):\n         '',\n         '   alias of :class:`target.classes.Foo`',\n     ]\n+\n+\n+@pytest.mark.skipif(sys.version_info < (3, 6), reason='python 3.6+ is required.')\n+@pytest.mark.sphinx('html', testroot='ext-autodoc')\n+def test_inherited_annotation_only_member(app):\n+    options = {'members': True,\n+               'inherited-members': True}\n+    actual = do_autodoc(app, 'class', 'target.annotations.Bar', options)\n+    assert list(actual) == [\n+        '',\n+        '.. py:class:: Bar()',\n+        '   :module: target.annotations',\n+        '',\n+        '   docstring',\n+        '',\n+        '',\n+        '   .. py:attribute:: Bar.attr1',\n+        '      :module: target.annotations',\n+        '      :type: myint',\n+        '',\n+        '      docstring',\n+        '',\n+        '',\n+        '   .. py:attribute:: Bar.attr3',\n+        '      :module: target.annotations',\n+        '      :type: myint',\n+        '',\n+        '      docstring for Bar',\n+        '',\n+    ]",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sympy__sympy-11400",
+    "model_patch": "diff --git a/sympy/printing/ccode.py b/sympy/printing/ccode.py\nindex 30a07a7b59..659096f513 100644\n--- a/sympy/printing/ccode.py\n+++ b/sympy/printing/ccode.py\n@@ -251,6 +251,13 @@ def _print_For(self, expr):\n     def _print_sign(self, func):\n         return '((({0}) > 0) - (({0}) < 0))'.format(self._print(func.args[0]))\n \n+    def _print_sinc(self, expr):\n+        from sympy.functions.elementary.trigonometric import sin\n+        from sympy.relational import Ne\n+        from sympy.functions import Piecewise\n+        x = expr.args[0]\n+        return self._print(Piecewise((sin(x)/x, Ne(x, 0)), (1, True)))\n+\n     def indent_code(self, code):\n         \"\"\"Accepts a string of code or a list of code lines\"\"\"\n \ndiff --git a/sympy/printing/tests/test_ccode.py b/sympy/printing/tests/test_ccode.py\nindex d8e449d853..7c673976c6 100644\n--- a/sympy/printing/tests/test_ccode.py\n+++ b/sympy/printing/tests/test_ccode.py\n@@ -1,7 +1,7 @@\n from sympy.core import (pi, oo, symbols, Rational, Integer,\n                         GoldenRatio, EulerGamma, Catalan, Lambda, Dummy, Eq)\n from sympy.functions import (Piecewise, sin, cos, Abs, exp, ceiling, sqrt,\n-                             gamma, sign)\n+                             gamma, sign, sinc)\n from sympy.sets import Range\n from sympy.logic import ITE\n from sympy.codegen import For, aug_assign, Assignment\n@@ -479,6 +479,12 @@ def test_ccode_sign():\n     expr = sign(cos(x))\n     assert ccode(expr) == '(((cos(x)) > 0) - ((cos(x)) < 0))'\n \n+def test_ccode_sinc():\n+    # sinc(x) should print as a Piecewise expression\n+    assert ccode(sinc(x)) == '((x != 0) ? (\\n   sin(x)/x\\n)\\n: (\\n   1\\n))'\n+    theta = symbols('theta')\n+    assert ccode(sinc(theta)) == '((theta != 0) ? (\\n   sin(theta)/theta\\n)\\n: (\\n   1\\n))'\n+\n def test_ccode_Assignment():\n     assert ccode(Assignment(x, y + z)) == 'x = y + z;'\n     assert ccode(aug_assign(x, '+', y + z)) == 'x += y + z;'",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sympy__sympy-11870",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sympy__sympy-11897",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sympy__sympy-12171",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sympy__sympy-12236",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sympy__sympy-12419",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sympy__sympy-12454",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sympy__sympy-12481",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sympy__sympy-13031",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sympy__sympy-13043",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sympy__sympy-13146",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sympy__sympy-13177",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sympy__sympy-13437",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sympy__sympy-13471",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sympy__sympy-13480",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sympy__sympy-13647",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sympy__sympy-13773",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sympy__sympy-13895",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sympy__sympy-13915",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sympy__sympy-13971",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sympy__sympy-14024",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sympy__sympy-14308",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sympy__sympy-14317",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sympy__sympy-14396",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sympy__sympy-14774",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  },
+  {
+    "instance_id": "sympy__sympy-14817",
+    "model_patch": "",
+    "model_name_or_path": "sage-agent"
+  }
+]
