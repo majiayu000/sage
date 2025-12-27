@@ -1,5 +1,6 @@
 //! Model parameters for LLM providers
 
+use crate::config::provider::{ApiKeyInfo, ApiKeySource};
 use crate::error::{SageError, SageResult};
 use serde::{Deserialize, Serialize};
 
@@ -51,11 +52,120 @@ impl Default for ModelParameters {
 impl ModelParameters {
     /// Get API key from environment or config
     pub fn get_api_key(&self) -> Option<String> {
-        self.api_key
-            .clone()
-            .or_else(|| std::env::var("OPENAI_API_KEY").ok())
-            .or_else(|| std::env::var("ANTHROPIC_API_KEY").ok())
-            .or_else(|| std::env::var("GOOGLE_API_KEY").ok())
+        self.get_api_key_for_provider("default").key
+    }
+
+    /// Get detailed API key information for a specific provider
+    ///
+    /// Priority order:
+    /// 1. SAGE_<PROVIDER>_API_KEY environment variable
+    /// 2. Standard provider environment variable (e.g., ANTHROPIC_API_KEY)
+    /// 3. Configuration file
+    pub fn get_api_key_info_for_provider(&self, provider: &str) -> ApiKeyInfo {
+        let provider_upper = provider.to_uppercase();
+
+        // 1. Try SAGE-prefixed env var first (highest priority)
+        let sage_env_var = format!("SAGE_{}_API_KEY", provider_upper);
+        if let Ok(key) = std::env::var(&sage_env_var) {
+            if !key.is_empty() {
+                return ApiKeyInfo {
+                    key: Some(key),
+                    source: ApiKeySource::SageEnvVar,
+                    env_var_name: Some(sage_env_var),
+                };
+            }
+        }
+
+        // 2. Try standard environment variables
+        let standard_env_vars = get_standard_env_vars_for_provider(provider);
+        for env_var in standard_env_vars {
+            if let Ok(key) = std::env::var(&env_var) {
+                if !key.is_empty() {
+                    return ApiKeyInfo {
+                        key: Some(key),
+                        source: ApiKeySource::StandardEnvVar,
+                        env_var_name: Some(env_var),
+                    };
+                }
+            }
+        }
+
+        // 3. Fall back to config file
+        if let Some(api_key) = &self.api_key {
+            if !api_key.is_empty() {
+                return ApiKeyInfo {
+                    key: Some(api_key.clone()),
+                    source: ApiKeySource::ConfigFile,
+                    env_var_name: None,
+                };
+            }
+        }
+
+        // No API key found
+        ApiKeyInfo {
+            key: None,
+            source: ApiKeySource::NotFound,
+            env_var_name: None,
+        }
+    }
+
+    /// Get API key info (alias for get_api_key_info_for_provider with default)
+    pub fn get_api_key_for_provider(&self, provider: &str) -> ApiKeyInfo {
+        self.get_api_key_info_for_provider(provider)
+    }
+
+    /// Validate the API key format for a specific provider
+    pub fn validate_api_key_format_for_provider(&self, provider: &str) -> Result<(), String> {
+        // Ollama doesn't need an API key
+        if provider == "ollama" {
+            return Ok(());
+        }
+
+        let key_info = self.get_api_key_info_for_provider(provider);
+        let key = match &key_info.key {
+            Some(k) => k,
+            None => {
+                return Err(format!(
+                    "API key required for '{}'. Set via {} or config file",
+                    provider,
+                    get_standard_env_vars_for_provider(provider)
+                        .first()
+                        .cloned()
+                        .unwrap_or_default()
+                ))
+            }
+        };
+
+        // Provider-specific validation
+        match provider {
+            "anthropic" => {
+                if !key.starts_with("sk-ant-") {
+                    return Err("Anthropic API key should start with 'sk-ant-'".to_string());
+                }
+            }
+            "openai" => {
+                if !key.starts_with("sk-") {
+                    return Err("OpenAI API key should start with 'sk-'".to_string());
+                }
+            }
+            "google" => {
+                if key.len() < 20 {
+                    return Err("Google API key appears too short".to_string());
+                }
+            }
+            "glm" => {
+                if key.len() < 10 {
+                    return Err("GLM API key appears too short".to_string());
+                }
+            }
+            _ => {
+                if key.is_empty() || key.contains("your-") || key.contains("xxx") {
+                    return Err("API key appears to be a placeholder".to_string());
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Get base URL for the provider
@@ -129,6 +239,67 @@ impl ModelParameters {
     }
 }
 
+/// Get standard environment variable names for a provider
+fn get_standard_env_vars_for_provider(provider: &str) -> Vec<String> {
+    match provider {
+        "openai" => vec!["OPENAI_API_KEY".to_string()],
+        "anthropic" => vec![
+            "ANTHROPIC_API_KEY".to_string(),
+            "CLAUDE_API_KEY".to_string(),
+        ],
+        "google" => vec![
+            "GOOGLE_API_KEY".to_string(),
+            "GEMINI_API_KEY".to_string(),
+        ],
+        "azure" => vec![
+            "AZURE_OPENAI_API_KEY".to_string(),
+            "AZURE_API_KEY".to_string(),
+        ],
+        "openrouter" => vec!["OPENROUTER_API_KEY".to_string()],
+        "doubao" => vec![
+            "DOUBAO_API_KEY".to_string(),
+            "ARK_API_KEY".to_string(),
+        ],
+        "glm" | "zhipu" => vec![
+            "GLM_API_KEY".to_string(),
+            "ZHIPU_API_KEY".to_string(),
+        ],
+        _ => {
+            // For custom or default providers, try <PROVIDER>_API_KEY
+            vec![format!("{}_API_KEY", provider.to_uppercase())]
+        }
+    }
+}
+
+/// Format API key status for display
+pub fn format_api_key_status_for_provider(provider: &str, info: &ApiKeyInfo) -> String {
+    match &info.source {
+        ApiKeySource::ConfigFile => {
+            format!(
+                "✓ {} API key (from config): {}",
+                provider,
+                info.masked_key().unwrap_or_default()
+            )
+        }
+        ApiKeySource::SageEnvVar | ApiKeySource::StandardEnvVar => {
+            format!(
+                "✓ {} API key (from {}): {}",
+                provider,
+                info.env_var_name.as_deref().unwrap_or("env"),
+                info.masked_key().unwrap_or_default()
+            )
+        }
+        ApiKeySource::NotFound => {
+            let env_hints = get_standard_env_vars_for_provider(provider);
+            format!(
+                "✗ {} API key missing. Set {} or add to config",
+                provider,
+                env_hints.first().cloned().unwrap_or_default()
+            )
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -163,7 +334,10 @@ mod tests {
             api_key: None,
             ..Default::default()
         };
-        assert_eq!(params.get_api_key(), Some("env_key".to_string()));
+        // Use provider-specific method
+        let key_info = params.get_api_key_info_for_provider("openai");
+        assert_eq!(key_info.key, Some("env_key".to_string()));
+        assert_eq!(key_info.source, ApiKeySource::StandardEnvVar);
 
         unsafe {
             std::env::remove_var("OPENAI_API_KEY");

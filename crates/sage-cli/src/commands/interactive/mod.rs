@@ -12,6 +12,7 @@ use crate::console::CliConsole;
 use crate::signal_handler::{AppState, set_global_app_state, start_global_signal_handling};
 use conversation::handle_conversation;
 use help::{print_config, print_help, print_input_help, print_status};
+use sage_core::config::{format_api_key_status_for_provider, ApiKeySource};
 use sage_core::error::{SageError, SageResult};
 use sage_core::ui::EnhancedConsole;
 use sage_sdk::SageAgentSdk;
@@ -58,6 +59,31 @@ pub async fn execute(args: InteractiveArgs) -> SageResult<()> {
 
     if let Some(trajectory_file) = &args.trajectory_file {
         sdk = sdk.with_trajectory_path(trajectory_file);
+    }
+
+    // Display API key status for default provider
+    let config = sdk.config();
+    let default_provider = config.get_default_provider();
+    if let Some(params) = config.model_providers.get(default_provider) {
+        let key_info = params.get_api_key_info_for_provider(&default_provider);
+        let status_msg = format_api_key_status_for_provider(&default_provider, &key_info);
+
+        match key_info.source {
+            ApiKeySource::NotFound => {
+                console.warn(&status_msg);
+                console.info(&format!(
+                    "Hint: Set {} environment variable or add to config file",
+                    format!("{}_API_KEY", default_provider.to_uppercase())
+                ));
+            }
+            _ => {
+                console.success(&status_msg);
+                // Validate key format
+                if let Err(e) = params.validate_api_key_format_for_provider(&default_provider) {
+                    console.warn(&format!("API key warning: {}", e));
+                }
+            }
+        }
     }
 
     console.success("Interactive mode initialized");
