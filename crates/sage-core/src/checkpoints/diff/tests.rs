@@ -19,6 +19,7 @@ mod tests {
 
         let mut file = File::create(&file_path).await.unwrap();
         file.write_all(b"Hello, World!").await.unwrap();
+        file.sync_all().await.unwrap(); // Ensure data is flushed to disk
 
         let detector = ChangeDetector::new(temp_dir.path());
         let snapshot = detector.capture_file(&file_path).await.unwrap();
@@ -38,6 +39,7 @@ mod tests {
         let file_path = node_modules.join("test.js");
         let mut file = File::create(&file_path).await.unwrap();
         file.write_all(b"module.exports = {}").await.unwrap();
+        file.sync_all().await.unwrap();
 
         let detector = ChangeDetector::new(temp_dir.path());
         let snapshot = detector.capture_file(&file_path).await.unwrap();
@@ -54,9 +56,11 @@ mod tests {
 
         let mut f1 = File::create(&rs_file).await.unwrap();
         f1.write_all(b"fn main() {}").await.unwrap();
+        f1.sync_all().await.unwrap();
 
         let mut f2 = File::create(&txt_file).await.unwrap();
         f2.write_all(b"Notes").await.unwrap();
+        f2.sync_all().await.unwrap();
 
         let detector = ChangeDetector::new(temp_dir.path()).with_extensions(["rs"]);
 
@@ -75,9 +79,11 @@ mod tests {
 
         let mut f1 = File::create(src_dir.join("main.rs")).await.unwrap();
         f1.write_all(b"fn main() {}").await.unwrap();
+        f1.sync_all().await.unwrap();
 
         let mut f2 = File::create(src_dir.join("lib.rs")).await.unwrap();
         f2.write_all(b"pub mod test;").await.unwrap();
+        f2.sync_all().await.unwrap();
 
         let detector = ChangeDetector::new(temp_dir.path());
         let snapshots = detector.scan_directory(temp_dir.path()).await.unwrap();
