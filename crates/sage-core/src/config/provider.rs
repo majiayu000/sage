@@ -4,6 +4,53 @@ use crate::llm::provider_types::TimeoutConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// Source of the API key
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ApiKeySource {
+    /// From configuration file
+    ConfigFile,
+    /// From SAGE_<PROVIDER>_API_KEY environment variable
+    SageEnvVar,
+    /// From standard environment variable (e.g., ANTHROPIC_API_KEY)
+    StandardEnvVar,
+    /// No API key found
+    NotFound,
+}
+
+impl std::fmt::Display for ApiKeySource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ApiKeySource::ConfigFile => write!(f, "config file"),
+            ApiKeySource::SageEnvVar => write!(f, "SAGE_*_API_KEY env"),
+            ApiKeySource::StandardEnvVar => write!(f, "env variable"),
+            ApiKeySource::NotFound => write!(f, "not found"),
+        }
+    }
+}
+
+/// Result of API key resolution with source information
+#[derive(Debug, Clone)]
+pub struct ApiKeyInfo {
+    /// The API key value (if found)
+    pub key: Option<String>,
+    /// Where the key was found
+    pub source: ApiKeySource,
+    /// The environment variable name that was used (if from env)
+    pub env_var_name: Option<String>,
+}
+
+impl ApiKeyInfo {
+    /// Check if a valid API key was found
+    pub fn is_valid(&self) -> bool {
+        self.key.is_some()
+    }
+
+    /// Get a display-safe version (masked) of the API key
+    pub fn masked_key(&self) -> Option<String> {
+        self.key.as_ref().map(|k| mask_api_key(k))
+    }
+}
+
 /// Configuration for a specific LLM provider
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderConfig {
@@ -134,23 +181,127 @@ impl ProviderConfig {
     }
 
     /// Get the effective API key (from config or environment)
+    ///
+    /// Priority order:
+    /// 1. SAGE_<PROVIDER>_API_KEY environment variable
+    /// 2. Standard provider environment variable (e.g., ANTHROPIC_API_KEY)
+    /// 3. Configuration file
     pub fn get_api_key(&self) -> Option<String> {
-        if let Some(api_key) = &self.api_key {
-            return Some(api_key.clone());
+        self.get_api_key_info().key
+    }
+
+    /// Get detailed API key information including source
+    ///
+    /// Returns ApiKeyInfo with the key (if found) and where it came from.
+    /// Priority order:
+    /// 1. SAGE_<PROVIDER>_API_KEY environment variable
+    /// 2. Standard provider environment variable (e.g., ANTHROPIC_API_KEY)
+    /// 3. Configuration file
+    pub fn get_api_key_info(&self) -> ApiKeyInfo {
+        let provider_upper = self.name.to_uppercase();
+
+        // 1. Try SAGE-prefixed env var first (highest priority)
+        let sage_env_var = format!("SAGE_{}_API_KEY", provider_upper);
+        if let Ok(key) = std::env::var(&sage_env_var) {
+            if !key.is_empty() {
+                return ApiKeyInfo {
+                    key: Some(key),
+                    source: ApiKeySource::SageEnvVar,
+                    env_var_name: Some(sage_env_var),
+                };
+            }
         }
 
-        // Try environment variables based on provider
-        match self.name.as_str() {
-            "openai" => std::env::var("OPENAI_API_KEY").ok(),
-            "anthropic" => std::env::var("ANTHROPIC_API_KEY").ok(),
-            "google" => std::env::var("GOOGLE_API_KEY").ok(),
-            _ => None,
+        // 2. Try standard environment variables
+        let standard_env_vars = get_standard_env_vars(&self.name);
+        for env_var in standard_env_vars {
+            if let Ok(key) = std::env::var(&env_var) {
+                if !key.is_empty() {
+                    return ApiKeyInfo {
+                        key: Some(key),
+                        source: ApiKeySource::StandardEnvVar,
+                        env_var_name: Some(env_var),
+                    };
+                }
+            }
+        }
+
+        // 3. Fall back to config file
+        if let Some(api_key) = &self.api_key {
+            if !api_key.is_empty() {
+                return ApiKeyInfo {
+                    key: Some(api_key.clone()),
+                    source: ApiKeySource::ConfigFile,
+                    env_var_name: None,
+                };
+            }
+        }
+
+        // No API key found
+        ApiKeyInfo {
+            key: None,
+            source: ApiKeySource::NotFound,
+            env_var_name: None,
         }
     }
 
     /// Check if this provider requires an API key
     pub fn requires_api_key(&self) -> bool {
-        matches!(self.name.as_str(), "openai" | "anthropic" | "google")
+        // Ollama runs locally and doesn't need an API key
+        !matches!(self.name.as_str(), "ollama")
+    }
+
+    /// Validate the API key format for this provider
+    ///
+    /// Returns Ok(()) if valid, Err with description if invalid.
+    pub fn validate_api_key_format(&self) -> Result<(), String> {
+        let key_info = self.get_api_key_info();
+
+        if !self.requires_api_key() {
+            return Ok(());
+        }
+
+        let key = match &key_info.key {
+            Some(k) => k,
+            None => return Err(format!(
+                "API key required for '{}'. Set via {} or config file",
+                self.name,
+                get_standard_env_vars(&self.name).first().cloned().unwrap_or_default()
+            )),
+        };
+
+        // Provider-specific validation
+        match self.name.as_str() {
+            "anthropic" => {
+                if !key.starts_with("sk-ant-") {
+                    return Err("Anthropic API key should start with 'sk-ant-'".to_string());
+                }
+            }
+            "openai" => {
+                if !key.starts_with("sk-") {
+                    return Err("OpenAI API key should start with 'sk-'".to_string());
+                }
+            }
+            "google" => {
+                if key.len() < 20 {
+                    return Err("Google API key appears too short".to_string());
+                }
+            }
+            "glm" => {
+                // GLM uses JWT-like format or simple keys
+                if key.len() < 10 {
+                    return Err("GLM API key appears too short".to_string());
+                }
+            }
+            _ => {
+                // Generic validation: key should not be empty or placeholder
+                if key.is_empty() || key.contains("your-") || key.contains("xxx") {
+                    return Err("API key appears to be a placeholder".to_string());
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Get the effective timeout configuration
@@ -346,5 +497,141 @@ impl ProviderDefaults {
             "glm" | "zhipu" => Self::glm(),
             _ => ProviderConfig::new(name),
         }
+    }
+}
+
+// =============================================================================
+// Helper Functions
+// =============================================================================
+
+/// Get standard environment variable names for a provider
+fn get_standard_env_vars(provider: &str) -> Vec<String> {
+    match provider {
+        "openai" => vec!["OPENAI_API_KEY".to_string()],
+        "anthropic" => vec![
+            "ANTHROPIC_API_KEY".to_string(),
+            "CLAUDE_API_KEY".to_string(),
+        ],
+        "google" => vec![
+            "GOOGLE_API_KEY".to_string(),
+            "GEMINI_API_KEY".to_string(),
+        ],
+        "azure" => vec![
+            "AZURE_OPENAI_API_KEY".to_string(),
+            "AZURE_API_KEY".to_string(),
+        ],
+        "openrouter" => vec!["OPENROUTER_API_KEY".to_string()],
+        "doubao" => vec![
+            "DOUBAO_API_KEY".to_string(),
+            "ARK_API_KEY".to_string(),
+        ],
+        "glm" | "zhipu" => vec![
+            "GLM_API_KEY".to_string(),
+            "ZHIPU_API_KEY".to_string(),
+        ],
+        _ => {
+            // For custom providers, try <PROVIDER>_API_KEY
+            vec![format!("{}_API_KEY", provider.to_uppercase())]
+        }
+    }
+}
+
+/// Mask an API key for safe display
+///
+/// Shows first 8 and last 4 characters, masks the rest with asterisks.
+fn mask_api_key(key: &str) -> String {
+    let len = key.len();
+    if len <= 12 {
+        // Too short to mask meaningfully
+        return "*".repeat(len);
+    }
+
+    let prefix = &key[..8];
+    let suffix = &key[len - 4..];
+    let mask_len = len - 12;
+
+    format!("{}{}...{}", prefix, "*".repeat(mask_len.min(8)), suffix)
+}
+
+/// Display API key status for CLI
+pub fn format_api_key_status(provider: &str, info: &ApiKeyInfo) -> String {
+    match &info.source {
+        ApiKeySource::ConfigFile => {
+            format!(
+                "✓ {} API key (from config): {}",
+                provider,
+                info.masked_key().unwrap_or_default()
+            )
+        }
+        ApiKeySource::SageEnvVar => {
+            format!(
+                "✓ {} API key (from {}): {}",
+                provider,
+                info.env_var_name.as_deref().unwrap_or("env"),
+                info.masked_key().unwrap_or_default()
+            )
+        }
+        ApiKeySource::StandardEnvVar => {
+            format!(
+                "✓ {} API key (from {}): {}",
+                provider,
+                info.env_var_name.as_deref().unwrap_or("env"),
+                info.masked_key().unwrap_or_default()
+            )
+        }
+        ApiKeySource::NotFound => {
+            let env_hints = get_standard_env_vars(provider);
+            format!(
+                "✗ {} API key missing. Set {} or add to config",
+                provider,
+                env_hints.first().cloned().unwrap_or_default()
+            )
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_mask_api_key() {
+        // 26 char key: show first 8, last 4, mask middle (14-12=2, but min 8)
+        assert_eq!(mask_api_key("sk-ant-api03-abc123xyz789"), "sk-ant-a********...z789");
+        assert_eq!(mask_api_key("short"), "*****");
+        assert_eq!(mask_api_key("exactly12ch"), "***********");
+    }
+
+    #[test]
+    fn test_api_key_source_display() {
+        assert_eq!(ApiKeySource::ConfigFile.to_string(), "config file");
+        assert_eq!(ApiKeySource::SageEnvVar.to_string(), "SAGE_*_API_KEY env");
+        assert_eq!(ApiKeySource::StandardEnvVar.to_string(), "env variable");
+        assert_eq!(ApiKeySource::NotFound.to_string(), "not found");
+    }
+
+    #[test]
+    fn test_get_standard_env_vars() {
+        assert!(get_standard_env_vars("anthropic").contains(&"ANTHROPIC_API_KEY".to_string()));
+        assert!(get_standard_env_vars("openai").contains(&"OPENAI_API_KEY".to_string()));
+        assert!(get_standard_env_vars("google").contains(&"GOOGLE_API_KEY".to_string()));
+        assert!(get_standard_env_vars("custom").contains(&"CUSTOM_API_KEY".to_string()));
+    }
+
+    #[test]
+    fn test_provider_config_api_key_from_config() {
+        let config = ProviderConfig::new("anthropic")
+            .with_api_key("sk-ant-test-key-12345");
+
+        let info = config.get_api_key_info();
+        assert_eq!(info.source, ApiKeySource::ConfigFile);
+        assert!(info.key.is_some());
+    }
+
+    #[test]
+    fn test_provider_requires_api_key() {
+        assert!(ProviderConfig::new("anthropic").requires_api_key());
+        assert!(ProviderConfig::new("openai").requires_api_key());
+        assert!(!ProviderConfig::new("ollama").requires_api_key());
     }
 }

@@ -1,6 +1,7 @@
 //! Help and information display functions
 
 use crate::console::CliConsole;
+use sage_core::config::format_api_key_status_for_provider;
 use sage_sdk::SageAgentSdk;
 use std::path::PathBuf;
 
@@ -125,13 +126,20 @@ pub fn print_status(console: &CliConsole, sdk: &SageAgentSdk) {
         Err(e) => console.error(&format!("Configuration error: {e}")),
     }
 
+    // Show API key status for each provider
+    console.info("");
+    console.info("API Key Status:");
     for (provider, params) in &config.model_providers {
-        let has_key = params.get_api_key().is_some();
-        let status = if has_key { "✓" } else { "✗" };
-        console.info(&format!(
-            "{status} {provider}: API key {}",
-            if has_key { "configured" } else { "missing" }
-        ));
+        let key_info = params.get_api_key_info_for_provider(provider);
+        let status = format_api_key_status_for_provider(provider, &key_info);
+        console.info(&format!("  {}", status));
+
+        // Also validate the key format if present
+        if key_info.is_valid() {
+            if let Err(e) = params.validate_api_key_format_for_provider(provider) {
+                console.warn(&format!("    ⚠ {}", e));
+            }
+        }
     }
 
     if let Some(working_dir) = &config.working_directory {
