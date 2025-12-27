@@ -14,7 +14,9 @@ impl Tool for GlobTool {
     }
 
     fn description(&self) -> &str {
-        r#"- Fast file pattern matching tool that works with any codebase size
+        r#"Fast file pattern matching tool that works with any codebase size.
+
+Usage:
 - Supports glob patterns like "**/*.js" or "src/**/*.ts"
 - Returns matching file paths sorted by modification time
 - Use this tool when you need to find files by name patterns
@@ -35,8 +37,10 @@ Examples:
 - "*.{js,ts}" - Find all JavaScript and TypeScript files
 
 Parameters:
-- pattern: Glob pattern to match files (required)
-- path: Directory to search in (default: current working directory)"#
+- pattern: The glob pattern to match files against (required)
+- path: The directory to search in. If not specified, the current working directory will be used.
+
+Results are sorted by modification time (newest first) and limited to 1000 files."#
     }
 
     fn schema(&self) -> ToolSchema {

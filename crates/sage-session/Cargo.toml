@@ -1,0 +1,37 @@
+[package]
+name = "sage-session"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "Session management and persistence for Sage Agent"
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+# Async runtime
+tokio = { workspace = true, features = ["fs", "sync"] }
+async-trait = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Date/time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Unique IDs
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# File system utilities
+dirs = "5.0"
+
+[dev-dependencies]
+tempfile = "3.10"
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
