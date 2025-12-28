@@ -8,14 +8,33 @@ SWE-bench Lite 共 300 个实例，分批运行评估。
 
 | 批次 | 范围 | 命令 | 状态 | 备注 |
 |-----|------|------|------|------|
-| 1 | 0-49 | `--offset 0 --limit 50` | ✅ 已完成 | 95 runs, 46 predictions |
+| 1 | 0-49 | `--offset 0 --limit 50` | ✅ 已完成 | 46 predictions |
 | 2 | 50-99 | `--offset 50 --limit 50` | ✅ 已完成 | 合并到批次1 |
-| 3 | 100-149 | `--offset 100 --limit 50` | ⏳ 待运行 | |
-| 4 | 150-199 | `--offset 150 --limit 50` | ⏳ 待运行 | |
-| 5 | 200-249 | `--offset 200 --limit 50` | ⏳ 待运行 | |
-| 6 | 250-299 | `--offset 250 --limit 50` | ⏳ 待运行 | |
+| 3 | 100-149 | `--offset 100 --limit 50` | ⚠️ 中断 | 21/50 尝试，API限额 |
+| 4 | 150-199 | `--offset 150 --limit 50` | ⚠️ 中断 | 19/50 尝试，API限额 |
+| 5 | 200-249 | `--offset 200 --limit 50` | ✅ 已完成 | |
+| 6 | 250-299 | `--offset 250 --limit 50` | ⚠️ 中断 | 20/50 (GLM限额) |
 
-**当前统计**: 95 个运行目录，46 个有效补丁
+**当前统计**: 180+ 个预测，批次6中断于 20/50 (补丁率100%)
+
+**2024-12-28 更新**:
+- 实现 Claude Code 风格安全特性 (validation, violations 模块)
+- 批次6使用新版本 sage (含安全增强) 运行中
+- 当前处理: sympy 系列实例
+
+**2024-12-27 备注**: 因 API 5小时限额中断批次3和4，已从 git diff 恢复 19 个补丁
+
+## Setup
+
+```bash
+cd swebench_eval
+
+# 创建虚拟环境 (使用 Python 3.10)
+uv venv --python 3.10
+
+# 安装依赖
+uv pip install datasets
+```
 
 ## Commands
 
@@ -25,16 +44,16 @@ SWE-bench Lite 共 300 个实例，分批运行评估。
 cd swebench_eval
 
 # 批次 3: 100-149
-nohup .venv/bin/python run_agent.py --offset 100 --limit 50 --output predictions_101_150.json --timeout 900 --max-retries 1 </dev/null > swebench_101_150.log 2>&1 &
+nohup uv run run_agent.py --offset 100 --limit 50 --output predictions_101_150.json --timeout 900 --max-retries 1 </dev/null > swebench_101_150.log 2>&1 &
 
 # 批次 4: 150-199
-nohup .venv/bin/python run_agent.py --offset 150 --limit 50 --output predictions_151_200.json --timeout 900 --max-retries 1 </dev/null > swebench_151_200.log 2>&1 &
+nohup uv run run_agent.py --offset 150 --limit 50 --output predictions_151_200.json --timeout 900 --max-retries 1 </dev/null > swebench_151_200.log 2>&1 &
 
 # 批次 5: 200-249
-nohup .venv/bin/python run_agent.py --offset 200 --limit 50 --output predictions_201_250.json --timeout 900 --max-retries 1 </dev/null > swebench_201_250.log 2>&1 &
+nohup uv run run_agent.py --offset 200 --limit 50 --output predictions_201_250.json --timeout 900 --max-retries 1 </dev/null > swebench_201_250.log 2>&1 &
 
 # 批次 6: 250-299
-nohup .venv/bin/python run_agent.py --offset 250 --limit 50 --output predictions_251_300.json --timeout 900 --max-retries 1 </dev/null > swebench_251_300.log 2>&1 &
+nohup uv run run_agent.py --offset 250 --limit 50 --output predictions_251_300.json --timeout 900 --max-retries 1 </dev/null > swebench_251_300.log 2>&1 &
 ```
 
 ### 监控进度
@@ -50,13 +69,13 @@ ls swebench_runs/ | wc -l
 ps aux | grep run_agent
 
 # 查看特定批次的补丁数量
-cat predictions_101_150.json | python -c "import json,sys; print(len(json.load(sys.stdin)))"
+cat predictions_101_150.json | uv run python -c "import json,sys; print(len(json.load(sys.stdin)))"
 ```
 
 ### 合并所有预测结果
 
 ```bash
-python3 << 'EOF'
+uv run python << 'EOF'
 import json
 from pathlib import Path
 
@@ -89,10 +108,10 @@ EOF
 
 ```bash
 # 方式一：使用 run_evaluation.py
-python run_evaluation.py evaluate predictions_all.json
+uv run run_evaluation.py evaluate predictions_all.json
 
 # 方式二：直接使用 swebench CLI
-python -m swebench.harness.run_evaluation \
+uv run python -m swebench.harness.run_evaluation \
     --dataset_name princeton-nlp/SWE-bench_Lite \
     --predictions_path predictions_all.json \
     --max_workers 4 \
@@ -106,7 +125,7 @@ python -m swebench.harness.run_evaluation \
 ls ~/.swebench/logs/sage_eval_*/
 
 # 解析结果
-python -c "
+uv run python -c "
 import json
 with open('~/.swebench/logs/sage_eval_*/results.json') as f:
     results = json.load(f)
