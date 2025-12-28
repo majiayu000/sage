@@ -4,7 +4,10 @@ mod execution;
 mod security;
 mod types;
 
-pub use security::{requires_user_confirmation, validate_command_security};
+pub use security::{
+    requires_user_confirmation, validate_command_comprehensive, validate_command_security,
+    validate_command_with_strictness,
+};
 pub use types::BashTool;
 
 use async_trait::async_trait;
