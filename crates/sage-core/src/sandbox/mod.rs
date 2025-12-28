@@ -7,8 +7,10 @@ mod config;
 mod executor;
 mod limits;
 mod policy;
+pub mod validation;
+pub mod violations;
 
-pub use config::{SandboxConfig, SandboxMode};
+pub use config::{SandboxConfig, SandboxMode, ValidationStrictness};
 pub use executor::{SandboxExecutor, SandboxedExecution};
 pub use limits::{ResourceLimits, ResourceUsage};
 pub use policy::{CommandPolicy, NetworkPolicy, PathPolicy, SandboxPolicy};

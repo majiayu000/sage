@@ -1,8 +1,19 @@
-//! Command security validation
+//! Command security validation following Claude Code patterns.
+//!
+//! This module provides comprehensive security validation:
+//! - Heredoc injection detection
+//! - Shell metacharacter checks
+//! - Variable injection detection
+//! - Dangerous pattern detection
+//! - Critical path removal prevention
 
+use sage_core::sandbox::validation::{
+    CheckType, ValidationContext, ValidationWarning, validate_command,
+};
+use sage_core::sandbox::violations::{SharedViolationStore, Violation, ViolationType};
 use sage_core::tools::base::ToolError;
 
-/// Validate command for security issues
+/// Validate command for security issues (legacy API)
 ///
 /// This checks for:
 /// - Dangerous command patterns (system destruction, privilege escalation)
@@ -11,23 +22,46 @@ use sage_core::tools::base::ToolError;
 /// Note: Command chaining (&&, ;, ||) and command substitution ($(), ``) are allowed
 /// as they are commonly needed for development workflows.
 pub fn validate_command_security(command: &str) -> Result<(), ToolError> {
+    validate_command_comprehensive(command, None)
+}
+
+/// Comprehensive command validation following Claude Code patterns
+///
+/// Performs all security checks and optionally records violations.
+/// Returns warnings for non-blocking issues.
+pub fn validate_command_comprehensive(
+    command: &str,
+    violation_store: Option<&SharedViolationStore>,
+) -> Result<(), ToolError> {
     let command_lower = command.to_lowercase();
 
-    // Dangerous command patterns - system destruction
-    let dangerous_commands = [
-        "rm -rf /",
-        "rm -rf /*",
-        "rm -rf ~",
+    // Fork bomb detection (not in standard validation)
+    let fork_bombs = [
         ":(){ :|:& };:", // Fork bomb
         ":(){:|:&};:",   // Fork bomb variant (no spaces)
+    ];
+    for pattern in &fork_bombs {
+        if command_lower.contains(pattern) {
+            if let Some(store) = violation_store {
+                store.record(Violation::blocked(
+                    ViolationType::DangerousPattern,
+                    "Fork bomb detected",
+                    command,
+                ));
+            }
+            return Err(ToolError::PermissionDenied(
+                "Fork bomb detected - command blocked".to_string(),
+            ));
+        }
+    }
+
+    // System destruction commands (beyond what removal_check catches)
+    let system_destruction = [
         "dd if=/dev/zero of=/dev/sda",
         "dd if=/dev/random of=/dev/sda",
         "> /dev/sda",
         "mv /* /dev/null",
         "chmod -r 000 /",
-        "mkfs",
-        "fdisk",
-        "parted",
         "shutdown",
         "reboot",
         "halt",
@@ -36,9 +70,15 @@ pub fn validate_command_security(command: &str) -> Result<(), ToolError> {
         "init 6",
         "telinit 0",
     ];
-
-    for pattern in &dangerous_commands {
+    for pattern in &system_destruction {
         if command_lower.contains(pattern) {
+            if let Some(store) = violation_store {
+                store.record(Violation::blocked(
+                    ViolationType::DangerousPattern,
+                    format!("System destruction command: {}", pattern),
+                    command,
+                ));
+            }
             return Err(ToolError::PermissionDenied(format!(
                 "Dangerous command pattern detected: {}",
                 pattern
@@ -46,26 +86,92 @@ pub fn validate_command_security(command: &str) -> Result<(), ToolError> {
         }
     }
 
-    // Privilege escalation commands
-    let privilege_commands = ["sudo ", "su ", "doas ", "pkexec "];
-    for pattern in &privilege_commands {
-        if command_lower.starts_with(pattern)
-            || command_lower.contains(&format!(" {}", pattern.trim()))
-        {
-            return Err(ToolError::PermissionDenied(format!(
-                "Privilege escalation command not allowed: {}",
-                pattern.trim()
-            )));
+    // Use the validation module for comprehensive checks
+    let context = ValidationContext::permissive();
+    let result = validate_command(command, &context);
+
+    if !result.allowed {
+        // Record the violation if we have a store
+        if let Some(store) = violation_store {
+            let violation_type = match result.check_type {
+                CheckType::Heredoc => ViolationType::HeredocInjection,
+                CheckType::ShellMetacharacter => ViolationType::ShellMetacharacterAbuse,
+                CheckType::DangerousVariable => ViolationType::VariableInjection,
+                CheckType::DangerousPattern => ViolationType::DangerousPattern,
+                CheckType::DangerousRemoval => ViolationType::CriticalPathRemoval,
+                CheckType::Composite => ViolationType::CommandBlocked,
+            };
+            store.record(Violation::blocked(
+                violation_type,
+                result.reason.as_deref().unwrap_or("Command blocked"),
+                command,
+            ));
+        }
+
+        return Err(ToolError::PermissionDenied(format!(
+            "Command blocked by {} check: {}",
+            result.check_type.as_str(),
+            result.reason.unwrap_or_default()
+        )));
+    }
+
+    // Log warnings if we have a store
+    if let Some(store) = violation_store {
+        for warning in &result.warnings {
+            if warning.severity == sage_core::sandbox::validation::WarningSeverity::Critical {
+                store.record(
+                    Violation::warning(
+                        ViolationType::DangerousPattern,
+                        &warning.message,
+                        command,
+                    )
+                    .with_context(warning.suggestion.clone().unwrap_or_default()),
+                );
+            }
         }
     }
 
-    // Note: We now allow:
-    // - Command chaining: &&, ;, || (commonly needed for development)
-    // - Command substitution: $(), `` (commonly needed for scripting)
-    // - Variable expansion: ${} (commonly needed)
-    // - Pipes and redirects: |, >, < (always allowed)
-
     Ok(())
+}
+
+/// Validate command with strictness level
+pub fn validate_command_with_strictness(
+    command: &str,
+    strict: bool,
+    violation_store: Option<&SharedViolationStore>,
+) -> Result<Vec<ValidationWarning>, ToolError> {
+    let context = if strict {
+        ValidationContext::strict()
+    } else {
+        ValidationContext::permissive()
+    };
+
+    let result = validate_command(command, &context);
+
+    if !result.allowed {
+        if let Some(store) = violation_store {
+            let violation_type = match result.check_type {
+                CheckType::Heredoc => ViolationType::HeredocInjection,
+                CheckType::ShellMetacharacter => ViolationType::ShellMetacharacterAbuse,
+                CheckType::DangerousVariable => ViolationType::VariableInjection,
+                CheckType::DangerousPattern => ViolationType::DangerousPattern,
+                CheckType::DangerousRemoval => ViolationType::CriticalPathRemoval,
+                CheckType::Composite => ViolationType::CommandBlocked,
+            };
+            store.record(Violation::blocked(
+                violation_type,
+                result.reason.as_deref().unwrap_or("Command blocked"),
+                command,
+            ));
+        }
+
+        return Err(ToolError::PermissionDenied(format!(
+            "Command blocked: {}",
+            result.reason.unwrap_or_default()
+        )));
+    }
+
+    Ok(result.warnings)
 }
 
 /// Check if a command is destructive and requires user confirmation

@@ -1,4 +1,4 @@
-//! Sandbox configuration
+//! Sandbox configuration following Claude Code patterns.
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -22,6 +22,38 @@ pub enum SandboxMode {
 impl Default for SandboxMode {
     fn default() -> Self {
         Self::Restricted
+    }
+}
+
+/// Validation strictness level
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum ValidationStrictness {
+    /// Minimal validation - only block critical issues
+    Minimal,
+    /// Standard validation - balanced security
+    #[default]
+    Standard,
+    /// Strict validation - maximum security
+    Strict,
+}
+
+impl ValidationStrictness {
+    /// Check if chaining is allowed at this strictness level
+    pub fn allows_chaining(&self) -> bool {
+        match self {
+            ValidationStrictness::Minimal => true,
+            ValidationStrictness::Standard => true,
+            ValidationStrictness::Strict => false,
+        }
+    }
+
+    /// Check if background execution is allowed
+    pub fn allows_background(&self) -> bool {
+        match self {
+            ValidationStrictness::Minimal => true,
+            ValidationStrictness::Standard => true,
+            ValidationStrictness::Strict => false,
+        }
     }
 }
 
@@ -70,6 +102,43 @@ pub struct SandboxConfig {
 
     /// Environment variables to set
     pub env_override: Vec<(String, String)>,
+
+    // === Claude Code style security options ===
+    /// Validation strictness level for command checks
+    #[serde(default)]
+    pub validation_strictness: ValidationStrictness,
+
+    /// Whether to track violations
+    #[serde(default = "default_true")]
+    pub track_violations: bool,
+
+    /// Maximum number of violations to store
+    #[serde(default = "default_max_violations")]
+    pub max_violations: usize,
+
+    /// Whether to annotate stderr with violation info
+    #[serde(default = "default_true")]
+    pub annotate_stderr: bool,
+
+    /// Additional sensitive file patterns to protect
+    #[serde(default)]
+    pub additional_sensitive_files: Vec<String>,
+
+    /// Additional allowed tmp paths (beyond /tmp/sage/)
+    #[serde(default)]
+    pub allowed_tmp_paths: Vec<PathBuf>,
+
+    /// Whether to enforce strict sensitive file protection
+    #[serde(default = "default_true")]
+    pub strict_sensitive_files: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_max_violations() -> usize {
+    1000
 }
 
 impl Default for SandboxConfig {
@@ -89,6 +158,14 @@ impl Default for SandboxConfig {
             blocked_hosts: vec![],
             env_passthrough: Self::default_env_passthrough(),
             env_override: vec![],
+            // Claude Code style security defaults
+            validation_strictness: ValidationStrictness::Standard,
+            track_violations: true,
+            max_violations: 1000,
+            annotate_stderr: true,
+            additional_sensitive_files: vec![],
+            allowed_tmp_paths: vec![],
+            strict_sensitive_files: true,
         }
     }
 }
@@ -111,6 +188,14 @@ impl SandboxConfig {
             blocked_hosts: vec![],
             env_passthrough: vec!["*".to_string()],
             env_override: vec![],
+            // Minimal validation in permissive mode
+            validation_strictness: ValidationStrictness::Minimal,
+            track_violations: true,
+            max_violations: 1000,
+            annotate_stderr: false,
+            additional_sensitive_files: vec![],
+            allowed_tmp_paths: vec![],
+            strict_sensitive_files: false,
         }
     }
 
@@ -131,6 +216,24 @@ impl SandboxConfig {
             blocked_hosts: vec![],
             env_passthrough: vec![],
             env_override: vec![],
+            // Maximum validation in strict mode
+            validation_strictness: ValidationStrictness::Strict,
+            track_violations: true,
+            max_violations: 1000,
+            annotate_stderr: true,
+            additional_sensitive_files: vec![],
+            allowed_tmp_paths: vec![],
+            strict_sensitive_files: true,
+        }
+    }
+
+    /// Get a ValidationContext based on this config's strictness
+    pub fn to_validation_context(&self) -> super::validation::ValidationContext {
+        super::validation::ValidationContext {
+            allow_chaining: self.validation_strictness.allows_chaining(),
+            allow_background: self.validation_strictness.allows_background(),
+            working_directory: self.working_dir.as_ref().map(|p| p.display().to_string()),
+            dangerous_commands: self.blocked_commands.clone(),
         }
     }
 
