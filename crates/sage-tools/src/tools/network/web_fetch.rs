@@ -219,7 +219,23 @@ impl Tool for WebFetchTool {
     }
 
     fn description(&self) -> &str {
-        "Fetches data from a webpage and converts it into Markdown.\n\n1. The tool takes in a URL and returns the content of the page in Markdown format;\n2. If the return is not valid Markdown, it means the tool cannot successfully parse this page."
+        r#"- Fetches content from a specified URL and processes it
+- Takes a URL as input
+- Fetches the URL content, converts HTML to markdown
+- Returns the content in markdown format
+- Use this tool when you need to retrieve and analyze web content
+
+Usage notes:
+  - The URL must be a fully-formed valid URL
+  - HTTP URLs will be automatically upgraded to HTTPS
+  - This tool is read-only and does not modify any files
+  - Results may be summarized if the content is very large
+  - Includes caching for faster responses when repeatedly accessing the same URL
+  - When a URL redirects to a different host, the tool will inform you and provide the redirect URL. You should then make a new WebFetch request with the redirect URL to fetch the content.
+  - If the return is not valid Markdown, it means the tool cannot successfully parse this page.
+
+Parameters:
+- url: The URL to fetch content from (required)"#
     }
 
     fn schema(&self) -> ToolSchema {
