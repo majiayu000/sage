@@ -152,11 +152,12 @@ class SageEvaluator:
 
         instance_dir = self.work_dir / instance_id
 
-        # Clean up if exists
+        # Clean up if exists (git clone requires target directory to not exist)
         if instance_dir.exists():
             shutil.rmtree(instance_dir)
 
-        instance_dir.mkdir(parents=True)
+        # Ensure parent directory exists (git clone will create instance_dir itself)
+        self.work_dir.mkdir(parents=True, exist_ok=True)
 
         print(f"  Setting up {instance_id}...")
 
