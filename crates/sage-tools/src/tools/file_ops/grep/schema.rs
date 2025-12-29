@@ -15,27 +15,35 @@ impl Tool for GrepTool {
     }
 
     fn description(&self) -> &str {
-        "A powerful search tool built on regex for finding patterns in files.
+        r#"A powerful search tool built on ripgrep
 
-Features:
-- Full regex pattern matching with multiline support
-- Multiple output modes: content, files_with_matches, count
-- File filtering by glob pattern or file type
-- Context lines (-A, -B, -C) for matches
-- Case insensitive search (-i)
-- Line numbers (-n)
-- Result limiting with head_limit and offset
+  Usage:
+  - ALWAYS use Grep for search tasks. NEVER invoke `grep` or `rg` as a Bash command. The Grep tool has been optimized for correct permissions and access.
+  - Supports full regex syntax (e.g., "log.*Error", "function\\s+\\w+")
+  - Filter files with glob parameter (e.g., "*.js", "**/*.tsx") or type parameter (e.g., "js", "py", "rust")
+  - Output modes: "content" shows matching lines, "files_with_matches" shows only file paths (default), "count" shows match counts
+  - Use Task tool for open-ended searches requiring multiple rounds
+  - Pattern syntax: Uses ripgrep (not grep) - literal braces need escaping (use `interface\\{\\}` to find `interface{}` in Go code)
+  - Multiline matching: By default patterns match within single lines only. For cross-line patterns like `struct \\{[\\s\\S]*?field`, use `multiline: true`
 
-Common usage:
-- Search for pattern: pattern='TODO', output_mode='files_with_matches'
-- View matches: pattern='function.*export', output_mode='content', '-n'=true
-- Filter files: glob='*.rs' or type='rust'
-- Context: '-A'=3, '-B'=3 to show surrounding lines
+Parameters:
+  - pattern: The regex pattern to search for (required)
+  - path: Directory or file to search in (defaults to working directory)
+  - glob: Glob pattern to filter files (e.g., "*.rs", "*.{ts,tsx}")
+  - type: File type filter (e.g., "rust", "js", "py")
+  - output_mode: "content" | "files_with_matches" | "count"
+  - -i: Case insensitive search
+  - -n: Show line numbers (default: true)
+  - -A: Lines to show after each match
+  - -B: Lines to show before each match
+  - -C: Lines to show before and after each match
+  - multiline: Enable multiline matching (default: false)
+  - head_limit: Limit output to first N results
+  - offset: Skip first N results
 
 Automatically skips:
-- Binary files and common cache directories (node_modules, target, .git, etc.)
-- Binary file extensions (images, videos, archives, etc.)
-- Hidden files"
+  - Binary files and common cache directories (node_modules, target, .git, etc.)
+  - Binary file extensions (images, videos, archives, etc.)"#
     }
 
     fn schema(&self) -> ToolSchema {

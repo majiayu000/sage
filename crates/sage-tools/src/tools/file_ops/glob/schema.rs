@@ -14,9 +14,14 @@ impl Tool for GlobTool {
     }
 
     fn description(&self) -> &str {
-        "Fast file pattern matching tool for finding files by name patterns.
+        r#"- Fast file pattern matching tool that works with any codebase size
+- Supports glob patterns like "**/*.js" or "src/**/*.ts"
+- Returns matching file paths sorted by modification time
+- Use this tool when you need to find files by name patterns
+- When you are doing an open ended search that may require multiple rounds of globbing and grepping, use the Task tool instead
+- You can call multiple tools in a single response. It is always better to speculatively perform multiple searches in parallel if they are potentially useful.
 
-Supports standard glob patterns:
+Glob pattern syntax:
 - * matches any sequence of characters (except /)
 - ** matches any sequence of characters (including /)
 - ? matches any single character
@@ -24,18 +29,14 @@ Supports standard glob patterns:
 - [a-z] matches any character in the range
 
 Examples:
-- \"**/*.rs\" - Find all Rust files recursively
-- \"src/**/*.ts\" - Find all TypeScript files in src directory
-- \"test_*.py\" - Find all Python test files in current directory
-- \"*.js\" - Find all JavaScript files
-- \"[A-Z]*.md\" - Find all markdown files starting with uppercase letter
-- \"src/*/main.rs\" - Find main.rs files one level deep in src
+- "**/*.rs" - Find all Rust files recursively
+- "src/**/*.ts" - Find all TypeScript files in src directory
+- "test_*.py" - Find all Python test files in current directory
+- "*.{js,ts}" - Find all JavaScript and TypeScript files
 
-Note: Brace expansion (e.g., *.{js,ts}) may not be supported on all systems.
-Use separate glob calls if you need to match multiple extensions.
-
-Results are sorted by modification time (newest first) and limited to 1000 files.
-File paths are returned relative to the working directory when possible."
+Parameters:
+- pattern: Glob pattern to match files (required)
+- path: Directory to search in (default: current working directory)"#
     }
 
     fn schema(&self) -> ToolSchema {
