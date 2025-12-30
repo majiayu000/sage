@@ -145,29 +145,62 @@ class SageEvaluator:
         return instances
 
     def setup_instance(self, instance: Dict[str, Any]) -> Path:
-        """Set up a test instance (clone repo, checkout commit, install deps)."""
+        """Set up a test instance (clone repo, checkout commit, install deps).
+
+        Uses a shared repo cache to avoid re-cloning large repositories.
+        """
         instance_id = instance["instance_id"]
         repo = instance["repo"]
         base_commit = instance["base_commit"]
 
         instance_dir = self.work_dir / instance_id
 
-        # Clean up if exists (git clone requires target directory to not exist)
+        # Clean up if exists
         if instance_dir.exists():
             shutil.rmtree(instance_dir)
 
-        # Ensure parent directory exists (git clone will create instance_dir itself)
+        # Ensure directories exist
         self.work_dir.mkdir(parents=True, exist_ok=True)
 
         print(f"  Setting up {instance_id}...")
 
-        # Clone repo (full clone to ensure we have all commits)
+        # Use shared repo cache to avoid re-cloning
+        repo_cache_dir = self.work_dir / ".repo_cache"
+        repo_cache_dir.mkdir(parents=True, exist_ok=True)
+
+        # Convert repo name to safe directory name (e.g., "django/django" -> "django__django")
+        repo_safe_name = repo.replace("/", "__")
+        cached_repo_dir = repo_cache_dir / repo_safe_name
+
         repo_url = f"https://github.com/{repo}.git"
-        subprocess.run(
-            ["git", "clone", repo_url, str(instance_dir)],
-            capture_output=True,
-            check=True,
-        )
+
+        if cached_repo_dir.exists():
+            # Reuse cached repo - just copy and checkout
+            print(f"    Using cached repo: {repo}")
+            shutil.copytree(cached_repo_dir, instance_dir)
+
+            # Fetch latest and reset to ensure clean state
+            subprocess.run(
+                ["git", "-C", str(instance_dir), "fetch", "origin"],
+                capture_output=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(instance_dir), "reset", "--hard"],
+                capture_output=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(instance_dir), "clean", "-fdx"],
+                capture_output=True,
+            )
+        else:
+            # First time - clone to cache, then copy
+            print(f"    Cloning repo (first time): {repo}")
+            subprocess.run(
+                ["git", "clone", repo_url, str(cached_repo_dir)],
+                capture_output=True,
+                check=True,
+            )
+            shutil.copytree(cached_repo_dir, instance_dir)
 
         # Checkout base commit
         subprocess.run(
