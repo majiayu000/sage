@@ -68,7 +68,7 @@ pub use session_cache::{
     SessionCacheData, SessionCacheStats, ToolTrustSettings, UserPreferences,
 };
 pub use storage::{
-    BoxedSessionStorage, FileSessionStorage, MemorySessionStorage, SessionFilter, SessionStorage,
+    BoxedSessionStorage, FileSessionStorage, MemorySessionStorage, SessionStorage,
 };
 pub use summary::SummaryGenerator;
 pub use types::{
