@@ -110,9 +110,9 @@ Sage-Agent supports 8 LLM providers through a unified abstraction:
 
 | Provider | Models | Notes |
 |----------|--------|-------|
-| OpenAI | GPT-4, GPT-3.5 | Standard OpenAI API |
-| Anthropic | Claude family | Native support |
-| Google | Gemini | Vertex AI compatible |
+| OpenAI | GPT-5.2, GPT-4.1, o3, o4-mini | Latest GPT-5 series with reasoning |
+| Anthropic | Claude Opus 4.5, Sonnet 4.5, Haiku 4.5 | Claude 4 family |
+| Google | Gemini 3 Pro, Gemini 3 Flash | Latest Gemini 3 series |
 | Zhipu AI | **GLM-4.7** | Anthropic-compatible endpoint |
 | OpenRouter | 300+ models | Router to multiple providers |
 | Ollama | Local models | Self-hosted option |
