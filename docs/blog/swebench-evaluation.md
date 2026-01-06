@@ -328,21 +328,7 @@ This recovered approximately 15% of initially failed instances.
 
 ---
 
-## 8. Comparison with Other Systems
-
-| System | Model | SWE-bench Lite |
-|--------|-------|----------------|
-| SWE-agent | GPT-4 | 18.0% |
-| SWE-agent | Claude 3 Opus | 22.0% |
-| AutoCodeRover | GPT-4 | 19.0% |
-| Agentless | GPT-4o | 27.0% |
-| **Sage-Agent** | **GLM-4.7** | **48.3%** |
-
-*Note: Results may vary based on evaluation conditions and prompting strategies.*
-
----
-
-## 9. Conclusion
+## 8. Conclusion
 
 Sage-Agent demonstrates that a well-designed agent system with appropriate tooling and prompting can achieve competitive results on challenging software engineering benchmarks. The combination of:
 
