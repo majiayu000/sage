@@ -1,6 +1,6 @@
 # Sage-Agent: A Rust-Based LLM Agent for Software Engineering Tasks
 
-## Achieving 48.3% on SWE-bench Lite with GLM-4
+## Achieving 48.3% on SWE-bench Lite with GLM-4.7
 
 **Author:** majiayu000
 **Date:** January 2026
@@ -9,7 +9,7 @@
 
 ## Abstract
 
-We present Sage-Agent, a high-performance LLM agent system built in Rust, designed for autonomous software engineering tasks. Using GLM-4 as the underlying language model, Sage-Agent achieves a **48.3% resolution rate (145/300)** on the SWE-bench Lite benchmark. This blog post describes the system architecture, key design decisions, evaluation methodology, and lessons learned.
+We present Sage-Agent, a high-performance LLM agent system built in Rust, designed for autonomous software engineering tasks. Using GLM-4.7 as the underlying language model, Sage-Agent achieves a **48.3% resolution rate (145/300)** on the SWE-bench Lite benchmark. This blog post describes the system architecture, key design decisions, evaluation methodology, and lessons learned.
 
 ---
 
@@ -113,15 +113,15 @@ Sage-Agent supports 8 LLM providers through a unified abstraction:
 | OpenAI | GPT-4, GPT-3.5 | Standard OpenAI API |
 | Anthropic | Claude family | Native support |
 | Google | Gemini | Vertex AI compatible |
-| Zhipu AI | **GLM-4** | Anthropic-compatible endpoint |
+| Zhipu AI | **GLM-4.7** | Anthropic-compatible endpoint |
 | OpenRouter | 300+ models | Router to multiple providers |
 | Ollama | Local models | Self-hosted option |
 | Azure | Azure OpenAI | Enterprise deployment |
 | Doubao | ByteDance models | Chinese market |
 
-### 3.2 GLM-4 Integration
+### 3.2 GLM-4.7 Integration
 
-For this evaluation, we used **GLM-4** via Zhipu AI's Anthropic-compatible endpoint:
+For this evaluation, we used **GLM-4.7** via Zhipu AI's Anthropic-compatible endpoint:
 
 ```rust
 pub struct GlmProvider {
@@ -142,7 +142,7 @@ impl GlmProvider {
 ```
 
 Key configuration:
-- **Model**: `glm-4`
+- **Model**: `glm-4.7`
 - **Temperature**: 0.0 (deterministic)
 - **Max tokens**: 8192
 - **Base URL**: `https://open.bigmodel.cn/api/anthropic`
@@ -336,7 +336,7 @@ This recovered approximately 15% of initially failed instances.
 | SWE-agent | Claude 3 Opus | 22.0% |
 | AutoCodeRover | GPT-4 | 19.0% |
 | Agentless | GPT-4o | 27.0% |
-| **Sage-Agent** | **GLM-4** | **48.3%** |
+| **Sage-Agent** | **GLM-4.7** | **48.3%** |
 
 *Note: Results may vary based on evaluation conditions and prompting strategies.*
 
@@ -347,7 +347,7 @@ This recovered approximately 15% of initially failed instances.
 Sage-Agent demonstrates that a well-designed agent system with appropriate tooling and prompting can achieve competitive results on challenging software engineering benchmarks. The combination of:
 
 - **Rust's performance** for fast execution
-- **GLM-4's reasoning capabilities** for code understanding
+- **GLM-4.7's reasoning capabilities** for code understanding
 - **Specialized tooling** for precise code modification
 - **Targeted prompting** for task-specific guidance
 
@@ -376,7 +376,7 @@ Sage-Agent demonstrates that a well-designed agent system with appropriate tooli
 - **Python**: 3.10+ (for SWE-bench evaluation harness)
 - **Docker**: For official SWE-bench evaluation
 - **Memory**: 16GB+ recommended
-- **API Key**: Zhipu AI GLM-4 access
+- **API Key**: Zhipu AI GLM-4.7 access
 
 ---
 
