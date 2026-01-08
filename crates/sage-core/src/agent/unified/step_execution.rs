@@ -73,11 +73,12 @@ impl UnifiedExecutor {
 
         // Execute LLM call with interrupt support using streaming API
         // Streaming keeps the connection alive, avoiding timeout issues with slow models
+        // Uses collect_stream_with_cancel for faster cancellation response between chunks
         let llm_response = select! {
             response = async {
-                // Use streaming API and collect into complete response
+                // Use streaming API and collect into complete response with cancel support
                 let stream = self.llm_client.chat_stream(&working_messages, Some(tool_schemas)).await?;
-                stream_utils::collect_stream(stream).await
+                stream_utils::collect_stream_with_cancel(stream, &cancellation_token).await
             } => {
                 response?
             }
