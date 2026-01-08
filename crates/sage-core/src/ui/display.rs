@@ -189,6 +189,12 @@ impl DisplayManager {
         let rendered = super::markdown::render_markdown_with_width(content, width);
         println!("{}", rendered);
     }
+
+    /// Render markdown and return lines for custom formatting
+    pub fn render_markdown_lines(content: &str) -> Vec<String> {
+        let rendered = render_markdown(content);
+        rendered.lines().map(|s| s.to_string()).collect()
+    }
 }
 
 impl Default for DisplayManager {

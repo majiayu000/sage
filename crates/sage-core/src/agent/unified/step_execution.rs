@@ -108,10 +108,15 @@ impl UnifiedExecutor {
         // Process response
         let mut new_messages = messages.to_vec();
 
-        // Display assistant response
+        // Display assistant response with proper formatting
         if !llm_response.content.is_empty() {
-            println!("\n AI Response:");
-            DisplayManager::print_markdown(&llm_response.content);
+            println!();
+            println!("  {} {}", "󰚩".bright_cyan(), "AI Response".bright_white().bold());
+            println!();
+            // Print markdown content with 2-space indent
+            for line in DisplayManager::render_markdown_lines(&llm_response.content) {
+                println!("  {}", line);
+            }
         }
 
         // Add assistant message with tool_calls if present
@@ -168,12 +173,33 @@ impl UnifiedExecutor {
     ) -> SageResult<()> {
         tracing::info!(tool_count = tool_calls.len(), "executing tools");
 
-        // Start tool animation
-        self.animation_manager
-            .start_animation(AnimationState::ExecutingTools, "Executing tools", "green")
-            .await;
+        // Display tool execution header
+        println!();
+        println!("  {} {} ({})",
+            "".bright_magenta(),
+            "Executing tools".bright_white().bold(),
+            tool_calls.len().to_string().dimmed()
+        );
 
         for tool_call in tool_calls {
+            // Display tool call info with parameters
+            let tool_icon = Self::get_tool_icon(&tool_call.name);
+            let params_preview = Self::format_tool_params(&tool_call.arguments);
+            println!();
+            println!("  {} {} {}",
+                tool_icon.bright_magenta(),
+                tool_call.name.bright_magenta().bold(),
+                params_preview.dimmed()
+            );
+
+            // Start animation for this specific tool
+            self.animation_manager
+                .start_animation(
+                    AnimationState::ExecutingTools,
+                    &format!("Running {}", tool_call.name),
+                    "green"
+                )
+                .await;
             // Check for interrupt before each tool
             if task_scope.is_cancelled() {
                 self.animation_manager.stop_animation().await;
@@ -240,6 +266,29 @@ impl UnifiedExecutor {
                     .await;
             }
 
+            // Stop animation and display result
+            self.animation_manager.stop_animation().await;
+
+            // Display tool result
+            let status_icon = if tool_result.success { "✓".green() } else { "✗".red() };
+            let duration_ms = tool_start_time.elapsed().as_millis();
+            print!("    {} ", status_icon);
+            if tool_result.success {
+                println!("{} ({}ms)", "done".green(), duration_ms);
+            } else {
+                println!("{} ({}ms)", "failed".red(), duration_ms);
+                if let Some(ref err) = tool_result.error {
+                    // Show first line of error
+                    let first_line = err.lines().next().unwrap_or(err);
+                    let truncated = if first_line.len() > 60 {
+                        format!("{}...", &first_line[..60])
+                    } else {
+                        first_line.to_string()
+                    };
+                    println!("      {}", truncated.dimmed());
+                }
+            }
+
             step.tool_results.push(tool_result.clone());
 
             // Add tool result to messages using LlmMessage::tool
@@ -251,10 +300,79 @@ impl UnifiedExecutor {
             ));
         }
 
-        self.animation_manager.stop_animation().await;
         step.state = AgentState::ToolExecution;
 
         Ok(())
+    }
+
+    /// Get icon for specific tool type
+    fn get_tool_icon(tool_name: &str) -> &'static str {
+        match tool_name.to_lowercase().as_str() {
+            "bash" | "shell" | "execute" => "",
+            "read" | "cat" => "",
+            "write" | "edit" => "",
+            "grep" | "search" => "",
+            "glob" | "find" => "",
+            "lsp" | "code" => "",
+            "web_fetch" | "web_search" => "󰖟",
+            "task" | "todo_write" => "",
+            _ => "",
+        }
+    }
+
+    /// Format tool parameters for display
+    fn format_tool_params(arguments: &std::collections::HashMap<String, serde_json::Value>) -> String {
+        // Extract key parameters to show
+        let mut parts = Vec::new();
+
+        // Show file_path or path if present
+        if let Some(path) = arguments.get("file_path").or(arguments.get("path")) {
+            if let Some(s) = path.as_str() {
+                let display = if s.len() > 40 {
+                    format!("...{}", &s[s.len().saturating_sub(37)..])
+                } else {
+                    s.to_string()
+                };
+                parts.push(display);
+            }
+        }
+
+        // Show command if present (for bash)
+        if let Some(cmd) = arguments.get("command") {
+            if let Some(s) = cmd.as_str() {
+                let display = if s.len() > 50 {
+                    format!("{}...", &s[..47])
+                } else {
+                    s.to_string()
+                };
+                parts.push(display);
+            }
+        }
+
+        // Show pattern if present (for grep/glob)
+        if let Some(pattern) = arguments.get("pattern") {
+            if let Some(s) = pattern.as_str() {
+                parts.push(format!("pattern={}", s));
+            }
+        }
+
+        // Show query if present (for search)
+        if let Some(query) = arguments.get("query") {
+            if let Some(s) = query.as_str() {
+                let display = if s.len() > 30 {
+                    format!("{}...", &s[..27])
+                } else {
+                    s.to_string()
+                };
+                parts.push(format!("query=\"{}\"", display));
+            }
+        }
+
+        if parts.is_empty() {
+            String::new()
+        } else {
+            parts.join(" ")
+        }
     }
 
     /// Execute a tool with permission check for dangerous operations

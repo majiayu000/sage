@@ -7,6 +7,7 @@
 
 use crate::console::CliConsole;
 use crate::signal_handler::start_global_signal_handling;
+use crate::ui::NerdConsole;
 use sage_core::agent::{ExecutionMode, ExecutionOptions, ExecutionOutcome, UnifiedExecutor};
 use sage_core::commands::{CommandExecutor, CommandRegistry};
 use sage_core::config::{Config, load_config_from_file};
@@ -195,7 +196,7 @@ async fn execute_single_task(
     task_description: &str,
 ) -> SageResult<()> {
     // Process slash commands if needed
-    let task_description = process_slash_command(
+    let action = process_slash_command(
         task_description,
         console,
         working_dir,
@@ -203,11 +204,16 @@ async fn execute_single_task(
     )
     .await?;
 
-    // If command was handled locally, we're done
-    if task_description.is_none() {
-        return Ok(());
-    }
-    let task_description = task_description.unwrap();
+    // Handle the command action
+    let task_description = match action {
+        SlashCommandAction::Prompt(desc) => desc,
+        SlashCommandAction::Handled => return Ok(()),
+        SlashCommandAction::ResumeSession(_) => {
+            // In single-task mode, we can't resume sessions inline
+            console.warn("Use 'sage -r <session_id>' to resume sessions in single-task mode.");
+            return Ok(());
+        }
+    };
 
     // Execute the task
     let task = TaskMetadata::new(&task_description, &working_dir.display().to_string());
@@ -227,26 +233,47 @@ async fn execute_single_task(
     Ok(())
 }
 
-/// Interactive REPL loop (Claude Code style)
+/// Interactive REPL loop (Claude Code style) with Nerd Font UI
 async fn execute_interactive_loop(
     executor: &mut UnifiedExecutor,
     console: &CliConsole,
-    _config: &Config,
+    config: &Config,
     working_dir: &std::path::Path,
     jsonl_storage: &Arc<sage_core::session::JsonlSessionStorage>,
     _session_recorder: &Option<Arc<Mutex<SessionRecorder>>>,
 ) -> SageResult<()> {
-    // Show welcome header and recent activity
-    console.print_header("Sage Agent");
-    show_recent_activity(console, jsonl_storage).await;
+    // Create Nerd Console for beautiful output
+    let nerd = NerdConsole::new();
 
-    console.info("Type your message, or /help for commands. Press Ctrl+C to exit.");
+    // Get model info from config
+    let model = config.model_providers
+        .get(&config.default_provider)
+        .map(|p| p.model.as_str())
+        .unwrap_or("unknown");
+
+    // Get git branch
+    let git_branch = get_git_branch(working_dir);
+
+    // Get working dir display
+    let dir_display = working_dir.display().to_string();
+
+    // Show welcome header with Nerd Font style
+    nerd.print_header(model, git_branch.as_deref(), &dir_display);
+
+    // Show recent activity in tree format
+    show_recent_activity_nerd(&nerd, jsonl_storage).await;
+
+    nerd.info("Type your message, or /help for commands. Press Ctrl+C to exit.");
     println!();
 
     // Main REPL loop - use console.input() for proper Chinese character handling
     loop {
+        // Print Nerd Font style prompt
+        nerd.print_prompt();
+
         // Read user input with proper Unicode support (using console crate's Term)
-        let input = match console.input("sage") {
+        // We use raw input here since we printed our own prompt
+        let input = match read_input_raw() {
             Ok(input) => input,
             Err(e) => {
                 if matches!(
@@ -254,22 +281,22 @@ async fn execute_interactive_loop(
                     std::io::ErrorKind::UnexpectedEof | std::io::ErrorKind::Interrupted
                 ) {
                     println!();
-                    console.info("Goodbye!");
+                    nerd.info("Goodbye!");
                     break;
                 }
-                console.error(&format!("Input error: {}", e));
+                nerd.error(&format!("Input error: {}", e));
                 continue;
             }
         };
 
-        // Skip empty input (console.input already handles this internally)
+        // Skip empty input
         if input.is_empty() {
             continue;
         }
 
         // Handle exit commands
         if input == "/exit" || input == "/quit" || input == "exit" || input == "quit" || input == "q" {
-            console.info("Goodbye!");
+            nerd.info("Goodbye!");
             break;
         }
 
@@ -277,12 +304,21 @@ async fn execute_interactive_loop(
         if input == "/clear" || input == "clear" || input == "cls" {
             print!("\x1B[2J\x1B[1;1H");
             print!("\x1B[3J");
-            console.success("Conversation cleared.");
+            std::io::stdout().flush().ok();
+            // Reprint header after clear
+            nerd.print_header(model, git_branch.as_deref(), &dir_display);
+            nerd.success("Conversation cleared.");
+            continue;
+        }
+
+        // Handle /help command
+        if input == "/help" || input == "help" || input == "?" {
+            nerd.print_help();
             continue;
         }
 
         // Process slash commands
-        let task_description = match process_slash_command(
+        let action = match process_slash_command(
             &input,
             console,
             working_dir,
@@ -290,13 +326,34 @@ async fn execute_interactive_loop(
         )
         .await
         {
-            Ok(Some(desc)) => desc,
-            Ok(None) => continue, // Command was handled locally
+            Ok(action) => action,
             Err(e) => {
-                console.error(&format!("Command error: {}", e));
+                nerd.error(&format!("Command error: {}", e));
                 continue;
             }
         };
+
+        // Handle the command action
+        let task_description = match action {
+            SlashCommandAction::Prompt(desc) => desc,
+            SlashCommandAction::Handled => continue,
+            SlashCommandAction::ResumeSession(session_id) => {
+                // Load session history and resume
+                match resume_session_inline(executor, &session_id, jsonl_storage, &nerd).await {
+                    Ok(_) => {
+                        nerd.success("Session resumed. Continue your conversation.");
+                        continue;
+                    }
+                    Err(e) => {
+                        nerd.error(&format!("Failed to resume session: {}", e));
+                        continue;
+                    }
+                }
+            }
+        };
+
+        // Show thinking indicator
+        nerd.print_thinking();
 
         // Execute the task
         let task = TaskMetadata::new(&task_description, &working_dir.display().to_string());
@@ -304,19 +361,22 @@ async fn execute_interactive_loop(
 
         match executor.execute(task).await {
             Ok(outcome) => {
+                nerd.clear_thinking();
                 let duration = start_time.elapsed();
 
-                // Show brief stats (not full outcome display in REPL mode)
-                println!();
-                println!(
-                    "\x1b[90m({:.1}s, {} tokens)\x1b[0m",
+                // Show brief summary with Nerd Font style
+                let usage = &outcome.execution().total_usage;
+                nerd.print_summary(
+                    outcome.is_success(),
+                    outcome.execution().steps.len(),
+                    usage.prompt_tokens as u64,
+                    usage.completion_tokens as u64,
                     duration.as_secs_f64(),
-                    outcome.execution().total_usage.total_tokens
                 );
-                println!();
             }
             Err(e) => {
-                console.error(&format!("Execution error: {}", e));
+                nerd.clear_thinking();
+                nerd.error(&format!("Execution error: {}", e));
             }
         }
     }
@@ -324,15 +384,128 @@ async fn execute_interactive_loop(
     Ok(())
 }
 
-/// Process slash commands, return None if handled locally, Some(prompt) if should be sent to LLM
+/// Read raw input without printing prompt (we handle prompt ourselves)
+/// Properly handles UTF-8 characters including Chinese
+fn read_input_raw() -> std::io::Result<String> {
+    use console::{Key, Term};
+
+    let term = Term::stdout();
+    let mut input = String::new();
+
+    loop {
+        match term.read_key()? {
+            Key::Enter => {
+                println!();
+                break;
+            }
+            Key::Backspace => {
+                if !input.is_empty() {
+                    // Pop the last character
+                    let removed = input.pop();
+
+                    // Calculate display width of the removed character
+                    // Chinese characters are typically 2 cells wide
+                    let width = if let Some(c) = removed {
+                        if c.is_ascii() { 1 } else { 2 }
+                    } else {
+                        1
+                    };
+
+                    // Move cursor back and clear based on character width
+                    for _ in 0..width {
+                        print!("\x08 \x08");
+                    }
+                    std::io::stdout().flush()?;
+                }
+            }
+            Key::Char(c) => {
+                if c == '\u{15}' {
+                    // Ctrl+U - clear entire line
+                    // Calculate total display width
+                    let total_width: usize = input.chars()
+                        .map(|c| if c.is_ascii() { 1 } else { 2 })
+                        .sum();
+
+                    for _ in 0..total_width {
+                        print!("\x08 \x08");
+                    }
+                    input.clear();
+                    std::io::stdout().flush()?;
+                } else {
+                    input.push(c);
+                    print!("{}", c);
+                    std::io::stdout().flush()?;
+                }
+            }
+            Key::CtrlC => {
+                continue; // Let global handler deal with it
+            }
+            _ => {}
+        }
+    }
+
+    Ok(input.trim().to_string())
+}
+
+/// Get current git branch
+fn get_git_branch(working_dir: &std::path::Path) -> Option<String> {
+    std::process::Command::new("git")
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .current_dir(working_dir)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+}
+
+/// Show recent activity with Nerd Font style
+async fn show_recent_activity_nerd(
+    nerd: &NerdConsole,
+    storage: &Arc<sage_core::session::JsonlSessionStorage>,
+) {
+    use crate::ui::nerd_console::SessionInfo;
+
+    let sessions = match storage.list_sessions().await {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+
+    if sessions.is_empty() {
+        return;
+    }
+
+    let session_infos: Vec<SessionInfo> = sessions
+        .iter()
+        .take(5)
+        .map(|s| SessionInfo {
+            title: s.display_title().to_string(),
+            time_ago: format_time_ago(&s.updated_at),
+            message_count: s.message_count,
+        })
+        .collect();
+
+    nerd.print_sessions_tree(&session_infos);
+}
+
+/// Result of processing a slash command
+enum SlashCommandAction {
+    /// Send this prompt to the LLM
+    Prompt(String),
+    /// Command was handled locally, no further action needed
+    Handled,
+    /// Resume a session with the given ID
+    ResumeSession(String),
+}
+
+/// Process slash commands
 async fn process_slash_command(
     input: &str,
     console: &CliConsole,
     working_dir: &std::path::Path,
     jsonl_storage: &Arc<sage_core::session::JsonlSessionStorage>,
-) -> SageResult<Option<String>> {
+) -> SageResult<SlashCommandAction> {
     if !CommandExecutor::is_command(input) {
-        return Ok(Some(input.to_string()));
+        return Ok(SlashCommandAction::Prompt(input.to_string()));
     }
 
     let mut registry = CommandRegistry::new(working_dir);
@@ -347,8 +520,7 @@ async fn process_slash_command(
         Ok(Some(result)) => {
             // Handle interactive commands (e.g., /resume)
             if let Some(interactive_cmd) = result.interactive {
-                handle_interactive_command(&interactive_cmd, console, jsonl_storage).await?;
-                return Ok(None);
+                return handle_interactive_command_v2(&interactive_cmd, console, jsonl_storage).await;
             }
 
             // Handle local commands (output directly, no LLM)
@@ -359,7 +531,7 @@ async fn process_slash_command(
                 if let Some(output) = &result.local_output {
                     println!("{}", output);
                 }
-                return Ok(None);
+                return Ok(SlashCommandAction::Handled);
             }
 
             if result.show_expansion {
@@ -371,11 +543,115 @@ async fn process_slash_command(
             if let Some(status) = &result.status_message {
                 console.info(status);
             }
-            Ok(Some(result.expanded_prompt))
+            Ok(SlashCommandAction::Prompt(result.expanded_prompt))
         }
-        Ok(None) => Ok(Some(input.to_string())), // Not a command, use as-is
+        Ok(None) => Ok(SlashCommandAction::Prompt(input.to_string())), // Not a command, use as-is
         Err(e) => Err(e),
     }
+}
+
+/// Handle interactive commands, returning the appropriate action
+async fn handle_interactive_command_v2(
+    cmd: &sage_core::commands::types::InteractiveCommand,
+    console: &CliConsole,
+    storage: &Arc<sage_core::session::JsonlSessionStorage>,
+) -> SageResult<SlashCommandAction> {
+    use sage_core::commands::types::InteractiveCommand;
+
+    match cmd {
+        InteractiveCommand::Resume { session_id, show_all } => {
+            handle_resume_interactive(session_id.as_deref(), *show_all, console, storage).await
+        }
+        InteractiveCommand::Title { title } => {
+            console.warn(&format!("Title command not available in non-interactive mode. Title: {}", title));
+            Ok(SlashCommandAction::Handled)
+        }
+    }
+}
+
+/// Handle /resume command with interactive selection
+async fn handle_resume_interactive(
+    session_id: Option<&str>,
+    show_all: bool,
+    console: &CliConsole,
+    storage: &Arc<sage_core::session::JsonlSessionStorage>,
+) -> SageResult<SlashCommandAction> {
+    use dialoguer::{Select, theme::ColorfulTheme};
+
+    let sessions = storage.list_sessions().await?;
+
+    if sessions.is_empty() {
+        console.info("No previous sessions found.");
+        console.info("Start a conversation to create a new session.");
+        return Ok(SlashCommandAction::Handled);
+    }
+
+    // If a specific session ID was provided, resume it directly
+    if let Some(id) = session_id {
+        if let Some(session) = sessions.iter().find(|s| s.id == id || s.id.starts_with(id)) {
+            console.success(&format!("Resuming session: {}", session.display_title()));
+            return Ok(SlashCommandAction::ResumeSession(session.id.clone()));
+        } else {
+            console.warn(&format!("Session not found: {}", id));
+            return Ok(SlashCommandAction::Handled);
+        }
+    }
+
+    // Build selection items
+    let display_count = if show_all { sessions.len() } else { 10.min(sessions.len()) };
+
+    let items: Vec<String> = sessions
+        .iter()
+        .take(display_count)
+        .map(|s| {
+            let title = truncate_str(s.display_title(), 50);
+            let time_ago = format_time_ago(&s.updated_at);
+            format!("{} ({}, {} msgs)", title, time_ago, s.message_count)
+        })
+        .collect();
+
+    // Add cancel option
+    let mut items_with_cancel = items.clone();
+    items_with_cancel.push("Cancel".to_string());
+
+    println!();
+    console.info("Select a session to resume (↑/↓ to navigate, Enter to select):");
+    println!();
+
+    // Interactive selection
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .items(&items_with_cancel)
+        .default(0)
+        .interact_opt();
+
+    match selection {
+        Ok(Some(idx)) if idx < sessions.len().min(display_count) => {
+            let session = &sessions[idx];
+            console.success(&format!("Resuming: {}", session.display_title()));
+            Ok(SlashCommandAction::ResumeSession(session.id.clone()))
+        }
+        _ => {
+            console.info("Cancelled.");
+            Ok(SlashCommandAction::Handled)
+        }
+    }
+}
+
+/// Resume a session inline (within the REPL loop)
+async fn resume_session_inline(
+    executor: &mut UnifiedExecutor,
+    session_id: &str,
+    _storage: &Arc<sage_core::session::JsonlSessionStorage>,
+    nerd: &NerdConsole,
+) -> SageResult<()> {
+    nerd.info(&format!("Loading session {}...", &session_id[..session_id.len().min(16)]));
+
+    // Restore the session - this loads messages and sets up session state
+    let restored_messages = executor.restore_session(session_id).await?;
+
+    nerd.success(&format!("Loaded {} messages from previous session.", restored_messages.len()));
+
+    Ok(())
 }
 
 /// Handle user input requests from the execution loop
