@@ -8,7 +8,6 @@ use crate::llm::parsers::ResponseParser;
 use crate::llm::provider_types::ModelParameters;
 use crate::llm::streaming::LlmStream;
 use crate::tools::types::ToolSchema;
-use anyhow::Context;
 use reqwest::Client;
 use serde_json::{Value, json};
 use tracing::instrument;
@@ -96,10 +95,9 @@ impl GoogleProvider {
             .json(&request_body)
             .send()
             .await
-            .map_err(|e| SageError::llm(format!("Google request failed: {}", e)))
-            .context(format!(
-                "Failed to send HTTP request to Google Gemini API for model: {}",
-                self.model_params.model
+            .map_err(|e| SageError::llm_with_context(
+                format!("Google request failed: {}", e),
+                format!("Failed to send HTTP request to Google Gemini API for model: {}", self.model_params.model),
             ))?;
 
         if !response.status().is_success() {
@@ -114,8 +112,10 @@ impl GoogleProvider {
         let response_json: Value = response
             .json()
             .await
-            .map_err(|e| SageError::llm(format!("Failed to parse Google response: {}", e)))
-            .context("Failed to deserialize Google Gemini API response as JSON")?;
+            .map_err(|e| SageError::llm_with_context(
+                format!("Failed to parse Google response: {}", e),
+                "Failed to deserialize Google Gemini API response as JSON",
+            ))?;
 
         tracing::debug!(
             "Google API response: {}",

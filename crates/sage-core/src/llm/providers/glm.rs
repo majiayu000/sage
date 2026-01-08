@@ -8,7 +8,6 @@ use crate::llm::parsers::ResponseParser;
 use crate::llm::provider_types::ModelParameters;
 use crate::llm::streaming::LlmStream;
 use crate::tools::types::ToolSchema;
-use anyhow::Context;
 use reqwest::Client;
 use serde_json::{Value, json};
 use tracing::instrument;
@@ -111,10 +110,9 @@ impl GlmProvider {
         let response = request
             .send()
             .await
-            .map_err(|e| SageError::llm(format!("GLM API request failed: {}", e)))
-            .context(format!(
-                "Failed to send HTTP request to GLM (Zhipu AI) API for model: {}",
-                self.model_params.model
+            .map_err(|e| SageError::llm_with_context(
+                format!("GLM API request failed: {}", e),
+                format!("Failed to send HTTP request to GLM (Zhipu AI) API for model: {}", self.model_params.model),
             ))?;
 
         if !response.status().is_success() {
@@ -148,8 +146,10 @@ impl GlmProvider {
         let response_json: Value = response
             .json()
             .await
-            .map_err(|e| SageError::llm(format!("Failed to parse GLM response: {}", e)))
-            .context("Failed to deserialize GLM (Zhipu AI) API response as JSON")?;
+            .map_err(|e| SageError::llm_with_context(
+                format!("Failed to parse GLM response: {}", e),
+                "Failed to deserialize GLM (Zhipu AI) API response as JSON",
+            ))?;
 
         tracing::debug!(
             "GLM API response: {}",
@@ -224,8 +224,10 @@ impl GlmProvider {
         let response = request
             .send()
             .await
-            .map_err(|e| SageError::llm(format!("GLM streaming request failed: {}", e)))
-            .context("Failed to send HTTP request to GLM streaming API")?;
+            .map_err(|e| SageError::llm_with_context(
+                format!("GLM streaming request failed: {}", e),
+                "Failed to send HTTP request to GLM streaming API",
+            ))?;
 
         if !response.status().is_success() {
             let error_text = response.text().await.unwrap_or_default();

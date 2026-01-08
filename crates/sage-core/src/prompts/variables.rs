@@ -130,47 +130,47 @@ impl PromptVariables {
         self.custom.insert(key.into(), value.into());
     }
 
-    /// Get variable value by name
-    pub fn get(&self, name: &str) -> Option<String> {
+    /// Get variable value by name (returns reference to avoid cloning)
+    pub fn get(&self, name: &str) -> Option<&str> {
         match name {
-            "BASH_TOOL_NAME" => Some(self.bash_tool_name.clone()),
-            "READ_TOOL_NAME" => Some(self.read_tool_name.clone()),
-            "EDIT_TOOL_NAME" => Some(self.edit_tool_name.clone()),
-            "WRITE_TOOL_NAME" => Some(self.write_tool_name.clone()),
-            "GLOB_TOOL_NAME" => Some(self.glob_tool_name.clone()),
-            "GREP_TOOL_NAME" => Some(self.grep_tool_name.clone()),
-            "TASK_TOOL_NAME" => Some(self.task_tool_name.clone()),
-            "TODO_TOOL_NAME" => Some(self.todo_tool_name.clone()),
-            "ASK_USER_QUESTION_TOOL_NAME" => Some(self.ask_user_question_tool_name.clone()),
-            "WEB_FETCH_TOOL_NAME" => Some(self.web_fetch_tool_name.clone()),
-            "ENTER_PLAN_MODE_TOOL_NAME" => Some(self.enter_plan_mode_tool_name.clone()),
-            "EXIT_PLAN_MODE_TOOL_NAME" => Some(self.exit_plan_mode_tool_name.clone()),
+            "BASH_TOOL_NAME" => Some(&self.bash_tool_name),
+            "READ_TOOL_NAME" => Some(&self.read_tool_name),
+            "EDIT_TOOL_NAME" => Some(&self.edit_tool_name),
+            "WRITE_TOOL_NAME" => Some(&self.write_tool_name),
+            "GLOB_TOOL_NAME" => Some(&self.glob_tool_name),
+            "GREP_TOOL_NAME" => Some(&self.grep_tool_name),
+            "TASK_TOOL_NAME" => Some(&self.task_tool_name),
+            "TODO_TOOL_NAME" => Some(&self.todo_tool_name),
+            "ASK_USER_QUESTION_TOOL_NAME" => Some(&self.ask_user_question_tool_name),
+            "WEB_FETCH_TOOL_NAME" => Some(&self.web_fetch_tool_name),
+            "ENTER_PLAN_MODE_TOOL_NAME" => Some(&self.enter_plan_mode_tool_name),
+            "EXIT_PLAN_MODE_TOOL_NAME" => Some(&self.exit_plan_mode_tool_name),
 
-            "EXPLORE_AGENT_TYPE" => Some(self.explore_agent_type.clone()),
-            "PLAN_AGENT_TYPE" => Some(self.plan_agent_type.clone()),
-            "CODE_REVIEW_AGENT_TYPE" => Some(self.code_review_agent_type.clone()),
-            "GUIDE_AGENT_TYPE" => Some(self.guide_agent_type.clone()),
+            "EXPLORE_AGENT_TYPE" => Some(&self.explore_agent_type),
+            "PLAN_AGENT_TYPE" => Some(&self.plan_agent_type),
+            "CODE_REVIEW_AGENT_TYPE" => Some(&self.code_review_agent_type),
+            "GUIDE_AGENT_TYPE" => Some(&self.guide_agent_type),
 
-            "FEEDBACK_URL" => Some(self.feedback_url.clone()),
-            "DOCS_URL" => Some(self.docs_url.clone()),
+            "FEEDBACK_URL" => Some(&self.feedback_url),
+            "DOCS_URL" => Some(&self.docs_url),
 
-            "PROMPT_VERSION" => Some(self.prompt_version.clone()),
+            "PROMPT_VERSION" => Some(&self.prompt_version),
 
-            "WORKING_DIR" => Some(self.working_dir.clone()),
-            "PLATFORM" => Some(self.platform.clone()),
-            "OS_VERSION" => Some(self.os_version.clone()),
-            "CURRENT_DATE" => Some(self.current_date.clone()),
-            "GIT_BRANCH" => Some(self.git_branch.clone()),
-            "MAIN_BRANCH" => Some(self.main_branch.clone()),
+            "WORKING_DIR" => Some(&self.working_dir),
+            "PLATFORM" => Some(&self.platform),
+            "OS_VERSION" => Some(&self.os_version),
+            "CURRENT_DATE" => Some(&self.current_date),
+            "GIT_BRANCH" => Some(&self.git_branch),
+            "MAIN_BRANCH" => Some(&self.main_branch),
 
-            "AGENT_NAME" => Some(self.agent_name.clone()),
-            "AGENT_VERSION" => Some(self.agent_version.clone()),
-            "MODEL_NAME" => Some(self.model_name.clone()),
+            "AGENT_NAME" => Some(&self.agent_name),
+            "AGENT_VERSION" => Some(&self.agent_version),
+            "MODEL_NAME" => Some(&self.model_name),
 
-            "TASK_DESCRIPTION" => Some(self.task_description.clone()),
-            "PLAN_FILE_PATH" => Some(self.plan_file_path.clone()),
+            "TASK_DESCRIPTION" => Some(&self.task_description),
+            "PLAN_FILE_PATH" => Some(&self.plan_file_path),
 
-            _ => self.custom.get(name).cloned(),
+            _ => self.custom.get(name).map(|s| s.as_str()),
         }
     }
 }

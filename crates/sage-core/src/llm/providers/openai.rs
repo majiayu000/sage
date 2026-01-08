@@ -8,7 +8,6 @@ use crate::llm::parsers::ResponseParser;
 use crate::llm::provider_types::ModelParameters;
 use crate::llm::streaming::{LlmStream, StreamChunk};
 use crate::tools::types::ToolSchema;
-use anyhow::Context;
 use futures::StreamExt;
 use reqwest::Client;
 use serde_json::{Value, json};
@@ -84,8 +83,10 @@ impl OpenAiProvider {
         let response = request
             .send()
             .await
-            .map_err(|e| SageError::llm(format!("OpenAI request failed: {}", e)))
-            .context("Failed to send HTTP request to OpenAI API")?;
+            .map_err(|e| SageError::llm_with_context(
+                format!("OpenAI request failed: {}", e),
+                "Failed to send HTTP request to OpenAI API",
+            ))?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -99,8 +100,10 @@ impl OpenAiProvider {
         let response_json: Value = response
             .json()
             .await
-            .map_err(|e| SageError::llm(format!("Failed to parse OpenAI response: {}", e)))
-            .context("Failed to deserialize OpenAI API response as JSON")?;
+            .map_err(|e| SageError::llm_with_context(
+                format!("Failed to parse OpenAI response: {}", e),
+                "Failed to deserialize OpenAI API response as JSON",
+            ))?;
 
         ResponseParser::parse_openai(response_json)
     }
@@ -147,8 +150,10 @@ impl OpenAiProvider {
         let response = request
             .send()
             .await
-            .map_err(|e| SageError::llm(format!("OpenAI streaming request failed: {}", e)))
-            .context("Failed to send HTTP request to OpenAI streaming API")?;
+            .map_err(|e| SageError::llm_with_context(
+                format!("OpenAI streaming request failed: {}", e),
+                "Failed to send HTTP request to OpenAI streaming API",
+            ))?;
 
         if !response.status().is_success() {
             let error_text = response.text().await.unwrap_or_default();

@@ -8,7 +8,6 @@ use crate::llm::parsers::ResponseParser;
 use crate::llm::provider_types::ModelParameters;
 use crate::llm::streaming::LlmStream;
 use crate::tools::types::ToolSchema;
-use anyhow::Context;
 use reqwest::Client;
 use serde_json::{Value, json};
 use tracing::instrument;
@@ -80,8 +79,10 @@ impl DoubaoProvider {
         let response = request
             .send()
             .await
-            .map_err(|e| SageError::llm(format!("Doubao API request failed: {}", e)))
-            .context("Failed to send HTTP request to Doubao API")?;
+            .map_err(|e| SageError::llm_with_context(
+                format!("Doubao API request failed: {}", e),
+                "Failed to send HTTP request to Doubao API",
+            ))?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -95,8 +96,10 @@ impl DoubaoProvider {
         let response_json: Value = response
             .json()
             .await
-            .map_err(|e| SageError::llm(format!("Failed to parse Doubao response: {}", e)))
-            .context("Failed to deserialize Doubao API response as JSON")?;
+            .map_err(|e| SageError::llm_with_context(
+                format!("Failed to parse Doubao response: {}", e),
+                "Failed to deserialize Doubao API response as JSON",
+            ))?;
 
         tracing::debug!(
             "Doubao API response: {}",
@@ -159,8 +162,10 @@ impl DoubaoProvider {
         let response = request
             .send()
             .await
-            .map_err(|e| SageError::llm(format!("Doubao streaming request failed: {}", e)))
-            .context("Failed to send HTTP request to Doubao streaming API")?;
+            .map_err(|e| SageError::llm_with_context(
+                format!("Doubao streaming request failed: {}", e),
+                "Failed to send HTTP request to Doubao streaming API",
+            ))?;
 
         if !response.status().is_success() {
             let error_text = response.text().await.unwrap_or_default();

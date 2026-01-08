@@ -8,7 +8,6 @@ use crate::llm::parsers::ResponseParser;
 use crate::llm::provider_types::ModelParameters;
 use crate::llm::streaming::LlmStream;
 use crate::tools::types::ToolSchema;
-use anyhow::Context;
 use reqwest::Client;
 use serde_json::{Value, json};
 use tracing::instrument;
@@ -94,10 +93,9 @@ impl OpenRouterProvider {
         let response = request
             .send()
             .await
-            .map_err(|e| SageError::llm(format!("OpenRouter API request failed: {}", e)))
-            .context(format!(
-                "Failed to send HTTP request to OpenRouter for model: {}",
-                self.model_params.model
+            .map_err(|e| SageError::llm_with_context(
+                format!("OpenRouter API request failed: {}", e),
+                format!("Failed to send HTTP request to OpenRouter for model: {}", self.model_params.model),
             ))?;
 
         if !response.status().is_success() {
@@ -112,8 +110,10 @@ impl OpenRouterProvider {
         let response_json: Value = response
             .json()
             .await
-            .map_err(|e| SageError::llm(format!("Failed to parse OpenRouter response: {}", e)))
-            .context("Failed to deserialize OpenRouter API response as JSON")?;
+            .map_err(|e| SageError::llm_with_context(
+                format!("Failed to parse OpenRouter response: {}", e),
+                "Failed to deserialize OpenRouter API response as JSON",
+            ))?;
 
         tracing::debug!(
             "OpenRouter API response: {}",
@@ -182,8 +182,10 @@ impl OpenRouterProvider {
         let response = request
             .send()
             .await
-            .map_err(|e| SageError::llm(format!("OpenRouter streaming request failed: {}", e)))
-            .context("Failed to send HTTP request to OpenRouter streaming API")?;
+            .map_err(|e| SageError::llm_with_context(
+                format!("OpenRouter streaming request failed: {}", e),
+                "Failed to send HTTP request to OpenRouter streaming API",
+            ))?;
 
         if !response.status().is_success() {
             let error_text = response.text().await.unwrap_or_default();

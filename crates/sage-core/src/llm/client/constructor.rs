@@ -106,46 +106,52 @@ impl LlmClient {
             timeouts.request_timeout_secs
         );
 
+        // Clone config and model_params once for LlmClient storage
+        // The originals are moved into the provider instance to avoid repeated cloning
+        let stored_config = config.clone();
+        let stored_model_params = model_params.clone();
+
         // Create provider instance based on provider type
+        // Move (not clone) config and model_params into the selected provider
         let provider_instance = match &provider {
             LlmProvider::OpenAI => ProviderInstance::OpenAI(OpenAiProvider::new(
-                config.clone(),
-                model_params.clone(),
+                config,
+                model_params,
                 http_client,
             )),
             LlmProvider::Anthropic => ProviderInstance::Anthropic(AnthropicProvider::new(
-                config.clone(),
-                model_params.clone(),
+                config,
+                model_params,
                 http_client,
             )),
             LlmProvider::Google => ProviderInstance::Google(GoogleProvider::new(
-                config.clone(),
-                model_params.clone(),
+                config,
+                model_params,
                 http_client,
             )),
             LlmProvider::Azure => ProviderInstance::Azure(AzureProvider::new(
-                config.clone(),
-                model_params.clone(),
+                config,
+                model_params,
                 http_client,
             )),
             LlmProvider::OpenRouter => ProviderInstance::OpenRouter(OpenRouterProvider::new(
-                config.clone(),
-                model_params.clone(),
+                config,
+                model_params,
                 http_client,
             )),
             LlmProvider::Ollama => ProviderInstance::Ollama(OllamaProvider::new(
-                config.clone(),
-                model_params.clone(),
+                config,
+                model_params,
                 http_client,
             )),
             LlmProvider::Doubao => ProviderInstance::Doubao(DoubaoProvider::new(
-                config.clone(),
-                model_params.clone(),
+                config,
+                model_params,
                 http_client,
             )),
             LlmProvider::Glm => ProviderInstance::Glm(GlmProvider::new(
-                config.clone(),
-                model_params.clone(),
+                config,
+                model_params,
                 http_client,
             )),
             LlmProvider::Custom(name) => {
@@ -158,8 +164,8 @@ impl LlmClient {
 
         Ok(Self {
             provider,
-            config,
-            model_params,
+            config: stored_config,
+            model_params: stored_model_params,
             provider_instance,
         })
     }
