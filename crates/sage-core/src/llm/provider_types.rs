@@ -9,12 +9,15 @@ use std::time::Duration;
 /// - **Connection timeout**: Time allowed to establish a connection
 /// - **Request timeout**: Time allowed for a complete request/response cycle
 ///
+/// Default values are set to be generous to avoid timeout issues with slow
+/// models or complex requests. For comparison, Claude Code uses 10 minutes.
+///
 /// # Examples
 ///
 /// ```rust
 /// use sage_core::llm::TimeoutConfig;
 ///
-/// // Use default timeouts (30s connection, 60s request)
+/// // Use default timeouts (30s connection, 300s request)
 /// let config = TimeoutConfig::default();
 ///
 /// // Custom timeouts for slow network
@@ -39,7 +42,7 @@ pub struct TimeoutConfig {
     /// Maximum time allowed for the complete request/response cycle,
     /// including connection establishment, sending request, and receiving response.
     /// This is the total end-to-end timeout.
-    /// Default: 60 seconds
+    /// Default: 300 seconds (5 minutes) - generous to avoid timeout issues
     #[serde(default = "TimeoutConfig::default_request_timeout")]
     pub request_timeout_secs: u64,
 }
@@ -50,9 +53,11 @@ impl TimeoutConfig {
         30
     }
 
-    /// Default request timeout in seconds
+    /// Default request timeout in seconds (5 minutes)
+    /// This is generous to avoid timeout issues with slow models or complex requests.
+    /// Claude Code uses 10 minutes (600s) as default.
     const fn default_request_timeout() -> u64 {
-        60
+        300
     }
 
     /// Create a new timeout configuration with default values

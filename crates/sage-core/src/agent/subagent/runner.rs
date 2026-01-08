@@ -50,10 +50,10 @@ impl SubAgentRunner {
                 provider_name
             ))?;
 
-        // Create provider config
+        // Create provider config with generous timeout (5 min default)
         let mut provider_config = ProviderConfig::new(provider_name)
             .with_api_key(default_params.get_api_key().unwrap_or_default())
-            .with_timeouts(TimeoutConfig::new().with_request_timeout_secs(60))
+            .with_timeouts(TimeoutConfig::default())
             .with_max_retries(3);
 
         // Apply custom base_url if configured
