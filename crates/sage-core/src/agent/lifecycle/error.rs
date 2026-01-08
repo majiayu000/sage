@@ -178,6 +178,22 @@ impl UnifiedError for LifecycleError {
 
 impl From<SageError> for LifecycleError {
     fn from(err: SageError) -> Self {
-        Self::internal(err.to_string())
+        // Preserve error code and context from SageError
+        let error_code = err.error_code();
+        let message = err.message();
+        let context = err.context();
+
+        // Create a detailed message that preserves the error code
+        let detailed_message = format!("[{}] {}", error_code, message);
+
+        // Create Internal error with preserved context
+        if let Some(ctx) = context {
+            Self::Internal {
+                message: detailed_message,
+                context: Some(ctx.to_string()),
+            }
+        } else {
+            Self::internal(detailed_message)
+        }
     }
 }

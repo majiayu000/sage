@@ -9,7 +9,6 @@ use crate::llm::provider_types::ModelParameters;
 use crate::llm::streaming::{LlmStream, StreamChunk};
 use crate::tools::types::ToolSchema;
 use crate::types::LlmUsage;
-use anyhow::Context;
 use futures::StreamExt;
 use reqwest::Client;
 use serde_json::{Value, json};
@@ -115,8 +114,10 @@ impl AnthropicProvider {
         let response = request
             .send()
             .await
-            .map_err(|e| SageError::llm(format!("Anthropic request failed: {}", e)))
-            .context("Failed to send HTTP request to Anthropic API")?;
+            .map_err(|e| SageError::llm_with_context(
+                format!("Anthropic request failed: {}", e),
+                "Failed to send HTTP request to Anthropic API",
+            ))?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -130,8 +131,10 @@ impl AnthropicProvider {
         let response_json: Value = response
             .json()
             .await
-            .map_err(|e| SageError::llm(format!("Failed to parse Anthropic response: {}", e)))
-            .context("Failed to deserialize Anthropic API response as JSON")?;
+            .map_err(|e| SageError::llm_with_context(
+                format!("Failed to parse Anthropic response: {}", e),
+                "Failed to deserialize Anthropic API response as JSON",
+            ))?;
 
         ResponseParser::parse_anthropic(response_json)
     }
@@ -222,8 +225,10 @@ impl AnthropicProvider {
         let response = request
             .send()
             .await
-            .map_err(|e| SageError::llm(format!("Anthropic streaming request failed: {}", e)))
-            .context("Failed to send HTTP request to Anthropic streaming API")?;
+            .map_err(|e| SageError::llm_with_context(
+                format!("Anthropic streaming request failed: {}", e),
+                "Failed to send HTTP request to Anthropic streaming API",
+            ))?;
 
         if !response.status().is_success() {
             let error_text = response.text().await.unwrap_or_default();

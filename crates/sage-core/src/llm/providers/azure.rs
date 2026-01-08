@@ -8,7 +8,6 @@ use crate::llm::parsers::ResponseParser;
 use crate::llm::provider_types::ModelParameters;
 use crate::llm::streaming::LlmStream;
 use crate::tools::types::ToolSchema;
-use anyhow::Context;
 use reqwest::Client;
 use serde_json::{Value, json};
 use tracing::instrument;
@@ -87,10 +86,9 @@ impl AzureProvider {
         let response = request
             .send()
             .await
-            .map_err(|e| SageError::llm(format!("Azure API request failed: {}", e)))
-            .context(format!(
-                "Failed to send HTTP request to Azure OpenAI deployment: {}",
-                self.model_params.model
+            .map_err(|e| SageError::llm_with_context(
+                format!("Azure API request failed: {}", e),
+                format!("Failed to send HTTP request to Azure OpenAI deployment: {}", self.model_params.model),
             ))?;
 
         if !response.status().is_success() {
@@ -105,8 +103,10 @@ impl AzureProvider {
         let response_json: Value = response
             .json()
             .await
-            .map_err(|e| SageError::llm(format!("Failed to parse Azure response: {}", e)))
-            .context("Failed to deserialize Azure OpenAI API response as JSON")?;
+            .map_err(|e| SageError::llm_with_context(
+                format!("Failed to parse Azure response: {}", e),
+                "Failed to deserialize Azure OpenAI API response as JSON",
+            ))?;
 
         tracing::debug!(
             "Azure API response: {}",
@@ -176,8 +176,10 @@ impl AzureProvider {
         let response = request
             .send()
             .await
-            .map_err(|e| SageError::llm(format!("Azure streaming request failed: {}", e)))
-            .context("Failed to send HTTP request to Azure streaming API")?;
+            .map_err(|e| SageError::llm_with_context(
+                format!("Azure streaming request failed: {}", e),
+                "Failed to send HTTP request to Azure streaming API",
+            ))?;
 
         if !response.status().is_success() {
             let error_text = response.text().await.unwrap_or_default();

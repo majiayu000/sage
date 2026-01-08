@@ -39,6 +39,15 @@ impl SageError {
         }
     }
 
+    /// Create an LLM error with context
+    pub fn llm_with_context(message: impl Into<String>, context: impl Into<String>) -> Self {
+        Self::Llm {
+            message: message.into(),
+            provider: None,
+            context: Some(context.into()),
+        }
+    }
+
     /// Create a new tool error
     pub fn tool(tool_name: impl Into<String>, message: impl Into<String>) -> Self {
         Self::Tool {
