@@ -97,6 +97,34 @@ pub enum Commands {
     #[command(verbatim_doc_comment)]
     Tools,
 
+    /// Check system health and diagnose issues (like Claude Code's /doctor)
+    #[command(verbatim_doc_comment)]
+    Doctor {
+        /// Path to configuration file
+        #[arg(long, default_value = "sage_config.json")]
+        config_file: String,
+    },
+
+    /// Show current status and environment info
+    #[command(verbatim_doc_comment)]
+    Status {
+        /// Path to configuration file
+        #[arg(long, default_value = "sage_config.json")]
+        config_file: String,
+    },
+
+    /// Show token usage statistics for sessions
+    #[command(verbatim_doc_comment)]
+    Usage {
+        /// Path to session directory
+        #[arg(long)]
+        session_dir: Option<PathBuf>,
+
+        /// Show detailed breakdown by session
+        #[arg(long, short)]
+        detailed: bool,
+    },
+
     /// Run as IPC backend for Modern UI (internal use)
     #[command(hide = true)]
     Ipc {
