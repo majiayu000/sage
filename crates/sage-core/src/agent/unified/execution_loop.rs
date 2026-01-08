@@ -3,7 +3,7 @@
 use crate::agent::{AgentExecution, AgentState, AgentStep, ExecutionError, ExecutionOutcome};
 use crate::error::{SageError, SageResult};
 use crate::session::{EnhancedTokenUsage, EnhancedToolCall};
-use crate::ui::DisplayManager;
+use crate::ui::{DisplayManager, ProgressTracker, global_progress_tracker};
 
 use super::UnifiedExecutor;
 
@@ -23,10 +23,19 @@ impl UnifiedExecutor {
         const REPETITION_THRESHOLD: usize = 2; // Force completion after N similar outputs
         let mut recent_outputs: Vec<String> = Vec::with_capacity(MAX_RECENT_OUTPUTS);
 
+        // Initialize progress tracker
+        let progress = global_progress_tracker();
+        progress.reset().await;
+        progress.set_max_steps(max_steps).await;
+
+        // Start heartbeat for long-running tasks
+        ProgressTracker::start_heartbeat(&progress).await;
+
         let outcome = 'execution_loop: {
             let mut step_number = 0u32;
             loop {
                 step_number += 1;
+                progress.set_step(step_number);
 
                 // Check max_steps limit (None = unlimited)
                 if let Some(max) = max_steps.filter(|&max| step_number > max) {
@@ -147,6 +156,9 @@ impl UnifiedExecutor {
                 unreachable!("Execution loop should exit via break statements")
             }
         };
+
+        // Stop heartbeat when execution ends
+        progress.stop_heartbeat().await;
 
         Ok(outcome)
     }
