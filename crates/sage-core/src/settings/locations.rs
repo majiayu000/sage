@@ -125,26 +125,14 @@ impl SettingsLocations {
     }
 
     /// Get all existing settings files in priority order (low to high)
-    pub fn get_existing_files(&self) -> Vec<&PathBuf> {
-        let mut files = Vec::new();
+    ///
+    /// Returns an iterator to avoid heap allocation when caller only iterates once.
+    pub fn get_existing_files(&self) -> impl Iterator<Item = &PathBuf> {
+        let user = self.user.exists().then_some(&self.user);
+        let project = self.project.as_ref().filter(|p| p.exists());
+        let local = self.local.as_ref().filter(|p| p.exists());
 
-        if self.user.exists() {
-            files.push(&self.user);
-        }
-
-        if let Some(ref project) = self.project {
-            if project.exists() {
-                files.push(project);
-            }
-        }
-
-        if let Some(ref local) = self.local {
-            if local.exists() {
-                files.push(local);
-            }
-        }
-
-        files
+        user.into_iter().chain(project).chain(local)
     }
 
     /// Initialize a new .sage directory in the project root
@@ -244,10 +232,10 @@ mod tests {
         fs::write(&local_file, "{}").unwrap();
 
         let locations = SettingsLocations::discover_from(temp_dir.path());
-        let existing = locations.get_existing_files();
+        let existing_count = locations.get_existing_files().count();
 
         // Should have project and local (user may or may not exist)
-        assert!(existing.len() >= 2);
+        assert!(existing_count >= 2);
     }
 
     #[test]
