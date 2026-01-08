@@ -240,7 +240,7 @@ impl ParallelToolExecutor {
             let handles: Vec<_> = parallel_calls
                 .into_iter()
                 .map(|call| {
-                    let call = call.clone();
+                    // call is already owned from into_iter(), no clone needed
                     let self_ref = self;
                     async move { self_ref.execute_tool(&call).await }
                 })
