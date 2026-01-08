@@ -102,7 +102,29 @@ impl SageAgentSdk {
         let mut executor = UnifiedExecutor::with_options(self.config.clone(), exec_options)?;
 
         // Register default tools
-        executor.register_tools(get_default_tools());
+        let mut all_tools = get_default_tools();
+
+        // Load MCP tools if MCP is enabled
+        if self.config.mcp.enabled {
+            tracing::info!("MCP is enabled, building MCP registry...");
+            match super::unified::build_mcp_registry_from_config(&self.config).await {
+                Ok(mcp_registry) => {
+                    let mcp_tools = mcp_registry.as_tools().await;
+                    tracing::info!("Loaded {} MCP tools from {} servers",
+                        mcp_tools.len(),
+                        mcp_registry.server_names().len());
+
+                    if !mcp_tools.is_empty() {
+                        all_tools.extend(mcp_tools);
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Failed to build MCP registry: {}", e);
+                }
+            }
+        }
+
+        executor.register_tools(all_tools);
 
         // Initialize sub-agent support
         if let Err(e) = executor.init_subagent_support() {

@@ -16,8 +16,7 @@ use std::path::PathBuf;
 /// # Example
 ///
 /// ```rust
-/// use sage_core::agent::subagent::{SubAgentConfig, AgentType, WorkingDirectoryConfig};
-/// use std::path::PathBuf;
+/// use sage_core::agent::subagent::{SubAgentConfig, AgentType, WorkingDirectoryConfig, ToolAccessControl};
 ///
 /// let config = SubAgentConfig::new(AgentType::Explore, "Analyze the codebase structure")
 ///     .with_working_directory(WorkingDirectoryConfig::Inherited)

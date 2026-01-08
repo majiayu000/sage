@@ -170,16 +170,31 @@ impl CliConsole {
                         }
                     }
                     Key::Char(c) => {
-                        // 处理 Ctrl+U (清除整行)
-                        if c == '\u{15}' {
-                            // Ctrl+U 的 ASCII 码
-                            input.clear();
-                            print!("\r\x1B[2K{} {}: ", "?".blue().bold(), prompt);
-                            io::stdout().flush()?;
-                        } else {
-                            input.push(c);
-                            print!("{}", c);
-                            io::stdout().flush()?;
+                        // 处理特殊控制字符
+                        match c {
+                            '\u{15}' => {
+                                // Ctrl+U - 清除整行
+                                input.clear();
+                                print!("\r\x1B[2K{} {}: ", "?".blue().bold(), prompt);
+                                io::stdout().flush()?;
+                            }
+                            '\u{16}' => {
+                                // Ctrl+V - 粘贴模式（忽略，让系统处理）
+                                // 在大多数终端中，Ctrl+V 会触发粘贴
+                                // 这里忽略这个控制字符，避免输入乱码
+                                continue;
+                            }
+                            '\u{01}'..='\u{1F}' => {
+                                // 忽略其他控制字符（ASCII 1-31）
+                                // 除了已经处理的回车(13)、换行(10)、退格(8)等
+                                continue;
+                            }
+                            _ => {
+                                // 正常字符
+                                input.push(c);
+                                print!("{}", c);
+                                io::stdout().flush()?;
+                            }
                         }
                     }
                     Key::CtrlC => {

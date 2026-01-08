@@ -93,10 +93,9 @@ pub fn print_config(console: &CliConsole, sdk: &SageAgentSdk) {
         console.info(&format!("Working Directory: {}", working_dir.display()));
     }
 
-    console.info(&format!(
-        "Tools Enabled: {}",
-        config.tools.enabled_tools.len()
-    ));
+    // All default tools are always enabled
+    let tools_count = sage_tools::get_default_tools().len();
+    console.info(&format!("Tools Available: {}", tools_count));
 }
 
 /// Print system status
@@ -111,10 +110,9 @@ pub fn print_status(console: &CliConsole, sdk: &SageAgentSdk) {
         console.info(&format!("Model: {}", params.model));
     }
 
-    console.info(&format!(
-        "Available Tools: {}",
-        config.tools.enabled_tools.len()
-    ));
+    // All default tools are always available
+    let tools_count = sage_tools::get_default_tools().len();
+    console.info(&format!("Available Tools: {}", tools_count));
     let max_steps_display = match config.max_steps {
         Some(n) => n.to_string(),
         None => "unlimited".to_string(),
