@@ -208,7 +208,7 @@ impl Tool for LspTool {
 ### Sage 实现建议
 
 ```rust
-// crates/sage-session/src/lib.rs
+// crates/sage-core/src/session/manager.rs (已实现)
 
 pub struct SessionManager {
     storage: SessionStorage,
@@ -303,38 +303,20 @@ serde_json = "1"
 
 ```
 crates/
-├── sage-core/          # 核心 (已有)
+├── sage-core/          # 核心 (包含 session, llm, agent, tools 系统)
+│   └── src/session/    # 会话管理 (已实现)
+│       ├── mod.rs
+│       ├── manager.rs
+│       ├── storage.rs
+│       ├── jsonl_storage/
+│       ├── branching/
+│       └── session_cache/
 ├── sage-cli/           # CLI (已有)
-├── sage-tools/         # 工具 (已有)
-├── sage-mcp/           # MCP 客户端 (新增)
-│   ├── src/
-│   │   ├── lib.rs
-│   │   ├── client.rs
-│   │   ├── server.rs
-│   │   ├── transport/
-│   │   │   ├── mod.rs
-│   │   │   ├── stdio.rs
-│   │   │   └── sse.rs
-│   │   ├── tools.rs
-│   │   └── resources.rs
-│   └── Cargo.toml
-├── sage-lsp/           # LSP 集成 (新增)
-│   ├── src/
-│   │   ├── lib.rs
-│   │   ├── manager.rs
-│   │   ├── wrapper.rs
-│   │   └── diagnostics.rs
-│   └── Cargo.toml
-└── sage-session/       # 会话管理 (新增)
-    ├── src/
-    │   ├── lib.rs
-    │   ├── session.rs
-    │   ├── storage/
-    │   │   ├── mod.rs
-    │   │   ├── local.rs
-    │   │   └── memory.rs
-    │   └── memory.rs
-    └── Cargo.toml
+├── sage-sdk/           # SDK (已有)
+└── sage-tools/         # 工具实现 (已有)
+
+# 注意: session 模块在 sage-core 内部，不是独立的 crate
+# 因为 session 与 agent 执行紧密耦合，需要访问 LlmMessage、ToolCall 等核心类型
 ```
 
 ---
@@ -475,7 +457,7 @@ impl McpClient {
 ### 7.2 会话持久化实现
 
 ```rust
-// crates/sage-session/src/session.rs
+// crates/sage-core/src/session/mod.rs
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

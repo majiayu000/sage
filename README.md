@@ -62,14 +62,20 @@ cargo install --git https://github.com/majiayu000/sage sage-cli
 ## ⚡ Quick Start
 
 ```bash
-# One-shot task
+# Interactive mode (default)
+sage
+
+# Execute task interactively
 sage "Create a Python script that fetches GitHub trending repos"
 
-# Interactive mode
-sage interactive
+# Print mode - execute and exit (non-interactive)
+sage -p "Explain this code"
 
-# With specific provider
-sage --provider ollama "Explain this code"
+# Continue most recent session
+sage -c
+
+# Resume specific session
+sage -r <session-id>
 ```
 
 ## ✨ Features
@@ -106,8 +112,8 @@ sage --provider ollama "Explain this code"
 - **Plugin System** - Custom tool development
 
 ### 💬 Claude Code Compatible
-- **16 Slash Commands** - `/resume`, `/undo`, `/cost`, `/plan`, etc.
-- **Session Resume** - Continue where you left off
+- **16+ Slash Commands** - `/resume`, `/undo`, `/cost`, `/plan`, `/compact`, `/title`, etc.
+- **Session Resume** - Continue where you left off (`sage -c` or `sage -r <id>`)
 - **Interactive Mode** - Multi-turn conversations
 - **File Change Tracking** - Built-in undo support
 
@@ -116,7 +122,11 @@ sage --provider ollama "Explain this code"
 ### Interactive Mode
 
 ```bash
-sage interactive
+# Start interactive session
+sage
+
+# Or with initial task
+sage "Create a REST API with user authentication"
 ```
 
 ```
@@ -134,36 +144,50 @@ sage interactive
 └─────────────────────────────────┘
 
 > /resume
-[Select previous session to resume...]
+[Shows list of previous sessions...]
+To resume: sage -r <session-id>
 ```
 
-### One-Shot Mode
+### Print Mode (One-Shot)
 
 ```bash
-# Simple task
-sage "Add error handling to main.rs"
+# Execute task and exit (non-interactive)
+sage -p "Add error handling to main.rs"
 
-# With options
-sage --provider anthropic --model claude-sonnet-4-20250514 "Review this code for security issues"
+# With maximum steps
+sage --max-steps 30 -p "Refactor the auth module"
+```
 
-# Maximum steps
-sage --max-steps 30 "Refactor the auth module"
+### Session Management
+
+```bash
+# Continue most recent session
+sage -c
+
+# Resume specific session by ID
+sage -r abc123
 ```
 
 ### Slash Commands
 
 | Command | Description |
 |---------|-------------|
+| `/help` | Show help information |
+| `/clear` | Clear conversation history |
+| `/compact` | Summarize and compact context |
 | `/resume [id]` | Resume previous session |
 | `/cost` | Show token usage and cost |
-| `/undo` | Undo last file changes |
-| `/plan` | View/manage execution plan |
+| `/undo [msg-id]` | Undo file changes |
+| `/plan [open\|clear]` | View/manage execution plan |
 | `/checkpoint [name]` | Save current state |
 | `/restore [id]` | Restore to checkpoint |
 | `/context` | Show context usage |
 | `/status` | Show agent status |
-| `/clear` | Clear conversation |
-| `/help` | Show help |
+| `/tasks` | List background tasks |
+| `/commands` | List all slash commands |
+| `/title <title>` | Set session title |
+| `/init` | Initialize Sage in project |
+| `/config` | Manage configuration |
 
 ## ⚙️ Configuration
 
@@ -209,14 +233,17 @@ use sage_sdk::{SageAgentSdk, RunOptions};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let sdk = SageAgentSdk::with_config_file("sage_config.json")?
-        .with_working_directory("./my-project");
+    // Load from config file
+    let sdk = SageAgentSdk::with_config_file("sage_config.json")?;
 
-    let result = sdk.run("Create a README file").await?;
+    // Or create with default config
+    // let sdk = SageAgentSdk::new()?;
 
-    if result.is_success() {
-        println!("Completed in {} steps", result.statistics().total_steps);
-    }
+    // Run a task
+    let options = RunOptions::new("Create a README file");
+    let result = sdk.run(options).await?;
+
+    println!("Execution completed: {:?}", result.outcome());
 
     Ok(())
 }
@@ -227,7 +254,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 sage/
 ├── crates/
-│   ├── sage-core/      # Core agent logic, LLM providers, tools
+│   ├── sage-core/      # Core agent logic, LLM providers, session, tools
 │   ├── sage-cli/       # Command-line interface
 │   ├── sage-sdk/       # High-level SDK for embedding
 │   └── sage-tools/     # Built-in tool implementations
