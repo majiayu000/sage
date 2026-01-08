@@ -4,7 +4,6 @@ mod conversation;
 mod execution;
 mod help;
 mod outcome;
-mod resume;
 mod session;
 mod slash_commands;
 

@@ -5,7 +5,6 @@ pub mod execution;
 pub mod lifecycle;
 pub mod options;
 pub mod outcome;
-pub mod reactive_agent;
 pub mod state;
 pub mod step;
 pub mod subagent;
@@ -22,9 +21,6 @@ pub use lifecycle::{
 };
 pub use options::{AutoResponse, ExecutionMode, ExecutionOptions};
 pub use outcome::{ExecutionError, ExecutionErrorKind, ExecutionOutcome};
-pub use reactive_agent::{
-    ClaudeStyleAgent, ReactiveAgent, ReactiveExecutionManager, ReactiveResponse,
-};
 pub use state::AgentState;
 pub use step::AgentStep;
 pub use subagent::{

@@ -158,11 +158,10 @@ pub mod workspace;
 
 // Re-export commonly used types
 pub use agent::{
-    AgentExecution, AgentLifecycle, AgentState, AgentStep, AutoResponse, ClaudeStyleAgent,
-    ExecutionMode, ExecutionOptions, HookResult, LifecycleContext, LifecycleError, LifecycleHook,
+    AgentExecution, AgentLifecycle, AgentState, AgentStep, AutoResponse, ExecutionMode,
+    ExecutionOptions, HookResult, LifecycleContext, LifecycleError, LifecycleHook,
     LifecycleHookRegistry, LifecycleManager, LifecyclePhase, LifecycleResult, LoggingHook,
-    MetricsHook, ReactiveAgent, ReactiveExecutionManager, ReactiveResponse, UnifiedExecutor,
-    UnifiedExecutorBuilder,
+    MetricsHook, UnifiedExecutor, UnifiedExecutorBuilder,
 };
 pub use builder::{BuilderError, ConfigBuilderExt, SageBuilder, SageComponents};
 pub use cache::{CacheConfig, CacheEntry, CacheKey, CacheManager, LlmCache};

@@ -1,12 +1,24 @@
 //! Skill execution tool
 //!
 //! Allows executing specialized skills within conversation context.
-//! Skills provide domain-specific capabilities like PDF processing,
-//! Excel manipulation, brainstorming, testing, etc.
+//! Skills provide domain-specific capabilities and can be defined as
+//! markdown files with YAML frontmatter.
+//!
+//! ## Claude Code Compatible
+//!
+//! This tool is designed to work like Claude Code's skill system:
+//! - Skills are loaded from `.sage/skills/` and `~/.config/sage/skills/`
+//! - Skills can be defined as `skill-name.md` or `skill-name/SKILL.md`
+//! - Supports `$ARGUMENTS` parameter substitution
+//! - AI can auto-invoke skills based on `when_to_use` condition
 
 use async_trait::async_trait;
+use sage_core::skills::{SkillContext, SkillRegistry};
 use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
+use std::path::PathBuf;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 /// Tool for executing specialized skills
 ///
@@ -15,11 +27,15 @@ use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
 ///
 /// # Examples
 ///
-/// - `skill: "pdf"` - Invoke PDF processing skill
-/// - `skill: "xlsx"` - Invoke Excel/spreadsheet skill
-/// - `skill: "brainstorming"` - Invoke collaborative brainstorming skill
-/// - `skill: "comprehensive-testing"` - Invoke testing strategy skill
-pub struct SkillTool;
+/// - `skill: "commit"` - Invoke git commit skill
+/// - `skill: "review-pr", args: "123"` - Review PR #123
+/// - `skill: "code-review", args: "src/main.rs"` - Review specific file
+pub struct SkillTool {
+    /// Skill registry (shared)
+    registry: Arc<RwLock<SkillRegistry>>,
+    /// Current working directory
+    working_dir: PathBuf,
+}
 
 impl Default for SkillTool {
     fn default() -> Self {
@@ -28,28 +44,62 @@ impl Default for SkillTool {
 }
 
 impl SkillTool {
-    /// Create a new SkillTool instance
+    /// Create a new SkillTool instance with default registry
     pub fn new() -> Self {
-        Self
+        let working_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let mut registry = SkillRegistry::new(&working_dir);
+        registry.register_builtins();
+
+        Self {
+            registry: Arc::new(RwLock::new(registry)),
+            working_dir,
+        }
     }
 
-    /// Get available skills
-    fn get_available_skills() -> Vec<&'static str> {
-        vec![
-            "artifacts-builder",
-            "brainstorming",
-            "comprehensive-testing",
-            "elegant-architecture",
-            "frontend-design",
-            "git-commit-smart",
-            "playwright-automation",
-            "product-manager",
-            "project-health-auditor",
-            "rust-best-practices",
-            "systematic-debugging",
-            "test-driven-development",
-            "ui-designer",
-        ]
+    /// Create with a specific working directory
+    pub fn with_working_dir(working_dir: impl Into<PathBuf>) -> Self {
+        let working_dir = working_dir.into();
+        let mut registry = SkillRegistry::new(&working_dir);
+        registry.register_builtins();
+
+        Self {
+            registry: Arc::new(RwLock::new(registry)),
+            working_dir,
+        }
+    }
+
+    /// Create with an existing registry
+    pub fn with_registry(registry: Arc<RwLock<SkillRegistry>>) -> Self {
+        let working_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        Self {
+            registry,
+            working_dir,
+        }
+    }
+
+    /// Discover skills from the file system
+    pub async fn discover_skills(&self) -> Result<usize, ToolError> {
+        let mut registry = self.registry.write().await;
+        registry
+            .discover()
+            .await
+            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to discover skills: {}", e)))
+    }
+
+    /// Get a reference to the registry
+    pub fn registry(&self) -> Arc<RwLock<SkillRegistry>> {
+        Arc::clone(&self.registry)
+    }
+
+    /// Get the skill prompt with arguments substituted
+    async fn get_skill_prompt(&self, skill_name: &str, args: Option<&str>) -> Option<String> {
+        let registry = self.registry.read().await;
+        let skill = registry.get(skill_name)?;
+
+        let context = SkillContext::new("")
+            .with_working_dir(&self.working_dir);
+
+        Some(skill.get_prompt_with_args(&context, args))
     }
 
     /// Validate skill name
@@ -59,29 +109,44 @@ impl SkillTool {
                 "Skill name cannot be empty".to_string(),
             ));
         }
-
-        // Allow any skill name for flexibility
-        // The actual skill availability is determined by the runtime environment
         Ok(())
     }
 
     /// Execute the skill
-    async fn execute_skill(&self, skill: &str) -> Result<String, ToolError> {
-        // In a real implementation, this would invoke the skill system
-        // For now, we return a message indicating the skill would be invoked
-        let available_skills = Self::get_available_skills();
+    async fn execute_skill(&self, skill_name: &str, args: Option<&str>) -> Result<String, ToolError> {
+        let registry = self.registry.read().await;
 
-        if available_skills.contains(&skill) {
-            Ok(format!(
-                "Skill '{}' execution initiated. The skill will be invoked within the conversation context.",
-                skill
-            ))
+        if let Some(skill) = registry.get(skill_name) {
+            let context = SkillContext::new("")
+                .with_working_dir(&self.working_dir);
+
+            let prompt = skill.get_prompt_with_args(&context, args);
+
+            // Format the response with skill metadata
+            let mut result = format!("# Skill: {}\n\n", skill.user_facing_name());
+            result.push_str(&format!("**Description:** {}\n\n", skill.description));
+
+            if let Some(ref when) = skill.when_to_use {
+                result.push_str(&format!("**When to use:** {}\n\n", when));
+            }
+
+            result.push_str("---\n\n");
+            result.push_str(&prompt);
+
+            Ok(result)
         } else {
-            Ok(format!(
-                "Skill '{}' will be invoked. Note: This skill may not be in the standard library. Available skills: {}",
-                skill,
-                available_skills.join(", ")
-            ))
+            // List available skills
+            let available: Vec<String> = registry
+                .list_enabled()
+                .iter()
+                .map(|s| s.name.clone())
+                .collect();
+
+            Err(ToolError::ExecutionFailed(format!(
+                "Skill '{}' not found. Available skills: {}",
+                skill_name,
+                available.join(", ")
+            )))
         }
     }
 }
@@ -89,23 +154,30 @@ impl SkillTool {
 #[async_trait]
 impl Tool for SkillTool {
     fn name(&self) -> &str {
-        "skill"
+        "Skill"
     }
 
     fn description(&self) -> &str {
         "Execute a specialized skill within the conversation. Skills provide domain-specific capabilities \
-         and expertise for tasks like PDF processing, Excel manipulation, brainstorming, testing strategies, \
-         architecture design, and more. Use when you need specialized functionality beyond standard tools."
+         and expertise. Skills can be invoked by name with optional arguments. Use /skill-name or call \
+         this tool with the skill name."
     }
 
     fn schema(&self) -> ToolSchema {
         ToolSchema::new(
             self.name(),
             self.description(),
-            vec![ToolParameter::string(
-                "skill",
-                "The name of the skill to execute (e.g., 'pdf', 'xlsx', 'brainstorming', 'comprehensive-testing')",
-            )],
+            vec![
+                ToolParameter::string(
+                    "skill",
+                    "The name of the skill to execute (e.g., 'commit', 'review-pr', 'comprehensive-testing')",
+                ),
+                ToolParameter::string(
+                    "args",
+                    "Optional arguments to pass to the skill (replaces $ARGUMENTS in the skill prompt)",
+                )
+                .optional(),
+            ],
         )
     }
 
@@ -115,11 +187,14 @@ impl Tool for SkillTool {
             ToolError::InvalidArguments("Missing required parameter: skill".to_string())
         })?;
 
+        // Extract optional args
+        let args = call.get_string("args");
+
         // Validate skill name
         self.validate_skill_name(&skill)?;
 
         // Execute the skill
-        let result = self.execute_skill(&skill).await?;
+        let result = self.execute_skill(&skill, args.as_deref()).await?;
 
         Ok(ToolResult::success(&call.id, self.name(), result))
     }
@@ -152,14 +227,38 @@ mod tests {
         }
     }
 
+    fn create_tool_call_with_args(id: &str, name: &str, skill: &str, args: &str) -> ToolCall {
+        let mut arguments = HashMap::new();
+        arguments.insert("skill".to_string(), json!(skill));
+        arguments.insert("args".to_string(), json!(args));
+
+        ToolCall {
+            id: id.to_string(),
+            name: name.to_string(),
+            arguments,
+            call_id: None,
+        }
+    }
+
     #[tokio::test]
-    async fn test_skill_execution() {
+    async fn test_builtin_skill_execution() {
         let tool = SkillTool::new();
-        let call = create_tool_call("test-1", "skill", "pdf");
+        // Test a builtin skill (rust-expert)
+        let call = create_tool_call("test-1", "Skill", "rust-expert");
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
-        assert!(result.output.as_ref().unwrap().contains("pdf"));
+        assert!(result.output.as_ref().unwrap().contains("rust-expert") ||
+                result.output.as_ref().unwrap().contains("Rust"));
+    }
+
+    #[tokio::test]
+    async fn test_skill_with_args() {
+        let tool = SkillTool::new();
+        let call = create_tool_call_with_args("test-args", "Skill", "comprehensive-testing", "src/lib.rs");
+
+        let result = tool.execute(&call).await.unwrap();
+        assert!(result.success);
     }
 
     #[tokio::test]
@@ -167,11 +266,11 @@ mod tests {
         let tool = SkillTool::new();
 
         // Valid skill
-        let call = create_tool_call("test-2", "skill", "brainstorming");
+        let call = create_tool_call("test-2", "Skill", "rust-expert");
         assert!(tool.validate(&call).is_ok());
 
         // Empty skill name
-        let call = create_tool_call("test-3", "skill", "");
+        let call = create_tool_call("test-3", "Skill", "");
         assert!(tool.validate(&call).is_err());
     }
 
@@ -180,7 +279,7 @@ mod tests {
         let tool = SkillTool::new();
         let call = ToolCall {
             id: "test-4".to_string(),
-            name: "skill".to_string(),
+            name: "Skill".to_string(),
             arguments: HashMap::new(),
             call_id: None,
         };
@@ -196,32 +295,31 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_available_skills() {
+    async fn test_builtin_skills_available() {
         let tool = SkillTool::new();
 
-        // Test a few standard skills
+        // Test builtin skills that should exist
         let skills = vec![
-            "brainstorming",
+            "rust-expert",
             "comprehensive-testing",
-            "rust-best-practices",
+            "systematic-debugging",
         ];
 
         for skill in skills {
-            let call = create_tool_call(&format!("test-{}", skill), "skill", skill);
+            let call = create_tool_call(&format!("test-{}", skill), "Skill", skill);
             let result = tool.execute(&call).await.unwrap();
-            assert!(result.success);
+            assert!(result.success, "Skill '{}' should be available", skill);
         }
     }
 
     #[tokio::test]
-    async fn test_custom_skill() {
+    async fn test_unknown_skill_error() {
         let tool = SkillTool::new();
-        let call = create_tool_call("test-5", "skill", "custom-skill");
+        let call = create_tool_call("test-unknown", "Skill", "nonexistent-skill");
 
-        let result = tool.execute(&call).await.unwrap();
-        assert!(result.success);
-        // Should still work but indicate it's not in standard library
-        assert!(result.output.as_ref().unwrap().contains("custom-skill"));
+        let result = tool.execute(&call).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
     }
 
     #[tokio::test]
@@ -229,7 +327,7 @@ mod tests {
         let tool = SkillTool::new();
         let schema = tool.schema();
 
-        assert_eq!(schema.name, "skill");
+        assert_eq!(schema.name, "Skill");
         assert!(!schema.description.is_empty());
 
         // Check that the schema has the skill parameter
@@ -238,5 +336,25 @@ mod tests {
 
         let properties = params.get("properties").unwrap().as_object().unwrap();
         assert!(properties.contains_key("skill"));
+        assert!(properties.contains_key("args"));
+    }
+
+    #[tokio::test]
+    async fn test_discover_skills() {
+        let tool = SkillTool::new();
+
+        // This should work even if no custom skills exist
+        let count = tool.discover_skills().await;
+        assert!(count.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_registry_access() {
+        let tool = SkillTool::new();
+        let registry = tool.registry();
+
+        let reg = registry.read().await;
+        // Should have builtin skills
+        assert!(reg.builtin_count() > 0);
     }
 }

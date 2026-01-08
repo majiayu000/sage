@@ -57,8 +57,6 @@
 
 mod api_types;
 mod args;
-mod claude_mode;
-mod cli_mode;
 mod commands;
 mod console;
 mod ipc;
@@ -73,7 +71,6 @@ use sage_core::error::SageResult;
 
 // Re-export for external use
 pub use args::{Cli, Commands, ConfigAction, TrajectoryAction};
-pub use cli_mode::CliMode;
 
 #[tokio::main]
 async fn main() -> SageResult<()> {

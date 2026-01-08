@@ -12,6 +12,17 @@ use std::path::PathBuf;
 
 use super::super::types::SessionId;
 
+/// Truncate a string to a maximum number of characters (UTF-8 safe)
+fn truncate_string(s: &str, max_chars: usize) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    if chars.len() > max_chars {
+        let truncated: String = chars[..max_chars.saturating_sub(3)].iter().collect();
+        format!("{}...", truncated)
+    } else {
+        s.to_string()
+    }
+}
+
 /// Session metadata stored in metadata.json
 ///
 /// Follows Claude Code's session design for compatibility and feature parity.
@@ -123,12 +134,8 @@ impl SessionMetadata {
     /// Set first prompt preview
     pub fn with_first_prompt(mut self, prompt: impl Into<String>) -> Self {
         let prompt = prompt.into();
-        // Truncate to 100 chars for preview
-        self.first_prompt = Some(if prompt.len() > 100 {
-            format!("{}...", &prompt[..97])
-        } else {
-            prompt
-        });
+        // Truncate to 100 chars for preview (safe for UTF-8)
+        self.first_prompt = Some(truncate_string(&prompt, 100));
         self
     }
 
@@ -166,11 +173,7 @@ impl SessionMetadata {
     /// Update first prompt (only if not set)
     pub fn set_first_prompt_if_empty(&mut self, prompt: &str) {
         if self.first_prompt.is_none() {
-            self.first_prompt = Some(if prompt.len() > 100 {
-                format!("{}...", &prompt[..97])
-            } else {
-                prompt.to_string()
-            });
+            self.first_prompt = Some(truncate_string(prompt, 100));
             self.updated_at = Utc::now();
         }
     }

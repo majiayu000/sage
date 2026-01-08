@@ -3,7 +3,6 @@
 use super::components::SageComponents;
 use super::core::SageBuilder;
 use super::error::BuilderError;
-use crate::agent::ClaudeStyleAgent;
 use crate::agent::lifecycle::{LifecycleHookRegistry, LifecycleManager};
 use crate::concurrency::CancellationHierarchy;
 use crate::config::model::ModelParameters;
@@ -126,16 +125,6 @@ impl SageBuilder {
             registry.register_server(name, config.clone()).await?;
         }
         Ok(registry)
-    }
-
-    /// Build a ClaudeStyleAgent
-    pub fn build_claude_style_agent(&self) -> SageResult<ClaudeStyleAgent> {
-        let config = self
-            .config
-            .clone()
-            .ok_or_else(|| BuilderError::MissingConfig("Configuration required".into()))?;
-
-        ClaudeStyleAgent::new(config)
     }
 
     /// Build all components into a SageComponents struct

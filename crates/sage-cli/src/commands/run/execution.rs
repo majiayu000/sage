@@ -1,10 +1,10 @@
 //! Run command execution logic
 
 use super::result_display::{display_result, display_token_usage};
-use super::resume::handle_interactive_command;
 use super::types::RunArgs;
 use crate::console::CliConsole;
 use crate::signal_handler::start_global_signal_handling;
+use sage_core::commands::types::InteractiveCommand;
 use sage_core::commands::{CommandExecutor, CommandRegistry};
 use sage_core::error::{SageError, SageResult};
 use sage_sdk::{RunOptions, SageAgentSdk};
@@ -91,7 +91,7 @@ async fn process_slash_commands(
         Ok(Some(result)) => {
             // Handle interactive commands
             if let Some(interactive_cmd) = &result.interactive {
-                handle_interactive_command(interactive_cmd, console).await?;
+                handle_interactive_command(interactive_cmd, console)?;
                 return Ok(SlashCommandResult::Completed);
             }
 
@@ -283,5 +283,23 @@ fn display_system_error(e: &SageError, sdk: &SageAgentSdk, console: &CliConsole)
             console.info(&format!("Configuration Error: {}", msg));
         }
         _ => {}
+    }
+}
+
+/// Handle interactive commands in run mode
+fn handle_interactive_command(
+    cmd: &InteractiveCommand,
+    console: &CliConsole,
+) -> SageResult<()> {
+    match cmd {
+        InteractiveCommand::Resume { .. } => {
+            console.warn("Session resume is not available in run mode.");
+            console.info("Use `sage -c` or `sage -r <session_id>` instead.");
+            Ok(())
+        }
+        InteractiveCommand::Title { .. } => {
+            console.warn("The /title command is only available in interactive mode.");
+            Ok(())
+        }
     }
 }

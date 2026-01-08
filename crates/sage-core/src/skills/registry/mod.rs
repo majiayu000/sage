@@ -4,7 +4,7 @@
 //! managing AI-activated skills.
 
 mod builtins;
-mod discovery;
+pub mod discovery;
 mod lookup;
 mod types;
 
@@ -12,4 +12,5 @@ mod types;
 mod tests;
 
 // Re-export public types
+pub use discovery::SkillFrontmatter;
 pub use types::SkillRegistry;

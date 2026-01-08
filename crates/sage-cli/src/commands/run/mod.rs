@@ -4,7 +4,6 @@
 
 mod execution;
 mod result_display;
-mod resume;
 mod types;
 
 pub use execution::execute;
