@@ -1,4 +1,10 @@
 //! Retry logic for LLM requests
+//!
+//! Implements a dual-strategy retry pipeline similar to Claude Code:
+//! 1. **Throttling Strategy**: For 429/503 errors, uses longer delays
+//! 2. **Exponential Backoff Strategy**: For other transient errors
+//!
+//! Both strategies use jitter to prevent thundering herd problems.
 
 use super::types::LlmClient;
 use crate::error::{SageError, SageResult};
@@ -8,18 +14,28 @@ use std::time::Duration;
 use tokio::time::sleep;
 use tracing::{instrument, warn};
 
+/// Minimum delay for throttling errors (429/503)
+const THROTTLING_MIN_DELAY_SECS: u64 = 5;
+
+/// Maximum delay cap for exponential backoff
+const MAX_RETRY_DELAY_SECS: u64 = 32;
+
 impl LlmClient {
     /// Execute a request with retry logic and exponential backoff.
     ///
-    /// Automatically retries failed requests using exponential backoff with jitter.
-    /// Only retries errors that are likely transient (network issues, rate limits, etc.).
+    /// Automatically retries failed requests using a dual-strategy approach:
     ///
-    /// # Retry Strategy
+    /// # Retry Strategy (following Claude Code patterns)
     ///
+    /// ## Throttling Strategy (for 429/503)
+    /// - Minimum delay: 5 seconds
+    /// - Exponential growth: 5s, 10s, 20s...
+    /// - Respects rate limits more conservatively
+    ///
+    /// ## Exponential Backoff Strategy (for other transient errors)
     /// - Base delay: 2^attempt seconds (1s, 2s, 4s, 8s, ...)
-    /// - Jitter: Random 0-500ms per second of delay
-    /// - Max retries: Configured in `ProviderConfig` (default: 3)
-    /// - Retryable errors: 429, 502, 503, 504, timeouts, network errors
+    /// - Jitter: Random value between 0 and delay/2 (like Claude Code)
+    /// - Max delay: 32 seconds
     ///
     /// # Arguments
     ///
@@ -65,14 +81,8 @@ impl LlmClient {
                     }
 
                     if attempt < max_retries {
-                        // Calculate exponential backoff with jitter
-                        let base_delay_secs = 2_u64.pow(attempt);
-                        let jitter_ms = {
-                            let mut rng = rand::thread_rng();
-                            rng.gen_range(0..=(base_delay_secs * 500))
-                        };
-                        let delay =
-                            Duration::from_secs(base_delay_secs) + Duration::from_millis(jitter_ms);
+                        // Calculate delay based on error type (dual strategy)
+                        let delay = self.calculate_retry_delay(attempt, &error);
 
                         warn!(
                             "Request failed (attempt {}/{}): {}. Retrying in {:.2}s...",
@@ -86,6 +96,7 @@ impl LlmClient {
                             attempt = attempt + 1,
                             max_attempts = max_retries + 1,
                             delay_secs = delay.as_secs_f64(),
+                            is_throttling = self.is_throttling_error(&error),
                             "retrying after failure"
                         );
 
@@ -111,5 +122,39 @@ impl LlmClient {
                 self.provider.name(),
             )
         }))
+    }
+
+    /// Calculate retry delay based on error type (dual strategy)
+    ///
+    /// - Throttling errors (429/503): Use longer delays starting at 5s
+    /// - Other errors: Standard exponential backoff starting at 1s
+    ///
+    /// Both include jitter (random value between 0 and delay/2) following
+    /// Claude Code's pattern for distributed systems.
+    fn calculate_retry_delay(&self, attempt: u32, error: &SageError) -> Duration {
+        let mut rng = rand::thread_rng();
+
+        if self.is_throttling_error(error) {
+            // Throttling strategy: longer delays for rate limit errors
+            // Base delay: 5s * 2^attempt = 5s, 10s, 20s...
+            let base_delay_secs = THROTTLING_MIN_DELAY_SECS * 2_u64.pow(attempt);
+            let capped_delay_secs = base_delay_secs.min(MAX_RETRY_DELAY_SECS);
+
+            // Jitter: random value between delay/2 and delay (like Claude Code)
+            let min_delay = capped_delay_secs / 2;
+            let jitter_secs = rng.gen_range(0..=(capped_delay_secs - min_delay));
+
+            Duration::from_secs(min_delay + jitter_secs)
+        } else {
+            // Exponential backoff strategy for transient errors
+            // Base delay: 2^attempt seconds = 1s, 2s, 4s, 8s...
+            let base_delay_secs = 2_u64.pow(attempt);
+            let capped_delay_secs = base_delay_secs.min(MAX_RETRY_DELAY_SECS);
+
+            // Jitter: random value between 0 and delay/2 (like Claude Code)
+            let jitter_ms = rng.gen_range(0..=(capped_delay_secs * 500));
+
+            Duration::from_secs(capped_delay_secs) + Duration::from_millis(jitter_ms)
+        }
     }
 }
