@@ -113,8 +113,21 @@ impl AgentState {
     }
 
     /// Check if transition to another state is valid
+    ///
+    /// Uses direct pattern matching instead of allocating a Vec for efficiency.
     pub fn can_transition_to(&self, target: &AgentState) -> bool {
-        self.possible_transitions().contains(target)
+        match (self, target) {
+            // From Initializing
+            (AgentState::Initializing, AgentState::Thinking | AgentState::Error) => true,
+            // From Thinking
+            (AgentState::Thinking, AgentState::ToolExecution | AgentState::Completed | AgentState::Error | AgentState::Cancelled) => true,
+            // From ToolExecution
+            (AgentState::ToolExecution, AgentState::WaitingForTools | AgentState::Thinking | AgentState::Error | AgentState::Cancelled) => true,
+            // From WaitingForTools
+            (AgentState::WaitingForTools, AgentState::Thinking | AgentState::Error | AgentState::Cancelled | AgentState::Timeout) => true,
+            // Terminal states have no valid transitions
+            _ => false,
+        }
     }
 }
 

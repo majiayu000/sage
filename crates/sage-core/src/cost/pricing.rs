@@ -148,17 +148,16 @@ impl PricingRegistry {
             .map(|p| p.calculate_cost(input_tokens, output_tokens))
     }
 
-    /// List all models
-    pub fn list_models(&self) -> Vec<&ModelPricing> {
-        self.models.values().collect()
+    /// List all models (returns iterator to avoid allocation)
+    pub fn list_models(&self) -> impl Iterator<Item = &ModelPricing> {
+        self.models.values()
     }
 
-    /// List models by provider
-    pub fn list_by_provider(&self, provider: &str) -> Vec<&ModelPricing> {
+    /// List models by provider (returns iterator to avoid allocation)
+    pub fn list_by_provider<'a>(&'a self, provider: &'a str) -> impl Iterator<Item = &'a ModelPricing> {
         self.models
             .values()
-            .filter(|p| p.provider.eq_ignore_ascii_case(provider))
-            .collect()
+            .filter(move |p| p.provider.eq_ignore_ascii_case(provider))
     }
 
     /// Register default model pricing (as of late 2024)
@@ -354,12 +353,12 @@ mod tests {
     fn test_list_by_provider() {
         let registry = PricingRegistry::with_defaults();
 
-        let anthropic = registry.list_by_provider("anthropic");
+        let anthropic: Vec<_> = registry.list_by_provider("anthropic").collect();
         assert!(!anthropic.is_empty());
         assert!(anthropic.iter().all(|p| p.provider == "anthropic"));
 
-        let openai = registry.list_by_provider("openai");
-        assert!(!openai.is_empty());
+        let openai_count = registry.list_by_provider("openai").count();
+        assert!(openai_count > 0);
     }
 
     #[test]
