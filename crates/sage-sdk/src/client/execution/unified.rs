@@ -5,6 +5,8 @@ use sage_core::{
     agent::{ExecutionMode, ExecutionOptions, UnifiedExecutor},
     error::SageResult,
     input::{InputChannel, InputChannelHandle},
+    mcp::registry::McpRegistry,
+    mcp::transport::TransportConfig,
     trajectory::SessionRecorder,
     types::TaskMetadata,
 };
@@ -13,7 +15,53 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+/// Build MCP registry from configuration
+pub(super) async fn build_mcp_registry_from_config(config: &sage_core::config::model::Config) -> SageResult<McpRegistry> {
+    let registry = McpRegistry::new();
+
+    for (name, server_config) in &config.mcp.servers {
+        if !server_config.enabled {
+            continue;
+        }
+
+        let transport_config = match server_config.transport.as_str() {
+            "stdio" => {
+                let command = server_config.command.clone().unwrap_or_default();
+                let args = server_config.args.clone();
+                let env = server_config.env.clone();
+                TransportConfig::Stdio { command, args, env }
+            }
+            "http" | "https" | "sse" => {
+                let base_url = server_config.url.clone().unwrap_or_default();
+                let headers = server_config.headers.clone();
+                TransportConfig::Http { base_url, headers }
+            }
+            _ => {
+                tracing::warn!("Unsupported MCP transport type: {}", server_config.transport);
+                continue;
+            }
+        };
+
+        match registry.register_server(name, transport_config).await {
+            Ok(server_info) => {
+                tracing::info!(
+                    "Connected to MCP server '{}': {} v{}",
+                    name,
+                    server_info.name,
+                    server_info.version
+                );
+            }
+            Err(e) => {
+                tracing::error!("Failed to connect to MCP server '{}': {}", name, e);
+            }
+        }
+    }
+
+    Ok(registry)
+}
+
 impl SageAgentSdk {
+
     /// Execute a task using the unified execution loop (Claude Code style)
     ///
     /// This method uses a unified execution model where:
@@ -94,9 +142,33 @@ impl SageAgentSdk {
         }
 
         let config_used = self.config.clone();
+        let config_for_mcp = self.config.clone();
 
         // Create the future that will execute the task
         let execution_future = async move {
+            // Load MCP tools if MCP is enabled
+            tracing::debug!("Checking MCP configuration: enabled={}", config_for_mcp.mcp.enabled);
+            if config_for_mcp.mcp.enabled {
+                tracing::info!("MCP is enabled, building MCP registry...");
+                match build_mcp_registry_from_config(&config_for_mcp).await {
+                    Ok(mcp_registry) => {
+                        let mcp_tools = mcp_registry.as_tools().await;
+                        tracing::info!("Loaded {} MCP tools from {} servers",
+                            mcp_tools.len(),
+                            mcp_registry.server_names().len());
+
+                        if !mcp_tools.is_empty() {
+                            executor.register_tools(mcp_tools);
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to build MCP registry: {}", e);
+                    }
+                }
+            } else {
+                tracing::debug!("MCP is disabled in configuration");
+            }
+
             let outcome = executor.execute(task).await?;
             Ok(ExecutionResult::new(
                 outcome,

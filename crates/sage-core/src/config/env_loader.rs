@@ -20,7 +20,6 @@ pub fn load_from_env() -> SageResult<Config> {
         enable_lakeview: false,
         working_directory: None,
         tools: crate::config::model::ToolConfig {
-            enabled_tools: Vec::new(),
             tool_settings: HashMap::new(),
             max_execution_time: 0,
             allow_parallel_execution: false,
@@ -256,6 +255,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_load_multiple_providers() {
         clean_test_env();
         unsafe {

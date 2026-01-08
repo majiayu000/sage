@@ -125,6 +125,12 @@ mod tests {
 
     #[test]
     fn test_load_config_with_overrides_with_file() {
+        // Clear any interfering environment variables from other tests
+        // SAFETY: This is a single-threaded test environment
+        unsafe {
+            std::env::remove_var("GOOGLE_TEMPERATURE");
+        }
+
         let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path().join("test.json");
         let config_json = r#"{

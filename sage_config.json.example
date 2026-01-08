@@ -67,13 +67,6 @@
   },
   "tools": {
     "allow_parallel_execution": true,
-    "enabled_tools": [
-      "str_replace_based_edit_tool",
-      "sequentialthinking",
-      "json_edit_tool",
-      "task_done",
-      "bash"
-    ],
     "max_execution_time": 300,
     "tool_settings": {}
   },

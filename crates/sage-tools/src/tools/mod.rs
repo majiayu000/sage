@@ -55,7 +55,7 @@ pub use diagnostics::{
     get_global_memory_manager, get_learning_patterns_for_context, get_memories_for_context,
     init_global_learning_engine, init_global_memory_manager,
 };
-pub use extensions::{SkillTool, SlashCommandTool};
+pub use extensions::{PlatformToolProxy, SkillTool, SlashCommandTool};
 pub use file_ops::{
     CodebaseRetrievalTool, EditTool, GlobTool, GrepTool, NotebookEditTool, ReadTool, WriteTool,
 };
@@ -119,6 +119,8 @@ pub fn get_default_tools() -> Vec<Arc<dyn Tool>> {
         // Extensions
         Arc::new(SkillTool::new()),
         Arc::new(SlashCommandTool::new()),
+        // Platform tool proxies (for LLM platform built-in tools)
+        Arc::new(PlatformToolProxy::glm_claim_coupon()),
         // Utilities
         Arc::new(SequentialThinkingTool::new()),
         Arc::new(TelemetryStatsTool::new()), // View tool usage statistics

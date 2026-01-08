@@ -54,7 +54,6 @@ mod tests {
             enable_lakeview: false,
             working_directory: Some(std::env::temp_dir()),
             tools: ToolConfig {
-                enabled_tools: vec!["task_done".to_string(), "bash".to_string()],
                 tool_settings: std::collections::HashMap::new(),
                 max_execution_time: 300,
                 allow_parallel_execution: true,

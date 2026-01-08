@@ -18,7 +18,6 @@ pub fn load_from_args(args: &HashMap<String, String>) -> SageResult<Config> {
         enable_lakeview: false,
         working_directory: None,
         tools: crate::config::model::ToolConfig {
-            enabled_tools: Vec::new(),
             tool_settings: HashMap::new(),
             max_execution_time: 0,
             allow_parallel_execution: false,

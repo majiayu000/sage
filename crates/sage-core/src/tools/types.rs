@@ -313,4 +313,18 @@ impl ToolSchema {
             parameters: parameters_schema,
         }
     }
+
+    /// Create a flexible tool schema with custom parameters JSON
+    /// Useful for platform tools that accept arbitrary parameters
+    pub fn new_flexible<S: Into<String>>(
+        name: S,
+        description: S,
+        parameters: serde_json::Value,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            description: description.into(),
+            parameters,
+        }
+    }
 }

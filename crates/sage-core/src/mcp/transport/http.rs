@@ -129,8 +129,9 @@ impl HttpTransport {
 
     /// Connect and start SSE listener if enabled
     pub async fn connect(&mut self) -> Result<(), McpError> {
-        // Try to connect to the SSE endpoint
-        let sse_url = format!("{}/sse", self.base_url.trim_end_matches('/'));
+        // Use base URL directly for Streamable HTTP (MCP 2025-03-26 spec)
+        // The new spec uses a single endpoint instead of separate /sse and /message paths
+        let sse_url = self.base_url.trim_end_matches('/').to_string();
 
         let client = self.client.clone();
         let connected = Arc::clone(&self.connected);
@@ -210,8 +211,9 @@ impl HttpTransport {
     }
 
     /// Get the message endpoint URL
+    /// With Streamable HTTP (MCP 2025-03-26), use the base URL directly as the single endpoint
     fn message_url(&self) -> String {
-        format!("{}/message", self.base_url.trim_end_matches('/'))
+        self.base_url.trim_end_matches('/').to_string()
     }
 }
 

@@ -1,43 +1,15 @@
 //! Tool configuration validation
 
 use crate::config::model::Config;
-use crate::error::{SageError, SageResult};
-use std::collections::HashSet;
+use crate::error::SageResult;
 
 /// Validate tool configuration
-pub fn validate_tools(config: &Config) -> SageResult<()> {
-    // Validate enabled tools
-    let valid_tools: HashSet<&str> = [
-        "str_replace_based_edit_tool",
-        "sequentialthinking",
-        "json_edit_tool",
-        "task_done",
-        "bash",
-    ]
-    .iter()
-    .cloned()
-    .collect();
-
-    for tool in &config.tools.enabled_tools {
-        if !valid_tools.contains(tool.as_str()) && !tool.starts_with("custom_") {
-            return Err(SageError::config(format!(
-                "Unknown tool '{}'. Valid tools are: {:?}",
-                tool, valid_tools
-            )));
-        }
-    }
-
-    // Ensure task_done tool is always enabled
-    if !config
-        .tools
-        .enabled_tools
-        .contains(&"task_done".to_string())
-    {
-        return Err(SageError::config(
-            "The 'task_done' tool must be enabled for proper agent operation",
-        ));
-    }
-
+///
+/// Note: Tool filtering is no longer enforced via configuration.
+/// All tools registered via `get_default_tools()` are available to the agent.
+pub fn validate_tools(_config: &Config) -> SageResult<()> {
+    // Tool validation is simplified - tools are now always registered
+    // from `get_default_tools()` and no filtering is applied
     Ok(())
 }
 
@@ -77,7 +49,6 @@ mod tests {
             enable_lakeview: false,
             working_directory: Some(std::env::temp_dir()),
             tools: ToolConfig {
-                enabled_tools: vec!["task_done".to_string(), "bash".to_string()],
                 tool_settings: std::collections::HashMap::new(),
                 max_execution_time: 300,
                 allow_parallel_execution: true,
@@ -95,34 +66,9 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_tools_unknown_tool() {
-        let mut config = create_test_config();
-        config.tools.enabled_tools.push("unknown_tool".to_string());
-
-        let result = validate_tools(&config);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Unknown tool"));
-    }
-
-    #[test]
-    fn test_validate_tools_custom_tool_allowed() {
-        let mut config = create_test_config();
-        config
-            .tools
-            .enabled_tools
-            .push("custom_my_tool".to_string());
-
-        // Custom tools with custom_ prefix should be allowed
+    fn test_validate_tools_always_succeeds() {
+        let config = create_test_config();
+        // Tool validation always succeeds now
         assert!(validate_tools(&config).is_ok());
-    }
-
-    #[test]
-    fn test_validate_tools_task_done_required() {
-        let mut config = create_test_config();
-        config.tools.enabled_tools = vec!["bash".to_string()]; // Missing task_done
-
-        let result = validate_tools(&config);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("task_done"));
     }
 }
