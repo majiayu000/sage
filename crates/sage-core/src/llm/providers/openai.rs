@@ -76,17 +76,16 @@ impl OpenAiProvider {
         }
 
         // Add organization header if provided
-        if let Some(org) = &self.config.organization {
+        if let Some(org) = self.config.organization() {
             request = request.header("OpenAI-Organization", org);
         }
 
-        let response = request
-            .send()
-            .await
-            .map_err(|e| SageError::llm_with_context(
+        let response = request.send().await.map_err(|e| {
+            SageError::llm_with_context(
                 format!("OpenAI request failed: {}", e),
                 "Failed to send HTTP request to OpenAI API",
-            ))?;
+            )
+        })?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -97,13 +96,12 @@ impl OpenAiProvider {
             )));
         }
 
-        let response_json: Value = response
-            .json()
-            .await
-            .map_err(|e| SageError::llm_with_context(
+        let response_json: Value = response.json().await.map_err(|e| {
+            SageError::llm_with_context(
                 format!("Failed to parse OpenAI response: {}", e),
                 "Failed to deserialize OpenAI API response as JSON",
-            ))?;
+            )
+        })?;
 
         ResponseParser::parse_openai(response_json)
     }
@@ -147,13 +145,12 @@ impl OpenAiProvider {
             request = request.bearer_auth(api_key);
         }
 
-        let response = request
-            .send()
-            .await
-            .map_err(|e| SageError::llm_with_context(
+        let response = request.send().await.map_err(|e| {
+            SageError::llm_with_context(
                 format!("OpenAI streaming request failed: {}", e),
                 "Failed to send HTTP request to OpenAI streaming API",
-            ))?;
+            )
+        })?;
 
         if !response.status().is_success() {
             let error_text = response.text().await.unwrap_or_default();

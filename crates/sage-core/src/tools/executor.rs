@@ -103,8 +103,7 @@ impl ToolExecutor {
 
         // Determine execution timeout
         let execution_timeout = tool
-            .max_execution_time()
-            .map(Duration::from_secs)
+            .max_execution_duration()
             .unwrap_or(self.max_execution_time);
 
         // Track execution time

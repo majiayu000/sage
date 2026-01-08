@@ -1,8 +1,20 @@
 //! Provider-specific configuration
+//!
+//! This module provides configuration types for LLM providers, organized into
+//! focused structs for better separation of concerns:
+//!
+//! - [`ApiAuthConfig`]: Authentication settings (API key, organization, project)
+//! - [`NetworkConfig`]: Network settings (base URL, headers, timeouts)
+//! - [`ResilienceConfig`]: Retry and rate limiting settings
+//! - [`ProviderConfig`]: Main configuration that composes the above
 
 use crate::llm::provider_types::TimeoutConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+// =============================================================================
+// API Key Types
+// =============================================================================
 
 /// Source of the API key
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,67 +63,28 @@ impl ApiKeyInfo {
     }
 }
 
-/// Configuration for a specific LLM provider
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProviderConfig {
-    /// Provider name (openai, anthropic, etc.)
-    pub name: String,
-    /// API endpoint base URL
-    pub base_url: Option<String>,
-    /// API key
+// =============================================================================
+// Focused Configuration Structs
+// =============================================================================
+
+/// Authentication configuration for API access
+///
+/// Contains credentials and identity information needed to authenticate
+/// with an LLM provider's API.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ApiAuthConfig {
+    /// API key for authentication
     pub api_key: Option<String>,
-    /// API version
-    pub api_version: Option<String>,
-    /// Organization ID (for OpenAI)
+    /// Organization ID (used by OpenAI for billing/access control)
     pub organization: Option<String>,
-    /// Project ID
+    /// Project ID (used by some providers for project-level access)
     pub project_id: Option<String>,
-    /// Custom headers
-    pub headers: HashMap<String, String>,
-    /// Timeout configuration
-    ///
-    /// Controls connection and request timeouts. If not specified, uses default values:
-    /// - Connection timeout: 30 seconds
-    /// - Request timeout: 60 seconds
-    #[serde(default)]
-    pub timeouts: TimeoutConfig,
-    /// Legacy timeout field (deprecated, use `timeouts` instead)
-    ///
-    /// For backward compatibility, this field is still supported.
-    /// If set, it will override the request timeout in `timeouts`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub timeout: Option<u64>,
-    /// Maximum number of retries
-    pub max_retries: Option<u32>,
-    /// Rate limiting configuration
-    pub rate_limit: Option<RateLimitConfig>,
 }
 
-impl Default for ProviderConfig {
-    fn default() -> Self {
-        Self {
-            name: "openai".to_string(),
-            base_url: None,
-            api_key: None,
-            api_version: None,
-            organization: None,
-            project_id: None,
-            headers: HashMap::new(),
-            timeouts: TimeoutConfig::default(),
-            timeout: None,
-            max_retries: Some(3),
-            rate_limit: None,
-        }
-    }
-}
-
-impl ProviderConfig {
-    /// Create a new provider config
-    pub fn new(name: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
-            ..Default::default()
-        }
+impl ApiAuthConfig {
+    /// Create a new authentication config
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Set API key
@@ -120,15 +93,61 @@ impl ProviderConfig {
         self
     }
 
-    /// Set base URL
-    pub fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
-        self.base_url = Some(base_url.into());
+    /// Set organization ID
+    pub fn with_organization(mut self, org: impl Into<String>) -> Self {
+        self.organization = Some(org.into());
         self
     }
 
-    /// Set API version
-    pub fn with_api_version(mut self, api_version: impl Into<String>) -> Self {
-        self.api_version = Some(api_version.into());
+    /// Set project ID
+    pub fn with_project_id(mut self, project: impl Into<String>) -> Self {
+        self.project_id = Some(project.into());
+        self
+    }
+}
+
+/// Network configuration for API communication
+///
+/// Contains settings for HTTP communication with the LLM provider,
+/// including endpoint URLs, custom headers, and timeout settings.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetworkConfig {
+    /// API endpoint base URL (overrides provider default)
+    pub base_url: Option<String>,
+    /// Custom HTTP headers to include in requests
+    #[serde(default)]
+    pub headers: HashMap<String, String>,
+    /// Timeout configuration for connection and request
+    #[serde(default)]
+    pub timeouts: TimeoutConfig,
+    /// Legacy timeout field (deprecated, use `timeouts` instead)
+    ///
+    /// For backward compatibility, this field is still supported.
+    /// If set, it will override the request timeout in `timeouts`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timeout: Option<u64>,
+}
+
+impl Default for NetworkConfig {
+    fn default() -> Self {
+        Self {
+            base_url: None,
+            headers: HashMap::new(),
+            timeouts: TimeoutConfig::default(),
+            timeout: None,
+        }
+    }
+}
+
+impl NetworkConfig {
+    /// Create a new network config
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set base URL
+    pub fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
+        self.base_url = Some(base_url.into());
         self
     }
 
@@ -144,30 +163,206 @@ impl ProviderConfig {
         self
     }
 
-    /// Set legacy timeout (deprecated, use `with_timeouts` instead)
+    /// Get the effective timeout configuration
     ///
-    /// This sets only the request timeout for backward compatibility.
-    #[deprecated(since = "0.1.0", note = "Use with_timeouts instead")]
-    pub fn with_timeout(mut self, timeout: u64) -> Self {
-        self.timeouts.request_timeout_secs = timeout;
-        self
+    /// Handles backward compatibility with the legacy `timeout` field.
+    /// If the legacy `timeout` is set, it overrides the request timeout.
+    pub fn get_effective_timeouts(&self) -> TimeoutConfig {
+        let mut timeouts = self.timeouts;
+
+        // Apply legacy timeout if set (for backward compatibility)
+        if let Some(legacy_timeout) = self.timeout {
+            timeouts.request_timeout_secs = legacy_timeout;
+        }
+
+        timeouts
+    }
+}
+
+/// Resilience configuration for retry and rate limiting
+///
+/// Contains settings for handling transient failures and rate limits
+/// when communicating with LLM providers.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ResilienceConfig {
+    /// Maximum number of retries for failed requests
+    pub max_retries: Option<u32>,
+    /// Rate limiting configuration
+    pub rate_limit: Option<RateLimitConfig>,
+}
+
+impl ResilienceConfig {
+    /// Create a new resilience config with default settings
+    pub fn new() -> Self {
+        Self {
+            max_retries: Some(3),
+            rate_limit: None,
+        }
     }
 
-    /// Set max retries
+    /// Set maximum retries
     pub fn with_max_retries(mut self, max_retries: u32) -> Self {
         self.max_retries = Some(max_retries);
         self
     }
 
-    /// Set rate limiting
+    /// Set rate limiting configuration
     pub fn with_rate_limit(mut self, rate_limit: RateLimitConfig) -> Self {
         self.rate_limit = Some(rate_limit);
         self
     }
+}
+
+// =============================================================================
+// Main Provider Configuration
+// =============================================================================
+
+/// Configuration for a specific LLM provider
+///
+/// This struct composes focused configuration types for authentication,
+/// network, and resilience settings. It provides convenient accessor methods
+/// that delegate to the underlying config structs.
+///
+/// # Examples
+///
+/// ```rust
+/// use sage_core::config::provider::ProviderConfig;
+///
+/// let config = ProviderConfig::new("anthropic")
+///     .with_api_key("sk-ant-xxx")
+///     .with_base_url("https://api.anthropic.com")
+///     .with_max_retries(5);
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderConfig {
+    /// Provider name (openai, anthropic, etc.)
+    pub name: String,
+    /// API version (used by some providers like Anthropic)
+    pub api_version: Option<String>,
+    /// Authentication configuration
+    #[serde(flatten)]
+    pub auth: ApiAuthConfig,
+    /// Network configuration
+    #[serde(flatten)]
+    pub network: NetworkConfig,
+    /// Resilience configuration (retry/rate limiting)
+    #[serde(flatten)]
+    pub resilience: ResilienceConfig,
+}
+
+impl Default for ProviderConfig {
+    fn default() -> Self {
+        Self {
+            name: "openai".to_string(),
+            api_version: None,
+            auth: ApiAuthConfig::default(),
+            network: NetworkConfig::default(),
+            resilience: ResilienceConfig::new(),
+        }
+    }
+}
+
+impl ProviderConfig {
+    /// Create a new provider config
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            ..Default::default()
+        }
+    }
+
+    // =========================================================================
+    // Builder Methods (delegate to composed structs)
+    // =========================================================================
+
+    /// Set API key
+    pub fn with_api_key(mut self, api_key: impl Into<String>) -> Self {
+        self.auth.api_key = Some(api_key.into());
+        self
+    }
+
+    /// Set organization ID (for OpenAI)
+    pub fn with_organization(mut self, org: impl Into<String>) -> Self {
+        self.auth.organization = Some(org.into());
+        self
+    }
+
+    /// Set project ID
+    pub fn with_project_id(mut self, project: impl Into<String>) -> Self {
+        self.auth.project_id = Some(project.into());
+        self
+    }
+
+    /// Set base URL
+    pub fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
+        self.network.base_url = Some(base_url.into());
+        self
+    }
+
+    /// Set API version
+    pub fn with_api_version(mut self, api_version: impl Into<String>) -> Self {
+        self.api_version = Some(api_version.into());
+        self
+    }
+
+    /// Add a custom header
+    pub fn with_header(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.network.headers.insert(key.into(), value.into());
+        self
+    }
+
+    /// Set timeout configuration
+    pub fn with_timeouts(mut self, timeouts: TimeoutConfig) -> Self {
+        self.network.timeouts = timeouts;
+        self
+    }
+
+    /// Set legacy timeout (deprecated, use `with_timeouts` instead)
+    ///
+    /// This sets only the request timeout for backward compatibility.
+    #[deprecated(since = "0.1.0", note = "Use with_timeouts instead")]
+    pub fn with_timeout(mut self, timeout: u64) -> Self {
+        self.network.timeouts.request_timeout_secs = timeout;
+        self
+    }
+
+    /// Set max retries
+    pub fn with_max_retries(mut self, max_retries: u32) -> Self {
+        self.resilience.max_retries = Some(max_retries);
+        self
+    }
+
+    /// Set rate limiting
+    pub fn with_rate_limit(mut self, rate_limit: RateLimitConfig) -> Self {
+        self.resilience.rate_limit = Some(rate_limit);
+        self
+    }
+
+    /// Set authentication configuration
+    pub fn with_auth(mut self, auth: ApiAuthConfig) -> Self {
+        self.auth = auth;
+        self
+    }
+
+    /// Set network configuration
+    pub fn with_network(mut self, network: NetworkConfig) -> Self {
+        self.network = network;
+        self
+    }
+
+    /// Set resilience configuration
+    pub fn with_resilience(mut self, resilience: ResilienceConfig) -> Self {
+        self.resilience = resilience;
+        self
+    }
+
+    // =========================================================================
+    // Convenience Accessors (for backward compatibility)
+    // =========================================================================
 
     /// Get the effective base URL for this provider
     pub fn get_base_url(&self) -> String {
-        if let Some(base_url) = &self.base_url {
+        if let Some(base_url) = &self.network.base_url {
             base_url.clone()
         } else {
             match self.name.as_str() {
@@ -226,8 +421,8 @@ impl ProviderConfig {
             }
         }
 
-        // 3. Fall back to config file
-        if let Some(api_key) = &self.api_key {
+        // 3. Fall back to config file (from auth struct)
+        if let Some(api_key) = &self.auth.api_key {
             if !api_key.is_empty() {
                 return ApiKeyInfo {
                     key: Some(api_key.clone()),
@@ -263,11 +458,16 @@ impl ProviderConfig {
 
         let key = match &key_info.key {
             Some(k) => k,
-            None => return Err(format!(
-                "API key required for '{}'. Set via {} or config file",
-                self.name,
-                get_standard_env_vars(&self.name).first().cloned().unwrap_or_default()
-            )),
+            None => {
+                return Err(format!(
+                    "API key required for '{}'. Set via {} or config file",
+                    self.name,
+                    get_standard_env_vars(&self.name)
+                        .first()
+                        .cloned()
+                        .unwrap_or_default()
+                ));
+            }
         };
 
         // Provider-specific validation
@@ -309,14 +509,7 @@ impl ProviderConfig {
     /// Handles backward compatibility with the legacy `timeout` field.
     /// If the legacy `timeout` is set, it overrides the request timeout.
     pub fn get_effective_timeouts(&self) -> TimeoutConfig {
-        let mut timeouts = self.timeouts;
-
-        // Apply legacy timeout if set (for backward compatibility)
-        if let Some(legacy_timeout) = self.timeout {
-            timeouts.request_timeout_secs = legacy_timeout;
-        }
-
-        timeouts
+        self.network.get_effective_timeouts()
     }
 
     /// Validate the provider configuration
@@ -336,13 +529,71 @@ impl ProviderConfig {
         let effective_timeouts = self.get_effective_timeouts();
         effective_timeouts.validate()?;
 
-        if let Some(max_retries) = self.max_retries {
+        if let Some(max_retries) = self.resilience.max_retries {
             if max_retries > 10 {
                 return Err("Max retries should not exceed 10".to_string());
             }
         }
 
         Ok(())
+    }
+
+    // =========================================================================
+    // Direct Field Accessors (for backward compatibility with field access)
+    // =========================================================================
+
+    /// Get API key from auth config (direct access for backward compatibility)
+    #[inline]
+    pub fn api_key(&self) -> Option<&String> {
+        self.auth.api_key.as_ref()
+    }
+
+    /// Get organization from auth config (direct access for backward compatibility)
+    #[inline]
+    pub fn organization(&self) -> Option<&String> {
+        self.auth.organization.as_ref()
+    }
+
+    /// Get project ID from auth config (direct access for backward compatibility)
+    #[inline]
+    pub fn project_id(&self) -> Option<&String> {
+        self.auth.project_id.as_ref()
+    }
+
+    /// Get base URL from network config (direct access for backward compatibility)
+    #[inline]
+    pub fn base_url(&self) -> Option<&String> {
+        self.network.base_url.as_ref()
+    }
+
+    /// Get headers from network config (direct access for backward compatibility)
+    #[inline]
+    pub fn headers(&self) -> &HashMap<String, String> {
+        &self.network.headers
+    }
+
+    /// Get mutable headers from network config
+    #[inline]
+    pub fn headers_mut(&mut self) -> &mut HashMap<String, String> {
+        &mut self.network.headers
+    }
+
+    /// Get timeouts from network config (direct access for backward compatibility)
+    #[inline]
+    pub fn timeouts(&self) -> TimeoutConfig {
+        self.network.timeouts
+    }
+
+    /// Get max retries from resilience config (direct access for backward compatibility)
+    #[inline]
+    pub fn max_retries(&self) -> Option<u32> {
+        self.resilience.max_retries
+    }
+
+    /// Get rate limit from resilience config (direct access for backward compatibility)
+    #[inline]
+    pub fn rate_limit(&self) -> Option<&RateLimitConfig> {
+        self.resilience.rate_limit.as_ref()
     }
 }
 
@@ -512,23 +763,14 @@ fn get_standard_env_vars(provider: &str) -> Vec<String> {
             "ANTHROPIC_API_KEY".to_string(),
             "CLAUDE_API_KEY".to_string(),
         ],
-        "google" => vec![
-            "GOOGLE_API_KEY".to_string(),
-            "GEMINI_API_KEY".to_string(),
-        ],
+        "google" => vec!["GOOGLE_API_KEY".to_string(), "GEMINI_API_KEY".to_string()],
         "azure" => vec![
             "AZURE_OPENAI_API_KEY".to_string(),
             "AZURE_API_KEY".to_string(),
         ],
         "openrouter" => vec!["OPENROUTER_API_KEY".to_string()],
-        "doubao" => vec![
-            "DOUBAO_API_KEY".to_string(),
-            "ARK_API_KEY".to_string(),
-        ],
-        "glm" | "zhipu" => vec![
-            "GLM_API_KEY".to_string(),
-            "ZHIPU_API_KEY".to_string(),
-        ],
+        "doubao" => vec!["DOUBAO_API_KEY".to_string(), "ARK_API_KEY".to_string()],
+        "glm" | "zhipu" => vec!["GLM_API_KEY".to_string(), "ZHIPU_API_KEY".to_string()],
         _ => {
             // For custom providers, try <PROVIDER>_API_KEY
             vec![format!("{}_API_KEY", provider.to_uppercase())]
@@ -597,7 +839,10 @@ mod tests {
     #[test]
     fn test_mask_api_key() {
         // 26 char key: show first 8, last 4, mask middle (14-12=2, but min 8)
-        assert_eq!(mask_api_key("sk-ant-api03-abc123xyz789"), "sk-ant-a********...z789");
+        assert_eq!(
+            mask_api_key("sk-ant-api03-abc123xyz789"),
+            "sk-ant-a********...z789"
+        );
         assert_eq!(mask_api_key("short"), "*****");
         assert_eq!(mask_api_key("exactly12ch"), "***********");
     }
@@ -620,8 +865,7 @@ mod tests {
 
     #[test]
     fn test_provider_config_api_key_from_config() {
-        let config = ProviderConfig::new("anthropic")
-            .with_api_key("sk-ant-test-key-12345");
+        let config = ProviderConfig::new("anthropic").with_api_key("sk-ant-test-key-12345");
 
         let info = config.get_api_key_info();
         assert_eq!(info.source, ApiKeySource::ConfigFile);

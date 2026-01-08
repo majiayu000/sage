@@ -195,7 +195,10 @@ impl PermissionCache {
         persist: bool,
     ) -> SageResult<()> {
         // Always update session cache
-        self.session_cache.write().await.insert(key.clone(), allowed);
+        self.session_cache
+            .write()
+            .await
+            .insert(key.clone(), allowed);
 
         // Persist if requested and enabled
         if persist && self.persist_enabled {
@@ -342,7 +345,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_pattern_matches() {
-        assert!(PermissionCache::pattern_matches("Bash(npm *)", "Bash(npm *)"));
+        assert!(PermissionCache::pattern_matches(
+            "Bash(npm *)",
+            "Bash(npm *)"
+        ));
         assert!(PermissionCache::pattern_matches(
             "Bash(npm *)",
             "Bash(npm install)"
@@ -371,10 +377,7 @@ mod tests {
         let cache = PermissionCache::with_persistence(temp_dir.path());
 
         // Should find in persistent settings
-        assert_eq!(
-            cache.get_with_persistence("Read(src/**)").await,
-            Some(true)
-        );
+        assert_eq!(cache.get_with_persistence("Read(src/**)").await, Some(true));
         assert_eq!(cache.get_with_persistence("Bash(rm *)").await, Some(false));
 
         // Should not find non-existent

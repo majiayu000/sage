@@ -125,7 +125,7 @@ impl SkillTool {
 
             // Format the response with skill metadata
             let mut result = format!("# Skill: {}\n\n", skill.user_facing_name());
-            result.push_str(&format!("**Description:** {}\n\n", skill.description));
+            result.push_str(&format!("**Description:** {}\n\n", skill.description()));
 
             if let Some(ref when) = skill.when_to_use {
                 result.push_str(&format!("**When to use:** {}\n\n", when));
@@ -140,7 +140,7 @@ impl SkillTool {
             let available: Vec<String> = registry
                 .list_enabled()
                 .iter()
-                .map(|s| s.name.clone())
+                .map(|s| s.name().to_string())
                 .collect();
 
             Err(ToolError::ExecutionFailed(format!(

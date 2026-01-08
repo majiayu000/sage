@@ -26,10 +26,7 @@ use tokio::process::Command;
 /// On macOS, it wraps the command with `sandbox-exec`.
 /// On Linux, it would apply seccomp filters (not yet implemented).
 /// On other platforms, it's a no-op.
-pub fn apply_os_sandbox(
-    cmd: &mut Command,
-    config: &OsSandboxConfig,
-) -> Result<(), SandboxError> {
+pub fn apply_os_sandbox(cmd: &mut Command, config: &OsSandboxConfig) -> Result<(), SandboxError> {
     match config.mode {
         OsSandboxMode::Disabled => Ok(()),
         #[cfg(target_os = "macos")]

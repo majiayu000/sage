@@ -95,10 +95,15 @@ impl GoogleProvider {
             .json(&request_body)
             .send()
             .await
-            .map_err(|e| SageError::llm_with_context(
-                format!("Google request failed: {}", e),
-                format!("Failed to send HTTP request to Google Gemini API for model: {}", self.model_params.model),
-            ))?;
+            .map_err(|e| {
+                SageError::llm_with_context(
+                    format!("Google request failed: {}", e),
+                    format!(
+                        "Failed to send HTTP request to Google Gemini API for model: {}",
+                        self.model_params.model
+                    ),
+                )
+            })?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -109,13 +114,12 @@ impl GoogleProvider {
             )));
         }
 
-        let response_json: Value = response
-            .json()
-            .await
-            .map_err(|e| SageError::llm_with_context(
+        let response_json: Value = response.json().await.map_err(|e| {
+            SageError::llm_with_context(
                 format!("Failed to parse Google response: {}", e),
                 "Failed to deserialize Google Gemini API response as JSON",
-            ))?;
+            )
+        })?;
 
         tracing::debug!(
             "Google API response: {}",

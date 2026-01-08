@@ -5,8 +5,8 @@
 //! - Temp path restrictions (/tmp only allowed in /tmp/sage/)
 //! - System path protection
 
-use super::super::config::SandboxConfig;
 use super::super::SandboxError;
+use super::super::config::SandboxConfig;
 use std::path::{Path, PathBuf};
 
 /// Sensitive files that require special protection
@@ -53,7 +53,7 @@ const SENSITIVE_FILES: &[&str] = &[
 const ALLOWED_TMP_PREFIXES: &[&str] = &[
     "/tmp/sage/",
     "/tmp/sage-agent/",
-    "/private/tmp/sage/",      // macOS
+    "/private/tmp/sage/",       // macOS
     "/private/tmp/sage-agent/", // macOS
 ];
 

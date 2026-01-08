@@ -142,7 +142,7 @@ mod tests {
         let model_params = ModelParameters::default();
         let client = LlmClient::new(LlmProvider::OpenAI, config, model_params).unwrap();
 
-        assert_eq!(client.config().max_retries, Some(5));
+        assert_eq!(client.config().max_retries(), Some(5));
     }
 
     #[test]

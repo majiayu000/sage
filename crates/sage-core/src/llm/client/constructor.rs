@@ -39,8 +39,8 @@ impl LlmClient {
     ///
     /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let provider = LlmProvider::OpenAI;
-    /// let mut config = ProviderConfig::default();
-    /// config.api_key = Some("your-api-key".to_string());
+    /// let config = ProviderConfig::new("openai")
+    ///     .with_api_key("your-api-key");
     ///
     /// let params = ModelParameters {
     ///     model: "gpt-4".to_string(),
@@ -79,7 +79,7 @@ impl LlmClient {
 
         // Add custom headers
         let mut headers = reqwest::header::HeaderMap::new();
-        for (key, value) in &config.headers {
+        for (key, value) in config.headers() {
             if let (Ok(name), Ok(val)) = (
                 reqwest::header::HeaderName::from_bytes(key.as_bytes()),
                 reqwest::header::HeaderValue::from_str(value),
@@ -114,46 +114,34 @@ impl LlmClient {
         // Create provider instance based on provider type
         // Move (not clone) config and model_params into the selected provider
         let provider_instance = match &provider {
-            LlmProvider::OpenAI => ProviderInstance::OpenAI(OpenAiProvider::new(
-                config,
-                model_params,
-                http_client,
-            )),
+            LlmProvider::OpenAI => {
+                ProviderInstance::OpenAI(OpenAiProvider::new(config, model_params, http_client))
+            }
             LlmProvider::Anthropic => ProviderInstance::Anthropic(AnthropicProvider::new(
                 config,
                 model_params,
                 http_client,
             )),
-            LlmProvider::Google => ProviderInstance::Google(GoogleProvider::new(
-                config,
-                model_params,
-                http_client,
-            )),
-            LlmProvider::Azure => ProviderInstance::Azure(AzureProvider::new(
-                config,
-                model_params,
-                http_client,
-            )),
+            LlmProvider::Google => {
+                ProviderInstance::Google(GoogleProvider::new(config, model_params, http_client))
+            }
+            LlmProvider::Azure => {
+                ProviderInstance::Azure(AzureProvider::new(config, model_params, http_client))
+            }
             LlmProvider::OpenRouter => ProviderInstance::OpenRouter(OpenRouterProvider::new(
                 config,
                 model_params,
                 http_client,
             )),
-            LlmProvider::Ollama => ProviderInstance::Ollama(OllamaProvider::new(
-                config,
-                model_params,
-                http_client,
-            )),
-            LlmProvider::Doubao => ProviderInstance::Doubao(DoubaoProvider::new(
-                config,
-                model_params,
-                http_client,
-            )),
-            LlmProvider::Glm => ProviderInstance::Glm(GlmProvider::new(
-                config,
-                model_params,
-                http_client,
-            )),
+            LlmProvider::Ollama => {
+                ProviderInstance::Ollama(OllamaProvider::new(config, model_params, http_client))
+            }
+            LlmProvider::Doubao => {
+                ProviderInstance::Doubao(DoubaoProvider::new(config, model_params, http_client))
+            }
+            LlmProvider::Glm => {
+                ProviderInstance::Glm(GlmProvider::new(config, model_params, http_client))
+            }
             LlmProvider::Custom(name) => {
                 return Err(SageError::llm_with_provider(
                     "Custom provider not implemented. Consider using OpenRouter or Ollama for custom models.".to_string(),

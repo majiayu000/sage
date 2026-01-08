@@ -132,7 +132,7 @@ impl ModelParameters {
                         .first()
                         .cloned()
                         .unwrap_or_default()
-                ))
+                ));
             }
         };
 
@@ -310,23 +310,14 @@ fn get_standard_env_vars_for_provider(provider: &str) -> Vec<String> {
             "ANTHROPIC_API_KEY".to_string(),
             "CLAUDE_API_KEY".to_string(),
         ],
-        "google" => vec![
-            "GOOGLE_API_KEY".to_string(),
-            "GEMINI_API_KEY".to_string(),
-        ],
+        "google" => vec!["GOOGLE_API_KEY".to_string(), "GEMINI_API_KEY".to_string()],
         "azure" => vec![
             "AZURE_OPENAI_API_KEY".to_string(),
             "AZURE_API_KEY".to_string(),
         ],
         "openrouter" => vec!["OPENROUTER_API_KEY".to_string()],
-        "doubao" => vec![
-            "DOUBAO_API_KEY".to_string(),
-            "ARK_API_KEY".to_string(),
-        ],
-        "glm" | "zhipu" => vec![
-            "GLM_API_KEY".to_string(),
-            "ZHIPU_API_KEY".to_string(),
-        ],
+        "doubao" => vec!["DOUBAO_API_KEY".to_string(), "ARK_API_KEY".to_string()],
+        "glm" | "zhipu" => vec!["GLM_API_KEY".to_string(), "ZHIPU_API_KEY".to_string()],
         _ => {
             // For custom or default providers, try <PROVIDER>_API_KEY
             vec![format!("{}_API_KEY", provider.to_uppercase())]
@@ -550,7 +541,7 @@ mod tests {
         };
 
         let override_params = ModelParameters {
-            model: "".to_string(), // Empty = don't override
+            model: "".to_string(),  // Empty = don't override
             max_tokens: Some(8192), // Override this
             temperature: None,      // None = keep base
             top_p: None,            // None = keep base

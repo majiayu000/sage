@@ -103,17 +103,23 @@ impl GlmProvider {
                     format!("{}/glm_request_{}.json", debug_dir, timestamp),
                     &json_str,
                 );
-                tracing::debug!("Saved GLM request to {}/glm_request_{}.json", debug_dir, timestamp);
+                tracing::debug!(
+                    "Saved GLM request to {}/glm_request_{}.json",
+                    debug_dir,
+                    timestamp
+                );
             }
         }
 
-        let response = request
-            .send()
-            .await
-            .map_err(|e| SageError::llm_with_context(
+        let response = request.send().await.map_err(|e| {
+            SageError::llm_with_context(
                 format!("GLM API request failed: {}", e),
-                format!("Failed to send HTTP request to GLM (Zhipu AI) API for model: {}", self.model_params.model),
-            ))?;
+                format!(
+                    "Failed to send HTTP request to GLM (Zhipu AI) API for model: {}",
+                    self.model_params.model
+                ),
+            )
+        })?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -134,7 +140,11 @@ impl GlmProvider {
                     format!("{}/glm_error_{}.json", debug_dir, timestamp),
                     serde_json::to_string_pretty(&error_info).unwrap_or_default(),
                 );
-                tracing::error!("Saved GLM error to {}/glm_error_{}.json", debug_dir, timestamp);
+                tracing::error!(
+                    "Saved GLM error to {}/glm_error_{}.json",
+                    debug_dir,
+                    timestamp
+                );
             }
 
             return Err(SageError::llm(format!(
@@ -143,13 +153,12 @@ impl GlmProvider {
             )));
         }
 
-        let response_json: Value = response
-            .json()
-            .await
-            .map_err(|e| SageError::llm_with_context(
+        let response_json: Value = response.json().await.map_err(|e| {
+            SageError::llm_with_context(
                 format!("Failed to parse GLM response: {}", e),
                 "Failed to deserialize GLM (Zhipu AI) API response as JSON",
-            ))?;
+            )
+        })?;
 
         tracing::debug!(
             "GLM API response: {}",
@@ -221,13 +230,12 @@ impl GlmProvider {
             serde_json::to_string_pretty(&request_body).unwrap_or_default()
         );
 
-        let response = request
-            .send()
-            .await
-            .map_err(|e| SageError::llm_with_context(
+        let response = request.send().await.map_err(|e| {
+            SageError::llm_with_context(
                 format!("GLM streaming request failed: {}", e),
                 "Failed to send HTTP request to GLM streaming API",
-            ))?;
+            )
+        })?;
 
         if !response.status().is_success() {
             let error_text = response.text().await.unwrap_or_default();

@@ -132,9 +132,12 @@ impl UnifiedExecutor {
                         // Determine error type for better categorization
                         let error_type = if error_message.contains("API") {
                             "api_error"
-                        } else if error_message.contains("timeout") || error_message.contains("Timeout") {
+                        } else if error_message.contains("timeout")
+                            || error_message.contains("Timeout")
+                        {
                             "timeout_error"
-                        } else if error_message.contains("rate") || error_message.contains("limit") {
+                        } else if error_message.contains("rate") || error_message.contains("limit")
+                        {
                             "rate_limit_error"
                         } else {
                             "execution_error"

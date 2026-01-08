@@ -96,8 +96,8 @@ Results are sorted by modification time (newest first) and limited to 1000 files
         Ok(())
     }
 
-    fn max_execution_time(&self) -> Option<u64> {
-        Some(30) // 30 seconds for file searching
+    fn max_execution_duration(&self) -> Option<std::time::Duration> {
+        Some(std::time::Duration::from_secs(30)) // 30 seconds for file searching
     }
 
     fn supports_parallel_execution(&self) -> bool {

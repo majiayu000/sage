@@ -91,8 +91,8 @@ impl Tool for PlatformToolProxy {
         Ok(())
     }
 
-    fn max_execution_time(&self) -> Option<u64> {
-        Some(5) // 5 seconds - this is just an acknowledgment
+    fn max_execution_duration(&self) -> Option<std::time::Duration> {
+        Some(std::time::Duration::from_secs(5)) // 5 seconds - this is just an acknowledgment
     }
 
     fn supports_parallel_execution(&self) -> bool {

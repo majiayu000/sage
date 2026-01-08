@@ -122,8 +122,8 @@ Parameters:
         Ok(())
     }
 
-    fn max_execution_time(&self) -> Option<u64> {
-        Some(120) // 2 minutes for large searches
+    fn max_execution_duration(&self) -> Option<std::time::Duration> {
+        Some(std::time::Duration::from_secs(120)) // 2 minutes for large searches
     }
 
     fn supports_parallel_execution(&self) -> bool {

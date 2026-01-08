@@ -124,10 +124,7 @@ impl JsonlSessionStorage {
         // Save initial metadata
         self.save_metadata(&id, &metadata).await?;
 
-        info!(
-            "Created sidechain session: {} (parent: {})",
-            id, parent_id
-        );
+        info!("Created sidechain session: {} (parent: {})", id, parent_id);
         Ok(metadata)
     }
 

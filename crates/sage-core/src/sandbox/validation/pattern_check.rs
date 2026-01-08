@@ -11,14 +11,10 @@ use regex::Regex;
 use std::sync::LazyLock;
 
 /// Pattern for backtick command substitution
-static BACKTICK_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"`[^`]+`"#).unwrap()
-});
+static BACKTICK_PATTERN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"`[^`]+`"#).unwrap());
 
 /// Pattern for eval command
-static EVAL_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"\beval\s+"#).unwrap()
-});
+static EVAL_PATTERN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"\beval\s+"#).unwrap());
 
 /// Pattern for network commands
 static NETWORK_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
@@ -26,29 +22,24 @@ static NETWORK_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 /// Pattern for process manipulation
-static PROCESS_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"\b(kill|pkill|killall|nohup|disown)\b"#).unwrap()
-});
+static PROCESS_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"\b(kill|pkill|killall|nohup|disown)\b"#).unwrap());
 
 /// Pattern for shell spawning
-static SHELL_SPAWN_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"\b(bash|sh|zsh|fish|csh|tcsh|ksh)\s+-c\s+"#).unwrap()
-});
+static SHELL_SPAWN_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"\b(bash|sh|zsh|fish|csh|tcsh|ksh)\s+-c\s+"#).unwrap());
 
 /// Pattern for sudo/su/pkexec
-static PRIVILEGE_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"\b(sudo|su|doas|pkexec)\b"#).unwrap()
-});
+static PRIVILEGE_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"\b(sudo|su|doas|pkexec)\b"#).unwrap());
 
 /// Pattern for filesystem destruction commands
-static FS_DESTROY_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"\b(mkfs|mkfs\.\w+|wipefs|shred)\b"#).unwrap()
-});
+static FS_DESTROY_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"\b(mkfs|mkfs\.\w+|wipefs|shred)\b"#).unwrap());
 
 /// Pattern for base64 decoding (potential obfuscation)
-static OBFUSCATION_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"\b(base64\s+-d|base64\s+--decode)\b"#).unwrap()
-});
+static OBFUSCATION_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"\b(base64\s+-d|base64\s+--decode)\b"#).unwrap());
 
 /// Check for dangerous command patterns
 ///
@@ -171,7 +162,12 @@ mod tests {
     fn test_backtick_warning() {
         let result = check_dangerous_patterns("echo `date`");
         assert!(result.allowed);
-        assert!(result.warnings.iter().any(|w| w.message.contains("backtick")));
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|w| w.message.contains("backtick"))
+        );
     }
 
     #[test]
@@ -206,7 +202,12 @@ mod tests {
     fn test_base64_decode_warning() {
         let result = check_dangerous_patterns("echo SGVsbG8= | base64 -d");
         assert!(result.allowed);
-        assert!(result.warnings.iter().any(|w| w.severity == WarningSeverity::Critical));
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|w| w.severity == WarningSeverity::Critical)
+        );
     }
 
     #[test]

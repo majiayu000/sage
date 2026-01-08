@@ -111,13 +111,12 @@ impl AnthropicProvider {
             request = request.header("anthropic-version", version);
         }
 
-        let response = request
-            .send()
-            .await
-            .map_err(|e| SageError::llm_with_context(
+        let response = request.send().await.map_err(|e| {
+            SageError::llm_with_context(
                 format!("Anthropic request failed: {}", e),
                 "Failed to send HTTP request to Anthropic API",
-            ))?;
+            )
+        })?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -128,13 +127,12 @@ impl AnthropicProvider {
             )));
         }
 
-        let response_json: Value = response
-            .json()
-            .await
-            .map_err(|e| SageError::llm_with_context(
+        let response_json: Value = response.json().await.map_err(|e| {
+            SageError::llm_with_context(
                 format!("Failed to parse Anthropic response: {}", e),
                 "Failed to deserialize Anthropic API response as JSON",
-            ))?;
+            )
+        })?;
 
         ResponseParser::parse_anthropic(response_json)
     }
@@ -222,13 +220,12 @@ impl AnthropicProvider {
         let api_version = self.config.api_version.as_deref().unwrap_or("2023-06-01");
         request = request.header("anthropic-version", api_version);
 
-        let response = request
-            .send()
-            .await
-            .map_err(|e| SageError::llm_with_context(
+        let response = request.send().await.map_err(|e| {
+            SageError::llm_with_context(
                 format!("Anthropic streaming request failed: {}", e),
                 "Failed to send HTTP request to Anthropic streaming API",
-            ))?;
+            )
+        })?;
 
         if !response.status().is_success() {
             let error_text = response.text().await.unwrap_or_default();

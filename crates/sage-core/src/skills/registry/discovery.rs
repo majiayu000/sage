@@ -31,7 +31,7 @@ use tokio::fs;
 use tokio::io::AsyncReadExt;
 use tracing::debug;
 
-use super::super::types::{Skill, SkillSource, SkillTrigger, ToolAccess};
+use super::super::types::{Skill, SkillSourceType, SkillTrigger, ToolAccess};
 use super::types::SkillRegistry;
 
 /// Parsed skill frontmatter
@@ -227,8 +227,8 @@ impl SkillRegistry {
                         .load_skill_from_file(&skill_md, dir_name, Some(&path), is_project)
                         .await?
                     {
-                        if !self.is_builtin(&skill.name) {
-                            debug!("Loaded skill '{}' from {:?}", skill.name, skill_md);
+                        if !self.is_builtin(skill.name()) {
+                            debug!("Loaded skill '{}' from {:?}", skill.name(), skill_md);
                             self.register(skill);
                             count += 1;
                         }
@@ -245,8 +245,8 @@ impl SkillRegistry {
                     .load_skill_from_file(&path, name, None, is_project)
                     .await?
                 {
-                    if !self.is_builtin(&skill.name) {
-                        debug!("Loaded skill '{}' from {:?}", skill.name, path);
+                    if !self.is_builtin(skill.name()) {
+                        debug!("Loaded skill '{}' from {:?}", skill.name(), path);
                         self.register(skill);
                         count += 1;
                     }
@@ -261,7 +261,7 @@ impl SkillRegistry {
     fn is_builtin(&self, name: &str) -> bool {
         self.skills
             .get(name)
-            .map_or(false, |s| s.source == SkillSource::Builtin)
+            .map_or(false, |s| *s.source() == SkillSourceType::Builtin)
     }
 
     /// Load a skill from a markdown file
@@ -284,9 +284,9 @@ impl SkillRegistry {
         let (frontmatter, prompt) = SkillFrontmatter::parse(&content);
 
         let source = if is_project {
-            SkillSource::Project(path.to_path_buf())
+            SkillSourceType::Project(path.to_path_buf())
         } else {
-            SkillSource::User(path.to_path_buf())
+            SkillSourceType::User(path.to_path_buf())
         };
 
         let mut skill = Skill::new(
@@ -309,7 +309,7 @@ impl SkillRegistry {
         }
 
         if frontmatter.user_invocable {
-            skill = skill.user_invocable();
+            skill = skill.set_user_invocable();
         }
 
         if frontmatter.disable_model_invocation {

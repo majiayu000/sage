@@ -161,7 +161,6 @@ fn test_max_execution_duration() {
         tool.max_execution_duration(),
         Some(Duration::from_secs(120))
     );
-    assert_eq!(tool.max_execution_time(), Some(120));
 }
 
 #[test]

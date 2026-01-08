@@ -38,7 +38,7 @@ impl SkillRegistry {
 
     /// Register a skill
     pub fn register(&mut self, skill: Skill) {
-        self.skills.insert(skill.name.clone(), skill);
+        self.skills.insert(skill.name().to_string(), skill);
     }
 
     /// Get a skill by name
@@ -53,7 +53,7 @@ impl SkillRegistry {
 
     /// List enabled skills
     pub fn list_enabled(&self) -> Vec<&Skill> {
-        self.skills.values().filter(|s| s.enabled).collect()
+        self.skills.values().filter(|s| s.enabled()).collect()
     }
 
     /// Check if a skill exists
@@ -69,7 +69,7 @@ impl SkillRegistry {
     /// Enable a skill
     pub fn enable(&mut self, name: &str) -> bool {
         if let Some(skill) = self.skills.get_mut(name) {
-            skill.enabled = true;
+            skill.set_enabled(true);
             true
         } else {
             false
@@ -79,7 +79,7 @@ impl SkillRegistry {
     /// Disable a skill
     pub fn disable(&mut self, name: &str) -> bool {
         if let Some(skill) = self.skills.get_mut(name) {
-            skill.enabled = false;
+            skill.set_enabled(false);
             true
         } else {
             false
@@ -95,7 +95,7 @@ impl SkillRegistry {
     pub fn builtin_count(&self) -> usize {
         self.skills
             .values()
-            .filter(|s| s.source == SkillSource::Builtin)
+            .filter(|s| *s.source() == SkillSource::Builtin)
             .count()
     }
 
@@ -129,7 +129,7 @@ impl SkillRegistry {
     pub fn list_user_invocable(&self) -> Vec<&Skill> {
         self.skills
             .values()
-            .filter(|s| s.enabled && s.user_invocable)
+            .filter(|s| s.enabled() && s.user_invocable())
             .collect()
     }
 

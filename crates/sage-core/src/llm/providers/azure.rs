@@ -83,13 +83,15 @@ impl AzureProvider {
             serde_json::to_string_pretty(&request_body).unwrap_or_default()
         );
 
-        let response = request
-            .send()
-            .await
-            .map_err(|e| SageError::llm_with_context(
+        let response = request.send().await.map_err(|e| {
+            SageError::llm_with_context(
                 format!("Azure API request failed: {}", e),
-                format!("Failed to send HTTP request to Azure OpenAI deployment: {}", self.model_params.model),
-            ))?;
+                format!(
+                    "Failed to send HTTP request to Azure OpenAI deployment: {}",
+                    self.model_params.model
+                ),
+            )
+        })?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -100,13 +102,12 @@ impl AzureProvider {
             )));
         }
 
-        let response_json: Value = response
-            .json()
-            .await
-            .map_err(|e| SageError::llm_with_context(
+        let response_json: Value = response.json().await.map_err(|e| {
+            SageError::llm_with_context(
                 format!("Failed to parse Azure response: {}", e),
                 "Failed to deserialize Azure OpenAI API response as JSON",
-            ))?;
+            )
+        })?;
 
         tracing::debug!(
             "Azure API response: {}",
@@ -173,13 +174,12 @@ impl AzureProvider {
             serde_json::to_string_pretty(&request_body).unwrap_or_default()
         );
 
-        let response = request
-            .send()
-            .await
-            .map_err(|e| SageError::llm_with_context(
+        let response = request.send().await.map_err(|e| {
+            SageError::llm_with_context(
                 format!("Azure streaming request failed: {}", e),
                 "Failed to send HTTP request to Azure streaming API",
-            ))?;
+            )
+        })?;
 
         if !response.status().is_success() {
             let error_text = response.text().await.unwrap_or_default();

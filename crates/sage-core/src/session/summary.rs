@@ -117,7 +117,9 @@ pub trait LlmSummaryGenerator: Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::session::enhanced::{MessageContent, EnhancedMessage, EnhancedMessageType, SessionContext};
+    use crate::session::enhanced::{
+        EnhancedMessage, EnhancedMessageType, MessageContent, SessionContext,
+    };
     use chrono::Utc;
     use std::collections::HashMap;
     use std::path::PathBuf;

@@ -76,13 +76,12 @@ impl DoubaoProvider {
             serde_json::to_string_pretty(&request_body).unwrap_or_default()
         );
 
-        let response = request
-            .send()
-            .await
-            .map_err(|e| SageError::llm_with_context(
+        let response = request.send().await.map_err(|e| {
+            SageError::llm_with_context(
                 format!("Doubao API request failed: {}", e),
                 "Failed to send HTTP request to Doubao API",
-            ))?;
+            )
+        })?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -93,13 +92,12 @@ impl DoubaoProvider {
             )));
         }
 
-        let response_json: Value = response
-            .json()
-            .await
-            .map_err(|e| SageError::llm_with_context(
+        let response_json: Value = response.json().await.map_err(|e| {
+            SageError::llm_with_context(
                 format!("Failed to parse Doubao response: {}", e),
                 "Failed to deserialize Doubao API response as JSON",
-            ))?;
+            )
+        })?;
 
         tracing::debug!(
             "Doubao API response: {}",
@@ -159,13 +157,12 @@ impl DoubaoProvider {
             serde_json::to_string_pretty(&request_body).unwrap_or_default()
         );
 
-        let response = request
-            .send()
-            .await
-            .map_err(|e| SageError::llm_with_context(
+        let response = request.send().await.map_err(|e| {
+            SageError::llm_with_context(
                 format!("Doubao streaming request failed: {}", e),
                 "Failed to send HTTP request to Doubao streaming API",
-            ))?;
+            )
+        })?;
 
         if !response.status().is_success() {
             let error_text = response.text().await.unwrap_or_default();

@@ -250,8 +250,8 @@ pub use settings::{
     ToolSettings, UiSettings, ValidationResult as SettingsValidationResult, WorkspaceSettings,
 };
 pub use skills::{
-    Skill, SkillActivation, SkillContext, SkillRegistry, SkillSource, SkillTrigger, TaskType,
-    ToolAccess,
+    Skill, SkillActivation, SkillContext, SkillInvocationConfig, SkillMetadata, SkillRegistry,
+    SkillSource, SkillSourceInfo, SkillSourceType, SkillTrigger, TaskType, ToolAccess,
 };
 pub use validation::{
     CommonRules, FieldError, FieldSchema, FieldType, InputSanitizer, RuleSet, SanitizeOptions,

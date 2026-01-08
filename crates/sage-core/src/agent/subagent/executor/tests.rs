@@ -97,11 +97,9 @@ mod tests {
         use crate::config::provider::ProviderConfig;
         use crate::llm::provider_types::{LlmProvider, ModelParameters};
 
-        let llm_config = ProviderConfig {
-            base_url: Some("http://localhost".to_string()),
-            api_key: Some("test-api-key".to_string()),
-            ..Default::default()
-        };
+        let llm_config = ProviderConfig::new("openai")
+            .with_base_url("http://localhost")
+            .with_api_key("test-api-key");
 
         let model_params = ModelParameters {
             model: "test-model".to_string(),

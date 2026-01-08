@@ -250,7 +250,9 @@ impl AnimationManager {
                 "yellow" => format!("{} {}", frame, full_message).bright_yellow().bold(),
                 "red" => format!("{} {}", frame, full_message).bright_red().bold(),
                 "cyan" => format!("{} {}", frame, full_message).bright_cyan().bold(),
-                "magenta" => format!("{} {}", frame, full_message).bright_magenta().bold(),
+                "magenta" => format!("{} {}", frame, full_message)
+                    .bright_magenta()
+                    .bold(),
                 _ => format!("{} {}", frame, full_message).bright_white().bold(),
             };
 

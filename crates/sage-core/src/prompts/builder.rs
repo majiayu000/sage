@@ -497,9 +497,7 @@ mod tests {
 
     #[test]
     fn test_builder_empty_skills_prompt_ignored() {
-        let prompt = SystemPromptBuilder::new()
-            .with_skills_prompt("")
-            .build();
+        let prompt = SystemPromptBuilder::new().with_skills_prompt("").build();
 
         assert!(!prompt.contains("available_skills"));
     }

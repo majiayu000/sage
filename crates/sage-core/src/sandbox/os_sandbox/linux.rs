@@ -15,18 +15,12 @@ use tokio::process::Command;
 /// 2. Careful syscall filtering based on requirements
 ///
 /// This is a placeholder that logs the intended restrictions.
-pub fn apply_seccomp(
-    _cmd: &mut Command,
-    config: &OsSandboxConfig,
-) -> Result<(), SandboxError> {
+pub fn apply_seccomp(_cmd: &mut Command, config: &OsSandboxConfig) -> Result<(), SandboxError> {
     if !config.mode.is_enabled() {
         return Ok(());
     }
 
-    tracing::info!(
-        "Linux seccomp sandbox requested (mode: {:?})",
-        config.mode
-    );
+    tracing::info!("Linux seccomp sandbox requested (mode: {:?})", config.mode);
 
     // Log what would be restricted
     match config.mode {

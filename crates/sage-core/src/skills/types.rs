@@ -15,22 +15,9 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-/// A skill definition
-///
-/// Skills can be defined in markdown files with YAML frontmatter:
-/// ```markdown
-/// ---
-/// description: Code review skill
-/// when_to_use: When user asks for code review
-/// allowed_tools: [Read, Grep, Glob]
-/// user_invocable: true
-/// argument_hint: "[file path]"
-/// ---
-///
-/// Please review the code at: $ARGUMENTS
-/// ```
+/// Skill metadata (name, display_name, description, version)
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Skill {
+pub struct SkillMetadata {
     /// Skill name (used for invocation, e.g., "commit" for /commit)
     pub name: String,
 
@@ -40,23 +27,30 @@ pub struct Skill {
     /// Short description
     pub description: String,
 
-    /// Detailed skill prompt (expertise to inject)
-    /// Supports $ARGUMENTS, $USER_MESSAGE, $WORKING_DIR, $FILE_CONTEXT
-    pub prompt: String,
+    /// Skill version
+    pub version: Option<String>,
+}
 
-    /// When to activate this skill (triggers) - legacy trigger system
-    pub triggers: Vec<SkillTrigger>,
+impl SkillMetadata {
+    /// Create new skill metadata
+    pub fn new(name: impl Into<String>, description: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            display_name: None,
+            description: description.into(),
+            version: None,
+        }
+    }
 
-    /// When to use this skill - AI auto-invocation hint (Claude Code compatible)
-    /// If set, AI can automatically invoke this skill when the condition matches
-    pub when_to_use: Option<String>,
+    /// Get the user-facing name (display_name or name)
+    pub fn user_facing_name(&self) -> &str {
+        self.display_name.as_deref().unwrap_or(&self.name)
+    }
+}
 
-    /// Tools available to this skill
-    pub available_tools: ToolAccess,
-
-    /// Source location of the skill
-    pub source: SkillSource,
-
+/// Skill invocation configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkillInvocationConfig {
     /// Priority (higher = checked first)
     pub priority: i32,
 
@@ -74,34 +68,172 @@ pub struct Skill {
 
     /// Model override for this skill
     pub model: Option<String>,
-
-    /// Base directory for relative paths in skill
-    pub base_dir: Option<PathBuf>,
-
-    /// Skill version
-    pub version: Option<String>,
 }
 
-impl Skill {
-    /// Create a new skill
-    pub fn new(name: impl Into<String>, description: impl Into<String>) -> Self {
+impl Default for SkillInvocationConfig {
+    fn default() -> Self {
         Self {
-            name: name.into(),
-            display_name: None,
-            description: description.into(),
-            prompt: String::new(),
-            triggers: Vec::new(),
-            when_to_use: None,
-            available_tools: ToolAccess::All,
-            source: SkillSource::Builtin,
             priority: 0,
             enabled: true,
             model_invocable: true,
             user_invocable: false,
             argument_hint: None,
             model: None,
+        }
+    }
+}
+
+/// Skill source information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkillSourceInfo {
+    /// Source location type
+    pub source: SkillSourceType,
+
+    /// Base directory for relative paths in skill
+    pub base_dir: Option<PathBuf>,
+}
+
+impl Default for SkillSourceInfo {
+    fn default() -> Self {
+        Self {
+            source: SkillSourceType::Builtin,
             base_dir: None,
-            version: None,
+        }
+    }
+}
+
+/// A skill definition
+///
+/// Skills can be defined in markdown files with YAML frontmatter:
+/// ```markdown
+/// ---
+/// description: Code review skill
+/// when_to_use: When user asks for code review
+/// allowed_tools: [Read, Grep, Glob]
+/// user_invocable: true
+/// argument_hint: "[file path]"
+/// ---
+///
+/// Please review the code at: $ARGUMENTS
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Skill {
+    /// Skill metadata (name, display_name, description, version)
+    pub metadata: SkillMetadata,
+
+    /// Detailed skill prompt (expertise to inject)
+    /// Supports $ARGUMENTS, $USER_MESSAGE, $WORKING_DIR, $FILE_CONTEXT
+    pub prompt: String,
+
+    /// When to activate this skill (triggers) - legacy trigger system
+    pub triggers: Vec<SkillTrigger>,
+
+    /// When to use this skill - AI auto-invocation hint (Claude Code compatible)
+    /// If set, AI can automatically invoke this skill when the condition matches
+    pub when_to_use: Option<String>,
+
+    /// Tools available to this skill
+    pub available_tools: ToolAccess,
+
+    /// Source information (source type and base directory)
+    pub source_info: SkillSourceInfo,
+
+    /// Invocation configuration (priority, enabled, invocability, etc.)
+    pub invocation: SkillInvocationConfig,
+}
+
+// Accessor methods for backward compatibility
+impl Skill {
+    /// Get skill name
+    #[inline]
+    pub fn name(&self) -> &str {
+        &self.metadata.name
+    }
+
+    /// Get skill description
+    #[inline]
+    pub fn description(&self) -> &str {
+        &self.metadata.description
+    }
+
+    /// Get display name
+    #[inline]
+    pub fn display_name(&self) -> Option<&str> {
+        self.metadata.display_name.as_deref()
+    }
+
+    /// Get version
+    #[inline]
+    pub fn version(&self) -> Option<&str> {
+        self.metadata.version.as_deref()
+    }
+
+    /// Get priority
+    #[inline]
+    pub fn priority(&self) -> i32 {
+        self.invocation.priority
+    }
+
+    /// Check if enabled
+    #[inline]
+    pub fn enabled(&self) -> bool {
+        self.invocation.enabled
+    }
+
+    /// Set enabled status
+    #[inline]
+    pub fn set_enabled(&mut self, enabled: bool) {
+        self.invocation.enabled = enabled;
+    }
+
+    /// Check if model can invoke
+    #[inline]
+    pub fn model_invocable(&self) -> bool {
+        self.invocation.model_invocable
+    }
+
+    /// Check if user can invoke
+    #[inline]
+    pub fn user_invocable(&self) -> bool {
+        self.invocation.user_invocable
+    }
+
+    /// Get argument hint
+    #[inline]
+    pub fn argument_hint(&self) -> Option<&str> {
+        self.invocation.argument_hint.as_deref()
+    }
+
+    /// Get model override
+    #[inline]
+    pub fn model(&self) -> Option<&str> {
+        self.invocation.model.as_deref()
+    }
+
+    /// Get source type
+    #[inline]
+    pub fn source(&self) -> &SkillSourceType {
+        &self.source_info.source
+    }
+
+    /// Get base directory
+    #[inline]
+    pub fn base_dir(&self) -> Option<&PathBuf> {
+        self.source_info.base_dir.as_ref()
+    }
+}
+
+impl Skill {
+    /// Create a new skill
+    pub fn new(name: impl Into<String>, description: impl Into<String>) -> Self {
+        Self {
+            metadata: SkillMetadata::new(name, description),
+            prompt: String::new(),
+            triggers: Vec::new(),
+            when_to_use: None,
+            available_tools: ToolAccess::All,
+            source_info: SkillSourceInfo::default(),
+            invocation: SkillInvocationConfig::default(),
         }
     }
 
@@ -124,26 +256,26 @@ impl Skill {
     }
 
     /// Set source
-    pub fn with_source(mut self, source: SkillSource) -> Self {
-        self.source = source;
+    pub fn with_source(mut self, source: SkillSourceType) -> Self {
+        self.source_info.source = source;
         self
     }
 
     /// Set priority
     pub fn with_priority(mut self, priority: i32) -> Self {
-        self.priority = priority;
+        self.invocation.priority = priority;
         self
     }
 
     /// Set model
     pub fn with_model(mut self, model: impl Into<String>) -> Self {
-        self.model = Some(model.into());
+        self.invocation.model = Some(model.into());
         self
     }
 
     /// Disable the skill
     pub fn disabled(mut self) -> Self {
-        self.enabled = false;
+        self.invocation.enabled = false;
         self
     }
 
@@ -155,55 +287,55 @@ impl Skill {
 
     /// Set display name
     pub fn with_display_name(mut self, name: impl Into<String>) -> Self {
-        self.display_name = Some(name.into());
+        self.metadata.display_name = Some(name.into());
         self
     }
 
     /// Set user invocable (can be called via /skill-name)
-    pub fn user_invocable(mut self) -> Self {
-        self.user_invocable = true;
+    pub fn set_user_invocable(mut self) -> Self {
+        self.invocation.user_invocable = true;
         self
     }
 
     /// Disable model invocation
     pub fn disable_model_invocation(mut self) -> Self {
-        self.model_invocable = false;
+        self.invocation.model_invocable = false;
         self
     }
 
     /// Set argument hint
     pub fn with_argument_hint(mut self, hint: impl Into<String>) -> Self {
-        self.argument_hint = Some(hint.into());
+        self.invocation.argument_hint = Some(hint.into());
         self
     }
 
     /// Set base directory
     pub fn with_base_dir(mut self, dir: impl Into<PathBuf>) -> Self {
-        self.base_dir = Some(dir.into());
+        self.source_info.base_dir = Some(dir.into());
         self
     }
 
     /// Set version
     pub fn with_version(mut self, version: impl Into<String>) -> Self {
-        self.version = Some(version.into());
+        self.metadata.version = Some(version.into());
         self
     }
 
     /// Get the user-facing name (display_name or name)
     pub fn user_facing_name(&self) -> &str {
-        self.display_name.as_deref().unwrap_or(&self.name)
+        self.metadata.user_facing_name()
     }
 
     /// Check if this skill can be auto-invoked by AI
     pub fn is_auto_invocable(&self) -> bool {
-        self.enabled
-            && self.model_invocable
+        self.invocation.enabled
+            && self.invocation.model_invocable
             && (self.when_to_use.is_some() || !self.triggers.is_empty())
     }
 
     /// Check if the skill matches a context
     pub fn matches(&self, context: &SkillContext) -> bool {
-        if !self.enabled {
+        if !self.invocation.enabled {
             return false;
         }
 
@@ -223,7 +355,7 @@ impl Skill {
         let mut prompt = self.prompt.clone();
 
         // Add base directory context if set
-        if let Some(ref base_dir) = self.base_dir {
+        if let Some(ref base_dir) = self.source_info.base_dir {
             prompt = format!(
                 "Base directory for this skill: {}\n\n{}",
                 base_dir.display(),
@@ -255,21 +387,21 @@ impl Skill {
     /// Generate XML representation for system prompt injection
     pub fn to_xml(&self) -> String {
         let description = if let Some(ref when) = self.when_to_use {
-            format!("{} - {}", self.description, when)
+            format!("{} - {}", self.metadata.description, when)
         } else {
-            self.description.clone()
+            self.metadata.description.clone()
         };
 
-        let location = match &self.source {
-            SkillSource::Project(_) => "project",
-            SkillSource::User(_) => "user",
-            SkillSource::Mcp(_) => "mcp",
-            SkillSource::Builtin => "builtin",
+        let location = match &self.source_info.source {
+            SkillSourceType::Project(_) => "project",
+            SkillSourceType::User(_) => "user",
+            SkillSourceType::Mcp(_) => "mcp",
+            SkillSourceType::Builtin => "builtin",
         };
 
         format!(
             "<skill>\n<name>\n{}\n</name>\n<description>\n{}\n</description>\n<location>\n{}\n</location>\n</skill>",
-            self.name, description, location
+            self.metadata.name, description, location
         )
     }
 }
@@ -382,9 +514,9 @@ impl Default for ToolAccess {
     }
 }
 
-/// Skill source location
+/// Skill source location type
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SkillSource {
+pub enum SkillSourceType {
     /// Built-in skill
     Builtin,
     /// Project skill (.sage/skills/)
@@ -395,11 +527,14 @@ pub enum SkillSource {
     Mcp(String),
 }
 
-impl Default for SkillSource {
+impl Default for SkillSourceType {
     fn default() -> Self {
         Self::Builtin
     }
 }
+
+/// Type alias for backward compatibility
+pub type SkillSource = SkillSourceType;
 
 /// Context for skill matching
 #[derive(Debug, Clone, Default)]
@@ -489,11 +624,11 @@ impl SkillActivation {
     /// Create a new activation
     pub fn new(skill: &Skill, context: &SkillContext) -> Self {
         Self {
-            skill_name: skill.name.clone(),
+            skill_name: skill.name().to_string(),
             injected_prompt: skill.get_full_prompt(context),
             tool_access: skill.available_tools.clone(),
-            model: skill.model.clone(),
-            status: format!("Activating skill: {}", skill.name),
+            model: skill.model().map(|s| s.to_string()),
+            status: format!("Activating skill: {}", skill.name()),
         }
     }
 }
@@ -508,8 +643,8 @@ mod tests {
             .with_prompt("You are an expert in Rust programming...")
             .with_priority(10);
 
-        assert_eq!(skill.name, "rust-expert");
-        assert_eq!(skill.priority, 10);
+        assert_eq!(skill.name(), "rust-expert");
+        assert_eq!(skill.priority(), 10);
     }
 
     #[test]

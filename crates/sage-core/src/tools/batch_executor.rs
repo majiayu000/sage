@@ -176,8 +176,7 @@ impl BatchToolExecutor {
 
         // Use tool-specific timeout or default
         let execution_timeout = tool
-            .max_execution_time()
-            .map(Duration::from_secs)
+            .max_execution_duration()
             .unwrap_or(self.default_timeout);
 
         // Execute with timeout

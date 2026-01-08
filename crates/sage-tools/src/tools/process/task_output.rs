@@ -178,8 +178,8 @@ Example: task_output(shell_id="shell_1", incremental=false)"#
         Ok(())
     }
 
-    fn max_execution_time(&self) -> Option<u64> {
-        Some(600) // 10 minutes max (when blocking)
+    fn max_execution_duration(&self) -> Option<std::time::Duration> {
+        Some(std::time::Duration::from_secs(600)) // 10 minutes max (when blocking)
     }
 
     fn supports_parallel_execution(&self) -> bool {
@@ -232,7 +232,7 @@ mod tests {
 
         assert_eq!(tool.name(), "task_output");
         assert!(tool.description().contains("background"));
-        assert_eq!(tool.max_execution_time(), Some(600));
+        assert_eq!(tool.max_execution_duration(), Some(std::time::Duration::from_secs(600)));
         assert!(tool.supports_parallel_execution());
         assert!(tool.is_read_only());
     }

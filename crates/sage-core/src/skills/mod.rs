@@ -87,5 +87,6 @@ pub use registry::{
     SkillWatcherConfig,
 };
 pub use types::{
-    Skill, SkillActivation, SkillContext, SkillSource, SkillTrigger, TaskType, ToolAccess,
+    Skill, SkillActivation, SkillContext, SkillInvocationConfig, SkillMetadata, SkillSource,
+    SkillSourceInfo, SkillSourceType, SkillTrigger, TaskType, ToolAccess,
 };
