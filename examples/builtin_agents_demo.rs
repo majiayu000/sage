@@ -104,6 +104,13 @@ fn print_agent_info(agent: &AgentDefinition) {
             }
         }
         ToolAccessControl::None => println!("No tools"),
+        ToolAccessControl::Inherited => println!("Inherited from parent"),
+        ToolAccessControl::InheritedRestricted(tools) => {
+            println!("Inherited (restricted to {} tools)", tools.len());
+            for tool in tools {
+                println!("  - {}", tool);
+            }
+        }
     }
 }
 

@@ -10,7 +10,7 @@ use super::UnifiedExecutor;
 impl UnifiedExecutor {
     /// Build the system prompt
     #[instrument(skip(self))]
-    pub(super) fn build_system_prompt(&self) -> SageResult<String> {
+    pub(super) async fn build_system_prompt(&self) -> SageResult<String> {
         let model_name = self
             .config
             .default_model_parameters()
@@ -28,10 +28,17 @@ impl UnifiedExecutor {
         // Get tool schemas to include in prompt - CRITICAL for AI to know what tools are available
         let tool_schemas = self.tool_executor.get_tool_schemas();
 
+        // Get skills prompt for AI auto-invocation (Claude Code compatible)
+        let skills_prompt = {
+            let registry = self.skill_registry.read().await;
+            registry.generate_skill_tool_prompt()
+        };
+
         let prompt = SystemPromptBuilder::new()
             .with_model_name(&model_name)
             .with_working_dir(&working_dir)
             .with_tools(tool_schemas) // Include tool descriptions in prompt
+            .with_skills_prompt(skills_prompt) // Include skills for AI auto-invocation
             .build();
 
         Ok(prompt)

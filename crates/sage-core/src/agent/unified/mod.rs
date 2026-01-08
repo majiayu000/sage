@@ -34,12 +34,13 @@ use crate::context::AutoCompact;
 use crate::error::{SageError, SageResult};
 use crate::input::{InputChannel, InputRequest, InputResponse};
 use crate::session::{FileSnapshotTracker, JsonlSessionStorage, MessageChainTracker};
+use crate::skills::SkillRegistry;
 use crate::tools::executor::ToolExecutor;
 use crate::trajectory::SessionRecorder;
 use crate::types::Id;
 use crate::ui::AnimationManager;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 use tracing::instrument;
 
 // Re-export types for convenience
@@ -77,6 +78,8 @@ pub struct UnifiedExecutor {
     last_summary_msg_count: usize,
     /// Auto-compact manager for context window management
     auto_compact: AutoCompact,
+    /// Skill registry for AI auto-invocation (Claude Code compatible)
+    skill_registry: Arc<RwLock<SkillRegistry>>,
 }
 
 impl UnifiedExecutor {
@@ -126,7 +129,7 @@ impl UnifiedExecutor {
 
         tracing::info!("Initializing sub-agent support with {} tools", tools.len());
 
-        init_global_runner_from_config(&self.config, tools)
+        init_global_runner_from_config(&self.config, tools, self.options.working_directory.clone())
     }
 
     /// Get the executor ID
@@ -142,6 +145,23 @@ impl UnifiedExecutor {
     /// Get execution options
     pub fn options(&self) -> &ExecutionOptions {
         &self.options
+    }
+
+    /// Get the skill registry for managing skills
+    pub fn skill_registry(&self) -> Arc<RwLock<SkillRegistry>> {
+        Arc::clone(&self.skill_registry)
+    }
+
+    /// Discover skills from the file system
+    ///
+    /// This scans:
+    /// - `.sage/skills/` - Project-specific skills
+    /// - `~/.config/sage/skills/` - User-level skills
+    ///
+    /// Returns the number of skills discovered.
+    pub async fn discover_skills(&self) -> SageResult<usize> {
+        let mut registry = self.skill_registry.write().await;
+        registry.discover().await
     }
 
     /// Graceful shutdown - cleanup resources and save state

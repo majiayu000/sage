@@ -39,8 +39,8 @@ impl UnifiedExecutor {
                 .context("Failed to start session recording")?;
         }
 
-        // Build system prompt
-        let system_prompt = self.build_system_prompt()?;
+        // Build system prompt (includes skills for AI auto-invocation)
+        let system_prompt = self.build_system_prompt().await?;
 
         // Get tool schemas
         let tool_schemas = self.tool_executor.get_tool_schemas();

@@ -30,6 +30,8 @@ pub struct SystemPromptBuilder {
     include_security_policy: bool,
     /// Custom sections to add
     custom_sections: Vec<(String, String)>,
+    /// Skills XML for AI auto-invocation (Claude Code compatible)
+    skills_prompt: Option<String>,
 }
 
 impl Default for SystemPromptBuilder {
@@ -51,6 +53,7 @@ impl SystemPromptBuilder {
             include_git_instructions: true,
             include_security_policy: true,
             custom_sections: Vec::new(),
+            skills_prompt: None,
         }
     }
 
@@ -164,6 +167,19 @@ impl SystemPromptBuilder {
         self
     }
 
+    /// Set skills prompt for AI auto-invocation (Claude Code compatible)
+    ///
+    /// This should be the output of `SkillRegistry::generate_skill_tool_prompt()`.
+    /// When set, it will be included in the system prompt so the AI knows about
+    /// available skills and when to invoke them.
+    pub fn with_skills_prompt(mut self, prompt: impl Into<String>) -> Self {
+        let p = prompt.into();
+        if !p.is_empty() {
+            self.skills_prompt = Some(p);
+        }
+        self
+    }
+
     /// Set platform info
     pub fn with_platform(
         mut self,
@@ -270,6 +286,13 @@ impl SystemPromptBuilder {
         if !tools_desc.is_empty() {
             prompt.push_str("\n\n# Available Tools\n\n");
             prompt.push_str(&tools_desc);
+        }
+
+        // Add skills section (Claude Code compatible)
+        // This enables AI to auto-invoke skills based on when_to_use conditions
+        if let Some(ref skills_prompt) = self.skills_prompt {
+            prompt.push_str("\n\n");
+            prompt.push_str(skills_prompt);
         }
 
         // Add Git and security sections
@@ -451,5 +474,33 @@ mod tests {
 
         assert!(builder.variables.has_tool("Bash"));
         assert!(builder.variables.has_tool("TodoWrite"));
+    }
+
+    #[test]
+    fn test_builder_with_skills_prompt() {
+        let skills_xml = r#"<available_skills>
+<skill>
+<name>commit</name>
+<description>Smart Git Commit - Use when committing code changes</description>
+<location>user</location>
+</skill>
+</available_skills>"#;
+
+        let prompt = SystemPromptBuilder::new()
+            .with_skills_prompt(skills_xml)
+            .build();
+
+        assert!(prompt.contains("available_skills"));
+        assert!(prompt.contains("commit"));
+        assert!(prompt.contains("Smart Git Commit"));
+    }
+
+    #[test]
+    fn test_builder_empty_skills_prompt_ignored() {
+        let prompt = SystemPromptBuilder::new()
+            .with_skills_prompt("")
+            .build();
+
+        assert!(!prompt.contains("available_skills"));
     }
 }

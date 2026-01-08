@@ -11,10 +11,12 @@ use crate::llm::provider_types::{LlmProvider, TimeoutConfig};
 use crate::session::{
     FileSnapshotTracker, JsonlSessionStorage, MessageChainTracker, SessionContext,
 };
+use crate::skills::SkillRegistry;
 use crate::tools::executor::ToolExecutor;
 use crate::ui::AnimationManager;
 use anyhow::Context;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 use super::{UnifiedExecutor, input_channel};
 
@@ -86,6 +88,9 @@ impl UnifiedExecutor {
             .clone()
             .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
 
+        // Create skill registry and register built-in skills (before working_dir is moved)
+        let mut skill_registry = SkillRegistry::new(&working_dir);
+
         // Create message chain tracker
         let context = SessionContext::new(working_dir);
         let message_tracker = MessageChainTracker::new().with_context(context);
@@ -99,6 +104,11 @@ impl UnifiedExecutor {
         tracing::debug!(
             "Auto-compact initialized with max context: {} tokens",
             model_capability.context_window
+        );
+        skill_registry.register_builtins();
+        tracing::debug!(
+            "Skill registry initialized with {} built-in skills",
+            skill_registry.builtin_count()
         );
 
         Ok(Self {
@@ -116,6 +126,7 @@ impl UnifiedExecutor {
             file_tracker: FileSnapshotTracker::default_tracker(),
             last_summary_msg_count: 0,
             auto_compact,
+            skill_registry: Arc::new(RwLock::new(skill_registry)),
         })
     }
 }

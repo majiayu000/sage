@@ -410,6 +410,10 @@ mod tests {
             run_in_background: true,
             model_override: Some("gpt-4".to_string()),
             thoroughness: Thoroughness::VeryThorough,
+            working_directory: WorkingDirectoryConfig::Inherited,
+            tool_access: ToolAccessControl::All,
+            parent_cwd: None,
+            parent_tools: None,
         };
 
         let json = serde_json::to_string(&config).unwrap();
