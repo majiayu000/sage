@@ -5,6 +5,7 @@ use crate::config::model::Config;
 use crate::config::provider::ProviderConfig;
 use crate::context::{AutoCompact, AutoCompactConfig};
 use crate::error::{SageError, SageResult};
+use crate::hooks::{HookExecutor, HookRegistry};
 use crate::llm::client::LlmClient;
 use crate::llm::model_capabilities::get_model_capability;
 use crate::llm::provider_types::{LlmProvider, TimeoutConfig};
@@ -111,6 +112,9 @@ impl UnifiedExecutor {
             skill_registry.builtin_count()
         );
 
+        // Create hook executor with empty registry (can be configured later)
+        let hook_executor = HookExecutor::new(HookRegistry::new());
+
         Ok(Self {
             id: uuid::Uuid::new_v4(),
             config,
@@ -127,6 +131,7 @@ impl UnifiedExecutor {
             last_summary_msg_count: 0,
             auto_compact,
             skill_registry: Arc::new(RwLock::new(skill_registry)),
+            hook_executor,
         })
     }
 }
