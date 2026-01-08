@@ -141,36 +141,24 @@ impl AgentExecution {
         )
     }
 
-    /// Get steps that had errors
-    pub fn error_steps(&self) -> Vec<&AgentStep> {
-        self.steps
-            .iter()
-            .filter(|step| step.error.is_some())
-            .collect()
+    /// Get steps that had errors (returns iterator to avoid allocation)
+    pub fn error_steps(&self) -> impl Iterator<Item = &AgentStep> {
+        self.steps.iter().filter(|step| step.error.is_some())
     }
 
-    /// Get steps that made tool calls
-    pub fn tool_steps(&self) -> Vec<&AgentStep> {
-        self.steps
-            .iter()
-            .filter(|step| step.has_tool_calls())
-            .collect()
+    /// Get steps that made tool calls (returns iterator to avoid allocation)
+    pub fn tool_steps(&self) -> impl Iterator<Item = &AgentStep> {
+        self.steps.iter().filter(|step| step.has_tool_calls())
     }
 
-    /// Get all tool calls made during execution
-    pub fn all_tool_calls(&self) -> Vec<&crate::tools::ToolCall> {
-        self.steps
-            .iter()
-            .flat_map(|step| &step.tool_calls)
-            .collect()
+    /// Get all tool calls made during execution (returns iterator to avoid allocation)
+    pub fn all_tool_calls(&self) -> impl Iterator<Item = &crate::tools::ToolCall> {
+        self.steps.iter().flat_map(|step| &step.tool_calls)
     }
 
-    /// Get all tool results from execution
-    pub fn all_tool_results(&self) -> Vec<&crate::tools::ToolResult> {
-        self.steps
-            .iter()
-            .flat_map(|step| &step.tool_results)
-            .collect()
+    /// Get all tool results from execution (returns iterator to avoid allocation)
+    pub fn all_tool_results(&self) -> impl Iterator<Item = &crate::tools::ToolResult> {
+        self.steps.iter().flat_map(|step| &step.tool_results)
     }
 
     /// Check if any step indicates task completion
@@ -195,7 +183,7 @@ impl AgentExecution {
         stats.total_steps = self.steps.len();
         stats.successful_steps = self.steps.iter().filter(|s| s.error.is_none()).count();
         stats.failed_steps = self.steps.iter().filter(|s| s.error.is_some()).count();
-        stats.tool_calls = self.all_tool_calls().len();
+        stats.tool_calls = self.all_tool_calls().count();
         stats.total_tokens = self.total_usage.total_tokens;
         stats.cache_creation_tokens = self.total_usage.cache_creation_input_tokens;
         stats.cache_read_tokens = self.total_usage.cache_read_input_tokens;
