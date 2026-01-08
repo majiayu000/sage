@@ -2,6 +2,7 @@
 
 use crate::agent::{AgentState, AgentStep};
 use crate::error::{SageError, SageResult};
+use crate::hooks::{HookEvent, HookInput};
 use crate::interrupt::global_interrupt_manager;
 use crate::llm::messages::LlmMessage;
 use crate::llm::streaming::{StreamingLlmClient, stream_utils};
@@ -12,6 +13,7 @@ use crate::ui::animation::{AnimationContext, AnimationState};
 use crate::ui::prompt::{PermissionChoice, PermissionDialogConfig, show_permission_dialog};
 use colored::Colorize;
 use tokio::select;
+use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 
 use super::UnifiedExecutor;
@@ -263,27 +265,88 @@ impl UnifiedExecutor {
                     .await;
             }
 
+            // === PreToolUse Hook ===
+            // Execute PreToolUse hooks before tool execution
+            let session_id = self.current_session_id.clone().unwrap_or_else(|| self.id.to_string());
+            let working_dir = self.options.working_directory.clone()
+                .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
+            let pre_hook_input = HookInput::new(HookEvent::PreToolUse, &session_id)
+                .with_cwd(working_dir.clone())
+                .with_tool_name(&tool_call.name)
+                .with_tool_input(serde_json::to_value(&tool_call.arguments).unwrap_or_default());
+
+            let cancel_token = CancellationToken::new();
+            let pre_hook_results = self.hook_executor
+                .execute(HookEvent::PreToolUse, &tool_call.name, pre_hook_input, cancel_token.clone())
+                .await
+                .unwrap_or_default();
+
+            // Check if any hook blocked the tool execution
+            let mut hook_blocked = false;
+            let mut block_reason = String::new();
+            for result in &pre_hook_results {
+                if !result.should_continue() {
+                    hook_blocked = true;
+                    block_reason = result.message().unwrap_or("Blocked by hook").to_string();
+                    tracing::warn!(
+                        tool = %tool_call.name,
+                        reason = %block_reason,
+                        "PreToolUse hook blocked tool execution"
+                    );
+                    break;
+                }
+            }
+
             let tool_start_time = std::time::Instant::now();
 
-            // Check if this tool requires user interaction (blocking input)
-            let requires_interaction = self
-                .tool_executor
-                .get_tool(&tool_call.name)
-                .map(|t| t.requires_user_interaction())
-                .unwrap_or(false);
-
-            // Handle tools that require user interaction with blocking input
-            let tool_result = if requires_interaction && tool_call.name == "ask_user_question" {
-                // Use specialized handler for ask_user_question
-                self.handle_ask_user_question(tool_call).await?
-            } else if requires_interaction {
-                // Generic handling for other interactive tools
-                // For now, just execute normally - can be extended later
-                self.tool_executor.execute_tool(tool_call).await
+            // Execute tool (or skip if blocked by hook)
+            let tool_result = if hook_blocked {
+                // Tool was blocked by PreToolUse hook
+                crate::tools::types::ToolResult::error(
+                    &tool_call.id,
+                    &tool_call.name,
+                    format!("Tool execution blocked by hook: {}", block_reason),
+                )
             } else {
-                // Normal tool execution - may require permission confirmation
-                self.execute_tool_with_permission_check(tool_call).await
+                // Check if this tool requires user interaction (blocking input)
+                let requires_interaction = self
+                    .tool_executor
+                    .get_tool(&tool_call.name)
+                    .map(|t| t.requires_user_interaction())
+                    .unwrap_or(false);
+
+                // Handle tools that require user interaction with blocking input
+                if requires_interaction && tool_call.name == "ask_user_question" {
+                    // Use specialized handler for ask_user_question
+                    self.handle_ask_user_question(tool_call).await?
+                } else if requires_interaction {
+                    // Generic handling for other interactive tools
+                    // For now, just execute normally - can be extended later
+                    self.tool_executor.execute_tool(tool_call).await
+                } else {
+                    // Normal tool execution - may require permission confirmation
+                    self.execute_tool_with_permission_check(tool_call).await
+                }
             };
+
+            // === PostToolUse Hook ===
+            // Execute PostToolUse hooks after tool execution
+            let post_event = if tool_result.success {
+                HookEvent::PostToolUse
+            } else {
+                HookEvent::PostToolUseFailure
+            };
+
+            let post_hook_input = HookInput::new(post_event, &session_id)
+                .with_cwd(working_dir)
+                .with_tool_name(&tool_call.name)
+                .with_tool_input(serde_json::to_value(&tool_call.arguments).unwrap_or_default())
+                .with_tool_result(serde_json::to_value(&tool_result).unwrap_or_default());
+
+            let _ = self.hook_executor
+                .execute(post_event, &tool_call.name, post_hook_input, cancel_token)
+                .await;
 
             // Record tool result after execution
             if let Some(recorder) = &self.session_recorder {

@@ -32,6 +32,7 @@ pub use builder::UnifiedExecutorBuilder;
 use crate::agent::subagent::init_global_runner_from_config;
 use crate::context::AutoCompact;
 use crate::error::{SageError, SageResult};
+use crate::hooks::{HookExecutor, HookRegistry};
 use crate::input::{InputChannel, InputRequest, InputResponse};
 use crate::session::{FileSnapshotTracker, JsonlSessionStorage, MessageChainTracker};
 use crate::skills::SkillRegistry;
@@ -80,6 +81,8 @@ pub struct UnifiedExecutor {
     auto_compact: AutoCompact,
     /// Skill registry for AI auto-invocation (Claude Code compatible)
     skill_registry: Arc<RwLock<SkillRegistry>>,
+    /// Hook executor for PreToolUse/PostToolUse hooks (Claude Code compatible)
+    hook_executor: HookExecutor,
 }
 
 impl UnifiedExecutor {
@@ -150,6 +153,22 @@ impl UnifiedExecutor {
     /// Get the skill registry for managing skills
     pub fn skill_registry(&self) -> Arc<RwLock<SkillRegistry>> {
         Arc::clone(&self.skill_registry)
+    }
+
+    /// Set the hook registry for the executor
+    ///
+    /// This allows configuring hooks for PreToolUse, PostToolUse, and other events.
+    /// Hooks can be used to:
+    /// - Block tool execution based on custom logic
+    /// - Log or audit tool calls
+    /// - Modify tool behavior
+    pub fn set_hook_registry(&mut self, registry: HookRegistry) {
+        self.hook_executor = HookExecutor::new(registry);
+    }
+
+    /// Get a reference to the hook executor
+    pub fn hook_executor(&self) -> &HookExecutor {
+        &self.hook_executor
     }
 
     /// Discover skills from the file system
