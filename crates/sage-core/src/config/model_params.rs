@@ -237,6 +237,69 @@ impl ModelParameters {
 
         Ok(())
     }
+
+    /// Deep merge with another ModelParameters
+    ///
+    /// Fields from `other` override self only if they have a value (Some).
+    /// This allows partial config overrides where user only specifies fields
+    /// they want to change, while keeping defaults for others.
+    ///
+    /// # Example
+    /// ```
+    /// use sage_core::config::model::ModelParameters;
+    ///
+    /// let mut base = ModelParameters::default();
+    /// let override_params = ModelParameters {
+    ///     max_tokens: Some(8192),  // Override this
+    ///     temperature: None,       // Keep base value
+    ///     ..Default::default()
+    /// };
+    ///
+    /// base.merge(override_params);
+    /// // base.max_tokens is now Some(8192)
+    /// // base.temperature is still Some(0.7) (default)
+    /// ```
+    pub fn merge(&mut self, other: Self) {
+        // Model name: override if other has non-default value
+        // We treat empty string as "not set" to allow keeping base model
+        if !other.model.is_empty() && other.model != "gpt-4" {
+            self.model = other.model;
+        }
+
+        // API key: override if other has a value
+        if other.api_key.is_some() {
+            self.api_key = other.api_key;
+        }
+
+        // Optional fields: override if other has Some value
+        if other.max_tokens.is_some() {
+            self.max_tokens = other.max_tokens;
+        }
+        if other.temperature.is_some() {
+            self.temperature = other.temperature;
+        }
+        if other.top_p.is_some() {
+            self.top_p = other.top_p;
+        }
+        if other.top_k.is_some() {
+            self.top_k = other.top_k;
+        }
+        if other.parallel_tool_calls.is_some() {
+            self.parallel_tool_calls = other.parallel_tool_calls;
+        }
+        if other.max_retries.is_some() {
+            self.max_retries = other.max_retries;
+        }
+        if other.base_url.is_some() {
+            self.base_url = other.base_url;
+        }
+        if other.api_version.is_some() {
+            self.api_version = other.api_version;
+        }
+        if other.stop_sequences.is_some() {
+            self.stop_sequences = other.stop_sequences;
+        }
+    }
 }
 
 /// Get standard environment variable names for a provider
@@ -474,5 +537,116 @@ mod tests {
         let params = ModelParameters::default();
         let cloned = params.clone();
         assert_eq!(params.model, cloned.model);
+    }
+
+    #[test]
+    fn test_model_parameters_merge_partial_override() {
+        let mut base = ModelParameters {
+            model: "claude-3-sonnet".to_string(),
+            max_tokens: Some(4096),
+            temperature: Some(0.7),
+            top_p: Some(0.9),
+            ..Default::default()
+        };
+
+        let override_params = ModelParameters {
+            model: "".to_string(), // Empty = don't override
+            max_tokens: Some(8192), // Override this
+            temperature: None,      // None = keep base
+            top_p: None,            // None = keep base
+            ..Default::default()
+        };
+
+        base.merge(override_params);
+
+        // model should be unchanged (empty string doesn't override)
+        assert_eq!(base.model, "claude-3-sonnet");
+        // max_tokens should be overridden
+        assert_eq!(base.max_tokens, Some(8192));
+        // temperature should be preserved
+        assert_eq!(base.temperature, Some(0.7));
+        // top_p should be preserved
+        assert_eq!(base.top_p, Some(0.9));
+    }
+
+    #[test]
+    fn test_model_parameters_merge_api_key() {
+        let mut base = ModelParameters {
+            api_key: Some("base_key".to_string()),
+            ..Default::default()
+        };
+
+        // Override with None should preserve base
+        let no_key = ModelParameters {
+            api_key: None,
+            ..Default::default()
+        };
+        base.merge(no_key);
+        assert_eq!(base.api_key, Some("base_key".to_string()));
+
+        // Override with Some should replace
+        let new_key = ModelParameters {
+            api_key: Some("new_key".to_string()),
+            ..Default::default()
+        };
+        base.merge(new_key);
+        assert_eq!(base.api_key, Some("new_key".to_string()));
+    }
+
+    #[test]
+    fn test_model_parameters_merge_model_name() {
+        let mut base = ModelParameters {
+            model: "claude-3-sonnet".to_string(),
+            ..Default::default()
+        };
+
+        // Override with custom model
+        let custom = ModelParameters {
+            model: "claude-3-opus".to_string(),
+            ..Default::default()
+        };
+        base.merge(custom);
+        assert_eq!(base.model, "claude-3-opus");
+
+        // Empty string should not override
+        let empty = ModelParameters {
+            model: "".to_string(),
+            ..Default::default()
+        };
+        base.merge(empty);
+        assert_eq!(base.model, "claude-3-opus"); // Unchanged
+    }
+
+    #[test]
+    fn test_model_parameters_merge_all_fields() {
+        let mut base = ModelParameters::default();
+
+        let override_all = ModelParameters {
+            model: "custom-model".to_string(),
+            api_key: Some("key".to_string()),
+            max_tokens: Some(16384),
+            temperature: Some(0.5),
+            top_p: Some(0.8),
+            top_k: Some(50),
+            parallel_tool_calls: Some(false),
+            max_retries: Some(5),
+            base_url: Some("https://custom.api".to_string()),
+            api_version: Some("2024-01".to_string()),
+            stop_sequences: Some(vec!["END".to_string()]),
+        };
+
+        base.merge(override_all);
+
+        assert_eq!(base.model, "custom-model");
+        assert_eq!(base.api_key, Some("key".to_string()));
+        assert_eq!(base.max_tokens, Some(16384));
+        assert_eq!(base.temperature, Some(0.5));
+        assert_eq!(base.top_p, Some(0.8));
+        assert_eq!(base.top_k, Some(50));
+        assert_eq!(base.parallel_tool_calls, Some(false));
+        assert_eq!(base.max_retries, Some(5));
+        assert_eq!(base.base_url, Some("https://custom.api".to_string()));
+        assert_eq!(base.api_version, Some("2024-01".to_string()));
+        assert_eq!(base.stop_sequences, Some(vec!["END".to_string()]));
     }
 }
