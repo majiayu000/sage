@@ -83,9 +83,15 @@ pub trait StreamingLlmClient {
 /// Utility functions for working with streams
 pub mod stream_utils {
     use super::*;
+    use crate::error::SageError;
     use futures::StreamExt;
+    use tokio_util::sync::CancellationToken;
 
     /// Collect a stream into a complete response
+    ///
+    /// This function collects all chunks from the stream and combines them into
+    /// a complete LlmResponse. It does not check for cancellation - use
+    /// `collect_stream_with_cancel` for cancellable collection.
     pub async fn collect_stream(mut stream: LlmStream) -> SageResult<LlmResponse> {
         let mut content = String::new();
         let mut tool_calls = Vec::new();
@@ -95,6 +101,66 @@ pub mod stream_utils {
         let mut metadata = HashMap::new();
 
         while let Some(chunk_result) = stream.next().await {
+            let chunk = chunk_result?;
+
+            // Accumulate content
+            if let Some(chunk_content) = chunk.content {
+                content.push_str(&chunk_content);
+            }
+
+            // Collect tool calls
+            if let Some(chunk_tool_calls) = chunk.tool_calls {
+                tool_calls.extend(chunk_tool_calls);
+            }
+
+            // Update usage and finish reason from final chunk
+            if chunk.is_final {
+                usage = chunk.usage;
+                finish_reason = chunk.finish_reason;
+            }
+
+            // Merge metadata
+            for (key, value) in chunk.metadata {
+                metadata.insert(key, value);
+            }
+        }
+
+        Ok(LlmResponse {
+            content,
+            tool_calls,
+            usage,
+            model,
+            finish_reason,
+            id: None,
+            metadata,
+        })
+    }
+
+    /// Collect a stream with cancellation support
+    ///
+    /// Like `collect_stream`, but checks the cancellation token after each chunk.
+    /// Returns early with `SageError::Cancelled` if the token is cancelled.
+    ///
+    /// This provides faster response to cancellation signals compared to wrapping
+    /// `collect_stream` in a `select!`, as it checks cancellation between chunks.
+    pub async fn collect_stream_with_cancel(
+        mut stream: LlmStream,
+        cancel_token: &CancellationToken,
+    ) -> SageResult<LlmResponse> {
+        let mut content = String::new();
+        let mut tool_calls = Vec::new();
+        let mut usage = None;
+        let mut finish_reason = None;
+        let model = None;
+        let mut metadata = HashMap::new();
+
+        while let Some(chunk_result) = stream.next().await {
+            // Check for cancellation after each chunk
+            if cancel_token.is_cancelled() {
+                tracing::debug!("Stream collection cancelled by user");
+                return Err(SageError::Cancelled);
+            }
+
             let chunk = chunk_result?;
 
             // Accumulate content
