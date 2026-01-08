@@ -11,6 +11,8 @@ mod constructors;
 mod conversions;
 mod types;
 mod unified_error;
+mod user_messages;
 
 // Re-export all public types and traits
 pub use types::{OptionExt, ResultExt, SageError, SageResult, UnifiedError};
+pub use user_messages::{ErrorCategory, UserFriendlyError};
