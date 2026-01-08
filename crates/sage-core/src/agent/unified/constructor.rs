@@ -3,8 +3,10 @@
 use crate::agent::ExecutionOptions;
 use crate::config::model::Config;
 use crate::config::provider::ProviderConfig;
+use crate::context::{AutoCompact, AutoCompactConfig};
 use crate::error::{SageError, SageResult};
 use crate::llm::client::LlmClient;
+use crate::llm::model_capabilities::get_model_capability;
 use crate::llm::provider_types::{LlmProvider, TimeoutConfig};
 use crate::session::{
     FileSnapshotTracker, JsonlSessionStorage, MessageChainTracker, SessionContext,
@@ -88,6 +90,17 @@ impl UnifiedExecutor {
         let context = SessionContext::new(working_dir);
         let message_tracker = MessageChainTracker::new().with_context(context);
 
+        // Create auto-compact manager with model-specific context window
+        let model_capability = get_model_capability(&default_params.model);
+        let auto_compact_config = AutoCompactConfig::default()
+            .with_max_tokens(model_capability.context_window as usize);
+        let auto_compact = AutoCompact::new(auto_compact_config);
+
+        tracing::debug!(
+            "Auto-compact initialized with max context: {} tokens",
+            model_capability.context_window
+        );
+
         Ok(Self {
             id: uuid::Uuid::new_v4(),
             config,
@@ -102,6 +115,7 @@ impl UnifiedExecutor {
             current_session_id: None,
             file_tracker: FileSnapshotTracker::default_tracker(),
             last_summary_msg_count: 0,
+            auto_compact,
         })
     }
 }

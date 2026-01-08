@@ -28,6 +28,22 @@ impl UnifiedExecutor {
     ) -> SageResult<(AgentStep, Vec<LlmMessage>)> {
         let mut step = AgentStep::new(step_number, AgentState::Thinking);
 
+        // Check and auto-compact context if needed before LLM call
+        let mut working_messages = messages.to_vec();
+        let compact_result = self
+            .auto_compact
+            .check_and_compact(&mut working_messages)
+            .await?;
+
+        if compact_result.was_compacted {
+            tracing::info!(
+                "Auto-compacted context: {} -> {} messages, saved {} tokens",
+                compact_result.messages_before,
+                compact_result.messages_after,
+                compact_result.tokens_saved()
+            );
+        }
+
         // Update animation manager with current step info
         self.animation_manager.set_step(step_number);
 
@@ -39,7 +55,7 @@ impl UnifiedExecutor {
 
         // Record LLM request before sending
         if let Some(recorder) = &self.session_recorder {
-            let input_messages: Vec<serde_json::Value> = messages
+            let input_messages: Vec<serde_json::Value> = working_messages
                 .iter()
                 .map(|msg| serde_json::to_value(msg).unwrap_or_default())
                 .collect();
@@ -60,7 +76,7 @@ impl UnifiedExecutor {
         let llm_response = select! {
             response = async {
                 // Use streaming API and collect into complete response
-                let stream = self.llm_client.chat_stream(messages, Some(tool_schemas)).await?;
+                let stream = self.llm_client.chat_stream(&working_messages, Some(tool_schemas)).await?;
                 stream_utils::collect_stream(stream).await
             } => {
                 response?
@@ -106,7 +122,7 @@ impl UnifiedExecutor {
         }
 
         // Convert messages to JSON for recording
-        let messages_json: Vec<serde_json::Value> = messages
+        let messages_json: Vec<serde_json::Value> = working_messages
             .iter()
             .map(|m| serde_json::to_value(m).unwrap_or_default())
             .collect();
@@ -116,8 +132,8 @@ impl UnifiedExecutor {
             .with_llm_messages(messages_json)
             .with_llm_response(llm_response.clone());
 
-        // Process response
-        let mut new_messages = messages.to_vec();
+        // Process response - use working_messages which may have been auto-compacted
+        let mut new_messages = working_messages;
 
         // Display assistant response with proper formatting
         if !llm_response.content.is_empty() {
