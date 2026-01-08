@@ -48,8 +48,11 @@ impl ToolExecutor {
     }
 
     /// Register a tool
+    ///
+    /// Note: Tools are stored with lowercase names for case-insensitive lookup,
+    /// since LLMs may return tool names with different casing (e.g., "Bash" vs "bash").
     pub fn register_tool(&mut self, tool: Arc<dyn Tool>) {
-        let name = tool.name().to_string();
+        let name = tool.name().to_lowercase();
         self.tools.insert(name, tool);
     }
 
@@ -60,9 +63,9 @@ impl ToolExecutor {
         }
     }
 
-    /// Get a tool by name
+    /// Get a tool by name (case-insensitive)
     pub fn get_tool(&self, name: &str) -> Option<&Arc<dyn Tool>> {
-        self.tools.get(name)
+        self.tools.get(&name.to_lowercase())
     }
 
     /// Get all registered tool names
@@ -70,15 +73,16 @@ impl ToolExecutor {
         self.tools.keys().cloned().collect()
     }
 
-    /// Check if a tool is registered
+    /// Check if a tool is registered (case-insensitive)
     pub fn has_tool(&self, name: &str) -> bool {
-        self.tools.contains_key(name)
+        self.tools.contains_key(&name.to_lowercase())
     }
 
     /// Execute a single tool call
     #[instrument(skip(self), fields(tool_name = %call.name, call_id = %call.id))]
     pub async fn execute_tool(&self, call: &ToolCall) -> ToolResult {
-        let tool = match self.tools.get(&call.name) {
+        // Case-insensitive tool lookup
+        let tool = match self.tools.get(&call.name.to_lowercase()) {
             Some(tool) => tool,
             None => {
                 // Record failed telemetry for missing tool
@@ -176,10 +180,10 @@ impl ToolExecutor {
 
     /// Execute tools in parallel
     async fn execute_tools_parallel(&self, calls: &[ToolCall]) -> Vec<ToolResult> {
-        // Check if all tools support parallel execution
+        // Check if all tools support parallel execution (case-insensitive lookup)
         let can_run_parallel = calls.iter().all(|call| {
             self.tools
-                .get(&call.name)
+                .get(&call.name.to_lowercase())
                 .map(|tool| tool.supports_parallel_execution())
                 .unwrap_or(false)
         });
@@ -197,10 +201,10 @@ impl ToolExecutor {
     /// Validate tool calls before execution
     pub fn validate_calls(&self, calls: &[ToolCall]) -> SageResult<()> {
         for call in calls {
-            // Check if tool exists
+            // Check if tool exists (case-insensitive lookup)
             let tool = self
                 .tools
-                .get(&call.name)
+                .get(&call.name.to_lowercase())
                 .ok_or_else(|| SageError::tool(&call.name, "Tool not found"))?;
 
             // Validate the call
@@ -216,14 +220,14 @@ impl ToolExecutor {
         self.tools.values().map(|tool| tool.schema()).collect()
     }
 
-    /// Get tool schemas for specific tools
+    /// Get tool schemas for specific tools (case-insensitive)
     pub fn get_schemas_for_tools(
         &self,
         tool_names: &[String],
     ) -> Vec<crate::tools::types::ToolSchema> {
         tool_names
             .iter()
-            .filter_map(|name| self.tools.get(name))
+            .filter_map(|name| self.tools.get(&name.to_lowercase()))
             .map(|tool| tool.schema())
             .collect()
     }
