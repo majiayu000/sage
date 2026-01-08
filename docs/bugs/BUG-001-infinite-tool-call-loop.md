@@ -147,6 +147,85 @@ pub struct TaskConfig {
 2. Token 限制（724k tokens）
 3. 模型返回异常
 
+## 详细时间线分析（第二次复现）
+
+### 关键时间点
+
+| 时间 | 事件 | 说明 |
+|------|------|------|
+| 07:33:13 | 用户提问 | 对比两个项目 |
+| 07:39:24 | 首次响应 | **延迟 6 分钟！** Task subagent 执行 |
+| 07:39:24 - 07:42:49 | 大量工具调用 | 20+ 次 bash/Read/Glob |
+| 07:43:00 | TodoWrite | 准备"总结关键点" |
+| 07:43:14 | 最后一条消息 | TodoWrite 设置 in_progress |
+| ??? | **Failed** | 未能输出总结 |
+
+### 发现的子问题
+
+1. **Task subagent 低效**
+   - 启动了 2 个 Explore subagent
+   - 耗时 6 分钟
+   - 但结果似乎没被使用（主 agent 后续重复探索）
+
+2. **多次空 content**
+   - 消息 24, 26, 28, 29, 35, 37, 38 的 content 都是空字符串
+   - LLM 只输出工具调用，不输出解释文字
+
+3. **准备总结时失败**
+   - 消息 38 设置 todo "总结关键点" 为 in_progress
+   - 下一步应该输出总结文本
+   - 但会话直接 Failed，没有后续消息
+
+### 结论
+
+这不是纯粹的"无限循环"，而是**复合问题**：
+
+1. **Subagent 效率问题** - 启动了 2 个 Explore subagent，耗时 6 分钟但结果未被有效使用
+2. **重复劳动** - 主 agent 后续重复了 subagent 已经做过的探索工作
+3. **在即将输出结论时失败** - Agent 已完成所有准备工作，TodoWrite 设置了 "总结关键点" 为 in_progress，但下一次 LLM 调用失败
+
+### 失败的直接原因分析
+
+从代码分析（`crates/sage-core/src/agent/unified/`）：
+
+1. **execution_loop.rs:115-148** - 当 `execute_step` 返回 `Err(e)` 时：
+   - 记录 error 到 session
+   - 设置 `ExecutionOutcome::Failed`
+   - 但**错误内容没有被持久化到 messages.jsonl**（只记录了 "execution_error" 类型）
+
+2. **step_execution.rs:66-67** - LLM 调用失败点：
+   ```rust
+   let llm_response = select! {
+       response = self.llm_client.chat(messages, Some(tool_schemas)) => {
+           response?  // <-- 这里如果失败会返回 Err
+       }
+       ...
+   };
+   ```
+
+3. **glm.rs:103-118** - GLM API 错误处理：
+   - HTTP 请求失败 → `SageError::llm("GLM API request failed")`
+   - 非 2xx 状态码 → `SageError::llm("GLM API error (status X)")`
+   - 响应解析失败 → `SageError::llm("Failed to parse GLM response")`
+
+### 推测的失败原因
+
+最可能的情况：**GLM API 返回了错误或超时**
+
+证据：
+1. 消息 38 的 `inputTokens: 46638` 不算很大，不太可能是 token 限制
+2. 耗时 660s 但最后几条消息间隔很短（5秒），说明不是超时
+3. 最可能是 GLM API 返回了错误（如 rate limit、server error）
+
+### 缺失的信息
+
+**问题：错误详情没有被记录到用户可见的日志中**
+
+建议添加：
+1. 在 `messages.jsonl` 中记录完整错误信息
+2. 保存最后一次 API 请求/响应用于调试
+3. CLI 显示具体的失败原因
+
 ## 参考
 
 - 问题会话 1：`~/.sage/sessions/a1524a75-7867-449d-a955-34d3ab30d8e9/`

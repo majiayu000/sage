@@ -129,7 +129,8 @@ impl AnimationManager {
                     .bold(),
             };
 
-            print!("\r{} ", colored_message);
+            // Add 2-space indent for consistent UI alignment
+            print!("\r  {} ", colored_message);
             let _ = std::io::stdout().flush();
 
             frame_index = (frame_index + 1) % frames.len();

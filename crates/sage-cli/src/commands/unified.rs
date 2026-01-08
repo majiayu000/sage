@@ -352,16 +352,12 @@ async fn execute_interactive_loop(
             }
         };
 
-        // Show thinking indicator
-        nerd.print_thinking();
-
-        // Execute the task
+        // Execute the task (AnimationManager in core handles all progress display)
         let task = TaskMetadata::new(&task_description, &working_dir.display().to_string());
         let start_time = std::time::Instant::now();
 
         match executor.execute(task).await {
             Ok(outcome) => {
-                nerd.clear_thinking();
                 let duration = start_time.elapsed();
 
                 // Show brief summary with Nerd Font style
@@ -375,7 +371,6 @@ async fn execute_interactive_loop(
                 );
             }
             Err(e) => {
-                nerd.clear_thinking();
                 nerd.error(&format!("Execution error: {}", e));
             }
         }
