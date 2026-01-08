@@ -87,13 +87,9 @@ pub fn format_messages_for_summary(messages: &[LlmMessage]) -> String {
         .join("\n\n")
 }
 
-/// Truncate content to max characters
+/// Truncate content to max characters (UTF-8 safe)
 pub fn truncate_content(content: &str, max_chars: usize) -> String {
-    if content.len() <= max_chars {
-        content.to_string()
-    } else {
-        format!("{}...", &content[..max_chars.saturating_sub(3)])
-    }
+    crate::utils::truncate_with_ellipsis(content, max_chars)
 }
 
 /// Create a simple summary without LLM

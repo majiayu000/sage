@@ -88,12 +88,13 @@ impl UnifiedExecutor {
                     session_id
                 ))?;
 
-            // Capture first_prompt for session metadata (Claude Code style)
+            // Capture first_prompt and last_prompt for session metadata
             if let Ok(Some(mut metadata)) = storage.load_metadata(session_id).await {
-                if metadata.first_prompt.is_none() {
-                    metadata.set_first_prompt_if_empty(content);
-                    let _ = storage.save_metadata(session_id, &metadata).await;
-                }
+                // Set first_prompt only once (for session list display)
+                metadata.set_first_prompt_if_empty(content);
+                // Always update last_prompt (for resume display)
+                metadata.set_last_prompt(content);
+                let _ = storage.save_metadata(session_id, &metadata).await;
             }
         }
 

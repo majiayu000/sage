@@ -114,7 +114,7 @@ async fn handle_resume_command(
             console.print_header("Resume Session");
             println!();
             println!("  Session:  {}", session.id);
-            println!("  Title:    {}", session.display_title());
+            println!("  Last msg: {}", session.resume_title());
             println!("  Modified: {}", session.updated_at.format("%Y-%m-%d %H:%M"));
             println!("  Messages: {}", session.message_count);
             println!();
@@ -135,7 +135,8 @@ async fn handle_resume_command(
 
     for (i, session) in sessions.iter().take(display_count).enumerate() {
         let time_ago = format_time_ago(&session.updated_at);
-        let title = session.display_title();
+        // Use resume_title() to show last user input
+        let title = session.resume_title();
         let title_truncated = truncate_str(title, 50);
 
         println!(

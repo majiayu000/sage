@@ -158,11 +158,7 @@ Provide a structured summary:"#,
 
     /// Truncate content to max characters
     fn truncate_content(&self, content: &str, max_chars: usize) -> String {
-        if content.len() <= max_chars {
-            content.to_string()
-        } else {
-            format!("{}...", &content[..max_chars])
-        }
+        crate::utils::truncate_with_ellipsis(content, max_chars)
     }
 
     /// Create a simple summary without LLM

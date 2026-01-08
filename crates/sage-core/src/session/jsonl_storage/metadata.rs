@@ -45,6 +45,11 @@ pub struct SessionMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub first_prompt: Option<String>,
 
+    /// Last user message preview (for resume display)
+    #[serde(rename = "lastPrompt")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_prompt: Option<String>,
+
     /// Auto-generated conversation summary
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
@@ -104,6 +109,7 @@ impl SessionMetadata {
             custom_title: None,
             name: None,
             first_prompt: None,
+            last_prompt: None,
             summary: None,
             created_at: now,
             updated_at: now,
@@ -178,6 +184,12 @@ impl SessionMetadata {
         }
     }
 
+    /// Set last prompt (always updates)
+    pub fn set_last_prompt(&mut self, prompt: &str) {
+        self.last_prompt = Some(truncate_string(prompt, 100));
+        self.updated_at = Utc::now();
+    }
+
     /// Update summary
     pub fn set_summary(&mut self, summary: impl Into<String>) {
         self.summary = Some(summary.into());
@@ -201,6 +213,18 @@ impl SessionMetadata {
         self.custom_title
             .as_deref()
             .or(self.summary.as_deref())
+            .or(self.first_prompt.as_deref())
+            .or(self.name.as_deref())
+            .unwrap_or(&self.id)
+    }
+
+    /// Get resume title for session resume display
+    /// Prioritizes last_prompt to show what user was last working on
+    /// (last_prompt > custom_title > first_prompt > name > id)
+    pub fn resume_title(&self) -> &str {
+        self.last_prompt
+            .as_deref()
+            .or(self.custom_title.as_deref())
             .or(self.first_prompt.as_deref())
             .or(self.name.as_deref())
             .unwrap_or(&self.id)

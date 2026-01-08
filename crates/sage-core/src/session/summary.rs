@@ -4,6 +4,7 @@
 //! Summaries help users quickly identify sessions without reading full history.
 
 use super::enhanced::{EnhancedMessage, EnhancedMessageType};
+use crate::utils::{truncate_str, truncate_with_ellipsis};
 
 /// Maximum length for auto-generated summary
 const MAX_SUMMARY_LENGTH: usize = 150;
@@ -48,9 +49,9 @@ impl SummaryGenerator {
             .take(3)
             .collect();
 
-        // Build summary
-        let mut summary = if user_content.len() > 80 {
-            format!("{}...", &user_content[..77])
+        // Build summary (UTF-8 safe truncation)
+        let mut summary = if user_content.chars().count() > 80 {
+            format!("{}...", truncate_str(user_content, 77))
         } else {
             user_content.clone()
         };
@@ -71,11 +72,7 @@ impl SummaryGenerator {
     ///
     /// This is a simpler approach that just uses the first prompt.
     pub fn from_first_prompt(first_prompt: &str) -> String {
-        if first_prompt.len() > MAX_SUMMARY_LENGTH {
-            format!("{}...", &first_prompt[..MAX_SUMMARY_LENGTH - 3])
-        } else {
-            first_prompt.to_string()
-        }
+        truncate_with_ellipsis(first_prompt, MAX_SUMMARY_LENGTH)
     }
 
     /// Check if messages warrant a summary update

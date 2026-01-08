@@ -216,12 +216,8 @@ impl ProgressTracker {
                 "Subagent running".bright_yellow().bold()
             );
 
-            // Truncate task description if too long
-            let desc = if status.task_description.len() > 50 {
-                format!("{}...", &status.task_description[..47])
-            } else {
-                status.task_description.clone()
-            };
+            // Truncate task description if too long (UTF-8 safe)
+            let desc = crate::utils::truncate_with_ellipsis(&status.task_description, 50);
             println!("    {} {}", "".dimmed(), desc);
 
             if let Some(ref tool) = status.last_tool {
@@ -290,12 +286,8 @@ impl ProgressTracker {
                 format!("{}s ago", ago.as_secs())
             };
 
-            // Truncate description
-            let desc = if act.description.len() > 40 {
-                format!("{}...", &act.description[..37])
-            } else {
-                act.description.clone()
-            };
+            // Truncate description (UTF-8 safe)
+            let desc = crate::utils::truncate_with_ellipsis(&act.description, 40);
 
             print!("\r\x1B[K");
             print!(
