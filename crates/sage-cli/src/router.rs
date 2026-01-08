@@ -17,6 +17,18 @@ pub async fn route(cli: Cli) -> SageResult<()> {
             Commands::Tools => commands::tools::show_tools().await,
             Commands::Ipc { config_file } => ipc::run_ipc_mode(Some(config_file)).await,
 
+            // Diagnostic commands
+            Commands::Doctor { config_file } => {
+                commands::diagnostics::doctor(config_file).await
+            }
+            Commands::Status { config_file } => {
+                commands::diagnostics::status(config_file).await
+            }
+            Commands::Usage {
+                session_dir,
+                detailed,
+            } => commands::diagnostics::usage(session_dir.as_deref(), *detailed).await,
+
             // Legacy commands (hidden but still supported for backward compatibility)
             Commands::Run { .. } => route_legacy_run(&cli).await,
             Commands::Interactive { .. } => route_legacy_interactive(&cli).await,
