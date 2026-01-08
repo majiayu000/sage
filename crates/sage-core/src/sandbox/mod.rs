@@ -2,10 +2,17 @@
 //!
 //! Provides isolated execution environments with resource limits,
 //! path restrictions, and command filtering.
+//!
+//! ## Sandbox Levels
+//!
+//! 1. **Policy-based**: Path/command/network restrictions (default)
+//! 2. **Resource limits**: CPU, memory, file limits (Unix rlimit)
+//! 3. **OS-level**: macOS sandbox-exec / Linux seccomp (optional)
 
 mod config;
 mod executor;
 mod limits;
+pub mod os_sandbox;
 mod policy;
 pub mod validation;
 pub mod violations;
@@ -13,6 +20,9 @@ pub mod violations;
 pub use config::{SandboxConfig, SandboxMode, ValidationStrictness};
 pub use executor::{SandboxExecutor, SandboxedExecution};
 pub use limits::{ResourceLimits, ResourceUsage};
+pub use os_sandbox::{
+    OsSandboxConfig, OsSandboxMode, apply_os_sandbox, is_os_sandbox_available, os_sandbox_name,
+};
 pub use policy::{CommandPolicy, NetworkPolicy, PathPolicy, SandboxPolicy};
 
 use crate::tools::base::ToolError;

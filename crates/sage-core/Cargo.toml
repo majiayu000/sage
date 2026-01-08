@@ -71,6 +71,9 @@ regex = { workspace = true }
 humantime-serde = { workspace = true }
 sha2 = "0.10.9"
 
+# Platform-specific temporary files (for macOS sandbox profiles)
+tempfile = "3.10"
+
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }
 nix = { workspace = true }
@@ -79,7 +82,6 @@ nix = { workspace = true }
 mockall = { workspace = true }
 tokio-test = "0.4"
 tracing-subscriber = { workspace = true }
-tempfile = "3.10"
 serial_test = "3"
 
 # Note: Examples are defined in the root workspace package to avoid filename collisions
