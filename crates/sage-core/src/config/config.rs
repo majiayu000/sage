@@ -141,6 +141,16 @@ impl Config {
     }
 
     /// Merge with another config (other takes precedence)
+    ///
+    /// Uses deep merge for model providers - field-level overrides are applied
+    /// rather than replacing the entire provider config. This allows users to
+    /// specify only the fields they want to change in their config file.
+    ///
+    /// # Example
+    ///
+    /// If base config has anthropic with max_tokens=4096, temperature=0.7
+    /// and override config has anthropic with max_tokens=8192,
+    /// the result will have max_tokens=8192 but temperature=0.7 (preserved).
     pub fn merge(&mut self, other: Config) {
         if !other.default_provider.is_empty() {
             self.default_provider = other.default_provider;
@@ -151,9 +161,20 @@ impl Config {
             self.max_steps = other.max_steps;
         }
 
-        // Merge model providers
-        for (provider, params) in other.model_providers {
-            self.model_providers.insert(provider, params);
+        // Merge total_token_budget if other has a value set
+        if other.total_token_budget.is_some() {
+            self.total_token_budget = other.total_token_budget;
+        }
+
+        // Deep merge model providers - field-level override instead of full replacement
+        for (provider, other_params) in other.model_providers {
+            if let Some(existing_params) = self.model_providers.get_mut(&provider) {
+                // Deep merge: existing params are updated with other's non-None fields
+                existing_params.merge(other_params);
+            } else {
+                // Provider doesn't exist in base, add it
+                self.model_providers.insert(provider, other_params);
+            }
         }
 
         if other.lakeview_config.is_some() {
@@ -295,6 +316,64 @@ mod tests {
         config1.merge(config2);
         // Empty provider should not override
         assert_eq!(config1.default_provider, "anthropic");
+    }
+
+    #[test]
+    fn test_config_merge_deep_model_params() {
+        let mut config1 = Config::default();
+        // Base config has default anthropic settings
+
+        // Override config only specifies max_tokens for anthropic
+        let mut config2 = Config::default();
+        config2.model_providers.clear();
+        config2.model_providers.insert(
+            "anthropic".to_string(),
+            ModelParameters {
+                model: "".to_string(), // Empty = don't override
+                max_tokens: Some(16384), // Override this
+                temperature: None,       // Keep base
+                ..Default::default()
+            },
+        );
+
+        config1.merge(config2);
+
+        // Check that deep merge worked
+        let anthropic = config1.model_providers.get("anthropic").unwrap();
+        // max_tokens should be overridden
+        assert_eq!(anthropic.max_tokens, Some(16384));
+        // temperature should be preserved from base (not None!)
+        assert!(anthropic.temperature.is_some());
+        // model should be preserved (claude-sonnet-4-xxx from defaults)
+        assert!(anthropic.model.contains("claude"));
+    }
+
+    #[test]
+    fn test_config_merge_new_provider() {
+        let mut config1 = Config::default();
+
+        // Add a new provider that doesn't exist in base
+        let mut config2 = Config::default();
+        config2.model_providers.clear();
+        config2.model_providers.insert(
+            "custom".to_string(),
+            ModelParameters {
+                model: "custom-model".to_string(),
+                max_tokens: Some(8192),
+                ..Default::default()
+            },
+        );
+
+        config1.merge(config2);
+
+        // New provider should be added
+        assert!(config1.model_providers.contains_key("custom"));
+        let custom = config1.model_providers.get("custom").unwrap();
+        assert_eq!(custom.model, "custom-model");
+        assert_eq!(custom.max_tokens, Some(8192));
+
+        // Existing providers should still exist
+        assert!(config1.model_providers.contains_key("anthropic"));
     }
 
     #[test]
