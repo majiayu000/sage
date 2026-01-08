@@ -103,7 +103,7 @@ impl SkillRegistry {
     pub async fn discover(&mut self) -> SageResult<usize> {
         let mut count = 0;
 
-        // Discover project skills
+        // Discover project skills (highest priority)
         let project_dir = self.project_root.join(".sage").join("skills");
         count += self.discover_from_dir(&project_dir, true).await?;
 
@@ -112,6 +112,96 @@ impl SkillRegistry {
         count += self.discover_from_dir(&user_dir, false).await?;
 
         Ok(count)
+    }
+
+    /// List skills that can be auto-invoked by AI
+    ///
+    /// Returns skills that have `when_to_use` set or have triggers defined,
+    /// and are not disabled for model invocation.
+    pub fn list_auto_invocable(&self) -> Vec<&Skill> {
+        self.skills
+            .values()
+            .filter(|s| s.is_auto_invocable())
+            .collect()
+    }
+
+    /// List skills that can be invoked by user (via /skill-name)
+    pub fn list_user_invocable(&self) -> Vec<&Skill> {
+        self.skills
+            .values()
+            .filter(|s| s.enabled && s.user_invocable)
+            .collect()
+    }
+
+    /// Generate XML for system prompt injection (Claude Code compatible)
+    ///
+    /// Returns an XML string containing all auto-invocable skills in the format:
+    /// ```xml
+    /// <available_skills>
+    ///   <skill>
+    ///     <name>skill-name</name>
+    ///     <description>description - when_to_use</description>
+    ///     <location>user|project|builtin</location>
+    ///   </skill>
+    /// </available_skills>
+    /// ```
+    pub fn generate_skills_xml(&self) -> String {
+        let skills = self.list_auto_invocable();
+
+        if skills.is_empty() {
+            return String::new();
+        }
+
+        let skill_xml: Vec<String> = skills.iter().map(|s| s.to_xml()).collect();
+
+        format!(
+            "<available_skills>\n{}\n</available_skills>",
+            skill_xml.join("\n")
+        )
+    }
+
+    /// Generate the full skill tool description for system prompt
+    ///
+    /// Returns a complete description including instructions and available skills XML.
+    pub fn generate_skill_tool_prompt(&self) -> String {
+        let skills_xml = self.generate_skills_xml();
+
+        if skills_xml.is_empty() {
+            return String::new();
+        }
+
+        format!(
+            r#"Execute a skill within the main conversation
+
+<skills_instructions>
+When users ask you to perform tasks, check if any of the available skills below can help complete the task more effectively. Skills provide specialized capabilities and domain knowledge.
+
+When users ask you to run a "slash command" or reference "/<something>" (e.g., "/commit", "/review-pr"), they are referring to a skill. Use the Skill tool to invoke the corresponding skill.
+
+<example>
+User: "run /commit"
+Assistant: [Calls Skill tool with skill: "commit"]
+</example>
+
+How to invoke:
+- Use the Skill tool with the skill name and optional arguments
+- Examples:
+  - skill: "pdf" - invoke the pdf skill
+  - skill: "commit", args: "-m 'Fix bug'" - invoke with arguments
+  - skill: "review-pr", args: "123" - invoke with arguments
+
+Important:
+- When a skill is relevant, you must invoke the Skill tool IMMEDIATELY as your first action
+- NEVER just announce or mention a skill without actually calling the Skill tool
+- This is a BLOCKING REQUIREMENT: invoke the relevant Skill tool BEFORE generating any other response about the task
+- Only use skills listed in <available_skills> below
+- Do not invoke a skill that is already running
+</skills_instructions>
+
+{}
+"#,
+            skills_xml
+        )
     }
 }
 

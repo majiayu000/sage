@@ -2,24 +2,54 @@
 //!
 //! This module defines types for the AI-activated skills system,
 //! providing domain-specific expertise that can be automatically invoked.
+//!
+//! ## Claude Code Compatible Features
+//!
+//! This skill system is designed to be compatible with Claude Code's skill format:
+//! - YAML frontmatter with markdown content
+//! - `when_to_use` for AI auto-invocation
+//! - `user_invocable` for slash command availability
+//! - `allowed_tools` for tool access control
+//! - `$ARGUMENTS` parameter substitution
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 /// A skill definition
+///
+/// Skills can be defined in markdown files with YAML frontmatter:
+/// ```markdown
+/// ---
+/// description: Code review skill
+/// when_to_use: When user asks for code review
+/// allowed_tools: [Read, Grep, Glob]
+/// user_invocable: true
+/// argument_hint: "[file path]"
+/// ---
+///
+/// Please review the code at: $ARGUMENTS
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Skill {
-    /// Skill name
+    /// Skill name (used for invocation, e.g., "commit" for /commit)
     pub name: String,
+
+    /// Display name (human-readable)
+    pub display_name: Option<String>,
 
     /// Short description
     pub description: String,
 
     /// Detailed skill prompt (expertise to inject)
+    /// Supports $ARGUMENTS, $USER_MESSAGE, $WORKING_DIR, $FILE_CONTEXT
     pub prompt: String,
 
-    /// When to activate this skill (triggers)
+    /// When to activate this skill (triggers) - legacy trigger system
     pub triggers: Vec<SkillTrigger>,
+
+    /// When to use this skill - AI auto-invocation hint (Claude Code compatible)
+    /// If set, AI can automatically invoke this skill when the condition matches
+    pub when_to_use: Option<String>,
 
     /// Tools available to this skill
     pub available_tools: ToolAccess,
@@ -33,8 +63,23 @@ pub struct Skill {
     /// Whether this skill is enabled
     pub enabled: bool,
 
+    /// Whether AI can auto-invoke this skill (default: true if when_to_use is set)
+    pub model_invocable: bool,
+
+    /// Whether user can invoke via slash command (e.g., /skill-name)
+    pub user_invocable: bool,
+
+    /// Argument hint shown to user (e.g., "[file path]")
+    pub argument_hint: Option<String>,
+
     /// Model override for this skill
     pub model: Option<String>,
+
+    /// Base directory for relative paths in skill
+    pub base_dir: Option<PathBuf>,
+
+    /// Skill version
+    pub version: Option<String>,
 }
 
 impl Skill {
@@ -42,14 +87,21 @@ impl Skill {
     pub fn new(name: impl Into<String>, description: impl Into<String>) -> Self {
         Self {
             name: name.into(),
+            display_name: None,
             description: description.into(),
             prompt: String::new(),
             triggers: Vec::new(),
+            when_to_use: None,
             available_tools: ToolAccess::All,
             source: SkillSource::Builtin,
             priority: 0,
             enabled: true,
+            model_invocable: true,
+            user_invocable: false,
+            argument_hint: None,
             model: None,
+            base_dir: None,
+            version: None,
         }
     }
 
@@ -95,6 +147,60 @@ impl Skill {
         self
     }
 
+    /// Set when to use (Claude Code compatible)
+    pub fn with_when_to_use(mut self, when_to_use: impl Into<String>) -> Self {
+        self.when_to_use = Some(when_to_use.into());
+        self
+    }
+
+    /// Set display name
+    pub fn with_display_name(mut self, name: impl Into<String>) -> Self {
+        self.display_name = Some(name.into());
+        self
+    }
+
+    /// Set user invocable (can be called via /skill-name)
+    pub fn user_invocable(mut self) -> Self {
+        self.user_invocable = true;
+        self
+    }
+
+    /// Disable model invocation
+    pub fn disable_model_invocation(mut self) -> Self {
+        self.model_invocable = false;
+        self
+    }
+
+    /// Set argument hint
+    pub fn with_argument_hint(mut self, hint: impl Into<String>) -> Self {
+        self.argument_hint = Some(hint.into());
+        self
+    }
+
+    /// Set base directory
+    pub fn with_base_dir(mut self, dir: impl Into<PathBuf>) -> Self {
+        self.base_dir = Some(dir.into());
+        self
+    }
+
+    /// Set version
+    pub fn with_version(mut self, version: impl Into<String>) -> Self {
+        self.version = Some(version.into());
+        self
+    }
+
+    /// Get the user-facing name (display_name or name)
+    pub fn user_facing_name(&self) -> &str {
+        self.display_name.as_deref().unwrap_or(&self.name)
+    }
+
+    /// Check if this skill can be auto-invoked by AI
+    pub fn is_auto_invocable(&self) -> bool {
+        self.enabled
+            && self.model_invocable
+            && (self.when_to_use.is_some() || !self.triggers.is_empty())
+    }
+
     /// Check if the skill matches a context
     pub fn matches(&self, context: &SkillContext) -> bool {
         if !self.enabled {
@@ -106,7 +212,24 @@ impl Skill {
 
     /// Get the skill's full prompt including context
     pub fn get_full_prompt(&self, context: &SkillContext) -> String {
+        self.get_prompt_with_args(context, None)
+    }
+
+    /// Get the skill's prompt with arguments (Claude Code compatible)
+    ///
+    /// Replaces `$ARGUMENTS` with the provided args. If `$ARGUMENTS` is not
+    /// found in the prompt, appends the args at the end.
+    pub fn get_prompt_with_args(&self, context: &SkillContext, args: Option<&str>) -> String {
         let mut prompt = self.prompt.clone();
+
+        // Add base directory context if set
+        if let Some(ref base_dir) = self.base_dir {
+            prompt = format!(
+                "Base directory for this skill: {}\n\n{}",
+                base_dir.display(),
+                prompt
+            );
+        }
 
         // Replace context variables
         prompt = prompt.replace("$USER_MESSAGE", &context.user_message);
@@ -116,7 +239,38 @@ impl Skill {
             prompt = prompt.replace("$FILE_CONTEXT", file_context);
         }
 
+        // Handle $ARGUMENTS substitution (Claude Code compatible)
+        if let Some(args) = args {
+            if prompt.contains("$ARGUMENTS") {
+                prompt = prompt.replace("$ARGUMENTS", args);
+            } else if !args.is_empty() {
+                // Append arguments if $ARGUMENTS not found
+                prompt = format!("{}\n\nARGUMENTS: {}", prompt, args);
+            }
+        }
+
         prompt
+    }
+
+    /// Generate XML representation for system prompt injection
+    pub fn to_xml(&self) -> String {
+        let description = if let Some(ref when) = self.when_to_use {
+            format!("{} - {}", self.description, when)
+        } else {
+            self.description.clone()
+        };
+
+        let location = match &self.source {
+            SkillSource::Project(_) => "project",
+            SkillSource::User(_) => "user",
+            SkillSource::Mcp(_) => "mcp",
+            SkillSource::Builtin => "builtin",
+        };
+
+        format!(
+            "<skill>\n<name>\n{}\n</name>\n<description>\n{}\n</description>\n<location>\n{}\n</location>\n</skill>",
+            self.name, description, location
+        )
     }
 }
 

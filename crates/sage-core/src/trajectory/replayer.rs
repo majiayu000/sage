@@ -1,6 +1,17 @@
 //! Session replayer for JSONL trajectory files
 
 use crate::error::SageResult;
+
+/// Truncate a string to a maximum number of characters (UTF-8 safe)
+fn truncate_string(s: &str, max_chars: usize) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    if chars.len() > max_chars {
+        let truncated: String = chars[..max_chars.saturating_sub(3)].iter().collect();
+        format!("{}...", truncated)
+    } else {
+        s.to_string()
+    }
+}
 use crate::trajectory::entry::{SessionEntry, TokenUsage};
 use crate::trajectory::session::{SessionInfo, SessionRecorder};
 use std::path::Path;
@@ -131,11 +142,7 @@ impl SessionReplayer {
     pub fn get_session_preview(entries: &[SessionEntry]) -> Option<String> {
         for entry in entries {
             if let SessionEntry::SessionStart { task, .. } = entry {
-                let preview = if task.len() > 100 {
-                    format!("{}...", &task[..100])
-                } else {
-                    task.clone()
-                };
+                let preview = truncate_string(task, 100);
                 return Some(preview);
             }
         }

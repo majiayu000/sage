@@ -1,72 +1,93 @@
 //! Command routing logic for CLI
+//!
+//! Unified routing: all execution modes go through UnifiedExecutor
 
 use crate::args::{Cli, Commands, ConfigAction, TrajectoryAction};
-use crate::{claude_mode, commands, ipc, ui_launcher};
+use crate::{commands, ipc, ui_launcher};
 use sage_core::error::SageResult;
 
 /// Route CLI commands to their respective handlers
 pub async fn route(cli: Cli) -> SageResult<()> {
-    match cli.command {
-        // DEFAULT BEHAVIOR: If no subcommand is provided, start interactive mode
-        None => route_default(cli).await,
-        Some(Commands::Run { .. }) => route_run(cli).await,
-        Some(Commands::Interactive { .. }) => route_interactive(cli).await,
-        Some(Commands::Config { action }) => route_config(action).await,
-        Some(Commands::Trajectory { action }) => route_trajectory(action).await,
-        Some(Commands::Tools) => commands::tools::show_tools().await,
-        Some(Commands::Unified { .. }) => route_unified(cli).await,
-        Some(Commands::Ipc { config_file }) => ipc::run_ipc_mode(Some(&config_file)).await,
+    // Handle subcommands first (utility commands and legacy support)
+    if let Some(command) = &cli.command {
+        return match command {
+            // Utility commands
+            Commands::Config { action } => route_config(action.clone()).await,
+            Commands::Trajectory { action } => route_trajectory(action.clone()).await,
+            Commands::Tools => commands::tools::show_tools().await,
+            Commands::Ipc { config_file } => ipc::run_ipc_mode(Some(config_file)).await,
+
+            // Legacy commands (hidden but still supported for backward compatibility)
+            Commands::Run { .. } => route_legacy_run(&cli).await,
+            Commands::Interactive { .. } => route_legacy_interactive(&cli).await,
+            Commands::Unified { .. } => route_legacy_unified(&cli).await,
+        };
     }
+
+    // Main unified execution path
+    route_main(cli).await
 }
 
-async fn route_default(cli: Cli) -> SageResult<()> {
+/// Main execution route - unified entry point for all execution modes
+async fn route_main(cli: Cli) -> SageResult<()> {
+    // Determine execution mode
+    let non_interactive = cli.print_mode;
+
+    // Use modern UI if requested
     if cli.modern_ui {
-        ui_launcher::launch_modern_ui(
+        return ui_launcher::launch_modern_ui(
             &cli.config_file,
-            cli.trajectory_file.as_ref().and_then(|p| p.to_str()),
+            None, // trajectory_file
             cli.working_dir.as_ref().and_then(|p| p.to_str()),
         )
-        .await
-    } else {
-        commands::interactive::execute(commands::interactive::InteractiveArgs {
-            config_file: cli.config_file,
-            trajectory_file: cli.trajectory_file,
-            working_dir: cli.working_dir,
-        })
-        .await
+        .await;
     }
+
+    // Execute using UnifiedExecutor (the single execution path)
+    // Session resume is handled by unified_execute when continue_recent or resume_session_id is set
+    commands::unified_execute(commands::UnifiedArgs {
+        task: cli.task,
+        config_file: cli.config_file,
+        working_dir: cli.working_dir,
+        max_steps: cli.max_steps,
+        verbose: cli.verbose,
+        non_interactive,
+        resume_session_id: cli.resume_session,
+        continue_recent: cli.continue_session,
+        stream_json: cli.stream_json,
+    })
+    .await
 }
 
-async fn route_run(cli: Cli) -> SageResult<()> {
+/// Route legacy `sage run "task"` command
+async fn route_legacy_run(cli: &Cli) -> SageResult<()> {
     if let Some(Commands::Run {
         task,
-        provider,
-        model,
-        model_base_url,
-        api_key,
+        provider: _,
+        model: _,
+        model_base_url: _,
+        api_key: _,
         max_steps,
         working_dir,
         config_file,
-        trajectory_file,
-        patch_path,
-        must_patch,
+        trajectory_file: _,
+        patch_path: _,
+        must_patch: _,
         verbose,
         modern_ui: _,
-    }) = cli.command
+    }) = &cli.command
     {
-        commands::run::execute(commands::run::RunArgs {
-            task,
-            provider,
-            model,
-            model_base_url,
-            api_key,
-            max_steps,
-            working_dir,
-            config_file,
-            trajectory_file,
-            patch_path,
-            must_patch,
-            verbose,
+        // Route to unified executor in non-interactive mode
+        commands::unified_execute(commands::UnifiedArgs {
+            task: Some(task.clone()),
+            config_file: config_file.clone(),
+            working_dir: working_dir.clone(),
+            max_steps: *max_steps,
+            verbose: *verbose,
+            non_interactive: true, // Legacy run is always non-interactive
+            resume_session_id: None,
+            continue_recent: false,
+            stream_json: false,
         })
         .await
     } else {
@@ -74,33 +95,66 @@ async fn route_run(cli: Cli) -> SageResult<()> {
     }
 }
 
-async fn route_interactive(cli: Cli) -> SageResult<()> {
+/// Route legacy `sage interactive` command
+async fn route_legacy_interactive(cli: &Cli) -> SageResult<()> {
     if let Some(Commands::Interactive {
         config_file,
-        trajectory_file,
+        trajectory_file: _,
         working_dir,
-        verbose: _,
+        verbose,
         modern_ui,
-        claude_style,
-    }) = cli.command
+    }) = &cli.command
     {
-        if claude_style {
-            claude_mode::run_claude_interactive(&config_file).await
-        } else if modern_ui {
+        if *modern_ui {
             ui_launcher::launch_modern_ui(
-                &config_file,
-                trajectory_file.as_ref().and_then(|p| p.to_str()),
+                config_file,
+                None,
                 working_dir.as_ref().and_then(|p| p.to_str()),
             )
             .await
         } else {
-            commands::interactive::execute(commands::interactive::InteractiveArgs {
-                config_file,
-                trajectory_file,
-                working_dir,
+            // Route to unified executor in interactive mode
+            commands::unified_execute(commands::UnifiedArgs {
+                task: None,
+                config_file: config_file.clone(),
+                working_dir: working_dir.clone(),
+                max_steps: None,
+                verbose: *verbose,
+                non_interactive: false,
+                resume_session_id: None,
+                continue_recent: false,
+                stream_json: false,
             })
             .await
         }
+    } else {
+        unreachable!()
+    }
+}
+
+/// Route legacy `sage unified` command
+async fn route_legacy_unified(cli: &Cli) -> SageResult<()> {
+    if let Some(Commands::Unified {
+        task,
+        config_file,
+        working_dir,
+        max_steps,
+        verbose,
+        non_interactive,
+    }) = &cli.command
+    {
+        commands::unified_execute(commands::UnifiedArgs {
+            task: task.clone(),
+            config_file: config_file.clone(),
+            working_dir: working_dir.clone(),
+            max_steps: *max_steps,
+            verbose: *verbose,
+            non_interactive: *non_interactive,
+            resume_session_id: None,
+            continue_recent: false,
+            stream_json: false,
+        })
+        .await
     } else {
         unreachable!()
     }
@@ -124,29 +178,5 @@ async fn route_trajectory(action: TrajectoryAction) -> SageResult<()> {
         }
         TrajectoryAction::Stats { path } => commands::trajectory::stats(&path).await,
         TrajectoryAction::Analyze { path } => commands::trajectory::analyze(&path).await,
-    }
-}
-
-async fn route_unified(cli: Cli) -> SageResult<()> {
-    if let Some(Commands::Unified {
-        task,
-        config_file,
-        working_dir,
-        max_steps,
-        verbose,
-        non_interactive,
-    }) = cli.command
-    {
-        commands::unified_execute(commands::UnifiedArgs {
-            task,
-            config_file,
-            working_dir,
-            max_steps,
-            verbose,
-            non_interactive,
-        })
-        .await
-    } else {
-        unreachable!()
     }
 }
