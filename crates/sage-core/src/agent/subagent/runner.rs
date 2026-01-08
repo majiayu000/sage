@@ -8,6 +8,8 @@ use std::time::Instant;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 
+use std::path::PathBuf;
+
 use super::builtin::{explore_agent, general_purpose_agent, plan_agent};
 use super::types::{
     AgentDefinition, AgentProgress, AgentType, ExecutionMetadata, SubAgentConfig, SubAgentResult,
@@ -30,11 +32,22 @@ pub struct SubAgentRunner {
     all_tools: Vec<Arc<dyn Tool>>,
     /// Maximum steps per agent execution
     max_steps: usize,
+    /// Current working directory (for inheritance)
+    working_directory: PathBuf,
 }
 
 impl SubAgentRunner {
     /// Create a new sub-agent runner from configuration
-    pub fn from_config(config: &Config, tools: Vec<Arc<dyn Tool>>) -> SageResult<Self> {
+    ///
+    /// # Arguments
+    /// * `config` - The main configuration
+    /// * `tools` - Available tools for sub-agents
+    /// * `working_directory` - The working directory for file operations (optional, defaults to cwd)
+    pub fn from_config(
+        config: &Config,
+        tools: Vec<Arc<dyn Tool>>,
+        working_directory: Option<PathBuf>,
+    ) -> SageResult<Self> {
         // Get default provider configuration
         let default_params = config
             .default_model_parameters()
@@ -71,10 +84,16 @@ impl SubAgentRunner {
                 provider_name
             ))?;
 
+        // Resolve working directory
+        let cwd = working_directory.unwrap_or_else(|| {
+            std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+        });
+
         Ok(Self {
             llm_client,
             all_tools: tools,
             max_steps: usize::MAX, // No limit by default
+            working_directory: cwd,
         })
     }
 
@@ -89,25 +108,64 @@ impl SubAgentRunner {
         self.all_tools = tools;
     }
 
+    /// Get the current working directory
+    pub fn working_directory(&self) -> &PathBuf {
+        &self.working_directory
+    }
+
+    /// Update the working directory
+    pub fn set_working_directory(&mut self, cwd: PathBuf) {
+        self.working_directory = cwd;
+    }
+
+    /// Get tool names for inheritance
+    pub fn tool_names(&self) -> Vec<String> {
+        self.all_tools.iter().map(|t| t.name().to_string()).collect()
+    }
+
     /// Execute a sub-agent with the given configuration
+    ///
+    /// This method injects the parent's working directory and tool list into
+    /// the config for inheritance resolution.
     pub async fn execute(
         &self,
-        config: SubAgentConfig,
+        mut config: SubAgentConfig,
         cancel: CancellationToken,
     ) -> SageResult<SubAgentResult> {
         let start_time = Instant::now();
         let agent_id = uuid::Uuid::new_v4().to_string();
 
+        // Inject parent context for inheritance
+        // If not already set, use the runner's working directory and tools
+        if config.parent_cwd.is_none() {
+            config.parent_cwd = Some(self.working_directory.clone());
+        }
+        if config.parent_tools.is_none() {
+            config.parent_tools = Some(self.tool_names());
+        }
+
+        // Resolve the effective working directory for this sub-agent
+        let effective_cwd = config.resolve_working_directory().map_err(|e| {
+            SageError::agent(format!("Failed to resolve working directory: {}", e))
+        })?;
+
+        tracing::info!(
+            "Sub-agent working directory: {:?} (config: {})",
+            effective_cwd,
+            config.working_directory
+        );
+
         // Get agent definition based on type
         let definition = self.get_agent_definition(&config.agent_type);
 
-        // Filter tools based on agent's allowed tools
-        let tools = self.filter_tools(&definition);
+        // Filter tools based on agent's allowed tools AND config's tool access
+        let tools = self.filter_tools_with_config(&definition, &config);
 
         tracing::info!(
-            "Starting sub-agent execution: type={}, tools={}, prompt_len={}",
+            "Starting sub-agent execution: type={}, tools={}, cwd={:?}, prompt_len={}",
             config.agent_type,
             tools.len(),
+            effective_cwd,
             config.prompt.len()
         );
 
@@ -201,11 +259,26 @@ impl SubAgentRunner {
         }
     }
 
-    /// Filter tools based on agent definition
-    fn filter_tools(&self, definition: &AgentDefinition) -> Vec<Arc<dyn Tool>> {
+    /// Filter tools based on both agent definition and config's tool access control
+    ///
+    /// This method considers:
+    /// 1. The agent definition's allowed tools
+    /// 2. The config's tool access (which may inherit from parent)
+    fn filter_tools_with_config(
+        &self,
+        definition: &AgentDefinition,
+        config: &SubAgentConfig,
+    ) -> Vec<Arc<dyn Tool>> {
         self.all_tools
             .iter()
-            .filter(|tool| definition.can_use_tool(tool.name()))
+            .filter(|tool| {
+                let name = tool.name();
+                // Must be allowed by agent definition
+                let allowed_by_definition = definition.can_use_tool(name);
+                // Must be allowed by config's tool access
+                let allowed_by_config = config.allows_tool(name);
+                allowed_by_definition && allowed_by_config
+            })
             .cloned()
             .collect()
     }
@@ -307,11 +380,17 @@ static GLOBAL_RUNNER: std::sync::OnceLock<Arc<RwLock<Option<SubAgentRunner>>>> =
     std::sync::OnceLock::new();
 
 /// Initialize the global sub-agent runner from configuration
+///
+/// # Arguments
+/// * `config` - The main configuration
+/// * `tools` - Available tools for sub-agents
+/// * `working_directory` - The working directory for file operations (optional)
 pub fn init_global_runner_from_config(
     config: &Config,
     tools: Vec<Arc<dyn Tool>>,
+    working_directory: Option<PathBuf>,
 ) -> SageResult<()> {
-    let runner = SubAgentRunner::from_config(config, tools)?;
+    let runner = SubAgentRunner::from_config(config, tools, working_directory)?;
     init_global_runner(runner);
     Ok(())
 }
@@ -333,6 +412,27 @@ pub async fn update_global_runner_tools(tools: Vec<Arc<dyn Tool>>) {
             runner.update_tools(tools);
             tracing::debug!("Updated global sub-agent runner tools");
         }
+    }
+}
+
+/// Update working directory in the global runner
+pub async fn update_global_runner_cwd(cwd: PathBuf) {
+    if let Some(lock) = GLOBAL_RUNNER.get() {
+        let mut guard = lock.write().await;
+        if let Some(runner) = guard.as_mut() {
+            runner.set_working_directory(cwd.clone());
+            tracing::debug!("Updated global sub-agent runner working directory: {:?}", cwd);
+        }
+    }
+}
+
+/// Get the current working directory from the global runner
+pub async fn get_global_runner_cwd() -> Option<PathBuf> {
+    if let Some(lock) = GLOBAL_RUNNER.get() {
+        let guard = lock.read().await;
+        guard.as_ref().map(|r| r.working_directory().clone())
+    } else {
+        None
     }
 }
 

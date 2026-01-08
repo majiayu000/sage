@@ -36,10 +36,11 @@ pub use builtin::{
 pub use executor::{ExecutorMessage, SubAgentExecutor};
 pub use registry::AgentRegistry;
 pub use runner::{
-    SubAgentRunner, execute_subagent, get_global_runner, init_global_runner,
-    init_global_runner_from_config, update_global_runner_tools,
+    SubAgentRunner, execute_subagent, get_global_runner, get_global_runner_cwd,
+    init_global_runner, init_global_runner_from_config, update_global_runner_cwd,
+    update_global_runner_tools,
 };
 pub use types::{
     AgentDefinition, AgentProgress, AgentStatus, AgentType, ExecutionMetadata, RunningAgent,
-    SubAgentConfig, SubAgentResult, Thoroughness, ToolAccessControl,
+    SubAgentConfig, SubAgentResult, Thoroughness, ToolAccessControl, WorkingDirectoryConfig,
 };
