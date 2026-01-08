@@ -319,13 +319,9 @@ impl<W: Write> OutputWriter<W> {
     }
 }
 
-/// Truncate string with ellipsis
+/// Truncate string with ellipsis (UTF-8 safe)
 fn truncate(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
-        s.to_string()
-    } else {
-        format!("{}...", &s[..max_len - 3])
-    }
+    crate::utils::truncate_with_ellipsis(s, max_len)
 }
 
 #[cfg(test)]

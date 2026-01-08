@@ -299,13 +299,9 @@ impl UnifiedExecutor {
             } else {
                 println!("{} ({}ms)", "failed".red(), duration_ms);
                 if let Some(ref err) = tool_result.error {
-                    // Show first line of error
+                    // Show first line of error (UTF-8 safe truncation)
                     let first_line = err.lines().next().unwrap_or(err);
-                    let truncated = if first_line.len() > 60 {
-                        format!("{}...", &first_line[..60])
-                    } else {
-                        first_line.to_string()
-                    };
+                    let truncated = crate::utils::truncate_with_ellipsis(first_line, 60);
                     println!("      {}", truncated.dimmed());
                 }
             }
@@ -358,14 +354,10 @@ impl UnifiedExecutor {
             }
         }
 
-        // Show command if present (for bash)
+        // Show command if present (for bash) - UTF-8 safe
         if let Some(cmd) = arguments.get("command") {
             if let Some(s) = cmd.as_str() {
-                let display = if s.len() > 50 {
-                    format!("{}...", &s[..47])
-                } else {
-                    s.to_string()
-                };
+                let display = crate::utils::truncate_with_ellipsis(s, 50);
                 parts.push(display);
             }
         }
@@ -377,14 +369,10 @@ impl UnifiedExecutor {
             }
         }
 
-        // Show query if present (for search)
+        // Show query if present (for search) - UTF-8 safe
         if let Some(query) = arguments.get("query") {
             if let Some(s) = query.as_str() {
-                let display = if s.len() > 30 {
-                    format!("{}...", &s[..27])
-                } else {
-                    s.to_string()
-                };
+                let display = crate::utils::truncate_with_ellipsis(s, 30);
                 parts.push(format!("query=\"{}\"", display));
             }
         }
@@ -429,7 +417,7 @@ impl UnifiedExecutor {
 
         if let Some(cmd) = arguments.get("command") {
             if let Some(s) = cmd.as_str() {
-                let short = if s.len() > 30 { &s[..30] } else { s };
+                let short = crate::utils::truncate_str(s, 30);
                 return format!("{} '{}'", verb, short);
             }
         }

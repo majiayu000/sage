@@ -584,7 +584,7 @@ async fn handle_resume_interactive(
     // If a specific session ID was provided, resume it directly
     if let Some(id) = session_id {
         if let Some(session) = sessions.iter().find(|s| s.id == id || s.id.starts_with(id)) {
-            console.success(&format!("Resuming session: {}", session.display_title()));
+            console.success(&format!("Resuming session: {}", session.resume_title()));
             return Ok(SlashCommandAction::ResumeSession(session.id.clone()));
         } else {
             console.warn(&format!("Session not found: {}", id));
@@ -599,7 +599,8 @@ async fn handle_resume_interactive(
         .iter()
         .take(display_count)
         .map(|s| {
-            let title = truncate_str(s.display_title(), 50);
+            // Use resume_title() to show last user input for resume context
+            let title = truncate_str(s.resume_title(), 50);
             let time_ago = format_time_ago(&s.updated_at);
             format!("{} ({}, {} msgs)", title, time_ago, s.message_count)
         })
@@ -622,7 +623,7 @@ async fn handle_resume_interactive(
     match selection {
         Ok(Some(idx)) if idx < sessions.len().min(display_count) => {
             let session = &sessions[idx];
-            console.success(&format!("Resuming: {}", session.display_title()));
+            console.success(&format!("Resuming: {}", session.resume_title()));
             Ok(SlashCommandAction::ResumeSession(session.id.clone()))
         }
         _ => {
@@ -853,7 +854,7 @@ async fn execute_session_resume(
                 console.info(&format!(
                     "Resuming most recent session: {} ({})",
                     metadata.id,
-                    metadata.display_title()
+                    metadata.resume_title()
                 ));
                 metadata.id
             }
@@ -1213,7 +1214,7 @@ async fn handle_resume_command(
             console.print_header("Resume Session");
             println!();
             println!("  Session:  {}", session.id);
-            println!("  Title:    {}", session.display_title());
+            println!("  Last msg: {}", session.resume_title());
             println!("  Modified: {}", session.updated_at.format("%Y-%m-%d %H:%M"));
             println!("  Messages: {}", session.message_count);
             println!();
@@ -1234,7 +1235,8 @@ async fn handle_resume_command(
 
     for (i, session) in sessions.iter().take(display_count).enumerate() {
         let time_ago = format_time_ago(&session.updated_at);
-        let title = session.display_title();
+        // Use resume_title() to show last user input
+        let title = session.resume_title();
         let title_truncated = truncate_str(title, 50);
 
         println!(

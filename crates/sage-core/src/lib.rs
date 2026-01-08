@@ -150,6 +150,7 @@ pub mod tools;
 pub mod trajectory;
 pub mod types;
 pub mod ui;
+pub mod utils;
 pub mod validation;
 pub mod workspace;
 
