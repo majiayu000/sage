@@ -49,6 +49,18 @@ impl MessageChainTracker {
         self.last_uuid.clone()
     }
 
+    /// Get last message UUID
+    pub fn last_message_uuid(&self) -> Option<&str> {
+        self.last_uuid.as_deref()
+    }
+
+    /// Get current context
+    pub fn context(&self) -> SessionContext {
+        self.context
+            .clone()
+            .unwrap_or_else(|| SessionContext::new(std::env::current_dir().unwrap_or_default()))
+    }
+
     /// Update todos
     pub fn set_todos(&mut self, todos: Vec<TodoItem>) {
         self.todos = todos;

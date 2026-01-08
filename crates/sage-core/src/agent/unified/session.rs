@@ -143,6 +143,51 @@ impl UnifiedExecutor {
         Ok(Some(msg))
     }
 
+    /// Record an error message to the session
+    ///
+    /// This ensures errors are visible in the session history for debugging.
+    #[instrument(skip(self, error_message), fields(error_type = %error_type))]
+    pub(super) async fn record_error_message(
+        &mut self,
+        error_type: &str,
+        error_message: &str,
+    ) -> SageResult<Option<EnhancedMessage>> {
+        if self.current_session_id.is_none() || self.jsonl_storage.is_none() {
+            return Ok(None);
+        }
+
+        let session_id = self.current_session_id.clone().unwrap();
+        let context = self.message_tracker.context().clone();
+        let parent_uuid = self.message_tracker.last_message_uuid().map(|s| s.to_string());
+
+        let msg = EnhancedMessage::error(
+            error_type,
+            error_message,
+            &session_id,
+            context,
+            parent_uuid,
+        );
+
+        if let Some(storage) = &self.jsonl_storage {
+            storage
+                .append_message(&session_id, &msg)
+                .await
+                .context(format!(
+                    "Failed to append error message to JSONL session: {}",
+                    session_id
+                ))?;
+
+            // Update metadata to reflect error state
+            if let Ok(Some(mut metadata)) = storage.load_metadata(&session_id).await {
+                metadata.state = "failed".to_string();
+                let _ = storage.save_metadata(&session_id, &metadata).await;
+            }
+        }
+
+        tracing::error!("Recorded error in session: [{}] {}", error_type, error_message);
+        Ok(Some(msg))
+    }
+
     /// Check and update session summary if needed
     async fn maybe_update_summary(
         &mut self,

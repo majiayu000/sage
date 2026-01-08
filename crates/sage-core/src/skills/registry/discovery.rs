@@ -371,6 +371,7 @@ impl SkillRegistry {
     }
 
     /// Parse skill file with YAML frontmatter (legacy method for compatibility)
+    #[allow(dead_code)]
     pub(crate) fn parse_skill_file(&self, content: &str) -> (HashMap<String, String>, String) {
         let mut metadata = HashMap::new();
 

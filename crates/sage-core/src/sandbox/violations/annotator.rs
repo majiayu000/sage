@@ -63,6 +63,7 @@ pub fn annotate_stderr(stderr: &str, store: &ViolationStore) -> String {
 }
 
 /// Annotate stderr with specific violations
+#[allow(dead_code)]
 pub fn annotate_stderr_with_violations(stderr: &str, violations: &[Violation]) -> String {
     if violations.is_empty() {
         return stderr.to_string();
@@ -82,6 +83,7 @@ fn escape_xml(s: &str) -> String {
 }
 
 /// Format a single violation as a human-readable message
+#[allow(dead_code)]
 pub fn format_violation_message(violation: &Violation) -> String {
     let status = if violation.blocked {
         "BLOCKED"
@@ -105,6 +107,7 @@ pub fn format_violation_message(violation: &Violation) -> String {
 }
 
 /// Format violations as a summary line
+#[allow(dead_code)]
 pub fn format_violations_summary(violations: &[Violation]) -> String {
     if violations.is_empty() {
         return "No violations".to_string();

@@ -121,9 +121,39 @@ pub struct TaskConfig {
 
 - [x] 问题确认
 - [x] 根因分析
-- [ ] 方案设计
-- [ ] 代码实现
+- [x] 方案设计
+- [x] 代码实现（部分）
 - [ ] 测试验证
+
+## 已实现的改进
+
+### 2026-01-08 修复
+
+1. **错误消息记录到 messages.jsonl**
+   - 新增 `EnhancedMessageType::Error` 类型
+   - 新增 `EnhancedMessage::error()` 构造方法
+   - 在 `execution_loop.rs` 中调用 `record_error_message()` 记录错误
+
+2. **CLI 显示详细错误信息**
+   - 显示错误类型（api_error, timeout_error, rate_limit_error 等）
+   - 显示 provider 信息
+   - 显示 session 日志路径
+
+3. **API 调试日志**
+   - 设置 `SAGE_DEBUG_API=1` 启用
+   - 请求保存到 `$SAGE_DEBUG_DIR/glm_request_*.json`
+   - 错误响应保存到 `$SAGE_DEBUG_DIR/glm_error_*.json`
+   - 默认目录：`/tmp/sage_debug`
+
+### 使用方法
+
+```bash
+# 启用 API 调试日志
+SAGE_DEBUG_API=1 sage "your task"
+
+# 指定调试目录
+SAGE_DEBUG_API=1 SAGE_DEBUG_DIR=~/sage_debug sage "your task"
+```
 
 ## 第二次复现
 

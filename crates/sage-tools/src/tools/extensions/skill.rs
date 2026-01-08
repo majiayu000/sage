@@ -92,6 +92,7 @@ impl SkillTool {
     }
 
     /// Get the skill prompt with arguments substituted
+    #[allow(dead_code)]
     async fn get_skill_prompt(&self, skill_name: &str, args: Option<&str>) -> Option<String> {
         let registry = self.registry.read().await;
         let skill = registry.get(skill_name)?;
