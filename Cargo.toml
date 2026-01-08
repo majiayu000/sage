@@ -111,6 +111,10 @@ parking_lot = "0.12"
 # LRU Cache
 lru = "0.12"
 
+# File system watching
+notify = "7.0"
+notify-debouncer-mini = "0.5"
+
 [profile.release]
 lto = true
 codegen-units = 1

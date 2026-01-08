@@ -82,7 +82,10 @@
 pub mod registry;
 pub mod types;
 
-pub use registry::{SkillFrontmatter, SkillRegistry};
+pub use registry::{
+    SkillChangeEvent, SkillFrontmatter, SkillHotReloader, SkillRegistry, SkillWatcher,
+    SkillWatcherConfig,
+};
 pub use types::{
     Skill, SkillActivation, SkillContext, SkillSource, SkillTrigger, TaskType, ToolAccess,
 };

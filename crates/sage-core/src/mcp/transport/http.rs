@@ -355,6 +355,7 @@ mod tests {
     fn test_message_url() {
         let config = HttpTransportConfig::new("http://localhost:8080/");
         let transport = HttpTransport::new(config).unwrap();
-        assert_eq!(transport.message_url(), "http://localhost:8080/message");
+        // With Streamable HTTP (MCP 2025-03-26), message URL is the same as base URL
+        assert_eq!(transport.message_url(), "http://localhost:8080");
     }
 }
