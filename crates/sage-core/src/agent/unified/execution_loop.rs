@@ -3,7 +3,7 @@
 use crate::agent::{AgentExecution, AgentState, AgentStep, ExecutionError, ExecutionOutcome};
 use crate::error::{SageError, SageResult};
 use crate::session::{EnhancedTokenUsage, EnhancedToolCall};
-use crate::ui::{DisplayManager, ProgressTracker, global_progress_tracker};
+use crate::ui::{DisplayManager, global_progress_tracker};
 
 use super::UnifiedExecutor;
 
@@ -28,8 +28,9 @@ impl UnifiedExecutor {
         progress.reset().await;
         progress.set_max_steps(max_steps).await;
 
-        // Start heartbeat for long-running tasks
-        ProgressTracker::start_heartbeat(&progress).await;
+        // Note: Heartbeat disabled - AnimationManager now provides unified progress display
+        // with step numbers and tool details, making heartbeat redundant
+        // ProgressTracker::start_heartbeat(&progress).await;
 
         let outcome = 'execution_loop: {
             let mut step_number = 0u32;

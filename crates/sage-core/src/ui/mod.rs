@@ -8,7 +8,7 @@ pub mod markdown;
 pub mod progress;
 pub mod prompt;
 
-pub use animation::AnimationManager;
+pub use animation::{AnimationContext, AnimationManager};
 pub use claude_style::{ClaudeStyleDisplay, ResponseFormatter, SimpleProgressIndicator};
 pub use display::DisplayManager;
 pub use enhanced_console::EnhancedConsole;

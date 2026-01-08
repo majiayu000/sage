@@ -30,6 +30,7 @@ mod tests;
 pub use builder::UnifiedExecutorBuilder;
 
 use crate::agent::subagent::init_global_runner_from_config;
+use crate::context::AutoCompact;
 use crate::error::{SageError, SageResult};
 use crate::input::{InputChannel, InputRequest, InputResponse};
 use crate::session::{FileSnapshotTracker, JsonlSessionStorage, MessageChainTracker};
@@ -74,6 +75,8 @@ pub struct UnifiedExecutor {
     file_tracker: FileSnapshotTracker,
     /// Message count at last summary update (for throttling summary generation)
     last_summary_msg_count: usize,
+    /// Auto-compact manager for context window management
+    auto_compact: AutoCompact,
 }
 
 impl UnifiedExecutor {
