@@ -6,7 +6,9 @@
 //! - Backgrounding: &
 //! - Subshells: () $()
 
-use super::types::{CheckType, ValidationContext, ValidationResult, ValidationWarning, WarningSeverity};
+use super::types::{
+    CheckType, ValidationContext, ValidationResult, ValidationWarning, WarningSeverity,
+};
 
 /// Pattern to detect subshell execution
 fn has_subshell(command: &str) -> bool {
@@ -14,7 +16,7 @@ fn has_subshell(command: &str) -> bool {
     let mut depth = 0;
     let chars: Vec<char> = command.chars().collect();
     for i in 0..chars.len() {
-        if i > 0 && chars[i-1] == '$' && chars[i] == '(' {
+        if i > 0 && chars[i - 1] == '$' && chars[i] == '(' {
             return true;
         }
         // Also check for standalone (...) not preceded by $
@@ -280,6 +282,11 @@ mod tests {
         let ctx = ValidationContext::default();
         let result = check_shell_metacharacters("echo $(date)", &ctx);
         assert!(result.allowed);
-        assert!(result.warnings.iter().any(|w| w.message.contains("subshell")));
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|w| w.message.contains("subshell"))
+        );
     }
 }

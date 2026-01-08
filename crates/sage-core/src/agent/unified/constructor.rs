@@ -98,8 +98,8 @@ impl UnifiedExecutor {
 
         // Create auto-compact manager with model-specific context window
         let model_capability = get_model_capability(&default_params.model);
-        let auto_compact_config = AutoCompactConfig::default()
-            .with_max_tokens(model_capability.context_window as usize);
+        let auto_compact_config =
+            AutoCompactConfig::default().with_max_tokens(model_capability.context_window as usize);
         let auto_compact = AutoCompact::new(auto_compact_config);
 
         tracing::debug!(

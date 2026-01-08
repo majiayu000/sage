@@ -154,7 +154,10 @@ impl PricingRegistry {
     }
 
     /// List models by provider (returns iterator to avoid allocation)
-    pub fn list_by_provider<'a>(&'a self, provider: &'a str) -> impl Iterator<Item = &'a ModelPricing> {
+    pub fn list_by_provider<'a>(
+        &'a self,
+        provider: &'a str,
+    ) -> impl Iterator<Item = &'a ModelPricing> {
         self.models
             .values()
             .filter(move |p| p.provider.eq_ignore_ascii_case(provider))

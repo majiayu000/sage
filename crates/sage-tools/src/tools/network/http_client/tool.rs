@@ -211,8 +211,8 @@ impl Tool for HttpClientTool {
         Ok(())
     }
 
-    fn max_execution_time(&self) -> Option<u64> {
-        Some(300)
+    fn max_execution_duration(&self) -> Option<std::time::Duration> {
+        Some(std::time::Duration::from_secs(300))
     }
 
     fn supports_parallel_execution(&self) -> bool {

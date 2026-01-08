@@ -1,6 +1,6 @@
 //! Built-in skill registration
 
-use super::super::types::{Skill, SkillSource, SkillTrigger, TaskType};
+use super::super::types::{Skill, SkillSourceType, SkillTrigger, TaskType};
 use super::types::SkillRegistry;
 
 impl SkillRegistry {
@@ -14,7 +14,7 @@ impl SkillRegistry {
                 .with_trigger(SkillTrigger::Keyword("rust".to_string()))
                 .with_trigger(SkillTrigger::Keyword("cargo".to_string()))
                 .with_priority(10)
-                .with_source(SkillSource::Builtin),
+                .with_source(SkillSourceType::Builtin),
         );
 
         // Testing skill
@@ -28,7 +28,7 @@ impl SkillRegistry {
             .with_trigger(SkillTrigger::Keyword("test".to_string()))
             .with_trigger(SkillTrigger::Keyword("spec".to_string()))
             .with_priority(8)
-            .with_source(SkillSource::Builtin),
+            .with_source(SkillSourceType::Builtin),
         );
 
         // Debugging skill
@@ -40,7 +40,7 @@ impl SkillRegistry {
                 .with_trigger(SkillTrigger::Keyword("fix".to_string()))
                 .with_trigger(SkillTrigger::Keyword("error".to_string()))
                 .with_priority(8)
-                .with_source(SkillSource::Builtin),
+                .with_source(SkillSourceType::Builtin),
         );
 
         // Code review skill
@@ -51,7 +51,7 @@ impl SkillRegistry {
                 .with_trigger(SkillTrigger::Keyword("review".to_string()))
                 .with_trigger(SkillTrigger::Keyword("pr".to_string()))
                 .with_priority(7)
-                .with_source(SkillSource::Builtin),
+                .with_source(SkillSourceType::Builtin),
         );
 
         // Architecture skill
@@ -63,7 +63,7 @@ impl SkillRegistry {
                 .with_trigger(SkillTrigger::Keyword("design".to_string()))
                 .with_trigger(SkillTrigger::Keyword("pattern".to_string()))
                 .with_priority(7)
-                .with_source(SkillSource::Builtin),
+                .with_source(SkillSourceType::Builtin),
         );
 
         // Security skill
@@ -78,7 +78,7 @@ impl SkillRegistry {
             .with_trigger(SkillTrigger::Keyword("vulnerability".to_string()))
             .with_trigger(SkillTrigger::Keyword("cve".to_string()))
             .with_priority(9)
-            .with_source(SkillSource::Builtin),
+            .with_source(SkillSourceType::Builtin),
         );
 
         // Git/Commit skill
@@ -88,7 +88,7 @@ impl SkillRegistry {
                 .with_trigger(SkillTrigger::Keyword("commit".to_string()))
                 .with_trigger(SkillTrigger::ToolUsage("Bash".to_string()))
                 .with_priority(5)
-                .with_source(SkillSource::Builtin),
+                .with_source(SkillSourceType::Builtin),
         );
     }
 }

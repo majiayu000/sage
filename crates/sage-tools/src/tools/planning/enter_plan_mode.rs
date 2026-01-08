@@ -151,8 +151,8 @@ Use exit_plan_mode NOW and begin implementation.
         Ok(())
     }
 
-    fn max_execution_time(&self) -> Option<u64> {
-        Some(5) // 5 seconds - this is a very lightweight operation
+    fn max_execution_duration(&self) -> Option<std::time::Duration> {
+        Some(std::time::Duration::from_secs(5)) // 5 seconds - this is a very lightweight operation
     }
 
     fn supports_parallel_execution(&self) -> bool {
@@ -231,9 +231,10 @@ mod tests {
     }
 
     #[test]
-    fn test_enter_plan_mode_max_execution_time() {
+    fn test_enter_plan_mode_max_execution_duration() {
+        use std::time::Duration;
         let tool = EnterPlanModeTool::new();
-        assert_eq!(tool.max_execution_time(), Some(5));
+        assert_eq!(tool.max_execution_duration(), Some(Duration::from_secs(5)));
     }
 
     #[test]

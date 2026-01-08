@@ -53,13 +53,13 @@ impl LlmClient {
     /// Returns the last error if all retry attempts are exhausted.
     /// Non-retryable errors (e.g., 400, 401) return immediately without retrying.
     /// Returns error if task is interrupted during retry delay.
-    #[instrument(skip(self, operation), fields(max_retries = %self.config.max_retries.unwrap_or(3)))]
+    #[instrument(skip(self, operation), fields(max_retries = %self.config.max_retries().unwrap_or(3)))]
     pub(super) async fn execute_with_retry<F, Fut>(&self, operation: F) -> SageResult<LlmResponse>
     where
         F: Fn() -> Fut,
         Fut: std::future::Future<Output = SageResult<LlmResponse>>,
     {
-        let max_retries = self.config.max_retries.unwrap_or(3);
+        let max_retries = self.config.max_retries().unwrap_or(3);
         let mut last_error = None;
 
         // Get cancellation token for abort signal support

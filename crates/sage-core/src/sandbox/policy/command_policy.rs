@@ -1,7 +1,7 @@
 //! Command execution policy
 
-use super::super::config::SandboxConfig;
 use super::super::SandboxError;
+use super::super::config::SandboxConfig;
 use regex::Regex;
 use std::collections::HashSet;
 

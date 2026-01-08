@@ -7,21 +7,21 @@
 //! - Dangerous command patterns
 //! - Critical path removal
 
-mod types;
 mod heredoc_check;
 mod metacharacter_check;
-mod variable_check;
 mod pattern_check;
 mod removal_check;
+mod types;
+mod variable_check;
 
+pub use heredoc_check::check_heredoc_safety;
+pub use metacharacter_check::check_shell_metacharacters;
+pub use pattern_check::check_dangerous_patterns;
+pub use removal_check::check_dangerous_removal;
 pub use types::{
     CheckType, ValidationContext, ValidationResult, ValidationWarning, WarningSeverity,
 };
-pub use heredoc_check::check_heredoc_safety;
-pub use metacharacter_check::check_shell_metacharacters;
 pub use variable_check::check_dangerous_variables;
-pub use pattern_check::check_dangerous_patterns;
-pub use removal_check::check_dangerous_removal;
 
 use crate::tools::ToolError;
 

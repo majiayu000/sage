@@ -117,7 +117,10 @@ fn generate_sandbox_profile(config: &OsSandboxConfig) -> Result<String, SandboxE
                 profile.push_str(&format!("(allow file-read* (subpath \"{}\"))\n", path));
             }
             _ => {
-                profile.push_str(&format!("(allow file-read* file-write* (subpath \"{}\"))\n", path));
+                profile.push_str(&format!(
+                    "(allow file-read* file-write* (subpath \"{}\"))\n",
+                    path
+                ));
             }
         }
     }
@@ -171,14 +174,17 @@ fn generate_sandbox_profile(config: &OsSandboxConfig) -> Result<String, SandboxE
 
 /// Write sandbox profile to a temporary file
 fn write_profile_to_temp(profile: &str) -> Result<NamedTempFile, SandboxError> {
-    let mut file = NamedTempFile::with_suffix(".sb")
-        .map_err(|e| SandboxError::InitializationFailed(format!("Failed to create temp file: {}", e)))?;
+    let mut file = NamedTempFile::with_suffix(".sb").map_err(|e| {
+        SandboxError::InitializationFailed(format!("Failed to create temp file: {}", e))
+    })?;
 
-    file.write_all(profile.as_bytes())
-        .map_err(|e| SandboxError::InitializationFailed(format!("Failed to write profile: {}", e)))?;
+    file.write_all(profile.as_bytes()).map_err(|e| {
+        SandboxError::InitializationFailed(format!("Failed to write profile: {}", e))
+    })?;
 
-    file.flush()
-        .map_err(|e| SandboxError::InitializationFailed(format!("Failed to flush profile: {}", e)))?;
+    file.flush().map_err(|e| {
+        SandboxError::InitializationFailed(format!("Failed to flush profile: {}", e))
+    })?;
 
     Ok(file)
 }
@@ -243,8 +249,8 @@ mod tests {
     #[test]
     fn test_generate_profile_custom() {
         let custom_profile = "(version 1)(allow default)";
-        let config = OsSandboxConfig::new(OsSandboxMode::Custom)
-            .with_custom_profile(custom_profile);
+        let config =
+            OsSandboxConfig::new(OsSandboxMode::Custom).with_custom_profile(custom_profile);
 
         let profile = generate_sandbox_profile(&config).unwrap();
         assert_eq!(profile, custom_profile);

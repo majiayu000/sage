@@ -150,7 +150,12 @@ mod tests {
     fn test_unquoted_variable_in_echo() {
         let result = check_dangerous_variables("echo $MESSAGE");
         assert!(result.allowed);
-        assert!(result.warnings.iter().any(|w| w.message.contains("unquoted")));
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|w| w.message.contains("unquoted"))
+        );
     }
 
     #[test]

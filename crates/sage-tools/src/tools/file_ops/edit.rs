@@ -209,8 +209,8 @@ Parameters:
         Ok(())
     }
 
-    fn max_execution_time(&self) -> Option<u64> {
-        Some(60) // 1 minute
+    fn max_execution_duration(&self) -> Option<std::time::Duration> {
+        Some(std::time::Duration::from_secs(60)) // 1 minute
     }
 
     fn supports_parallel_execution(&self) -> bool {

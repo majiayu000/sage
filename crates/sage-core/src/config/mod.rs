@@ -29,8 +29,11 @@ pub use lakeview_config::LakeviewConfig;
 pub use loader::{ConfigLoader, ConfigSource};
 pub use logging_config::LoggingConfig;
 pub use mcp_config::{McpConfig, McpServerConfig};
-pub use model_params::{format_api_key_status_for_provider, ModelParameters};
-pub use provider::{format_api_key_status, ApiKeyInfo, ApiKeySource, ProviderConfig};
+pub use model_params::{ModelParameters, format_api_key_status_for_provider};
+pub use provider::{
+    ApiAuthConfig, ApiKeyInfo, ApiKeySource, NetworkConfig, ProviderConfig, RateLimitConfig,
+    ResilienceConfig, format_api_key_status,
+};
 pub use tool_config::ToolConfig;
 pub use trajectory_config::TrajectoryConfig;
 pub use validation::ConfigValidator;

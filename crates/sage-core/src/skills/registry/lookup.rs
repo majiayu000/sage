@@ -13,7 +13,7 @@ impl SkillRegistry {
             .collect();
 
         // Sort by priority (highest first)
-        matching.sort_by(|a, b| b.priority.cmp(&a.priority));
+        matching.sort_by(|a, b| b.priority().cmp(&a.priority()));
 
         matching
     }

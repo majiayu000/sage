@@ -81,7 +81,7 @@ impl LlmClient {
     /// )?;
     ///
     /// let config = client.config();
-    /// println!("Max retries: {:?}", config.max_retries);
+    /// println!("Max retries: {:?}", config.max_retries());
     /// # Ok(())
     /// # }
     /// ```

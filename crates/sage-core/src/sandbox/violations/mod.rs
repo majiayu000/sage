@@ -5,10 +5,10 @@
 //! - Thread-safe violation storage
 //! - Stderr annotation for violation reporting
 
-mod types;
-mod store;
 mod annotator;
+mod store;
+mod types;
 
-pub use types::{Violation, ViolationType, ViolationSeverity};
-pub use store::{ViolationStore, SharedViolationStore};
 pub use annotator::{annotate_stderr, format_violations_xml};
+pub use store::{SharedViolationStore, ViolationStore};
+pub use types::{Violation, ViolationSeverity, ViolationType};

@@ -69,7 +69,11 @@ fn find_heredocs(command: &str) -> Vec<HeredocInfo> {
             let delimiter: String = chars[start..i].iter().collect();
             if !delimiter.is_empty() {
                 result.push(HeredocInfo {
-                    quote: if quote != '\0' { quote.to_string() } else { String::new() },
+                    quote: if quote != '\0' {
+                        quote.to_string()
+                    } else {
+                        String::new()
+                    },
                     delimiter,
                 });
             }
@@ -148,7 +152,10 @@ pub fn check_heredoc_safety(command: &str) -> ValidationResult {
         // Warn about unquoted delimiters (variables in content will expand)
         if heredoc.quote.is_empty() && !delimiter.starts_with('\'') {
             warnings.push(ValidationWarning::with_suggestion(
-                format!("Unquoted heredoc delimiter '{}' allows variable expansion", delimiter),
+                format!(
+                    "Unquoted heredoc delimiter '{}' allows variable expansion",
+                    delimiter
+                ),
                 WarningSeverity::Warning,
                 format!("Use quoted delimiter: << '{}'", delimiter),
             ));

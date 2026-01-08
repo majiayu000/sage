@@ -115,15 +115,15 @@ impl LlmClient {
     /// - 429 Too Many Requests is retryable (throttling)
     pub fn is_retryable_http_status(status_code: u16) -> bool {
         match status_code {
-            408 => true,                    // Request Timeout
-            429 => true,                    // Too Many Requests (throttling)
-            500 => true,                    // Internal Server Error
-            501 => false,                   // Not Implemented - not retryable
-            502 => true,                    // Bad Gateway
-            503 => true,                    // Service Unavailable (throttling)
-            504 => true,                    // Gateway Timeout
-            505 => false,                   // HTTP Version Not Supported - not retryable
-            code if code >= 500 => true,    // Other 5xx errors
+            408 => true,                 // Request Timeout
+            429 => true,                 // Too Many Requests (throttling)
+            500 => true,                 // Internal Server Error
+            501 => false,                // Not Implemented - not retryable
+            502 => true,                 // Bad Gateway
+            503 => true,                 // Service Unavailable (throttling)
+            504 => true,                 // Gateway Timeout
+            505 => false,                // HTTP Version Not Supported - not retryable
+            code if code >= 500 => true, // Other 5xx errors
             _ => false,
         }
     }
@@ -139,9 +139,10 @@ impl LlmClient {
                 let msg_lower = msg.to_lowercase();
                 msg_lower.contains("429") || msg_lower.contains("503")
             }
-            SageError::Http { status_code: Some(code), .. } => {
-                *code == 429 || *code == 503
-            }
+            SageError::Http {
+                status_code: Some(code),
+                ..
+            } => *code == 429 || *code == 503,
             _ => false,
         }
     }

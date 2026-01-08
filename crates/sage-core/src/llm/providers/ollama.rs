@@ -76,13 +76,15 @@ impl OllamaProvider {
             serde_json::to_string_pretty(&request_body).unwrap_or_default()
         );
 
-        let response = request
-            .send()
-            .await
-            .map_err(|e| SageError::llm_with_context(
+        let response = request.send().await.map_err(|e| {
+            SageError::llm_with_context(
                 format!("Ollama API request failed: {}", e),
-                format!("Failed to send HTTP request to Ollama for model: {}", self.model_params.model),
-            ))?;
+                format!(
+                    "Failed to send HTTP request to Ollama for model: {}",
+                    self.model_params.model
+                ),
+            )
+        })?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -93,13 +95,12 @@ impl OllamaProvider {
             )));
         }
 
-        let response_json: Value = response
-            .json()
-            .await
-            .map_err(|e| SageError::llm_with_context(
+        let response_json: Value = response.json().await.map_err(|e| {
+            SageError::llm_with_context(
                 format!("Failed to parse Ollama response: {}", e),
                 "Failed to deserialize Ollama API response as JSON",
-            ))?;
+            )
+        })?;
 
         tracing::debug!(
             "Ollama API response: {}",
@@ -159,13 +160,12 @@ impl OllamaProvider {
             serde_json::to_string_pretty(&request_body).unwrap_or_default()
         );
 
-        let response = request
-            .send()
-            .await
-            .map_err(|e| SageError::llm_with_context(
+        let response = request.send().await.map_err(|e| {
+            SageError::llm_with_context(
                 format!("Ollama streaming request failed: {}", e),
                 "Failed to send HTTP request to Ollama streaming API",
-            ))?;
+            )
+        })?;
 
         if !response.status().is_success() {
             let error_text = response.text().await.unwrap_or_default();

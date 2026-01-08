@@ -141,7 +141,11 @@ impl UnifiedExecutor {
         // Display assistant response with proper formatting
         if !llm_response.content.is_empty() {
             println!();
-            println!("  {} {}", "󰚩".bright_cyan(), "AI Response".bright_white().bold());
+            println!(
+                "  {} {}",
+                "󰚩".bright_cyan(),
+                "AI Response".bright_white().bold()
+            );
             println!();
             // Print markdown content with 2-space indent
             for line in DisplayManager::render_markdown_lines(&llm_response.content) {
@@ -205,7 +209,8 @@ impl UnifiedExecutor {
 
         // Display tool execution header
         println!();
-        println!("  {} {} ({})",
+        println!(
+            "  {} {} ({})",
             "".bright_magenta(),
             "Executing tools".bright_white().bold(),
             tool_calls.len().to_string().dimmed()
@@ -213,13 +218,15 @@ impl UnifiedExecutor {
 
         for tool_call in tool_calls {
             // Build activity description for animation detail
-            let activity_desc = Self::build_activity_description(&tool_call.name, &tool_call.arguments);
+            let activity_desc =
+                Self::build_activity_description(&tool_call.name, &tool_call.arguments);
 
             // Display tool call info with parameters
             let tool_icon = Self::get_tool_icon(&tool_call.name);
             let params_preview = Self::format_tool_params(&tool_call.arguments);
             println!();
-            println!("  {} {} {}",
+            println!(
+                "  {} {} {}",
                 tool_icon.bright_magenta(),
                 tool_call.name.bright_magenta().bold(),
                 params_preview.dimmed()
@@ -267,8 +274,14 @@ impl UnifiedExecutor {
 
             // === PreToolUse Hook ===
             // Execute PreToolUse hooks before tool execution
-            let session_id = self.current_session_id.clone().unwrap_or_else(|| self.id.to_string());
-            let working_dir = self.options.working_directory.clone()
+            let session_id = self
+                .current_session_id
+                .clone()
+                .unwrap_or_else(|| self.id.to_string());
+            let working_dir = self
+                .options
+                .working_directory
+                .clone()
                 .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
 
             let pre_hook_input = HookInput::new(HookEvent::PreToolUse, &session_id)
@@ -277,8 +290,14 @@ impl UnifiedExecutor {
                 .with_tool_input(serde_json::to_value(&tool_call.arguments).unwrap_or_default());
 
             let cancel_token = CancellationToken::new();
-            let pre_hook_results = self.hook_executor
-                .execute(HookEvent::PreToolUse, &tool_call.name, pre_hook_input, cancel_token.clone())
+            let pre_hook_results = self
+                .hook_executor
+                .execute(
+                    HookEvent::PreToolUse,
+                    &tool_call.name,
+                    pre_hook_input,
+                    cancel_token.clone(),
+                )
                 .await
                 .unwrap_or_default();
 
@@ -344,7 +363,8 @@ impl UnifiedExecutor {
                 .with_tool_input(serde_json::to_value(&tool_call.arguments).unwrap_or_default())
                 .with_tool_result(serde_json::to_value(&tool_result).unwrap_or_default());
 
-            let _ = self.hook_executor
+            let _ = self
+                .hook_executor
                 .execute(post_event, &tool_call.name, post_hook_input, cancel_token)
                 .await;
 
@@ -368,7 +388,11 @@ impl UnifiedExecutor {
             self.animation_manager.stop_animation().await;
 
             // Display tool result
-            let status_icon = if tool_result.success { "✓".green() } else { "✗".red() };
+            let status_icon = if tool_result.success {
+                "✓".green()
+            } else {
+                "✗".red()
+            };
             let duration_ms = tool_start_time.elapsed().as_millis();
             print!("    {} ", status_icon);
             if tool_result.success {
@@ -415,7 +439,9 @@ impl UnifiedExecutor {
     }
 
     /// Format tool parameters for display
-    fn format_tool_params(arguments: &std::collections::HashMap<String, serde_json::Value>) -> String {
+    fn format_tool_params(
+        arguments: &std::collections::HashMap<String, serde_json::Value>,
+    ) -> String {
         // Extract key parameters to show
         let mut parts = Vec::new();
 

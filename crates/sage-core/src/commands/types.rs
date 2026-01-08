@@ -231,9 +231,7 @@ pub enum InteractiveCommand {
         show_all: bool,
     },
     /// Set custom title for current session (Claude Code style)
-    Title {
-        title: String,
-    },
+    Title { title: String },
 }
 
 /// Command execution result

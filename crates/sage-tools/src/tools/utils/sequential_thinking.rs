@@ -76,8 +76,8 @@ impl Tool for SequentialThinkingTool {
         Ok(())
     }
 
-    fn max_execution_time(&self) -> Option<u64> {
-        Some(10) // 10 seconds - this is a lightweight operation
+    fn max_execution_duration(&self) -> Option<std::time::Duration> {
+        Some(std::time::Duration::from_secs(10)) // 10 seconds - this is a lightweight operation
     }
 
     fn supports_parallel_execution(&self) -> bool {

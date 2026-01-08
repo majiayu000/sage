@@ -9,45 +9,142 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 /// Plugin entry in the registry
+///
+/// Uses interior mutability with `RwLock` to allow safe concurrent access
+/// to the plugin and its lifecycle state without requiring external synchronization.
 pub struct PluginEntry {
-    /// The plugin instance
-    pub plugin: Box<dyn Plugin>,
+    /// The plugin instance (behind RwLock for async mutable access)
+    plugin: RwLock<Box<dyn Plugin>>,
 
-    /// Plugin lifecycle manager
-    pub lifecycle: PluginLifecycle,
+    /// Plugin lifecycle manager (behind RwLock for async mutable access)
+    lifecycle: RwLock<PluginLifecycle>,
 
-    /// Whether the plugin is enabled
-    pub enabled: bool,
+    /// Whether the plugin is enabled (behind RwLock for mutable access)
+    enabled: RwLock<bool>,
 
     /// Plugin context
-    pub context: Option<PluginContext>,
+    context: RwLock<Option<PluginContext>>,
 
-    /// Load order (lower = earlier)
-    pub load_order: usize,
+    /// Load order (lower = earlier) - immutable after creation
+    load_order: usize,
 }
 
 impl PluginEntry {
     /// Create new plugin entry
     pub fn new(plugin: Box<dyn Plugin>) -> Self {
         Self {
-            plugin,
-            lifecycle: PluginLifecycle::new(),
-            enabled: true,
-            context: None,
+            plugin: RwLock::new(plugin),
+            lifecycle: RwLock::new(PluginLifecycle::new()),
+            enabled: RwLock::new(true),
+            context: RwLock::new(None),
             load_order: 0,
         }
     }
 
+    /// Create new plugin entry with load order
+    pub fn with_load_order(plugin: Box<dyn Plugin>, load_order: usize) -> Self {
+        Self {
+            plugin: RwLock::new(plugin),
+            lifecycle: RwLock::new(PluginLifecycle::new()),
+            enabled: RwLock::new(true),
+            context: RwLock::new(None),
+            load_order,
+        }
+    }
+
     /// Get plugin info
-    pub fn info(&self) -> PluginInfo {
-        PluginInfo::from_plugin(self.plugin.as_ref(), self.lifecycle.state(), self.enabled)
+    pub async fn info(&self) -> PluginInfo {
+        let plugin = self.plugin.read().await;
+        let lifecycle = self.lifecycle.read().await;
+        let enabled = *self.enabled.read().await;
+        PluginInfo::from_plugin(plugin.as_ref(), lifecycle.state(), enabled)
+    }
+
+    /// Get the current lifecycle state
+    pub async fn state(&self) -> PluginState {
+        self.lifecycle.read().await.state()
+    }
+
+    /// Check if the plugin is enabled
+    pub async fn is_enabled(&self) -> bool {
+        *self.enabled.read().await
+    }
+
+    /// Set enabled status
+    pub async fn set_enabled(&self, enabled: bool) {
+        *self.enabled.write().await = enabled;
+    }
+
+    /// Get the load order
+    pub fn load_order(&self) -> usize {
+        self.load_order
+    }
+
+    /// Get plugin name
+    pub async fn name(&self) -> String {
+        self.plugin.read().await.name().to_string()
+    }
+
+    /// Get plugin version
+    pub async fn version(&self) -> String {
+        self.plugin.read().await.version().to_string()
+    }
+
+    /// Get plugin capabilities
+    pub async fn capabilities(&self) -> Vec<PluginCapability> {
+        self.plugin.read().await.capabilities()
+    }
+
+    /// Get tools provided by this plugin
+    pub async fn get_tools(&self) -> Vec<Arc<dyn crate::tools::base::Tool>> {
+        self.plugin.read().await.get_tools()
+    }
+
+    /// Set the plugin context
+    pub async fn set_context(&self, ctx: PluginContext) {
+        *self.context.write().await = Some(ctx);
+    }
+
+    /// Initialize the plugin with lifecycle management
+    ///
+    /// This method safely handles the lifecycle state transition and plugin
+    /// initialization without requiring unsafe code.
+    pub async fn initialize(&self, ctx: &PluginContext) -> PluginResult<()> {
+        let mut lifecycle = self.lifecycle.write().await;
+        let mut plugin = self.plugin.write().await;
+        lifecycle.initialize(plugin.as_mut(), ctx).await
+    }
+
+    /// Shutdown the plugin with lifecycle management
+    pub async fn shutdown(&self) -> PluginResult<()> {
+        let mut lifecycle = self.lifecycle.write().await;
+        let mut plugin = self.plugin.write().await;
+        lifecycle.shutdown(plugin.as_mut()).await
+    }
+
+    /// Suspend the plugin with lifecycle management
+    pub async fn suspend(&self) -> PluginResult<()> {
+        let mut lifecycle = self.lifecycle.write().await;
+        let mut plugin = self.plugin.write().await;
+        lifecycle.suspend(plugin.as_mut()).await
+    }
+
+    /// Resume the plugin with lifecycle management
+    pub async fn resume(&self) -> PluginResult<()> {
+        let mut lifecycle = self.lifecycle.write().await;
+        let mut plugin = self.plugin.write().await;
+        lifecycle.resume(plugin.as_mut()).await
     }
 }
 
 /// Plugin registry for managing all plugins
+///
+/// Uses `DashMap` for thread-safe concurrent access to plugins.
+/// Each `PluginEntry` handles its own interior mutability via `RwLock`,
+/// so we don't need additional `Arc<RwLock<>>` wrapping at the registry level.
 pub struct PluginRegistry {
-    /// Registered plugins
-    plugins: DashMap<String, Arc<RwLock<PluginEntry>>>,
+    /// Registered plugins - DashMap provides thread-safe access
+    plugins: DashMap<String, PluginEntry>,
 
     /// Plugin load order counter
     load_order: std::sync::atomic::AtomicUsize,
@@ -122,27 +219,17 @@ impl PluginRegistry {
             .load_order
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
-        let mut entry = PluginEntry::new(plugin);
-        entry.load_order = order;
+        let entry = PluginEntry::with_load_order(plugin, order);
 
-        self.plugins.insert(name, Arc::new(RwLock::new(entry)));
+        self.plugins.insert(name, entry);
         Ok(())
     }
 
     /// Unregister a plugin
     pub async fn unregister(&self, name: &str) -> PluginResult<()> {
         if let Some((_, entry)) = self.plugins.remove(name) {
-            let mut entry = entry.write().await;
-            if entry.lifecycle.state().is_operational() {
-                // SAFETY: We hold exclusive write access to `entry` through the RwLock.
-                // The raw pointer is used to pass the plugin reference to lifecycle
-                // without triggering Rust's borrow checker on the simultaneous access
-                // to entry.lifecycle and entry.plugin. The pointer is valid for the
-                // duration of the shutdown call and is not retained afterward.
-                let plugin_ptr = &mut *entry.plugin as *mut dyn Plugin;
-                unsafe {
-                    entry.lifecycle.shutdown(&mut *plugin_ptr).await?;
-                }
+            if entry.state().await.is_operational() {
+                entry.shutdown().await?;
             }
             Ok(())
         } else {
@@ -150,9 +237,12 @@ impl PluginRegistry {
         }
     }
 
-    /// Get a plugin by name
-    pub fn get(&self, name: &str) -> Option<Arc<RwLock<PluginEntry>>> {
-        self.plugins.get(name).map(|r| r.clone())
+    /// Get a reference to a plugin entry by name
+    ///
+    /// Returns a DashMap reference guard that provides read access to the plugin entry.
+    /// The entry uses interior mutability, so all operations on it are async.
+    pub fn get(&self, name: &str) -> Option<dashmap::mapref::one::Ref<'_, String, PluginEntry>> {
+        self.plugins.get(name)
     }
 
     /// Check if a plugin is registered
@@ -169,8 +259,7 @@ impl PluginRegistry {
     pub async fn plugin_infos(&self) -> Vec<PluginInfo> {
         let mut infos = Vec::new();
         for entry_ref in self.plugins.iter() {
-            let entry = entry_ref.read().await;
-            infos.push(entry.info());
+            infos.push(entry_ref.info().await);
         }
         infos
     }
@@ -185,44 +274,39 @@ impl PluginRegistry {
             .get(name)
             .ok_or_else(|| PluginError::NotFound(name.to_string()))?;
 
-        let mut entry = entry.write().await;
-
         // Build context with permissions
         let mut all_permissions = self.default_permissions.clone();
         all_permissions.extend(permissions);
 
-        let ctx = PluginContext::new(entry.plugin.name(), entry.plugin.version())
+        let plugin_name = entry.name().await;
+        let plugin_version = entry.version().await;
+
+        let ctx = PluginContext::new(plugin_name, plugin_version)
             .with_permission(PluginPermission::ConfigAccess);
 
         let ctx = all_permissions
             .into_iter()
             .fold(ctx, |ctx, perm| ctx.with_permission(perm));
 
-        entry.context = Some(ctx.clone());
-
-        // SAFETY: We hold exclusive write access to `entry` through the RwLock.
-        // The raw pointer is used to pass the plugin reference to lifecycle
-        // without triggering Rust's borrow checker on the simultaneous access
-        // to entry.lifecycle and entry.plugin. The pointer is valid for the
-        // duration of the initialize call and is not retained afterward.
-        let plugin_ptr = &mut *entry.plugin as *mut dyn Plugin;
-        unsafe { entry.lifecycle.initialize(&mut *plugin_ptr, &ctx).await }
+        entry.set_context(ctx.clone()).await;
+        entry.initialize(&ctx).await
     }
 
     /// Initialize all registered plugins
     pub async fn initialize_all(&self) -> Vec<PluginResult<()>> {
         let mut results = Vec::new();
 
-        // Sort by load order
-        let mut entries: Vec<_> = self.plugins.iter().collect();
-        entries.sort_by_key(|_e| {
-            // We can't await inside sort, so we'll use a blocking read
-            // In practice, this is fine since we're just reading load_order
-            0 // Simplified - actual implementation would need to access load_order
-        });
+        // Collect names with load order for sorting
+        let mut entries_with_order: Vec<_> = self
+            .plugins
+            .iter()
+            .map(|r| (r.key().clone(), r.load_order()))
+            .collect();
 
-        for entry_ref in entries {
-            let name = entry_ref.key().clone();
+        // Sort by load order (lower = earlier)
+        entries_with_order.sort_by_key(|(_, order)| *order);
+
+        for (name, _) in entries_with_order {
             let result = self.initialize_plugin(&name, vec![]).await;
             results.push(result);
         }
@@ -236,24 +320,29 @@ impl PluginRegistry {
             .get(name)
             .ok_or_else(|| PluginError::NotFound(name.to_string()))?;
 
-        let mut entry = entry.write().await;
-        // SAFETY: See safety comment in unregister() - same invariants apply.
-        let plugin_ptr = &mut *entry.plugin as *mut dyn Plugin;
-        unsafe { entry.lifecycle.shutdown(&mut *plugin_ptr).await }
+        entry.shutdown().await
     }
 
     /// Shutdown all plugins
     pub async fn shutdown_all(&self) -> Vec<PluginResult<()>> {
         let mut results = Vec::new();
 
-        // Shutdown in reverse load order would be ideal
-        for entry_ref in self.plugins.iter() {
-            let mut entry = entry_ref.write().await;
-            if entry.lifecycle.state().can_shutdown() {
-                // SAFETY: See safety comment in unregister() - same invariants apply.
-                let plugin_ptr = &mut *entry.plugin as *mut dyn Plugin;
-                let result = unsafe { entry.lifecycle.shutdown(&mut *plugin_ptr).await };
-                results.push(result);
+        // Collect names with load order for reverse shutdown order
+        let mut entries_with_order: Vec<_> = self
+            .plugins
+            .iter()
+            .map(|r| (r.key().clone(), r.load_order()))
+            .collect();
+
+        // Sort by load order in reverse (higher = earlier shutdown)
+        entries_with_order.sort_by_key(|(_, order)| std::cmp::Reverse(*order));
+
+        for (name, _) in entries_with_order {
+            if let Some(entry) = self.get(&name) {
+                if entry.state().await.can_shutdown() {
+                    let result = entry.shutdown().await;
+                    results.push(result);
+                }
             }
         }
 
@@ -266,16 +355,11 @@ impl PluginRegistry {
             .get(name)
             .ok_or_else(|| PluginError::NotFound(name.to_string()))?;
 
-        let mut entry = entry.write().await;
-        entry.enabled = true;
+        entry.set_enabled(true).await;
 
         // Resume if suspended
-        if entry.lifecycle.state() == PluginState::Suspended {
-            // SAFETY: See safety comment in unregister() - same invariants apply.
-            let plugin_ptr = &mut *entry.plugin as *mut dyn Plugin;
-            unsafe {
-                entry.lifecycle.resume(&mut *plugin_ptr).await?;
-            }
+        if entry.state().await == PluginState::Suspended {
+            entry.resume().await?;
         }
 
         Ok(())
@@ -287,16 +371,11 @@ impl PluginRegistry {
             .get(name)
             .ok_or_else(|| PluginError::NotFound(name.to_string()))?;
 
-        let mut entry = entry.write().await;
-        entry.enabled = false;
+        entry.set_enabled(false).await;
 
         // Suspend if active
-        if entry.lifecycle.state() == PluginState::Active {
-            // SAFETY: See safety comment in unregister() - same invariants apply.
-            let plugin_ptr = &mut *entry.plugin as *mut dyn Plugin;
-            unsafe {
-                entry.lifecycle.suspend(&mut *plugin_ptr).await?;
-            }
+        if entry.state().await == PluginState::Active {
+            entry.suspend().await?;
         }
 
         Ok(())
@@ -307,11 +386,11 @@ impl PluginRegistry {
         let mut result = Vec::new();
 
         for entry_ref in self.plugins.iter() {
-            let entry = entry_ref.read().await;
-            if entry.plugin.capabilities().contains(&capability)
-                && entry.enabled
-                && entry.lifecycle.state().is_operational()
-            {
+            let capabilities = entry_ref.capabilities().await;
+            let enabled = entry_ref.is_enabled().await;
+            let state = entry_ref.state().await;
+
+            if capabilities.contains(&capability) && enabled && state.is_operational() {
                 result.push(entry_ref.key().clone());
             }
         }
@@ -324,9 +403,11 @@ impl PluginRegistry {
         let mut tools = Vec::new();
 
         for entry_ref in self.plugins.iter() {
-            let entry = entry_ref.read().await;
-            if entry.enabled && entry.lifecycle.state().is_operational() {
-                tools.extend(entry.plugin.get_tools());
+            let enabled = entry_ref.is_enabled().await;
+            let state = entry_ref.state().await;
+
+            if enabled && state.is_operational() {
+                tools.extend(entry_ref.get_tools().await);
             }
         }
 
@@ -394,8 +475,7 @@ mod tests {
         assert!(registry.initialize_plugin("test", vec![]).await.is_ok());
 
         let entry = registry.get("test").unwrap();
-        let entry = entry.read().await;
-        assert_eq!(entry.lifecycle.state(), PluginState::Active);
+        assert_eq!(entry.state().await, PluginState::Active);
     }
 
     #[tokio::test]
@@ -410,18 +490,16 @@ mod tests {
         assert!(registry.disable_plugin("test").await.is_ok());
         {
             let entry = registry.get("test").unwrap();
-            let entry = entry.read().await;
-            assert!(!entry.enabled);
-            assert_eq!(entry.lifecycle.state(), PluginState::Suspended);
+            assert!(!entry.is_enabled().await);
+            assert_eq!(entry.state().await, PluginState::Suspended);
         }
 
         // Enable
         assert!(registry.enable_plugin("test").await.is_ok());
         {
             let entry = registry.get("test").unwrap();
-            let entry = entry.read().await;
-            assert!(entry.enabled);
-            assert_eq!(entry.lifecycle.state(), PluginState::Active);
+            assert!(entry.is_enabled().await);
+            assert_eq!(entry.state().await, PluginState::Active);
         }
     }
 
@@ -477,5 +555,55 @@ mod tests {
         for result in results {
             assert!(result.is_ok());
         }
+    }
+
+    #[tokio::test]
+    async fn test_plugin_entry_lifecycle() {
+        // Test PluginEntry directly to ensure lifecycle operations work correctly
+        let plugin = Box::new(TestPlugin::new("test", "1.0.0"));
+        let entry = PluginEntry::new(plugin);
+
+        // Initial state
+        assert_eq!(entry.state().await, PluginState::Created);
+        assert!(entry.is_enabled().await);
+        assert_eq!(entry.name().await, "test");
+        assert_eq!(entry.version().await, "1.0.0");
+
+        // Initialize
+        let ctx = PluginContext::new("test", "1.0.0");
+        assert!(entry.initialize(&ctx).await.is_ok());
+        assert_eq!(entry.state().await, PluginState::Active);
+
+        // Suspend
+        assert!(entry.suspend().await.is_ok());
+        assert_eq!(entry.state().await, PluginState::Suspended);
+
+        // Resume
+        assert!(entry.resume().await.is_ok());
+        assert_eq!(entry.state().await, PluginState::Active);
+
+        // Shutdown
+        assert!(entry.shutdown().await.is_ok());
+        assert_eq!(entry.state().await, PluginState::Stopped);
+    }
+
+    #[tokio::test]
+    async fn test_plugin_entry_with_load_order() {
+        let plugin = Box::new(TestPlugin::new("test", "1.0.0"));
+        let entry = PluginEntry::with_load_order(plugin, 42);
+
+        assert_eq!(entry.load_order(), 42);
+    }
+
+    #[tokio::test]
+    async fn test_plugin_entry_set_enabled() {
+        let plugin = Box::new(TestPlugin::new("test", "1.0.0"));
+        let entry = PluginEntry::new(plugin);
+
+        assert!(entry.is_enabled().await);
+        entry.set_enabled(false).await;
+        assert!(!entry.is_enabled().await);
+        entry.set_enabled(true).await;
+        assert!(entry.is_enabled().await);
     }
 }

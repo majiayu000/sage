@@ -45,9 +45,12 @@ pub mod tool_trait;
 #[cfg(test)]
 mod tests;
 
-// Re-exports for backward compatibility
+// Re-exports
 pub use command_tool::CommandTool;
 pub use concurrency::ConcurrencyMode;
 pub use error::ToolError;
 pub use filesystem_tool::FileSystemTool;
-pub use tool_trait::Tool;
+pub use tool_trait::{
+    FullTool, Tool, ToolConcurrency, ToolMetadata, ToolPermission, ToolRenderer, ToolTiming,
+    ToolValidator,
+};

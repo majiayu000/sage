@@ -9,7 +9,7 @@ use notify_debouncer_mini::{DebouncedEvent, DebouncedEventKind, Debouncer, new_d
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{RwLock, mpsc};
 use tracing::{debug, error, info};
 
 use super::types::SkillRegistry;
@@ -142,8 +142,9 @@ impl SkillWatcher {
     fn watch_directory(&mut self, path: &Path) -> SageResult<()> {
         if !path.exists() {
             // Create the directory if it doesn't exist
-            std::fs::create_dir_all(path)
-                .map_err(|e| SageError::storage(format!("Failed to create skills directory: {}", e)))?;
+            std::fs::create_dir_all(path).map_err(|e| {
+                SageError::storage(format!("Failed to create skills directory: {}", e))
+            })?;
         }
 
         self.debouncer
@@ -205,7 +206,8 @@ impl SkillHotReloader {
         project_root: &Path,
         user_config_dir: &Path,
     ) -> SageResult<Self> {
-        let watcher = SkillWatcher::new(project_root, user_config_dir, SkillWatcherConfig::default())?;
+        let watcher =
+            SkillWatcher::new(project_root, user_config_dir, SkillWatcherConfig::default())?;
 
         Ok(Self {
             watcher,
@@ -311,12 +313,16 @@ impl SkillHotReloader {
         let builtin_names: Vec<String> = registry
             .list()
             .iter()
-            .filter(|s| s.source == crate::skills::types::SkillSource::Builtin)
-            .map(|s| s.name.clone())
+            .filter(|s| *s.source() == crate::skills::types::SkillSource::Builtin)
+            .map(|s| s.name().to_string())
             .collect();
 
         // Remove all non-builtin skills
-        let all_names: Vec<String> = registry.list().iter().map(|s| s.name.clone()).collect();
+        let all_names: Vec<String> = registry
+            .list()
+            .iter()
+            .map(|s| s.name().to_string())
+            .collect();
         for name in all_names {
             if !builtin_names.contains(&name) {
                 registry.remove(&name);
@@ -409,11 +415,7 @@ mod tests {
         std::fs::create_dir_all(project_root.join(".sage/skills")).unwrap();
         std::fs::create_dir_all(user_config.join("skills")).unwrap();
 
-        let watcher = SkillWatcher::new(
-            &project_root,
-            &user_config,
-            SkillWatcherConfig::default(),
-        );
+        let watcher = SkillWatcher::new(&project_root, &user_config, SkillWatcherConfig::default());
 
         assert!(watcher.is_ok());
         let watcher = watcher.unwrap();

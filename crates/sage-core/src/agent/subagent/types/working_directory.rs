@@ -135,13 +135,19 @@ mod tests {
 
     #[test]
     fn test_default_is_inherited() {
-        assert_eq!(WorkingDirectoryConfig::default(), WorkingDirectoryConfig::Inherited);
+        assert_eq!(
+            WorkingDirectoryConfig::default(),
+            WorkingDirectoryConfig::Inherited
+        );
     }
 
     #[test]
     fn test_display() {
         assert_eq!(WorkingDirectoryConfig::Inherited.to_string(), "inherited");
-        assert_eq!(WorkingDirectoryConfig::ProcessCwd.to_string(), "process_cwd");
+        assert_eq!(
+            WorkingDirectoryConfig::ProcessCwd.to_string(),
+            "process_cwd"
+        );
         assert_eq!(
             WorkingDirectoryConfig::Explicit(PathBuf::from("/foo/bar")).to_string(),
             "explicit(/foo/bar)"

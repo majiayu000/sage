@@ -8,8 +8,8 @@ pub use command_policy::CommandPolicy;
 pub use network_policy::NetworkPolicy;
 pub use path_policy::PathPolicy;
 
-use super::config::SandboxConfig;
 use super::SandboxError;
+use super::config::SandboxConfig;
 
 /// Combined sandbox policy
 #[derive(Debug)]

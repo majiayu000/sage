@@ -4,8 +4,8 @@
 //! addressing the "stuck" perception problem in open-ended tasks.
 
 use colored::*;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 
@@ -39,10 +39,10 @@ impl ExecutionPhase {
     /// Get icon for the phase
     pub fn icon(&self) -> &'static str {
         match self {
-            Self::Exploring => "󰍉",  // search
-            Self::Analyzing => "",   // analyze
-            Self::Synthesizing => "", // merge
-            Self::Executing => "",   // run
+            Self::Exploring => "󰍉",       // search
+            Self::Analyzing => "",        // analyze
+            Self::Synthesizing => "",     // merge
+            Self::Executing => "",        // run
             Self::WaitingForInput => "󰏤", // pause
         }
     }
@@ -221,11 +221,7 @@ impl ProgressTracker {
             println!("    {} {}", "".dimmed(), desc);
 
             if let Some(ref tool) = status.last_tool {
-                println!(
-                    "    └──  {}  {}",
-                    step_info.dimmed(),
-                    tool.bright_magenta()
-                );
+                println!("    └──  {}  {}", step_info.dimmed(), tool.bright_magenta());
             } else {
                 println!("    └── {}", step_info.dimmed());
             }
@@ -263,7 +259,11 @@ impl ProgressTracker {
         let elapsed_str = format_duration(elapsed);
 
         println!();
-        print!("  ⏳ {} ({})", "Long-running task".dimmed(), elapsed_str.dimmed());
+        print!(
+            "  ⏳ {} ({})",
+            "Long-running task".dimmed(),
+            elapsed_str.dimmed()
+        );
 
         if let Some(pct) = percentage {
             println!("  [{}] {}%", bar, pct);
@@ -371,10 +371,22 @@ mod tests {
 
     #[test]
     fn test_phase_from_tool() {
-        assert_eq!(ExecutionPhase::from_tool_name("glob"), ExecutionPhase::Exploring);
-        assert_eq!(ExecutionPhase::from_tool_name("read"), ExecutionPhase::Analyzing);
-        assert_eq!(ExecutionPhase::from_tool_name("write"), ExecutionPhase::Synthesizing);
-        assert_eq!(ExecutionPhase::from_tool_name("bash"), ExecutionPhase::Executing);
+        assert_eq!(
+            ExecutionPhase::from_tool_name("glob"),
+            ExecutionPhase::Exploring
+        );
+        assert_eq!(
+            ExecutionPhase::from_tool_name("read"),
+            ExecutionPhase::Analyzing
+        );
+        assert_eq!(
+            ExecutionPhase::from_tool_name("write"),
+            ExecutionPhase::Synthesizing
+        );
+        assert_eq!(
+            ExecutionPhase::from_tool_name("bash"),
+            ExecutionPhase::Executing
+        );
     }
 
     #[test]

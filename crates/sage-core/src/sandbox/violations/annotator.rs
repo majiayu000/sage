@@ -3,8 +3,8 @@
 //! Provides XML-formatted violation annotations that can be appended to
 //! command stderr output for visibility.
 
-use super::types::Violation;
 use super::store::ViolationStore;
+use super::types::Violation;
 
 /// Format violations as XML for stderr annotation
 ///
@@ -153,12 +153,14 @@ mod tests {
 
     #[test]
     fn test_format_violations_xml_with_context() {
-        let violations = vec![Violation::warning(
-            ViolationType::SensitiveFileAccess,
-            "Accessing sensitive file",
-            "cat ~/.ssh/id_rsa",
-        )
-        .with_context("SSH private key")];
+        let violations = vec![
+            Violation::warning(
+                ViolationType::SensitiveFileAccess,
+                "Accessing sensitive file",
+                "cat ~/.ssh/id_rsa",
+            )
+            .with_context("SSH private key"),
+        ];
 
         let xml = format_violations_xml(&violations);
         assert!(xml.contains("<context>SSH private key</context>"));

@@ -54,14 +54,12 @@ static RM_RF: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 /// Pattern to extract rm target path
-static RM_TARGET: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"\brm\s+(?:-[a-zA-Z]+\s+)*([^\s|;&]+)"#).unwrap()
-});
+static RM_TARGET: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"\brm\s+(?:-[a-zA-Z]+\s+)*([^\s|;&]+)"#).unwrap());
 
 /// Pattern for wildcard in path
-static WILDCARD_PATH: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(/[^/\s]*\*|/\.\.\s|/\.\.$)"#).unwrap()
-});
+static WILDCARD_PATH: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"(/[^/\s]*\*|/\.\.\s|/\.\.$)"#).unwrap());
 
 /// Check for dangerous file removal commands
 ///
@@ -107,12 +105,10 @@ pub fn check_dangerous_removal(command: &str) -> ValidationResult {
 
         // Check for .. traversal that could escape to critical paths
         if target.contains("..") && RM_RECURSIVE.is_match(command) {
-            warnings.push(ValidationWarning::critical(
-                format!(
-                    "Recursive removal with '..' traversal '{}' - verify target carefully",
-                    target
-                ),
-            ));
+            warnings.push(ValidationWarning::critical(format!(
+                "Recursive removal with '..' traversal '{}' - verify target carefully",
+                target
+            )));
         }
 
         // Warn about any recursive removal
@@ -233,7 +229,12 @@ mod tests {
         let result = check_dangerous_removal("rm -rf /tmp/mydir/subdir");
         assert!(result.allowed);
         // Should still warn about recursive removal
-        assert!(result.warnings.iter().any(|w| w.message.contains("Recursive")));
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|w| w.message.contains("Recursive"))
+        );
     }
 
     #[test]
@@ -246,7 +247,12 @@ mod tests {
     fn test_rm_dot_dot_warning() {
         let result = check_dangerous_removal("rm -r ../important");
         assert!(result.allowed);
-        assert!(result.warnings.iter().any(|w| w.severity == WarningSeverity::Critical));
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|w| w.severity == WarningSeverity::Critical)
+        );
     }
 
     #[test]

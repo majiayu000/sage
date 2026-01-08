@@ -159,15 +159,13 @@ impl UnifiedExecutor {
 
         let session_id = self.current_session_id.clone().unwrap();
         let context = self.message_tracker.context().clone();
-        let parent_uuid = self.message_tracker.last_message_uuid().map(|s| s.to_string());
+        let parent_uuid = self
+            .message_tracker
+            .last_message_uuid()
+            .map(|s| s.to_string());
 
-        let msg = EnhancedMessage::error(
-            error_type,
-            error_message,
-            &session_id,
-            context,
-            parent_uuid,
-        );
+        let msg =
+            EnhancedMessage::error(error_type, error_message, &session_id, context, parent_uuid);
 
         if let Some(storage) = &self.jsonl_storage {
             storage
@@ -185,7 +183,11 @@ impl UnifiedExecutor {
             }
         }
 
-        tracing::error!("Recorded error in session: [{}] {}", error_type, error_message);
+        tracing::error!(
+            "Recorded error in session: [{}] {}",
+            error_type,
+            error_message
+        );
         Ok(Some(msg))
     }
 
@@ -201,9 +203,15 @@ impl UnifiedExecutor {
                 // Generate new summary
                 if let Some(summary) = SummaryGenerator::generate_simple(&messages) {
                     // Update metadata with new summary
-                    if let Ok(Some(mut metadata)) = storage.load_metadata(&session_id.to_string()).await {
+                    if let Ok(Some(mut metadata)) =
+                        storage.load_metadata(&session_id.to_string()).await
+                    {
                         metadata.set_summary(&summary);
-                        if storage.save_metadata(&session_id.to_string(), &metadata).await.is_ok() {
+                        if storage
+                            .save_metadata(&session_id.to_string(), &metadata)
+                            .await
+                            .is_ok()
+                        {
                             self.last_summary_msg_count = messages.len();
                             tracing::debug!("Updated session summary: {}", summary);
                         }
@@ -273,7 +281,7 @@ impl UnifiedExecutor {
             None => {
                 return Err(crate::error::SageError::agent(
                     "No active session to branch from",
-                ))
+                ));
             }
         };
 
@@ -351,7 +359,9 @@ impl UnifiedExecutor {
         let metadata = storage
             .load_metadata(&session_id_string)
             .await?
-            .ok_or_else(|| SageError::config(format!("Session metadata not found: {}", session_id)))?;
+            .ok_or_else(|| {
+                SageError::config(format!("Session metadata not found: {}", session_id))
+            })?;
 
         // Load all messages from the session
         let enhanced_messages = storage.load_messages(&session_id_string).await?;
@@ -395,9 +405,10 @@ impl UnifiedExecutor {
     /// Get the most recent session for the current working directory
     #[instrument(skip(self))]
     pub async fn get_most_recent_session(&self) -> SageResult<Option<SessionMetadata>> {
-        let storage = self.jsonl_storage.as_ref().ok_or_else(|| {
-            SageError::config("JSONL storage not configured")
-        })?;
+        let storage = self
+            .jsonl_storage
+            .as_ref()
+            .ok_or_else(|| SageError::config("JSONL storage not configured"))?;
 
         let sessions = storage.list_sessions().await?;
 
@@ -406,9 +417,7 @@ impl UnifiedExecutor {
         let working_dir = self.options.working_directory.as_ref();
 
         let session = if let Some(wd) = working_dir {
-            sessions
-                .into_iter()
-                .find(|s| &s.working_directory == wd)
+            sessions.into_iter().find(|s| &s.working_directory == wd)
         } else {
             sessions.into_iter().next()
         };
@@ -440,17 +449,17 @@ impl UnifiedExecutor {
                             .map(|tc| {
                                 let args: HashMap<String, serde_json::Value> =
                                     if let serde_json::Value::Object(map) = &tc.arguments {
-                                        map.iter()
-                                            .map(|(k, v)| (k.clone(), v.clone()))
-                                            .collect()
+                                        map.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
                                     } else {
                                         HashMap::new()
                                     };
                                 ToolCall::new(&tc.id, &tc.name, args)
                             })
                             .collect();
-                        llm_messages
-                            .push(LlmMessage::assistant_with_tools(&msg.message.content, calls));
+                        llm_messages.push(LlmMessage::assistant_with_tools(
+                            &msg.message.content,
+                            calls,
+                        ));
                     } else {
                         llm_messages.push(LlmMessage::assistant(&msg.message.content));
                     }

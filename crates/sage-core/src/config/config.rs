@@ -329,7 +329,7 @@ mod tests {
         config2.model_providers.insert(
             "anthropic".to_string(),
             ModelParameters {
-                model: "".to_string(), // Empty = don't override
+                model: "".to_string(),   // Empty = don't override
                 max_tokens: Some(16384), // Override this
                 temperature: None,       // Keep base
                 ..Default::default()

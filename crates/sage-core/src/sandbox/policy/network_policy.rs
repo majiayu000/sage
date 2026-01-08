@@ -1,7 +1,7 @@
 //! Network access policy
 
-use super::super::config::SandboxConfig;
 use super::super::SandboxError;
+use super::super::config::SandboxConfig;
 use std::collections::HashSet;
 
 /// Network access policy

@@ -144,11 +144,7 @@ impl SubAgentConfig {
     /// Set parent context for inheritance resolution
     ///
     /// This should be called by the parent agent when spawning the sub-agent.
-    pub fn with_parent_context(
-        mut self,
-        parent_cwd: PathBuf,
-        parent_tools: Vec<String>,
-    ) -> Self {
+    pub fn with_parent_context(mut self, parent_cwd: PathBuf, parent_tools: Vec<String>) -> Self {
         self.parent_cwd = Some(parent_cwd);
         self.parent_tools = Some(parent_tools);
         self
@@ -178,9 +174,7 @@ impl SubAgentConfig {
     ///
     /// Takes into account inheritance from parent agent.
     pub fn allows_tool(&self, tool_name: &str) -> bool {
-        self.tool_access.resolve_allows_tool(
-            tool_name,
-            self.parent_tools.as_ref().map(|v| v.as_slice()),
-        )
+        self.tool_access
+            .resolve_allows_tool(tool_name, self.parent_tools.as_ref().map(|v| v.as_slice()))
     }
 }

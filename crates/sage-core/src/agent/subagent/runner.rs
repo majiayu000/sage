@@ -85,9 +85,8 @@ impl SubAgentRunner {
             ))?;
 
         // Resolve working directory
-        let cwd = working_directory.unwrap_or_else(|| {
-            std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
-        });
+        let cwd = working_directory
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
 
         Ok(Self {
             llm_client,
@@ -120,7 +119,10 @@ impl SubAgentRunner {
 
     /// Get tool names for inheritance
     pub fn tool_names(&self) -> Vec<String> {
-        self.all_tools.iter().map(|t| t.name().to_string()).collect()
+        self.all_tools
+            .iter()
+            .map(|t| t.name().to_string())
+            .collect()
     }
 
     /// Execute a sub-agent with the given configuration
@@ -145,9 +147,9 @@ impl SubAgentRunner {
         }
 
         // Resolve the effective working directory for this sub-agent
-        let effective_cwd = config.resolve_working_directory().map_err(|e| {
-            SageError::agent(format!("Failed to resolve working directory: {}", e))
-        })?;
+        let effective_cwd = config
+            .resolve_working_directory()
+            .map_err(|e| SageError::agent(format!("Failed to resolve working directory: {}", e)))?;
 
         tracing::info!(
             "Sub-agent working directory: {:?} (config: {})",
@@ -421,7 +423,10 @@ pub async fn update_global_runner_cwd(cwd: PathBuf) {
         let mut guard = lock.write().await;
         if let Some(runner) = guard.as_mut() {
             runner.set_working_directory(cwd.clone());
-            tracing::debug!("Updated global sub-agent runner working directory: {:?}", cwd);
+            tracing::debug!(
+                "Updated global sub-agent runner working directory: {:?}",
+                cwd
+            );
         }
     }
 }

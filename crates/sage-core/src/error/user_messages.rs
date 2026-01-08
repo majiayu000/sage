@@ -105,7 +105,12 @@ impl UserFriendlyError {
 
     /// Format the error for display
     pub fn format_display(&self) -> String {
-        let mut output = format!("{}: {}\n\n{}", self.category.display_name(), self.title, self.message);
+        let mut output = format!(
+            "{}: {}\n\n{}",
+            self.category.display_name(),
+            self.title,
+            self.message
+        );
 
         if !self.suggestions.is_empty() {
             output.push_str("\n\nSuggested actions:");
@@ -129,30 +134,42 @@ impl From<&SageError> for UserFriendlyError {
                     .with_error_code("SAGE_CONFIG")
             }
 
-            SageError::Llm { message, provider, .. } => {
-                let (category, title, suggestions) = classify_llm_error(message, provider.as_deref());
+            SageError::Llm {
+                message, provider, ..
+            } => {
+                let (category, title, suggestions) =
+                    classify_llm_error(message, provider.as_deref());
                 UserFriendlyError::new(category, title, message.clone())
                     .with_suggestions(suggestions)
                     .with_error_code("SAGE_LLM")
             }
 
-            SageError::Http { message, status_code, url, .. } => {
-                let (category, title, suggestions) = classify_http_error(message, *status_code, url.as_deref());
+            SageError::Http {
+                message,
+                status_code,
+                url,
+                ..
+            } => {
+                let (category, title, suggestions) =
+                    classify_http_error(message, *status_code, url.as_deref());
                 UserFriendlyError::new(category, title, message.clone())
                     .with_suggestions(suggestions)
                     .with_error_code("SAGE_HTTP")
             }
 
-            SageError::Tool { tool_name, message, .. } => {
-                UserFriendlyError::new(
-                    ErrorCategory::ToolExecution,
-                    format!("Tool '{}' failed", tool_name),
-                    message.clone(),
-                )
-                .with_suggestion(format!("Check if the tool '{}' is available and properly configured", tool_name))
-                .with_suggestion("Review the tool arguments for correctness".to_string())
-                .with_error_code("SAGE_TOOL")
-            }
+            SageError::Tool {
+                tool_name, message, ..
+            } => UserFriendlyError::new(
+                ErrorCategory::ToolExecution,
+                format!("Tool '{}' failed", tool_name),
+                message.clone(),
+            )
+            .with_suggestion(format!(
+                "Check if the tool '{}' is available and properly configured",
+                tool_name
+            ))
+            .with_suggestion("Review the tool arguments for correctness".to_string())
+            .with_error_code("SAGE_TOOL"),
 
             SageError::InvalidInput { message, field, .. } => {
                 let title = if let Some(f) = field {
@@ -165,28 +182,28 @@ impl From<&SageError> for UserFriendlyError {
                     .with_error_code("SAGE_INVALID_INPUT")
             }
 
-            SageError::Timeout { seconds, .. } => {
-                UserFriendlyError::new(
-                    ErrorCategory::Internal,
-                    "Operation timed out",
-                    format!("The operation did not complete within {} seconds", seconds),
-                )
-                .with_suggestion("Try again with a simpler request".to_string())
-                .with_suggestion("Consider breaking the task into smaller steps".to_string())
-                .with_error_code("SAGE_TIMEOUT")
-            }
+            SageError::Timeout { seconds, .. } => UserFriendlyError::new(
+                ErrorCategory::Internal,
+                "Operation timed out",
+                format!("The operation did not complete within {} seconds", seconds),
+            )
+            .with_suggestion("Try again with a simpler request".to_string())
+            .with_suggestion("Consider breaking the task into smaller steps".to_string())
+            .with_error_code("SAGE_TIMEOUT"),
 
-            SageError::Cancelled => {
-                UserFriendlyError::new(
-                    ErrorCategory::Cancellation,
-                    "Operation cancelled",
-                    "The operation was cancelled by user request".to_string(),
-                )
-                .recoverable(false)
-                .with_error_code("SAGE_CANCELLED")
-            }
+            SageError::Cancelled => UserFriendlyError::new(
+                ErrorCategory::Cancellation,
+                "Operation cancelled",
+                "The operation was cancelled by user request".to_string(),
+            )
+            .recoverable(false)
+            .with_error_code("SAGE_CANCELLED"),
 
-            SageError::NotFound { message, resource_type, .. } => {
+            SageError::NotFound {
+                message,
+                resource_type,
+                ..
+            } => {
                 let title = if let Some(rt) = resource_type {
                     format!("{} not found", rt)
                 } else {
@@ -209,54 +226,38 @@ impl From<&SageError> for UserFriendlyError {
                     .with_error_code("SAGE_IO")
             }
 
-            SageError::Json { message, .. } => {
-                UserFriendlyError::new(
-                    ErrorCategory::Internal,
-                    "Data format error",
-                    message.clone(),
-                )
-                .with_suggestion("The data may be corrupted or in an unexpected format".to_string())
-                .with_error_code("SAGE_JSON")
-            }
+            SageError::Json { message, .. } => UserFriendlyError::new(
+                ErrorCategory::Internal,
+                "Data format error",
+                message.clone(),
+            )
+            .with_suggestion("The data may be corrupted or in an unexpected format".to_string())
+            .with_error_code("SAGE_JSON"),
 
-            SageError::Agent { message, .. } => {
-                UserFriendlyError::new(
-                    ErrorCategory::Internal,
-                    "Agent execution error",
-                    message.clone(),
-                )
-                .with_suggestion("Try rephrasing your request".to_string())
-                .with_error_code("SAGE_AGENT")
-            }
+            SageError::Agent { message, .. } => UserFriendlyError::new(
+                ErrorCategory::Internal,
+                "Agent execution error",
+                message.clone(),
+            )
+            .with_suggestion("Try rephrasing your request".to_string())
+            .with_error_code("SAGE_AGENT"),
 
             SageError::Cache { message, .. } => {
-                UserFriendlyError::new(
-                    ErrorCategory::Internal,
-                    "Cache error",
-                    message.clone(),
-                )
-                .with_suggestion("Try clearing the cache and retrying".to_string())
-                .with_error_code("SAGE_CACHE")
+                UserFriendlyError::new(ErrorCategory::Internal, "Cache error", message.clone())
+                    .with_suggestion("Try clearing the cache and retrying".to_string())
+                    .with_error_code("SAGE_CACHE")
             }
 
             SageError::Storage { message, .. } => {
-                UserFriendlyError::new(
-                    ErrorCategory::Internal,
-                    "Storage error",
-                    message.clone(),
-                )
-                .with_suggestion("Check disk space and permissions".to_string())
-                .with_error_code("SAGE_STORAGE")
+                UserFriendlyError::new(ErrorCategory::Internal, "Storage error", message.clone())
+                    .with_suggestion("Check disk space and permissions".to_string())
+                    .with_error_code("SAGE_STORAGE")
             }
 
             SageError::Other { message, .. } => {
-                UserFriendlyError::new(
-                    ErrorCategory::Internal,
-                    "Unexpected error",
-                    message.clone(),
-                )
-                .with_suggestion("If this persists, please report the issue".to_string())
-                .with_error_code("SAGE_OTHER")
+                UserFriendlyError::new(ErrorCategory::Internal, "Unexpected error", message.clone())
+                    .with_suggestion("If this persists, please report the issue".to_string())
+                    .with_error_code("SAGE_OTHER")
             }
         }
     }
@@ -299,11 +300,17 @@ fn classify_config_error(message: &str) -> (String, Vec<String>) {
 }
 
 /// Classify LLM errors
-fn classify_llm_error(message: &str, provider: Option<&str>) -> (ErrorCategory, String, Vec<String>) {
+fn classify_llm_error(
+    message: &str,
+    provider: Option<&str>,
+) -> (ErrorCategory, String, Vec<String>) {
     let message_lower = message.to_lowercase();
     let provider_name = provider.unwrap_or("LLM provider");
 
-    if message_lower.contains("401") || message_lower.contains("unauthorized") || message_lower.contains("invalid api key") {
+    if message_lower.contains("401")
+        || message_lower.contains("unauthorized")
+        || message_lower.contains("invalid api key")
+    {
         (
             ErrorCategory::Authentication,
             format!("{} authentication failed", provider_name),
@@ -313,7 +320,10 @@ fn classify_llm_error(message: &str, provider: Option<&str>) -> (ErrorCategory, 
                 format!("Verify the API key is for {}", provider_name),
             ],
         )
-    } else if message_lower.contains("429") || message_lower.contains("rate limit") || message_lower.contains("quota") {
+    } else if message_lower.contains("429")
+        || message_lower.contains("rate limit")
+        || message_lower.contains("quota")
+    {
         (
             ErrorCategory::RateLimit,
             format!("{} rate limit exceeded", provider_name),
@@ -360,7 +370,11 @@ fn classify_llm_error(message: &str, provider: Option<&str>) -> (ErrorCategory, 
 }
 
 /// Classify HTTP errors
-fn classify_http_error(message: &str, status_code: Option<u16>, _url: Option<&str>) -> (ErrorCategory, String, Vec<String>) {
+fn classify_http_error(
+    message: &str,
+    status_code: Option<u16>,
+    _url: Option<&str>,
+) -> (ErrorCategory, String, Vec<String>) {
     match status_code {
         Some(401) => (
             ErrorCategory::Authentication,

@@ -212,8 +212,8 @@ For now, please use these alternative tools to explore the codebase."#,
         Ok(())
     }
 
-    fn max_execution_time(&self) -> Option<u64> {
-        Some(30) // 30 seconds for LSP operations
+    fn max_execution_duration(&self) -> Option<std::time::Duration> {
+        Some(std::time::Duration::from_secs(30)) // 30 seconds for LSP operations
     }
 
     fn supports_parallel_execution(&self) -> bool {

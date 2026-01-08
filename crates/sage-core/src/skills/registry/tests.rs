@@ -2,7 +2,7 @@
 
 #[cfg(test)]
 mod tests {
-    use super::super::super::types::{Skill, SkillContext, SkillSource, SkillTrigger};
+    use super::super::super::types::{Skill, SkillContext, SkillSourceType, SkillTrigger};
     use super::super::types::SkillRegistry;
     use tempfile::TempDir;
     use tokio::fs::{self, File};
@@ -29,8 +29,8 @@ mod tests {
         registry.register(Skill::new("test", "Test description"));
 
         let skill = registry.get("test").unwrap();
-        assert_eq!(skill.name, "test");
-        assert_eq!(skill.description, "Test description");
+        assert_eq!(skill.name(), "test");
+        assert_eq!(skill.description(), "Test description");
     }
 
     #[tokio::test]
@@ -61,7 +61,7 @@ mod tests {
         let matching = registry.find_matching(&context);
 
         assert_eq!(matching.len(), 2);
-        assert_eq!(matching[0].name, "rust"); // Higher priority first
+        assert_eq!(matching[0].name(), "rust"); // Higher priority first
     }
 
     #[tokio::test]
@@ -81,7 +81,7 @@ mod tests {
         let context = SkillContext::new("Any message");
         let best = registry.find_best_match(&context).unwrap();
 
-        assert_eq!(best.name, "high");
+        assert_eq!(best.name(), "high");
     }
 
     #[tokio::test]
@@ -89,13 +89,13 @@ mod tests {
         let mut registry = SkillRegistry::new("/project");
         registry.register(Skill::new("test", "Test"));
 
-        assert!(registry.get("test").unwrap().enabled);
+        assert!(registry.get("test").unwrap().enabled());
 
         registry.disable("test");
-        assert!(!registry.get("test").unwrap().enabled);
+        assert!(!registry.get("test").unwrap().enabled());
 
         registry.enable("test");
-        assert!(registry.get("test").unwrap().enabled);
+        assert!(registry.get("test").unwrap().enabled());
     }
 
     #[tokio::test]
@@ -135,7 +135,7 @@ mod tests {
         registry.discover().await.unwrap();
 
         let skill = registry.get("rust-expert").unwrap();
-        assert_eq!(skill.source, SkillSource::Builtin);
+        assert_eq!(*skill.source(), SkillSourceType::Builtin);
     }
 
     #[test]
@@ -184,8 +184,14 @@ Please review the code at: $ARGUMENTS
 "#;
         let (frontmatter, prompt) = SkillFrontmatter::parse(content);
 
-        assert_eq!(frontmatter.description, Some("Code review skill".to_string()));
-        assert_eq!(frontmatter.when_to_use, Some("When user asks for code review".to_string()));
+        assert_eq!(
+            frontmatter.description,
+            Some("Code review skill".to_string())
+        );
+        assert_eq!(
+            frontmatter.when_to_use,
+            Some("When user asks for code review".to_string())
+        );
         assert_eq!(frontmatter.allowed_tools, vec!["Read", "Grep", "Glob"]);
         assert!(frontmatter.user_invocable);
         assert_eq!(frontmatter.argument_hint, Some("[file path]".to_string()));
@@ -219,7 +225,8 @@ Test prompt
         // Create SKILL.md in subdirectory (Claude Code format)
         let skill_file = commit_dir.join("SKILL.md");
         let mut file = File::create(&skill_file).await.unwrap();
-        file.write_all(br#"---
+        file.write_all(
+            br#"---
 description: Smart Git Commit
 when_to_use: When user asks to commit
 user_invocable: true
@@ -229,7 +236,8 @@ allowed_tools:
 ---
 
 Run git commit with smart message
-"#)
+"#,
+        )
         .await
         .unwrap();
 
@@ -240,15 +248,20 @@ Run git commit with smart message
         assert!(registry.contains("commit"));
 
         let skill = registry.get("commit").unwrap();
-        assert_eq!(skill.when_to_use, Some("When user asks to commit".to_string()));
-        assert!(skill.user_invocable);
+        assert_eq!(
+            skill.when_to_use,
+            Some("When user asks to commit".to_string())
+        );
+        assert!(skill.user_invocable());
     }
 
     #[test]
     fn test_skill_to_xml() {
         let skill = Skill::new("commit", "Smart Git Commit")
             .with_when_to_use("When user asks to commit")
-            .with_source(SkillSource::User(std::path::PathBuf::from("~/.config/sage/skills/commit")));
+            .with_source(SkillSourceType::User(std::path::PathBuf::from(
+                "~/.config/sage/skills/commit",
+            )));
 
         let xml = skill.to_xml();
 
@@ -264,8 +277,7 @@ Run git commit with smart message
 
         // Skill with when_to_use
         registry.register(
-            Skill::new("auto1", "Auto invocable")
-                .with_when_to_use("When user needs help"),
+            Skill::new("auto1", "Auto invocable").with_when_to_use("When user needs help"),
         );
 
         // Skill with triggers
@@ -294,12 +306,12 @@ Run git commit with smart message
         registry.register(
             Skill::new("commit", "Smart Git Commit")
                 .with_when_to_use("When user asks to commit")
-                .with_source(SkillSource::User(std::path::PathBuf::from("/path"))),
+                .with_source(SkillSourceType::User(std::path::PathBuf::from("/path"))),
         );
         registry.register(
             Skill::new("review", "Code Review")
                 .with_when_to_use("When user asks for review")
-                .with_source(SkillSource::Project(std::path::PathBuf::from("/path"))),
+                .with_source(SkillSourceType::Project(std::path::PathBuf::from("/path"))),
         );
 
         let xml = registry.generate_skills_xml();
@@ -313,8 +325,7 @@ Run git commit with smart message
 
     #[test]
     fn test_skill_prompt_with_args() {
-        let skill = Skill::new("test", "Test")
-            .with_prompt("Review the file: $ARGUMENTS");
+        let skill = Skill::new("test", "Test").with_prompt("Review the file: $ARGUMENTS");
 
         let context = SkillContext::new("review").with_working_dir("/project");
         let prompt = skill.get_prompt_with_args(&context, Some("src/main.rs"));
@@ -324,8 +335,7 @@ Run git commit with smart message
 
     #[test]
     fn test_skill_prompt_args_append() {
-        let skill = Skill::new("test", "Test")
-            .with_prompt("Do something");
+        let skill = Skill::new("test", "Test").with_prompt("Do something");
 
         let context = SkillContext::new("test").with_working_dir("/project");
         let prompt = skill.get_prompt_with_args(&context, Some("extra args"));

@@ -147,7 +147,9 @@ pub(super) async fn execute_title(invocation: &CommandInvocation) -> SageResult<
         ))
     } else {
         // Return an interactive command that the CLI will handle
-        Ok(CommandResult::interactive(InteractiveCommand::Title { title })
-            .with_status("Setting session title..."))
+        Ok(
+            CommandResult::interactive(InteractiveCommand::Title { title })
+                .with_status("Setting session title..."),
+        )
     }
 }
