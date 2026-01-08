@@ -124,17 +124,32 @@ impl UnifiedExecutor {
                             };
                         }
 
+                        let error_message = e.to_string();
                         let error_step = AgentStep::new(step_number, AgentState::Error)
-                            .with_error(e.to_string());
+                            .with_error(error_message.clone());
 
-                        // Record error in session
+                        // Determine error type for better categorization
+                        let error_type = if error_message.contains("API") {
+                            "api_error"
+                        } else if error_message.contains("timeout") || error_message.contains("Timeout") {
+                            "timeout_error"
+                        } else if error_message.contains("rate") || error_message.contains("limit") {
+                            "rate_limit_error"
+                        } else {
+                            "execution_error"
+                        };
+
+                        // Record error in trajectory (for replay)
                         if let Some(recorder) = &self.session_recorder {
                             let _ = recorder
                                 .lock()
                                 .await
-                                .record_error("execution_error", &e.to_string())
+                                .record_error(error_type, &error_message)
                                 .await;
                         }
+
+                        // Record error in JSONL session (for user visibility)
+                        let _ = self.record_error_message(error_type, &error_message).await;
 
                         execution.add_step(error_step);
                         execution.complete(false, Some(format!("Task failed: {}", e)));

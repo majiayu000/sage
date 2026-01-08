@@ -760,9 +760,36 @@ fn display_outcome(
         }
         ExecutionOutcome::Failed { error, .. } => {
             console.error("Task execution failed!");
-            console.error(&format!("Error: {}", error.message));
+
+            // Show error type for better debugging
+            let error_type = match &error.kind {
+                sage_core::agent::ExecutionErrorKind::Authentication => "Authentication Error",
+                sage_core::agent::ExecutionErrorKind::RateLimit => "Rate Limit Error",
+                sage_core::agent::ExecutionErrorKind::InvalidRequest => "Invalid Request",
+                sage_core::agent::ExecutionErrorKind::ServiceUnavailable => "Service Unavailable",
+                sage_core::agent::ExecutionErrorKind::ToolExecution { tool_name } => {
+                    &format!("Tool Execution Error ({})", tool_name)
+                }
+                sage_core::agent::ExecutionErrorKind::Configuration => "Configuration Error",
+                sage_core::agent::ExecutionErrorKind::Network => "Network Error",
+                sage_core::agent::ExecutionErrorKind::Timeout => "Timeout Error",
+                sage_core::agent::ExecutionErrorKind::Other => "Error",
+            };
+            console.error(&format!("[{}] {}", error_type, error.message));
+
+            if let Some(provider) = &error.provider {
+                console.info(&format!("Provider: {}", provider));
+            }
             if let Some(suggestion) = &error.suggestion {
                 console.info(&format!("Suggestion: {}", suggestion));
+            }
+
+            // Show session ID for debugging if available
+            if let Some(path) = session_path {
+                console.info(&format!(
+                    "Session logs: {}",
+                    path.display()
+                ));
             }
         }
         ExecutionOutcome::Interrupted { .. } => {

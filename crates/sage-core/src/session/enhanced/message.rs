@@ -26,6 +26,8 @@ pub enum EnhancedMessageType {
     ToolResult,
     /// System message
     System,
+    /// Error message (execution failures, API errors, etc.)
+    Error,
     /// Auto-generated conversation summary
     Summary,
     /// User-defined custom title
@@ -41,6 +43,7 @@ impl fmt::Display for EnhancedMessageType {
             Self::Assistant => write!(f, "assistant"),
             Self::ToolResult => write!(f, "tool_result"),
             Self::System => write!(f, "system"),
+            Self::Error => write!(f, "error"),
             Self::Summary => write!(f, "summary"),
             Self::CustomTitle => write!(f, "custom_title"),
             Self::FileHistorySnapshot => write!(f, "file_history_snapshot"),
@@ -310,5 +313,51 @@ impl EnhancedMessage {
     /// Check if this is an assistant message
     pub fn is_assistant(&self) -> bool {
         self.message_type == EnhancedMessageType::Assistant
+    }
+
+    /// Check if this is an error message
+    pub fn is_error(&self) -> bool {
+        self.message_type == EnhancedMessageType::Error
+    }
+
+    /// Create a new error message
+    ///
+    /// Records execution errors, API failures, etc. for debugging and session review.
+    pub fn error(
+        error_type: impl Into<String>,
+        error_message: impl Into<String>,
+        session_id: impl Into<String>,
+        context: SessionContext,
+        parent_uuid: Option<String>,
+    ) -> Self {
+        let error_type_str = error_type.into();
+        let error_message_str = error_message.into();
+
+        let mut metadata = HashMap::new();
+        metadata.insert(
+            "error_type".to_string(),
+            Value::String(error_type_str.clone()),
+        );
+
+        Self {
+            message_type: EnhancedMessageType::Error,
+            uuid: uuid::Uuid::new_v4().to_string(),
+            parent_uuid,
+            timestamp: Utc::now(),
+            session_id: session_id.into(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            context,
+            message: MessageContent {
+                role: "error".to_string(),
+                content: format!("[{}] {}", error_type_str, error_message_str),
+                tool_calls: None,
+                tool_results: None,
+            },
+            usage: None,
+            thinking_metadata: None,
+            todos: Vec::new(),
+            is_sidechain: false,
+            metadata,
+        }
     }
 }
