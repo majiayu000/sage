@@ -5,12 +5,15 @@
 //! 2. **Exponential Backoff Strategy**: For other transient errors
 //!
 //! Both strategies use jitter to prevent thundering herd problems.
+//! Supports abort/cancellation signals during retry delays.
 
 use super::types::LlmClient;
 use crate::error::{SageError, SageResult};
+use crate::interrupt::global_interrupt_manager;
 use crate::llm::messages::LlmResponse;
 use rand::Rng;
 use std::time::Duration;
+use tokio::select;
 use tokio::time::sleep;
 use tracing::{instrument, warn};
 
@@ -37,6 +40,10 @@ impl LlmClient {
     /// - Jitter: Random value between 0 and delay/2 (like Claude Code)
     /// - Max delay: 32 seconds
     ///
+    /// ## Abort Signal Support
+    /// - Respects global cancellation token during retry delays
+    /// - Returns immediately if task is interrupted
+    ///
     /// # Arguments
     ///
     /// * `operation` - Async closure that performs the LLM request
@@ -45,6 +52,7 @@ impl LlmClient {
     ///
     /// Returns the last error if all retry attempts are exhausted.
     /// Non-retryable errors (e.g., 400, 401) return immediately without retrying.
+    /// Returns error if task is interrupted during retry delay.
     #[instrument(skip(self, operation), fields(max_retries = %self.config.max_retries.unwrap_or(3)))]
     pub(super) async fn execute_with_retry<F, Fut>(&self, operation: F) -> SageResult<LlmResponse>
     where
@@ -54,7 +62,16 @@ impl LlmClient {
         let max_retries = self.config.max_retries.unwrap_or(3);
         let mut last_error = None;
 
+        // Get cancellation token for abort signal support
+        let cancellation_token = global_interrupt_manager().lock().cancellation_token();
+
         for attempt in 0..=max_retries {
+            // Check for cancellation before each attempt
+            if cancellation_token.is_cancelled() {
+                tracing::info!("retry loop cancelled by abort signal");
+                return Err(SageError::agent("Request cancelled by user"));
+            }
+
             match operation().await {
                 Ok(response) => {
                     if attempt > 0 {
@@ -100,7 +117,16 @@ impl LlmClient {
                             "retrying after failure"
                         );
 
-                        sleep(delay).await;
+                        // Wait with abort signal support (like Claude Code's waitWithAbort)
+                        select! {
+                            _ = sleep(delay) => {
+                                // Normal delay completed, continue to next retry
+                            }
+                            _ = cancellation_token.cancelled() => {
+                                tracing::info!("retry delay interrupted by abort signal");
+                                return Err(SageError::agent("Request cancelled by user during retry"));
+                            }
+                        }
                     } else {
                         warn!(
                             "Request failed after {} attempts: {}",
