@@ -125,8 +125,31 @@ pub struct TaskConfig {
 - [ ] 代码实现
 - [ ] 测试验证
 
+## 第二次复现
+
+**Session ID**: `69c9d4cf-6c80-447d-9aa3-21a9fba915a3`
+
+**执行统计：**
+- 22 steps（工具调用）
+- 724,904 input tokens
+- 2,136 output tokens
+- 660.7 秒（11 分钟）
+- 状态：**Failed**
+- 消息数：38 条
+
+**关键发现：**
+- Agent 创建了 TodoWrite，计划"总结关键点"
+- 但在执行总结之前会话就 Failed 了
+- 最后一条消息 `content: ""` + TodoWrite 调用
+
+**可能的失败原因：**
+1. 超时限制（660s 太长）
+2. Token 限制（724k tokens）
+3. 模型返回异常
+
 ## 参考
 
-- 问题会话：`~/.sage/sessions/a1524a75-7867-449d-a955-34d3ab30d8e9/`
+- 问题会话 1：`~/.sage/sessions/a1524a75-7867-449d-a955-34d3ab30d8e9/`
+- 问题会话 2：`~/.sage/sessions/69c9d4cf-6c80-447d-9aa3-21a9fba915a3/`
 - 发现时间：2026-01-08
 - 使用模型：glm-4.7

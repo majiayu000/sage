@@ -8,7 +8,9 @@ use crate::tools::types::{ToolCall, ToolSchema};
 use crate::trajectory::TokenUsage;
 use crate::ui::DisplayManager;
 use crate::ui::animation::AnimationState;
+use crate::ui::progress::{ExecutionPhase, global_progress_tracker};
 use crate::ui::prompt::{PermissionChoice, PermissionDialogConfig, show_permission_dialog};
+use colored::Colorize;
 use tokio::select;
 use tracing::instrument;
 
@@ -25,6 +27,16 @@ impl UnifiedExecutor {
         task_scope: &crate::interrupt::TaskScope,
     ) -> SageResult<(AgentStep, Vec<LlmMessage>)> {
         let mut step = AgentStep::new(step_number, AgentState::Thinking);
+
+        // Update progress tracker
+        let progress = global_progress_tracker();
+        progress.record_activity("thinking").await;
+
+        // Display progress info for long-running tasks (show every 5 steps or after 30s)
+        let elapsed = progress.elapsed();
+        if step_number > 1 && (step_number % 5 == 0 || elapsed.as_secs() > 30) {
+            progress.display_full_status().await;
+        }
 
         // Start thinking animation
         self.animation_manager
@@ -182,6 +194,15 @@ impl UnifiedExecutor {
         );
 
         for tool_call in tool_calls {
+            // Update progress tracker with phase and activity
+            let progress = global_progress_tracker();
+            let phase = ExecutionPhase::from_tool_name(&tool_call.name);
+            progress.set_phase(phase).await;
+
+            // Build activity description
+            let activity_desc = Self::build_activity_description(&tool_call.name, &tool_call.arguments);
+            progress.record_activity(&activity_desc).await;
+
             // Display tool call info with parameters
             let tool_icon = Self::get_tool_icon(&tool_call.name);
             let params_preview = Self::format_tool_params(&tool_call.arguments);
@@ -373,6 +394,53 @@ impl UnifiedExecutor {
         } else {
             parts.join(" ")
         }
+    }
+
+    /// Build activity description for progress tracking
+    fn build_activity_description(
+        tool_name: &str,
+        arguments: &std::collections::HashMap<String, serde_json::Value>,
+    ) -> String {
+        let verb = match tool_name.to_lowercase().as_str() {
+            "read" => "reading",
+            "write" => "writing",
+            "edit" => "editing",
+            "bash" => "running",
+            "glob" => "searching",
+            "grep" => "searching",
+            "web_fetch" => "fetching",
+            "web_search" => "searching web",
+            "task" => "running subagent",
+            "lsp" => "analyzing",
+            _ => "executing",
+        };
+
+        // Extract key info
+        if let Some(path) = arguments.get("file_path").or(arguments.get("path")) {
+            if let Some(s) = path.as_str() {
+                // Get just the filename
+                let filename = std::path::Path::new(s)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or(s);
+                return format!("{} {}", verb, filename);
+            }
+        }
+
+        if let Some(cmd) = arguments.get("command") {
+            if let Some(s) = cmd.as_str() {
+                let short = if s.len() > 30 { &s[..30] } else { s };
+                return format!("{} '{}'", verb, short);
+            }
+        }
+
+        if let Some(pattern) = arguments.get("pattern") {
+            if let Some(s) = pattern.as_str() {
+                return format!("{} for '{}'", verb, s);
+            }
+        }
+
+        format!("{} {}", verb, tool_name)
     }
 
     /// Execute a tool with permission check for dangerous operations

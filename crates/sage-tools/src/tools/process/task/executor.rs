@@ -2,6 +2,7 @@
 
 use sage_core::agent::subagent::{AgentType, SubAgentConfig, Thoroughness, execute_subagent};
 use sage_core::tools::types::{ToolCall, ToolResult};
+use sage_core::ui::progress::{SubagentStatus, global_progress_tracker};
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -37,11 +38,25 @@ pub async fn execute_task_sync(
 
     registry.add_task(task);
 
+    // Update progress tracker to show subagent status
+    let progress = global_progress_tracker();
+    progress.set_subagent(Some(SubagentStatus {
+        task_description: task_params.description.clone(),
+        current_step: 0,
+        max_steps: None,
+        last_tool: None,
+    })).await;
+
     // Execute subagent
     let config =
         SubAgentConfig::new(agent_type, task_params.prompt.clone()).with_thoroughness(thoroughness);
 
-    match execute_subagent(config).await {
+    let result = execute_subagent(config).await;
+
+    // Clear subagent status when done
+    progress.set_subagent(None).await;
+
+    match result {
         Ok(result) => {
             // Update task status
             registry.update_status(

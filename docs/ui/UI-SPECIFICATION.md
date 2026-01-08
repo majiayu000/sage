@@ -293,13 +293,13 @@ for _ in 0..width {
 - [x] 终端宽度自适应
 - [x] 中文输入处理
 - [x] 交互式 /resume
+- [x] **P0** 阶段指示器（Exploring/Analyzing/Synthesizing/Executing）
+- [x] **P0** Subagent 状态显示
+- [x] **P1** 长时间任务进度条（30秒后显示）
+- [x] **P1** 活动心跳指示器（每5秒更新）
 
 ### 5.2 待实现
 
-- [ ] **P0** 阶段指示器（Exploring/Analyzing/Synthesizing）
-- [ ] **P0** Subagent 状态显示
-- [ ] **P1** 长时间任务进度条
-- [ ] **P1** 活动心跳指示器
 - [ ] **P2** Token 使用实时显示
 - [ ] **P2** 工具输出折叠/展开
 
@@ -379,3 +379,4 @@ fn show_heartbeat(last_activity: &str, elapsed: Duration) {
 |------|------|------|
 | 2025-01-08 | 0.1.0 | 初始文档，定义基础规范 |
 | 2025-01-08 | 0.1.1 | 添加开放式任务问题分析 |
+| 2025-01-08 | 0.2.0 | 实现 P0/P1 功能：阶段指示器、Subagent状态、进度条、心跳指示器 |
