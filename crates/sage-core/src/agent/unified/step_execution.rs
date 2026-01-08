@@ -4,11 +4,11 @@ use crate::agent::{AgentState, AgentStep};
 use crate::error::{SageError, SageResult};
 use crate::interrupt::global_interrupt_manager;
 use crate::llm::messages::LlmMessage;
+use crate::llm::streaming::{StreamingLlmClient, stream_utils};
 use crate::tools::types::{ToolCall, ToolSchema};
 use crate::trajectory::TokenUsage;
 use crate::ui::DisplayManager;
-use crate::ui::animation::AnimationState;
-use crate::ui::progress::{ExecutionPhase, global_progress_tracker};
+use crate::ui::animation::{AnimationContext, AnimationState};
 use crate::ui::prompt::{PermissionChoice, PermissionDialogConfig, show_permission_dialog};
 use colored::Colorize;
 use tokio::select;
@@ -28,19 +28,13 @@ impl UnifiedExecutor {
     ) -> SageResult<(AgentStep, Vec<LlmMessage>)> {
         let mut step = AgentStep::new(step_number, AgentState::Thinking);
 
-        // Update progress tracker
-        let progress = global_progress_tracker();
-        progress.record_activity("thinking").await;
+        // Update animation manager with current step info
+        self.animation_manager.set_step(step_number);
 
-        // Display progress info for long-running tasks (show every 5 steps or after 30s)
-        let elapsed = progress.elapsed();
-        if step_number > 1 && (step_number % 5 == 0 || elapsed.as_secs() > 30) {
-            progress.display_full_status().await;
-        }
-
-        // Start thinking animation
+        // Start thinking animation with context
+        let context = AnimationContext::new().with_step(step_number);
         self.animation_manager
-            .start_animation(AnimationState::Thinking, "Thinking", "blue")
+            .start_with_context(AnimationState::Thinking, "Thinking", "blue", context)
             .await;
 
         // Record LLM request before sending
@@ -61,9 +55,14 @@ impl UnifiedExecutor {
         // Get cancellation token for interrupt handling
         let cancellation_token = global_interrupt_manager().lock().cancellation_token();
 
-        // Execute LLM call with interrupt support
+        // Execute LLM call with interrupt support using streaming API
+        // Streaming keeps the connection alive, avoiding timeout issues with slow models
         let llm_response = select! {
-            response = self.llm_client.chat(messages, Some(tool_schemas)) => {
+            response = async {
+                // Use streaming API and collect into complete response
+                let stream = self.llm_client.chat_stream(messages, Some(tool_schemas)).await?;
+                stream_utils::collect_stream(stream).await
+            } => {
                 response?
             }
             _ = cancellation_token.cancelled() => {
@@ -194,14 +193,8 @@ impl UnifiedExecutor {
         );
 
         for tool_call in tool_calls {
-            // Update progress tracker with phase and activity
-            let progress = global_progress_tracker();
-            let phase = ExecutionPhase::from_tool_name(&tool_call.name);
-            progress.set_phase(phase).await;
-
-            // Build activity description
+            // Build activity description for animation detail
             let activity_desc = Self::build_activity_description(&tool_call.name, &tool_call.arguments);
-            progress.record_activity(&activity_desc).await;
 
             // Display tool call info with parameters
             let tool_icon = Self::get_tool_icon(&tool_call.name);
@@ -213,12 +206,16 @@ impl UnifiedExecutor {
                 params_preview.dimmed()
             );
 
-            // Start animation for this specific tool
+            // Start animation for this specific tool with detail context
+            let context = AnimationContext::new()
+                .with_step(step.step_number)
+                .with_detail(&activity_desc);
             self.animation_manager
-                .start_animation(
+                .start_with_context(
                     AnimationState::ExecutingTools,
                     &format!("Running {}", tool_call.name),
-                    "green"
+                    "green",
+                    context,
                 )
                 .await;
             // Check for interrupt before each tool
@@ -425,6 +422,21 @@ impl UnifiedExecutor {
         if let Some(pattern) = arguments.get("pattern") {
             if let Some(s) = pattern.as_str() {
                 return format!("{} for '{}'", verb, s);
+            }
+        }
+
+        // Task tool: show description or prompt preview
+        if tool_name.to_lowercase() == "task" {
+            if let Some(desc) = arguments.get("description") {
+                if let Some(s) = desc.as_str() {
+                    return format!("{}: {}", verb, crate::utils::truncate_str(s, 40));
+                }
+            }
+            if let Some(prompt) = arguments.get("prompt") {
+                if let Some(s) = prompt.as_str() {
+                    let preview = crate::utils::truncate_str(s, 40);
+                    return format!("{}: {}", verb, preview);
+                }
             }
         }
 
