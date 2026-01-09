@@ -1,7 +1,9 @@
 //! Default configuration loading functions
 
+use crate::config::credential::CredentialsFile;
 use crate::config::loader::ConfigLoader;
 use crate::config::model::Config;
+use crate::config::ModelParameters;
 use crate::error::SageResult;
 use std::collections::HashMap;
 use std::path::Path;
@@ -13,13 +15,9 @@ use std::path::Path;
 /// 2. sage_config.json (if exists)
 /// 3. sage_config.toml (if exists)
 /// 4. Environment variables
+/// 5. Global credentials file (~/.sage/credentials.json)
 pub fn load_config() -> SageResult<Config> {
-    ConfigLoader::new()
-        .with_defaults()
-        .with_file("sage_config.json")
-        .with_file("sage_config.toml")
-        .with_env()
-        .load()
+    load_config_with_overrides(None, HashMap::new())
 }
 
 /// Load configuration with custom file path
@@ -28,12 +26,9 @@ pub fn load_config() -> SageResult<Config> {
 /// 1. Default configuration
 /// 2. Custom config file
 /// 3. Environment variables
+/// 4. Global credentials file (~/.sage/credentials.json)
 pub fn load_config_from_file<P: AsRef<Path>>(path: P) -> SageResult<Config> {
-    ConfigLoader::new()
-        .with_defaults()
-        .with_file(path)
-        .with_env()
-        .load()
+    load_config_with_overrides(path.as_ref().to_str(), HashMap::new())
 }
 
 /// Load configuration with command line overrides
@@ -42,7 +37,8 @@ pub fn load_config_from_file<P: AsRef<Path>>(path: P) -> SageResult<Config> {
 /// 1. Default configuration
 /// 2. Environment variables
 /// 3. Config file (if specified, or default files)
-/// 4. Command line overrides
+/// 4. Global credentials file (~/.sage/credentials.json)
+/// 5. Command line overrides
 pub fn load_config_with_overrides(
     config_file: Option<&str>,
     overrides: HashMap<String, String>,
@@ -57,7 +53,30 @@ pub fn load_config_with_overrides(
             .with_file("sage_config.toml");
     }
 
-    loader.with_args(overrides).load()
+    let mut config = loader.with_args(overrides).load()?;
+
+    // Load credentials from ~/.sage/credentials.json
+    if let Some(creds_path) = dirs::home_dir().map(|h| h.join(".sage").join("credentials.json")) {
+        if let Some(creds) = CredentialsFile::load(&creds_path) {
+            // Merge credentials into config
+            for (provider, api_key) in creds.api_keys {
+                // Only add if not already configured
+                if !config.model_providers.contains_key(&provider) {
+                    let mut params = ModelParameters::default();
+                    params.api_key = Some(api_key);
+                    config.model_providers.insert(provider.clone(), params);
+                } else if let Some(params) = config.model_providers.get_mut(&provider) {
+                    // Only update API key if not already set
+                    if params.api_key.is_none() {
+                        params.api_key = Some(api_key);
+                    }
+                }
+            }
+            tracing::debug!("Loaded credentials from {}", creds_path.display());
+        }
+    }
+
+    Ok(config)
 }
 
 #[cfg(test)]

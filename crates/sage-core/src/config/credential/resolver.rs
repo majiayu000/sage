@@ -351,6 +351,7 @@ impl Default for CredentialResolver {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::status::ConfigStatus;
     use serial_test::serial;
     use tempfile::tempdir;
 
