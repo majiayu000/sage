@@ -19,7 +19,7 @@ impl UnifiedExecutor {
         tool_call: &crate::tools::types::ToolCall,
     ) -> SageResult<ToolResult> {
         // Stop animation while waiting for user input
-        self.animation_manager.stop_animation().await;
+        self.event_manager.stop_animation().await;
 
         // Parse questions from the tool call arguments
         let questions_value = tool_call

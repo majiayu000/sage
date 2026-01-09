@@ -16,30 +16,36 @@
 
 mod builder;
 mod constructor;
+mod event_manager;
 mod execution_loop;
 mod executor;
 mod input_channel;
+mod llm_orchestrator;
 mod message_builder;
 mod session;
+mod session_manager;
 mod step_execution;
+mod tool_display;
+mod tool_orchestrator;
 mod user_interaction;
 
 #[cfg(test)]
 mod tests;
 
 pub use builder::UnifiedExecutorBuilder;
+pub use event_manager::{EventManager, ExecutionEvent};
+pub use llm_orchestrator::LlmOrchestrator;
+pub use session_manager::SessionManager;
+pub use tool_orchestrator::{PreExecutionResult, ToolExecutionContext, ToolOrchestrator};
 
 use crate::agent::subagent::init_global_runner_from_config;
 use crate::context::AutoCompact;
 use crate::error::{SageError, SageResult};
-use crate::hooks::{HookExecutor, HookRegistry};
+use crate::hooks::HookRegistry;
 use crate::input::{InputChannel, InputRequest, InputResponse};
-use crate::session::{FileSnapshotTracker, JsonlSessionStorage, MessageChainTracker};
 use crate::skills::SkillRegistry;
-use crate::tools::executor::ToolExecutor;
 use crate::trajectory::SessionRecorder;
 use crate::types::Id;
-use crate::ui::AnimationManager;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 use tracing::instrument;
@@ -47,7 +53,6 @@ use tracing::instrument;
 // Re-export types for convenience
 use crate::agent::ExecutionOptions;
 use crate::config::model::Config;
-use crate::llm::client::LlmClient;
 
 /// Unified executor that implements the Claude Code style execution loop
 pub struct UnifiedExecutor {
@@ -55,34 +60,22 @@ pub struct UnifiedExecutor {
     id: Id,
     /// Configuration
     config: Config,
-    /// LLM client for model interactions
-    llm_client: LlmClient,
-    /// Tool executor for running tools
-    tool_executor: ToolExecutor,
+    /// LLM orchestrator for model interactions (centralized LLM communication)
+    llm_orchestrator: LlmOrchestrator,
+    /// Tool orchestrator for three-phase tool execution
+    tool_orchestrator: ToolOrchestrator,
     /// Execution options
     options: ExecutionOptions,
     /// Input channel for blocking user input (None for batch mode)
     input_channel: Option<InputChannel>,
-    /// Session recorder
-    session_recorder: Option<Arc<Mutex<SessionRecorder>>>,
-    /// Animation manager
-    animation_manager: AnimationManager,
-    /// JSONL session storage for enhanced messages
-    jsonl_storage: Option<Arc<JsonlSessionStorage>>,
-    /// Message chain tracker for building message relationships
-    message_tracker: MessageChainTracker,
-    /// Current session ID
-    current_session_id: Option<String>,
-    /// File snapshot tracker for undo capability
-    file_tracker: FileSnapshotTracker,
-    /// Message count at last summary update (for throttling summary generation)
-    last_summary_msg_count: usize,
+    /// Event manager for unified event handling and UI animations
+    event_manager: EventManager,
+    /// Session manager encapsulating all session-related state
+    session_manager: SessionManager,
     /// Auto-compact manager for context window management
     auto_compact: AutoCompact,
     /// Skill registry for AI auto-invocation (Claude Code compatible)
     skill_registry: Arc<RwLock<SkillRegistry>>,
-    /// Hook executor for PreToolUse/PostToolUse hooks (Claude Code compatible)
-    hook_executor: HookExecutor,
 }
 
 impl UnifiedExecutor {
@@ -93,28 +86,38 @@ impl UnifiedExecutor {
 
     /// Set session recorder
     pub fn set_session_recorder(&mut self, recorder: Arc<Mutex<SessionRecorder>>) {
-        self.session_recorder = Some(recorder);
+        self.session_manager.set_session_recorder(recorder);
     }
 
     /// Get current session ID
     pub fn current_session_id(&self) -> Option<&str> {
-        self.current_session_id.as_deref()
+        self.session_manager.current_session_id()
     }
 
     /// Get the file tracker for external file tracking
-    pub fn file_tracker_mut(&mut self) -> &mut FileSnapshotTracker {
-        &mut self.file_tracker
+    pub fn file_tracker_mut(&mut self) -> &mut crate::session::FileSnapshotTracker {
+        self.session_manager.file_tracker_mut()
+    }
+
+    /// Get the session manager for external session management
+    pub fn session_manager(&self) -> &SessionManager {
+        &self.session_manager
+    }
+
+    /// Get the session manager mutably
+    pub fn session_manager_mut(&mut self) -> &mut SessionManager {
+        &mut self.session_manager
     }
 
     /// Register a tool with the executor
     pub fn register_tool(&mut self, tool: Arc<dyn crate::tools::base::Tool>) {
-        self.tool_executor.register_tool(tool);
+        self.tool_orchestrator.tool_executor_mut().register_tool(tool);
     }
 
     /// Register multiple tools with the executor
     pub fn register_tools(&mut self, tools: Vec<Arc<dyn crate::tools::base::Tool>>) {
         for tool in tools {
-            self.tool_executor.register_tool(tool);
+            self.tool_orchestrator.tool_executor_mut().register_tool(tool);
         }
     }
 
@@ -124,10 +127,11 @@ impl UnifiedExecutor {
     /// the Task tool to execute sub-agents (Explore, Plan, etc.)
     pub fn init_subagent_support(&self) -> SageResult<()> {
         // Get all registered tools from the executor
-        let tool_names = self.tool_executor.tool_names();
+        let tool_executor = self.tool_orchestrator.tool_executor();
+        let tool_names = tool_executor.tool_names();
         let tools: Vec<Arc<dyn crate::tools::base::Tool>> = tool_names
             .iter()
-            .filter_map(|name| self.tool_executor.get_tool(name).cloned())
+            .filter_map(|name| tool_executor.get_tool(name).cloned())
             .collect();
 
         tracing::info!("Initializing sub-agent support with {} tools", tools.len());
@@ -163,12 +167,23 @@ impl UnifiedExecutor {
     /// - Log or audit tool calls
     /// - Modify tool behavior
     pub fn set_hook_registry(&mut self, registry: HookRegistry) {
-        self.hook_executor = HookExecutor::new(registry);
+        use crate::hooks::HookExecutor;
+        self.tool_orchestrator.set_hook_executor(HookExecutor::new(registry));
     }
 
     /// Get a reference to the hook executor
-    pub fn hook_executor(&self) -> &HookExecutor {
-        &self.hook_executor
+    pub fn hook_executor(&self) -> &crate::hooks::HookExecutor {
+        self.tool_orchestrator.hook_executor()
+    }
+
+    /// Get a reference to the tool orchestrator
+    pub fn tool_orchestrator(&self) -> &ToolOrchestrator {
+        &self.tool_orchestrator
+    }
+
+    /// Get a mutable reference to the tool orchestrator
+    pub fn tool_orchestrator_mut(&mut self) -> &mut ToolOrchestrator {
+        &mut self.tool_orchestrator
     }
 
     /// Discover skills from the file system
@@ -192,10 +207,10 @@ impl UnifiedExecutor {
         tracing::info!("Initiating graceful shutdown of UnifiedExecutor");
 
         // Stop any animations
-        self.animation_manager.stop_animation().await;
+        self.event_manager.stop_animation().await;
 
         // Finalize session recording if present
-        if let Some(recorder) = &self.session_recorder {
+        if let Some(recorder) = self.session_manager.session_recorder() {
             tracing::debug!("Finalizing session recording");
             let mut recorder_guard = recorder.lock().await;
             if let Err(e) = recorder_guard
@@ -207,7 +222,7 @@ impl UnifiedExecutor {
         }
 
         // Log session cleanup
-        if let Some(session_id) = &self.current_session_id {
+        if let Some(session_id) = self.session_manager.current_session_id() {
             tracing::debug!("Session {} shutdown complete", session_id);
         }
 

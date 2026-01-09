@@ -2,23 +2,20 @@
 
 use crate::agent::ExecutionOptions;
 use crate::config::model::Config;
-use crate::config::provider::ProviderConfig;
 use crate::context::{AutoCompact, AutoCompactConfig};
-use crate::error::{SageError, SageResult};
+use crate::error::SageResult;
 use crate::hooks::{HookExecutor, HookRegistry};
-use crate::llm::client::LlmClient;
 use crate::llm::model_capabilities::get_model_capability;
-use crate::llm::provider_types::{LlmProvider, TimeoutConfig};
-use crate::session::{
-    FileSnapshotTracker, JsonlSessionStorage, MessageChainTracker, SessionContext,
-};
 use crate::skills::SkillRegistry;
 use crate::tools::executor::ToolExecutor;
-use crate::ui::AnimationManager;
 use anyhow::Context;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+use super::event_manager::EventManager;
+use super::llm_orchestrator::LlmOrchestrator;
+use super::session_manager::SessionManager;
+use super::tool_orchestrator::ToolOrchestrator;
 use super::{UnifiedExecutor, input_channel};
 
 impl UnifiedExecutor {
@@ -41,47 +38,22 @@ impl UnifiedExecutor {
             default_params.model
         );
 
-        // Parse provider
-        let provider: LlmProvider = provider_name
-            .parse()
-            .map_err(|_| SageError::config(format!("Invalid provider: {}", provider_name)))
-            .context(format!(
-                "Failed to parse provider name '{}' into a valid LLM provider",
-                provider_name
-            ))?;
+        // Create LLM orchestrator (handles all LLM communication)
+        let llm_orchestrator = LlmOrchestrator::from_config(&config)
+            .context("Failed to create LLM orchestrator")?;
 
-        // Create provider config with generous timeout (5 min default)
-        let mut provider_config = ProviderConfig::new(provider_name)
-            .with_api_key(default_params.get_api_key().unwrap_or_default())
-            .with_timeouts(TimeoutConfig::default())
-            .with_max_retries(3);
-
-        // Apply custom base_url if configured
-        if let Some(base_url) = &default_params.base_url {
-            provider_config = provider_config.with_base_url(base_url.clone());
-        }
-
-        // Create model parameters
-        let model_params = default_params.to_llm_parameters();
-
-        // Create LLM client
-        let llm_client =
-            LlmClient::new(provider, provider_config, model_params).context(format!(
-                "Failed to create LLM client for provider: {}",
-                provider_name
-            ))?;
-
-        // Create tool executor
+        // Create tool executor and hook executor
         let tool_executor = ToolExecutor::new();
+        let hook_executor = HookExecutor::new(HookRegistry::new());
+
+        // Create tool orchestrator with three-phase execution model
+        let tool_orchestrator = ToolOrchestrator::new(tool_executor, hook_executor);
 
         // Create input channel based on mode
         let input_channel = input_channel::create_input_channel(&options);
 
-        // Create animation manager
-        let animation_manager = AnimationManager::new();
-
-        // Create JSONL storage (optional, can be enabled later)
-        let jsonl_storage = JsonlSessionStorage::default_path().ok().map(Arc::new);
+        // Create event manager for unified event handling
+        let event_manager = EventManager::new();
 
         // Get working directory for context
         let working_dir = options
@@ -92,9 +64,8 @@ impl UnifiedExecutor {
         // Create skill registry and register built-in skills (before working_dir is moved)
         let mut skill_registry = SkillRegistry::new(&working_dir);
 
-        // Create message chain tracker
-        let context = SessionContext::new(working_dir);
-        let message_tracker = MessageChainTracker::new().with_context(context);
+        // Create session manager with working directory
+        let session_manager = SessionManager::new(working_dir);
 
         // Create auto-compact manager with model-specific context window
         let model_capability = get_model_capability(&default_params.model);
@@ -112,26 +83,17 @@ impl UnifiedExecutor {
             skill_registry.builtin_count()
         );
 
-        // Create hook executor with empty registry (can be configured later)
-        let hook_executor = HookExecutor::new(HookRegistry::new());
-
         Ok(Self {
             id: uuid::Uuid::new_v4(),
             config,
-            llm_client,
-            tool_executor,
+            llm_orchestrator,
+            tool_orchestrator,
             options,
             input_channel,
-            session_recorder: None,
-            animation_manager,
-            jsonl_storage,
-            message_tracker,
-            current_session_id: None,
-            file_tracker: FileSnapshotTracker::default_tracker(),
-            last_summary_msg_count: 0,
+            event_manager,
+            session_manager,
             auto_compact,
             skill_registry: Arc::new(RwLock::new(skill_registry)),
-            hook_executor,
         })
     }
 }
