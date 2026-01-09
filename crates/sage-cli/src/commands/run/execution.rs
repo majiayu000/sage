@@ -301,5 +301,10 @@ fn handle_interactive_command(
             console.warn("The /title command is only available in interactive mode.");
             Ok(())
         }
+        InteractiveCommand::Login => {
+            console.warn("The /login command is only available in interactive mode.");
+            console.info("Run `sage` to start interactive mode and configure credentials.");
+            Ok(())
+        }
     }
 }

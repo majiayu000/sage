@@ -1,6 +1,7 @@
 //! Slash command handling
 
 use super::conversation::handle_conversation;
+use super::onboarding::CliOnboarding;
 use super::session::ConversationSession;
 use crate::console::CliConsole;
 use crate::signal_handler::{AppState, set_global_app_state};
@@ -87,7 +88,28 @@ async fn handle_interactive_command(
         InteractiveCommand::Title { title } => {
             handle_title_command(title, console, conversation).await
         }
+        InteractiveCommand::Login => {
+            handle_login_command(console).await
+        }
     }
+}
+
+/// Handle /login command - run credential setup wizard
+async fn handle_login_command(console: &CliConsole) -> SageResult<()> {
+    let mut onboarding = CliOnboarding::new();
+    match onboarding.run_login().await {
+        Ok(true) => {
+            console.success("API credentials configured successfully!");
+            console.info("Restart sage to apply the new configuration.");
+        }
+        Ok(false) => {
+            console.info("Credential setup cancelled.");
+        }
+        Err(e) => {
+            console.error(&format!("Setup failed: {}", e));
+        }
+    }
+    Ok(())
 }
 
 /// Handle /resume command - show and select sessions to resume

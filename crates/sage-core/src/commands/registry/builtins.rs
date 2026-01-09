@@ -169,5 +169,16 @@ impl CommandRegistry {
             .builtin(),
             CommandSource::Builtin,
         );
+
+        // Login command - configure API credentials
+        self.register(
+            SlashCommand::new(
+                "login",
+                "Configure API credentials for AI providers. Opens the credential setup wizard.",
+            )
+            .with_description("Configure API credentials")
+            .builtin(),
+            CommandSource::Builtin,
+        );
     }
 }
