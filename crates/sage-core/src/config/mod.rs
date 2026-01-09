@@ -16,8 +16,10 @@ mod tool_config;
 mod trajectory_config;
 
 // Public modules
+pub mod credential;
 pub mod loader;
 pub mod model;
+pub mod onboarding;
 pub mod provider;
 pub mod timeouts;
 pub mod validation;

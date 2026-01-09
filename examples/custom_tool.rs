@@ -80,8 +80,8 @@ impl Tool for CalculatorTool {
         Ok(())
     }
 
-    fn max_execution_time(&self) -> Option<u64> {
-        Some(5) // 5 seconds max
+    fn max_execution_duration(&self) -> Option<std::time::Duration> {
+        Some(std::time::Duration::from_secs(5)) // 5 seconds max
     }
 
     fn supports_parallel_execution(&self) -> bool {
