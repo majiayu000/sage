@@ -10,7 +10,11 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 /// Main configuration for Sage Agent
+///
+/// All fields support serde(default) to allow partial configuration files
+/// to be merged with defaults.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Config {
     /// Default LLM provider to use
     pub default_provider: String,
@@ -18,7 +22,6 @@ pub struct Config {
     pub max_steps: Option<u32>,
     /// Total token budget across all steps (input + output)
     /// When exceeded, agent will stop with a budget exceeded error
-    #[serde(default)]
     pub total_token_budget: Option<u64>,
     /// Model parameters for each provider
     pub model_providers: HashMap<String, ModelParameters>,
@@ -33,10 +36,8 @@ pub struct Config {
     /// Logging configuration
     pub logging: LoggingConfig,
     /// Trajectory configuration
-    #[serde(default)]
     pub trajectory: TrajectoryConfig,
     /// MCP (Model Context Protocol) configuration
-    #[serde(default)]
     pub mcp: McpConfig,
 }
 
@@ -196,7 +197,6 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
 
     #[test]
     fn test_config_default() {
