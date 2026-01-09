@@ -3,7 +3,10 @@
 //! Unified routing: all execution modes go through UnifiedExecutor
 
 use crate::args::{Cli, Commands, ConfigAction, TrajectoryAction};
+use crate::commands::interactive::{CliOnboarding, check_config_status};
+use crate::console::CliConsole;
 use crate::{commands, ipc, ui_launcher};
+use sage_core::config::credential::ConfigStatus;
 use sage_core::error::SageResult;
 
 /// Route CLI commands to their respective handlers
@@ -42,6 +45,24 @@ pub async fn route(cli: Cli) -> SageResult<()> {
 
 /// Main execution route - unified entry point for all execution modes
 async fn route_main(cli: Cli) -> SageResult<()> {
+    // Check configuration status and run onboarding if needed
+    let (config_status, _status_hint) = check_config_status();
+    if config_status == ConfigStatus::Unconfigured {
+        let console = CliConsole::new(true);
+        let mut onboarding = CliOnboarding::new();
+        match onboarding.run().await {
+            Ok(true) => {
+                console.success("Setup complete! Starting sage...");
+            }
+            Ok(false) => {
+                console.warn("Setup incomplete. You can run /login anytime to configure.");
+            }
+            Err(e) => {
+                console.warn(&format!("Setup error: {}. Continuing anyway.", e));
+            }
+        }
+    }
+
     // Determine execution mode
     let non_interactive = cli.print_mode;
 
