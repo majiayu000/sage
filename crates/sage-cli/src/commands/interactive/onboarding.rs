@@ -6,6 +6,7 @@
 use crate::console::CliConsole;
 use colored::*;
 use console::{Key, Term};
+use dialoguer::{Select, theme::ColorfulTheme};
 use sage_core::config::credential::{
     ConfigStatus, StatusBarHint, hint_from_status, load_config_unified,
 };
@@ -215,36 +216,21 @@ impl CliOnboarding {
     fn select_provider(&self) -> SageResult<String> {
         let options = self.manager.providers();
 
-        println!("  {} Select your AI provider:\n", "?".blue().bold());
-
-        for (i, opt) in options.iter().enumerate() {
-            let marker = if i == 0 { "→" } else { " " };
-            println!(
-                "  {} {}. {} {}",
-                marker.cyan(),
-                i + 1,
-                opt.name.bold(),
-                format!("({})", opt.description).dimmed()
-            );
-        }
+        // Build display items with description
+        let items: Vec<String> = options
+            .iter()
+            .map(|opt| format!("{} - {}", opt.name, opt.description))
+            .collect();
 
         println!();
-        print!("  Enter number [1-{}]: ", options.len());
-        io::stdout().flush().map_err(|e| SageError::io(format!("flush error: {}", e)))?;
+        let selection = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Select your AI provider")
+            .items(&items)
+            .default(0)
+            .interact()
+            .map_err(|e| SageError::io(format!("selection error: {}", e)))?;
 
-        let mut input = String::new();
-        io::stdin()
-            .read_line(&mut input)
-            .map_err(|e| SageError::io(format!("read error: {}", e)))?;
-
-        let choice: usize = input
-            .trim()
-            .parse::<usize>()
-            .unwrap_or(1)
-            .saturating_sub(1)
-            .min(options.len().saturating_sub(1));
-
-        let selected = &options[choice];
+        let selected = &options[selection];
         self.console
             .success(&format!("Selected: {}", selected.name));
 
