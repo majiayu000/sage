@@ -3,7 +3,11 @@
 //! This module contains helper functions for displaying tool information
 //! in the terminal, including icons, parameter formatting, and activity descriptions.
 
+use crate::tools::types::{ToolCall, ToolResult};
+use colored::Colorize;
 use std::collections::HashMap;
+
+use super::event_manager::{EventManager, ExecutionEvent};
 
 /// Get icon for specific tool type
 pub fn get_tool_icon(tool_name: &str) -> &'static str {
@@ -129,4 +133,61 @@ pub fn build_activity_description(
     }
 
     format!("{} {}", verb, tool_name)
+}
+
+/// Display tool execution start information
+pub async fn display_tool_start(event_manager: &mut EventManager, tool_call: &ToolCall) {
+    let tool_icon = get_tool_icon(&tool_call.name);
+    let params_preview = format_tool_params(&tool_call.arguments);
+
+    println!();
+    println!(
+        "  {} {} {}",
+        tool_icon.bright_magenta(),
+        tool_call.name.bright_magenta().bold(),
+        params_preview.dimmed()
+    );
+
+    // Emit tool execution started event
+    event_manager
+        .emit(ExecutionEvent::ToolExecutionStarted {
+            tool_name: tool_call.name.clone(),
+            tool_id: tool_call.id.clone(),
+        })
+        .await;
+}
+
+/// Display tool execution result
+pub async fn display_tool_result(
+    event_manager: &mut EventManager,
+    tool_result: &ToolResult,
+    duration_ms: u64,
+) {
+    // Emit tool execution completed event
+    event_manager
+        .emit(ExecutionEvent::ToolExecutionCompleted {
+            tool_name: tool_result.tool_name.clone(),
+            tool_id: tool_result.call_id.clone(),
+            success: tool_result.success,
+            duration_ms,
+        })
+        .await;
+
+    let status_icon = if tool_result.success {
+        "✓".green()
+    } else {
+        "✗".red()
+    };
+
+    print!("    {} ", status_icon);
+    if tool_result.success {
+        println!("{} ({}ms)", "done".green(), duration_ms);
+    } else {
+        println!("{} ({}ms)", "failed".red(), duration_ms);
+        if let Some(ref err) = tool_result.error {
+            let first_line = err.lines().next().unwrap_or(err);
+            let truncated = crate::utils::truncate_with_ellipsis(first_line, 60);
+            println!("      {}", truncated.dimmed());
+        }
+    }
 }

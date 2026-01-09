@@ -90,13 +90,13 @@ impl ToolOrchestrator {
         &self,
         tool_call: &ToolCall,
         context: &ToolExecutionContext,
+        cancel_token: CancellationToken,
     ) -> SageResult<PreExecutionResult> {
         let hook_input = HookInput::new(HookEvent::PreToolUse, &context.session_id)
             .with_cwd(context.working_dir.clone())
             .with_tool_name(&tool_call.name)
             .with_tool_input(serde_json::to_value(&tool_call.arguments).unwrap_or_default());
 
-        let cancel_token = CancellationToken::new();
         let results = self
             .hook_executor
             .execute(
@@ -127,9 +127,24 @@ impl ToolOrchestrator {
         Ok(PreExecutionResult::Continue)
     }
 
-    /// Execute the tool (execution phase)
-    pub async fn execution_phase(&self, tool_call: &ToolCall) -> ToolResult {
-        self.tool_executor.execute_tool(tool_call).await
+    /// Execute the tool (execution phase) with cancellation support
+    pub async fn execution_phase(
+        &self,
+        tool_call: &ToolCall,
+        cancel_token: CancellationToken,
+    ) -> ToolResult {
+        tokio::select! {
+            result = self.tool_executor.execute_tool(tool_call) => {
+                result
+            }
+            _ = cancel_token.cancelled() => {
+                ToolResult::error(
+                    &tool_call.id,
+                    &tool_call.name,
+                    "Tool execution cancelled by user",
+                )
+            }
+        }
     }
 
     /// Execute post-execution phase: run PostToolUse/PostToolUseFailure hooks
@@ -138,6 +153,7 @@ impl ToolOrchestrator {
         tool_call: &ToolCall,
         tool_result: &ToolResult,
         context: &ToolExecutionContext,
+        cancel_token: CancellationToken,
     ) -> SageResult<()> {
         let event = if tool_result.success {
             HookEvent::PostToolUse
@@ -151,7 +167,6 @@ impl ToolOrchestrator {
             .with_tool_input(serde_json::to_value(&tool_call.arguments).unwrap_or_default())
             .with_tool_result(serde_json::to_value(tool_result).unwrap_or_default());
 
-        let cancel_token = CancellationToken::new();
         if let Err(e) = self
             .hook_executor
             .execute(event, &tool_call.name, hook_input, cancel_token)
@@ -181,9 +196,12 @@ impl ToolOrchestrator {
         &self,
         tool_call: &ToolCall,
         context: &ToolExecutionContext,
+        cancel_token: CancellationToken,
     ) -> SageResult<ToolResult> {
         // Pre-execution phase
-        let pre_result = self.pre_execution_phase(tool_call, context).await?;
+        let pre_result = self
+            .pre_execution_phase(tool_call, context, cancel_token.clone())
+            .await?;
         if let Some(reason) = pre_result.block_reason() {
             return Ok(ToolResult::error(
                 &tool_call.id,
@@ -192,11 +210,12 @@ impl ToolOrchestrator {
             ));
         }
 
-        // Execution phase
-        let tool_result = self.execution_phase(tool_call).await;
+        // Execution phase (with cancellation support)
+        let tool_result = self.execution_phase(tool_call, cancel_token.clone()).await;
 
         // Post-execution phase
-        self.post_execution_phase(tool_call, &tool_result, context).await?;
+        self.post_execution_phase(tool_call, &tool_result, context, cancel_token)
+            .await?;
 
         Ok(tool_result)
     }

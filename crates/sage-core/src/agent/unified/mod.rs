@@ -16,12 +16,15 @@
 
 mod builder;
 mod constructor;
+mod context_builder;
 mod event_manager;
 mod execution_loop;
 mod executor;
 mod input_channel;
 mod llm_orchestrator;
 mod message_builder;
+mod permission_handler;
+mod recording;
 mod session;
 mod session_manager;
 mod step_execution;
@@ -33,6 +36,7 @@ mod user_interaction;
 mod tests;
 
 pub use builder::UnifiedExecutorBuilder;
+pub use context_builder::{ContextBuilder, GitInfo, ProjectContext};
 pub use event_manager::{EventManager, ExecutionEvent};
 pub use llm_orchestrator::LlmOrchestrator;
 pub use session_manager::SessionManager;
