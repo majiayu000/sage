@@ -28,7 +28,7 @@ impl UnifiedExecutor {
         let execution = AgentExecution::new(task.clone());
 
         // Start session recording if available
-        if let Some(recorder) = &self.session_recorder {
+        if let Some(recorder) = self.session_manager.session_recorder() {
             let provider = self.config.get_default_provider().to_string();
             let model = self.config.default_model_parameters()?.model.clone();
             recorder
@@ -43,14 +43,16 @@ impl UnifiedExecutor {
         let system_prompt = self.build_system_prompt().await?;
 
         // Get tool schemas
-        let tool_schemas = self.tool_executor.get_tool_schemas();
+        let tool_schemas = self.tool_orchestrator.tool_executor().get_tool_schemas();
 
         // Initialize conversation with system prompt and task
         let messages = self.build_initial_messages(&system_prompt, &task.description);
 
         // Record initial user message if session recording is enabled
-        if self.current_session_id.is_some() {
-            let _ = self.record_user_message(&task.description).await;
+        if self.session_manager.current_session_id().is_some() {
+            if let Err(e) = self.record_user_message(&task.description).await {
+                tracing::warn!(error = %e, "Failed to record user message (non-fatal)");
+            }
         }
 
         // Start the unified execution loop
@@ -69,18 +71,21 @@ impl UnifiedExecutor {
             .await?;
 
         // Stop any running animations
-        self.animation_manager.stop_animation().await;
+        self.event_manager.stop_animation().await;
 
         // Finalize session recording
-        if let Some(recorder) = &self.session_recorder {
-            let _ = recorder
+        if let Some(recorder) = self.session_manager.session_recorder() {
+            if let Err(e) = recorder
                 .lock()
                 .await
                 .record_session_end(
                     outcome.is_success(),
                     outcome.execution().final_result.clone(),
                 )
-                .await;
+                .await
+            {
+                tracing::warn!(error = %e, "Failed to record session end (non-fatal)");
+            }
         }
 
         Ok(outcome)

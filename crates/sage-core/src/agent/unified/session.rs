@@ -22,7 +22,7 @@ impl UnifiedExecutor {
     pub async fn enable_session_recording(&mut self) -> SageResult<String> {
         let session_id = uuid::Uuid::new_v4().to_string();
 
-        if let Some(storage) = &self.jsonl_storage {
+        if let Some(storage) = self.session_manager.jsonl_storage() {
             let working_dir = self
                 .options
                 .working_directory
@@ -51,18 +51,20 @@ impl UnifiedExecutor {
                 ))?;
 
             // Update tracker
-            let mut context = crate::session::SessionContext::new(working_dir);
-            context.detect_git_branch();
-            self.message_tracker = crate::session::MessageChainTracker::new()
-                .with_session(&session_id)
-                .with_context(context);
+            self.session_manager
+                .reset_message_tracker(&session_id, working_dir);
 
-            self.current_session_id = Some(session_id.clone());
+            self.session_manager
+                .set_current_session_id(Some(session_id.clone()));
 
             tracing::info!("Started JSONL session recording: {}", session_id);
         }
 
-        Ok(self.current_session_id.clone().unwrap_or_default())
+        Ok(self
+            .session_manager
+            .current_session_id()
+            .map(|s| s.to_string())
+            .unwrap_or_default())
     }
 
     /// Record a user message
@@ -73,15 +75,21 @@ impl UnifiedExecutor {
         &mut self,
         content: &str,
     ) -> SageResult<Option<EnhancedMessage>> {
-        if self.current_session_id.is_none() || self.jsonl_storage.is_none() {
+        if !self.session_manager.is_recording_active() {
             return Ok(None);
         }
 
-        let msg = self.message_tracker.create_user_message(content);
+        let msg = self
+            .session_manager
+            .message_tracker_mut()
+            .create_user_message(content);
 
-        if let (Some(storage), Some(session_id)) = (&self.jsonl_storage, &self.current_session_id) {
+        let storage = self.session_manager.jsonl_storage().cloned();
+        let session_id = self.session_manager.current_session_id().map(|s| s.to_string());
+
+        if let (Some(storage), Some(session_id)) = (storage, session_id) {
             storage
-                .append_message(session_id, &msg)
+                .append_message(&session_id, &msg)
                 .await
                 .context(format!(
                     "Failed to append user message to JSONL session: {}",
@@ -89,12 +97,18 @@ impl UnifiedExecutor {
                 ))?;
 
             // Capture first_prompt and last_prompt for session metadata
-            if let Ok(Some(mut metadata)) = storage.load_metadata(session_id).await {
+            if let Ok(Some(mut metadata)) = storage.load_metadata(&session_id).await {
                 // Set first_prompt only once (for session list display)
                 metadata.set_first_prompt_if_empty(content);
                 // Always update last_prompt (for resume display)
                 metadata.set_last_prompt(content);
-                let _ = storage.save_metadata(session_id, &metadata).await;
+                if let Err(e) = storage.save_metadata(&session_id, &metadata).await {
+                    tracing::warn!(
+                        error = %e,
+                        session_id = %session_id,
+                        "Failed to save session metadata (non-fatal)"
+                    );
+                }
             }
         }
 
@@ -111,11 +125,14 @@ impl UnifiedExecutor {
         tool_calls: Option<Vec<EnhancedToolCall>>,
         usage: Option<EnhancedTokenUsage>,
     ) -> SageResult<Option<EnhancedMessage>> {
-        if self.current_session_id.is_none() || self.jsonl_storage.is_none() {
+        if !self.session_manager.is_recording_active() {
             return Ok(None);
         }
 
-        let mut msg = self.message_tracker.create_assistant_message(content);
+        let mut msg = self
+            .session_manager
+            .message_tracker_mut()
+            .create_assistant_message(content);
 
         if let Some(calls) = tool_calls {
             msg = msg.with_tool_calls(calls);
@@ -125,8 +142,11 @@ impl UnifiedExecutor {
         }
 
         // Clone values to avoid borrow conflicts
-        let storage = self.jsonl_storage.clone();
-        let session_id = self.current_session_id.clone();
+        let storage = self.session_manager.jsonl_storage().cloned();
+        let session_id = self
+            .session_manager
+            .current_session_id()
+            .map(|s| s.to_string());
 
         if let (Some(storage), Some(session_id)) = (storage, session_id) {
             storage
@@ -153,21 +173,26 @@ impl UnifiedExecutor {
         error_type: &str,
         error_message: &str,
     ) -> SageResult<Option<EnhancedMessage>> {
-        if self.current_session_id.is_none() || self.jsonl_storage.is_none() {
+        if !self.session_manager.is_recording_active() {
             return Ok(None);
         }
 
-        let session_id = self.current_session_id.clone().unwrap();
-        let context = self.message_tracker.context().clone();
+        let session_id = self
+            .session_manager
+            .current_session_id()
+            .map(|s| s.to_string())
+            .unwrap();
+        let context = self.session_manager.message_tracker().context().clone();
         let parent_uuid = self
-            .message_tracker
+            .session_manager
+            .message_tracker()
             .last_message_uuid()
             .map(|s| s.to_string());
 
         let msg =
             EnhancedMessage::error(error_type, error_message, &session_id, context, parent_uuid);
 
-        if let Some(storage) = &self.jsonl_storage {
+        if let Some(storage) = self.session_manager.jsonl_storage() {
             storage
                 .append_message(&session_id, &msg)
                 .await
@@ -179,7 +204,13 @@ impl UnifiedExecutor {
             // Update metadata to reflect error state
             if let Ok(Some(mut metadata)) = storage.load_metadata(&session_id).await {
                 metadata.state = "failed".to_string();
-                let _ = storage.save_metadata(&session_id, &metadata).await;
+                if let Err(e) = storage.save_metadata(&session_id, &metadata).await {
+                    tracing::warn!(
+                        error = %e,
+                        session_id = %session_id,
+                        "Failed to save error state metadata (non-fatal)"
+                    );
+                }
             }
         }
 
@@ -198,8 +229,9 @@ impl UnifiedExecutor {
         session_id: &str,
     ) {
         // Load messages to check if summary update is needed
+        let last_count = self.session_manager.last_summary_msg_count();
         if let Ok(messages) = storage.load_messages(&session_id.to_string()).await {
-            if SummaryGenerator::should_update_summary(&messages, self.last_summary_msg_count) {
+            if SummaryGenerator::should_update_summary(&messages, last_count) {
                 // Generate new summary
                 if let Some(summary) = SummaryGenerator::generate_simple(&messages) {
                     // Update metadata with new summary
@@ -212,7 +244,8 @@ impl UnifiedExecutor {
                             .await
                             .is_ok()
                         {
-                            self.last_summary_msg_count = messages.len();
+                            self.session_manager
+                                .set_last_summary_msg_count(messages.len());
                             tracing::debug!("Updated session summary: {}", summary);
                         }
                     }
@@ -224,27 +257,33 @@ impl UnifiedExecutor {
     /// Create and record a file snapshot for the current message
     #[instrument(skip(self), fields(message_uuid = %message_uuid))]
     pub(super) async fn record_file_snapshot(&mut self, message_uuid: &str) -> SageResult<()> {
-        if self.current_session_id.is_none() || self.jsonl_storage.is_none() {
+        if !self.session_manager.is_recording_active() {
             return Ok(());
         }
 
         // Only create snapshot if files were tracked
-        if self.file_tracker.is_empty() {
+        if self.session_manager.is_file_tracker_empty() {
             return Ok(());
         }
 
         let snapshot = self
-            .file_tracker
-            .create_snapshot(message_uuid)
+            .session_manager
+            .create_file_snapshot(message_uuid)
             .await
             .context(format!(
                 "Failed to create file snapshot for message: {}",
                 message_uuid
             ))?;
 
-        if let (Some(storage), Some(session_id)) = (&self.jsonl_storage, &self.current_session_id) {
+        let storage = self.session_manager.jsonl_storage().cloned();
+        let session_id = self
+            .session_manager
+            .current_session_id()
+            .map(|s| s.to_string());
+
+        if let (Some(storage), Some(session_id)) = (storage, session_id) {
             storage
-                .append_snapshot(session_id, &snapshot)
+                .append_snapshot(&session_id, &snapshot)
                 .await
                 .context(format!(
                     "Failed to append file snapshot to JSONL session: {}",
@@ -253,21 +292,21 @@ impl UnifiedExecutor {
         }
 
         // Clear tracker for next round
-        self.file_tracker.clear();
+        self.session_manager.clear_file_tracker();
 
         Ok(())
     }
 
     /// Update todos in the message tracker
     pub fn update_todos(&mut self, todos: Vec<TodoItem>) {
-        self.message_tracker.set_todos(todos);
+        self.session_manager.set_todos(todos);
     }
 
     /// Track a file for snapshot capability
     ///
     /// Call this before modifying files to enable undo.
     pub async fn track_file(&mut self, path: impl AsRef<std::path::Path>) -> SageResult<()> {
-        self.file_tracker.track_file(path).await
+        self.session_manager.track_file(path).await
     }
 
     /// Create a sidechain session for branching
@@ -276,8 +315,8 @@ impl UnifiedExecutor {
     /// This is used for conversation branching (Claude Code style).
     #[instrument(skip(self))]
     pub async fn create_sidechain_session(&mut self) -> SageResult<String> {
-        let parent_session_id = match &self.current_session_id {
-            Some(id) => id.clone(),
+        let parent_session_id = match self.session_manager.current_session_id() {
+            Some(id) => id.to_string(),
             None => {
                 return Err(crate::error::SageError::agent(
                     "No active session to branch from",
@@ -287,7 +326,7 @@ impl UnifiedExecutor {
 
         let sidechain_id = uuid::Uuid::new_v4().to_string();
 
-        if let Some(storage) = &self.jsonl_storage {
+        if let Some(storage) = self.session_manager.jsonl_storage() {
             let working_dir = self
                 .options
                 .working_directory
@@ -316,14 +355,12 @@ impl UnifiedExecutor {
                 ))?;
 
             // Update tracker for new sidechain session
-            let mut context = crate::session::SessionContext::new(working_dir);
-            context.detect_git_branch();
-            self.message_tracker = crate::session::MessageChainTracker::new()
-                .with_session(&sidechain_id)
-                .with_context(context);
+            self.session_manager
+                .reset_message_tracker(&sidechain_id, working_dir);
 
-            self.current_session_id = Some(sidechain_id.clone());
-            self.last_summary_msg_count = 0;
+            self.session_manager
+                .set_current_session_id(Some(sidechain_id.clone()));
+            self.session_manager.set_last_summary_msg_count(0);
 
             tracing::info!(
                 "Created sidechain session: {} (parent: {})",
@@ -332,7 +369,11 @@ impl UnifiedExecutor {
             );
         }
 
-        Ok(self.current_session_id.clone().unwrap_or_default())
+        Ok(self
+            .session_manager
+            .current_session_id()
+            .map(|s| s.to_string())
+            .unwrap_or_default())
     }
 
     /// Restore session from storage
@@ -341,7 +382,7 @@ impl UnifiedExecutor {
     /// This enables the `-c` (continue) and `-r` (resume) CLI flags.
     #[instrument(skip(self))]
     pub async fn restore_session(&mut self, session_id: &str) -> SageResult<Vec<LlmMessage>> {
-        let storage = self.jsonl_storage.as_ref().ok_or_else(|| {
+        let storage = self.session_manager.jsonl_storage().ok_or_else(|| {
             SageError::config("JSONL storage not configured - cannot restore session")
         })?;
 
@@ -376,22 +417,23 @@ impl UnifiedExecutor {
         let llm_messages = Self::convert_messages_for_resume(&enhanced_messages);
 
         // Update executor state
-        self.current_session_id = Some(session_id.to_string());
+        self.session_manager
+            .set_current_session_id(Some(session_id.to_string()));
 
         // Restore message tracker context
         let working_dir = metadata.working_directory.clone();
-        let mut context = crate::session::SessionContext::new(working_dir);
-        context.detect_git_branch();
-        self.message_tracker = crate::session::MessageChainTracker::new()
-            .with_session(session_id)
-            .with_context(context);
+        self.session_manager
+            .reset_message_tracker(session_id, working_dir);
 
         // Set last parent UUID from restored messages
         if let Some(last_msg) = enhanced_messages.last() {
-            self.message_tracker.set_last_uuid(&last_msg.uuid);
+            self.session_manager
+                .message_tracker_mut()
+                .set_last_uuid(&last_msg.uuid);
         }
 
-        self.last_summary_msg_count = enhanced_messages.len();
+        self.session_manager
+            .set_last_summary_msg_count(enhanced_messages.len());
 
         tracing::info!(
             "Session {} restored successfully (title: {})",
@@ -406,8 +448,8 @@ impl UnifiedExecutor {
     #[instrument(skip(self))]
     pub async fn get_most_recent_session(&self) -> SageResult<Option<SessionMetadata>> {
         let storage = self
-            .jsonl_storage
-            .as_ref()
+            .session_manager
+            .jsonl_storage()
             .ok_or_else(|| SageError::config("JSONL storage not configured"))?;
 
         let sessions = storage.list_sessions().await?;
@@ -489,6 +531,6 @@ impl UnifiedExecutor {
 
     /// Set JSONL storage (for external configuration)
     pub fn set_jsonl_storage(&mut self, storage: Arc<JsonlSessionStorage>) {
-        self.jsonl_storage = Some(storage);
+        self.session_manager.set_jsonl_storage(storage);
     }
 }

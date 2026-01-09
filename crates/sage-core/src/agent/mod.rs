@@ -8,6 +8,8 @@ pub mod outcome;
 pub mod state;
 pub mod step;
 pub mod subagent;
+pub mod trait_impls;
+pub mod traits;
 pub mod unified;
 
 pub use completion::{
@@ -28,3 +30,9 @@ pub use subagent::{
     register_builtin_agents,
 };
 pub use unified::{UnifiedExecutor, UnifiedExecutorBuilder};
+
+// Core trait abstractions for dependency injection and testability
+pub use traits::{
+    LlmService, NoopProgressReporter, NoopSessionRecorder, ProgressReporter, SessionRecorderService,
+    ToolService, UserInteractionService,
+};

@@ -26,7 +26,7 @@ impl UnifiedExecutor {
             .unwrap_or_else(|| ".".to_string());
 
         // Get tool schemas to include in prompt - CRITICAL for AI to know what tools are available
-        let tool_schemas = self.tool_executor.get_tool_schemas();
+        let tool_schemas = self.tool_orchestrator.tool_executor().get_tool_schemas();
 
         // Get skills prompt for AI auto-invocation (Claude Code compatible)
         let skills_prompt = {

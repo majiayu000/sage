@@ -1,7 +1,7 @@
 //! Main execution loop logic
 
 use crate::agent::{AgentExecution, AgentState, AgentStep, ExecutionError, ExecutionOutcome};
-use crate::error::{SageError, SageResult};
+use crate::error::{SageError, SageResult, UnifiedError};
 use crate::session::{EnhancedTokenUsage, EnhancedToolCall};
 use crate::ui::{DisplayManager, global_progress_tracker};
 
@@ -47,7 +47,7 @@ impl UnifiedExecutor {
 
                 // Check for interrupt before each step
                 if task_scope.is_cancelled() {
-                    self.animation_manager.stop_animation().await;
+                    self.event_manager.stop_animation().await;
                     DisplayManager::print_separator("Task Interrupted", "yellow");
                     execution.complete(false, Some("Interrupted by user".to_string()));
                     break 'execution_loop ExecutionOutcome::Interrupted { execution };
@@ -114,7 +114,7 @@ impl UnifiedExecutor {
                         }
                     }
                     Err(e) => {
-                        self.animation_manager.stop_animation().await;
+                        self.event_manager.stop_animation().await;
 
                         // Check if this is a user cancellation
                         if matches!(e, SageError::Cancelled) {
@@ -129,31 +129,40 @@ impl UnifiedExecutor {
                         let error_step = AgentStep::new(step_number, AgentState::Error)
                             .with_error(error_message.clone());
 
-                        // Determine error type for better categorization
-                        let error_type = if error_message.contains("API") {
-                            "api_error"
-                        } else if error_message.contains("timeout")
-                            || error_message.contains("Timeout")
-                        {
-                            "timeout_error"
-                        } else if error_message.contains("rate") || error_message.contains("limit")
-                        {
-                            "rate_limit_error"
-                        } else {
-                            "execution_error"
+                        // Determine error type using structured error codes
+                        let error_type = match e.error_code() {
+                            "SAGE_LLM" | "SAGE_HTTP" => "api_error",
+                            "SAGE_TIMEOUT" => "timeout_error",
+                            "SAGE_TOOL" => "tool_error",
+                            "SAGE_CONFIG" => "config_error",
+                            "SAGE_IO" | "SAGE_STORAGE" => "io_error",
+                            "SAGE_JSON" => "parse_error",
+                            "SAGE_CANCELLED" => "cancelled_error",
+                            _ => "execution_error",
                         };
 
                         // Record error in trajectory (for replay)
-                        if let Some(recorder) = &self.session_recorder {
-                            let _ = recorder
+                        if let Some(recorder) = self.session_manager.session_recorder() {
+                            if let Err(e) = recorder
                                 .lock()
                                 .await
                                 .record_error(error_type, &error_message)
-                                .await;
+                                .await
+                            {
+                                tracing::warn!(
+                                    error = %e,
+                                    "Failed to record error in trajectory (non-fatal)"
+                                );
+                            }
                         }
 
                         // Record error in JSONL session (for user visibility)
-                        let _ = self.record_error_message(error_type, &error_message).await;
+                        if let Err(e) = self.record_error_message(error_type, &error_message).await {
+                            tracing::warn!(
+                                error = %e,
+                                "Failed to record error message in session (non-fatal)"
+                            );
+                        }
 
                         execution.add_step(error_step);
                         execution.complete(false, Some(format!("Task failed: {}", e)));
@@ -184,7 +193,7 @@ impl UnifiedExecutor {
 
     /// Record step in JSONL session
     async fn record_step_in_session(&mut self, step: &AgentStep) -> SageResult<()> {
-        if self.current_session_id.is_none() {
+        if self.session_manager.current_session_id().is_none() {
             return Ok(());
         }
 
@@ -224,7 +233,13 @@ impl UnifiedExecutor {
             .await
         {
             // Record file snapshot if files were tracked
-            let _ = self.record_file_snapshot(&msg.uuid).await;
+            if let Err(e) = self.record_file_snapshot(&msg.uuid).await {
+                tracing::warn!(
+                    error = %e,
+                    message_uuid = %msg.uuid,
+                    "Failed to record file snapshot (non-fatal)"
+                );
+            }
         }
 
         Ok(())
