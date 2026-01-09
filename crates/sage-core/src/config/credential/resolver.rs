@@ -5,7 +5,7 @@
 
 use super::resolved::{ResolvedCredential, ResolvedCredentials};
 use super::source::CredentialSource;
-use super::status::{ConfigStatus, ConfigStatusReport};
+use super::status::ConfigStatusReport;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;

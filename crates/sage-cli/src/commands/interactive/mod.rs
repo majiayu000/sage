@@ -3,6 +3,7 @@
 mod conversation;
 mod execution;
 mod help;
+mod onboarding;
 mod outcome;
 mod session;
 mod slash_commands;
@@ -11,6 +12,7 @@ use crate::console::CliConsole;
 use crate::signal_handler::{AppState, set_global_app_state, start_global_signal_handling};
 use conversation::handle_conversation;
 use help::{print_config, print_help, print_input_help, print_status};
+use sage_core::config::credential::ConfigStatus;
 use sage_core::config::{format_api_key_status_for_provider, ApiKeySource};
 use sage_core::error::{SageError, SageResult};
 use sage_core::ui::EnhancedConsole;
@@ -19,6 +21,8 @@ use session::ConversationSession;
 use slash_commands::handle_slash_command;
 use std::io::Write;
 use std::path::PathBuf;
+
+pub use onboarding::{CliOnboarding, check_config_status, print_status_hint};
 
 /// Arguments for interactive mode
 pub struct InteractiveArgs {
@@ -35,11 +39,37 @@ pub async fn execute(args: InteractiveArgs) -> SageResult<()> {
         console.warn(&format!("Failed to initialize signal handling: {}", e));
     }
 
+    // Check configuration status using unified loader
+    let (config_status, status_hint) = check_config_status();
+
+    // Run onboarding if needed
+    if config_status == ConfigStatus::Unconfigured {
+        let mut onboarding = CliOnboarding::new();
+        match onboarding.run().await {
+            Ok(true) => {
+                // Onboarding completed successfully
+                console.success("Setup complete! Starting sage...");
+            }
+            Ok(false) => {
+                // User cancelled or didn't save
+                console.warn("Setup incomplete. You can run /login anytime to configure.");
+            }
+            Err(e) => {
+                console.warn(&format!("Setup error: {}. Continuing anyway.", e));
+            }
+        }
+    }
+
     EnhancedConsole::print_welcome_banner();
     EnhancedConsole::print_section_header(
         "Interactive Mode",
         Some("Type 'help' for available commands, 'exit' to quit"),
     );
+
+    // Show status hint if there's a configuration issue
+    if let Some(hint) = &status_hint {
+        print_status_hint(&console, hint);
+    }
 
     let mut sdk = if std::path::Path::new(&args.config_file).exists() {
         console.info(&format!("Loading configuration from: {}", args.config_file));
@@ -71,7 +101,7 @@ pub async fn execute(args: InteractiveArgs) -> SageResult<()> {
             ApiKeySource::NotFound => {
                 console.warn(&status_msg);
                 console.info(&format!(
-                    "Hint: Set {} environment variable or add to config file",
+                    "Hint: Set {} environment variable or run /login to configure",
                     format!("{}_API_KEY", default_provider.to_uppercase())
                 ));
             }

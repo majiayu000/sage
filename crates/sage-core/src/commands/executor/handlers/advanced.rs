@@ -153,3 +153,12 @@ pub(super) async fn execute_title(invocation: &CommandInvocation) -> SageResult<
         )
     }
 }
+
+/// Execute /login command - configure API credentials
+pub(super) async fn execute_login() -> SageResult<CommandResult> {
+    // Return an interactive command that the CLI will handle
+    Ok(
+        CommandResult::interactive(InteractiveCommand::Login)
+            .with_status("Opening credential setup..."),
+    )
+}

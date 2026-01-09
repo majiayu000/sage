@@ -232,6 +232,8 @@ pub enum InteractiveCommand {
     },
     /// Set custom title for current session (Claude Code style)
     Title { title: String },
+    /// Run login/credential setup wizard
+    Login,
 }
 
 /// Command execution result

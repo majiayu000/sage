@@ -589,6 +589,11 @@ async fn handle_interactive_command_v2(
             console.warn(&format!("Title command not available in non-interactive mode. Title: {}", title));
             Ok(SlashCommandAction::Handled)
         }
+        InteractiveCommand::Login => {
+            console.warn("The /login command is only available in interactive mode.");
+            console.info("Run `sage` to start interactive mode and configure credentials.");
+            Ok(SlashCommandAction::Handled)
+        }
     }
 }
 
@@ -1215,6 +1220,11 @@ async fn handle_interactive_command(
         }
         InteractiveCommand::Title { title } => {
             console.warn(&format!("Title command not available in non-interactive mode. Title: {}", title));
+            Ok(())
+        }
+        InteractiveCommand::Login => {
+            console.warn("The /login command is only available in interactive mode.");
+            console.info("Run `sage` to start interactive mode and configure credentials.");
             Ok(())
         }
     }
