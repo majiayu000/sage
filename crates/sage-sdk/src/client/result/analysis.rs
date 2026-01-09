@@ -56,7 +56,7 @@ impl ExecutionResult {
     /// # }
     /// ```
     pub fn tool_calls(&self) -> Vec<&sage_core::tools::types::ToolCall> {
-        self.outcome.execution().all_tool_calls()
+        self.outcome.execution().all_tool_calls().collect()
     }
 
     /// Get all tool results from execution.
@@ -75,13 +75,13 @@ impl ExecutionResult {
     /// # }
     /// ```
     pub fn tool_results(&self) -> Vec<&sage_core::tools::types::ToolResult> {
-        self.outcome.execution().all_tool_results()
+        self.outcome.execution().all_tool_results().collect()
     }
 
     /// Get steps that had errors.
     ///
     /// Returns a list of agent steps where tool execution or other errors occurred.
     pub fn error_steps(&self) -> Vec<&sage_core::agent::AgentStep> {
-        self.outcome.execution().error_steps()
+        self.outcome.execution().error_steps().collect()
     }
 }
