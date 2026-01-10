@@ -53,6 +53,15 @@ impl LlmOrchestrator {
         // Create provider config with generous timeout (5 min default)
         // Use provider-specific API key lookup to get the correct key from env/config
         let api_key_info = default_params.get_api_key_info_for_provider(&provider_name);
+        tracing::info!(
+            "LLM Orchestrator: provider={}, api_key_source={:?}, has_key={}, key_preview={}",
+            provider_name,
+            api_key_info.source,
+            api_key_info.key.is_some(),
+            api_key_info.key.as_ref().map(|k| {
+                if k.len() > 8 { format!("{}...{}", &k[..4], &k[k.len()-4..]) } else { "***".to_string() }
+            }).unwrap_or_else(|| "NONE".to_string())
+        );
         let mut provider_config = ProviderConfig::new(&provider_name)
             .with_api_key(api_key_info.key.unwrap_or_default())
             .with_timeouts(TimeoutConfig::default())

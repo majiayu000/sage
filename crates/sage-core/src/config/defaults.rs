@@ -68,22 +68,36 @@ pub fn load_config_with_overrides(
             let default_params = create_default_providers();
             // Merge credentials into config
             for (provider, api_key) in creds.api_keys {
+                tracing::debug!(
+                    "Processing credential for provider '{}': key_len={}",
+                    provider,
+                    api_key.len()
+                );
                 // Only add if not already configured
                 if !config.model_providers.contains_key(&provider) {
                     let mut params = default_params
                         .get(&provider)
                         .cloned()
                         .unwrap_or_else(ModelParameters::default);
-                    params.api_key = Some(api_key);
+                    params.api_key = Some(api_key.clone());
                     config.model_providers.insert(provider.clone(), params);
+                    tracing::debug!("Added new provider '{}' with API key", provider);
                 } else if let Some(params) = config.model_providers.get_mut(&provider) {
                     // Update API key if not set or is an env var placeholder
+                    let current_key = params.api_key.as_deref().unwrap_or("");
                     let should_update = match &params.api_key {
                         None => true,
                         Some(key) => key.starts_with("${") || key.is_empty(),
                     };
+                    tracing::debug!(
+                        "Provider '{}' exists: current_key_preview='{}...', should_update={}",
+                        provider,
+                        if current_key.len() > 8 { &current_key[..8] } else { current_key },
+                        should_update
+                    );
                     if should_update {
-                        params.api_key = Some(api_key);
+                        params.api_key = Some(api_key.clone());
+                        tracing::debug!("Updated API key for provider '{}'", provider);
                     }
                 }
             }

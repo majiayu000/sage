@@ -75,21 +75,12 @@ impl GlmProvider {
         let mut request = self.http_client.post(&url).json(&request_body);
 
         // Add authentication (x-api-key header for Anthropic format)
-        if let Some(api_key) = self.config.get_api_key() {
-            request = request.header("x-api-key", api_key);
+        if let Some(key) = self.config.get_api_key() {
+            request = request.header("x-api-key", key);
         }
 
         // Add API version header
         request = request.header("anthropic-version", "2023-06-01");
-
-        tracing::info!(
-            "GLM API request tools count: {}, first tool: {:?}",
-            request_body["tools"].as_array().map_or(0, |a| a.len()),
-            request_body["tools"]
-                .as_array()
-                .and_then(|a| a.first())
-                .map(|t| t["name"].as_str())
-        );
 
         // Debug: Write full request to file for debugging
         let debug_enabled = std::env::var("SAGE_DEBUG_API").is_ok();
@@ -218,17 +209,23 @@ impl GlmProvider {
         let mut request = self.http_client.post(&url).json(&request_body);
 
         // Add authentication (x-api-key header for Anthropic format)
-        if let Some(api_key) = self.config.get_api_key() {
-            request = request.header("x-api-key", api_key);
+        let api_key = self.config.get_api_key();
+        tracing::info!(
+            "GLM streaming: url={}, has_api_key={}, key_preview={}",
+            url,
+            api_key.is_some(),
+            api_key.as_ref().map(|k| {
+                if k.len() > 8 { format!("{}...{}", &k[..4], &k[k.len()-4..]) } else { "***".to_string() }
+            }).unwrap_or_else(|| "NONE".to_string())
+        );
+        if let Some(key) = api_key {
+            request = request.header("x-api-key", key);
+        } else {
+            tracing::error!("GLM API key is missing! Check your configuration.");
         }
 
         // Add API version header
         request = request.header("anthropic-version", "2023-06-01");
-
-        tracing::debug!(
-            "GLM API streaming request: {}",
-            serde_json::to_string_pretty(&request_body).unwrap_or_default()
-        );
 
         let response = request.send().await.map_err(|e| {
             SageError::llm_with_context(
