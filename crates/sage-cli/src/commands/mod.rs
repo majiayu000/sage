@@ -3,7 +3,6 @@
 pub mod config;
 pub mod diagnostics;
 pub mod interactive;
-pub mod run;
 pub mod tools;
 pub mod trajectory;
 pub mod unified;
