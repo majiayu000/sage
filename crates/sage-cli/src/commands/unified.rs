@@ -647,8 +647,23 @@ async fn handle_interactive_command_v2(
             Ok(SlashCommandAction::Handled)
         }
         InteractiveCommand::Login => {
-            console.warn("The /login command is only available in interactive mode.");
-            console.info("Run `sage` to start interactive mode and configure credentials.");
+            // Run the login flow directly
+            use crate::commands::interactive::CliOnboarding;
+            use crate::ui::NerdConsole;
+
+            let nerd = NerdConsole::new();
+            let mut onboarding = CliOnboarding::new();
+            match onboarding.run_login().await {
+                Ok(true) => {
+                    nerd.success("API key updated! Restart sage to use the new key.");
+                }
+                Ok(false) => {
+                    nerd.info("API key not changed.");
+                }
+                Err(e) => {
+                    nerd.error(&format!("Login failed: {}", e));
+                }
+            }
             Ok(SlashCommandAction::Handled)
         }
     }
