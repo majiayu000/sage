@@ -81,6 +81,9 @@ async fn main() -> SageResult<()> {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
+    // Initialize icon mode from environment (SAGE_NERD_FONTS=false to disable)
+    sage_core::ui::init_icons();
+
     let cli = Cli::parse();
     router::route(cli).await
 }

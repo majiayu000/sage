@@ -282,6 +282,8 @@ impl NerdConsole {
         println!();
         println!("  {}  {}   Clear conversation", "/clear".bright_yellow(), " ".dimmed());
         println!("  {}  {}   Show recent sessions", "/resume".bright_yellow(), "".dimmed());
+        println!("  {}  {}   Update API key", "/login".bright_yellow(), " ".dimmed());
+        println!("  {} {}   Clear credentials", "/logout".bright_yellow(), "".dimmed());
         println!("  {}   {}   Show help", "/help".bright_yellow(), "  ".dimmed());
         println!("  {}   {}   Exit sage", "/exit".bright_yellow(), "  ".dimmed());
         println!();

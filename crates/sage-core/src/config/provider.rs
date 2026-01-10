@@ -370,6 +370,7 @@ impl ProviderConfig {
                 "anthropic" => "https://api.anthropic.com".to_string(),
                 "google" => "https://generativelanguage.googleapis.com".to_string(),
                 "ollama" => "http://localhost:11434".to_string(),
+                "glm" | "zhipu" => "https://open.bigmodel.cn/api/anthropic".to_string(),
                 _ => "http://localhost:8000".to_string(),
             }
         }
@@ -683,7 +684,7 @@ impl ProviderDefaults {
     /// Get default configuration for GLM (Zhipu AI)
     pub fn glm() -> ProviderConfig {
         ProviderConfig::new("glm")
-            .with_base_url("https://open.bigmodel.cn/api/paas/v4")
+            .with_base_url("https://open.bigmodel.cn/api/anthropic")
             .with_timeouts(TimeoutConfig::default())
             .with_max_retries(3)
             .with_rate_limit(RateLimitConfig {

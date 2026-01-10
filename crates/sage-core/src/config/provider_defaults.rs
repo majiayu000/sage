@@ -133,5 +133,41 @@ pub fn create_default_providers() -> HashMap<String, ModelParameters> {
         },
     );
 
+    // GLM (Zhipu AI) - Anthropic-compatible endpoint
+    providers.insert(
+        "glm".to_string(),
+        ModelParameters {
+            model: "glm-4.7".to_string(),
+            api_key: None,
+            base_url: Some("https://open.bigmodel.cn/api/anthropic".to_string()),
+            max_tokens: Some(4096),
+            temperature: Some(0.7),
+            top_p: Some(1.0),
+            top_k: None,
+            parallel_tool_calls: Some(false),
+            max_retries: Some(3),
+            api_version: Some("2023-06-01".to_string()),
+            stop_sequences: None,
+        },
+    );
+
+    // Zhipu alias (same behavior as GLM)
+    providers.insert(
+        "zhipu".to_string(),
+        ModelParameters {
+            model: "glm-4.7".to_string(),
+            api_key: None,
+            base_url: Some("https://open.bigmodel.cn/api/anthropic".to_string()),
+            max_tokens: Some(4096),
+            temperature: Some(0.7),
+            top_p: Some(1.0),
+            top_k: None,
+            parallel_tool_calls: Some(false),
+            max_retries: Some(3),
+            api_version: Some("2023-06-01".to_string()),
+            stop_sequences: None,
+        },
+    );
+
     providers
 }

@@ -36,6 +36,8 @@ pub fn default_providers() -> Vec<ProviderEnvConfig> {
         ProviderEnvConfig::new("anthropic", "ANTHROPIC_API_KEY"),
         ProviderEnvConfig::new("openai", "OPENAI_API_KEY"),
         ProviderEnvConfig::new("google", "GOOGLE_API_KEY"),
+        ProviderEnvConfig::new("glm", "GLM_API_KEY"),
+        ProviderEnvConfig::new("zhipu", "ZHIPU_API_KEY"),
         ProviderEnvConfig::new("ollama", "OLLAMA_API_KEY"),
     ]
 }
@@ -360,6 +362,7 @@ mod tests {
             env::remove_var("ANTHROPIC_API_KEY");
             env::remove_var("OPENAI_API_KEY");
             env::remove_var("GOOGLE_API_KEY");
+            env::remove_var("GLM_API_KEY");
             env::remove_var("OLLAMA_API_KEY");
         }
     }
@@ -374,12 +377,13 @@ mod tests {
     #[test]
     fn test_default_providers() {
         let providers = default_providers();
-        assert_eq!(providers.len(), 4);
+        assert_eq!(providers.len(), 5);
 
         let names: Vec<&str> = providers.iter().map(|p| p.name.as_str()).collect();
         assert!(names.contains(&"anthropic"));
         assert!(names.contains(&"openai"));
         assert!(names.contains(&"google"));
+        assert!(names.contains(&"glm"));
         assert!(names.contains(&"ollama"));
     }
 
@@ -612,14 +616,15 @@ mod tests {
             .with_cli_key("anthropic", "key1")
             .with_cli_key("openai", "key2")
             .with_cli_key("google", "key3")
-            .with_cli_key("ollama", "key4")
+            .with_cli_key("glm", "key4")
+            .with_cli_key("ollama", "key5")
             .with_auto_import(false);
 
         let resolver = CredentialResolver::new(config);
         let status = resolver.get_status();
 
         assert_eq!(status.status, ConfigStatus::Complete);
-        assert_eq!(status.configured_providers.len(), 4);
+        assert_eq!(status.configured_providers.len(), 5);
         assert!(status.missing_credentials.is_empty());
     }
 

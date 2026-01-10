@@ -5,8 +5,10 @@
 
 use super::state::{OnboardingState, OnboardingStep};
 use crate::config::credential::{
-    CredentialResolver, CredentialsFile, ResolverConfig, ConfigStatus,
+    ConfigStatus, CredentialResolver, CredentialsFile, ResolverConfig,
 };
+use crate::config::Config;
+use crate::config::ModelParameters;
 use crate::error::{SageError, SageResult};
 use std::path::PathBuf;
 use tracing::{debug, info};
@@ -69,6 +71,12 @@ pub fn default_provider_options() -> Vec<ProviderOption> {
             "Google (Gemini)",
             "Gemini models - multimodal capabilities",
             "https://makersuite.google.com/app/apikey",
+        ),
+        ProviderOption::new(
+            "glm",
+            "智谱AI (GLM)",
+            "GLM-4 models - powerful Chinese and English capabilities",
+            "https://open.bigmodel.cn/",
         ),
         ProviderOption::new(
             "ollama",
@@ -260,6 +268,15 @@ impl OnboardingManager {
                     );
                 }
             }
+            "glm" => {
+                // GLM/ZAI API keys are alphanumeric strings, typically 32+ characters
+                // Format: alphanumeric with possible dots (e.g., "xxx.yyy")
+                if api_key.len() < 20 {
+                    return ValidationResult::failure(
+                        "智谱AI API keys are typically longer (20+ characters)",
+                    );
+                }
+            }
             "ollama" => {
                 // Ollama doesn't need a real API key
                 return ValidationResult::success("Ollama configured (local)");
@@ -324,6 +341,45 @@ impl OnboardingManager {
             creds_path.display()
         );
 
+        // Save minimal global config to ensure provider is configured
+        let config_path = self.global_dir.join("config.json");
+        let mut config = Config::default();
+
+        if !config.model_providers.contains_key(provider) {
+            let mut params = ModelParameters::default();
+            if provider == "glm" || provider == "zhipu" {
+                params.model = "glm-4.7".to_string();
+                params.base_url = Some("https://open.bigmodel.cn/api/anthropic".to_string());
+                params.api_version = Some("2023-06-01".to_string());
+                params.parallel_tool_calls = Some(false);
+            }
+            config.model_providers.insert(provider.clone(), params);
+        }
+
+        config.set_default_provider(provider.clone())?;
+
+        if let Some(params) = config.model_providers.get_mut(provider) {
+            if provider == "glm" || provider == "zhipu" {
+                params.model = "glm-4.7".to_string();
+                params.base_url = Some("https://open.bigmodel.cn/api/anthropic".to_string());
+                params.api_version = Some("2023-06-01".to_string());
+                params.parallel_tool_calls = Some(false);
+            }
+            if params.api_key.is_none() {
+                params.api_key = Some(format!("${{{}_API_KEY}}", provider.to_uppercase()));
+            }
+        }
+
+        std::fs::create_dir_all(&self.global_dir).map_err(|e| {
+            SageError::config(format!("Failed to create config directory: {}", e))
+        })?;
+        let config_json = serde_json::to_string_pretty(&config)
+            .map_err(|e| SageError::config(format!("Failed to serialize config: {}", e)))?;
+        std::fs::write(&config_path, config_json)
+            .map_err(|e| SageError::config(format!("Failed to save config: {}", e)))?;
+
+        info!("Saved global config to {}", config_path.display());
+
         Ok(())
     }
 
@@ -387,11 +443,16 @@ mod tests {
     #[test]
     fn test_default_provider_options() {
         let providers = default_provider_options();
-        assert!(providers.len() >= 3);
+        assert!(providers.len() >= 5);
 
         let anthropic = providers.iter().find(|p| p.id == "anthropic");
         assert!(anthropic.is_some());
         assert!(anthropic.unwrap().recommended);
+
+        // Check GLM provider exists
+        let glm = providers.iter().find(|p| p.id == "glm");
+        assert!(glm.is_some());
+        assert_eq!(glm.unwrap().name, "智谱AI (GLM)");
     }
 
     #[test]
@@ -551,6 +612,25 @@ mod tests {
         manager.select_provider("ollama").unwrap();
         manager.set_api_key("anything").unwrap();
 
+        let result = manager.validate_api_key().await;
+        assert!(result.valid);
+    }
+
+    #[tokio::test]
+    async fn test_onboarding_manager_validate_glm_key_format() {
+        let dir = tempdir().unwrap();
+        let mut manager = OnboardingManager::new(dir.path());
+        manager.select_provider("glm").unwrap();
+
+        // Too short key should fail
+        manager.set_api_key("short").unwrap();
+        let result = manager.validate_api_key().await;
+        assert!(!result.valid);
+
+        // Valid length key should pass
+        let mut manager = OnboardingManager::new(dir.path());
+        manager.select_provider("glm").unwrap();
+        manager.set_api_key("abcdefghij1234567890abcdefghij12").unwrap();
         let result = manager.validate_api_key().await;
         assert!(result.valid);
     }
