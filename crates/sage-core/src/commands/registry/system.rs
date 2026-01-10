@@ -1,4 +1,7 @@
-//! Built-in slash commands registration
+//! System slash commands registration
+//!
+//! This module registers all built-in system commands that are
+//! always available regardless of project configuration.
 
 use super::super::types::{CommandSource, SlashCommand};
 use super::types::CommandRegistry;

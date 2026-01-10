@@ -3,8 +3,8 @@
 //! This module provides the command registry for discovering and
 //! managing slash commands from various sources.
 
-mod builtins;
 mod discovery;
+mod system;
 mod types;
 
 #[cfg(test)]

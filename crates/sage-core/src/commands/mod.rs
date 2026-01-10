@@ -6,17 +6,42 @@
 //! # Overview
 //!
 //! Slash commands are triggered by typing `/command-name [args]` in the chat.
-//! Commands can be:
-//! - **Built-in**: Core commands like `/help`, `/clear`, `/checkpoint`
-//! - **Project-level**: Defined in `.sage/commands/*.md`
-//! - **User-level**: Defined in `~/.config/sage/commands/*.md`
+//! Commands can be categorized as:
+//! - **System**: Core commands like `/help`, `/clear`, `/checkpoint`
+//! - **User**: Defined in `.sage/commands/*.md` or `~/.config/sage/commands/*.md`
+//! - **MCP**: Commands from MCP (Model Context Protocol) servers
 //!
 //! # Command Priority
 //!
 //! When multiple commands have the same name:
-//! 1. Built-in commands (highest priority)
+//! 1. System commands (highest priority)
 //! 2. Project commands
-//! 3. User commands (lowest priority)
+//! 3. User commands
+//! 4. MCP commands (lowest priority)
+//!
+//! # Using the Command Router
+//!
+//! The `CommandRouter` provides a unified entry point for all command operations:
+//!
+//! ```rust,ignore
+//! use sage_core::commands::CommandRouter;
+//!
+//! // Create router
+//! let router = CommandRouter::new("./project").await?;
+//!
+//! // Check if input is a command
+//! if CommandRouter::is_command("/help") {
+//!     // Route and execute
+//!     if let Some(result) = router.route("/help").await? {
+//!         match result.kind() {
+//!             CommandResultKind::Local { output } => println!("{}", output),
+//!             CommandResultKind::Prompt { content } => send_to_llm(content),
+//!             CommandResultKind::Interactive(cmd) => handle_interactive(cmd),
+//!             CommandResultKind::Empty => {}
+//!         }
+//!     }
+//! }
+//! ```
 //!
 //! # Creating Custom Commands
 //!
@@ -36,28 +61,7 @@
 //! - `$ARG1`, `$ARG2`, etc. - Individual arguments
 //! - `$ARGUMENTS_JSON` - Arguments as a JSON array
 //!
-//! # Example Usage
-//!
-//! ```rust,ignore
-//! use sage_core::commands::{CommandRegistry, CommandExecutor};
-//! use std::sync::Arc;
-//! use tokio::sync::RwLock;
-//!
-//! // Create registry and discover commands
-//! let mut registry = CommandRegistry::new("./project");
-//! registry.register_builtins();
-//! registry.discover().await?;
-//!
-//! // Create executor
-//! let executor = CommandExecutor::new(Arc::new(RwLock::new(registry)));
-//!
-//! // Process user input
-//! if let Some(result) = executor.process("/search MyFunction").await? {
-//!     println!("Expanded: {}", result.expanded_prompt);
-//! }
-//! ```
-//!
-//! # Built-in Commands
+//! # System Commands
 //!
 //! | Command | Description |
 //! |---------|-------------|
@@ -70,11 +74,18 @@
 //! | `/commands` | List all commands |
 //! | `/config` | Show/modify configuration |
 //! | `/init` | Initialize .sage directory |
+//! | `/login` | Configure API credentials |
+//! | `/resume` | Resume previous session |
 
 pub mod executor;
 pub mod registry;
+pub mod router;
 pub mod types;
 
 pub use executor::CommandExecutor;
 pub use registry::CommandRegistry;
-pub use types::{CommandArgument, CommandInvocation, CommandResult, CommandSource, SlashCommand};
+pub use router::{CommandCategory, CommandList, CommandResultKind, CommandRouter, RoutedCommand};
+pub use types::{
+    CommandArgument, CommandInvocation, CommandResult, CommandSource, InteractiveCommand,
+    SlashCommand,
+};
