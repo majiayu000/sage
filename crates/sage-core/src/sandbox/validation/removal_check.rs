@@ -154,8 +154,7 @@ fn is_path_match(path: &str, critical: &str) -> bool {
     }
 
     // Path starts with critical path as a directory
-    if path.starts_with(critical) {
-        let after = &path[critical.len()..];
+    if let Some(after) = path.strip_prefix(critical) {
         if after.is_empty() || after.starts_with('/') {
             // Only match if it's the exact path or a subdirectory
             // But for root paths, we need to be more careful

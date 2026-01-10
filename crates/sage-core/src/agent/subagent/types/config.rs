@@ -175,6 +175,6 @@ impl SubAgentConfig {
     /// Takes into account inheritance from parent agent.
     pub fn allows_tool(&self, tool_name: &str) -> bool {
         self.tool_access
-            .resolve_allows_tool(tool_name, self.parent_tools.as_ref().map(|v| v.as_slice()))
+            .resolve_allows_tool(tool_name, self.parent_tools.as_deref())
     }
 }

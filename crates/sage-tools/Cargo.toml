@@ -52,7 +52,7 @@ toml = "0.8"
 
 # HTTP client
 reqwest = { workspace = true }
-base64 = "0.21"
+base64 = "0.22"
 html2md-rs = "0.10.2"
 
 # Regular expressions

@@ -33,8 +33,13 @@ You are a Git commit expert. Help the user create a well-structured commit.
 
 <body - explain what and why>
 
-Co-Authored-By: Sage Agent <noreply@sage.dev>
+Signed-off-by: <用户名> <邮箱>
 ```
+
+**重要**：
+- 必须使用 `Signed-off-by` 而非 `Co-Authored-By`
+- 禁止添加任何 AI 生成标记
+- DCO 验证必须通过
 
 ## User Request
 
