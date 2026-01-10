@@ -93,11 +93,26 @@ impl ModelParameters {
         // 3. Fall back to config file
         if let Some(api_key) = &self.api_key {
             if !api_key.is_empty() {
-                return ApiKeyInfo {
-                    key: Some(api_key.clone()),
-                    source: ApiKeySource::ConfigFile,
-                    env_var_name: None,
-                };
+                // Handle ${VAR_NAME} placeholder format
+                if api_key.starts_with("${") && api_key.ends_with("}") {
+                    let var_name = &api_key[2..api_key.len() - 1];
+                    if let Ok(key) = std::env::var(var_name) {
+                        if !key.is_empty() {
+                            return ApiKeyInfo {
+                                key: Some(key),
+                                source: ApiKeySource::StandardEnvVar,
+                                env_var_name: Some(var_name.to_string()),
+                            };
+                        }
+                    }
+                    // Placeholder not resolved, treat as not found
+                } else {
+                    return ApiKeyInfo {
+                        key: Some(api_key.clone()),
+                        source: ApiKeySource::ConfigFile,
+                        env_var_name: None,
+                    };
+                }
             }
         }
 
