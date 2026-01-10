@@ -56,15 +56,34 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
     }
 
     // Load configuration
-    let config = if std::path::Path::new(&args.config_file).exists() {
+    let mut config = if std::path::Path::new(&args.config_file).exists() {
         load_config_from_file(&args.config_file)?
     } else {
-        console.warn(&format!(
-            "Configuration file not found: {}, using defaults",
-            args.config_file
-        ));
-        Config::default()
+        let global_config = dirs::home_dir().map(|h| h.join(".sage").join("config.json"));
+        if global_config.as_ref().is_none_or(|path| !path.exists()) {
+            console.warn(&format!(
+                "Configuration file not found: {}, using defaults",
+                args.config_file
+            ));
+        }
+        sage_core::config::load_config()?
     };
+
+    // If the default provider has no key, pick the first provider that does.
+    if let Some(params) = config.model_providers.get(&config.default_provider) {
+        if params
+            .get_api_key_info_for_provider(&config.default_provider)
+            .key
+            .is_none()
+        {
+            if let Some((provider, _)) = config.model_providers.iter().find(|(provider, params)| {
+                params.get_api_key_info_for_provider(provider).key.is_some()
+                    || provider.as_str() == "ollama"
+            }) {
+                config.default_provider = provider.clone();
+            }
+        }
+    }
 
     // Determine working directory
     let working_dir = args
@@ -342,6 +361,44 @@ async fn execute_interactive_loop(
         // Handle /help command
         if input == "/help" || input == "help" || input == "?" {
             nerd.print_help();
+            continue;
+        }
+
+        // Handle /login command - update API key
+        if input == "/login" || input == "login" {
+            use crate::commands::interactive::CliOnboarding;
+
+            let mut onboarding = CliOnboarding::new();
+            match onboarding.run_login().await {
+                Ok(true) => {
+                    nerd.success("API key updated! Restart sage to use the new key.");
+                    break; // Exit to restart with new config
+                }
+                Ok(false) => {
+                    nerd.info("API key not changed.");
+                }
+                Err(e) => {
+                    nerd.error(&format!("Login failed: {}", e));
+                }
+            }
+            continue;
+        }
+
+        // Handle /logout command - clear credentials
+        if input == "/logout" || input == "logout" {
+            // Clear credentials file
+            if let Some(home) = dirs::home_dir() {
+                let creds_path = home.join(".sage/credentials.json");
+                if creds_path.exists() {
+                    if let Err(e) = std::fs::remove_file(&creds_path) {
+                        nerd.error(&format!("Failed to remove credentials: {}", e));
+                    } else {
+                        nerd.success("Credentials cleared. Run /login to configure a new API key.");
+                    }
+                } else {
+                    nerd.info("No credentials file found.");
+                }
+            }
             continue;
         }
 

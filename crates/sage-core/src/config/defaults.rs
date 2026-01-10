@@ -3,6 +3,7 @@
 use crate::config::credential::CredentialsFile;
 use crate::config::loader::ConfigLoader;
 use crate::config::model::Config;
+use crate::config::provider_defaults::create_default_providers;
 use crate::config::ModelParameters;
 use crate::error::SageResult;
 use std::collections::HashMap;
@@ -51,6 +52,12 @@ pub fn load_config_with_overrides(
         loader = loader
             .with_file("sage_config.json")
             .with_file("sage_config.toml");
+
+        if let Some(global_config) = dirs::home_dir().map(|h| h.join(".sage").join("config.json")) {
+            if global_config.exists() {
+                loader = loader.with_file(global_config);
+            }
+        }
     }
 
     let mut config = loader.with_args(overrides).load()?;
@@ -58,11 +65,15 @@ pub fn load_config_with_overrides(
     // Load credentials from ~/.sage/credentials.json
     if let Some(creds_path) = dirs::home_dir().map(|h| h.join(".sage").join("credentials.json")) {
         if let Some(creds) = CredentialsFile::load(&creds_path) {
+            let default_params = create_default_providers();
             // Merge credentials into config
             for (provider, api_key) in creds.api_keys {
                 // Only add if not already configured
                 if !config.model_providers.contains_key(&provider) {
-                    let mut params = ModelParameters::default();
+                    let mut params = default_params
+                        .get(&provider)
+                        .cloned()
+                        .unwrap_or_else(ModelParameters::default);
                     params.api_key = Some(api_key);
                     config.model_providers.insert(provider.clone(), params);
                 } else if let Some(params) = config.model_providers.get_mut(&provider) {
@@ -73,6 +84,25 @@ pub fn load_config_with_overrides(
                 }
             }
             tracing::debug!("Loaded credentials from {}", creds_path.display());
+        }
+    }
+
+    if let Some(params) = config.model_providers.get(&config.default_provider) {
+        let has_key = params
+            .get_api_key_info_for_provider(&config.default_provider)
+            .key
+            .is_some();
+        if !has_key {
+            if let Some((provider, _)) = config
+                .model_providers
+                .iter()
+                .find(|(provider, params)| {
+                    params.get_api_key_info_for_provider(provider).key.is_some()
+                        || provider.as_str() == "ollama"
+                })
+            {
+                config.default_provider = provider.clone();
+            }
         }
     }
 

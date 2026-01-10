@@ -37,14 +37,39 @@ impl ToolCall {
         self
     }
 
-    /// Get a typed argument value
+    /// Get a typed argument value, trying both snake_case and camelCase
     pub fn get_argument<T>(&self, key: &str) -> Option<T>
     where
         T: for<'de> Deserialize<'de>,
     {
-        self.arguments
-            .get(key)
-            .and_then(|v| serde_json::from_value(v.clone()).ok())
+        // Try exact key first
+        if let Some(value) = self.arguments.get(key) {
+            if let Ok(result) = serde_json::from_value(value.clone()) {
+                return Some(result);
+            }
+        }
+
+        // Try camelCase version (e.g., "file_path" -> "filePath")
+        let camel = to_camel_case(key);
+        if camel != key {
+            if let Some(value) = self.arguments.get(&camel) {
+                if let Ok(result) = serde_json::from_value(value.clone()) {
+                    return Some(result);
+                }
+            }
+        }
+
+        // Try snake_case version (e.g., "filePath" -> "file_path")
+        let snake = to_snake_case(key);
+        if snake != key {
+            if let Some(value) = self.arguments.get(&snake) {
+                if let Ok(result) = serde_json::from_value(value.clone()) {
+                    return Some(result);
+                }
+            }
+        }
+
+        None
     }
 
     /// Get a string argument
@@ -61,6 +86,41 @@ impl ToolCall {
     pub fn get_number(&self, key: &str) -> Option<f64> {
         self.get_argument::<f64>(key)
     }
+}
+
+/// Convert snake_case to camelCase
+fn to_camel_case(s: &str) -> String {
+    let mut result = String::new();
+    let mut capitalize_next = false;
+
+    for c in s.chars() {
+        if c == '_' {
+            capitalize_next = true;
+        } else if capitalize_next {
+            result.push(c.to_ascii_uppercase());
+            capitalize_next = false;
+        } else {
+            result.push(c);
+        }
+    }
+    result
+}
+
+/// Convert camelCase to snake_case
+fn to_snake_case(s: &str) -> String {
+    let mut result = String::new();
+
+    for (i, c) in s.chars().enumerate() {
+        if c.is_ascii_uppercase() {
+            if i > 0 {
+                result.push('_');
+            }
+            result.push(c.to_ascii_lowercase());
+        } else {
+            result.push(c);
+        }
+    }
+    result
 }
 
 /// Result of a tool execution
@@ -326,5 +386,58 @@ impl ToolSchema {
             description: description.into(),
             parameters,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_to_camel_case() {
+        assert_eq!(to_camel_case("file_path"), "filePath");
+        assert_eq!(to_camel_case("working_directory"), "workingDirectory");
+        assert_eq!(to_camel_case("simple"), "simple");
+        assert_eq!(to_camel_case("a_b_c"), "aBC");
+    }
+
+    #[test]
+    fn test_to_snake_case() {
+        assert_eq!(to_snake_case("filePath"), "file_path");
+        assert_eq!(to_snake_case("workingDirectory"), "working_directory");
+        assert_eq!(to_snake_case("simple"), "simple");
+        assert_eq!(to_snake_case("ABC"), "a_b_c");
+    }
+
+    #[test]
+    fn test_get_argument_with_case_fallback() {
+        let mut args = HashMap::new();
+        args.insert("filePath".to_string(), serde_json::json!("/test/path"));
+        args.insert("content".to_string(), serde_json::json!("hello"));
+
+        let call = ToolCall::new("1", "Write", args);
+
+        // Should find "filePath" when asking for "file_path"
+        assert_eq!(
+            call.get_string("file_path"),
+            Some("/test/path".to_string())
+        );
+
+        // Should find exact match
+        assert_eq!(call.get_string("content"), Some("hello".to_string()));
+    }
+
+    #[test]
+    fn test_get_argument_snake_to_camel() {
+        let mut args = HashMap::new();
+        args.insert("file_path".to_string(), serde_json::json!("/test/path"));
+
+        let call = ToolCall::new("1", "Write", args);
+
+        // Should find "file_path" when asking for "filePath"
+        assert_eq!(
+            call.get_string("filePath"),
+            Some("/test/path".to_string())
+        );
     }
 }

@@ -5,7 +5,7 @@ use crate::error::{SageError, SageResult};
 use crate::interrupt::global_interrupt_manager;
 use crate::llm::messages::LlmMessage;
 use crate::tools::types::{ToolCall, ToolSchema};
-use crate::ui::DisplayManager;
+use crate::ui::{DisplayManager, Icons};
 use colored::Colorize;
 use tracing::instrument;
 
@@ -91,7 +91,7 @@ impl UnifiedExecutor {
         // Display assistant response
         if !llm_response.content.is_empty() {
             println!();
-            println!("  {} {}", "󰚩".bright_cyan(), "AI Response".bright_white().bold());
+            println!("  {} {}", Icons::sage().bright_cyan(), "AI Response".bright_white().bold());
             println!();
             for line in DisplayManager::render_markdown_lines(&llm_response.content) {
                 println!("  {}", line);
@@ -140,7 +140,7 @@ impl UnifiedExecutor {
         println!();
         println!(
             "  {} {} ({})",
-            "".bright_magenta(),
+            Icons::tool().bright_magenta(),
             "Executing tools".bright_white().bold(),
             tool_calls.len().to_string().dimmed()
         );

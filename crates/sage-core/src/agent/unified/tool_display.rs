@@ -4,24 +4,15 @@
 //! in the terminal, including icons, parameter formatting, and activity descriptions.
 
 use crate::tools::types::{ToolCall, ToolResult};
+use crate::ui::Icons;
 use colored::Colorize;
 use std::collections::HashMap;
 
 use super::event_manager::{EventManager, ExecutionEvent};
 
-/// Get icon for specific tool type
+/// Get icon for specific tool type (delegates to Icons::for_tool)
 pub fn get_tool_icon(tool_name: &str) -> &'static str {
-    match tool_name.to_lowercase().as_str() {
-        "bash" | "shell" | "execute" => "",
-        "read" | "cat" => "",
-        "write" | "edit" => "",
-        "grep" | "search" => "",
-        "glob" | "find" => "",
-        "lsp" | "code" => "",
-        "web_fetch" | "web_search" => "󰖟",
-        "task" | "todo_write" => "",
-        _ => "",
-    }
+    Icons::for_tool(tool_name)
 }
 
 /// Format tool parameters for display
