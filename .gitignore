@@ -28,6 +28,11 @@ sage_config.*.json
 
 # Trajectory files (execution logs)
 trajectories/
+
+# Evaluation and test files
+sage-agent-*.json
+swebench_eval/
+*.sage_*.json
 sage_*.json
 trajectory_*.json
 *.trajectory.json
