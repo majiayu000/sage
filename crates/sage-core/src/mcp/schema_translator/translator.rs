@@ -2,7 +2,7 @@
 
 use crate::mcp::types::{McpContent, McpTool, McpToolResult};
 use crate::tools::types::{ToolCall, ToolResult, ToolSchema};
-use serde_json::Value;
+use serde_json::{Map, Value};
 use std::collections::HashMap;
 
 /// Translator for converting between Sage and MCP schema formats
@@ -14,11 +14,65 @@ impl SchemaTranslator {
     // ==========================================================================
 
     /// Convert an MCP tool to a Sage ToolSchema
+    /// Sanitizes the input_schema to ensure all description fields are valid strings
     pub fn mcp_to_sage_schema(mcp_tool: &McpTool) -> ToolSchema {
+        let sanitized_schema = Self::sanitize_json_schema(&mcp_tool.input_schema);
         ToolSchema {
             name: mcp_tool.name.clone(),
             description: mcp_tool.description.clone().unwrap_or_default(),
-            parameters: mcp_tool.input_schema.clone(),
+            parameters: sanitized_schema,
+        }
+    }
+
+    /// Sanitize a JSON schema to ensure all description fields are valid strings
+    /// This prevents API errors like "description: Input should be a valid string"
+    pub fn sanitize_json_schema(schema: &Value) -> Value {
+        match schema {
+            Value::Object(obj) => {
+                let mut new_obj = Map::new();
+                for (key, value) in obj {
+                    if key == "description" {
+                        // Ensure description is always a string
+                        let desc_str = match value {
+                            Value::String(s) => s.clone(),
+                            Value::Null => String::new(),
+                            other => other.to_string(),
+                        };
+                        new_obj.insert(key.clone(), Value::String(desc_str));
+                    } else if key == "properties" {
+                        // Recursively sanitize properties
+                        if let Value::Object(props) = value {
+                            let mut new_props = Map::new();
+                            for (prop_name, prop_schema) in props {
+                                new_props
+                                    .insert(prop_name.clone(), Self::sanitize_json_schema(prop_schema));
+                            }
+                            new_obj.insert(key.clone(), Value::Object(new_props));
+                        } else {
+                            new_obj.insert(key.clone(), value.clone());
+                        }
+                    } else if key == "items" {
+                        // Recursively sanitize array items schema
+                        new_obj.insert(key.clone(), Self::sanitize_json_schema(value));
+                    } else if key == "additionalProperties" && value.is_object() {
+                        // Recursively sanitize additionalProperties if it's a schema
+                        new_obj.insert(key.clone(), Self::sanitize_json_schema(value));
+                    } else if key == "anyOf" || key == "oneOf" || key == "allOf" {
+                        // Recursively sanitize schema arrays
+                        if let Value::Array(arr) = value {
+                            let sanitized: Vec<Value> =
+                                arr.iter().map(|v| Self::sanitize_json_schema(v)).collect();
+                            new_obj.insert(key.clone(), Value::Array(sanitized));
+                        } else {
+                            new_obj.insert(key.clone(), value.clone());
+                        }
+                    } else {
+                        new_obj.insert(key.clone(), value.clone());
+                    }
+                }
+                Value::Object(new_obj)
+            }
+            other => other.clone(),
         }
     }
 

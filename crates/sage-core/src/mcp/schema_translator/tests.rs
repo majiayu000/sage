@@ -215,4 +215,134 @@ mod tests {
         let result = SchemaTranslator::mcp_content_to_string(&content);
         assert_eq!(result, "Line 1\nLine 2");
     }
+
+    #[test]
+    fn test_sanitize_json_schema_null_description() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": null
+                }
+            }
+        });
+
+        let sanitized = SchemaTranslator::sanitize_json_schema(&schema);
+
+        // null description should be converted to empty string
+        assert_eq!(
+            sanitized["properties"]["name"]["description"],
+            json!("")
+        );
+    }
+
+    #[test]
+    fn test_sanitize_json_schema_missing_description() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                }
+            }
+        });
+
+        let sanitized = SchemaTranslator::sanitize_json_schema(&schema);
+
+        // Properties without description should remain unchanged (no description field added)
+        assert!(sanitized["properties"]["name"].get("description").is_none());
+        assert_eq!(sanitized["properties"]["name"]["type"], json!("string"));
+    }
+
+    #[test]
+    fn test_sanitize_json_schema_object_description() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "config": {
+                    "type": "object",
+                    "description": { "invalid": "object" }
+                }
+            }
+        });
+
+        let sanitized = SchemaTranslator::sanitize_json_schema(&schema);
+
+        // Object description should be converted to string
+        assert!(sanitized["properties"]["config"]["description"].is_string());
+    }
+
+    #[test]
+    fn test_sanitize_json_schema_nested_properties() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "outer": {
+                    "type": "object",
+                    "description": "Outer object",
+                    "properties": {
+                        "inner": {
+                            "type": "string",
+                            "description": null
+                        }
+                    }
+                }
+            }
+        });
+
+        let sanitized = SchemaTranslator::sanitize_json_schema(&schema);
+
+        // Nested null description should be converted to empty string
+        assert_eq!(
+            sanitized["properties"]["outer"]["properties"]["inner"]["description"],
+            json!("")
+        );
+        // Outer description should remain as valid string
+        assert_eq!(
+            sanitized["properties"]["outer"]["description"],
+            json!("Outer object")
+        );
+    }
+
+    #[test]
+    fn test_sanitize_json_schema_array_items() {
+        let schema = json!({
+            "type": "array",
+            "items": {
+                "type": "string",
+                "description": null
+            }
+        });
+
+        let sanitized = SchemaTranslator::sanitize_json_schema(&schema);
+
+        // Array items with null description should be sanitized
+        assert_eq!(sanitized["items"]["description"], json!(""));
+    }
+
+    #[test]
+    fn test_mcp_to_sage_schema_sanitizes_null_descriptions() {
+        let mcp_tool = McpTool {
+            name: "test_tool".to_string(),
+            description: Some("Test tool".to_string()),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "new_string": {
+                        "type": "string",
+                        "description": null
+                    }
+                }
+            }),
+        };
+
+        let sage_schema = SchemaTranslator::mcp_to_sage_schema(&mcp_tool);
+
+        // Verify that null description is sanitized
+        assert_eq!(
+            sage_schema.parameters["properties"]["new_string"]["description"],
+            json!("")
+        );
+    }
 }
