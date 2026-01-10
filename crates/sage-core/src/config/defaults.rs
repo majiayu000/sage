@@ -77,8 +77,12 @@ pub fn load_config_with_overrides(
                     params.api_key = Some(api_key);
                     config.model_providers.insert(provider.clone(), params);
                 } else if let Some(params) = config.model_providers.get_mut(&provider) {
-                    // Only update API key if not already set
-                    if params.api_key.is_none() {
+                    // Update API key if not set or is an env var placeholder
+                    let should_update = match &params.api_key {
+                        None => true,
+                        Some(key) => key.starts_with("${") || key.is_empty(),
+                    };
+                    if should_update {
                         params.api_key = Some(api_key);
                     }
                 }
