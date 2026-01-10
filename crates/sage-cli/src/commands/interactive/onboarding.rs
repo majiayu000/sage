@@ -312,9 +312,8 @@ impl CliOnboarding {
         print!("  {} {} [Y/n]: ", "?".yellow().bold(), message);
         io::stdout().flush().map_err(|e| SageError::io(format!("flush error: {}", e)))?;
 
-        let mut input = String::new();
-        io::stdin()
-            .read_line(&mut input)
+        // Use term.read_line() instead of stdin to work properly after read_key()
+        let input = self.term.read_line()
             .map_err(|e| SageError::io(format!("read error: {}", e)))?;
 
         let answer = input.trim().to_lowercase();
