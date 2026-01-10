@@ -188,6 +188,14 @@ sage -r abc123
 | `/title <title>` | Set session title |
 | `/init` | Initialize Sage in project |
 | `/config` | Manage configuration |
+| `/login` | Configure API key for provider |
+| `/logout` | Clear stored credentials |
+
+#### Login/Logout Demo
+
+<div align="center">
+  <img src="docs/images/login-command.png" alt="Login Command Demo" width="600"/>
+</div>
 
 ## ⚙️ Configuration
 
