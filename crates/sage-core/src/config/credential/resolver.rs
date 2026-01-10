@@ -377,13 +377,14 @@ mod tests {
     #[test]
     fn test_default_providers() {
         let providers = default_providers();
-        assert_eq!(providers.len(), 5);
+        assert_eq!(providers.len(), 6);
 
         let names: Vec<&str> = providers.iter().map(|p| p.name.as_str()).collect();
         assert!(names.contains(&"anthropic"));
         assert!(names.contains(&"openai"));
         assert!(names.contains(&"google"));
         assert!(names.contains(&"glm"));
+        assert!(names.contains(&"zhipu"));
         assert!(names.contains(&"ollama"));
     }
 
@@ -617,14 +618,15 @@ mod tests {
             .with_cli_key("openai", "key2")
             .with_cli_key("google", "key3")
             .with_cli_key("glm", "key4")
-            .with_cli_key("ollama", "key5")
+            .with_cli_key("zhipu", "key5")
+            .with_cli_key("ollama", "key6")
             .with_auto_import(false);
 
         let resolver = CredentialResolver::new(config);
         let status = resolver.get_status();
 
         assert_eq!(status.status, ConfigStatus::Complete);
-        assert_eq!(status.configured_providers.len(), 5);
+        assert_eq!(status.configured_providers.len(), 6);
         assert!(status.missing_credentials.is_empty());
     }
 
