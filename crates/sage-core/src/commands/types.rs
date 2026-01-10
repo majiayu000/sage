@@ -29,6 +29,14 @@ pub struct SlashCommand {
 
     /// Required permissions
     pub required_permissions: Vec<String>,
+
+    /// Allowed tools (None = all tools allowed)
+    #[serde(default)]
+    pub allowed_tools: Option<Vec<String>>,
+
+    /// Model override (None = use default model)
+    #[serde(default)]
+    pub model_override: Option<String>,
 }
 
 impl SlashCommand {
@@ -42,6 +50,8 @@ impl SlashCommand {
             is_builtin: false,
             arguments: Vec::new(),
             required_permissions: Vec::new(),
+            allowed_tools: None,
+            model_override: None,
         }
     }
 
@@ -72,6 +82,18 @@ impl SlashCommand {
     /// Add required permission
     pub fn with_permission(mut self, permission: impl Into<String>) -> Self {
         self.required_permissions.push(permission.into());
+        self
+    }
+
+    /// Set allowed tools (restricts which tools the command can use)
+    pub fn with_allowed_tools(mut self, tools: Vec<String>) -> Self {
+        self.allowed_tools = Some(tools);
+        self
+    }
+
+    /// Set model override (use a specific model for this command)
+    pub fn with_model(mut self, model: impl Into<String>) -> Self {
+        self.model_override = Some(model.into());
         self
     }
 
@@ -259,6 +281,12 @@ pub struct CommandResult {
 
     /// Interactive command that needs CLI handling
     pub interactive: Option<InteractiveCommand>,
+
+    /// Tool restrictions (None = all tools allowed)
+    pub tool_restrictions: Option<Vec<String>>,
+
+    /// Model override (None = use default model)
+    pub model_override: Option<String>,
 }
 
 impl CommandResult {
@@ -272,6 +300,8 @@ impl CommandResult {
             is_local: false,
             local_output: None,
             interactive: None,
+            tool_restrictions: None,
+            model_override: None,
         }
     }
 
@@ -285,6 +315,8 @@ impl CommandResult {
             is_local: true,
             local_output: Some(output.into()),
             interactive: None,
+            tool_restrictions: None,
+            model_override: None,
         }
     }
 
@@ -298,6 +330,8 @@ impl CommandResult {
             is_local: true,
             local_output: None,
             interactive: Some(cmd),
+            tool_restrictions: None,
+            model_override: None,
         }
     }
 
@@ -319,9 +353,31 @@ impl CommandResult {
         self
     }
 
+    /// Set tool restrictions (only allow specified tools)
+    pub fn with_tool_restrictions(mut self, tools: Vec<String>) -> Self {
+        self.tool_restrictions = Some(tools);
+        self
+    }
+
+    /// Set model override
+    pub fn with_model(mut self, model: impl Into<String>) -> Self {
+        self.model_override = Some(model.into());
+        self
+    }
+
     /// Check if this is an interactive command
     pub fn is_interactive(&self) -> bool {
         self.interactive.is_some()
+    }
+
+    /// Check if this result has tool restrictions
+    pub fn has_tool_restrictions(&self) -> bool {
+        self.tool_restrictions.is_some()
+    }
+
+    /// Check if this result has a model override
+    pub fn has_model_override(&self) -> bool {
+        self.model_override.is_some()
     }
 }
 
@@ -460,5 +516,76 @@ mod tests {
 
         assert!(!opt.required);
         assert_eq!(opt.default, Some("json".to_string()));
+    }
+
+    #[test]
+    fn test_command_with_allowed_tools() {
+        let cmd = SlashCommand::new("review", "Review the code")
+            .with_allowed_tools(vec!["Read".to_string(), "Grep".to_string()]);
+
+        assert_eq!(cmd.allowed_tools, Some(vec!["Read".to_string(), "Grep".to_string()]));
+    }
+
+    #[test]
+    fn test_command_with_model() {
+        let cmd = SlashCommand::new("fast", "Quick task")
+            .with_model("gpt-4o-mini");
+
+        assert_eq!(cmd.model_override, Some("gpt-4o-mini".to_string()));
+    }
+
+    #[test]
+    fn test_command_result_tool_restrictions() {
+        let result = CommandResult::prompt("test")
+            .with_tool_restrictions(vec!["Read".to_string(), "Write".to_string()]);
+
+        assert!(result.has_tool_restrictions());
+        assert_eq!(
+            result.tool_restrictions,
+            Some(vec!["Read".to_string(), "Write".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_command_result_model_override() {
+        let result = CommandResult::prompt("test")
+            .with_model("claude-opus-4-5-20251101");
+
+        assert!(result.has_model_override());
+        assert_eq!(result.model_override, Some("claude-opus-4-5-20251101".to_string()));
+    }
+
+    #[test]
+    fn test_command_result_no_restrictions() {
+        let result = CommandResult::prompt("test");
+
+        assert!(!result.has_tool_restrictions());
+        assert!(!result.has_model_override());
+        assert!(result.tool_restrictions.is_none());
+        assert!(result.model_override.is_none());
+    }
+
+    #[test]
+    fn test_command_source_display() {
+        assert_eq!(CommandSource::Builtin.to_string(), "builtin");
+        assert_eq!(CommandSource::Project.to_string(), "project");
+        assert_eq!(CommandSource::User.to_string(), "user");
+    }
+
+    #[test]
+    fn test_interactive_command_variants() {
+        let resume = InteractiveCommand::Resume {
+            session_id: Some("abc123".to_string()),
+            show_all: true,
+        };
+        assert!(matches!(resume, InteractiveCommand::Resume { .. }));
+
+        let title = InteractiveCommand::Title {
+            title: "My Session".to_string(),
+        };
+        assert!(matches!(title, InteractiveCommand::Title { .. }));
+
+        let login = InteractiveCommand::Login;
+        assert!(matches!(login, InteractiveCommand::Login));
     }
 }
