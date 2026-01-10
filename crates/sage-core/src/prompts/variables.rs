@@ -393,7 +393,7 @@ impl TemplateRenderer {
         for var_name in var_names {
             let pattern = format!("${{{}}}", var_name);
             if let Some(value) = vars.get(var_name) {
-                result = result.replace(&pattern, &value);
+                result = result.replace(&pattern, value);
             }
         }
 

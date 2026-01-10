@@ -23,7 +23,7 @@ async fn main() -> Result<()> {
     let transport = HttpTransport::new(config)?;
 
     // 创建 MCP 客户端
-    let mut client = McpClient::new(Box::new(transport));
+    let client = McpClient::new(Box::new(transport));
 
     println!("📡 正在连接到智谱 GLM Camp MCP 服务器...");
     client.initialize().await?;
