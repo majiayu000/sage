@@ -51,8 +51,10 @@ impl LlmOrchestrator {
             .map_err(|_| SageError::config(format!("Invalid provider: {}", provider_name)))?;
 
         // Create provider config with generous timeout (5 min default)
+        // Use provider-specific API key lookup to get the correct key from env/config
+        let api_key_info = default_params.get_api_key_info_for_provider(&provider_name);
         let mut provider_config = ProviderConfig::new(&provider_name)
-            .with_api_key(default_params.get_api_key().unwrap_or_default())
+            .with_api_key(api_key_info.key.unwrap_or_default())
             .with_timeouts(TimeoutConfig::default())
             .with_max_retries(3);
 

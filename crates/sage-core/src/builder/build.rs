@@ -85,8 +85,10 @@ impl SageBuilder {
         let provider_config = self.providers.get(&provider_name).cloned().or_else(|| {
             self.config.as_ref().and_then(|c| {
                 c.default_model_parameters().ok().map(|params| {
+                    // Use provider-specific API key lookup to get the correct key
+                    let api_key_info = params.get_api_key_info_for_provider(&provider_name);
                     let mut config = crate::config::provider::ProviderConfig::new(&provider_name)
-                        .with_api_key(params.get_api_key().unwrap_or_default())
+                        .with_api_key(api_key_info.key.unwrap_or_default())
                         .with_timeouts(crate::llm::provider_types::TimeoutConfig::default())
                         .with_max_retries(3);
                     // Apply custom base_url if configured (for OpenRouter, etc.)
