@@ -20,7 +20,9 @@ pub mod credential;
 pub mod loader;
 pub mod model;
 pub mod onboarding;
+pub mod persistence;
 pub mod provider;
+pub mod provider_registry;
 pub mod timeouts;
 pub mod validation;
 
@@ -32,10 +34,12 @@ pub use loader::{ConfigLoader, ConfigSource};
 pub use logging_config::LoggingConfig;
 pub use mcp_config::{McpConfig, McpServerConfig};
 pub use model_params::{ModelParameters, format_api_key_status_for_provider};
+pub use persistence::{ConfigPersistence, ConfigUpdate};
 pub use provider::{
     ApiAuthConfig, ApiKeyInfo, ApiKeySource, NetworkConfig, ProviderConfig, RateLimitConfig,
     ResilienceConfig, format_api_key_status,
 };
+pub use provider_registry::{ProviderRegistry, ProviderInfo, ModelInfo};
 pub use tool_config::ToolConfig;
 pub use trajectory_config::TrajectoryConfig;
 pub use validation::ConfigValidator;

@@ -4,6 +4,7 @@
 //! API keys and providers when starting sage for the first time.
 
 use crate::console::CliConsole;
+use crate::ui::{WaitingSpinner, get_provider_help_url, get_provider_env_var, print_api_key_tips};
 use colored::*;
 use console::{Key, Term};
 use dialoguer::{Select, theme::ColorfulTheme};
@@ -52,18 +53,15 @@ impl CliOnboarding {
         let api_key = self.input_api_key(&provider)?;
         self.manager.set_api_key(&api_key)?;
 
-        // Validate key
-        self.console.info("Validating API key...");
+        // Validate key with spinner
+        let spinner = WaitingSpinner::validation("Validating API key...");
         let validation = self.manager.validate_api_key().await;
 
         if validation.valid {
             let model_info = validation.model_info.as_deref().unwrap_or("default");
-            self.console.success(&format!(
-                "API key validated successfully! Model: {}",
-                model_info
-            ));
+            spinner.finish_success(&format!("API key validated! Model: {}", model_info));
         } else if let Some(error) = &validation.error {
-            self.console.warn(&format!("Validation failed: {}", error));
+            spinner.finish_warning(&format!("Validation warning: {}", error));
             self.console.info("The key will be saved but may not work correctly.");
         }
 
@@ -94,18 +92,15 @@ impl CliOnboarding {
         let api_key = self.input_api_key(&provider)?;
         self.manager.set_api_key(&api_key)?;
 
-        // Validate
-        self.console.info("Validating API key...");
+        // Validate with spinner
+        let spinner = WaitingSpinner::validation("Validating API key...");
         let validation = self.manager.validate_api_key().await;
 
         if validation.valid {
             let model_info = validation.model_info.as_deref().unwrap_or("default");
-            self.console.success(&format!(
-                "Validated! Model: {}",
-                model_info
-            ));
+            spinner.finish_success(&format!("Validated! Model: {}", model_info));
         } else if let Some(error) = &validation.error {
-            self.console.warn(&format!("Validation warning: {}", error));
+            spinner.finish_warning(&format!("Warning: {}", error));
         }
 
         // Save
@@ -238,7 +233,8 @@ impl CliOnboarding {
     }
 
     fn input_api_key(&self, provider: &str) -> SageResult<String> {
-        let env_var = format!("{}_API_KEY", provider.to_uppercase());
+        let env_var = get_provider_env_var(provider);
+        let help_url = get_provider_help_url(provider);
 
         println!();
         println!(
@@ -246,9 +242,17 @@ impl CliOnboarding {
             "?".blue().bold(),
             provider.cyan()
         );
+        println!();
+        println!("  {}", "Tips:".dimmed());
         println!(
-            "  {}",
-            format!("(You can also set {} environment variable)", env_var).dimmed()
+            "  {} Set {} to avoid re-entering",
+            "•".dimmed(),
+            env_var.yellow()
+        );
+        println!(
+            "  {} Get your key at: {}",
+            "•".dimmed(),
+            help_url.underline()
         );
         println!();
 
