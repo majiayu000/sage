@@ -1,11 +1,13 @@
 //! Tool orchestration with three-phase execution model:
 //! Pre-execution (hooks), Execution (tool), Post-execution (result hooks)
 
-use crate::error::SageResult;
+use crate::error::{SageError, SageResult};
 use crate::hooks::{HookEvent, HookExecutor, HookInput};
+use crate::recovery::supervisor::{SupervisionPolicy, SupervisionResult, TaskSupervisor};
 use crate::tools::executor::ToolExecutor;
 use crate::tools::types::{ToolCall, ToolResult};
 use std::path::PathBuf;
+use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 /// Context for tool execution, providing session and environment info
@@ -23,6 +25,45 @@ impl ToolExecutionContext {
         Self {
             session_id: session_id.into(),
             working_dir,
+        }
+    }
+}
+
+/// Configuration for tool execution supervision
+#[derive(Debug, Clone)]
+pub struct SupervisionConfig {
+    /// Whether supervision is enabled
+    pub enabled: bool,
+    /// Supervision policy for tool failures
+    pub policy: SupervisionPolicy,
+}
+
+impl Default for SupervisionConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            policy: SupervisionPolicy::Restart {
+                max_restarts: 2,
+                window: Duration::from_secs(60),
+            },
+        }
+    }
+}
+
+impl SupervisionConfig {
+    /// Create supervision config with no retries (for tools that shouldn't retry)
+    pub fn no_retry() -> Self {
+        Self {
+            enabled: true,
+            policy: SupervisionPolicy::Stop,
+        }
+    }
+
+    /// Disable supervision entirely
+    pub fn disabled() -> Self {
+        Self {
+            enabled: false,
+            policy: SupervisionPolicy::Stop,
         }
     }
 }
@@ -54,6 +95,7 @@ impl PreExecutionResult {
 pub struct ToolOrchestrator {
     tool_executor: ToolExecutor,
     hook_executor: HookExecutor,
+    supervision_config: SupervisionConfig,
 }
 
 impl ToolOrchestrator {
@@ -62,7 +104,31 @@ impl ToolOrchestrator {
         Self {
             tool_executor,
             hook_executor,
+            supervision_config: SupervisionConfig::default(),
         }
+    }
+
+    /// Create a new tool orchestrator with custom supervision config
+    pub fn with_supervision(
+        tool_executor: ToolExecutor,
+        hook_executor: HookExecutor,
+        supervision_config: SupervisionConfig,
+    ) -> Self {
+        Self {
+            tool_executor,
+            hook_executor,
+            supervision_config,
+        }
+    }
+
+    /// Set the supervision configuration
+    pub fn set_supervision_config(&mut self, config: SupervisionConfig) {
+        self.supervision_config = config;
+    }
+
+    /// Get the supervision configuration
+    pub fn supervision_config(&self) -> &SupervisionConfig {
+        &self.supervision_config
     }
 
     /// Get a reference to the tool executor
@@ -127,8 +193,95 @@ impl ToolOrchestrator {
         Ok(PreExecutionResult::Continue)
     }
 
-    /// Execute the tool (execution phase) with cancellation support
+    /// Execute the tool (execution phase) with cancellation and supervision support
     pub async fn execution_phase(
+        &self,
+        tool_call: &ToolCall,
+        cancel_token: CancellationToken,
+    ) -> ToolResult {
+        // If supervision is disabled, execute directly
+        if !self.supervision_config.enabled {
+            return self.execute_tool_direct(tool_call, cancel_token).await;
+        }
+
+        // Create a supervisor for this tool execution
+        let mut supervisor = TaskSupervisor::new(format!("tool_{}", tool_call.name))
+            .with_policy(self.supervision_config.policy.clone())
+            .with_cancel_token(cancel_token.clone());
+
+        // Track the final result across potential restarts
+        let tool_call_clone = tool_call.clone();
+        let executor = &self.tool_executor;
+
+        // Execute with supervision - we need to handle the fact that
+        // ToolResult doesn't implement Err, so we convert success/failure
+        let supervision_result = supervisor
+            .supervise(|| {
+                let call = tool_call_clone.clone();
+                async move {
+                    let result = executor.execute_tool(&call).await;
+                    // Convert ToolResult to Result for supervision
+                    if result.success {
+                        Ok(result)
+                    } else {
+                        // Create an error from the tool failure for supervision to handle
+                        Err(SageError::tool(
+                            &call.name,
+                            result.output.clone().unwrap_or_else(|| "Tool failed".to_string()),
+                        ))
+                    }
+                }
+            })
+            .await;
+
+        // Convert supervision result back to ToolResult
+        match supervision_result {
+            SupervisionResult::Completed => {
+                // Re-execute to get the actual result (supervision doesn't return it)
+                self.execute_tool_direct(tool_call, cancel_token).await
+            }
+            SupervisionResult::Restarted { attempt } => {
+                tracing::info!(
+                    tool = %tool_call.name,
+                    attempt = attempt,
+                    "Tool execution restarted, attempting again"
+                );
+                // After restart signal, try execution again
+                self.execute_tool_direct(tool_call, cancel_token).await
+            }
+            SupervisionResult::Resumed { error } => {
+                tracing::warn!(
+                    tool = %tool_call.name,
+                    error = %error.message,
+                    "Tool execution resumed after error"
+                );
+                ToolResult::error(&tool_call.id, &tool_call.name, error.message)
+            }
+            SupervisionResult::Stopped { error } => {
+                tracing::warn!(
+                    tool = %tool_call.name,
+                    error = %error.message,
+                    "Tool execution stopped by supervisor"
+                );
+                ToolResult::error(&tool_call.id, &tool_call.name, error.message)
+            }
+            SupervisionResult::Escalated { error } => {
+                tracing::error!(
+                    tool = %tool_call.name,
+                    error = %error.message,
+                    "Tool execution failure escalated"
+                );
+                ToolResult::error(
+                    &tool_call.id,
+                    &tool_call.name,
+                    format!("Escalated failure: {}", error.message),
+                )
+            }
+        }
+    }
+
+    /// Execute tool directly without supervision
+    async fn execute_tool_direct(
         &self,
         tool_call: &ToolCall,
         cancel_token: CancellationToken,
