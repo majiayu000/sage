@@ -6,6 +6,7 @@ use crate::context::{AutoCompact, AutoCompactConfig};
 use crate::error::SageResult;
 use crate::hooks::{HookExecutor, HookRegistry};
 use crate::llm::model_capabilities::get_model_capability;
+use crate::output::StreamingOutput;
 use crate::skills::SkillRegistry;
 use crate::tools::executor::ToolExecutor;
 use anyhow::Context;
@@ -94,6 +95,7 @@ impl UnifiedExecutor {
             session_manager,
             auto_compact,
             skill_registry: Arc::new(RwLock::new(skill_registry)),
+            output_strategy: Arc::new(StreamingOutput::new()),
         })
     }
 }

@@ -60,11 +60,16 @@
 //! | `result` | Final result |
 
 pub mod formatter;
+pub mod strategy;
 pub mod types;
 
 pub use formatter::{
     JsonFormatter, OutputFormatter, OutputWriter, StreamJsonFormatter, TextFormatter,
     create_formatter,
+};
+pub use strategy::{
+    BatchOutput, JsonOutput as JsonOutputStrategy, OutputMode, OutputStrategy, SilentOutput,
+    StreamingOutput,
 };
 pub use types::{
     AssistantEvent, CostInfo, ErrorEvent, JsonOutput, OutputEvent, OutputFormat, ResultEvent,

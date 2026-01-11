@@ -12,6 +12,8 @@ pub enum InteractiveCommand {
     Title { title: String },
     /// Run login/credential setup wizard
     Login,
+    /// Switch output display mode
+    OutputMode { mode: String },
 }
 
 /// Command execution result

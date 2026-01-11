@@ -5,8 +5,6 @@ use crate::error::{SageError, SageResult};
 use crate::interrupt::global_interrupt_manager;
 use crate::llm::messages::LlmMessage;
 use crate::tools::types::{ToolCall, ToolSchema};
-use crate::ui::{DisplayManager, Icons};
-use colored::Colorize;
 use tracing::instrument;
 
 use super::event_manager::ExecutionEvent;
@@ -57,19 +55,21 @@ impl UnifiedExecutor {
             .await;
 
         let cancellation_token = global_interrupt_manager().lock().cancellation_token();
-        let llm_response = match self
-            .llm_orchestrator
-            .stream_chat(&working_messages, Some(tool_schemas), cancellation_token)
-            .await
-        {
-            Ok(response) => response,
-            Err(e) => {
-                self.event_manager.emit(ExecutionEvent::ThinkingStopped).await;
-                return Err(e);
-            }
-        };
 
-        self.event_manager.emit(ExecutionEvent::ThinkingStopped).await;
+        // Use output strategy for streaming display
+        // Note: Animation will be stopped when first content arrives (in stream_chat_with_animation_stop)
+        let output_strategy = self.output_strategy.clone();
+        let event_manager = &self.event_manager;
+        let llm_response = self
+            .llm_orchestrator
+            .stream_chat_with_animation_stop(
+                &working_messages,
+                Some(tool_schemas),
+                cancellation_token,
+                output_strategy,
+                event_manager,
+            )
+            .await?;
 
         // Record response
         let model = self.llm_orchestrator.model_name();
@@ -88,15 +88,7 @@ impl UnifiedExecutor {
 
         let mut new_messages = working_messages;
 
-        // Display assistant response
-        if !llm_response.content.is_empty() {
-            println!();
-            println!("  {} {}", Icons::sage().bright_cyan(), "AI Response".bright_white().bold());
-            println!();
-            for line in DisplayManager::render_markdown_lines(&llm_response.content) {
-                println!("  {}", line);
-            }
-        }
+        // Note: Content is already displayed via streaming - no need to print again
 
         // Add assistant message
         if !llm_response.tool_calls.is_empty() || !llm_response.content.is_empty() {
@@ -137,14 +129,7 @@ impl UnifiedExecutor {
     ) -> SageResult<()> {
         tracing::info!(tool_count = tool_calls.len(), "executing tools");
 
-        println!();
-        println!(
-            "  {} {} ({})",
-            Icons::tool().bright_magenta(),
-            "Executing tools".bright_white().bold(),
-            tool_calls.len().to_string().dimmed()
-        );
-
+        // No header needed - each tool will display its own indicator
         let context = self.build_execution_context();
 
         for tool_call in tool_calls {

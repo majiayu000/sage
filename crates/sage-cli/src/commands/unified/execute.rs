@@ -6,12 +6,13 @@ use sage_core::agent::{ExecutionMode, ExecutionOptions, UnifiedExecutor};
 use sage_core::config::load_config_from_file;
 use sage_core::error::SageResult;
 use sage_core::input::InputChannel;
+use sage_core::output::OutputMode;
 use sage_core::trajectory::SessionRecorder;
 use sage_tools::get_default_tools;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use super::args::UnifiedArgs;
+use super::args::{OutputModeArg, UnifiedArgs};
 use super::input::handle_user_input;
 use super::interactive::execute_interactive_loop;
 use super::mcp::build_mcp_registry_from_config;
@@ -79,6 +80,14 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
 
     // Create the unified executor
     let mut executor = UnifiedExecutor::with_options(config.clone(), options)?;
+
+    // Set output mode based on args
+    let output_mode = match args.output_mode {
+        OutputModeArg::Streaming => OutputMode::Streaming,
+        OutputModeArg::Batch => OutputMode::Batch,
+        OutputModeArg::Silent => OutputMode::Silent,
+    };
+    executor.set_output_mode(output_mode);
 
     // Register default tools
     let mut all_tools = get_default_tools();

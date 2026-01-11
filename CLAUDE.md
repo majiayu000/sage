@@ -38,14 +38,19 @@ make test-int
 
 ### Development
 ```bash
-# Run the CLI in dev mode
+# Run the CLI in dev mode (interactive)
 make dev
 # or
 cargo run -p sage-cli
 
-# Run with arguments
-cargo run -p sage-cli -- interactive
-cargo run -p sage-cli -- run "your task"
+# Run with a task
+cargo run -p sage-cli -- "your task"
+
+# Print mode (non-interactive, execute and exit)
+cargo run -p sage-cli -- -p "your task"
+
+# Resume most recent session
+cargo run -p sage-cli -- -c
 
 # Code quality checks
 make clippy        # Linting

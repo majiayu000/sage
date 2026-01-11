@@ -183,5 +183,16 @@ impl CommandRegistry {
             .builtin(),
             CommandSource::Builtin,
         );
+
+        // Output command - switch output mode
+        self.register(
+            SlashCommand::new(
+                "output",
+                "Switch output display mode. Usage: /output <streaming|batch|silent>",
+            )
+            .with_description("Switch output mode")
+            .builtin(),
+            CommandSource::Builtin,
+        );
     }
 }

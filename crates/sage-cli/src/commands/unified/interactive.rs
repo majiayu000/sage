@@ -92,6 +92,11 @@ pub async fn execute_interactive_loop(
                 }
                 continue;
             }
+            SlashCommandAction::SetOutputMode(mode) => {
+                executor.set_output_mode(mode.clone());
+                nerd.success(&format!("Output mode set to: {:?}", mode));
+                continue;
+            }
         };
 
         let task = TaskMetadata::new(&task_description, &working_dir.display().to_string());

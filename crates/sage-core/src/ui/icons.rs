@@ -33,6 +33,16 @@ pub fn set_nerd_fonts(enabled: bool) {
 pub struct Icons;
 
 impl Icons {
+    // === Claude Code Style Message Indicators ===
+    /// Filled circle for messages (Claude Code style)
+    pub const MESSAGE: &'static str = "⏺";
+    /// Result/output indicator (corner bracket)
+    pub const RESULT: &'static str = "⎿";
+    /// Thinking/cogitating indicator
+    pub const COGITATE: &'static str = "✻";
+    /// User prompt indicator
+    pub const PROMPT: &'static str = "❯";
+
     // === Application ===
     pub const SAGE: &'static str = "󰚩";           // nf-md-robot
     pub const SAGE_ASCII: &'static str = "[S]";
@@ -85,6 +95,26 @@ impl Icons {
     pub const FOLDER_ASCII: &'static str = "📁";
 
     // === Dynamic getters ===
+
+    /// Get message indicator (filled circle)
+    pub fn message() -> &'static str {
+        Self::MESSAGE
+    }
+
+    /// Get result indicator (corner bracket)
+    pub fn result() -> &'static str {
+        Self::RESULT
+    }
+
+    /// Get cogitate/thinking indicator
+    pub fn cogitate() -> &'static str {
+        Self::COGITATE
+    }
+
+    /// Get user prompt indicator
+    pub fn prompt() -> &'static str {
+        Self::PROMPT
+    }
 
     /// Get sage icon based on current mode
     pub fn sage() -> &'static str {

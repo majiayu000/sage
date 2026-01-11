@@ -1,6 +1,19 @@
 //! Arguments for the unified command
 
+use clap::ValueEnum;
 use std::path::PathBuf;
+
+/// Output mode for display
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ValueEnum)]
+pub enum OutputModeArg {
+    /// Real-time streaming output (default)
+    #[default]
+    Streaming,
+    /// Batch output (collect then display)
+    Batch,
+    /// Silent (no output)
+    Silent,
+}
 
 /// Arguments for the unified command
 pub struct UnifiedArgs {
@@ -22,6 +35,8 @@ pub struct UnifiedArgs {
     pub continue_recent: bool,
     /// Stream JSON output mode (for SDK/programmatic use)
     pub stream_json: bool,
+    /// Output mode (streaming, batch, silent)
+    pub output_mode: OutputModeArg,
 }
 
 #[cfg(test)]
@@ -40,11 +55,22 @@ mod tests {
             resume_session_id: None,
             continue_recent: false,
             stream_json: false,
+            output_mode: OutputModeArg::default(),
         };
 
         assert!(!args.non_interactive);
         assert!(!args.verbose);
         assert!(!args.continue_recent);
         assert!(!args.stream_json);
+        assert_eq!(args.output_mode, OutputModeArg::Streaming);
+    }
+
+    #[test]
+    fn test_output_mode_value_enum() {
+        use clap::ValueEnum;
+        assert_eq!(OutputModeArg::value_variants().len(), 3);
+        assert_eq!(OutputModeArg::Streaming.to_possible_value().unwrap().get_name(), "streaming");
+        assert_eq!(OutputModeArg::Batch.to_possible_value().unwrap().get_name(), "batch");
+        assert_eq!(OutputModeArg::Silent.to_possible_value().unwrap().get_name(), "silent");
     }
 }

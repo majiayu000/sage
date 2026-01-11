@@ -16,5 +16,5 @@ mod slash_commands;
 mod stream;
 mod utils;
 
-pub use args::UnifiedArgs;
+pub use args::{OutputModeArg, UnifiedArgs};
 pub use execute::execute;

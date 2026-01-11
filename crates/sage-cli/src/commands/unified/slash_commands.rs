@@ -4,6 +4,7 @@ use crate::console::CliConsole;
 use crate::ui::NerdConsole;
 use sage_core::commands::{CommandExecutor, CommandRegistry};
 use sage_core::error::SageResult;
+use sage_core::output::OutputMode;
 use sage_core::session::JsonlSessionStorage;
 use std::sync::Arc;
 
@@ -17,6 +18,8 @@ pub enum SlashCommandAction {
     Handled,
     /// Resume a session with the given ID
     ResumeSession(String),
+    /// Set output mode
+    SetOutputMode(OutputMode),
 }
 
 /// Process slash commands
@@ -111,6 +114,18 @@ pub async fn handle_interactive_command_v2(
                 }
             }
             Ok(SlashCommandAction::Handled)
+        }
+        InteractiveCommand::OutputMode { mode } => {
+            let output_mode = match mode.as_str() {
+                "streaming" => OutputMode::Streaming,
+                "batch" => OutputMode::Batch,
+                "silent" => OutputMode::Silent,
+                _ => {
+                    console.warn(&format!("Unknown output mode: {}", mode));
+                    return Ok(SlashCommandAction::Handled);
+                }
+            };
+            Ok(SlashCommandAction::SetOutputMode(output_mode))
         }
     }
 }
