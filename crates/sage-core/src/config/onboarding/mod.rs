@@ -24,11 +24,13 @@
 //! }
 //! ```
 
+mod config_saver;
 mod manager;
+mod provider_option;
 mod state;
+mod validation;
 
-pub use manager::{
-    OnboardingManager, ProviderOption, ValidationResult,
-    default_provider_options,
-};
+pub use manager::OnboardingManager;
+pub use provider_option::{ProviderOption, default_provider_options};
 pub use state::{OnboardingState, OnboardingStep};
+pub use validation::ValidationResult;
