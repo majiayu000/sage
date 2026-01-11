@@ -27,6 +27,11 @@ impl CheckpointId {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// Get a shortened version of the ID (first 8 characters)
+    pub fn short(&self) -> &str {
+        &self.0[..8.min(self.0.len())]
+    }
 }
 
 impl Default for CheckpointId {
