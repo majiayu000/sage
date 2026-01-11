@@ -67,12 +67,12 @@ pub struct Cli {
     pub verbose: bool,
 
     /// Use modern UI (Ink + React) instead of traditional CLI
-    #[arg(long)]
+    #[arg(long, hide = true)]
     pub modern_ui: bool,
 
-    /// Use new rnk-based declarative UI (experimental)
+    /// Use legacy CLI UI instead of new rnk-based UI
     #[arg(long)]
-    pub new_ui: bool,
+    pub legacy_ui: bool,
 
     /// Run UI demo mode (for testing new UI components)
     #[arg(long, hide = true)]
