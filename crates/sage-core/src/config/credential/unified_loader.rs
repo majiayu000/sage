@@ -3,7 +3,8 @@
 //! This module provides a configuration loader that gracefully handles missing
 //! or invalid configuration, returning usable defaults with status information.
 
-use super::resolver::{CredentialResolver, ResolverConfig};
+use super::resolver::CredentialResolver;
+use super::resolver_config::ResolverConfig;
 use super::status::ConfigStatusReport;
 use crate::config::model::Config;
 use std::path::{Path, PathBuf};
