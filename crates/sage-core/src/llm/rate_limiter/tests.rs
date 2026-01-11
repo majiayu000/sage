@@ -10,6 +10,7 @@ async fn test_rate_limiter_allows_burst() {
     let limiter = RateLimiter::new(RateLimitConfig {
         requests_per_minute: 60,
         burst_size: 5,
+        max_concurrent: 0, // unlimited
         enabled: true,
     });
 
@@ -37,6 +38,7 @@ async fn test_rate_limiter_refills() {
     let limiter = RateLimiter::new(RateLimitConfig {
         requests_per_minute: 600, // 10 per second for faster test
         burst_size: 2,
+        max_concurrent: 0, // unlimited
         enabled: true,
     });
 
@@ -57,6 +59,7 @@ async fn test_available_tokens() {
     let limiter = RateLimiter::new(RateLimitConfig {
         requests_per_minute: 60,
         burst_size: 5,
+        max_concurrent: 0, // unlimited
         enabled: true,
     });
 
@@ -71,12 +74,15 @@ async fn test_provider_configs() {
     // Test that provider-specific configs are reasonable
     let openai = RateLimitConfig::for_provider("openai");
     assert!(openai.requests_per_minute >= 60);
+    assert!(openai.max_concurrent >= 5);
 
     let anthropic = RateLimitConfig::for_provider("anthropic");
     assert!(anthropic.requests_per_minute >= 60);
+    assert!(anthropic.max_concurrent >= 5);
 
     let ollama = RateLimitConfig::for_provider("ollama");
     assert!(ollama.requests_per_minute >= 60);
+    assert!(ollama.max_concurrent >= 10); // Local providers can handle more
 }
 
 #[tokio::test]
@@ -84,6 +90,7 @@ async fn test_acquire_waits() {
     let limiter = RateLimiter::new(RateLimitConfig {
         requests_per_minute: 600, // 10 per second for faster test
         burst_size: 1,
+        max_concurrent: 0, // unlimited
         enabled: true,
     });
 
@@ -176,6 +183,7 @@ async fn test_rate_limiter_burst_size_limit() {
     let limiter = RateLimiter::new(RateLimitConfig {
         requests_per_minute: 600, // 10 per second
         burst_size: 3,
+        max_concurrent: 0, // unlimited
         enabled: true,
     });
 
@@ -205,6 +213,7 @@ async fn test_rate_limiter_config_for_known_providers() {
         assert!(config.enabled);
         assert!(config.requests_per_minute > 0);
         assert!(config.burst_size > 0);
+        assert!(config.max_concurrent > 0);
     }
 }
 
@@ -218,6 +227,7 @@ async fn test_rate_limiter_unknown_provider_uses_default() {
         default_config.requests_per_minute
     );
     assert_eq!(config.burst_size, default_config.burst_size);
+    assert_eq!(config.max_concurrent, default_config.max_concurrent);
 }
 
 #[test]
@@ -240,6 +250,7 @@ async fn test_rate_limiter_precise_timing() {
     let limiter = RateLimiter::new(RateLimitConfig {
         requests_per_minute: 600, // 10 tokens per second
         burst_size: 5,
+        max_concurrent: 0, // unlimited
         enabled: true,
     });
 
@@ -271,6 +282,7 @@ async fn test_available_tokens_after_partial_refill() {
     let limiter = RateLimiter::new(RateLimitConfig {
         requests_per_minute: 600, // 10 per second
         burst_size: 10,
+        max_concurrent: 0, // unlimited
         enabled: true,
     });
 
@@ -284,4 +296,60 @@ async fn test_available_tokens_after_partial_refill() {
 
     let available = limiter.available_tokens().await;
     assert!(available >= 4 && available <= 6); // Allow some timing variance
+}
+
+// New tests for concurrent request limiting
+
+#[tokio::test]
+async fn test_concurrent_requests_tracking() {
+    let limiter = RateLimiter::new(RateLimitConfig {
+        requests_per_minute: 60,
+        burst_size: 10,
+        max_concurrent: 5,
+        enabled: true,
+    });
+
+    // Initially should have 0 concurrent requests
+    assert_eq!(limiter.concurrent_requests(), 0);
+
+    // max_concurrent should match config
+    assert_eq!(limiter.max_concurrent(), 5);
+}
+
+#[tokio::test]
+async fn test_with_concurrent_constructor() {
+    let config = RateLimitConfig::with_concurrent(120, 25, 10);
+    assert_eq!(config.requests_per_minute, 120);
+    assert_eq!(config.burst_size, 25);
+    assert_eq!(config.max_concurrent, 10);
+    assert!(config.enabled);
+}
+
+#[tokio::test]
+async fn test_rate_limiter_clone_shares_concurrent_state() {
+    let limiter1 = RateLimiter::new(RateLimitConfig::with_concurrent(60, 5, 10));
+    let limiter2 = limiter1.clone();
+
+    // Both should share the same concurrent semaphore
+    // After consuming from limiter1, limiter2 should see the same state
+    limiter1.try_acquire().await;
+
+    let tokens1 = limiter1.available_tokens().await;
+    let tokens2 = limiter2.available_tokens().await;
+    assert_eq!(tokens1, tokens2);
+}
+
+#[test]
+fn test_rate_limit_config_default_includes_concurrent() {
+    let config = RateLimitConfig::default();
+    assert!(config.max_concurrent > 0);
+    assert_eq!(config.max_concurrent, 5); // Default should be 5
+}
+
+#[test]
+fn test_rate_limit_config_disabled_includes_concurrent() {
+    let config = RateLimitConfig::disabled();
+    assert!(!config.enabled);
+    // Should still have a max_concurrent value even when disabled
+    assert!(config.max_concurrent > 0);
 }

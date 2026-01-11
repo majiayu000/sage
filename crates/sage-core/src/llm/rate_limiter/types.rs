@@ -9,6 +9,8 @@ pub struct RateLimitConfig {
     pub requests_per_minute: u32,
     /// Maximum burst size (allows short bursts above the sustained rate)
     pub burst_size: u32,
+    /// Maximum concurrent requests (0 = unlimited)
+    pub max_concurrent: u32,
     /// Whether rate limiting is enabled
     pub enabled: bool,
 }
@@ -20,6 +22,8 @@ impl Default for RateLimitConfig {
             requests_per_minute: 60,
             // Allow bursts of up to 10 requests
             burst_size: 10,
+            // Default: 5 concurrent requests
+            max_concurrent: 5,
             enabled: true,
         }
     }
@@ -31,6 +35,17 @@ impl RateLimitConfig {
         Self {
             requests_per_minute,
             burst_size,
+            max_concurrent: 5,
+            enabled: true,
+        }
+    }
+
+    /// Create a rate limit configuration with concurrent limit
+    pub fn with_concurrent(requests_per_minute: u32, burst_size: u32, max_concurrent: u32) -> Self {
+        Self {
+            requests_per_minute,
+            burst_size,
+            max_concurrent,
             enabled: true,
         }
     }
@@ -47,21 +62,21 @@ impl RateLimitConfig {
     pub fn for_provider(provider: &str) -> Self {
         match provider.to_lowercase().as_str() {
             // OpenAI: Varies by tier, use conservative defaults
-            "openai" => Self::new(60, 20),
+            "openai" => Self::with_concurrent(60, 20, 8),
             // Anthropic: 60 RPM for Claude models
-            "anthropic" => Self::new(60, 10),
+            "anthropic" => Self::with_concurrent(60, 10, 5),
             // Google: 60 RPM for Gemini
-            "google" => Self::new(60, 15),
+            "google" => Self::with_concurrent(60, 15, 6),
             // Azure: Depends on deployment, use conservative
-            "azure" => Self::new(60, 20),
+            "azure" => Self::with_concurrent(60, 20, 8),
             // Doubao: Similar to OpenAI
-            "doubao" => Self::new(60, 20),
+            "doubao" => Self::with_concurrent(60, 20, 8),
             // OpenRouter: Aggregates multiple providers
-            "openrouter" => Self::new(60, 20),
+            "openrouter" => Self::with_concurrent(60, 20, 10),
             // Ollama: Local, can be more generous
-            "ollama" => Self::new(120, 30),
+            "ollama" => Self::with_concurrent(120, 30, 20),
             // GLM: Conservative defaults
-            "glm" => Self::new(60, 15),
+            "glm" => Self::with_concurrent(60, 15, 6),
             // Default for unknown providers
             _ => Self::default(),
         }
