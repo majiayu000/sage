@@ -1,6 +1,7 @@
 //! Configuration management for Sage Agent
 
 // Internal modules
+mod api_key_helpers;
 mod args_loader;
 #[allow(clippy::module_inception)] // config module in config directory is intentional
 mod config;
@@ -33,7 +34,8 @@ pub use lakeview_config::LakeviewConfig;
 pub use loader::{ConfigLoader, ConfigSource};
 pub use logging_config::LoggingConfig;
 pub use mcp_config::{McpConfig, McpServerConfig};
-pub use model_params::{ModelParameters, format_api_key_status_for_provider};
+pub use api_key_helpers::format_api_key_status_for_provider;
+pub use model_params::ModelParameters;
 pub use persistence::{ConfigPersistence, ConfigUpdate};
 pub use provider::{
     ApiAuthConfig, ApiKeyInfo, ApiKeySource, NetworkConfig, ProviderConfig, RateLimitConfig,
