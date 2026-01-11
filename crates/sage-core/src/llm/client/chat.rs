@@ -1,12 +1,13 @@
 //! Chat request handling
 
 use super::types::LlmClient;
-use crate::error::SageResult;
+use crate::error::{SageError, SageResult};
 use crate::llm::messages::{LlmMessage, LlmResponse};
 use crate::llm::providers::LlmProviderTrait;
 use crate::llm::rate_limiter::global as rate_limiter;
+use crate::recovery::circuit_breaker::CircuitBreakerError;
 use crate::tools::types::ToolSchema;
-use tracing::{debug, instrument};
+use tracing::{debug, instrument, warn};
 
 impl LlmClient {
     /// Send a chat completion request.
@@ -34,6 +35,7 @@ impl LlmClient {
     /// - Provider returns an error response
     /// - Network connectivity issues
     /// - API key is invalid
+    /// - Circuit breaker is open (too many recent failures)
     ///
     /// # Examples
     ///
@@ -80,8 +82,34 @@ impl LlmClient {
             );
         }
 
-        // Execute the request with retry logic
-        self.execute_with_retry(|| async { self.provider_instance.chat(messages, tools).await })
-            .await
+        // Execute the request with circuit breaker protection and retry logic
+        let result = self
+            .circuit_breaker
+            .call(|| async {
+                self.execute_with_retry(|| async {
+                    self.provider_instance.chat(messages, tools).await
+                })
+                .await
+            })
+            .await;
+
+        // Convert circuit breaker errors to SageError
+        match result {
+            Ok(response) => Ok(response),
+            Err(CircuitBreakerError::Open { component }) => {
+                warn!(
+                    "Circuit breaker open for '{}', rejecting request",
+                    component
+                );
+                Err(SageError::llm_with_provider(
+                    format!(
+                        "Service temporarily unavailable: circuit breaker open for {}. Too many recent failures.",
+                        component
+                    ),
+                    provider_name,
+                ))
+            }
+            Err(CircuitBreakerError::OperationFailed(e)) => Err(e),
+        }
     }
 }

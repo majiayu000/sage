@@ -1,14 +1,15 @@
 //! Streaming chat support
 
 use super::types::LlmClient;
-use crate::error::SageResult;
+use crate::error::{SageError, SageResult};
 use crate::llm::messages::LlmMessage;
 use crate::llm::providers::LlmProviderTrait;
 use crate::llm::rate_limiter::global as rate_limiter;
 use crate::llm::streaming::{LlmStream, StreamingLlmClient};
+use crate::recovery::circuit_breaker::CircuitBreakerError;
 use crate::tools::types::ToolSchema;
 use async_trait::async_trait;
-use tracing::{debug, instrument};
+use tracing::{debug, instrument, warn};
 
 #[async_trait]
 impl StreamingLlmClient for LlmClient {
@@ -34,6 +35,7 @@ impl StreamingLlmClient for LlmClient {
     /// - Provider doesn't support streaming
     /// - Network connectivity issues
     /// - API key is invalid
+    /// - Circuit breaker is open (too many recent failures)
     ///
     /// # Examples
     ///
@@ -87,12 +89,32 @@ impl StreamingLlmClient for LlmClient {
             );
         }
 
-        let result = self.provider_instance.chat_stream(messages, tools).await;
+        // Execute the streaming request with circuit breaker protection
+        let result = self
+            .circuit_breaker
+            .call(|| async { self.provider_instance.chat_stream(messages, tools).await })
+            .await;
 
-        if result.is_ok() {
-            tracing::info!("streaming request initiated");
+        // Convert circuit breaker errors to SageError
+        match result {
+            Ok(stream) => {
+                tracing::info!("streaming request initiated");
+                Ok(stream)
+            }
+            Err(CircuitBreakerError::Open { component }) => {
+                warn!(
+                    "Circuit breaker open for '{}' (streaming), rejecting request",
+                    component
+                );
+                Err(SageError::llm_with_provider(
+                    format!(
+                        "Service temporarily unavailable: circuit breaker open for {}. Too many recent failures.",
+                        component
+                    ),
+                    provider_name,
+                ))
+            }
+            Err(CircuitBreakerError::OperationFailed(e)) => Err(e),
         }
-
-        result
     }
 }

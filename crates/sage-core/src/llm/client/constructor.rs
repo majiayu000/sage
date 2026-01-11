@@ -8,7 +8,10 @@ use crate::llm::providers::{
     AnthropicProvider, AzureProvider, DoubaoProvider, GlmProvider, GoogleProvider, OllamaProvider,
     OpenAiProvider, OpenRouterProvider, ProviderInstance,
 };
+use crate::recovery::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig};
 use reqwest::Client;
+use std::sync::Arc;
+use std::time::Duration;
 use tracing::debug;
 
 impl LlmClient {
@@ -111,6 +114,25 @@ impl LlmClient {
         let stored_config = config.clone();
         let stored_model_params = model_params.clone();
 
+        // Create circuit breaker for this provider
+        // LLM calls benefit from a lenient configuration due to natural latency variance
+        let circuit_breaker_config = CircuitBreakerConfig {
+            failure_threshold: 5,        // Open after 5 consecutive failures
+            success_threshold: 2,        // Close after 2 successes in half-open
+            reset_timeout: Duration::from_secs(30), // Try again after 30s
+            window_size: Duration::from_secs(60),   // Count failures in 60s window
+            half_open_max_requests: 2,   // Allow 2 test requests in half-open
+        };
+        let circuit_breaker = Arc::new(CircuitBreaker::with_config(
+            format!("llm_{}", provider.name()),
+            circuit_breaker_config,
+        ));
+
+        debug!(
+            "Created circuit breaker for LLM provider '{}'",
+            provider.name()
+        );
+
         // Create provider instance based on provider type
         // Move (not clone) config and model_params into the selected provider
         let provider_instance = match &provider {
@@ -155,6 +177,7 @@ impl LlmClient {
             config: stored_config,
             model_params: stored_model_params,
             provider_instance,
+            circuit_breaker,
         })
     }
 }
