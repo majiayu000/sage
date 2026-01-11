@@ -39,8 +39,10 @@
 //! }
 //! ```
 
+mod cli_overrides;
 mod credentials_file;
 mod hint;
+mod loaded_config;
 mod providers;
 mod resolved;
 mod resolver;
@@ -49,15 +51,17 @@ mod source;
 mod status;
 mod unified_loader;
 
+pub use cli_overrides::CliOverrides;
 pub use credentials_file::CredentialsFile;
 pub use hint::{
     HintType, StatusBarHint, hint_configured, hint_from_status,
     hint_validation_failed, hint_welcome,
 };
+pub use loaded_config::LoadedConfig;
 pub use providers::{ProviderEnvConfig, auto_import_paths, default_providers};
 pub use resolved::{ResolvedCredential, ResolvedCredentials};
 pub use resolver::CredentialResolver;
 pub use resolver_config::ResolverConfig;
 pub use source::{CredentialPriority, CredentialSource};
 pub use status::{ConfigStatus, ConfigStatusReport};
-pub use unified_loader::{CliOverrides, LoadedConfig, UnifiedConfigLoader, load_config_unified};
+pub use unified_loader::{UnifiedConfigLoader, load_config_unified};
