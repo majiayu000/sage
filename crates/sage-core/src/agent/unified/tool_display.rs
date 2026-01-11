@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use super::event_manager::{EventManager, ExecutionEvent};
 
 /// Get icon for specific tool type (delegates to Icons::for_tool)
+#[allow(dead_code)]
 pub fn get_tool_icon(tool_name: &str) -> &'static str {
     Icons::for_tool(tool_name)
 }

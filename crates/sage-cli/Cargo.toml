@@ -37,6 +37,9 @@ serde_json = { workspace = true }
 # Synchronization
 parking_lot = { workspace = true }
 
+# Terminal UI (rnk - React-like declarative UI)
+rnk = { workspace = true }
+
 # Error handling
 anyhow = { workspace = true }
 

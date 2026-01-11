@@ -50,7 +50,7 @@ use crate::context::AutoCompact;
 use crate::error::{SageError, SageResult};
 use crate::hooks::HookRegistry;
 use crate::input::{InputChannel, InputRequest, InputResponse};
-use crate::output::{OutputMode, OutputStrategy, StreamingOutput};
+use crate::output::{OutputMode, OutputStrategy};
 use crate::skills::SkillRegistry;
 use crate::trajectory::SessionRecorder;
 use crate::types::Id;

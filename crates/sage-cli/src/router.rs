@@ -6,7 +6,7 @@ use crate::args::{Cli, Commands, ConfigAction, TrajectoryAction};
 use crate::commands::interactive::{CliOnboarding, check_config_status};
 use crate::commands::unified::OutputModeArg;
 use crate::console::CliConsole;
-use crate::{commands, ipc, ui_launcher};
+use crate::{app, commands, ipc, ui_launcher};
 use sage_core::config::credential::ConfigStatus;
 use sage_core::error::SageResult;
 
@@ -75,6 +75,24 @@ async fn route_main(cli: Cli) -> SageResult<()> {
             cli.working_dir.as_ref().and_then(|p| p.to_str()),
         )
         .await;
+    }
+
+    // Use new rnk-based UI if requested
+    if cli.new_ui {
+        return app::run_app().map_err(|e| sage_core::error::SageError::Io {
+            message: e.to_string(),
+            path: None,
+            context: Some("Running new UI".to_string()),
+        });
+    }
+
+    // Run UI demo mode
+    if cli.ui_demo {
+        return app::run_demo().map_err(|e| sage_core::error::SageError::Io {
+            message: e.to_string(),
+            path: None,
+            context: Some("Running UI demo".to_string()),
+        });
     }
 
     // Execute using UnifiedExecutor (the single execution path)

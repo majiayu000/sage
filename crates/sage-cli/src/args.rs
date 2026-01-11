@@ -70,6 +70,14 @@ pub struct Cli {
     #[arg(long)]
     pub modern_ui: bool,
 
+    /// Use new rnk-based declarative UI (experimental)
+    #[arg(long)]
+    pub new_ui: bool,
+
+    /// Run UI demo mode (for testing new UI components)
+    #[arg(long, hide = true)]
+    pub ui_demo: bool,
+
     /// Output in streaming JSON format (for SDK/programmatic use)
     #[arg(long)]
     pub stream_json: bool,

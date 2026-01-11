@@ -3,6 +3,7 @@
 //! Provides a centralized event dispatch system that coordinates:
 //! - UI animations through AnimationManager
 //! - Event logging and debugging
+//! - New rnk-based UI through AgentEvent bridge
 //!
 //! This module unifies event handling that was previously scattered across
 //! multiple locations in the codebase.
@@ -11,6 +12,7 @@
 mod tests;
 
 use crate::ui::animation::{AnimationContext, AnimationManager, AnimationState};
+use crate::ui::bridge::{emit_event, AgentEvent};
 
 /// Execution events that can be observed throughout the agent lifecycle
 #[derive(Debug, Clone)]
@@ -87,11 +89,18 @@ impl EventManager {
                 self.animation_manager
                     .start_with_context(AnimationState::Thinking, "Thinking", "blue", context)
                     .await;
+                // Bridge to new UI
+                emit_event(AgentEvent::ThinkingStarted);
             }
             ExecutionEvent::ThinkingStopped => {
                 self.animation_manager.stop_animation().await;
+                // Bridge to new UI
+                emit_event(AgentEvent::ThinkingStopped);
             }
-            ExecutionEvent::ToolExecutionStarted { ref tool_name, .. } => {
+            ExecutionEvent::ToolExecutionStarted {
+                ref tool_name,
+                ref tool_id,
+            } => {
                 // Detail is passed via emit_with_detail for Task tool
                 // For other tools, just show the tool name
                 let context = AnimationContext::new().with_detail(tool_name);
@@ -103,16 +112,45 @@ impl EventManager {
                         context,
                     )
                     .await;
+                // Bridge to new UI
+                emit_event(AgentEvent::ToolExecutionStarted {
+                    tool_name: tool_name.clone(),
+                    tool_id: tool_id.clone(),
+                    description: tool_name.clone(),
+                });
             }
-            ExecutionEvent::ToolExecutionCompleted { .. } => {
+            ExecutionEvent::ToolExecutionCompleted {
+                ref tool_name,
+                ref tool_id,
+                success,
+                duration_ms,
+            } => {
                 self.animation_manager.stop_animation().await;
+                // Bridge to new UI
+                emit_event(AgentEvent::ToolExecutionCompleted {
+                    tool_name: tool_name.clone(),
+                    tool_id: tool_id.clone(),
+                    success,
+                    duration_ms,
+                    result_preview: None,
+                });
             }
             ExecutionEvent::SessionStarted { ref session_id } => {
                 tracing::info!("Session started: {}", session_id);
+                // Bridge to new UI - note: model/provider info comes from elsewhere
+                emit_event(AgentEvent::SessionStarted {
+                    session_id: session_id.clone(),
+                    model: String::new(),
+                    provider: String::new(),
+                });
             }
             ExecutionEvent::SessionEnded { ref session_id } => {
                 tracing::info!("Session ended: {}", session_id);
                 self.animation_manager.stop_animation().await;
+                // Bridge to new UI
+                emit_event(AgentEvent::SessionEnded {
+                    session_id: session_id.clone(),
+                });
             }
             ExecutionEvent::ErrorOccurred {
                 ref error_type,
@@ -120,6 +158,11 @@ impl EventManager {
             } => {
                 tracing::error!("Execution error [{}]: {}", error_type, message);
                 self.animation_manager.stop_animation().await;
+                // Bridge to new UI
+                emit_event(AgentEvent::ErrorOccurred {
+                    error_type: error_type.clone(),
+                    message: message.clone(),
+                });
             }
             ExecutionEvent::MessageReceived { .. } => {
                 // Message received events are for logging/debugging only
@@ -134,7 +177,10 @@ impl EventManager {
         }
 
         match event {
-            ExecutionEvent::ToolExecutionStarted { .. } => {
+            ExecutionEvent::ToolExecutionStarted {
+                ref tool_name,
+                ref tool_id,
+            } => {
                 // Use the provided detail instead of tool_name
                 let context = AnimationContext::new().with_detail(&detail);
                 self.animation_manager
@@ -145,6 +191,12 @@ impl EventManager {
                         context,
                     )
                     .await;
+                // Bridge to new UI with custom description
+                emit_event(AgentEvent::ToolExecutionStarted {
+                    tool_name: tool_name.clone(),
+                    tool_id: tool_id.clone(),
+                    description: detail,
+                });
             }
             _ => {
                 // For other events, just call the regular emit
