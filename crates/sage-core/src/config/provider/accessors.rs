@@ -1,6 +1,5 @@
 //! ProviderConfig accessor methods and validation
 
-use super::api_key::get_standard_env_vars;
 use super::config::ProviderConfig;
 use super::resilience::RateLimitConfig;
 use crate::llm::provider_types::TimeoutConfig;

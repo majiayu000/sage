@@ -6,7 +6,6 @@ use super::network::NetworkConfig;
 use super::resilience::{RateLimitConfig, ResilienceConfig};
 use crate::llm::provider_types::TimeoutConfig;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// Configuration for a specific LLM provider
 #[derive(Debug, Clone, Serialize, Deserialize)]
