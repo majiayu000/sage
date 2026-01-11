@@ -50,6 +50,7 @@ use crate::context::AutoCompact;
 use crate::error::{SageError, SageResult};
 use crate::hooks::HookRegistry;
 use crate::input::{InputChannel, InputRequest, InputResponse};
+use crate::output::{OutputMode, OutputStrategy, StreamingOutput};
 use crate::skills::SkillRegistry;
 use crate::trajectory::SessionRecorder;
 use crate::types::Id;
@@ -83,6 +84,8 @@ pub struct UnifiedExecutor {
     auto_compact: AutoCompact,
     /// Skill registry for AI auto-invocation (Claude Code compatible)
     skill_registry: Arc<RwLock<SkillRegistry>>,
+    /// Output strategy for flexible display modes (streaming, batch, json, silent)
+    output_strategy: Arc<dyn OutputStrategy>,
 }
 
 impl UnifiedExecutor {
@@ -191,6 +194,25 @@ impl UnifiedExecutor {
     /// Get a mutable reference to the tool orchestrator
     pub fn tool_orchestrator_mut(&mut self) -> &mut ToolOrchestrator {
         &mut self.tool_orchestrator
+    }
+
+    /// Set the output strategy for display mode
+    ///
+    /// This allows switching between streaming, batch, JSON, or silent output.
+    pub fn set_output_strategy(&mut self, strategy: Arc<dyn OutputStrategy>) {
+        self.output_strategy = strategy;
+    }
+
+    /// Set output mode (convenience method)
+    ///
+    /// Creates and sets the appropriate output strategy for the given mode.
+    pub fn set_output_mode(&mut self, mode: OutputMode) {
+        self.output_strategy = Arc::from(mode.create_strategy());
+    }
+
+    /// Get a reference to the output strategy
+    pub fn output_strategy(&self) -> &Arc<dyn OutputStrategy> {
+        &self.output_strategy
     }
 
     /// Discover skills from the file system

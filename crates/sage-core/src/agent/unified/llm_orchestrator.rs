@@ -1,13 +1,14 @@
 //! LLM Orchestrator - Centralized LLM communication management
 //!
 //! This module encapsulates all LLM communication logic including:
-//! - Streaming chat completion
+//! - Streaming chat completion with real-time display
 //! - Cancellation support
 //! - Response collection
 //!
 //! It provides a clean abstraction layer between the agent executor
 //! and the underlying LLM client.
 
+use crate::agent::unified::event_manager::EventManager;
 use crate::config::model::Config;
 use crate::config::provider::ProviderConfig;
 use crate::error::{SageError, SageResult};
@@ -15,9 +16,15 @@ use crate::llm::client::LlmClient;
 use crate::llm::messages::{LlmMessage, LlmResponse};
 use crate::llm::provider_types::{LlmProvider, TimeoutConfig};
 use crate::llm::streaming::{StreamingLlmClient, stream_utils};
+use crate::output::OutputStrategy;
 use crate::tools::types::ToolSchema;
+use crate::types::LlmUsage;
 use anyhow::Context;
+use std::collections::HashMap;
+use std::io::{self, Write};
+use std::sync::Arc;
 use tokio::select;
+use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 
@@ -143,6 +150,353 @@ impl LlmOrchestrator {
     /// Get a reference to the underlying LLM client
     pub fn client(&self) -> &LlmClient {
         &self.client
+    }
+
+    /// Execute streaming chat with real-time display to terminal
+    ///
+    /// This method streams LLM responses in real-time, printing each chunk
+    /// as it arrives. This provides a much better user experience compared
+    /// to waiting for the complete response.
+    ///
+    /// # Arguments
+    /// * `messages` - Conversation history
+    /// * `tools` - Optional tool schemas for function calling
+    /// * `cancel_token` - Token to signal cancellation
+    /// * `on_first_content` - Optional callback invoked when first content arrives
+    ///
+    /// # Returns
+    /// The complete LLM response
+    #[instrument(skip(self, messages, tools, cancel_token, on_first_content), fields(provider = %self.provider_name, model = %self.model_name))]
+    pub async fn stream_chat_with_display<F>(
+        &self,
+        messages: &[LlmMessage],
+        tools: Option<&[ToolSchema]>,
+        cancel_token: CancellationToken,
+        on_first_content: Option<F>,
+    ) -> SageResult<LlmResponse>
+    where
+        F: FnOnce(),
+    {
+        let stream_result = self.client.chat_stream(messages, tools).await;
+
+        let mut stream = match stream_result {
+            Ok(s) => s,
+            Err(e) => return Err(e),
+        };
+
+        let mut content = String::new();
+        let mut tool_calls = Vec::new();
+        let mut usage: Option<LlmUsage> = None;
+        let mut finish_reason: Option<String> = None;
+        let mut metadata: HashMap<String, serde_json::Value> = HashMap::new();
+        let mut has_printed_content = false;
+        let mut on_first_content = on_first_content;
+
+        loop {
+            select! {
+                chunk_opt = stream.next() => {
+                    match chunk_opt {
+                        Some(Ok(chunk)) => {
+                            // Print content in real-time
+                            if let Some(ref chunk_content) = chunk.content {
+                                if !chunk_content.is_empty() {
+                                    // Call on_first_content callback on first content
+                                    if !has_printed_content {
+                                        if let Some(callback) = on_first_content.take() {
+                                            callback();
+                                        }
+                                    }
+                                    // Print to terminal immediately
+                                    print!("{}", chunk_content);
+                                    if io::stdout().flush().is_err() {
+                                        tracing::warn!("Failed to flush stdout");
+                                    }
+                                    content.push_str(chunk_content);
+                                    has_printed_content = true;
+                                }
+                            }
+
+                            // Collect tool calls
+                            if let Some(chunk_tool_calls) = chunk.tool_calls {
+                                tool_calls.extend(chunk_tool_calls);
+                            }
+
+                            // Handle final chunk
+                            if chunk.is_final {
+                                usage = chunk.usage;
+                                finish_reason = chunk.finish_reason;
+                            }
+
+                            // Merge metadata
+                            for (key, value) in chunk.metadata {
+                                metadata.insert(key, value);
+                            }
+                        }
+                        Some(Err(e)) => {
+                            if has_printed_content {
+                                println!(); // New line after streaming content
+                            }
+                            return Err(e);
+                        }
+                        None => {
+                            // Stream ended
+                            if has_printed_content {
+                                println!(); // New line after streaming content
+                            }
+                            break;
+                        }
+                    }
+                }
+                _ = cancel_token.cancelled() => {
+                    if has_printed_content {
+                        println!(); // New line after streaming content
+                    }
+                    return Err(SageError::Cancelled);
+                }
+            }
+        }
+
+        Ok(LlmResponse {
+            content,
+            tool_calls,
+            usage,
+            model: None,
+            finish_reason,
+            id: None,
+            metadata,
+        })
+    }
+
+    /// Execute streaming chat with configurable output strategy
+    ///
+    /// This method uses the Strategy Pattern to allow flexible output handling.
+    /// The output strategy determines how content is displayed (streaming, batch, JSON, etc.)
+    ///
+    /// # Arguments
+    /// * `messages` - Conversation history
+    /// * `tools` - Optional tool schemas for function calling
+    /// * `cancel_token` - Token to signal cancellation
+    /// * `output_strategy` - The output strategy to use for display
+    ///
+    /// # Returns
+    /// The complete LLM response
+    #[instrument(skip(self, messages, tools, cancel_token, output_strategy), fields(provider = %self.provider_name, model = %self.model_name))]
+    pub async fn stream_chat_with_strategy(
+        &self,
+        messages: &[LlmMessage],
+        tools: Option<&[ToolSchema]>,
+        cancel_token: CancellationToken,
+        output_strategy: Arc<dyn OutputStrategy>,
+    ) -> SageResult<LlmResponse> {
+        let stream_result = self.client.chat_stream(messages, tools).await;
+
+        let mut stream = match stream_result {
+            Ok(s) => s,
+            Err(e) => return Err(e),
+        };
+
+        let mut content = String::new();
+        let mut tool_calls = Vec::new();
+        let mut usage: Option<LlmUsage> = None;
+        let mut finish_reason: Option<String> = None;
+        let mut metadata: HashMap<String, serde_json::Value> = HashMap::new();
+        let mut has_content = false;
+
+        loop {
+            select! {
+                chunk_opt = stream.next() => {
+                    match chunk_opt {
+                        Some(Ok(chunk)) => {
+                            // Handle content via output strategy
+                            if let Some(ref chunk_content) = chunk.content {
+                                if !chunk_content.is_empty() {
+                                    if !has_content {
+                                        output_strategy.on_content_start();
+                                        has_content = true;
+                                    }
+                                    output_strategy.on_content_chunk(chunk_content);
+                                    content.push_str(chunk_content);
+                                }
+                            }
+
+                            // Collect tool calls
+                            if let Some(chunk_tool_calls) = chunk.tool_calls {
+                                tool_calls.extend(chunk_tool_calls);
+                            }
+
+                            // Handle final chunk
+                            if chunk.is_final {
+                                usage = chunk.usage;
+                                finish_reason = chunk.finish_reason;
+                            }
+
+                            // Merge metadata
+                            for (key, value) in chunk.metadata {
+                                metadata.insert(key, value);
+                            }
+                        }
+                        Some(Err(e)) => {
+                            if has_content {
+                                output_strategy.on_content_end();
+                            }
+                            return Err(e);
+                        }
+                        None => {
+                            // Stream ended
+                            if has_content {
+                                output_strategy.on_content_end();
+                            }
+                            break;
+                        }
+                    }
+                }
+                _ = cancel_token.cancelled() => {
+                    if has_content {
+                        output_strategy.on_content_end();
+                    }
+                    return Err(SageError::Cancelled);
+                }
+            }
+        }
+
+        Ok(LlmResponse {
+            content,
+            tool_calls,
+            usage,
+            model: None,
+            finish_reason,
+            id: None,
+            metadata,
+        })
+    }
+
+    /// Execute streaming chat with animation stop on first content
+    ///
+    /// This method stops the thinking animation only when the first content chunk arrives,
+    /// ensuring there's no visible delay between the animation ending and content appearing.
+    ///
+    /// # Arguments
+    /// * `messages` - Conversation history
+    /// * `tools` - Optional tool schemas for function calling
+    /// * `cancel_token` - Token to signal cancellation
+    /// * `output_strategy` - The output strategy to use for display
+    /// * `event_manager` - Event manager to stop animation
+    ///
+    /// # Returns
+    /// The complete LLM response
+    #[instrument(skip(self, messages, tools, cancel_token, output_strategy, event_manager), fields(provider = %self.provider_name, model = %self.model_name))]
+    pub async fn stream_chat_with_animation_stop(
+        &self,
+        messages: &[LlmMessage],
+        tools: Option<&[ToolSchema]>,
+        cancel_token: CancellationToken,
+        output_strategy: Arc<dyn OutputStrategy>,
+        event_manager: &EventManager,
+    ) -> SageResult<LlmResponse> {
+        let stream_result = self.client.chat_stream(messages, tools).await;
+
+        let mut stream = match stream_result {
+            Ok(s) => s,
+            Err(e) => {
+                // Stop animation on error
+                event_manager.stop_animation().await;
+                return Err(e);
+            }
+        };
+
+        let mut content = String::new();
+        let mut tool_calls = Vec::new();
+        let mut usage: Option<LlmUsage> = None;
+        let mut finish_reason: Option<String> = None;
+        let mut metadata: HashMap<String, serde_json::Value> = HashMap::new();
+        let mut has_content = false;
+        let mut animation_stopped = false;
+
+        loop {
+            select! {
+                chunk_opt = stream.next() => {
+                    match chunk_opt {
+                        Some(Ok(chunk)) => {
+                            // Handle content via output strategy
+                            if let Some(ref chunk_content) = chunk.content {
+                                if !chunk_content.is_empty() {
+                                    // Stop animation on first content (no delay!)
+                                    if !animation_stopped {
+                                        event_manager.stop_animation().await;
+                                        animation_stopped = true;
+                                    }
+                                    if !has_content {
+                                        output_strategy.on_content_start();
+                                        has_content = true;
+                                    }
+                                    output_strategy.on_content_chunk(chunk_content);
+                                    content.push_str(chunk_content);
+                                }
+                            }
+
+                            // Collect tool calls
+                            if let Some(chunk_tool_calls) = chunk.tool_calls {
+                                // Stop animation when tool calls arrive (no content case)
+                                if !animation_stopped {
+                                    event_manager.stop_animation().await;
+                                    animation_stopped = true;
+                                }
+                                tool_calls.extend(chunk_tool_calls);
+                            }
+
+                            // Handle final chunk
+                            if chunk.is_final {
+                                usage = chunk.usage;
+                                finish_reason = chunk.finish_reason;
+                            }
+
+                            // Merge metadata
+                            for (key, value) in chunk.metadata {
+                                metadata.insert(key, value);
+                            }
+                        }
+                        Some(Err(e)) => {
+                            if !animation_stopped {
+                                event_manager.stop_animation().await;
+                            }
+                            if has_content {
+                                output_strategy.on_content_end();
+                            }
+                            return Err(e);
+                        }
+                        None => {
+                            // Stream ended
+                            if !animation_stopped {
+                                event_manager.stop_animation().await;
+                            }
+                            if has_content {
+                                output_strategy.on_content_end();
+                            }
+                            break;
+                        }
+                    }
+                }
+                _ = cancel_token.cancelled() => {
+                    if !animation_stopped {
+                        event_manager.stop_animation().await;
+                    }
+                    if has_content {
+                        output_strategy.on_content_end();
+                    }
+                    return Err(SageError::Cancelled);
+                }
+            }
+        }
+
+        Ok(LlmResponse {
+            content,
+            tool_calls,
+            usage,
+            model: None,
+            finish_reason,
+            id: None,
+            metadata,
+        })
     }
 }
 

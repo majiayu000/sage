@@ -91,14 +91,14 @@ impl EventManager {
             ExecutionEvent::ThinkingStopped => {
                 self.animation_manager.stop_animation().await;
             }
-            ExecutionEvent::ToolExecutionStarted { tool_name, .. } => {
-                let context = AnimationContext::new()
-                    .with_step(self.current_step)
-                    .with_detail(&tool_name);
+            ExecutionEvent::ToolExecutionStarted { ref tool_name, .. } => {
+                // Detail is passed via emit_with_detail for Task tool
+                // For other tools, just show the tool name
+                let context = AnimationContext::new().with_detail(tool_name);
                 self.animation_manager
                     .start_with_context(
                         AnimationState::ExecutingTools,
-                        &format!("Running {}", tool_name),
+                        "Running",
                         "green",
                         context,
                     )
@@ -123,6 +123,32 @@ impl EventManager {
             }
             ExecutionEvent::MessageReceived { .. } => {
                 // Message received events are for logging/debugging only
+            }
+        }
+    }
+
+    /// Emit an execution event with custom detail for animation
+    pub async fn emit_with_detail(&mut self, event: ExecutionEvent, detail: String) {
+        if self.debug_events {
+            tracing::debug!("Event: {:?}, detail: {}", event, detail);
+        }
+
+        match event {
+            ExecutionEvent::ToolExecutionStarted { .. } => {
+                // Use the provided detail instead of tool_name
+                let context = AnimationContext::new().with_detail(&detail);
+                self.animation_manager
+                    .start_with_context(
+                        AnimationState::ExecutingTools,
+                        "Running",
+                        "green",
+                        context,
+                    )
+                    .await;
+            }
+            _ => {
+                // For other events, just call the regular emit
+                self.emit(event).await;
             }
         }
     }

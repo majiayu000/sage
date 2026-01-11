@@ -4,6 +4,7 @@
 
 use crate::args::{Cli, Commands, ConfigAction, TrajectoryAction};
 use crate::commands::interactive::{CliOnboarding, check_config_status};
+use crate::commands::unified::OutputModeArg;
 use crate::console::CliConsole;
 use crate::{commands, ipc, ui_launcher};
 use sage_core::config::credential::ConfigStatus;
@@ -88,6 +89,7 @@ async fn route_main(cli: Cli) -> SageResult<()> {
         resume_session_id: cli.resume_session,
         continue_recent: cli.continue_session,
         stream_json: cli.stream_json,
+        output_mode: cli.output_mode,
     })
     .await
 }
@@ -121,6 +123,7 @@ async fn route_legacy_run(cli: &Cli) -> SageResult<()> {
             resume_session_id: None,
             continue_recent: false,
             stream_json: false,
+            output_mode: OutputModeArg::default(),
         })
         .await
     } else {
@@ -157,6 +160,7 @@ async fn route_legacy_interactive(cli: &Cli) -> SageResult<()> {
                 resume_session_id: None,
                 continue_recent: false,
                 stream_json: false,
+                output_mode: OutputModeArg::default(),
             })
             .await
         }
@@ -186,6 +190,7 @@ async fn route_legacy_unified(cli: &Cli) -> SageResult<()> {
             resume_session_id: None,
             continue_recent: false,
             stream_json: false,
+            output_mode: OutputModeArg::default(),
         })
         .await
     } else {

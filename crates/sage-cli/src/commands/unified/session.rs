@@ -39,6 +39,11 @@ pub async fn execute_single_task(
             console.warn("Use 'sage -r <session_id>' to resume sessions in single-task mode.");
             return Ok(());
         }
+        SlashCommandAction::SetOutputMode(mode) => {
+            executor.set_output_mode(mode);
+            console.info("Output mode updated.");
+            return Ok(());
+        }
     };
 
     // Execute the task

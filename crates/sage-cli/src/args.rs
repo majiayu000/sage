@@ -8,6 +8,7 @@
 //! - sage -r <id>             # Resume specific session
 //! - sage config/trajectory   # Utility commands
 
+use crate::commands::unified::OutputModeArg;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
@@ -72,6 +73,10 @@ pub struct Cli {
     /// Output in streaming JSON format (for SDK/programmatic use)
     #[arg(long)]
     pub stream_json: bool,
+
+    /// Output mode: streaming (real-time), batch (collect then display), or silent
+    #[arg(long, value_enum, default_value = "streaming")]
+    pub output_mode: OutputModeArg,
 
     #[command(subcommand)]
     pub command: Option<Commands>,

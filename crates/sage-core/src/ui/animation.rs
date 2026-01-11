@@ -51,23 +51,14 @@ impl AnimationContext {
         self
     }
 
-    /// Format context as suffix string
+    /// Format context as suffix string (without step numbers - cleaner UI)
     fn format_suffix(&self) -> String {
         let mut parts = Vec::new();
 
-        // Add step info
-        if let Some(step) = self.step {
-            if let Some(max) = self.max_steps {
-                parts.push(format!("Step {}/{}", step, max));
-            } else {
-                parts.push(format!("Step {}", step));
-            }
-        }
-
-        // Add detail
+        // Add detail (skip step numbers for cleaner display)
         if let Some(ref detail) = self.detail {
             // Truncate long details (UTF-8 safe)
-            let truncated = crate::utils::truncate_with_ellipsis(detail, 40);
+            let truncated = crate::utils::truncate_with_ellipsis(detail, 50);
             parts.push(truncated);
         }
 
@@ -90,6 +81,10 @@ pub struct AnimationManager {
     max_steps: Arc<AtomicU32>,
     /// Current detail string (shared with animation loop)
     current_detail: Arc<RwLock<Option<String>>>,
+    /// Animation start time (for calculating duration on stop)
+    start_time: Arc<RwLock<Option<std::time::Instant>>>,
+    /// Current animation message (for completion display)
+    current_message: Arc<RwLock<String>>,
 }
 
 impl AnimationManager {
@@ -102,6 +97,8 @@ impl AnimationManager {
             current_step: Arc::new(AtomicU32::new(0)),
             max_steps: Arc::new(AtomicU32::new(0)),
             current_detail: Arc::new(RwLock::new(None)),
+            start_time: Arc::new(RwLock::new(None)),
+            current_message: Arc::new(RwLock::new(String::new())),
         }
     }
 
@@ -122,8 +119,12 @@ impl AnimationManager {
 
     /// Start an animation with the given state and message
     pub async fn start_animation(&self, state: AnimationState, message: &str, color: &str) {
-        // Stop any existing animation first
-        self.stop_animation().await;
+        // Stop any existing animation first (without printing completion)
+        self.stop_animation_silent().await;
+
+        // Record start time and message for completion display
+        *self.start_time.write().await = Some(std::time::Instant::now());
+        *self.current_message.write().await = message.to_string();
 
         // Update state
         *self.current_state.write().await = state;
@@ -173,23 +174,66 @@ impl AnimationManager {
         self.start_animation(state, message, color).await;
     }
 
-    /// Stop the current animation
+    /// Stop the current animation and display completion status
     pub async fn stop_animation(&self) {
+        // Check if animation was running
+        let was_running = self.is_running.load(Ordering::SeqCst);
+
         // Signal stop
         self.is_running.store(false, Ordering::SeqCst);
 
         // Wait for current task to finish
         if let Some(task) = self.current_task.write().await.take() {
             task.abort();
-            // Give it a moment to clean up
+            // Brief pause to let task clean up (reduced from 50ms)
+            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+        }
+
+        // Print completion status instead of just clearing
+        if was_running {
+            let elapsed = if let Some(start) = *self.start_time.read().await {
+                start.elapsed().as_secs_f64()
+            } else {
+                0.0
+            };
+
+            let message = self.current_message.read().await.clone();
+
+            // Print completion with color: "✓ Thought for 2.3s"
+            let completion_msg = if message.contains("Thinking") {
+                format!("✓ Thought for {:.1}s", elapsed)
+            } else {
+                format!("✓ {} ({:.1}s)", message, elapsed)
+            };
+
+            // Clear line and print completion at column 0 with dim cyan color
+            print!("\r\x1b[K");
+            println!("{}", completion_msg.bright_cyan().dimmed());
+            let _ = std::io::stdout().flush();
+        }
+
+        // Reset state
+        *self.start_time.write().await = None;
+        *self.current_state.write().await = AnimationState::Idle;
+    }
+
+    /// Stop the current animation silently (no completion message)
+    /// Used internally when switching between animations
+    async fn stop_animation_silent(&self) {
+        // Signal stop
+        self.is_running.store(false, Ordering::SeqCst);
+
+        // Wait for current task to finish
+        if let Some(task) = self.current_task.write().await.take() {
+            task.abort();
             tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
         }
 
-        // Clear the line
+        // Just clear the line
         print!("\r\x1b[K");
         let _ = std::io::stdout().flush();
 
-        // Update state
+        // Reset state
         *self.current_state.write().await = AnimationState::Idle;
     }
 
@@ -256,8 +300,8 @@ impl AnimationManager {
                 _ => format!("{} {}", frame, full_message).bright_white().bold(),
             };
 
-            // Add 2-space indent for consistent UI alignment
-            print!("\r  {}", colored_output);
+            // Icon at column 0 (no leading spaces) for consistent UI alignment
+            print!("\r{}", colored_output);
             let _ = std::io::stdout().flush();
 
             frame_index = (frame_index + 1) % frames.len();

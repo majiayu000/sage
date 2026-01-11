@@ -128,23 +128,40 @@ pub fn build_activity_description(
 
 /// Display tool execution start information
 pub async fn display_tool_start(event_manager: &mut EventManager, tool_call: &ToolCall) {
-    let tool_icon = get_tool_icon(&tool_call.name);
     let params_preview = format_tool_params(&tool_call.arguments);
 
+    // Claude Code style: blue filled circle for tools, with 2-space indent for result
     println!();
-    println!(
-        "  {} {} {}",
-        tool_icon.bright_magenta(),
-        tool_call.name.bright_magenta().bold(),
-        params_preview.dimmed()
+    print!(
+        "{} {}",
+        Icons::message().bright_blue(),
+        tool_call.name.bright_white().bold(),
     );
+    // Show tool-specific icon and params
+    if !params_preview.is_empty() {
+        println!("({})", params_preview.dimmed());
+    } else {
+        println!();
+    }
 
-    // Emit tool execution started event
+    // For Task tool, get the description to show in animation
+    let detail = if tool_call.name.to_lowercase() == "task" {
+        tool_call
+            .arguments
+            .get("description")
+            .and_then(|v| v.as_str())
+            .map(|s| crate::utils::truncate_with_ellipsis(s, 40))
+            .unwrap_or_else(|| "Task".to_string())
+    } else {
+        tool_call.name.clone()
+    };
+
+    // Emit tool execution started event with detail
     event_manager
-        .emit(ExecutionEvent::ToolExecutionStarted {
+        .emit_with_detail(ExecutionEvent::ToolExecutionStarted {
             tool_name: tool_call.name.clone(),
             tool_id: tool_call.id.clone(),
-        })
+        }, detail)
         .await;
 }
 
@@ -164,21 +181,21 @@ pub async fn display_tool_result(
         })
         .await;
 
-    let status_icon = if tool_result.success {
-        "✓".green()
-    } else {
-        "✗".red()
-    };
-
-    print!("    {} ", status_icon);
+    // Claude Code style: result indicator with corner bracket
     if tool_result.success {
-        println!("{} ({}ms)", "done".green(), duration_ms);
-    } else {
-        println!("{} ({}ms)", "failed".red(), duration_ms);
-        if let Some(ref err) = tool_result.error {
-            let first_line = err.lines().next().unwrap_or(err);
-            let truncated = crate::utils::truncate_with_ellipsis(first_line, 60);
-            println!("      {}", truncated.dimmed());
+        // Show brief output preview if available
+        if let Some(ref output) = tool_result.output {
+            let preview = output.lines().take(3).collect::<Vec<_>>().join("\n  ");
+            if !preview.trim().is_empty() {
+                let truncated = crate::utils::truncate_with_ellipsis(&preview, 200);
+                println!("  {} {}", Icons::result().dimmed(), truncated.dimmed());
+            }
         }
+    } else {
+        // Show error
+        let err_msg = tool_result.error.as_deref().unwrap_or("Unknown error");
+        let first_line = err_msg.lines().next().unwrap_or(err_msg);
+        let truncated = crate::utils::truncate_with_ellipsis(first_line, 80);
+        println!("  {} {}", Icons::result().red(), truncated.red());
     }
 }

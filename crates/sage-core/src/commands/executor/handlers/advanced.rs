@@ -162,3 +162,26 @@ pub(super) async fn execute_login() -> SageResult<CommandResult> {
             .with_status("Opening credential setup..."),
     )
 }
+
+/// Execute /output command - switch output display mode
+pub(super) async fn execute_output(invocation: &CommandInvocation) -> SageResult<CommandResult> {
+    let mode = invocation.arguments.first().map(|s| s.as_str());
+
+    match mode {
+        Some(m) if ["streaming", "batch", "silent"].contains(&m) => {
+            Ok(
+                CommandResult::interactive(InteractiveCommand::OutputMode {
+                    mode: m.to_string(),
+                })
+                .with_status(format!("Switching to {} mode...", m)),
+            )
+        }
+        Some(m) => Ok(CommandResult::local(format!(
+            "Unknown output mode: '{}'\nValid modes: streaming, batch, silent",
+            m
+        ))),
+        None => Ok(CommandResult::local(
+            "Usage: /output <mode>\n\nModes:\n  streaming - Real-time output (default)\n  batch     - Collect and display at end\n  silent    - No output",
+        )),
+    }
+}

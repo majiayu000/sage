@@ -35,6 +35,7 @@ pub(super) async fn execute_builtin(
         "plan" => execute_plan(invocation).await,
         "title" => execute_title(invocation).await,
         "login" => execute_login().await,
+        "output" => execute_output(invocation).await,
         _ => {
             // Fall back to prompt expansion
             let expanded = command.expand(&invocation.arguments);

@@ -255,6 +255,8 @@ impl GlmProvider {
             // Final message info
             stop_reason: Option<String>,
             usage: Option<LlmUsage>,
+            // Input tokens from message_start
+            input_tokens: u32,
         }
 
         let state = std::sync::Arc::new(tokio::sync::Mutex::new(StreamState {
@@ -266,6 +268,7 @@ impl GlmProvider {
             pending_tool_calls: Vec::new(),
             stop_reason: None,
             usage: None,
+            input_tokens: 0,
         }));
 
         let byte_stream = response.bytes_stream();
@@ -293,7 +296,12 @@ impl GlmProvider {
 
                             match event_type {
                                 Some("message_start") => {
-                                    // Message started
+                                    // Extract input tokens from message_start event
+                                    if let Some(usage_data) = data["message"]["usage"].as_object() {
+                                        if let Some(input) = usage_data.get("input_tokens").and_then(|v| v.as_u64()) {
+                                            state.input_tokens = input as u32;
+                                        }
+                                    }
                                 }
                                 Some("content_block_start") => {
                                     // Start of a content block
@@ -366,10 +374,18 @@ impl GlmProvider {
                                             .and_then(|v| v.as_u64())
                                             .unwrap_or(0);
 
+                                        // Get input_tokens from message_delta if available
+                                        // Otherwise fall back to what we captured from message_start
+                                        let input_tokens = usage_data
+                                            .get("input_tokens")
+                                            .and_then(|v| v.as_u64())
+                                            .map(|v| v as u32)
+                                            .unwrap_or(state.input_tokens);
+
                                         state.usage = Some(LlmUsage {
-                                            prompt_tokens: 0, // Not provided in delta
+                                            prompt_tokens: input_tokens,
                                             completion_tokens: output_tokens as u32,
-                                            total_tokens: output_tokens as u32,
+                                            total_tokens: input_tokens + output_tokens as u32,
                                             cost_usd: None,
                                             cache_creation_input_tokens: None,
                                             cache_read_input_tokens: None,
