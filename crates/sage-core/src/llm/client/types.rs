@@ -3,6 +3,8 @@
 use crate::config::provider::ProviderConfig;
 use crate::llm::provider_types::{LlmProvider, ModelParameters};
 use crate::llm::providers::ProviderInstance;
+use crate::recovery::circuit_breaker::CircuitBreaker;
+use std::sync::Arc;
 
 /// LLM client for making requests to various providers.
 ///
@@ -16,7 +18,7 @@ use crate::llm::providers::ProviderInstance;
 /// - **Automatic retries**: Exponential backoff with jitter for transient failures
 /// - **Rate limiting**: Global rate limiter prevents hitting API limits
 /// - **Streaming**: Support for streaming responses via `StreamingLlmClient` trait
-/// - **Timeout control**: Configurable connection and request timeouts
+/// - **Circuit breaker**: Protection against cascading failures
 /// - **Custom headers**: Support for custom HTTP headers
 ///
 /// # Examples
@@ -50,4 +52,6 @@ pub struct LlmClient {
     pub(super) config: ProviderConfig,
     pub(super) model_params: ModelParameters,
     pub(super) provider_instance: ProviderInstance,
+    /// Circuit breaker for protecting against cascading failures
+    pub(super) circuit_breaker: Arc<CircuitBreaker>,
 }
