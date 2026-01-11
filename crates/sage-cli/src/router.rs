@@ -77,15 +77,6 @@ async fn route_main(cli: Cli) -> SageResult<()> {
         .await;
     }
 
-    // Use new rnk-based UI if requested
-    if cli.new_ui {
-        return app::run_app().map_err(|e| sage_core::error::SageError::Io {
-            message: e.to_string(),
-            path: None,
-            context: Some("Running new UI".to_string()),
-        });
-    }
-
     // Run UI demo mode
     if cli.ui_demo {
         return app::run_demo().map_err(|e| sage_core::error::SageError::Io {
@@ -95,21 +86,31 @@ async fn route_main(cli: Cli) -> SageResult<()> {
         });
     }
 
-    // Execute using UnifiedExecutor (the single execution path)
-    // Session resume is handled by unified_execute when continue_recent or resume_session_id is set
-    commands::unified_execute(commands::UnifiedArgs {
-        task: cli.task,
-        config_file: cli.config_file,
-        working_dir: cli.working_dir,
-        max_steps: cli.max_steps,
-        verbose: cli.verbose,
-        non_interactive,
-        resume_session_id: cli.resume_session,
-        continue_recent: cli.continue_session,
-        stream_json: cli.stream_json,
-        output_mode: cli.output_mode,
-    })
-    .await
+    // Use legacy UI if requested, otherwise use new rnk UI as default
+    if cli.legacy_ui {
+        // Execute using UnifiedExecutor (the single execution path)
+        // Session resume is handled by unified_execute when continue_recent or resume_session_id is set
+        commands::unified_execute(commands::UnifiedArgs {
+            task: cli.task,
+            config_file: cli.config_file,
+            working_dir: cli.working_dir,
+            max_steps: cli.max_steps,
+            verbose: cli.verbose,
+            non_interactive,
+            resume_session_id: cli.resume_session,
+            continue_recent: cli.continue_session,
+            stream_json: cli.stream_json,
+            output_mode: cli.output_mode,
+        })
+        .await
+    } else {
+        // New rnk-based UI is the default
+        app::run_app().map_err(|e| sage_core::error::SageError::Io {
+            message: e.to_string(),
+            path: None,
+            context: Some("Running rnk UI".to_string()),
+        })
+    }
 }
 
 /// Route legacy `sage run "task"` command

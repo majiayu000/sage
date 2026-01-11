@@ -39,6 +39,7 @@ parking_lot = { workspace = true }
 
 # Terminal UI (rnk - React-like declarative UI)
 rnk = { workspace = true }
+crossterm = "0.27"
 
 # Error handling
 anyhow = { workspace = true }

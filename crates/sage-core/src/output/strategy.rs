@@ -317,6 +317,76 @@ impl OutputStrategy for SilentOutput {
     fn on_thinking_stop(&self) {}
 }
 
+/// Rnk UI output - sends events to the new declarative UI
+///
+/// Uses the event bridge to update AppState, which rnk then renders.
+/// This replaces terminal print! calls with state updates.
+#[derive(Debug, Default)]
+pub struct RnkOutput {
+    content_buffer: Mutex<String>,
+}
+
+impl RnkOutput {
+    pub fn new() -> Self {
+        Self {
+            content_buffer: Mutex::new(String::new()),
+        }
+    }
+}
+
+impl OutputStrategy for RnkOutput {
+    fn on_content_start(&self) {
+        if let Ok(mut buffer) = self.content_buffer.lock() {
+            buffer.clear();
+        }
+        crate::ui::bridge::emit_event(crate::ui::bridge::AgentEvent::ContentStreamStarted);
+    }
+
+    fn on_content_chunk(&self, chunk: &str) {
+        if let Ok(mut buffer) = self.content_buffer.lock() {
+            buffer.push_str(chunk);
+        }
+        crate::ui::bridge::emit_event(crate::ui::bridge::AgentEvent::ContentChunk {
+            chunk: chunk.to_string(),
+        });
+    }
+
+    fn on_content_end(&self) {
+        crate::ui::bridge::emit_event(crate::ui::bridge::AgentEvent::ContentStreamEnded);
+    }
+
+    fn on_tool_start(&self, name: &str, params: &str) {
+        crate::ui::bridge::emit_event(crate::ui::bridge::AgentEvent::ToolExecutionStarted {
+            tool_name: name.to_string(),
+            tool_id: String::new(),
+            description: params.to_string(),
+        });
+    }
+
+    fn on_tool_result(&self, success: bool, output: Option<&str>, error: Option<&str>) {
+        let result_preview = if success { output } else { error };
+        crate::ui::bridge::emit_event(crate::ui::bridge::AgentEvent::ToolExecutionCompleted {
+            tool_name: String::new(),
+            tool_id: String::new(),
+            success,
+            duration_ms: 0,
+            result_preview: result_preview.map(|s| s.to_string()),
+        });
+    }
+
+    fn on_thinking(&self, _message: &str) {
+        crate::ui::bridge::emit_event(crate::ui::bridge::AgentEvent::ThinkingStarted);
+    }
+
+    fn on_thinking_stop(&self) {
+        crate::ui::bridge::emit_event(crate::ui::bridge::AgentEvent::ThinkingStopped);
+    }
+
+    fn get_collected_content(&self) -> Option<String> {
+        self.content_buffer.lock().ok().map(|b| b.clone())
+    }
+}
+
 /// Output mode configuration
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum OutputMode {
@@ -329,6 +399,8 @@ pub enum OutputMode {
     Json,
     /// Silent (no output)
     Silent,
+    /// Rnk declarative UI output
+    Rnk,
 }
 
 impl OutputMode {
@@ -339,6 +411,7 @@ impl OutputMode {
             OutputMode::Batch => Box::new(BatchOutput::new()),
             OutputMode::Json => Box::new(JsonOutput::new()),
             OutputMode::Silent => Box::new(SilentOutput::new()),
+            OutputMode::Rnk => Box::new(RnkOutput::new()),
         }
     }
 }
@@ -352,6 +425,7 @@ impl std::str::FromStr for OutputMode {
             "batch" => Ok(OutputMode::Batch),
             "json" => Ok(OutputMode::Json),
             "silent" | "quiet" => Ok(OutputMode::Silent),
+            "rnk" | "ui" => Ok(OutputMode::Rnk),
             _ => Err(format!("Unknown output mode: {}", s)),
         }
     }
