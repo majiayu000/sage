@@ -10,7 +10,7 @@ pub mod adapter;
 pub mod events;
 pub mod state;
 
-pub use adapter::EventAdapter;
+pub use adapter::{emit_event, global_adapter, set_global_adapter, EventAdapter};
 pub use events::AgentEvent;
 pub use state::{
     AppState, ExecutionPhase, InputState, Message, MessageContent, MessageMetadata, Role,

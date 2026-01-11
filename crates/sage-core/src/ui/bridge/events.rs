@@ -3,8 +3,6 @@
 //! These events represent all UI-relevant actions from Agent execution.
 //! The EventAdapter converts these to AppState updates.
 
-use std::time::Duration;
-
 /// Events emitted by Agent for UI consumption
 #[derive(Clone, Debug)]
 pub enum AgentEvent {
@@ -39,16 +37,17 @@ pub enum AgentEvent {
     /// Tool execution started
     ToolExecutionStarted {
         tool_name: String,
+        tool_id: String,
         description: String,
     },
 
     /// Tool execution completed
     ToolExecutionCompleted {
         tool_name: String,
+        tool_id: String,
         success: bool,
-        output: Option<String>,
-        error: Option<String>,
-        duration: Duration,
+        duration_ms: u64,
+        result_preview: Option<String>,
     },
 
     /// Error occurred
@@ -78,9 +77,14 @@ impl AgentEvent {
     }
 
     /// Create a tool execution started event
-    pub fn tool_started(tool_name: impl Into<String>, description: impl Into<String>) -> Self {
+    pub fn tool_started(
+        tool_name: impl Into<String>,
+        tool_id: impl Into<String>,
+        description: impl Into<String>,
+    ) -> Self {
         Self::ToolExecutionStarted {
             tool_name: tool_name.into(),
+            tool_id: tool_id.into(),
             description: description.into(),
         }
     }
@@ -88,17 +92,17 @@ impl AgentEvent {
     /// Create a tool execution completed event
     pub fn tool_completed(
         tool_name: impl Into<String>,
+        tool_id: impl Into<String>,
         success: bool,
-        output: Option<String>,
-        error: Option<String>,
-        duration: Duration,
+        duration_ms: u64,
+        result_preview: Option<String>,
     ) -> Self {
         Self::ToolExecutionCompleted {
             tool_name: tool_name.into(),
+            tool_id: tool_id.into(),
             success,
-            output,
-            error,
-            duration,
+            duration_ms,
+            result_preview,
         }
     }
 
@@ -136,9 +140,15 @@ mod tests {
 
     #[test]
     fn test_tool_event() {
-        let event = AgentEvent::tool_started("bash", "ls -la");
-        if let AgentEvent::ToolExecutionStarted { tool_name, description } = event {
+        let event = AgentEvent::tool_started("bash", "tool-123", "ls -la");
+        if let AgentEvent::ToolExecutionStarted {
+            tool_name,
+            tool_id,
+            description,
+        } = event
+        {
             assert_eq!(tool_name, "bash");
+            assert_eq!(tool_id, "tool-123");
             assert_eq!(description, "ls -la");
         } else {
             panic!("Expected ToolExecutionStarted event");

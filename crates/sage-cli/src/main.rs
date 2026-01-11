@@ -56,6 +56,7 @@
 #![allow(clippy::filter_map_identity)]
 
 mod api_types;
+mod app;
 mod args;
 mod commands;
 mod console;

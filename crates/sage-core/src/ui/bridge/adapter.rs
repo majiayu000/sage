@@ -79,6 +79,7 @@ impl EventAdapter {
 
             AgentEvent::ToolExecutionStarted {
                 tool_name,
+                tool_id: _,
                 description,
             } => {
                 state.start_tool(tool_name, description);
@@ -86,10 +87,12 @@ impl EventAdapter {
 
             AgentEvent::ToolExecutionCompleted {
                 success,
-                output,
-                error,
+                result_preview,
                 ..
             } => {
+                // Convert result_preview to the format expected by finish_tool
+                let output = if success { result_preview.clone() } else { None };
+                let error = if success { None } else { result_preview };
                 state.finish_tool(success, output, error);
             }
 
