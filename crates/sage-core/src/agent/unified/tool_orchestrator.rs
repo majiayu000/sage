@@ -1,12 +1,14 @@
 //! Tool orchestration with three-phase execution model:
 //! Pre-execution (hooks), Execution (tool), Post-execution (result hooks)
 
+use crate::checkpoints::{CheckpointManager, CheckpointId, RestoreOptions};
 use crate::error::{SageError, SageResult};
 use crate::hooks::{HookEvent, HookExecutor, HookInput};
 use crate::recovery::supervisor::{SupervisionPolicy, SupervisionResult, TaskSupervisor};
 use crate::tools::executor::ToolExecutor;
 use crate::tools::types::{ToolCall, ToolResult};
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
@@ -68,6 +70,42 @@ impl SupervisionConfig {
     }
 }
 
+/// Configuration for checkpoint behavior
+#[derive(Debug, Clone)]
+pub struct CheckpointConfig {
+    /// Whether checkpointing is enabled
+    pub enabled: bool,
+    /// Whether to auto-rollback on tool failure
+    pub auto_rollback_on_failure: bool,
+}
+
+impl Default for CheckpointConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            auto_rollback_on_failure: false, // Disabled by default for safety
+        }
+    }
+}
+
+impl CheckpointConfig {
+    /// Create config with auto-rollback enabled
+    pub fn with_auto_rollback() -> Self {
+        Self {
+            enabled: true,
+            auto_rollback_on_failure: true,
+        }
+    }
+
+    /// Disable checkpointing entirely
+    pub fn disabled() -> Self {
+        Self {
+            enabled: false,
+            auto_rollback_on_failure: false,
+        }
+    }
+}
+
 /// Result of the pre-execution phase
 pub enum PreExecutionResult {
     /// Continue with execution
@@ -96,6 +134,10 @@ pub struct ToolOrchestrator {
     tool_executor: ToolExecutor,
     hook_executor: HookExecutor,
     supervision_config: SupervisionConfig,
+    checkpoint_manager: Option<Arc<CheckpointManager>>,
+    checkpoint_config: CheckpointConfig,
+    /// Track the last checkpoint ID for potential rollback
+    last_checkpoint_id: tokio::sync::RwLock<Option<CheckpointId>>,
 }
 
 impl ToolOrchestrator {
@@ -105,6 +147,9 @@ impl ToolOrchestrator {
             tool_executor,
             hook_executor,
             supervision_config: SupervisionConfig::default(),
+            checkpoint_manager: None,
+            checkpoint_config: CheckpointConfig::default(),
+            last_checkpoint_id: tokio::sync::RwLock::new(None),
         }
     }
 
@@ -118,7 +163,25 @@ impl ToolOrchestrator {
             tool_executor,
             hook_executor,
             supervision_config,
+            checkpoint_manager: None,
+            checkpoint_config: CheckpointConfig::default(),
+            last_checkpoint_id: tokio::sync::RwLock::new(None),
         }
+    }
+
+    /// Set the checkpoint manager for automatic checkpointing
+    pub fn set_checkpoint_manager(&mut self, manager: Arc<CheckpointManager>) {
+        self.checkpoint_manager = Some(manager);
+    }
+
+    /// Set the checkpoint configuration
+    pub fn set_checkpoint_config(&mut self, config: CheckpointConfig) {
+        self.checkpoint_config = config;
+    }
+
+    /// Get the checkpoint configuration
+    pub fn checkpoint_config(&self) -> &CheckpointConfig {
+        &self.checkpoint_config
     }
 
     /// Set the supervision configuration
@@ -151,13 +214,44 @@ impl ToolOrchestrator {
         self.hook_executor = hook_executor;
     }
 
-    /// Execute pre-execution phase: run PreToolUse hooks
+    /// Execute pre-execution phase: run PreToolUse hooks and create checkpoint
     pub async fn pre_execution_phase(
         &self,
         tool_call: &ToolCall,
         context: &ToolExecutionContext,
         cancel_token: CancellationToken,
     ) -> SageResult<PreExecutionResult> {
+        // Create checkpoint for file-modifying tools before execution
+        if self.checkpoint_config.enabled {
+            if let Some(manager) = &self.checkpoint_manager {
+                if manager.should_checkpoint_for_tool(&tool_call.name) {
+                    let affected_files = self.extract_affected_files(tool_call);
+                    if !affected_files.is_empty() {
+                        match manager.create_pre_tool_checkpoint(&tool_call.name, &affected_files).await {
+                            Ok(checkpoint) => {
+                                tracing::debug!(
+                                    tool = %tool_call.name,
+                                    checkpoint_id = %checkpoint.short_id(),
+                                    files = ?affected_files,
+                                    "Created pre-tool checkpoint"
+                                );
+                                // Store checkpoint ID for potential rollback
+                                let mut last_id = self.last_checkpoint_id.write().await;
+                                *last_id = Some(checkpoint.id);
+                            }
+                            Err(e) => {
+                                tracing::warn!(
+                                    tool = %tool_call.name,
+                                    error = %e,
+                                    "Failed to create pre-tool checkpoint (continuing anyway)"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         let hook_input = HookInput::new(HookEvent::PreToolUse, &context.session_id)
             .with_cwd(context.working_dir.clone())
             .with_tool_name(&tool_call.name)
@@ -191,6 +285,32 @@ impl ToolOrchestrator {
         }
 
         Ok(PreExecutionResult::Continue)
+    }
+
+    /// Extract file paths affected by a tool call
+    fn extract_affected_files(&self, tool_call: &ToolCall) -> Vec<PathBuf> {
+        let mut files = Vec::new();
+
+        // Write/Edit tools use file_path or path
+        if let Some(path) = tool_call.arguments.get("file_path")
+            .or_else(|| tool_call.arguments.get("path"))
+            .and_then(|v| v.as_str())
+        {
+            files.push(PathBuf::from(path));
+        }
+
+        // MultiEdit may have multiple files
+        if let Some(edits) = tool_call.arguments.get("edits")
+            .and_then(|v| v.as_array())
+        {
+            for edit in edits {
+                if let Some(path) = edit.get("file_path").and_then(|v| v.as_str()) {
+                    files.push(PathBuf::from(path));
+                }
+            }
+        }
+
+        files
     }
 
     /// Execute the tool (execution phase) with cancellation and supervision support
@@ -300,7 +420,7 @@ impl ToolOrchestrator {
         }
     }
 
-    /// Execute post-execution phase: run PostToolUse/PostToolUseFailure hooks
+    /// Execute post-execution phase: run PostToolUse/PostToolUseFailure hooks and handle rollback
     pub async fn post_execution_phase(
         &self,
         tool_call: &ToolCall,
@@ -308,6 +428,39 @@ impl ToolOrchestrator {
         context: &ToolExecutionContext,
         cancel_token: CancellationToken,
     ) -> SageResult<()> {
+        // Handle potential rollback on failure
+        if !tool_result.success && self.checkpoint_config.auto_rollback_on_failure {
+            if let Some(manager) = &self.checkpoint_manager {
+                let last_id = self.last_checkpoint_id.read().await;
+                if let Some(checkpoint_id) = last_id.as_ref() {
+                    match manager.restore(checkpoint_id, RestoreOptions::files_only()).await {
+                        Ok(result) => {
+                            tracing::info!(
+                                tool = %tool_call.name,
+                                checkpoint_id = %checkpoint_id.short(),
+                                restored = result.restored_count(),
+                                "Auto-rolled back after tool failure"
+                            );
+                        }
+                        Err(e) => {
+                            tracing::error!(
+                                tool = %tool_call.name,
+                                checkpoint_id = %checkpoint_id.short(),
+                                error = %e,
+                                "Failed to rollback after tool failure"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        // Clear checkpoint ID after post-execution
+        if self.checkpoint_config.enabled {
+            let mut last_id = self.last_checkpoint_id.write().await;
+            *last_id = None;
+        }
+
         let event = if tool_result.success {
             HookEvent::PostToolUse
         } else {
@@ -334,6 +487,28 @@ impl ToolOrchestrator {
         }
 
         Ok(())
+    }
+
+    /// Rollback to the last checkpoint (manual rollback)
+    pub async fn rollback_last_checkpoint(&self) -> SageResult<bool> {
+        if let Some(manager) = &self.checkpoint_manager {
+            let last_id = self.last_checkpoint_id.read().await;
+            if let Some(checkpoint_id) = last_id.as_ref() {
+                let result = manager.restore(checkpoint_id, RestoreOptions::files_only()).await?;
+                tracing::info!(
+                    checkpoint_id = %checkpoint_id.short(),
+                    restored = result.restored_count(),
+                    "Rolled back to checkpoint"
+                );
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    /// Get the last checkpoint ID (if any)
+    pub async fn last_checkpoint_id(&self) -> Option<CheckpointId> {
+        self.last_checkpoint_id.read().await.clone()
     }
 
     /// Check if a tool requires user interaction

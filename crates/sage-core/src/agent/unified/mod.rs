@@ -40,7 +40,7 @@ pub use context_builder::{ContextBuilder, GitInfo, ProjectContext};
 pub use event_manager::{EventManager, ExecutionEvent};
 pub use llm_orchestrator::LlmOrchestrator;
 pub use session_manager::SessionManager;
-pub use tool_orchestrator::{PreExecutionResult, SupervisionConfig, ToolExecutionContext, ToolOrchestrator};
+pub use tool_orchestrator::{CheckpointConfig, PreExecutionResult, SupervisionConfig, ToolExecutionContext, ToolOrchestrator};
 
 use crate::agent::subagent::init_global_runner_from_config;
 use crate::context::AutoCompact;
