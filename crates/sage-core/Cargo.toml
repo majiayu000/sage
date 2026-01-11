@@ -56,6 +56,9 @@ shell-words = "1.1"
 glob = "0.3"
 parking_lot = { workspace = true }
 
+# Terminal UI (rnk - React-like declarative UI)
+rnk = { workspace = true }
+
 # File system watching
 notify = { workspace = true }
 notify-debouncer-mini = { workspace = true }
