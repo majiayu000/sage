@@ -274,7 +274,13 @@ fn print_element(element: &Element) {
 fn print_element_inline(element: &Element) {
     let (width, _) = crossterm::terminal::size().unwrap_or((80, 24));
     let output = render_to_string(element, width);
-    print!("{}", output);
+    // Trim trailing spaces from each line to avoid cursor drift
+    let trimmed: String = output
+        .lines()
+        .map(|line| line.trim_end())
+        .collect::<Vec<_>>()
+        .join("\n");
+    print!("{}", trimmed);
 }
 
 // ===== UI Components =====
