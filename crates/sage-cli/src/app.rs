@@ -1,12 +1,13 @@
 //! Sage CLI Main Application (streaming output mode with rnk 0.4.0)
 //!
-//! Uses rnk::println() to print Element directly
+//! Uses rnk::println() with Message components for clean output
 
 use crossterm::{
     event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
     terminal,
 };
 use rnk::prelude::*;
+use rnk::components::Message;
 use sage_core::agent::{ExecutionMode, ExecutionOptions, ExecutionOutcome, UnifiedExecutor};
 use sage_core::config::load_config;
 use sage_core::error::SageResult;
@@ -51,41 +52,7 @@ fn render_banner() -> Element {
         .into_element()
 }
 
-fn render_user_message(text: &str) -> Element {
-    RnkBox::new()
-        .flex_direction(FlexDirection::Row)
-        .child(Text::new("> ").color(Color::Yellow).bold().into_element())
-        .child(Text::new(text).color(Color::BrightWhite).into_element())
-        .into_element()
-}
-
-fn render_thinking() -> Element {
-    RnkBox::new()
-        .flex_direction(FlexDirection::Row)
-        .child(Text::new("● ").color(Color::Magenta).into_element())
-        .child(
-            Text::new("Thinking...")
-                .color(Color::Magenta)
-                .into_element(),
-        )
-        .into_element()
-}
-
-fn render_tool_call(name: &str) -> Element {
-    RnkBox::new()
-        .flex_direction(FlexDirection::Row)
-        .child(Text::new("● ").color(Color::Magenta).into_element())
-        .child(Text::new(name).color(Color::Magenta).bold().into_element())
-        .into_element()
-}
-
-fn render_error(message: &str) -> Element {
-    RnkBox::new()
-        .flex_direction(FlexDirection::Row)
-        .child(Text::new("● ").color(Color::Red).into_element())
-        .child(Text::new(message).color(Color::Red).into_element())
-        .into_element()
-}
+// UI components are now provided by rnk's Message component
 
 // ===== Input Handling =====
 
@@ -151,13 +118,13 @@ fn read_line_with_cjk() -> io::Result<String> {
 
 // ===== Agent Integration =====
 
-/// Simple event printer for Agent events
+/// Simple event printer for Agent events using rnk components
 struct EventPrinter;
 
 impl EventPrinter {
     fn print_thinking_start() {
-        // Use simple println instead of rnk::println to avoid layout issues
-        println!("\x1b[35m● Thinking...\x1b[0m");
+        // Print thinking message using rnk
+        rnk::println(Message::tool("Thinking...").into_element());
     }
 
     fn print_thinking_stop() {
@@ -167,15 +134,15 @@ impl EventPrinter {
     }
 
     fn print_tool_call(name: &str) {
-        println!("\x1b[35m● {}\x1b[0m", name);
+        rnk::println(Message::tool(name).into_element());
     }
 
     fn print_error(message: &str) {
-        println!("\x1b[31m● {}\x1b[0m", message);
+        rnk::println(Message::error(message).into_element());
     }
 
     fn print_assistant_response(text: &str) {
-        println!("\x1b[97m● {}\x1b[0m", text);
+        rnk::println(Message::assistant(text).into_element());
     }
 }
 
@@ -263,37 +230,27 @@ pub fn run_app() -> std::io::Result<()> {
 
                                     let response = match outcome {
                                         ExecutionOutcome::Success(exec) => {
-                                            // Debug: print outcome type
-                                            eprintln!("[DEBUG] Success outcome, final_result: {:?}", exec.final_result.as_ref().map(|s| &s[..s.len().min(50)]));
                                             exec.final_result
                                         }
                                         ExecutionOutcome::NeedsUserInput { last_response, .. } => {
-                                            eprintln!("[DEBUG] NeedsUserInput outcome");
                                             Some(last_response)
                                         }
                                         ExecutionOutcome::Failed { error, .. } => {
-                                            eprintln!("[DEBUG] Failed outcome: {}", error.message);
                                             Some(format!("Error: {}", error.message))
                                         }
                                         ExecutionOutcome::MaxStepsReached { .. } => {
-                                            eprintln!("[DEBUG] MaxStepsReached outcome");
                                             Some("Max steps reached".to_string())
                                         }
                                         ExecutionOutcome::Interrupted { .. } => {
-                                            eprintln!("[DEBUG] Interrupted outcome");
                                             Some("Interrupted".to_string())
                                         }
                                         ExecutionOutcome::UserCancelled { .. } => {
-                                            eprintln!("[DEBUG] UserCancelled outcome");
                                             Some("Cancelled".to_string())
                                         }
                                     };
 
                                     if let Some(response_text) = response {
-                                        eprintln!("[DEBUG] Printing response: {}", &response_text[..response_text.len().min(100)]);
                                         EventPrinter::print_assistant_response(&response_text);
-                                    } else {
-                                        eprintln!("[DEBUG] No response to print (response is None)");
                                     }
                                 }
                                 Err(e) => {
@@ -337,7 +294,7 @@ pub fn run_app() -> std::io::Result<()> {
 
         // Clear the line and reprint with formatting
         print!("\x1b[1A\x1b[2K");
-        rnk::println(render_user_message(input));
+        rnk::println(Message::user(input).into_element());
 
         let _ = action_tx.send(UserAction::Submit(input.to_string()));
     }
@@ -353,10 +310,10 @@ pub fn run_demo() -> std::io::Result<()> {
     rnk::println(render_banner());
     println!();
 
-    rnk::println(render_user_message("Help me refactor the UI code"));
+    rnk::println(Message::user("Help me refactor the UI code").into_element());
     println!();
 
-    rnk::println(render_thinking());
+    rnk::println(Message::tool("Thinking...").into_element());
     std::thread::sleep(Duration::from_secs(1));
     print!("\x1b[1A\x1b[2K");
 
@@ -365,7 +322,7 @@ pub fn run_demo() -> std::io::Result<()> {
     );
     println!();
 
-    rnk::println(render_tool_call("read_file"));
+    rnk::println(Message::tool("read_file").into_element());
     println!();
 
     print!("\x1b[33m\x1b[1m> \x1b[0m");
