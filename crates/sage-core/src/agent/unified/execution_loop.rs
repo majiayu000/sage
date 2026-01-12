@@ -3,7 +3,6 @@
 use crate::agent::{AgentExecution, AgentState, AgentStep, ExecutionError, ExecutionOutcome};
 use crate::error::{SageError, SageResult, UnifiedError};
 use crate::session::{EnhancedTokenUsage, EnhancedToolCall};
-use crate::ui::{DisplayManager, global_progress_tracker};
 
 use super::UnifiedExecutor;
 
@@ -23,20 +22,14 @@ impl UnifiedExecutor {
         const REPETITION_THRESHOLD: usize = 2; // Force completion after N similar outputs
         let mut recent_outputs: Vec<String> = Vec::with_capacity(MAX_RECENT_OUTPUTS);
 
-        // Initialize progress tracker
-        let progress = global_progress_tracker();
-        progress.reset().await;
-        progress.set_max_steps(max_steps).await;
-
-        // Note: Heartbeat disabled - AnimationManager now provides unified progress display
-        // with step numbers and tool details, making heartbeat redundant
-        // ProgressTracker::start_heartbeat(&progress).await;
+        // Set max steps in event manager
+        self.event_manager.set_max_steps(max_steps);
 
         let outcome = 'execution_loop: {
             let mut step_number = 0u32;
             loop {
                 step_number += 1;
-                progress.set_step(step_number);
+                self.event_manager.set_step(step_number);
 
                 // Check max_steps limit (None = unlimited)
                 if let Some(max) = max_steps.filter(|&max| step_number > max) {
@@ -48,7 +41,7 @@ impl UnifiedExecutor {
                 // Check for interrupt before each step
                 if task_scope.is_cancelled() {
                     self.event_manager.stop_animation().await;
-                    DisplayManager::print_separator("Task Interrupted", "yellow");
+                    tracing::info!("Task interrupted by user");
                     execution.complete(false, Some("Interrupted by user".to_string()));
                     break 'execution_loop ExecutionOutcome::Interrupted { execution };
                 }
@@ -184,9 +177,6 @@ impl UnifiedExecutor {
                 unreachable!("Execution loop should exit via break statements")
             }
         };
-
-        // Stop heartbeat when execution ends
-        progress.stop_heartbeat().await;
 
         Ok(outcome)
     }

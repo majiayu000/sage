@@ -1,17 +1,11 @@
 //! Event management for unified executor
 //!
-//! Provides a centralized event dispatch system that coordinates:
-//! - UI animations through AnimationManager
-//! - Event logging and debugging
-//! - New rnk-based UI through AgentEvent bridge
-//!
-//! This module unifies event handling that was previously scattered across
-//! multiple locations in the codebase.
+//! Provides a centralized event dispatch system that coordinates UI updates
+//! through the rnk-based UI bridge.
 
 #[cfg(test)]
 mod tests;
 
-use crate::ui::animation::{AnimationContext, AnimationManager, AnimationState};
 use crate::ui::bridge::{emit_event, AgentEvent};
 
 /// Execution events that can be observed throughout the agent lifecycle
@@ -45,24 +39,20 @@ pub enum ExecutionEvent {
     ErrorOccurred { error_type: String, message: String },
 }
 
-/// Event manager that dispatches events to UI and optional listeners
-///
-/// Wraps `AnimationManager` and provides a unified interface for event handling.
-/// This centralizes event dispatch logic that was previously scattered across
-/// the executor implementation.
+/// Event manager that dispatches events to the UI
 pub struct EventManager {
-    animation_manager: AnimationManager,
     current_step: u32,
     debug_events: bool,
+    is_animating: bool,
 }
 
 impl EventManager {
     /// Create a new event manager
     pub fn new() -> Self {
         Self {
-            animation_manager: AnimationManager::new(),
             current_step: 0,
             debug_events: false,
+            is_animating: false,
         }
     }
 
@@ -81,38 +71,21 @@ impl EventManager {
         match event {
             ExecutionEvent::StepStarted { step_number } => {
                 self.current_step = step_number;
-                self.animation_manager.set_step(step_number);
             }
             ExecutionEvent::ThinkingStarted { step_number } => {
                 self.current_step = step_number;
-                let context = AnimationContext::new().with_step(step_number);
-                self.animation_manager
-                    .start_with_context(AnimationState::Thinking, "Thinking", "blue", context)
-                    .await;
-                // Bridge to new UI
+                self.is_animating = true;
                 emit_event(AgentEvent::ThinkingStarted);
             }
             ExecutionEvent::ThinkingStopped => {
-                self.animation_manager.stop_animation().await;
-                // Bridge to new UI
+                self.is_animating = false;
                 emit_event(AgentEvent::ThinkingStopped);
             }
             ExecutionEvent::ToolExecutionStarted {
                 ref tool_name,
                 ref tool_id,
             } => {
-                // Detail is passed via emit_with_detail for Task tool
-                // For other tools, just show the tool name
-                let context = AnimationContext::new().with_detail(tool_name);
-                self.animation_manager
-                    .start_with_context(
-                        AnimationState::ExecutingTools,
-                        "Running",
-                        "green",
-                        context,
-                    )
-                    .await;
-                // Bridge to new UI
+                self.is_animating = true;
                 emit_event(AgentEvent::ToolExecutionStarted {
                     tool_name: tool_name.clone(),
                     tool_id: tool_id.clone(),
@@ -125,8 +98,7 @@ impl EventManager {
                 success,
                 duration_ms,
             } => {
-                self.animation_manager.stop_animation().await;
-                // Bridge to new UI
+                self.is_animating = false;
                 emit_event(AgentEvent::ToolExecutionCompleted {
                     tool_name: tool_name.clone(),
                     tool_id: tool_id.clone(),
@@ -137,7 +109,6 @@ impl EventManager {
             }
             ExecutionEvent::SessionStarted { ref session_id } => {
                 tracing::info!("Session started: {}", session_id);
-                // Bridge to new UI - note: model/provider info comes from elsewhere
                 emit_event(AgentEvent::SessionStarted {
                     session_id: session_id.clone(),
                     model: String::new(),
@@ -146,8 +117,7 @@ impl EventManager {
             }
             ExecutionEvent::SessionEnded { ref session_id } => {
                 tracing::info!("Session ended: {}", session_id);
-                self.animation_manager.stop_animation().await;
-                // Bridge to new UI
+                self.is_animating = false;
                 emit_event(AgentEvent::SessionEnded {
                     session_id: session_id.clone(),
                 });
@@ -157,8 +127,7 @@ impl EventManager {
                 ref message,
             } => {
                 tracing::error!("Execution error [{}]: {}", error_type, message);
-                self.animation_manager.stop_animation().await;
-                // Bridge to new UI
+                self.is_animating = false;
                 emit_event(AgentEvent::ErrorOccurred {
                     error_type: error_type.clone(),
                     message: message.clone(),
@@ -170,7 +139,7 @@ impl EventManager {
         }
     }
 
-    /// Emit an execution event with custom detail for animation
+    /// Emit an execution event with custom detail
     pub async fn emit_with_detail(&mut self, event: ExecutionEvent, detail: String) {
         if self.debug_events {
             tracing::debug!("Event: {:?}, detail: {}", event, detail);
@@ -181,17 +150,7 @@ impl EventManager {
                 ref tool_name,
                 ref tool_id,
             } => {
-                // Use the provided detail instead of tool_name
-                let context = AnimationContext::new().with_detail(&detail);
-                self.animation_manager
-                    .start_with_context(
-                        AnimationState::ExecutingTools,
-                        "Running",
-                        "green",
-                        context,
-                    )
-                    .await;
-                // Bridge to new UI with custom description
+                self.is_animating = true;
                 emit_event(AgentEvent::ToolExecutionStarted {
                     tool_name: tool_name.clone(),
                     tool_id: tool_id.clone(),
@@ -199,7 +158,6 @@ impl EventManager {
                 });
             }
             _ => {
-                // For other events, just call the regular emit
                 self.emit(event).await;
             }
         }
@@ -207,53 +165,39 @@ impl EventManager {
 
     /// Stop any running animation
     pub async fn stop_animation(&self) {
-        self.animation_manager.stop_animation().await;
+        emit_event(AgentEvent::ThinkingStopped);
     }
 
     /// Set the current step number
     pub fn set_step(&mut self, step: u32) {
         self.current_step = step;
-        self.animation_manager.set_step(step);
     }
 
     /// Set max steps for progress display
-    pub fn set_max_steps(&self, max: Option<u32>) {
-        self.animation_manager.set_max_steps(max);
+    pub fn set_max_steps(&self, _max: Option<u32>) {
+        // No-op for now, the new UI handles this through state
     }
 
     /// Check if animation is currently running
-    pub fn is_animating(&self) -> bool {
-        self.animation_manager.is_running()
+    pub fn is_running(&self) -> bool {
+        self.is_animating
     }
 
-    /// Get the current animation state
-    pub async fn animation_state(&self) -> AnimationState {
-        self.animation_manager.current_state().await
+    /// Start thinking animation
+    pub async fn start_animation_thinking(&mut self, step: u32) {
+        self.current_step = step;
+        self.is_animating = true;
+        emit_event(AgentEvent::ThinkingStarted);
     }
 
-    /// Direct access to animation manager for advanced use cases
-    pub fn animation_manager(&self) -> &AnimationManager {
-        &self.animation_manager
-    }
-
-    /// Start animation directly (for backward compatibility)
-    pub async fn start_animation(&self, state: AnimationState, message: &str, color: &str) {
-        self.animation_manager
-            .start_animation(state, message, color)
-            .await;
-    }
-
-    /// Start animation with context (for backward compatibility)
-    pub async fn start_with_context(
-        &self,
-        state: AnimationState,
-        message: &str,
-        color: &str,
-        context: AnimationContext,
-    ) {
-        self.animation_manager
-            .start_with_context(state, message, color, context)
-            .await;
+    /// Start tool execution animation
+    pub async fn start_animation_tool(&mut self, tool_name: &str) {
+        self.is_animating = true;
+        emit_event(AgentEvent::ToolExecutionStarted {
+            tool_name: tool_name.to_string(),
+            tool_id: String::new(),
+            description: tool_name.to_string(),
+        });
     }
 }
 

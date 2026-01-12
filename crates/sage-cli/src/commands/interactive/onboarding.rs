@@ -4,16 +4,64 @@
 //! API keys and providers when starting sage for the first time.
 
 use crate::console::CliConsole;
-use crate::ui::{WaitingSpinner, get_provider_help_url, get_provider_env_var, print_api_key_tips};
 use colored::*;
 use console::{Key, Term};
 use dialoguer::{Select, theme::ColorfulTheme};
+use indicatif::{ProgressBar, ProgressStyle};
 use sage_core::config::credential::{
     ConfigStatus, StatusBarHint, hint_from_status, load_config_unified,
 };
 use sage_core::config::onboarding::OnboardingManager;
 use sage_core::error::{SageError, SageResult};
 use std::io::{self, Write};
+
+/// Get the environment variable name for a provider
+fn get_provider_env_var(provider: &str) -> &'static str {
+    match provider {
+        "anthropic" => "ANTHROPIC_API_KEY",
+        "openai" => "OPENAI_API_KEY",
+        "google" => "GOOGLE_API_KEY",
+        "deepseek" => "DEEPSEEK_API_KEY",
+        _ => "API_KEY",
+    }
+}
+
+/// Get the help URL for a provider
+fn get_provider_help_url(provider: &str) -> &'static str {
+    match provider {
+        "anthropic" => "https://console.anthropic.com/settings/keys",
+        "openai" => "https://platform.openai.com/api-keys",
+        "google" => "https://makersuite.google.com/app/apikey",
+        "deepseek" => "https://platform.deepseek.com/api_keys",
+        _ => "https://docs.sage-agent.dev/configuration",
+    }
+}
+
+/// Simple validation spinner
+struct ValidationSpinner {
+    bar: ProgressBar,
+}
+
+impl ValidationSpinner {
+    fn new(message: &str) -> Self {
+        let bar = ProgressBar::new_spinner();
+        bar.set_style(ProgressStyle::default_spinner()
+            .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ")
+            .template("{spinner:.blue} {msg}")
+            .unwrap());
+        bar.set_message(message.to_string());
+        bar.enable_steady_tick(std::time::Duration::from_millis(100));
+        Self { bar }
+    }
+
+    fn finish_success(&self, message: &str) {
+        self.bar.finish_with_message(format!("{} {}", "✓".green(), message));
+    }
+
+    fn finish_warning(&self, message: &str) {
+        self.bar.finish_with_message(format!("{} {}", "⚠".yellow(), message));
+    }
+}
 
 /// CLI onboarding wizard
 pub struct CliOnboarding {
@@ -54,7 +102,7 @@ impl CliOnboarding {
         self.manager.set_api_key(&api_key)?;
 
         // Validate key with spinner
-        let spinner = WaitingSpinner::validation("Validating API key...");
+        let spinner = ValidationSpinner::new("Validating API key...");
         let validation = self.manager.validate_api_key().await;
 
         if validation.valid {
@@ -93,7 +141,7 @@ impl CliOnboarding {
         self.manager.set_api_key(&api_key)?;
 
         // Validate with spinner
-        let spinner = WaitingSpinner::validation("Validating API key...");
+        let spinner = ValidationSpinner::new("Validating API key...");
         let validation = self.manager.validate_api_key().await;
 
         if validation.valid {

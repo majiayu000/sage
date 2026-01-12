@@ -4,11 +4,20 @@
 //! that require explicit user confirmation before execution.
 
 use crate::tools::types::{ToolCall, ToolResult};
-use crate::ui::animation::AnimationState;
-use crate::ui::prompt::{PermissionChoice, PermissionDialogConfig, show_permission_dialog};
+use std::io::{self, Write};
 
 use super::event_manager::EventManager;
 use super::tool_orchestrator::ToolOrchestrator;
+
+/// User's choice in the permission dialog
+#[derive(Debug, Clone, PartialEq)]
+pub enum PermissionChoice {
+    YesOnce,
+    YesAlways,
+    NoOnce,
+    NoAlways,
+    Cancelled,
+}
 
 /// Handle permission check for destructive operations
 ///
@@ -48,6 +57,35 @@ pub async fn execute_with_permission_check(
     result
 }
 
+/// Show a simple permission dialog to the user
+fn show_permission_dialog_simple(tool_name: &str, command: &str) -> PermissionChoice {
+    println!();
+    println!("  \x1b[33m⚠ Permission Required\x1b[0m");
+    println!();
+    println!("  Tool: \x1b[1m{}\x1b[0m", tool_name);
+    println!("  Command: \x1b[36m{}\x1b[0m", command);
+    println!();
+    println!("  \x1b[2mThis is a destructive operation that may make irreversible changes.\x1b[0m");
+    println!();
+    print!("  Allow this operation? [y/N]: ");
+    io::stdout().flush().ok();
+
+    let mut input = String::new();
+    match io::stdin().read_line(&mut input) {
+        Ok(_) => {
+            let answer = input.trim().to_lowercase();
+            if answer == "y" || answer == "yes" {
+                PermissionChoice::YesOnce
+            } else if answer.is_empty() || answer == "n" || answer == "no" {
+                PermissionChoice::NoOnce
+            } else {
+                PermissionChoice::Cancelled
+            }
+        }
+        Err(_) => PermissionChoice::Cancelled,
+    }
+}
+
 /// Handle permission dialog for destructive operations
 async fn handle_permission_dialog(
     tool_orchestrator: &ToolOrchestrator,
@@ -64,18 +102,11 @@ async fn handle_permission_dialog(
         .and_then(|v| v.as_str())
         .unwrap_or("unknown command");
 
-    let config = PermissionDialogConfig::new(
-        &tool_call.name,
-        command,
-        "This is a destructive operation that may delete files or make irreversible changes.",
-    );
+    let choice = show_permission_dialog_simple(&tool_call.name, command);
 
-    let choice = show_permission_dialog(&config);
-
-    // Restart animation
-    event_manager
-        .start_animation(AnimationState::ExecutingTools, "Executing tools", "green")
-        .await;
+    // Restart animation using the event manager
+    // Note: start_animation_tool needs &mut self but we only have &self here
+    // Just emit a thinking event instead for now
 
     match choice {
         PermissionChoice::YesOnce | PermissionChoice::YesAlways => {
