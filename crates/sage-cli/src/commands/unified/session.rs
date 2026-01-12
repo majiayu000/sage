@@ -1,7 +1,6 @@
 //! Session management for the unified command
 
 use crate::console::CliConsole;
-use crate::ui::NerdConsole;
 use sage_core::agent::UnifiedExecutor;
 use sage_core::config::Config;
 use sage_core::error::{SageError, SageResult};
@@ -69,9 +68,9 @@ pub async fn resume_session_inline(
     executor: &mut UnifiedExecutor,
     session_id: &str,
     _storage: &Arc<JsonlSessionStorage>,
-    nerd: &NerdConsole,
+    console: &CliConsole,
 ) -> SageResult<()> {
-    nerd.info(&format!(
+    console.info(&format!(
         "Loading session {}...",
         &session_id[..session_id.len().min(16)]
     ));
@@ -79,7 +78,7 @@ pub async fn resume_session_inline(
     // Restore the session - this loads messages and sets up session state
     let restored_messages = executor.restore_session(session_id).await?;
 
-    nerd.success(&format!(
+    console.success(&format!(
         "Loaded {} messages from previous session.",
         restored_messages.len()
     ));

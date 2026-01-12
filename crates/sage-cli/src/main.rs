@@ -64,7 +64,6 @@ mod ipc;
 mod progress;
 mod router;
 mod signal_handler;
-mod ui;
 mod ui_backend;
 mod ui_launcher;
 

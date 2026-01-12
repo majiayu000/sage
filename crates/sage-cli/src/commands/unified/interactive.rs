@@ -1,7 +1,7 @@
 //! Interactive REPL loop for the unified command
 
 use crate::console::CliConsole;
-use crate::ui::NerdConsole;
+use colored::*;
 use sage_core::agent::UnifiedExecutor;
 use sage_core::config::Config;
 use sage_core::error::SageResult;
@@ -13,9 +13,9 @@ use std::sync::Arc;
 use super::input::read_input_raw;
 use super::session::resume_session_inline;
 use super::slash_commands::{process_slash_command, SlashCommandAction};
-use super::utils::{get_git_branch, show_recent_activity_nerd};
+use super::utils::get_git_branch;
 
-/// Interactive REPL loop (Claude Code style) with Nerd Font UI
+/// Interactive REPL loop (legacy mode)
 pub async fn execute_interactive_loop(
     executor: &mut UnifiedExecutor,
     console: &CliConsole,
@@ -23,8 +23,6 @@ pub async fn execute_interactive_loop(
     working_dir: &std::path::Path,
     jsonl_storage: &Arc<JsonlSessionStorage>,
 ) -> SageResult<()> {
-    let nerd = NerdConsole::new();
-
     let model = config
         .model_providers
         .get(&config.default_provider)
@@ -34,13 +32,44 @@ pub async fn execute_interactive_loop(
     let git_branch = get_git_branch(working_dir);
     let dir_display = working_dir.display().to_string();
 
-    nerd.print_header(model, git_branch.as_deref(), &dir_display);
-    show_recent_activity_nerd(&nerd, jsonl_storage).await;
-    nerd.info("Type your message, or /help for commands. Press Ctrl+C to exit.");
+    // Print header
+    println!();
+    println!(
+        "  {} sage    {}    {}   {}",
+        "󰚩".cyan(),
+        git_branch.as_deref().unwrap_or("no-branch").yellow(),
+        dir_display.dimmed(),
+        format!("󰧑 {}", model).blue()
+    );
+    println!("{}", "━".repeat(80).dimmed());
+    println!();
+
+    // Show recent sessions
+    if let Ok(sessions) = jsonl_storage.list_sessions().await {
+        if !sessions.is_empty() {
+            println!("   {}", "Recent Sessions".bold());
+            println!();
+            for (i, session) in sessions.iter().take(5).enumerate() {
+                let prefix = if i == sessions.len().min(5) - 1 { "└──" } else { "├──" };
+                let time_ago = super::utils::format_time_ago(&session.updated_at);
+                println!(
+                    "  {} 󰆍 {} ({}, {} msgs)",
+                    prefix.dimmed(),
+                    session.display_title(),
+                    time_ago.dimmed(),
+                    session.message_count
+                );
+            }
+            println!();
+        }
+    }
+
+    console.info("Type your message, or /help for commands. Press Ctrl+C to exit.");
     println!();
 
     loop {
-        nerd.print_prompt();
+        print!("  {} ", "sage ❯".cyan().bold());
+        std::io::stdout().flush().ok();
 
         let input = match read_input_raw() {
             Ok(input) => input,
@@ -50,10 +79,10 @@ pub async fn execute_interactive_loop(
                     std::io::ErrorKind::UnexpectedEof | std::io::ErrorKind::Interrupted
                 ) {
                     println!();
-                    nerd.info("Goodbye!");
+                    console.info("Goodbye!");
                     break;
                 }
-                nerd.error(&format!("Input error: {}", e));
+                console.error(&format!("Input error: {}", e));
                 continue;
             }
         };
@@ -64,7 +93,7 @@ pub async fn execute_interactive_loop(
 
         // Handle built-in commands
         if let Some(action) =
-            handle_builtin(&input, &nerd, model, git_branch.as_deref(), &dir_display).await
+            handle_builtin(&input, console, model, git_branch.as_deref(), &dir_display).await
         {
             match action {
                 BuiltinAction::Continue => continue,
@@ -77,7 +106,7 @@ pub async fn execute_interactive_loop(
         {
             Ok(action) => action,
             Err(e) => {
-                nerd.error(&format!("Command error: {}", e));
+                console.error(&format!("Command error: {}", e));
                 continue;
             }
         };
@@ -86,15 +115,15 @@ pub async fn execute_interactive_loop(
             SlashCommandAction::Prompt(desc) => desc,
             SlashCommandAction::Handled => continue,
             SlashCommandAction::ResumeSession(session_id) => {
-                match resume_session_inline(executor, &session_id, jsonl_storage, &nerd).await {
-                    Ok(_) => nerd.success("Session resumed. Continue your conversation."),
-                    Err(e) => nerd.error(&format!("Failed to resume session: {}", e)),
+                match resume_session_inline(executor, &session_id, jsonl_storage, console).await {
+                    Ok(_) => console.success("Session resumed. Continue your conversation."),
+                    Err(e) => console.error(&format!("Failed to resume session: {}", e)),
                 }
                 continue;
             }
             SlashCommandAction::SetOutputMode(mode) => {
                 executor.set_output_mode(mode.clone());
-                nerd.success(&format!("Output mode set to: {:?}", mode));
+                console.success(&format!("Output mode set to: {:?}", mode));
                 continue;
             }
         };
@@ -106,15 +135,20 @@ pub async fn execute_interactive_loop(
             Ok(outcome) => {
                 let duration = start_time.elapsed();
                 let usage = &outcome.execution().total_usage;
-                nerd.print_summary(
-                    outcome.is_success(),
+                // Print summary
+                let status = if outcome.is_success() { "✓".green() } else { "✗".red() };
+                println!();
+                println!(
+                    "  {} {} steps | {} in | {} out | {:.1}s",
+                    status,
                     outcome.execution().steps.len(),
-                    usage.prompt_tokens as u64,
-                    usage.completion_tokens as u64,
-                    duration.as_secs_f64(),
+                    usage.prompt_tokens,
+                    usage.completion_tokens,
+                    duration.as_secs_f64()
                 );
+                println!();
             }
-            Err(e) => nerd.error(&format!("Execution error: {}", e)),
+            Err(e) => console.error(&format!("Execution error: {}", e)),
         }
     }
 
@@ -128,26 +162,42 @@ enum BuiltinAction {
 
 async fn handle_builtin(
     input: &str,
-    nerd: &NerdConsole,
+    console: &CliConsole,
     model: &str,
     git_branch: Option<&str>,
     dir_display: &str,
 ) -> Option<BuiltinAction> {
     if matches!(input, "/exit" | "/quit" | "exit" | "quit" | "q") {
-        nerd.info("Goodbye!");
+        console.info("Goodbye!");
         return Some(BuiltinAction::Exit);
     }
 
     if matches!(input, "/clear" | "clear" | "cls") {
         print!("\x1B[2J\x1B[1;1H\x1B[3J");
         std::io::stdout().flush().ok();
-        nerd.print_header(model, git_branch, dir_display);
-        nerd.success("Conversation cleared.");
+        // Reprint header
+        println!();
+        println!(
+            "  {} sage    {}    {}   {}",
+            "󰚩".cyan(),
+            git_branch.unwrap_or("no-branch").yellow(),
+            dir_display.dimmed(),
+            format!("󰧑 {}", model).blue()
+        );
+        println!("{}", "━".repeat(80).dimmed());
+        console.success("Conversation cleared.");
         return Some(BuiltinAction::Continue);
     }
 
     if matches!(input, "/help" | "help" | "?") {
-        nerd.print_help();
+        println!();
+        println!("  {}", "Available Commands".bold());
+        println!("  {} Show this help", "/help".cyan());
+        println!("  {} Clear conversation", "/clear".cyan());
+        println!("  {} Resume a previous session", "/resume".cyan());
+        println!("  {} Configure API key", "/login".cyan());
+        println!("  {} Exit", "/exit".cyan());
+        println!();
         return Some(BuiltinAction::Continue);
     }
 
@@ -156,11 +206,11 @@ async fn handle_builtin(
         let mut onboarding = CliOnboarding::new();
         match onboarding.run_login().await {
             Ok(true) => {
-                nerd.success("API key updated! Restart sage to use the new key.");
+                console.success("API key updated! Restart sage to use the new key.");
                 return Some(BuiltinAction::Exit);
             }
-            Ok(false) => nerd.info("API key not changed."),
-            Err(e) => nerd.error(&format!("Login failed: {}", e)),
+            Ok(false) => console.info("API key not changed."),
+            Err(e) => console.error(&format!("Login failed: {}", e)),
         }
         return Some(BuiltinAction::Continue);
     }
@@ -170,11 +220,11 @@ async fn handle_builtin(
             let creds_path = home.join(".sage/credentials.json");
             if creds_path.exists() {
                 match std::fs::remove_file(&creds_path) {
-                    Ok(_) => nerd.success("Credentials cleared. Run /login to configure."),
-                    Err(e) => nerd.error(&format!("Failed to remove credentials: {}", e)),
+                    Ok(_) => console.success("Credentials cleared. Run /login to configure."),
+                    Err(e) => console.error(&format!("Failed to remove credentials: {}", e)),
                 }
             } else {
-                nerd.info("No credentials file found.");
+                console.info("No credentials file found.");
             }
         }
         return Some(BuiltinAction::Continue);

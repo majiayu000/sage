@@ -1,11 +1,7 @@
 //! Utility functions for the unified command
 
 use crate::console::CliConsole;
-use crate::ui::nerd_console::SessionInfo;
-use crate::ui::NerdConsole;
 use sage_core::error::{SageError, SageResult};
-use sage_core::session::JsonlSessionStorage;
-use std::sync::Arc;
 
 /// Load task description from argument (might be a file path)
 pub async fn load_task_from_arg(task: &str, console: &CliConsole) -> SageResult<String> {
@@ -29,33 +25,6 @@ pub fn get_git_branch(working_dir: &std::path::Path) -> Option<String> {
         .ok()
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-}
-
-/// Show recent activity with Nerd Font style
-pub async fn show_recent_activity_nerd(
-    nerd: &NerdConsole,
-    storage: &Arc<JsonlSessionStorage>,
-) {
-    let sessions = match storage.list_sessions().await {
-        Ok(s) => s,
-        Err(_) => return,
-    };
-
-    if sessions.is_empty() {
-        return;
-    }
-
-    let session_infos: Vec<SessionInfo> = sessions
-        .iter()
-        .take(5)
-        .map(|s| SessionInfo {
-            title: s.display_title().to_string(),
-            time_ago: format_time_ago(&s.updated_at),
-            message_count: s.message_count,
-        })
-        .collect();
-
-    nerd.print_sessions_tree(&session_infos);
 }
 
 /// Format time difference as human-readable string

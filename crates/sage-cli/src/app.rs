@@ -1,9 +1,8 @@
 //! Sage CLI Main Application (rnk-based)
 //!
-//! Complete declarative UI with keyboard input and Agent integration.
+//! Uses rnk's internal event loop with use_input hook for keyboard handling.
 
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
+use crossterm::tty::IsTty;
 use rnk::core::Dimension;
 use rnk::prelude::*;
 use sage_core::agent::{ExecutionMode, ExecutionOptions, ExecutionOutcome, UnifiedExecutor};
@@ -19,7 +18,6 @@ use sage_core::ui::{
 };
 use sage_tools::get_default_tools;
 use std::sync::{Arc, RwLock};
-use std::time::Duration;
 use tokio::sync::mpsc;
 
 /// User action from keyboard input
@@ -34,8 +32,111 @@ pub enum UserAction {
 }
 
 /// Sage CLI main application component
-pub fn sage_app(state: Arc<RwLock<AppState>>) -> Element {
+pub fn sage_app(state: Arc<RwLock<AppState>>, action_tx: mpsc::UnboundedSender<UserAction>) -> Element {
     let current_state = state.read().unwrap().clone();
+    let state_for_input = Arc::clone(&state);
+    let app = use_app();
+
+    // Register keyboard input handler using rnk's use_input hook
+    use_input(move |input, key| {
+        // Ctrl+C or Ctrl+D to exit
+        if key.ctrl && (input == "c" || input == "d") {
+            let _ = action_tx.send(UserAction::Exit);
+            app.exit();
+            return;
+        }
+
+        // Escape to cancel
+        if key.escape {
+            let _ = action_tx.send(UserAction::Cancel);
+            return;
+        }
+
+        // Enter to submit
+        if key.return_key {
+            let text = state_for_input.read().unwrap().input.text.clone();
+            if !text.is_empty() {
+                {
+                    let mut s = state_for_input.write().unwrap();
+                    s.input.text.clear();
+                    s.input.cursor_pos = 0;
+                }
+                let _ = action_tx.send(UserAction::Submit(text));
+            }
+            return;
+        }
+
+        // Backspace
+        if key.backspace {
+            let mut s = state_for_input.write().unwrap();
+            if s.input.cursor_pos > 0 {
+                let pos = s.input.cursor_pos - 1;
+                s.input.text.remove(pos);
+                s.input.cursor_pos = pos;
+            }
+            return;
+        }
+
+        // Delete
+        if key.delete {
+            let mut s = state_for_input.write().unwrap();
+            let pos = s.input.cursor_pos;
+            if pos < s.input.text.len() {
+                s.input.text.remove(pos);
+            }
+            return;
+        }
+
+        // Left arrow
+        if key.left_arrow {
+            let mut s = state_for_input.write().unwrap();
+            if s.input.cursor_pos > 0 {
+                s.input.cursor_pos -= 1;
+            }
+            return;
+        }
+
+        // Right arrow
+        if key.right_arrow {
+            let mut s = state_for_input.write().unwrap();
+            if s.input.cursor_pos < s.input.text.len() {
+                s.input.cursor_pos += 1;
+            }
+            return;
+        }
+
+        // Home
+        if key.home {
+            let mut s = state_for_input.write().unwrap();
+            s.input.cursor_pos = 0;
+            return;
+        }
+
+        // End
+        if key.end {
+            let mut s = state_for_input.write().unwrap();
+            s.input.cursor_pos = s.input.text.len();
+            return;
+        }
+
+        // Ctrl+U to clear line
+        if key.ctrl && input == "u" {
+            let mut s = state_for_input.write().unwrap();
+            s.input.text.clear();
+            s.input.cursor_pos = 0;
+            return;
+        }
+
+        // Regular character input (not control characters)
+        if !input.is_empty() && !key.ctrl && !key.alt {
+            let mut s = state_for_input.write().unwrap();
+            let pos = s.input.cursor_pos;
+            for c in input.chars() {
+                s.input.text.insert(pos, c);
+                s.input.cursor_pos += 1;
+            }
+        }
+    });
 
     Box::new()
         .flex_direction(FlexDirection::Column)
@@ -109,107 +210,6 @@ impl Default for SageAppState {
     }
 }
 
-/// Keyboard event handler - runs in a separate thread
-fn spawn_keyboard_handler(
-    state: Arc<RwLock<AppState>>,
-    action_tx: mpsc::UnboundedSender<UserAction>,
-) {
-    std::thread::spawn(move || {
-        loop {
-            if event::poll(Duration::from_millis(50)).unwrap_or(false) {
-                if let Ok(Event::Key(key_event)) = event::read() {
-                    if let Some(action) = handle_key_event(key_event, &state) {
-                        if action_tx.send(action).is_err() {
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-    });
-}
-
-/// Handle a single key event
-fn handle_key_event(key: KeyEvent, state: &Arc<RwLock<AppState>>) -> Option<UserAction> {
-    match key.code {
-        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            Some(UserAction::Exit)
-        }
-        KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            Some(UserAction::Exit)
-        }
-        KeyCode::Esc => Some(UserAction::Cancel),
-        KeyCode::Enter => {
-            let text = state.read().unwrap().input.text.clone();
-            if !text.is_empty() {
-                {
-                    let mut s = state.write().unwrap();
-                    s.input.text.clear();
-                    s.input.cursor_pos = 0;
-                }
-                Some(UserAction::Submit(text))
-            } else {
-                None
-            }
-        }
-        KeyCode::Backspace => {
-            let mut s = state.write().unwrap();
-            if s.input.cursor_pos > 0 {
-                let pos = s.input.cursor_pos - 1;
-                s.input.text.remove(pos);
-                s.input.cursor_pos = pos;
-            }
-            None
-        }
-        KeyCode::Delete => {
-            let mut s = state.write().unwrap();
-            let pos = s.input.cursor_pos;
-            if pos < s.input.text.len() {
-                s.input.text.remove(pos);
-            }
-            None
-        }
-        KeyCode::Left => {
-            let mut s = state.write().unwrap();
-            if s.input.cursor_pos > 0 {
-                s.input.cursor_pos -= 1;
-            }
-            None
-        }
-        KeyCode::Right => {
-            let mut s = state.write().unwrap();
-            if s.input.cursor_pos < s.input.text.len() {
-                s.input.cursor_pos += 1;
-            }
-            None
-        }
-        KeyCode::Home => {
-            let mut s = state.write().unwrap();
-            s.input.cursor_pos = 0;
-            None
-        }
-        KeyCode::End => {
-            let mut s = state.write().unwrap();
-            s.input.cursor_pos = s.input.text.len();
-            None
-        }
-        KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            let mut s = state.write().unwrap();
-            s.input.text.clear();
-            s.input.cursor_pos = 0;
-            None
-        }
-        KeyCode::Char(c) => {
-            let mut s = state.write().unwrap();
-            let pos = s.input.cursor_pos;
-            s.input.text.insert(pos, c);
-            s.input.cursor_pos += 1;
-            None
-        }
-        _ => None,
-    }
-}
-
 /// Create and configure UnifiedExecutor
 async fn create_executor() -> SageResult<UnifiedExecutor> {
     let config = load_config()?;
@@ -237,6 +237,14 @@ async fn create_executor() -> SageResult<UnifiedExecutor> {
 
 /// Run the Sage CLI application with rnk and full Agent integration
 pub fn run_app() -> std::io::Result<()> {
+    // Check if we have a TTY - rnk requires an interactive terminal
+    if !std::io::stdin().is_tty() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Sage requires an interactive terminal. For non-interactive use, try: sage -p \"your task\""
+        ));
+    }
+
     Icons::init_from_env();
 
     // Create app state
@@ -250,13 +258,7 @@ pub fn run_app() -> std::io::Result<()> {
     // Create action channel
     let (action_tx, mut action_rx) = mpsc::unbounded_channel::<UserAction>();
 
-    // Spawn keyboard handler
-    spawn_keyboard_handler(Arc::clone(&state), action_tx);
-
-    // Enable raw mode
-    enable_raw_mode()?;
-
-    // Spawn Agent executor thread
+    // Spawn Agent executor in background thread with tokio runtime
     let state_clone = Arc::clone(&state);
     std::thread::spawn(move || {
         let rt = tokio::runtime::Runtime::new().unwrap();
@@ -358,13 +360,11 @@ pub fn run_app() -> std::io::Result<()> {
         });
     });
 
-    // Run the rnk app
-    let result = render(move || sage_app(Arc::clone(&state)));
+    // Clone for render closure
+    let action_tx_clone = action_tx.clone();
 
-    // Cleanup
-    disable_raw_mode()?;
-
-    result
+    // Run the rnk app - rnk handles raw mode internally
+    render(move || sage_app(Arc::clone(&state), action_tx_clone.clone()))
 }
 
 /// Demo mode for testing UI
@@ -411,5 +411,6 @@ pub fn run_demo() -> std::io::Result<()> {
     }
 
     let state = app_state.state();
-    render(move || sage_app(Arc::clone(&state)))
+    let (action_tx, _) = mpsc::unbounded_channel::<UserAction>();
+    render(move || sage_app(Arc::clone(&state), action_tx.clone()))
 }

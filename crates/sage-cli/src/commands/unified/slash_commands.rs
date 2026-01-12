@@ -1,7 +1,7 @@
 //! Slash command processing for the unified command
 
 use crate::console::CliConsole;
-use crate::ui::NerdConsole;
+use colored::*;
 use sage_core::commands::{CommandExecutor, CommandRegistry};
 use sage_core::error::SageResult;
 use sage_core::output::OutputMode;
@@ -100,17 +100,16 @@ pub async fn handle_interactive_command_v2(
             // Run the login flow directly
             use crate::commands::interactive::CliOnboarding;
 
-            let nerd = NerdConsole::new();
             let mut onboarding = CliOnboarding::new();
             match onboarding.run_login().await {
                 Ok(true) => {
-                    nerd.success("API key updated! Restart sage to use the new key.");
+                    console.success("API key updated! Restart sage to use the new key.");
                 }
                 Ok(false) => {
-                    nerd.info("API key not changed.");
+                    console.info("API key not changed.");
                 }
                 Err(e) => {
-                    nerd.error(&format!("Login failed: {}", e));
+                    console.error(&format!("Login failed: {}", e));
                 }
             }
             Ok(SlashCommandAction::Handled)
