@@ -112,7 +112,7 @@ parking_lot = "0.12"
 lru = "0.12"
 
 # Terminal UI (rnk - React-like declarative UI)
-rnk = "0.2"
+rnk = "0.3"
 
 # File system watching
 notify = "7.0"

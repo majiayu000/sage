@@ -160,6 +160,8 @@ pub fn global_adapter() -> Option<&'static EventAdapter> {
 pub fn emit_event(event: AgentEvent) {
     if let Some(adapter) = global_adapter() {
         adapter.handle_event(event);
+        // Notify rnk to re-render after state update
+        rnk::request_render();
     }
 }
 
