@@ -1,232 +1,431 @@
-//! Sage CLI Main Application (rnk-based)
+//! Sage CLI Main Application (streaming output mode)
 //!
-//! Uses rnk's internal event loop with use_input hook for keyboard handling.
+//! Uses rnk components for rendering but outputs to stdout directly (not fullscreen TUI)
 
-use crossterm::tty::IsTty;
-use rnk::core::Dimension;
+use crossterm::{
+    event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
+    terminal,
+};
+use rnk::core::Style;
+use rnk::layout::LayoutEngine;
 use rnk::prelude::*;
+use rnk::renderer::Output;
 use sage_core::agent::{ExecutionMode, ExecutionOptions, ExecutionOutcome, UnifiedExecutor};
 use sage_core::config::load_config;
 use sage_core::error::SageResult;
 use sage_core::input::InputChannel;
 use sage_core::output::OutputMode;
 use sage_core::types::TaskMetadata;
-use sage_core::ui::{
-    bridge::{emit_event, set_global_adapter, AgentEvent, AppState, EventAdapter, ExecutionPhase},
-    components::{InputBox, MessageList, StatusBar, ThinkingIndicator, ToolExecutionView},
-    theme::Icons,
-};
+use sage_core::ui::theme::Icons;
 use sage_tools::get_default_tools;
-use std::sync::{Arc, RwLock};
+use std::io::{self, Write};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tokio::sync::mpsc;
+use unicode_width::UnicodeWidthChar;
+
+// Alias rnk's Box to avoid conflict with std::boxed::Box
+use rnk::prelude::Box as RnkBox;
 
 /// User action from keyboard input
 #[derive(Debug, Clone)]
 pub enum UserAction {
-    /// Submit the current input
     Submit(String),
-    /// Exit the application
     Exit,
-    /// Cancel current operation
     Cancel,
 }
 
-/// Sage CLI main application component
-pub fn sage_app(state: Arc<RwLock<AppState>>, action_tx: mpsc::UnboundedSender<UserAction>) -> Element {
-    let current_state = state.read().unwrap().clone();
-    let state_for_input = Arc::clone(&state);
-    let app = use_app();
+// ===== Rendering Helpers =====
 
-    // Register keyboard input handler using rnk's use_input hook
-    use_input(move |input, key| {
-        // Ctrl+C or Ctrl+D to exit
-        if key.ctrl && (input == "c" || input == "d") {
-            let _ = action_tx.send(UserAction::Exit);
-            app.exit();
-            return;
-        }
+/// Wrap text to fit within max_width columns
+fn wrap_text(text: &str, max_width: usize) -> Vec<String> {
+    if max_width == 0 {
+        return vec![text.to_string()];
+    }
 
-        // Escape to cancel
-        if key.escape {
-            let _ = action_tx.send(UserAction::Cancel);
-            return;
-        }
+    let mut result = Vec::new();
+    let mut current_line = String::new();
+    let mut current_width = 0usize;
 
-        // Enter to submit
-        if key.return_key {
-            let text = state_for_input.read().unwrap().input.text.clone();
-            if !text.is_empty() {
-                {
-                    let mut s = state_for_input.write().unwrap();
-                    s.input.text.clear();
-                    s.input.cursor_pos = 0;
-                }
-                let _ = action_tx.send(UserAction::Submit(text));
+    for ch in text.chars() {
+        let ch_width = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1);
+
+        if ch == '\n' {
+            result.push(current_line.clone());
+            current_line = String::new();
+            current_width = 0;
+        } else if current_width + ch_width > max_width {
+            if current_line.is_empty() {
+                current_line.push(ch);
+                current_width = ch_width;
+            } else {
+                result.push(current_line.clone());
+                current_line = ch.to_string();
+                current_width = ch_width;
             }
-            return;
+        } else {
+            current_line.push(ch);
+            current_width += ch_width;
         }
+    }
 
-        // Backspace - remove character before cursor
-        if key.backspace {
-            let mut s = state_for_input.write().unwrap();
-            if s.input.cursor_pos > 0 {
-                let new_pos = s.input.cursor_pos - 1;
-                // Convert character position to byte position for String::remove
-                if let Some((byte_pos, _)) = s.input.text.char_indices().nth(new_pos) {
-                    s.input.text.remove(byte_pos);
-                }
-                s.input.cursor_pos = new_pos;
+    if !current_line.is_empty() {
+        result.push(current_line);
+    }
+
+    if result.is_empty() {
+        result.push(String::new());
+    }
+
+    result
+}
+
+/// Calculate the actual height needed for an element
+fn calculate_element_height(element: &Element, max_width: u16) -> u16 {
+    let mut height = 1u16;
+    let available_width = if element.style.has_border() {
+        max_width.saturating_sub(2)
+    } else {
+        max_width
+    };
+    let padding_h = (element.style.padding.left + element.style.padding.right) as u16;
+    let available_width = available_width.saturating_sub(padding_h);
+
+    if let Some(lines) = &element.spans {
+        let mut total_lines = 0usize;
+        for line in lines {
+            let line_text: String = line.spans.iter().map(|s| s.content.as_str()).collect();
+            let wrapped = wrap_text(&line_text, available_width as usize);
+            total_lines += wrapped.len();
+        }
+        height = height.max(total_lines as u16);
+    }
+
+    if let Some(text) = &element.text_content {
+        let wrapped = wrap_text(text, available_width as usize);
+        height = height.max(wrapped.len() as u16);
+    }
+
+    let mut child_height_sum = 0u16;
+    for child in &element.children {
+        let child_height = calculate_element_height(child, max_width);
+        child_height_sum += child_height;
+    }
+
+    if !element.children.is_empty() {
+        height = height.max(child_height_sum);
+    }
+
+    height
+}
+
+/// Render a single text span at position
+fn render_text_span(
+    output: &mut Output,
+    text: &str,
+    x: u16,
+    y: u16,
+    max_width: u16,
+    style: &Style,
+) {
+    let wrapped_lines = wrap_text(text, max_width as usize);
+    for (i, line) in wrapped_lines.iter().enumerate() {
+        output.write(x, y + i as u16, line, style);
+    }
+}
+
+/// Recursively render element tree
+fn render_element_recursive(
+    element: &Element,
+    engine: &LayoutEngine,
+    output: &mut Output,
+    offset_x: f32,
+    offset_y: f32,
+    container_width: u16,
+) {
+    if element.style.display == Display::None {
+        return;
+    }
+
+    let layout = match engine.get_layout(element.id) {
+        Some(l) => l,
+        None => return,
+    };
+
+    let x = (offset_x + layout.x) as u16;
+    let y = (offset_y + layout.y) as u16;
+    let w = layout.width as u16;
+    let h = layout.height as u16;
+
+    // Background
+    if element.style.background_color.is_some() {
+        for row in 0..h {
+            output.write(x, y + row, &" ".repeat(w as usize), &element.style);
+        }
+    }
+
+    // Border
+    if element.style.has_border() {
+        let (tl, tr, bl, br, hz, vt) = element.style.border_style.chars();
+        let mut style = element.style.clone();
+
+        style.color = element.style.get_border_top_color();
+        output.write(
+            x,
+            y,
+            &format!("{}{}{}", tl, hz.repeat((w as usize).saturating_sub(2)), tr),
+            &style,
+        );
+
+        style.color = element.style.get_border_bottom_color();
+        output.write(
+            x,
+            y + h.saturating_sub(1),
+            &format!("{}{}{}", bl, hz.repeat((w as usize).saturating_sub(2)), br),
+            &style,
+        );
+
+        for row in 1..h.saturating_sub(1) {
+            style.color = element.style.get_border_left_color();
+            output.write(x, y + row, vt, &style);
+            style.color = element.style.get_border_right_color();
+            output.write(x + w.saturating_sub(1), y + row, vt, &style);
+        }
+    }
+
+    let inner_x =
+        x + if element.style.has_border() { 1 } else { 0 } + element.style.padding.left as u16;
+    let inner_y =
+        y + if element.style.has_border() { 1 } else { 0 } + element.style.padding.top as u16;
+    let padding_h = (element.style.padding.left + element.style.padding.right) as u16;
+    let inner_width = w.saturating_sub(if element.style.has_border() { 2 } else { 0 } + padding_h);
+
+    if let Some(text) = &element.text_content {
+        render_text_span(output, text, inner_x, inner_y, inner_width, &element.style);
+    } else if let Some(lines) = &element.spans {
+        let mut line_offset = 0u16;
+        for line in lines {
+            let line_text: String = line.spans.iter().map(|s| s.content.as_str()).collect();
+            let wrapped = wrap_text(&line_text, inner_width as usize);
+
+            for (wrapped_idx, wrapped_line) in wrapped.iter().enumerate() {
+                let span_style = if !line.spans.is_empty() {
+                    let span = &line.spans[0];
+                    let mut style = element.style.clone();
+                    if span.style.color.is_some() {
+                        style.color = span.style.color;
+                    }
+                    if span.style.background_color.is_some() {
+                        style.background_color = span.style.background_color;
+                    }
+                    if span.style.bold {
+                        style.bold = true;
+                    }
+                    if span.style.italic {
+                        style.italic = true;
+                    }
+                    if span.style.dim {
+                        style.dim = true;
+                    }
+                    if span.style.underline {
+                        style.underline = true;
+                    }
+                    style
+                } else {
+                    element.style.clone()
+                };
+
+                output.write(
+                    inner_x,
+                    inner_y + line_offset + wrapped_idx as u16,
+                    wrapped_line,
+                    &span_style,
+                );
             }
-            return;
+            line_offset += wrapped.len() as u16;
         }
+    }
 
-        // Delete - remove character at cursor
-        if key.delete {
-            let mut s = state_for_input.write().unwrap();
-            let char_pos = s.input.cursor_pos;
-            // Convert character position to byte position
-            if let Some((byte_pos, _)) = s.input.text.char_indices().nth(char_pos) {
-                s.input.text.remove(byte_pos);
-            }
-            return;
-        }
+    for child in element.children.iter() {
+        render_element_recursive(child, engine, output, x as f32, y as f32, container_width);
+    }
+}
 
-        // Left arrow
-        if key.left_arrow {
-            let mut s = state_for_input.write().unwrap();
-            if s.input.cursor_pos > 0 {
-                s.input.cursor_pos -= 1;
-            }
-            return;
-        }
+/// Main render-to-string function
+fn render_to_string(element: &Element, width: u16) -> String {
+    let mut engine = LayoutEngine::new();
+    engine.compute(element, width, 100);
 
-        // Right arrow
-        if key.right_arrow {
-            let mut s = state_for_input.write().unwrap();
-            let char_count = s.input.text.chars().count();
-            if s.input.cursor_pos < char_count {
-                s.input.cursor_pos += 1;
-            }
-            return;
-        }
+    let height = calculate_element_height(element, width);
 
-        // Home
-        if key.home {
-            let mut s = state_for_input.write().unwrap();
-            s.input.cursor_pos = 0;
-            return;
-        }
+    let mut output = Output::new(width, height);
+    render_element_recursive(element, &engine, &mut output, 0.0, 0.0, width);
+    output.render()
+}
 
-        // End
-        if key.end {
-            let mut s = state_for_input.write().unwrap();
-            s.input.cursor_pos = s.input.text.chars().count();
-            return;
-        }
+/// Print rnk element to stdout
+fn print_element(element: &Element) {
+    let (width, _) = crossterm::terminal::size().unwrap_or((80, 24));
+    let output = render_to_string(element, width);
+    println!("{}", output);
+}
 
-        // Ctrl+U to clear line
-        if key.ctrl && input == "u" {
-            let mut s = state_for_input.write().unwrap();
-            s.input.text.clear();
-            s.input.cursor_pos = 0;
-            return;
-        }
+/// Print rnk element inline (no newline)
+fn print_element_inline(element: &Element) {
+    let (width, _) = crossterm::terminal::size().unwrap_or((80, 24));
+    let output = render_to_string(element, width);
+    print!("{}", output);
+}
 
-        // Regular character input (not control characters)
-        // Filter out control characters and empty input
-        if !input.is_empty() && !key.ctrl && !key.alt {
-            // Skip non-printable characters
-            let printable: String = input.chars().filter(|c| !c.is_control()).collect();
-            if printable.is_empty() {
-                return;
-            }
+// ===== UI Components =====
 
-            let mut s = state_for_input.write().unwrap();
-
-            for c in printable.chars() {
-                let char_pos = s.input.cursor_pos;
-                // Convert character position to byte position for String::insert
-                let byte_pos = s.input.text
-                    .char_indices()
-                    .nth(char_pos)
-                    .map(|(i, _)| i)
-                    .unwrap_or(s.input.text.len());
-
-                s.input.text.insert(byte_pos, c);
-                s.input.cursor_pos += 1;
-            }
-        }
-    });
-
-    Box::new()
+fn render_banner() -> Element {
+    RnkBox::new()
         .flex_direction(FlexDirection::Column)
-        .height(Dimension::Percent(100.0))
-        // Status bar at top
         .child(
-            StatusBar::new(current_state.session.clone(), current_state.phase.clone()).render(),
-        )
-        // Message area (scrollable)
-        .child(
-            Box::new()
-                .flex_direction(FlexDirection::Column)
-                .flex_grow(1.0)
-                .overflow_y(Overflow::Scroll)
-                // Message list
-                .child(MessageList(current_state.display_messages()))
-                // Thinking indicator
-                .child(if let Some(thinking) = current_state.thinking.clone() {
-                    ThinkingIndicator::new(thinking).render()
-                } else {
-                    Box::new().into_element()
-                })
-                // Tool execution
-                .child(if let Some(tool) = current_state.tool_execution.clone() {
-                    ToolExecutionView::new(tool).render()
-                } else {
-                    Box::new().into_element()
-                })
+            Text::new("Sage Agent")
+                .color(Color::Cyan)
+                .bold()
                 .into_element(),
         )
-        // Input box at bottom
-        .child(InputBox::new(current_state.input.clone()).render())
+        .child(
+            Text::new("Rust-based LLM Agent for software engineering tasks")
+                .dim()
+                .into_element(),
+        )
         .into_element()
 }
 
-/// Application state holder
-pub struct SageAppState {
-    pub adapter: EventAdapter,
-    pub state: Arc<RwLock<AppState>>,
+fn render_user_message(text: &str) -> Element {
+    RnkBox::new()
+        .flex_direction(FlexDirection::Row)
+        .child(Text::new("> ").color(Color::Yellow).bold().into_element())
+        .child(Text::new(text).color(Color::BrightWhite).into_element())
+        .into_element()
 }
 
-impl SageAppState {
-    pub fn new() -> Self {
-        let adapter = EventAdapter::with_default_state();
-        let state = adapter.state_handle();
-        Self { adapter, state }
-    }
-
-    pub fn with_session(self, model: impl Into<String>, provider: impl Into<String>) -> Self {
-        self.adapter.handle_event(AgentEvent::session_started(
-            uuid::Uuid::new_v4().to_string(),
-            model,
-            provider,
-        ));
-        self
-    }
-
-    #[allow(dead_code)]
-    pub fn event_adapter(&self) -> EventAdapter {
-        self.adapter.clone()
-    }
-
-    pub fn state(&self) -> Arc<RwLock<AppState>> {
-        Arc::clone(&self.state)
-    }
+fn render_thinking() -> Element {
+    RnkBox::new()
+        .flex_direction(FlexDirection::Row)
+        .child(Text::new("● ").color(Color::Magenta).into_element())
+        .child(
+            Text::new("Thinking...")
+                .color(Color::Magenta)
+                .into_element(),
+        )
+        .into_element()
 }
 
-impl Default for SageAppState {
-    fn default() -> Self {
-        Self::new()
+fn render_tool_call(name: &str) -> Element {
+    RnkBox::new()
+        .flex_direction(FlexDirection::Row)
+        .child(Text::new("● ").color(Color::Magenta).into_element())
+        .child(Text::new(name).color(Color::Magenta).bold().into_element())
+        .into_element()
+}
+
+fn render_prompt() -> Element {
+    RnkBox::new()
+        .flex_direction(FlexDirection::Row)
+        .child(Text::new("> ").color(Color::Yellow).bold().into_element())
+        .into_element()
+}
+
+fn render_error(message: &str) -> Element {
+    RnkBox::new()
+        .flex_direction(FlexDirection::Row)
+        .child(Text::new("● ").color(Color::Red).into_element())
+        .child(Text::new(message).color(Color::Red).into_element())
+        .into_element()
+}
+
+// ===== Input Handling =====
+
+/// Read a line of input with proper CJK character handling
+fn read_line_with_cjk() -> io::Result<String> {
+    let mut input = String::new();
+    let mut stdout = io::stdout();
+
+    terminal::enable_raw_mode()?;
+
+    loop {
+        if event::poll(Duration::from_millis(100))? {
+            if let Event::Key(KeyEvent {
+                code, modifiers, ..
+            }) = event::read()?
+            {
+                match code {
+                    KeyCode::Enter => {
+                        print!("\r\n");
+                        stdout.flush()?;
+                        break;
+                    }
+                    KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => {
+                        terminal::disable_raw_mode()?;
+                        std::process::exit(0);
+                    }
+                    KeyCode::Char('d') if modifiers.contains(KeyModifiers::CONTROL) => {
+                        terminal::disable_raw_mode()?;
+                        std::process::exit(0);
+                    }
+                    KeyCode::Char(c) => {
+                        input.push(c);
+                        print!("{}", c);
+                        stdout.flush()?;
+                    }
+                    KeyCode::Backspace => {
+                        if let Some(ch) = input.pop() {
+                            let char_width = ch.width().unwrap_or(1);
+                            for _ in 0..char_width {
+                                print!("\x08 \x08");
+                            }
+                            stdout.flush()?;
+                        }
+                    }
+                    KeyCode::Esc => {
+                        let total_width: usize =
+                            input.chars().map(|c| c.width().unwrap_or(1)).sum();
+                        for _ in 0..total_width {
+                            print!("\x08 \x08");
+                        }
+                        stdout.flush()?;
+                        input.clear();
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    terminal::disable_raw_mode()?;
+    Ok(input)
+}
+
+// ===== Agent Integration =====
+
+/// Simple event printer for Agent events
+struct EventPrinter;
+
+impl EventPrinter {
+    fn print_thinking_start() {
+        print_element(&render_thinking());
+    }
+
+    fn print_thinking_stop() {
+        // Clear the thinking line
+        print!("\x1b[1A\x1b[2K");
+    }
+
+    fn print_tool_call(name: &str) {
+        print_element(&render_tool_call(name));
+    }
+
+    fn print_error(message: &str) {
+        print_element(&render_error(message));
+    }
+
+    fn print_assistant_response(text: &str) {
+        println!("\x1b[97m● {}\x1b[0m", text);
     }
 }
 
@@ -243,7 +442,7 @@ async fn create_executor() -> SageResult<UnifiedExecutor> {
 
     let mut executor = UnifiedExecutor::with_options(config, options)?;
 
-    // Use Rnk output mode
+    // Use Rnk output mode (though we're not using the bridge anymore)
     executor.set_output_mode(OutputMode::Rnk);
 
     // Register default tools
@@ -255,31 +454,22 @@ async fn create_executor() -> SageResult<UnifiedExecutor> {
     Ok(executor)
 }
 
-/// Run the Sage CLI application with rnk and full Agent integration
+/// Run the Sage CLI application with streaming output
 pub fn run_app() -> std::io::Result<()> {
-    // Check if we have a TTY - rnk requires an interactive terminal
-    if !std::io::stdin().is_tty() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "Sage requires an interactive terminal. For non-interactive use, try: sage -p \"your task\""
-        ));
-    }
-
     Icons::init_from_env();
 
-    // Create app state
-    let app_state = SageAppState::new().with_session("claude-sonnet-4-20250514", "anthropic");
-
-    // Set global adapter for Agent events
-    set_global_adapter(app_state.adapter.clone());
-
-    let state = app_state.state();
+    // Print banner
+    println!();
+    print_element(&render_banner());
+    println!();
 
     // Create action channel
     let (action_tx, mut action_rx) = mpsc::unbounded_channel::<UserAction>();
 
-    // Spawn Agent executor in background thread with tokio runtime
-    let state_clone = Arc::clone(&state);
+    // Spawn Agent executor in background thread
+    let executor_handle = Arc::new(Mutex::new(None::<UnifiedExecutor>));
+    let executor_handle_clone = Arc::clone(&executor_handle);
+
     std::thread::spawn(move || {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
@@ -288,10 +478,7 @@ pub fn run_app() -> std::io::Result<()> {
             let mut executor = match executor_result {
                 Ok(e) => e,
                 Err(e) => {
-                    emit_event(AgentEvent::ErrorOccurred {
-                        error_type: "InitError".to_string(),
-                        message: e.to_string(),
-                    });
+                    EventPrinter::print_error(&format!("Init error: {}", e));
                     return;
                 }
             };
@@ -300,143 +487,126 @@ pub fn run_app() -> std::io::Result<()> {
             let (input_channel, _input_handle) = InputChannel::new(16);
             executor.set_input_channel(input_channel);
 
+            *executor_handle_clone.lock().unwrap() = Some(executor);
+
             // Process user actions
             while let Some(action) = action_rx.recv().await {
                 match action {
                     UserAction::Submit(text) => {
-                        // Handle exit command
                         if text == "/exit" || text == "/quit" {
                             std::process::exit(0);
                         }
 
-                        // Add user message to UI
-                        emit_event(AgentEvent::UserInputReceived {
-                            input: text.clone(),
-                        });
-
-                        // Execute task
-                        emit_event(AgentEvent::ThinkingStarted);
+                        EventPrinter::print_thinking_start();
 
                         let working_dir = std::env::current_dir()
                             .unwrap_or_default()
                             .to_string_lossy()
                             .to_string();
                         let task = TaskMetadata::new(&text, &working_dir);
-                        match executor.execute(task).await {
-                            Ok(outcome) => {
-                                emit_event(AgentEvent::ThinkingStopped);
 
-                                // Extract final response based on outcome type
-                                let response = match outcome {
-                                    ExecutionOutcome::Success(exec) => exec.final_result,
-                                    ExecutionOutcome::NeedsUserInput { last_response, .. } => {
-                                        Some(last_response)
-                                    }
-                                    ExecutionOutcome::Failed { error, .. } => {
-                                        Some(format!("Error: {}", error.message))
-                                    }
-                                    ExecutionOutcome::MaxStepsReached { .. } => {
-                                        Some("Max steps reached".to_string())
-                                    }
-                                    ExecutionOutcome::Interrupted { .. } => {
-                                        Some("Interrupted".to_string())
-                                    }
-                                    ExecutionOutcome::UserCancelled { .. } => {
-                                        Some("Cancelled".to_string())
-                                    }
-                                };
+                        let mut exec_guard = executor_handle_clone.lock().unwrap();
+                        if let Some(ref mut executor) = *exec_guard {
+                            match executor.execute(task).await {
+                                Ok(outcome) => {
+                                    EventPrinter::print_thinking_stop();
 
-                                if let Some(response_text) = response {
-                                    emit_event(AgentEvent::UserInputReceived {
-                                        input: response_text,
-                                    });
+                                    let response = match outcome {
+                                        ExecutionOutcome::Success(exec) => exec.final_result,
+                                        ExecutionOutcome::NeedsUserInput { last_response, .. } => {
+                                            Some(last_response)
+                                        }
+                                        ExecutionOutcome::Failed { error, .. } => {
+                                            Some(format!("Error: {}", error.message))
+                                        }
+                                        ExecutionOutcome::MaxStepsReached { .. } => {
+                                            Some("Max steps reached".to_string())
+                                        }
+                                        ExecutionOutcome::Interrupted { .. } => {
+                                            Some("Interrupted".to_string())
+                                        }
+                                        ExecutionOutcome::UserCancelled { .. } => {
+                                            Some("Cancelled".to_string())
+                                        }
+                                    };
+
+                                    if let Some(response_text) = response {
+                                        EventPrinter::print_assistant_response(&response_text);
+                                    }
+                                }
+                                Err(e) => {
+                                    EventPrinter::print_thinking_stop();
+                                    EventPrinter::print_error(&format!("Execution error: {}", e));
                                 }
                             }
-                            Err(e) => {
-                                emit_event(AgentEvent::ThinkingStopped);
-                                emit_event(AgentEvent::ErrorOccurred {
-                                    error_type: "ExecutionError".to_string(),
-                                    message: e.to_string(),
-                                });
-                            }
                         }
 
-                        // Reset to idle
-                        {
-                            let mut s = state_clone.write().unwrap();
-                            s.phase = ExecutionPhase::Idle;
-                        }
+                        println!();
                     }
                     UserAction::Exit => {
                         std::process::exit(0);
                     }
                     UserAction::Cancel => {
-                        emit_event(AgentEvent::ThinkingStopped);
-                        let mut s = state_clone.write().unwrap();
-                        s.phase = ExecutionPhase::Idle;
+                        EventPrinter::print_thinking_stop();
+                        println!();
                     }
                 }
             }
         });
     });
 
-    // Clone for render closure
-    let action_tx_clone = action_tx.clone();
+    // Main input loop
+    loop {
+        print_element_inline(&render_prompt());
+        io::stdout().flush()?;
 
-    // Run the rnk app in fullscreen mode with 60 FPS for smooth animations
-    render(move || sage_app(Arc::clone(&state), action_tx_clone.clone()))
-        .fullscreen()
-        .fps(60)
-        .run()
+        let input = read_line_with_cjk()?;
+        let input = input.trim();
+
+        match input.to_lowercase().as_str() {
+            "quit" | "exit" => {
+                println!();
+                break;
+            }
+            "" => continue,
+            _ => {}
+        }
+
+        // Clear the line and reprint with formatting
+        print!("\x1b[1A\x1b[2K");
+        print_element(&render_user_message(input));
+
+        let _ = action_tx.send(UserAction::Submit(input.to_string()));
+    }
+
+    Ok(())
 }
 
 /// Demo mode for testing UI
 pub fn run_demo() -> std::io::Result<()> {
-    use sage_core::ui::bridge::{Message, MessageContent, Role, SessionState};
-
     Icons::init_from_env();
 
-    let app_state = SageAppState::new();
+    println!();
+    print_element(&render_banner());
+    println!();
 
-    {
-        let mut state = app_state.state.write().unwrap();
-        state.session = SessionState {
-            session_id: Some("demo-session".to_string()),
-            model: "claude-sonnet-4-20250514".to_string(),
-            provider: "anthropic".to_string(),
-            working_dir: std::env::current_dir()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string(),
-            git_branch: Some("main".to_string()),
-            step: 1,
-            max_steps: Some(10),
-        };
+    print_element(&render_user_message("Help me refactor the UI code"));
+    println!();
 
-        state.messages.push(Message {
-            role: Role::User,
-            content: MessageContent::Text("Help me refactor the UI code".to_string()),
-            timestamp: chrono::Utc::now(),
-            metadata: Default::default(),
-        });
+    print_element(&render_thinking());
+    std::thread::sleep(Duration::from_secs(1));
+    print!("\x1b[1A\x1b[2K");
 
-        state.messages.push(Message {
-            role: Role::Assistant,
-            content: MessageContent::Text(
-                "I'll help you refactor the UI code. Let me analyze the structure first."
-                    .to_string(),
-            ),
-            timestamp: chrono::Utc::now(),
-            metadata: Default::default(),
-        });
+    EventPrinter::print_assistant_response(
+        "I'll help you refactor the UI code. Let me analyze the structure first.",
+    );
+    println!();
 
-        state.phase = ExecutionPhase::Idle;
-    }
+    print_element(&render_tool_call("read_file"));
+    println!();
 
-    let state = app_state.state();
-    let (action_tx, _) = mpsc::unbounded_channel::<UserAction>();
-    render(move || sage_app(Arc::clone(&state), action_tx.clone()))
-        .fullscreen()
-        .fps(60)
-        .run()
+    print_element_inline(&render_prompt());
+    io::stdout().flush()?;
+
+    Ok(())
 }
