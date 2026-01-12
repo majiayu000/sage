@@ -156,7 +156,8 @@ struct EventPrinter;
 
 impl EventPrinter {
     fn print_thinking_start() {
-        rnk::println(render_thinking());
+        // Use simple println instead of rnk::println to avoid layout issues
+        println!("\x1b[35m● Thinking...\x1b[0m");
     }
 
     fn print_thinking_stop() {
@@ -166,11 +167,11 @@ impl EventPrinter {
     }
 
     fn print_tool_call(name: &str) {
-        rnk::println(render_tool_call(name));
+        println!("\x1b[35m● {}\x1b[0m", name);
     }
 
     fn print_error(message: &str) {
-        rnk::println(render_error(message));
+        println!("\x1b[31m● {}\x1b[0m", message);
     }
 
     fn print_assistant_response(text: &str) {
@@ -261,26 +262,38 @@ pub fn run_app() -> std::io::Result<()> {
                                     EventPrinter::print_thinking_stop();
 
                                     let response = match outcome {
-                                        ExecutionOutcome::Success(exec) => exec.final_result,
+                                        ExecutionOutcome::Success(exec) => {
+                                            // Debug: print outcome type
+                                            eprintln!("[DEBUG] Success outcome, final_result: {:?}", exec.final_result.as_ref().map(|s| &s[..s.len().min(50)]));
+                                            exec.final_result
+                                        }
                                         ExecutionOutcome::NeedsUserInput { last_response, .. } => {
+                                            eprintln!("[DEBUG] NeedsUserInput outcome");
                                             Some(last_response)
                                         }
                                         ExecutionOutcome::Failed { error, .. } => {
+                                            eprintln!("[DEBUG] Failed outcome: {}", error.message);
                                             Some(format!("Error: {}", error.message))
                                         }
                                         ExecutionOutcome::MaxStepsReached { .. } => {
+                                            eprintln!("[DEBUG] MaxStepsReached outcome");
                                             Some("Max steps reached".to_string())
                                         }
                                         ExecutionOutcome::Interrupted { .. } => {
+                                            eprintln!("[DEBUG] Interrupted outcome");
                                             Some("Interrupted".to_string())
                                         }
                                         ExecutionOutcome::UserCancelled { .. } => {
+                                            eprintln!("[DEBUG] UserCancelled outcome");
                                             Some("Cancelled".to_string())
                                         }
                                     };
 
                                     if let Some(response_text) = response {
+                                        eprintln!("[DEBUG] Printing response: {}", &response_text[..response_text.len().min(100)]);
                                         EventPrinter::print_assistant_response(&response_text);
+                                    } else {
+                                        eprintln!("[DEBUG] No response to print (response is None)");
                                     }
                                 }
                                 Err(e) => {
