@@ -383,8 +383,11 @@ pub fn run_app() -> std::io::Result<()> {
     // Clone for render closure
     let action_tx_clone = action_tx.clone();
 
-    // Run the rnk app - rnk handles raw mode internally
+    // Run the rnk app in fullscreen mode with 60 FPS for smooth animations
     render(move || sage_app(Arc::clone(&state), action_tx_clone.clone()))
+        .fullscreen()
+        .fps(60)
+        .run()
 }
 
 /// Demo mode for testing UI
@@ -433,4 +436,7 @@ pub fn run_demo() -> std::io::Result<()> {
     let state = app_state.state();
     let (action_tx, _) = mpsc::unbounded_channel::<UserAction>();
     render(move || sage_app(Arc::clone(&state), action_tx.clone()))
+        .fullscreen()
+        .fps(60)
+        .run()
 }
