@@ -66,23 +66,27 @@ pub fn sage_app(state: Arc<RwLock<AppState>>, action_tx: mpsc::UnboundedSender<U
             return;
         }
 
-        // Backspace
+        // Backspace - remove character before cursor
         if key.backspace {
             let mut s = state_for_input.write().unwrap();
             if s.input.cursor_pos > 0 {
-                let pos = s.input.cursor_pos - 1;
-                s.input.text.remove(pos);
-                s.input.cursor_pos = pos;
+                let new_pos = s.input.cursor_pos - 1;
+                // Convert character position to byte position for String::remove
+                if let Some((byte_pos, _)) = s.input.text.char_indices().nth(new_pos) {
+                    s.input.text.remove(byte_pos);
+                }
+                s.input.cursor_pos = new_pos;
             }
             return;
         }
 
-        // Delete
+        // Delete - remove character at cursor
         if key.delete {
             let mut s = state_for_input.write().unwrap();
-            let pos = s.input.cursor_pos;
-            if pos < s.input.text.len() {
-                s.input.text.remove(pos);
+            let char_pos = s.input.cursor_pos;
+            // Convert character position to byte position
+            if let Some((byte_pos, _)) = s.input.text.char_indices().nth(char_pos) {
+                s.input.text.remove(byte_pos);
             }
             return;
         }
@@ -99,7 +103,8 @@ pub fn sage_app(state: Arc<RwLock<AppState>>, action_tx: mpsc::UnboundedSender<U
         // Right arrow
         if key.right_arrow {
             let mut s = state_for_input.write().unwrap();
-            if s.input.cursor_pos < s.input.text.len() {
+            let char_count = s.input.text.chars().count();
+            if s.input.cursor_pos < char_count {
                 s.input.cursor_pos += 1;
             }
             return;
@@ -115,7 +120,7 @@ pub fn sage_app(state: Arc<RwLock<AppState>>, action_tx: mpsc::UnboundedSender<U
         // End
         if key.end {
             let mut s = state_for_input.write().unwrap();
-            s.input.cursor_pos = s.input.text.len();
+            s.input.cursor_pos = s.input.text.chars().count();
             return;
         }
 
@@ -128,11 +133,26 @@ pub fn sage_app(state: Arc<RwLock<AppState>>, action_tx: mpsc::UnboundedSender<U
         }
 
         // Regular character input (not control characters)
+        // Filter out control characters and empty input
         if !input.is_empty() && !key.ctrl && !key.alt {
+            // Skip non-printable characters
+            let printable: String = input.chars().filter(|c| !c.is_control()).collect();
+            if printable.is_empty() {
+                return;
+            }
+
             let mut s = state_for_input.write().unwrap();
-            let pos = s.input.cursor_pos;
-            for c in input.chars() {
-                s.input.text.insert(pos, c);
+
+            for c in printable.chars() {
+                let char_pos = s.input.cursor_pos;
+                // Convert character position to byte position for String::insert
+                let byte_pos = s.input.text
+                    .char_indices()
+                    .nth(char_pos)
+                    .map(|(i, _)| i)
+                    .unwrap_or(s.input.text.len());
+
+                s.input.text.insert(byte_pos, c);
                 s.input.cursor_pos += 1;
             }
         }
