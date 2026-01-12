@@ -1,6 +1,6 @@
 [package]
 name = "sage"
-version = "0.2.3"
+version = "0.2.4"
 edition = "2024"
 authors = ["Sage Agent Team"]
 license = "MIT"
@@ -33,7 +33,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.2.3"
+version = "0.2.4"
 edition = "2024"
 authors = ["Sage Agent Team"]
 license = "MIT"
@@ -112,7 +112,7 @@ parking_lot = "0.12"
 lru = "0.12"
 
 # Terminal UI (rnk - React-like declarative UI)
-rnk = "0.3"
+rnk = { path = "/Users/apple/Desktop/code/AI/tool/tink" }
 
 # File system watching
 notify = "7.0"
