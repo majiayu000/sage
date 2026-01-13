@@ -86,8 +86,9 @@ async fn route_main(cli: Cli) -> SageResult<()> {
         });
     }
 
-    // Use legacy UI if requested, otherwise use new rnk UI as default
-    if cli.legacy_ui {
+    // Use legacy UI if requested, print mode (non-interactive), or otherwise use new rnk UI as default
+    // Print mode requires legacy UI because rnk needs an interactive terminal
+    if cli.legacy_ui || non_interactive {
         // Execute using UnifiedExecutor (the single execution path)
         // Session resume is handled by unified_execute when continue_recent or resume_session_id is set
         commands::unified_execute(commands::UnifiedArgs {
@@ -105,7 +106,7 @@ async fn route_main(cli: Cli) -> SageResult<()> {
         .await
     } else {
         // New rnk-based UI is the default
-        app::run_app().map_err(|e| sage_core::error::SageError::Io {
+        app::run_app().await.map_err(|e| sage_core::error::SageError::Io {
             message: e.to_string(),
             path: None,
             context: Some("Running rnk UI".to_string()),
