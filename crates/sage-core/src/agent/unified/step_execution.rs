@@ -57,17 +57,14 @@ impl UnifiedExecutor {
         let cancellation_token = global_interrupt_manager().lock().cancellation_token();
 
         // Use output strategy for streaming display
-        // Note: Animation will be stopped when first content arrives (in stream_chat_with_animation_stop)
         let output_strategy = self.output_strategy.clone();
-        let event_manager = &self.event_manager;
         let llm_response = self
             .llm_orchestrator
-            .stream_chat_with_animation_stop(
+            .stream_chat_with_strategy(
                 &working_messages,
                 Some(tool_schemas),
                 cancellation_token,
                 output_strategy,
-                event_manager,
             )
             .await?;
 
