@@ -1,7 +1,12 @@
 //! Demo: Fixed bottom input area like Claude Code
 //!
+//! Uses inline mode with flexbox layout for fixed-bottom behavior.
+//! The content area uses flex_grow: 1 to take remaining space,
+//! pushing the bottom elements (input + status) to the bottom.
+//!
 //! Run with: cargo run --example fixed_bottom_demo
 
+use rnk::core::Dimension;
 use rnk::prelude::*;
 
 /// Permission mode
@@ -9,6 +14,25 @@ use rnk::prelude::*;
 enum PermissionMode {
     Normal,
     Bypass,
+    Plan,
+}
+
+impl PermissionMode {
+    fn next(self) -> Self {
+        match self {
+            PermissionMode::Normal => PermissionMode::Bypass,
+            PermissionMode::Bypass => PermissionMode::Plan,
+            PermissionMode::Plan => PermissionMode::Normal,
+        }
+    }
+
+    fn display_text(self) -> &'static str {
+        match self {
+            PermissionMode::Normal => "permissions required",
+            PermissionMode::Bypass => "bypass permissions on",
+            PermissionMode::Plan => "plan mode",
+        }
+    }
 }
 
 /// Message in chat history
@@ -20,11 +44,21 @@ struct ChatMessage {
 
 fn app() -> Element {
     let app_ctx = use_app();
+    let scroll = use_scroll();
 
     // State: messages, input buffer, permission mode
     let messages = use_signal(|| Vec::<ChatMessage>::new());
     let input = use_signal(|| String::new());
     let mode = use_signal(|| PermissionMode::Normal);
+
+    // Get terminal size
+    let (term_width, term_height) = crossterm::terminal::size().unwrap_or((80, 24));
+    let viewport_height = term_height.saturating_sub(3) as usize; // Reserve 3 lines for bottom
+
+    // Update scroll viewport
+    let msg_count = messages.get().len();
+    scroll.set_content_size(term_width as usize, msg_count * 2); // ~2 lines per message
+    scroll.set_viewport_size(term_width as usize, viewport_height);
 
     // Handle keyboard input
     use_input({
@@ -32,6 +66,7 @@ fn app() -> Element {
         let messages = messages.clone();
         let mode = mode.clone();
         let app_ctx = app_ctx.clone();
+        let scroll = scroll.clone();
 
         move |ch, key| {
             // Ctrl+C to quit
@@ -43,12 +78,26 @@ fn app() -> Element {
             // Shift+Tab to toggle permission mode
             if key.tab && key.shift {
                 mode.update(|m| {
-                    *m = if *m == PermissionMode::Normal {
-                        PermissionMode::Bypass
-                    } else {
-                        PermissionMode::Normal
-                    };
+                    *m = m.next();
                 });
+                return;
+            }
+
+            // Arrow keys for scrolling
+            if key.up_arrow {
+                scroll.scroll_up(1);
+                return;
+            }
+            if key.down_arrow {
+                scroll.scroll_down(1);
+                return;
+            }
+            if key.page_up {
+                scroll.page_up();
+                return;
+            }
+            if key.page_down {
+                scroll.page_down();
                 return;
             }
 
@@ -68,6 +117,8 @@ fn app() -> Element {
                         });
                     });
                     input.set(String::new());
+                    // Auto-scroll to bottom on new message
+                    scroll.scroll_to_bottom();
                 }
                 return;
             }
@@ -89,65 +140,68 @@ fn app() -> Element {
         }
     });
 
-    // Get terminal height for layout
-    let (_, term_height) = crossterm::terminal::size().unwrap_or((80, 24));
-    let content_height = term_height.saturating_sub(4) as u16;
-
     let current_messages = messages.get();
     let current_input = input.get();
     let current_mode = mode.get();
 
-    // Build the layout
+    // Build the fixed-bottom layout using flexbox
+    // Root: height 100% with column direction
+    // Content area: flex_grow 1 (takes remaining space)
+    // Bottom elements: fixed height (naturally pushed to bottom)
     Box::new()
         .flex_direction(FlexDirection::Column)
-        .child(render_content_area(&current_messages, content_height))
-        .child(render_separator())
+        .height(Dimension::Percent(100.0)) // Full terminal height
+        // Content area - takes remaining space with flex_grow
+        .child(
+            Box::new()
+                .flex_grow(1.0) // Take all remaining space
+                .flex_direction(FlexDirection::Column)
+                .overflow_y(Overflow::Hidden) // Clip overflow
+                .child(if current_messages.is_empty() {
+                    Text::new("Type something and press Enter... (Ctrl+C to quit)")
+                        .dim()
+                        .into_element()
+                } else {
+                    // Show messages (most recent at bottom)
+                    let visible_count = (term_height.saturating_sub(4)) as usize;
+                    let mut msg_box = Box::new().flex_direction(FlexDirection::Column);
+                    let msgs: Vec<_> = current_messages.iter().rev().take(visible_count).collect();
+                    for msg in msgs.into_iter().rev() {
+                        msg_box = msg_box.child(render_message(msg));
+                    }
+                    msg_box.into_element()
+                })
+                .into_element(),
+        )
+        // Separator line 1 (above input)
+        .child(render_separator(term_width))
+        // Input line
         .child(render_input_line(&current_input))
-        .child(render_status_bar(current_mode))
+        // Separator line 2 (above status bar)
+        .child(render_separator(term_width))
+        // Status bar
+        .child(render_status_bar(current_mode, &scroll))
         .into_element()
 }
 
-/// Render scrollable content area
-fn render_content_area(messages: &[ChatMessage], max_lines: u16) -> Element {
-    let mut container = Box::new()
-        .flex_direction(FlexDirection::Column)
-        .min_height(max_lines);
+/// Render a chat message
+fn render_message(msg: &ChatMessage) -> Element {
+    let (prefix, color) = if msg.role == "user" {
+        ("❯ ", Color::Yellow)
+    } else {
+        ("● ", Color::BrightWhite)
+    };
 
-    // Show last N messages that fit
-    let max = max_lines as usize / 2;
-    let start = messages.len().saturating_sub(max);
-    for msg in messages.iter().skip(start) {
-        let (prefix, color) = if msg.role == "user" {
-            ("❯ ", Color::Yellow)
-        } else {
-            ("● ", Color::BrightWhite)
-        };
-
-        container = container.child(
-            Box::new()
-                .flex_direction(FlexDirection::Row)
-                .child(Text::new(prefix).color(color).bold().into_element())
-                .child(Text::new(&msg.content).into_element())
-                .into_element(),
-        );
-    }
-
-    // Fill remaining space if needed
-    if messages.is_empty() {
-        container = container.child(
-            Text::new("Type something and press Enter... (Ctrl+C to quit)")
-                .dim()
-                .into_element(),
-        );
-    }
-
-    container.into_element()
+    Box::new()
+        .flex_direction(FlexDirection::Row)
+        .child(Text::new(prefix).color(color).bold().into_element())
+        .child(Text::new(&msg.content).into_element())
+        .into_element()
 }
 
 /// Render separator line
-fn render_separator() -> Element {
-    let (term_width, _) = crossterm::terminal::size().unwrap_or((80, 24));
-    let line = "─".repeat(term_width as usize);
+fn render_separator(width: u16) -> Element {
+    let line = "─".repeat(width as usize);
     Text::new(line).dim().into_element()
 }
 
@@ -162,10 +216,15 @@ fn render_input_line(input: &str) -> Element {
 }
 
 /// Render status bar
-fn render_status_bar(mode: PermissionMode) -> Element {
-    let mode_text = match mode {
-        PermissionMode::Normal => "permissions required",
-        PermissionMode::Bypass => "bypass permissions on",
+fn render_status_bar(mode: PermissionMode, scroll: &ScrollHandle) -> Element {
+    let mode_text = mode.display_text();
+
+    // Show scroll indicator if content is scrollable
+    let scroll_indicator = if scroll.can_scroll_up() || scroll.can_scroll_down() {
+        let percent = (scroll.scroll_percent_y() * 100.0) as u8;
+        format!(" [{:3}%]", percent)
+    } else {
+        String::new()
     };
 
     Box::new()
@@ -173,10 +232,11 @@ fn render_status_bar(mode: PermissionMode) -> Element {
         .child(Text::new("▸▸ ").color(Color::Cyan).into_element())
         .child(Text::new(mode_text).dim().into_element())
         .child(Text::new(" (shift+tab to cycle)").dim().into_element())
+        .child(Text::new(scroll_indicator).dim().into_element())
         .into_element()
 }
 
 fn main() -> std::io::Result<()> {
-    // Run in inline mode (preserves terminal history)
+    // Run in inline mode
     render(app).run()
 }
