@@ -6,23 +6,39 @@
 use super::events::AgentEvent;
 use super::state::{AppState, ExecutionPhase};
 use std::sync::{Arc, RwLock};
+use tokio::sync::watch;
 
 /// Adapter that converts Agent events to UI state updates
 pub struct EventAdapter {
     state: Arc<RwLock<AppState>>,
+    /// Channel sender for broadcasting state changes to subscribers
+    state_tx: watch::Sender<AppState>,
 }
 
 impl EventAdapter {
     /// Create a new event adapter with the given state
     pub fn new(state: Arc<RwLock<AppState>>) -> Self {
-        Self { state }
+        let initial_state = state.read().unwrap().clone();
+        let (state_tx, _) = watch::channel(initial_state);
+        Self { state, state_tx }
     }
 
     /// Create a new event adapter with default state
     pub fn with_default_state() -> Self {
+        let state = AppState::default();
+        let (state_tx, _) = watch::channel(state.clone());
         Self {
-            state: Arc::new(RwLock::new(AppState::default())),
+            state: Arc::new(RwLock::new(state)),
+            state_tx,
         }
+    }
+
+    /// Subscribe to state changes
+    ///
+    /// Returns a receiver that will be notified whenever the state changes.
+    /// Use `receiver.changed().await` to wait for updates.
+    pub fn subscribe(&self) -> watch::Receiver<AppState> {
+        self.state_tx.subscribe()
     }
 
     /// Get a clone of the state Arc for sharing
@@ -32,8 +48,13 @@ impl EventAdapter {
 
     /// Handle an agent event, updating the state accordingly
     pub fn handle_event(&self, event: AgentEvent) {
-        let mut state = self.state.write().unwrap();
-        self.apply_event(&mut state, event);
+        let state_snapshot = {
+            let mut state = self.state.write().unwrap();
+            self.apply_event(&mut state, event);
+            state.clone()
+        };
+        // Notify all subscribers of state change
+        let _ = self.state_tx.send(state_snapshot);
     }
 
     /// Apply an event to the state
@@ -125,13 +146,17 @@ impl EventAdapter {
         self.state.read().unwrap().clone()
     }
 
-    /// Update state with a closure
+    /// Update state with a closure and notify subscribers
     pub fn update_state<F>(&self, f: F)
     where
         F: FnOnce(&mut AppState),
     {
-        let mut state = self.state.write().unwrap();
-        f(&mut state);
+        let state_snapshot = {
+            let mut state = self.state.write().unwrap();
+            f(&mut state);
+            state.clone()
+        };
+        let _ = self.state_tx.send(state_snapshot);
     }
 }
 
@@ -139,6 +164,7 @@ impl Clone for EventAdapter {
     fn clone(&self) -> Self {
         Self {
             state: Arc::clone(&self.state),
+            state_tx: self.state_tx.clone(),
         }
     }
 }

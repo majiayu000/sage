@@ -17,3 +17,6 @@ pub use state::{
     SessionState, StreamingContent, ThinkingState, ToolExecution, ToolResult, ToolStatus,
     UiConfig,
 };
+
+// Re-export tokio watch types for subscribers
+pub use tokio::sync::watch::Receiver as StateReceiver;

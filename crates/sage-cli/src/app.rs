@@ -26,7 +26,7 @@ use unicode_width::UnicodeWidthChar;
 use rnk::prelude::Box as RnkBox;
 
 // ============================================================================
-// UI Components (rnk Elements)
+// UI Components using rnk's built-in components
 // ============================================================================
 
 /// Render banner at the top
@@ -47,128 +47,38 @@ fn render_banner() -> Element {
         .into_element()
 }
 
-/// Render user message
+/// Render user message using rnk Message component
 fn render_user_message(text: &str) -> Element {
-    RnkBox::new()
-        .flex_direction(FlexDirection::Row)
-        .child(Text::new("> ").color(Color::Yellow).bold().into_element())
-        .child(Text::new(text).color(Color::BrightWhite).into_element())
-        .into_element()
+    Message::user(text).into_element()
 }
 
 /// Render input prompt
 fn render_prompt() -> Element {
-    RnkBox::new()
-        .flex_direction(FlexDirection::Row)
-        .child(Text::new("> ").color(Color::Yellow).bold().into_element())
-        .into_element()
+    Text::new("> ").color(Color::Yellow).bold().into_element()
 }
 
-/// Render assistant response
+/// Render assistant response using rnk Message component
 fn render_assistant_response(text: &str) -> Element {
-    let lines: Vec<&str> = text.lines().collect();
-    if lines.len() <= 1 {
-        RnkBox::new()
-            .flex_direction(FlexDirection::Row)
-            .child(Text::new("● ").color(Color::BrightWhite).into_element())
-            .child(Text::new(text).color(Color::White).into_element())
-            .into_element()
-    } else {
-        let mut container = RnkBox::new().flex_direction(FlexDirection::Column);
-        for (i, line) in lines.iter().enumerate() {
-            let prefix = if i == 0 { "● " } else { "  " };
-            container = container.child(
-                RnkBox::new()
-                    .flex_direction(FlexDirection::Row)
-                    .child(Text::new(prefix).color(Color::BrightWhite).into_element())
-                    .child(Text::new(*line).color(Color::White).into_element())
-                    .into_element(),
-            );
-        }
-        container.into_element()
-    }
+    Message::assistant(text).into_element()
 }
 
-/// Render thinking block (collapsed)
+/// Render thinking block using rnk ThinkingBlock component
 fn render_thinking(text: &str) -> Element {
-    let lines: Vec<&str> = text.lines().take(5).collect();
-    let has_more = text.lines().count() > 5;
-
-    let mut container = RnkBox::new()
-        .flex_direction(FlexDirection::Column)
-        .child(
-            Text::new("∴ Thinking…")
-                .color(Color::Magenta)
-                .dim()
-                .italic()
-                .into_element(),
-        );
-
-    for line in lines {
-        container = container.child(
-            RnkBox::new()
-                .flex_direction(FlexDirection::Row)
-                .child(Text::new("  ").into_element())
-                .child(
-                    Text::new(line)
-                        .color(Color::Magenta)
-                        .dim()
-                        .italic()
-                        .into_element(),
-                )
-                .into_element(),
-        );
-    }
-
-    if has_more {
-        container = container.child(
-            Text::new("  ...")
-                .color(Color::Ansi256(245))
-                .dim()
-                .into_element(),
-        );
-    }
-
-    container.into_element()
+    ThinkingBlock::new(text).into_element()
 }
 
-/// Render tool call
+/// Render tool call using rnk ToolCall component
 fn render_tool_call(name: &str, args: Option<&str>) -> Element {
-    let mut row = RnkBox::new()
-        .flex_direction(FlexDirection::Row)
-        .child(Text::new("● ").color(Color::Magenta).into_element())
-        .child(
-            Text::new(name)
-                .color(Color::Magenta)
-                .bold()
-                .into_element(),
-        );
-
-    if let Some(args) = args {
-        // Truncate long args
-        let display_args = if args.len() > 50 {
-            format!("{}...", &args[..47])
-        } else {
-            args.to_string()
-        };
-        row = row.child(
-            Text::new(format!("(\"{}\")", display_args))
-                .color(Color::Magenta)
-                .dim()
-                .into_element(),
-        );
-    }
-
-    row.into_element()
+    let display_args = match args {
+        Some(a) if a.len() > 50 => format!("{}...", &a[..47]),
+        Some(a) => a.to_string(),
+        None => String::new(),
+    };
+    ToolCall::new(name, &display_args).into_element()
 }
 
-/// Render tool result
+/// Render tool result using rnk Message component
 fn render_tool_result(result: &str, success: bool) -> Element {
-    let color = if success {
-        Color::Ansi256(245)
-    } else {
-        Color::Red
-    };
     // Truncate long output
     let display = if result.len() > 100 {
         format!("{}...", &result[..97])
@@ -176,20 +86,16 @@ fn render_tool_result(result: &str, success: bool) -> Element {
         result.to_string()
     };
 
-    RnkBox::new()
-        .flex_direction(FlexDirection::Row)
-        .child(Text::new("  ⎿ ").color(color).into_element())
-        .child(Text::new(display).color(color).into_element())
-        .into_element()
+    if success {
+        Message::tool_result(display).into_element()
+    } else {
+        Message::error(display).into_element()
+    }
 }
 
-/// Render error message
+/// Render error message using rnk Message component
 fn render_error(message: &str) -> Element {
-    RnkBox::new()
-        .flex_direction(FlexDirection::Row)
-        .child(Text::new("● Error: ").color(Color::Red).into_element())
-        .child(Text::new(message).color(Color::Red).into_element())
-        .into_element()
+    Message::error(format!("Error: {}", message)).into_element()
 }
 
 /// Render goodbye message
