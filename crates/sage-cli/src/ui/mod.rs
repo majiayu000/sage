@@ -1,13 +1,11 @@
 //! Sage CLI UI Module
 //!
-//! Provides streaming UI components for the CLI interface.
+//! Provides UI components for the CLI interface.
+//! Includes both legacy streaming mode and new rnk App mode.
 
 mod indicators;
+mod rnk_app;
 mod streaming;
 
-pub use indicators::{ThinkingIndicator, ToolIndicator};
-pub use streaming::{
-    print_assistant_response, print_error, print_thinking, print_tool_call, print_tool_result,
-    print_user_message, StreamingPrinter,
-};
+pub use rnk_app::run_rnk_app;
 
