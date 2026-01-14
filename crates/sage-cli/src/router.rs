@@ -105,11 +105,11 @@ async fn route_main(cli: Cli) -> SageResult<()> {
         })
         .await
     } else {
-        // New rnk-based UI is the default
-        app::run_app().await.map_err(|e| sage_core::error::SageError::Io {
+        // New rnk App mode is the default (fullscreen with fixed-bottom layout)
+        app::run_app_mode().map_err(|e| sage_core::error::SageError::Io {
             message: e.to_string(),
             path: None,
-            context: Some("Running rnk UI".to_string()),
+            context: Some("Running rnk App mode".to_string()),
         })
     }
 }

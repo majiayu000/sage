@@ -1,7 +1,9 @@
 //! Sage CLI Main Application
 //!
 //! Claude Code style UI using rnk components for rendering.
-//! Uses command-loop pattern (like glm_chat.rs) for async Agent integration.
+//! Supports two modes:
+//! 1. App mode (default): Fullscreen declarative UI with fixed-bottom layout
+//! 2. Streaming mode: Traditional println-based streaming output
 
 use crossterm::{
     event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
@@ -414,4 +416,10 @@ pub fn run_demo() -> io::Result<()> {
     print_element(&render_goodbye());
 
     Ok(())
+}
+
+/// Run in App mode - fullscreen declarative UI with fixed-bottom layout
+/// This is the new Claude Code-style interface.
+pub fn run_app_mode() -> io::Result<()> {
+    crate::ui::run_rnk_app()
 }
