@@ -6,7 +6,6 @@
 //!
 //! Run with: cargo run --example fixed_bottom_demo
 
-use rnk::core::Dimension;
 use rnk::prelude::*;
 
 /// Permission mode
@@ -55,9 +54,9 @@ fn app() -> Element {
     let (term_width, term_height) = crossterm::terminal::size().unwrap_or((80, 24));
     let viewport_height = term_height.saturating_sub(3) as usize; // Reserve 3 lines for bottom
 
-    // Update scroll viewport
+    // Update scroll viewport - each message is 1 line
     let msg_count = messages.get().len();
-    scroll.set_content_size(term_width as usize, msg_count * 2); // ~2 lines per message
+    scroll.set_content_size(term_width as usize, msg_count);
     scroll.set_viewport_size(term_width as usize, viewport_height);
 
     // Handle keyboard input
@@ -140,17 +139,42 @@ fn app() -> Element {
         }
     });
 
+    // Handle mouse scroll
+    use_mouse({
+        let scroll = scroll.clone();
+        move |mouse| {
+            match mouse.action {
+                MouseAction::ScrollUp => {
+                    scroll.scroll_up(3); // Scroll 3 lines per wheel tick
+                }
+                MouseAction::ScrollDown => {
+                    scroll.scroll_down(3);
+                }
+                _ => {}
+            }
+        }
+    });
+
     let current_messages = messages.get();
     let current_input = input.get();
     let current_mode = mode.get();
 
+    // Calculate which messages to show based on scroll position
+    let scroll_offset = scroll.offset_y();
+    let visible_count = viewport_height;
+
     // Build the fixed-bottom layout using flexbox
-    // Root: height 100% with column direction
+    // Root: explicit height (not Percent) to ensure stable line count between frames
     // Content area: flex_grow 1 (takes remaining space)
     // Bottom elements: fixed height (naturally pushed to bottom)
+    //
+    // IMPORTANT: Using explicit pixel height instead of Dimension::Percent(100.0)
+    // because inline mode tracking relies on consistent line counts between frames.
+    // Percent-based heights can compute differently causing rendering artifacts.
     Box::new()
         .flex_direction(FlexDirection::Column)
-        .height(Dimension::Percent(100.0)) // Full terminal height
+        .width(term_width as i32)
+        .height(term_height as i32) // Use explicit height, not Percent
         // Content area - takes remaining space with flex_grow
         .child(
             Box::new()
@@ -162,23 +186,25 @@ fn app() -> Element {
                         .dim()
                         .into_element()
                 } else {
-                    // Show messages (most recent at bottom)
-                    let visible_count = (term_height.saturating_sub(4)) as usize;
+                    // Show messages based on scroll offset
                     let mut msg_box = Box::new().flex_direction(FlexDirection::Column);
-                    let msgs: Vec<_> = current_messages.iter().rev().take(visible_count).collect();
-                    for msg in msgs.into_iter().rev() {
+
+                    // Calculate the range of messages to display
+                    let total = current_messages.len();
+                    let start = scroll_offset.min(total.saturating_sub(visible_count));
+                    let end = (start + visible_count).min(total);
+
+                    for msg in current_messages.iter().skip(start).take(end - start) {
                         msg_box = msg_box.child(render_message(msg));
                     }
                     msg_box.into_element()
                 })
                 .into_element(),
         )
-        // Separator line 1 (above input)
+        // Separator line
         .child(render_separator(term_width))
         // Input line
         .child(render_input_line(&current_input))
-        // Separator line 2 (above status bar)
-        .child(render_separator(term_width))
         // Status bar
         .child(render_status_bar(current_mode, &scroll))
         .into_element()
@@ -237,6 +263,8 @@ fn render_status_bar(mode: PermissionMode, scroll: &ScrollHandle) -> Element {
 }
 
 fn main() -> std::io::Result<()> {
-    // Run in inline mode
-    render(app).run()
+    // Use fullscreen mode for fixed-bottom layouts
+    // This prevents terminal scroll history from showing old frames
+    // and properly handles window resize
+    render(app).fullscreen().run()
 }
