@@ -52,14 +52,10 @@ tracing-subscriber = { workspace = true }
 # Utilities
 dirs = { workspace = true }
 chrono = { workspace = true }
-uuid = { workspace = true }
 
 # Signal handling
 signal-hook = { workspace = true }
 signal-hook-tokio = { workspace = true }
-
-# File system utilities
-walkdir = "2.4"
 
 [dev-dependencies]
 tempfile = "3.10"

@@ -6,7 +6,7 @@
 use rnk::layout::LayoutEngine;
 use rnk::prelude::*;
 use rnk::prelude::Box as RnkBox;
-use unicode_width::UnicodeWidthStr;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 // ============================================================================
 // Test Utilities
@@ -46,6 +46,28 @@ fn display_width(s: &str) -> usize {
     s.width()
 }
 
+fn truncate_to_width(text: &str, max_width: usize) -> String {
+    if max_width == 0 {
+        return String::new();
+    }
+    if text.width() <= max_width {
+        return text.to_string();
+    }
+
+    let mut trimmed = String::new();
+    let mut width = 0;
+    for ch in text.chars() {
+        let ch_width = UnicodeWidthChar::width(ch).unwrap_or(0);
+        if width + ch_width + 3 > max_width {
+            break;
+        }
+        trimmed.push(ch);
+        width += ch_width;
+    }
+    trimmed.push_str("...");
+    trimmed
+}
+
 /// Layout assertion helper for fluent testing
 struct LayoutAssertion {
     output: String,
@@ -74,10 +96,15 @@ impl LayoutAssertion {
             let line = self.output.lines().nth(i).unwrap_or("");
             let stripped = strip_ansi(line);
             if !stripped.trim().is_empty() {
+                let allowed_indent = if stripped.starts_with("  ▘▘") || stripped.starts_with("  /model") {
+                    2
+                } else {
+                    0
+                };
                 assert_eq!(
-                    start, 0,
-                    "Line {} should start at column 0, but starts at {}.\nLine content: '{}'",
-                    i, start, stripped
+                    start, allowed_indent,
+                    "Line {} should start at column {}, but starts at {}.\nLine content: '{}'",
+                    i, allowed_indent, start, stripped
                 );
             }
         }
@@ -138,44 +165,47 @@ fn print_layout_tree(element: &Element, engine: &LayoutEngine, indent: usize) {
 // Sage UI Component Builders (matching rnk_app.rs exactly)
 // ============================================================================
 
-fn build_welcome() -> Element {
+fn build_header(width: u16) -> Element {
+    let version = env!("CARGO_PKG_VERSION");
+    let title = truncate_to_width(
+        &format!("▐▛███▜▌   Sage Code v{}", version),
+        width as usize,
+    );
+    let model_line = truncate_to_width("▝▜█████▛▘  unknown · unknown", width as usize);
+    let cwd_line = truncate_to_width("  ▘▘ ▝▝    .", width as usize);
+    let hint_line = truncate_to_width("  /model to try another model", width as usize);
+
     RnkBox::new()
         .flex_direction(FlexDirection::Column)
         .child(
-            Text::new("Sage Agent")
-                .color(Color::Cyan)
+            Text::new(title)
+                .color(Color::Black)
                 .bold()
                 .into_element(),
         )
+        .child(Text::new(model_line).color(Color::Black).into_element())
+        .child(Text::new(cwd_line).color(Color::Black).into_element())
+        .child(Newline::new().into_element())
         .child(
-            Text::new("Rust-based LLM Agent for software engineering tasks")
-                .dim()
+            Text::new(hint_line)
+                .color(Color::Black)
                 .into_element(),
         )
         .child(Newline::new().into_element())
-        .child(
-            Text::new("Type a message to get started, or use /help for commands")
-                .dim()
-                .into_element(),
-        )
         .into_element()
 }
 
 fn build_input_prompt(input_text: &str) -> Element {
     RnkBox::new()
         .flex_direction(FlexDirection::Row)
-        .child(Text::new("❯ ").color(Color::Yellow).bold().into_element())
+        .child(Text::new("❯ ").color(Color::Black).bold().into_element())
         .child(
             Text::new(if input_text.is_empty() {
-                "Type your message..."
+                "Try \"edit base.rs to...\""
             } else {
                 input_text
             })
-            .color(if input_text.is_empty() {
-                Color::BrightBlack
-            } else {
-                Color::White
-            })
+            .color(Color::Black)
             .into_element(),
         )
         .into_element()
@@ -184,9 +214,9 @@ fn build_input_prompt(input_text: &str) -> Element {
 fn build_status_bar(mode: &str) -> Element {
     RnkBox::new()
         .flex_direction(FlexDirection::Row)
-        .child(Text::new("▸▸").into_element())
-        .child(Text::new(format!(" {}", mode)).dim().into_element())
-        .child(Text::new(" (shift+tab to cycle)").dim().into_element())
+        .child(Text::new("⏵⏵").color(Color::Black).into_element())
+        .child(Text::new(format!(" {}", mode)).color(Color::Black).into_element())
+        .child(Text::new(" (shift+tab to cycle)").color(Color::Black).into_element())
         .into_element()
 }
 
@@ -195,20 +225,25 @@ fn build_bottom_area(term_width: u16) -> Element {
 
     RnkBox::new()
         .flex_direction(FlexDirection::Column)
-        .child(Text::new(&separator).dim().into_element())
+        .child(Text::new(&separator).color(Color::Black).into_element())
         .child(build_input_prompt(""))
         .child(build_status_bar("permissions required"))
         .into_element()
 }
 
 fn build_full_ui(term_width: u16, term_height: u16) -> Element {
-    let content = build_welcome();
+    let header = build_header(term_width);
+    let content = RnkBox::new()
+        .flex_direction(FlexDirection::Column)
+        .child(Text::new("").into_element())
+        .into_element();
     let bottom = build_bottom_area(term_width);
 
     RnkBox::new()
         .flex_direction(FlexDirection::Column)
         .width(term_width as i32)
         .height(term_height as i32)
+        .child(header)
         .child(
             RnkBox::new()
                 .flex_direction(FlexDirection::Column)
@@ -225,13 +260,13 @@ fn build_full_ui(term_width: u16, term_height: u16) -> Element {
 // ============================================================================
 
 #[test]
-fn test_welcome_left_aligned() {
-    let element = build_welcome();
+fn test_header_left_aligned() {
+    let element = build_header(80);
 
     LayoutAssertion::new(&element, 80, 24)
         .debug_print()
-        .assert_contains("Sage Agent")
-        .assert_contains("Rust-based LLM Agent")
+        .assert_contains("Sage Code v")
+        .assert_contains("/model to try")
         .assert_all_lines_left_aligned();
 }
 
@@ -242,7 +277,7 @@ fn test_input_prompt_left_aligned() {
     LayoutAssertion::new(&element, 80, 24)
         .debug_print()
         .assert_contains("❯")
-        .assert_contains("Type your message")
+        .assert_contains("Try \"edit base.rs to")
         .assert_all_lines_left_aligned();
 }
 
@@ -252,7 +287,7 @@ fn test_status_bar_left_aligned() {
 
     LayoutAssertion::new(&element, 80, 24)
         .debug_print()
-        .assert_contains("▸▸")
+        .assert_contains("⏵⏵")
         .assert_contains("permissions required")
         .assert_all_lines_left_aligned();
 }
@@ -268,14 +303,15 @@ fn test_bottom_area_left_aligned() {
         .assert_all_lines_left_aligned();
 }
 
+
 #[test]
 fn test_full_ui_left_aligned() {
     let element = build_full_ui(80, 24);
 
     LayoutAssertion::new(&element, 80, 24)
         .debug_print()
-        .assert_contains("Sage Agent")
-        .assert_contains("Type a message to get started")
+        .assert_contains("Sage Code v")
+        .assert_contains("/model to try")
         .assert_contains("❯")
         .assert_contains("permissions required")
         .assert_all_lines_left_aligned()

@@ -66,17 +66,9 @@ pub struct Cli {
     #[arg(long, short)]
     pub verbose: bool,
 
-    /// Use modern UI (Ink + React) instead of traditional CLI
-    #[arg(long, hide = true)]
-    pub modern_ui: bool,
-
     /// Use legacy CLI UI instead of new rnk-based UI
     #[arg(long)]
     pub legacy_ui: bool,
-
-    /// Run UI demo mode (for testing new UI components)
-    #[arg(long, hide = true)]
-    pub ui_demo: bool,
 
     /// Output in streaming JSON format (for SDK/programmatic use)
     #[arg(long)]
@@ -138,14 +130,6 @@ pub enum Commands {
         detailed: bool,
     },
 
-    /// Run as IPC backend for Modern UI (internal use)
-    #[command(hide = true)]
-    Ipc {
-        /// Path to configuration file
-        #[arg(long, default_value = "sage_config.json")]
-        config_file: String,
-    },
-
     // Legacy commands for backward compatibility
     /// [Legacy] Run a single task - use `sage -p "task"` instead
     #[command(hide = true)]
@@ -185,9 +169,6 @@ pub enum Commands {
 
         #[arg(long, short)]
         verbose: bool,
-
-        #[arg(long)]
-        modern_ui: bool,
     },
 
     /// [Legacy] Interactive mode - use `sage` instead
@@ -204,9 +185,6 @@ pub enum Commands {
 
         #[arg(long, short)]
         verbose: bool,
-
-        #[arg(long)]
-        modern_ui: bool,
     },
 
     /// [Legacy] Unified mode - use `sage "task"` instead

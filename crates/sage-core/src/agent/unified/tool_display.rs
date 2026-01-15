@@ -4,6 +4,7 @@
 //! in the terminal, including icons, parameter formatting, and activity descriptions.
 
 use crate::tools::types::{ToolCall, ToolResult};
+use crate::ui::bridge::global_adapter;
 use crate::ui::Icons;
 use colored::Colorize;
 use std::collections::HashMap;
@@ -132,20 +133,22 @@ pub async fn display_tool_start(event_manager: &mut EventManager, tool_call: &To
     let params_preview = format_tool_params(&tool_call.arguments);
 
     // Claude Code style: blue filled circle for tools, with 2-space indent for result
-    println!();
-    print!(
-        "{} {}",
-        Icons::message().bright_blue(),
-        tool_call.name.bright_white().bold(),
-    );
-    // Show tool-specific icon and params
-    if !params_preview.is_empty() {
-        println!("({})", params_preview.dimmed());
-    } else {
+    if global_adapter().is_none() {
         println!();
+        print!(
+            "{} {}",
+            Icons::message().bright_blue(),
+            tool_call.name.bright_white().bold(),
+        );
+        // Show tool-specific icon and params
+        if !params_preview.is_empty() {
+            println!("({})", params_preview.dimmed());
+        } else {
+            println!();
+        }
     }
 
-    // For Task tool, get the description to show in animation
+    // Use tool params (or task description) as the detail for UI tool rows.
     let detail = if tool_call.name.to_lowercase() == "task" {
         tool_call
             .arguments
@@ -154,7 +157,7 @@ pub async fn display_tool_start(event_manager: &mut EventManager, tool_call: &To
             .map(|s| crate::utils::truncate_with_ellipsis(s, 40))
             .unwrap_or_else(|| "Task".to_string())
     } else {
-        tool_call.name.clone()
+        params_preview.clone()
     };
 
     // Emit tool execution started event with detail
@@ -183,20 +186,22 @@ pub async fn display_tool_result(
         .await;
 
     // Claude Code style: result indicator with corner bracket
-    if tool_result.success {
-        // Show brief output preview if available
-        if let Some(ref output) = tool_result.output {
-            let preview = output.lines().take(3).collect::<Vec<_>>().join("\n  ");
-            if !preview.trim().is_empty() {
-                let truncated = crate::utils::truncate_with_ellipsis(&preview, 200);
-                println!("  {} {}", Icons::result().dimmed(), truncated.dimmed());
+    if global_adapter().is_none() {
+        if tool_result.success {
+            // Show brief output preview if available
+            if let Some(ref output) = tool_result.output {
+                let preview = output.lines().take(3).collect::<Vec<_>>().join("\n  ");
+                if !preview.trim().is_empty() {
+                    let truncated = crate::utils::truncate_with_ellipsis(&preview, 200);
+                    println!("  {} {}", Icons::result().dimmed(), truncated.dimmed());
+                }
             }
+        } else {
+            // Show error
+            let err_msg = tool_result.error.as_deref().unwrap_or("Unknown error");
+            let first_line = err_msg.lines().next().unwrap_or(err_msg);
+            let truncated = crate::utils::truncate_with_ellipsis(first_line, 80);
+            println!("  {} {}", Icons::result().red(), truncated.red());
         }
-    } else {
-        // Show error
-        let err_msg = tool_result.error.as_deref().unwrap_or("Unknown error");
-        let first_line = err_msg.lines().next().unwrap_or(err_msg);
-        let truncated = crate::utils::truncate_with_ellipsis(first_line, 80);
-        println!("  {} {}", Icons::result().red(), truncated.red());
     }
 }
