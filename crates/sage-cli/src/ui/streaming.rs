@@ -87,13 +87,23 @@ pub fn print_tool_call(name: &str, args: Option<&str>) {
 /// Print a tool result with indentation
 pub fn print_tool_result(result: &str, success: bool) {
     let color = if success { "245" } else { "196" }; // Gray for success, red for error
-    // Truncate long results
-    let display = if result.len() > 200 {
-        format!("{}...", &result[..197])
-    } else {
-        result.to_string()
-    };
+    // Truncate long results - use safe UTF-8 truncation
+    let display = safe_truncate(result, 200);
     println!("\x1b[38;5;{}m  ⎿ {}\x1b[0m", color, display);
+}
+
+/// Safely truncate a string by character count (not byte count)
+/// This avoids panicking on multi-byte UTF-8 characters
+fn safe_truncate(s: &str, max_chars: usize) -> String {
+    let char_count = s.chars().count();
+    if char_count <= max_chars {
+        return s.to_string();
+    }
+
+    s.chars()
+        .take(max_chars.saturating_sub(3)) // Reserve 3 chars for "..."
+        .collect::<String>()
+        + "..."
 }
 
 /// Print an error message

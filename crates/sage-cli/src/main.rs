@@ -60,13 +60,10 @@ mod app;
 mod args;
 mod commands;
 mod console;
-mod ipc;
 mod progress;
 mod router;
 mod signal_handler;
 mod ui;
-mod ui_backend;
-mod ui_launcher;
 
 use clap::Parser;
 use sage_core::error::SageResult;

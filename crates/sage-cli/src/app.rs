@@ -380,10 +380,16 @@ pub fn run_demo() -> io::Result<()> {
     print_element(&render_user_message("Help me refactor the UI code"));
     println!();
 
-    // Demo thinking spinner
-    let spinner = Spinner::new("Thinking...");
-    std::thread::sleep(Duration::from_secs(2));
-    spinner.stop();
+    // Demo thinking spinner (simple, no raw mode)
+    print!("\x1b[35m⠋ Thinking...\x1b[0m");
+    io::stdout().flush()?;
+    for frame in ["⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏", "⠋", "⠙", "⠹"].iter() {
+        std::thread::sleep(Duration::from_millis(150));
+        print!("\x1b[2K\r\x1b[35m{} Thinking...\x1b[0m", frame);
+        io::stdout().flush()?;
+    }
+    print!("\x1b[2K\r");
+    io::stdout().flush()?;
 
     // Demo thinking block
     print_element(&render_thinking(

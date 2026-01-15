@@ -6,7 +6,7 @@ use crate::args::{Cli, Commands, ConfigAction, TrajectoryAction};
 use crate::commands::interactive::{CliOnboarding, check_config_status};
 use crate::commands::unified::OutputModeArg;
 use crate::console::CliConsole;
-use crate::{app, commands, ipc, ui_launcher};
+use crate::{app, commands};
 use sage_core::config::credential::ConfigStatus;
 use sage_core::error::SageResult;
 
@@ -19,7 +19,6 @@ pub async fn route(cli: Cli) -> SageResult<()> {
             Commands::Config { action } => route_config(action.clone()).await,
             Commands::Trajectory { action } => route_trajectory(action.clone()).await,
             Commands::Tools => commands::tools::show_tools().await,
-            Commands::Ipc { config_file } => ipc::run_ipc_mode(Some(config_file)).await,
 
             // Diagnostic commands
             Commands::Doctor { config_file } => {
@@ -67,25 +66,6 @@ async fn route_main(cli: Cli) -> SageResult<()> {
     // Determine execution mode
     let non_interactive = cli.print_mode;
 
-    // Use modern UI if requested
-    if cli.modern_ui {
-        return ui_launcher::launch_modern_ui(
-            &cli.config_file,
-            None, // trajectory_file
-            cli.working_dir.as_ref().and_then(|p| p.to_str()),
-        )
-        .await;
-    }
-
-    // Run UI demo mode
-    if cli.ui_demo {
-        return app::run_demo().map_err(|e| sage_core::error::SageError::Io {
-            message: e.to_string(),
-            path: None,
-            context: Some("Running UI demo".to_string()),
-        });
-    }
-
     // Use legacy UI if requested, print mode (non-interactive), or otherwise use new rnk UI as default
     // Print mode requires legacy UI because rnk needs an interactive terminal
     if cli.legacy_ui || non_interactive {
@@ -129,7 +109,6 @@ async fn route_legacy_run(cli: &Cli) -> SageResult<()> {
         patch_path: _,
         must_patch: _,
         verbose,
-        modern_ui: _,
     }) = &cli.command
     {
         // Route to unified executor in non-interactive mode
@@ -158,32 +137,22 @@ async fn route_legacy_interactive(cli: &Cli) -> SageResult<()> {
         trajectory_file: _,
         working_dir,
         verbose,
-        modern_ui,
     }) = &cli.command
     {
-        if *modern_ui {
-            ui_launcher::launch_modern_ui(
-                config_file,
-                None,
-                working_dir.as_ref().and_then(|p| p.to_str()),
-            )
-            .await
-        } else {
-            // Route to unified executor in interactive mode
-            commands::unified_execute(commands::UnifiedArgs {
-                task: None,
-                config_file: config_file.clone(),
-                working_dir: working_dir.clone(),
-                max_steps: None,
-                verbose: *verbose,
-                non_interactive: false,
-                resume_session_id: None,
-                continue_recent: false,
-                stream_json: false,
-                output_mode: OutputModeArg::default(),
-            })
-            .await
-        }
+        // Route to unified executor in interactive mode
+        commands::unified_execute(commands::UnifiedArgs {
+            task: None,
+            config_file: config_file.clone(),
+            working_dir: working_dir.clone(),
+            max_steps: None,
+            verbose: *verbose,
+            non_interactive: false,
+            resume_session_id: None,
+            continue_recent: false,
+            stream_json: false,
+            output_mode: OutputModeArg::default(),
+        })
+        .await
     } else {
         unreachable!()
     }
