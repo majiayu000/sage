@@ -110,11 +110,12 @@ impl LayoutAssertion {
     }
 
     fn assert_not_contains(&self, text: &str) -> &Self {
+        let stripped = strip_ansi(&self.output);
         assert!(
-            !self.output.contains(text),
+            !stripped.contains(text),
             "Output should NOT contain '{}'\nActual output:\n{}",
             text,
-            self.output
+            stripped
         );
         self
     }
@@ -916,46 +917,78 @@ mod phase3_message_rendering {
     use super::*;
 
     fn build_message_element(msg: &Message, max_width: usize) -> Element {
-        let (prefix, color, bold, content) = match &msg.content {
+        match &msg.content {
             MessageContent::Text(text) => {
                 let (prefix, color) = match msg.role {
                     Role::User => ("user: ", Color::Black),
                     Role::Assistant => ("assistant: ", Color::Black),
                     Role::System => ("system: ", Color::Black),
                 };
-                (prefix, color, true, text.clone())
+                let display_text = format!("{}{}", prefix, text);
+                Text::new(truncate_to_width(&display_text, max_width))
+                    .color(color)
+                    .bold()
+                    .into_element()
             }
             MessageContent::Thinking(text) => {
-                ("∴ Thinking: ", Color::Magenta, false, text.clone())
+                let display_text = format!("∴ Thinking: {}", text);
+                Text::new(truncate_to_width(&display_text, max_width))
+                    .color(Color::Magenta)
+                    .into_element()
             }
             MessageContent::ToolCall {
                 tool_name,
                 params,
                 result,
             } => {
-                let mut content = format!("tool: {}", tool_name);
+                // Tool calls need multiple lines, use Column layout
+                let mut container = RnkBox::new().flex_direction(FlexDirection::Column);
+
+                // Line 1: tool: Name
+                container = container.child(
+                    Text::new(truncate_to_width(&format!("tool: {}", tool_name), max_width))
+                        .color(Color::Magenta)
+                        .bold()
+                        .into_element(),
+                );
+
+                // Line 2: args (if any)
                 if !params.is_empty() {
-                    content.push_str(&format!("\n  args: {}", params));
+                    container = container.child(
+                        Text::new(truncate_to_width(&format!("  args: {}", params), max_width))
+                            .color(Color::Magenta)
+                            .into_element(),
+                    );
                 }
+
+                // Line 3: result or error (if any)
                 if let Some(r) = result {
                     if r.success {
                         if let Some(output) = &r.output {
-                            content.push_str(&format!("\n  result: {}", output));
+                            container = container.child(
+                                Text::new(truncate_to_width(
+                                    &format!("  result: {}", output),
+                                    max_width,
+                                ))
+                                .color(Color::Magenta)
+                                .into_element(),
+                            );
                         }
                     } else if let Some(error) = &r.error {
-                        content.push_str(&format!("\n  error: {}", error));
+                        container = container.child(
+                            Text::new(truncate_to_width(
+                                &format!("  error: {}", error),
+                                max_width,
+                            ))
+                            .color(Color::Red)
+                            .into_element(),
+                        );
                     }
                 }
-                ("", Color::Magenta, true, content)
-            }
-        };
 
-        let display_text = format!("{}{}", prefix, content);
-        let mut text = Text::new(truncate_to_width(&display_text, max_width)).color(color);
-        if bold {
-            text = text.bold();
+                container.into_element()
+            }
         }
-        text.into_element()
     }
 
     #[test]
