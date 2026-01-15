@@ -388,7 +388,13 @@ fn app() -> Element {
     } else {
         let visible_start = scroll_offset.min(total_lines.saturating_sub(viewport_height));
         let visible_end = (visible_start + viewport_height).min(total_lines);
-        render_visible_lines(&all_lines[visible_start..visible_end], term_width)
+        render_content_with_scrollbar(
+            &all_lines[visible_start..visible_end],
+            term_width,
+            viewport_height,
+            total_lines,
+            scroll_offset,
+        )
     };
 
     // Build bottom area
@@ -671,6 +677,77 @@ fn render_visible_lines(lines: &[RenderLine], width: u16) -> Element {
     }
 
     content_box.into_element()
+}
+
+/// Render a visual scrollbar track with thumb
+/// Returns a Column element with scrollbar characters for each visible line
+fn render_scrollbar(
+    viewport_height: usize,
+    total_lines: usize,
+    scroll_offset: usize,
+) -> Element {
+    // If content fits in viewport, no scrollbar needed
+    if total_lines <= viewport_height || viewport_height == 0 {
+        // Return empty column
+        return RnkBox::new()
+            .flex_direction(FlexDirection::Column)
+            .width(1)
+            .into_element();
+    }
+
+    // Calculate thumb size and position
+    // Thumb size is proportional to viewport/total ratio (min 1 line)
+    let thumb_size = ((viewport_height as f32 / total_lines as f32) * viewport_height as f32)
+        .ceil()
+        .max(1.0) as usize;
+
+    // Thumb position based on scroll offset
+    let max_scroll = total_lines.saturating_sub(viewport_height);
+    let thumb_position = if max_scroll > 0 {
+        let scroll_ratio = scroll_offset.min(max_scroll) as f32 / max_scroll as f32;
+        (scroll_ratio * (viewport_height - thumb_size) as f32).round() as usize
+    } else {
+        0
+    };
+
+    // Build scrollbar column
+    let mut scrollbar = RnkBox::new()
+        .flex_direction(FlexDirection::Column)
+        .width(1);
+
+    for i in 0..viewport_height {
+        let ch = if i >= thumb_position && i < thumb_position + thumb_size {
+            "█" // Thumb (solid block)
+        } else {
+            "░" // Track (light shade)
+        };
+        scrollbar = scrollbar.child(
+            Text::new(ch)
+                .color(Color::BrightBlack)
+                .into_element(),
+        );
+    }
+
+    scrollbar.into_element()
+}
+
+/// Render content area with scrollbar on the right
+fn render_content_with_scrollbar(
+    lines: &[RenderLine],
+    content_width: u16,
+    viewport_height: usize,
+    total_lines: usize,
+    scroll_offset: usize,
+) -> Element {
+    let content = render_visible_lines(lines, content_width.saturating_sub(1)); // Reserve 1 col for scrollbar
+    let scrollbar = render_scrollbar(viewport_height, total_lines, scroll_offset);
+
+    RnkBox::new()
+        .flex_direction(FlexDirection::Row)
+        .width(content_width as i32)
+        .child(content)
+        .child(scrollbar)
+        .into_element()
 }
 
 /// Render header banner
