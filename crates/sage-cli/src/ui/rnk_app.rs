@@ -434,12 +434,13 @@ fn app() -> Element {
                 .child(content)
                 .into_element(),
         )
-        .child(Text::new(separator).color(Color::Black).into_element())
+        .child(Text::new(separator).color(Color::BrightBlack).into_element())
         .child(render_input_or_status(&ui_state.input_text, &ui_state.app_state.phase))
         .child(render_status_bar(
             ui_state.permission_mode,
             scroll_percent,
             ui_state.mouse_enabled,
+            term_width,
         ))
         .into_element()
 }
@@ -573,14 +574,14 @@ fn append_message_lines(
     match &msg.content {
         MessageContent::Text(text) => {
             let (prefix, color) = match msg.role {
-                Role::User => ("user: ", Color::Black),
-                Role::Assistant => ("assistant: ", Color::Black),
-                Role::System => ("system: ", Color::Black),
+                Role::User => ("user: ", Color::Blue),
+                Role::Assistant => ("assistant: ", Color::Green),
+                Role::System => ("system: ", Color::Cyan),
             };
             append_wrapped_text(lines, prefix, color, true, text, max_width);
         }
         MessageContent::Thinking(text) => {
-            append_wrapped_text(lines, "thinking: ", Color::Black, false, text, max_width);
+            append_wrapped_text(lines, "thinking: ", Color::BrightBlack, false, text, max_width);
         }
         MessageContent::ToolCall {
             tool_name,
@@ -602,7 +603,7 @@ fn append_message_lines(
                 let (label, color, content) = if r.success {
                     ("  result: ", Color::Magenta, r.output.as_deref().unwrap_or(""))
                 } else {
-                    ("  error: ", Color::Magenta, r.error.as_deref().unwrap_or("Unknown error"))
+                    ("  error: ", Color::Red, r.error.as_deref().unwrap_or("Unknown error"))
                 };
                 if !content.is_empty() {
                     append_wrapped_text(lines, label, color, false, content, max_width);
@@ -695,20 +696,20 @@ fn render_header(session: &SessionState, width: u16) -> Element {
         .width(width as i32)
         .child(
             Text::new(title)
-                .color(Color::Black)
+                .color(Color::Cyan)
                 .bold()
                 .into_element(),
         )
         .child(
             Text::new(model_line)
-                .color(Color::Black)
+                .color(Color::Blue)
                 .into_element(),
         )
-        .child(Text::new(cwd_line).color(Color::Black).into_element())
+        .child(Text::new(cwd_line).color(Color::BrightBlack).into_element())
         .child(Newline::new().into_element())
         .child(
             Text::new(hint_line)
-                .color(Color::Black)
+                .color(Color::BrightBlack)
                 .into_element(),
         )
         .child(Newline::new().into_element())
@@ -736,32 +737,40 @@ fn render_spinner_indicator(message: &str, color: Color) -> Element {
 fn render_input_or_status(input_text: &str, phase: &ExecutionPhase) -> Element {
     match phase {
         ExecutionPhase::Idle | ExecutionPhase::Thinking | ExecutionPhase::Streaming { .. } | ExecutionPhase::ExecutingTool { .. } => {
+            let is_placeholder = input_text.is_empty() && matches!(phase, ExecutionPhase::Idle);
+            let display_text = if is_placeholder {
+                "Try \"edit base.rs to...\""
+            } else {
+                input_text
+            };
+            // Placeholder uses dim grey, actual input uses white
+            let text_color = if is_placeholder {
+                Color::BrightBlack
+            } else {
+                Color::White
+            };
             RnkBox::new()
                 .flex_direction(FlexDirection::Row)
-                .child(Text::new("❯ ").color(Color::Black).bold().into_element())
+                .child(Text::new("❯ ").color(Color::Green).bold().into_element())
                 .child(
-                    Text::new(if input_text.is_empty() && matches!(phase, ExecutionPhase::Idle) {
-                        "Try \"edit base.rs to...\""
-                    } else {
-                        input_text
-                    })
-                    .color(Color::Black)
-                    .into_element(),
+                    Text::new(display_text)
+                        .color(text_color)
+                        .into_element(),
                 )
                 .into_element()
         }
         ExecutionPhase::WaitingConfirmation { prompt } => {
             RnkBox::new()
                 .flex_direction(FlexDirection::Row)
-                .child(Text::new("? ").color(Color::Black).bold().into_element())
-                .child(Text::new(prompt).color(Color::Black).into_element())
+                .child(Text::new("? ").color(Color::Yellow).bold().into_element())
+                .child(Text::new(prompt).color(Color::White).into_element())
                 .into_element()
         }
         ExecutionPhase::Error { message } => {
             RnkBox::new()
                 .flex_direction(FlexDirection::Row)
-                .child(Text::new("✗ ").color(Color::Black).bold().into_element())
-                .child(Text::new(message).color(Color::Black).into_element())
+                .child(Text::new("✗ ").color(Color::Red).bold().into_element())
+                .child(Text::new(message).color(Color::Red).into_element())
                 .into_element()
         }
     }
@@ -772,38 +781,49 @@ fn render_status_bar(
     permission_mode: PermissionMode,
     scroll_percent: Option<u8>,
     mouse_enabled: bool,
+    term_width: u16,
 ) -> Element {
-    let mode_indicator = match permission_mode {
-        PermissionMode::Normal => ("⏵⏵", Color::Black),
-        PermissionMode::Bypass => ("⏵⏵", Color::Black),
-        PermissionMode::Plan => ("⏵⏵", Color::Black),
+    // Mode indicator with different colors per mode
+    let (mode_icon, mode_color) = match permission_mode {
+        PermissionMode::Normal => ("⏵⏵", Color::Yellow),
+        PermissionMode::Bypass => ("⏵⏵", Color::Red),
+        PermissionMode::Plan => ("⏵⏵", Color::Cyan),
     };
 
-    let mut row = RnkBox::new()
+    // Left side: mode indicator + permission text + hints
+    let left_content = RnkBox::new()
         .flex_direction(FlexDirection::Row)
-        .child(Text::new(mode_indicator.0).color(mode_indicator.1).into_element())
+        .child(Text::new(mode_icon).color(mode_color).into_element())
         .child(
             Text::new(format!(" {}", permission_mode.display_text()))
-                .color(Color::Black)
+                .color(Color::BrightBlack)
                 .into_element(),
         )
-        .child(Text::new(" (shift+tab to cycle)").color(Color::Black).into_element());
-    row = row.child(
-        Text::new(format!(" | mouse {}", if mouse_enabled { "on" } else { "off" }))
-            .color(Color::Black)
-            .into_element(),
-    );
-
-    // Add scroll indicator if scrollable
-    if let Some(percent) = scroll_percent {
-        row = row.child(
-            Text::new(format!(" [{:3}%]", percent))
-                .color(Color::Black)
+        .child(Text::new(" (shift+tab to cycle)").color(Color::BrightBlack).into_element())
+        .child(
+            Text::new(format!(" | mouse {}", if mouse_enabled { "on" } else { "off" }))
+                .color(Color::BrightBlack)
                 .into_element(),
-        );
-    }
+        )
+        .into_element();
 
-    row.into_element()
+    // Right side: scroll indicator (if any)
+    let right_content = if let Some(percent) = scroll_percent {
+        Text::new(format!("[{:3}%]", percent))
+            .color(Color::BrightBlack)
+            .into_element()
+    } else {
+        Text::new("").into_element()
+    };
+
+    // Use justify_content to space between left and right
+    RnkBox::new()
+        .flex_direction(FlexDirection::Row)
+        .justify_content(JustifyContent::SpaceBetween)
+        .width(term_width as i32)
+        .child(left_content)
+        .child(right_content)
+        .into_element()
 }
 
 fn status_render_line(app_state: &AppState) -> Option<RenderLine> {
