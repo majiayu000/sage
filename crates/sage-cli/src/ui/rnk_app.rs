@@ -2,7 +2,9 @@
 //!
 //! This module implements the Claude Code-style UI using rnk for rendering.
 //! Key architecture:
-//! - rnk render().fullscreen().run() for declarative rendering
+//! - rnk render().run() for declarative rendering (inline mode, preserves terminal history)
+//! - Raw Mode enabled for keyboard input capture
+//! - Main screen buffer (no alternate screen) - allows scrolling to pre-app content
 //! - Tokio runtime in background thread for async operations
 //! - Shared state via Arc<RwLock<UiState>>
 //! - Cross-thread updates via rnk::request_render()
@@ -1098,6 +1100,8 @@ pub fn run_rnk_app() -> io::Result<()> {
         });
     }
 
-    // Run rnk app with fullscreen mode (like the demo)
-    render(app).fullscreen().run()
+    // Run rnk app with inline mode (preserves terminal history, like Claude Code)
+    // Inline mode uses Raw Mode + main screen buffer (no alternate screen)
+    // This allows scrolling to see content from before the app started
+    render(app).run()
 }
