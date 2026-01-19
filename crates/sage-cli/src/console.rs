@@ -1,4 +1,8 @@
 //! CLI console utilities
+//!
+//! Note: Some methods in this module are for legacy mode or future features.
+
+#![allow(dead_code)]
 
 use colored::*;
 use console::{Key, Term};

@@ -2,6 +2,10 @@
 //!
 //! This module provides an interactive terminal experience for configuring
 //! API keys and providers when starting sage for the first time.
+//!
+//! Note: Some functions in this module are for legacy mode compatibility.
+
+#![allow(dead_code)]
 
 use crate::console::CliConsole;
 use colored::*;

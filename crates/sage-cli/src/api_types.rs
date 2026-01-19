@@ -1,4 +1,8 @@
 //! Shared API types for HTTP/RPC communication
+//!
+//! Note: These types are for future API server support.
+
+#![allow(dead_code)]
 
 use serde::{Deserialize, Serialize};
 

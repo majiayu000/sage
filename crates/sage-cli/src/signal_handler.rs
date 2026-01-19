@@ -1,3 +1,10 @@
+//! Signal Handler for CLI
+//!
+//! Manages Ctrl+C interrupts and application state transitions.
+//! Note: Some items in this module are for legacy mode compatibility.
+
+#![allow(dead_code)]
+
 use futures::stream::StreamExt;
 use parking_lot::Mutex;
 use sage_core::interrupt::{InterruptReason, global_interrupt_manager};

@@ -1,7 +1,6 @@
 //! Slash command processing for the unified command
 
 use crate::console::CliConsole;
-use colored::*;
 use sage_core::commands::{CommandExecutor, CommandRegistry};
 use sage_core::error::SageResult;
 use sage_core::output::OutputMode;
