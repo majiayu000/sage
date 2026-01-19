@@ -426,6 +426,6 @@ pub fn run_demo() -> io::Result<()> {
 
 /// Run in App mode - fullscreen declarative UI with fixed-bottom layout
 /// This is the new Claude Code-style interface.
-pub fn run_app_mode() -> io::Result<()> {
-    crate::ui::run_rnk_app()
+pub async fn run_app_mode() -> io::Result<()> {
+    crate::ui::run_rnk_app().await
 }
