@@ -4,6 +4,10 @@
 //! Supports two modes:
 //! 1. App mode (default): Fullscreen declarative UI with fixed-bottom layout
 //! 2. Streaming mode: Traditional println-based streaming output
+//!
+//! Note: Some functions in this module are for legacy mode compatibility.
+
+#![allow(dead_code)]
 
 use crossterm::{
     event::{self, Event, KeyCode, KeyEvent, KeyModifiers},

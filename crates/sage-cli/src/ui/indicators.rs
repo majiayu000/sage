@@ -2,6 +2,9 @@
 //!
 //! Displays a spinner animation with "Thinking..." message and elapsed time.
 //! Supports ESC key cancellation.
+//! Note: This module is for legacy streaming mode compatibility.
+
+#![allow(dead_code)]
 
 use crossterm::{
     event::{self, Event, KeyCode, KeyEvent},

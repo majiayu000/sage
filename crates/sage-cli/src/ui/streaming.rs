@@ -1,6 +1,9 @@
 //! Streaming Printer - Progressive text output
 //!
 //! Handles streaming text output with proper formatting and chunk handling.
+//! Note: This module is for legacy streaming mode compatibility.
+
+#![allow(dead_code)]
 
 use std::io::{self, Write};
 
