@@ -1,15 +1,10 @@
 //! rnk App Mode - Claude Code-style UI with terminal native scrolling
 //!
 //! This module implements a UI similar to Claude Code:
-//! - Messages are printed directly to terminal (persists in scrollback)
-//! - Input uses raw mode for proper CJK handling
-//! - No fullscreen/alternate buffer - uses native terminal scrolling
+//! - Messages are printed using println + rnk::render_to_string_auto
+//! - Terminal native scrolling for message history
 //! - Header is printed once at startup, then scrolls away
-//!
-//! Key architecture:
-//! - Direct println for messages (no render loop)
-//! - Raw mode only during input
-//! - Spinner in separate thread during LLM calls
+//! - Simple input with status bar before prompt
 
 use crossterm::{
     event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
@@ -35,25 +30,42 @@ use unicode_width::UnicodeWidthChar;
 // Alias rnk's Box to avoid conflict with std::boxed::Box
 use rnk::prelude::Box as RnkBox;
 
-/// Print rnk element to stdout (with newline)
+/// Permission mode for the UI
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PermissionMode {
+    Normal,
+    Bypass,
+    Plan,
+}
+
+impl PermissionMode {
+    pub fn display_text(self) -> &'static str {
+        match self {
+            PermissionMode::Normal => "permissions required",
+            PermissionMode::Bypass => "bypass permissions",
+            PermissionMode::Plan => "plan mode",
+        }
+    }
+
+    pub fn color(self) -> &'static str {
+        match self {
+            PermissionMode::Normal => "\x1b[33m", // Yellow
+            PermissionMode::Bypass => "\x1b[31m", // Red
+            PermissionMode::Plan => "\x1b[36m",   // Cyan
+        }
+    }
+}
+
+/// Print rnk element to stdout
 fn print_element(element: &Element) {
     let output = rnk::render_to_string_auto(element);
     println!("{}", output);
 }
 
-/// Print rnk element to stdout (without newline, for inline prompts)
-fn print_element_inline(element: &Element) {
-    let output = rnk::render_to_string_auto(element);
-    print!("{}", output);
-    let _ = io::stdout().flush();
-}
-
 /// Render header banner
 fn render_header(session: &SessionState) -> Element {
     let version = env!("CARGO_PKG_VERSION");
-    let term_width = crossterm::terminal::size()
-        .map(|(w, _)| w as usize)
-        .unwrap_or(80);
+    let term_width = terminal::size().map(|(w, _)| w as usize).unwrap_or(80);
 
     let title = format!("▐▛███▜▌   Sage Code v{}", version);
     let model_info = format!("{} · {}", session.model, session.provider);
@@ -88,132 +100,120 @@ fn render_header(session: &SessionState) -> Element {
         .into_element()
 }
 
-/// Render user message
-fn render_user_message(text: &str) -> Element {
-    RnkBox::new()
-        .flex_direction(FlexDirection::Row)
-        .child(
-            Text::new("user: ")
-                .color(Color::Blue)
-                .bold()
-                .into_element(),
-        )
-        .child(Text::new(text).color(Color::Blue).into_element())
-        .into_element()
-}
+/// Format a message for printing
+fn format_message(msg: &Message) -> Element {
+    let term_width = terminal::size().map(|(w, _)| w as usize).unwrap_or(80);
 
-/// Render assistant message
-fn render_assistant_message(text: &str) -> Element {
-    let term_width = crossterm::terminal::size()
-        .map(|(w, _)| w as usize)
-        .unwrap_or(80);
-
-    let mut container = RnkBox::new().flex_direction(FlexDirection::Column);
-    let lines = wrap_text_with_prefix("assistant: ", text, term_width);
-
-    for (i, line) in lines.iter().enumerate() {
-        let text_elem = if i == 0 {
-            Text::new(line.as_str()).color(Color::Green).bold()
-        } else {
-            Text::new(line.as_str()).color(Color::Green)
-        };
-        container = container.child(text_elem.into_element());
-    }
-
-    container.into_element()
-}
-
-/// Render tool call
-fn render_tool_call(tool_name: &str, params: &str) -> Element {
-    let term_width = crossterm::terminal::size()
-        .map(|(w, _)| w as usize)
-        .unwrap_or(80);
-
-    let mut container = RnkBox::new().flex_direction(FlexDirection::Column);
-
-    // Tool header
-    let header = format!("● {}", tool_name);
-    container = container.child(
-        Text::new(truncate_to_width(&header, term_width))
-            .color(Color::Magenta)
-            .bold()
-            .into_element(),
-    );
-
-    // Params
-    if !params.trim().is_empty() {
-        let param_lines = wrap_text_with_prefix("  args: ", params, term_width);
-        for line in param_lines {
-            container = container.child(Text::new(line).color(Color::Magenta).into_element());
-        }
-    }
-
-    container.into_element()
-}
-
-/// Render tool result
-fn render_tool_result(output: Option<&str>, error: Option<&str>, success: bool) -> Element {
-    let term_width = crossterm::terminal::size()
-        .map(|(w, _)| w as usize)
-        .unwrap_or(80);
-
-    let (label, color, content) = if success {
-        ("  ⎿ ", Color::Ansi256(245), output.unwrap_or(""))
-    } else {
-        ("  ✗ ", Color::Red, error.unwrap_or("Unknown error"))
-    };
-
-    if content.is_empty() {
-        return Text::new("").into_element();
-    }
-
-    let mut container = RnkBox::new().flex_direction(FlexDirection::Column);
-    let result_lines = wrap_text_with_prefix(label, content, term_width);
-    for line in result_lines {
-        container = container.child(Text::new(line).color(color).into_element());
-    }
-
-    container.into_element()
-}
-
-/// Render prompt
-fn render_prompt() -> Element {
-    Text::new("❯ ").color(Color::Green).bold().into_element()
-}
-
-/// Print a message from state
-fn print_message(msg: &Message) {
     match &msg.content {
-        MessageContent::Text(text) => match msg.role {
-            Role::User => print_element(&render_user_message(text)),
-            Role::Assistant => print_element(&render_assistant_message(text)),
-            Role::System => {
-                println!("\x1b[36msystem: {}\x1b[0m", text);
+        MessageContent::Text(text) => {
+            let (prefix, color) = match msg.role {
+                Role::User => ("user: ", Color::Blue),
+                Role::Assistant => ("assistant: ", Color::Green),
+                Role::System => ("system: ", Color::Cyan),
+            };
+
+            let mut container = RnkBox::new().flex_direction(FlexDirection::Column);
+            let lines = wrap_text_with_prefix(prefix, text, term_width);
+
+            for (i, line) in lines.iter().enumerate() {
+                let text_elem = if i == 0 {
+                    Text::new(line.as_str()).color(color).bold()
+                } else {
+                    Text::new(line.as_str()).color(color)
+                };
+                container = container.child(text_elem.into_element());
             }
-        },
+
+            container.into_element()
+        }
         MessageContent::Thinking(text) => {
             let preview: String = text.lines().take(3).collect::<Vec<_>>().join(" ");
-            println!("\x1b[90mthinking: {}...\x1b[0m", truncate_to_width(&preview, 60));
+            Text::new(format!(
+                "thinking: {}...",
+                truncate_to_width(&preview, term_width.saturating_sub(12))
+            ))
+            .color(Color::BrightBlack)
+            .italic()
+            .into_element()
         }
         MessageContent::ToolCall {
             tool_name,
             params,
             result,
         } => {
-            print_element(&render_tool_call(tool_name, params));
-            if let Some(r) = result {
-                print_element(&render_tool_result(
-                    r.output.as_deref(),
-                    r.error.as_deref(),
-                    r.success,
-                ));
+            let mut container = RnkBox::new().flex_direction(FlexDirection::Column);
+
+            // Tool header
+            container = container.child(
+                Text::new(format!("● {}", tool_name))
+                    .color(Color::Magenta)
+                    .bold()
+                    .into_element(),
+            );
+
+            // Params
+            if !params.trim().is_empty() {
+                let param_lines = wrap_text_with_prefix("  args: ", params, term_width);
+                for line in param_lines {
+                    container =
+                        container.child(Text::new(line).color(Color::Magenta).into_element());
+                }
             }
+
+            // Result
+            if let Some(r) = result {
+                let (label, color, content) = if r.success {
+                    ("  ⎿ ", Color::Ansi256(245), r.output.as_deref().unwrap_or(""))
+                } else {
+                    (
+                        "  ✗ ",
+                        Color::Red,
+                        r.error.as_deref().unwrap_or("Unknown error"),
+                    )
+                };
+                if !content.is_empty() {
+                    let result_lines = wrap_text_with_prefix(label, content, term_width);
+                    for line in result_lines {
+                        container = container.child(Text::new(line).color(color).into_element());
+                    }
+                }
+            }
+
+            container.into_element()
         }
     }
 }
 
-/// Read a line of input with proper CJK character handling
-fn read_line_with_cjk() -> io::Result<String> {
+/// Render user message
+fn render_user_message(text: &str) -> Element {
+    RnkBox::new()
+        .flex_direction(FlexDirection::Row)
+        .child(Text::new("user: ").color(Color::Blue).bold().into_element())
+        .child(Text::new(text).color(Color::Blue).into_element())
+        .into_element()
+}
+
+/// Render prompt with status bar
+fn print_status_and_prompt(permission_mode: PermissionMode) {
+    let mode_color = permission_mode.color();
+    let mode_text = permission_mode.display_text();
+    // Status bar line
+    print!(
+        "{}⏵⏵ {} (shift+tab to cycle)\x1b[0m\n",
+        mode_color, mode_text
+    );
+    // Prompt
+    print!("\x1b[32;1m❯\x1b[0m ");
+    io::stdout().flush().unwrap();
+}
+
+/// Render goodbye message
+fn render_goodbye() -> Element {
+    Text::new("Goodbye!").dim().into_element()
+}
+
+/// Read a line of input with proper CJK character handling and shift+tab detection
+fn read_line_with_cjk(permission_mode: &mut PermissionMode) -> io::Result<Option<String>> {
     let mut input = String::new();
     let mut stdout = io::stdout();
 
@@ -233,13 +233,29 @@ fn read_line_with_cjk() -> io::Result<String> {
                     }
                     KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => {
                         terminal::disable_raw_mode()?;
-                        println!();
-                        return Err(io::Error::new(io::ErrorKind::Interrupted, "Ctrl+C"));
+                        return Ok(None); // Signal to quit
                     }
                     KeyCode::Char('d') if modifiers.contains(KeyModifiers::CONTROL) => {
                         terminal::disable_raw_mode()?;
-                        println!();
-                        return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "Ctrl+D"));
+                        return Ok(None); // Signal to quit
+                    }
+                    KeyCode::BackTab => {
+                        // Shift+Tab - cycle permission mode
+                        *permission_mode = match *permission_mode {
+                            PermissionMode::Normal => PermissionMode::Bypass,
+                            PermissionMode::Bypass => PermissionMode::Plan,
+                            PermissionMode::Plan => PermissionMode::Normal,
+                        };
+                        // Redraw status and prompt
+                        // Move up 2 lines, clear to end of screen, reprint
+                        print!("\x1b[2A\x1b[J");
+                        stdout.flush()?;
+                        terminal::disable_raw_mode()?;
+                        print_status_and_prompt(*permission_mode);
+                        terminal::enable_raw_mode()?;
+                        // Reprint current input
+                        print!("{}", input);
+                        stdout.flush()?;
                     }
                     KeyCode::Char(c) => {
                         input.push(c);
@@ -256,7 +272,7 @@ fn read_line_with_cjk() -> io::Result<String> {
                         }
                     }
                     KeyCode::Esc => {
-                        // Clear input
+                        // Clear input on Escape
                         let total_width: usize =
                             input.chars().map(|c| c.width().unwrap_or(1)).sum();
                         for _ in 0..total_width {
@@ -272,18 +288,18 @@ fn read_line_with_cjk() -> io::Result<String> {
     }
 
     terminal::disable_raw_mode()?;
-    Ok(input)
+    Ok(Some(input))
 }
 
 /// Spinner for loading animation with ESC cancellation support
-struct Spinner {
+pub struct Spinner {
     running: Arc<AtomicBool>,
     cancel_rx: watch::Receiver<bool>,
     handle: Option<std::thread::JoinHandle<()>>,
 }
 
 impl Spinner {
-    fn new(message: &str) -> Self {
+    pub fn new(message: &str) -> Self {
         let running = Arc::new(AtomicBool::new(true));
         let running_clone = running.clone();
         let (cancel_tx, cancel_rx) = watch::channel(false);
@@ -328,11 +344,11 @@ impl Spinner {
         }
     }
 
-    fn get_cancel_receiver(&self) -> watch::Receiver<bool> {
+    pub fn get_cancel_receiver(&self) -> watch::Receiver<bool> {
         self.cancel_rx.clone()
     }
 
-    fn stop(mut self) -> bool {
+    pub fn stop(mut self) -> bool {
         self.running.store(false, Ordering::Relaxed);
         if let Some(handle) = self.handle.take() {
             let _ = handle.join();
@@ -347,7 +363,8 @@ impl Drop for Spinner {
     }
 }
 
-/// Wrap text with a prefix
+// === Text wrapping utilities ===
+
 fn wrap_text_with_prefix(prefix: &str, text: &str, max_width: usize) -> Vec<String> {
     let prefix_width = unicode_width::UnicodeWidthStr::width(prefix);
     let text_width = max_width.saturating_sub(prefix_width);
@@ -389,7 +406,6 @@ fn wrap_text_with_prefix(prefix: &str, text: &str, max_width: usize) -> Vec<Stri
     result
 }
 
-/// Wrap a single line
 fn wrap_single_line(text: &str, max_width: usize) -> Vec<String> {
     if max_width == 0 {
         return vec![];
@@ -474,17 +490,14 @@ async fn create_executor() -> SageResult<UnifiedExecutor> {
     Ok(executor)
 }
 
-/// Run the chat loop (async version - uses existing tokio runtime)
+/// Run the rnk-based app (async version)
+/// Uses simple println + render_to_string pattern like glm_chat
 pub async fn run_rnk_app() -> io::Result<()> {
-    // Initialize event adapter for state tracking
+    // Initialize event adapter
     let adapter = EventAdapter::with_default_state();
     set_global_adapter(adapter.clone());
 
-    // Create input channel
-    let (input_channel, _input_handle) = InputChannel::new(16);
-
-    // Print header
-    println!();
+    // Get initial session info
     let session = SessionState {
         session_id: None,
         model: "unknown".to_string(),
@@ -497,96 +510,89 @@ pub async fn run_rnk_app() -> io::Result<()> {
         step: 0,
         max_steps: None,
     };
+
+    // Print header
+    println!();
     print_element(&render_header(&session));
     println!();
 
     // Create executor
-    let mut executor = match create_executor().await {
-        Ok(e) => e,
-        Err(e) => {
-            eprintln!("\x1b[31mFailed to create executor: {}\x1b[0m", e);
-            return Err(io::Error::new(io::ErrorKind::Other, e.to_string()));
-        }
-    };
+    let mut executor = create_executor().await.map_err(|e| {
+        io::Error::new(io::ErrorKind::Other, format!("Init error: {}", e))
+    })?;
+
+    // Set up input channel
+    let (input_channel, _input_handle) = InputChannel::new(16);
     executor.set_input_channel(input_channel);
+
+    // Permission mode
+    let mut permission_mode = PermissionMode::Normal;
 
     // Track printed messages
     let mut printed_count = 0;
 
+    // Main loop
     loop {
-        // Print any new messages from adapter
-        let state = adapter.get_state();
-        let messages = state.display_messages();
-        for msg in messages.iter().skip(printed_count) {
-            print_message(msg);
-        }
-        printed_count = messages.len();
+        // Print status bar and prompt
+        print_status_and_prompt(permission_mode);
 
-        // Print prompt
-        print_element_inline(&render_prompt());
-
-        // Read input using spawn_blocking to avoid blocking the async runtime
-        let input = match tokio::task::spawn_blocking(read_line_with_cjk).await {
-            Ok(Ok(s)) => s,
-            Ok(Err(e)) if e.kind() == io::ErrorKind::Interrupted => {
-                println!("\x1b[33mGoodbye!\x1b[0m");
-                break;
-            }
-            Ok(Err(e)) if e.kind() == io::ErrorKind::UnexpectedEof => {
-                println!("\x1b[33mGoodbye!\x1b[0m");
-                break;
-            }
-            Ok(Err(e)) => return Err(e),
-            Err(e) => {
-                eprintln!("\x1b[31mInput error: {}\x1b[0m", e);
+        // Read user input
+        let input = match read_line_with_cjk(&mut permission_mode)? {
+            Some(input) => input,
+            None => {
+                // Ctrl+C or Ctrl+D
+                println!();
+                print_element(&render_goodbye());
+                println!();
                 break;
             }
         };
 
         let input = input.trim();
-        if input.is_empty() {
-            continue;
-        }
 
         // Handle special commands
         match input.to_lowercase().as_str() {
-            "quit" | "exit" | "/quit" | "/exit" => {
-                println!("\x1b[33mGoodbye!\x1b[0m");
+            "quit" | "exit" | "/exit" | "/quit" => {
+                println!();
+                print_element(&render_goodbye());
+                println!();
                 break;
             }
-            "clear" | "/clear" => {
+            "clear" => {
                 print!("\x1b[2J\x1b[H");
                 print_element(&render_header(&session));
                 println!();
-                printed_count = 0;
                 continue;
             }
+            "" => continue,
             _ => {}
         }
 
-        // Print user message (move cursor up to replace the input line)
-        print!("\x1b[1A\x1b[2K");
+        // Clear the status and prompt lines, then reprint with user message
+        print!("\x1b[2A\x1b[J");
         print_element(&render_user_message(input));
+        println!();
 
-        // Emit user input event
-        emit_event(AgentEvent::UserInputReceived {
-            input: input.to_string(),
-        });
-
-        // Start spinner in background
-        let spinner = Spinner::new("Thinking...");
-        let cancel_rx = spinner.get_cancel_receiver();
-
-        // Execute task
+        // Create task
         let working_dir = std::env::current_dir()
             .unwrap_or_default()
             .to_string_lossy()
             .to_string();
-        let task_meta = TaskMetadata::new(input, &working_dir);
+        let task = TaskMetadata::new(input, &working_dir);
 
-        // Run with cancellation support
+        // Emit events
+        emit_event(AgentEvent::UserInputReceived {
+            input: input.to_string(),
+        });
+        emit_event(AgentEvent::ThinkingStarted);
+
+        // Show spinner while executing
+        let spinner = Spinner::new("Thinking...");
+        let cancel_rx = spinner.get_cancel_receiver();
+
+        // Execute task with cancellation support
         let result = tokio::select! {
-            result = executor.execute(task_meta) => Some(result),
+            result = executor.execute(task) => result,
             _ = async {
                 let mut rx = cancel_rx;
                 loop {
@@ -595,33 +601,31 @@ pub async fn run_rnk_app() -> io::Result<()> {
                         break;
                     }
                 }
-            } => None, // Cancelled
+            } => {
+                Err(sage_core::error::SageError::Cancelled)
+            }
         };
 
         let was_cancelled = spinner.stop();
 
-        if was_cancelled {
-            println!("\x1b[33m● Cancelled\x1b[0m");
-            continue;
+        // Print any new messages from adapter
+        let app_state = adapter.get_state();
+        let messages = app_state.display_messages();
+        let new_count = messages.len();
+
+        if new_count > printed_count {
+            for msg in messages.iter().skip(printed_count) {
+                print_element(&format_message(msg));
+                println!();
+            }
+            printed_count = new_count;
         }
 
         // Handle result
-        match result {
-            Some(Ok(_)) => {
-                // Print any new messages
-                let state = adapter.get_state();
-                let messages = state.display_messages();
-                for msg in messages.iter().skip(printed_count) {
-                    print_message(msg);
-                }
-                printed_count = messages.len();
-            }
-            Some(Err(e)) => {
-                println!("\x1b[31m● Error: {}\x1b[0m", e);
-            }
-            None => {
-                // Cancelled, already handled above
-            }
+        if was_cancelled {
+            println!("\x1b[33m⦻ Cancelled\x1b[0m");
+        } else if let Err(e) = result {
+            println!("\x1b[31mError: {}\x1b[0m", e);
         }
 
         println!();
