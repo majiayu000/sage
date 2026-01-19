@@ -1,935 +1,439 @@
-//! rnk App Mode - Declarative UI with fixed-bottom layout
+//! rnk App Mode - Claude Code-style UI with terminal native scrolling
 //!
-//! This module implements the Claude Code-style UI using rnk for rendering.
+//! This module implements a UI similar to Claude Code:
+//! - Messages are printed directly to terminal (persists in scrollback)
+//! - Input uses raw mode for proper CJK handling
+//! - No fullscreen/alternate buffer - uses native terminal scrolling
+//! - Header is printed once at startup, then scrolls away
+//!
 //! Key architecture:
-//! - rnk render().run() for declarative rendering (inline mode, preserves terminal history)
-//! - Raw Mode enabled for keyboard input capture
-//! - Main screen buffer (no alternate screen) - allows scrolling to pre-app content
-//! - Tokio runtime in background thread for async operations
-//! - Shared state via Arc<RwLock<UiState>>
-//! - Cross-thread updates via rnk::request_render()
+//! - Direct println for messages (no render loop)
+//! - Raw mode only during input
+//! - Spinner in separate thread during LLM calls
 
-use parking_lot::RwLock;
+use crossterm::{
+    event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
+    terminal,
+};
 use rnk::prelude::*;
-use rnk::hooks::set_mouse_enabled;
 use sage_core::agent::{ExecutionMode, ExecutionOptions, UnifiedExecutor};
 use sage_core::config::load_config;
 use sage_core::error::SageResult;
 use sage_core::input::InputChannel;
 use sage_core::output::OutputMode;
 use sage_core::types::TaskMetadata;
-use sage_core::ui::bridge::state::{AppState, ExecutionPhase, Role, SessionState};
+use sage_core::ui::bridge::state::{ExecutionPhase, Message, MessageContent, Role, SessionState};
 use sage_core::ui::bridge::{emit_event, set_global_adapter, AgentEvent, EventAdapter};
 use sage_tools::get_default_tools;
-use std::io;
-use std::io::Write;
+use std::io::{self, Write};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tokio::sync::mpsc;
+use std::time::Duration;
+use tokio::sync::watch;
+use unicode_width::UnicodeWidthChar;
 
 // Alias rnk's Box to avoid conflict with std::boxed::Box
 use rnk::prelude::Box as RnkBox;
 
-/// Simple file logger for debugging
-fn log(msg: &str) {
-    if let Ok(mut f) = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open("/tmp/sage_debug.log")
-    {
-        let _ = writeln!(f, "[{}] {}", chrono::Local::now().format("%H:%M:%S%.3f"), msg);
-    }
+/// Print rnk element to stdout (with newline)
+fn print_element(element: &Element) {
+    let output = rnk::render_to_string_auto(element);
+    println!("{}", output);
 }
 
-/// Permission mode for the UI
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PermissionMode {
-    Normal,
-    Bypass,
-    Plan,
+/// Print rnk element to stdout (without newline, for inline prompts)
+fn print_element_inline(element: &Element) {
+    let output = rnk::render_to_string_auto(element);
+    print!("{}", output);
+    let _ = io::stdout().flush();
 }
 
-impl PermissionMode {
-    pub fn cycle(self) -> Self {
-        match self {
-            PermissionMode::Normal => PermissionMode::Bypass,
-            PermissionMode::Bypass => PermissionMode::Plan,
-            PermissionMode::Plan => PermissionMode::Normal,
-        }
-    }
+/// Render header banner
+fn render_header(session: &SessionState) -> Element {
+    let version = env!("CARGO_PKG_VERSION");
+    let term_width = crossterm::terminal::size()
+        .map(|(w, _)| w as usize)
+        .unwrap_or(80);
 
-    pub fn display_text(self) -> &'static str {
-        match self {
-            PermissionMode::Normal => "permissions required",
-            PermissionMode::Bypass => "bypass permissions on",
-            PermissionMode::Plan => "plan mode",
-        }
-    }
-}
+    let title = format!("▐▛███▜▌   Sage Code v{}", version);
+    let model_info = format!("{} · {}", session.model, session.provider);
+    let model_line = format!("▝▜█████▛▘  {}", model_info);
+    let cwd_line = format!("  ▘▘ ▝▝    {}", session.working_dir);
+    let hint_line = "  /model to try another model";
 
-/// UI state shared between event loop and executor
-pub struct UiState {
-    /// Core app state
-    pub app_state: AppState,
-    /// Permission mode
-    pub permission_mode: PermissionMode,
-    /// Should quit
-    pub should_quit: bool,
-    /// Error message to display
-    pub error: Option<String>,
-    /// Current input text
-    pub input_text: String,
-    /// Scroll offset (line index of first visible message)
-    pub scroll_offset: usize,
-    /// Mouse capture enabled for scroll support
-    pub mouse_enabled: bool,
-}
-
-impl Default for UiState {
-    fn default() -> Self {
-        Self {
-            app_state: AppState::default(),
-            permission_mode: PermissionMode::Normal,
-            should_quit: false,
-            error: None,
-            input_text: String::new(),
-            scroll_offset: 0,
-            mouse_enabled: true,
-        }
-    }
-}
-
-/// Shared state wrapper
-pub type SharedState = Arc<RwLock<UiState>>;
-
-/// Command from UI to executor
-#[derive(Debug)]
-pub enum UiCommand {
-    /// Submit a task
-    Submit(String),
-    /// Cancel current operation
-    Cancel,
-    /// Quit
-    Quit,
-}
-
-/// Global state for the app component
-static GLOBAL_STATE: std::sync::OnceLock<SharedState> = std::sync::OnceLock::new();
-static GLOBAL_CMD_TX: std::sync::OnceLock<mpsc::Sender<UiCommand>> = std::sync::OnceLock::new();
-
-/// Create executor in background thread
-async fn create_executor() -> SageResult<UnifiedExecutor> {
-    let config = load_config()?;
-    let working_dir = std::env::current_dir().unwrap_or_default();
-    let mode = ExecutionMode::interactive();
-    let options = ExecutionOptions::default()
-        .with_mode(mode)
-        .with_working_directory(&working_dir);
-
-    let mut executor = UnifiedExecutor::with_options(config, options)?;
-    executor.set_output_mode(OutputMode::Rnk);
-    executor.register_tools(get_default_tools());
-    let _ = executor.init_subagent_support();
-    Ok(executor)
-}
-
-/// Run executor loop in background
-async fn executor_loop(
-    state: SharedState,
-    mut rx: mpsc::Receiver<UiCommand>,
-    input_channel: InputChannel,
-) {
-    log("executor_loop: starting");
-    // Create executor
-    let mut executor = match create_executor().await {
-        Ok(e) => {
-            log("executor_loop: executor created successfully");
-            e
-        }
-        Err(e) => {
-            log(&format!("executor_loop: FAILED to create executor: {}", e));
-            {
-                let mut s = state.write();
-                s.error = Some(format!("Failed to create executor: {}", e));
-            }
-            rnk::request_render();
-            return;
-        }
-    };
-    executor.set_input_channel(input_channel);
-
-    log("executor_loop: waiting for commands");
-    // Process commands
-    while let Some(cmd) = rx.recv().await {
-        log(&format!("executor_loop: received command: {:?}", cmd));
-        match cmd {
-            UiCommand::Submit(task) => {
-                emit_event(AgentEvent::UserInputReceived {
-                    input: task.clone(),
-                });
-                emit_event(AgentEvent::ThinkingStarted);
-
-                // Execute task
-                let working_dir = std::env::current_dir()
-                    .unwrap_or_default()
-                    .to_string_lossy()
-                    .to_string();
-                let task_meta = TaskMetadata::new(&task, &working_dir);
-
-                match executor.execute(task_meta).await {
-                    Ok(_outcome) => {}
-                    Err(e) => {
-                        emit_event(AgentEvent::error("execution", e.to_string()));
-                        let mut s = state.write();
-                        s.error = Some(e.to_string());
-                    }
-                }
-                rnk::request_render();
-            }
-            UiCommand::Cancel => {
-                emit_event(AgentEvent::ThinkingStopped);
-                rnk::request_render();
-            }
-            UiCommand::Quit => {
-                state.write().should_quit = true;
-                break;
-            }
-        }
-    }
-}
-
-/// The main app component using rnk hooks
-fn app() -> Element {
-    log("app() called - rendering");
-    let app_ctx = use_app();
-    let scroll = use_scroll();
-
-    // Get shared state
-    let state = GLOBAL_STATE.get().expect("State not initialized");
-    let cmd_tx = GLOBAL_CMD_TX.get().expect("Command channel not initialized");
-
-    // Read current state
-    let ui_state = state.read();
-
-    // Check if should quit
-    if ui_state.should_quit {
-        drop(ui_state);
-        app_ctx.exit();
-        return Text::new("Goodbye!").into_element();
-    }
-
-    // Get terminal size
-    let (term_width, term_height) = crossterm::terminal::size().unwrap_or((80, 24));
-    let header_height = 6u16;
-    let bottom_height = 3u16;
-    let viewport_height = term_height
-        .saturating_sub(header_height + bottom_height) as usize;
-
-
-    // Drop the read lock before setting up handlers
-    drop(ui_state);
-
-    // Handle keyboard input
-    use_input({
-        let state = Arc::clone(state);
-        let cmd_tx = cmd_tx.clone();
-        let app_ctx = app_ctx.clone();
-        let scroll = scroll.clone();
-
-        move |ch, key| {
-            // Ctrl+C to quit
-            if key.ctrl && ch == "c" {
-                let _ = cmd_tx.blocking_send(UiCommand::Quit);
-                app_ctx.exit();
-                return;
-            }
-
-            // Ctrl+Y to toggle mouse capture (enable selection)
-            if key.ctrl && ch == "y" {
-                let mut s = state.write();
-                s.mouse_enabled = !s.mouse_enabled;
-                drop(s);
-                rnk::request_render();
-                return;
-            }
-
-            // Shift+Tab to cycle permission mode
-            if key.tab && key.shift {
-                let mut s = state.write();
-                s.permission_mode = s.permission_mode.cycle();
-                drop(s);
-                rnk::request_render();
-                return;
-            }
-
-            // Arrow keys for scrolling
-            if key.up_arrow {
-                scroll.scroll_up(1);
-                rnk::request_render();
-                return;
-            }
-            if key.down_arrow {
-                scroll.scroll_down(1);
-                rnk::request_render();
-                return;
-            }
-            if key.page_up {
-                scroll.page_up();
-                rnk::request_render();
-                return;
-            }
-            if key.page_down {
-                scroll.page_down();
-                rnk::request_render();
-                return;
-            }
-
-            // Enter to submit
-            if key.return_key {
-                log("Enter pressed");
-                let mut s = state.write();
-                log(&format!("Phase: {:?}", s.app_state.phase));
-                if matches!(s.app_state.phase, ExecutionPhase::Idle) {
-                    let text = std::mem::take(&mut s.input_text);
-                    log(&format!("Input text: '{}'", text));
-                    if !text.is_empty() {
-                        log("Sending submit command...");
-                        // Auto-scroll to bottom
-                        scroll.scroll_to_bottom();
-                        drop(s); // Drop lock before send
-                        // Use try_send instead of blocking_send to avoid blocking rnk's event loop
-                        // If send fails, restore the input text so user doesn't lose their message
-                        match cmd_tx.try_send(UiCommand::Submit(text.clone())) {
-                            Ok(()) => {
-                                log("try_send succeeded");
-                            }
-                            Err(mpsc::error::TrySendError::Full(_)) => {
-                                log("try_send failed: channel full, restoring input");
-                                // Restore input text since send failed
-                                let mut s = state.write();
-                                s.input_text = text;
-                                s.error = Some("System busy, please try again".to_string());
-                            }
-                            Err(mpsc::error::TrySendError::Closed(_)) => {
-                                log("try_send failed: channel closed");
-                                let mut s = state.write();
-                                s.input_text = text;
-                                s.error = Some("Connection lost".to_string());
-                            }
-                        }
-                        rnk::request_render();
-                        log("request_render called");
-                    } else {
-                        log("Text is empty, not sending");
-                    }
-                } else {
-                    log("Not in Idle phase, ignoring Enter");
-                }
-                return;
-            }
-
-            // ESC to cancel - use try_send to avoid blocking UI
-            if key.escape {
-                let s = state.read();
-                if !matches!(s.app_state.phase, ExecutionPhase::Idle) {
-                    drop(s);
-                    // Use try_send instead of blocking_send to prevent UI freeze
-                    if let Err(e) = cmd_tx.try_send(UiCommand::Cancel) {
-                        log(&format!("ESC cancel try_send failed: {:?}", e));
-                    }
-                    rnk::request_render();
-                }
-                return;
-            }
-
-            // Backspace
-            if key.backspace {
-                let mut s = state.write();
-                if matches!(s.app_state.phase, ExecutionPhase::Idle) {
-                    s.input_text.pop();
-                }
-                drop(s);
-                rnk::request_render();
-                return;
-            }
-
-            // Regular character input
-            if !ch.is_empty() && !key.ctrl && !key.alt {
-                let mut s = state.write();
-                if matches!(s.app_state.phase, ExecutionPhase::Idle) {
-                    s.input_text.push_str(ch);
-                }
-                drop(s);
-                rnk::request_render();
-            }
-        }
-    });
-
-    // Re-read state for rendering
-    let ui_state = state.read();
-    let all_messages = ui_state.app_state.display_messages();
-    let status_line = status_render_line(&ui_state.app_state);
-    let all_lines = build_render_lines(&all_messages, status_line, term_width as usize);
-    let total_lines = all_lines.len();
-    scroll.set_content_size(term_width as usize, total_lines.max(1));
-    scroll.set_viewport_size(term_width as usize, viewport_height);
-
-    let scroll_offset = scroll.offset_y();
-    let max_scroll = total_lines.saturating_sub(viewport_height);
-    let scroll_percent = if max_scroll > 0 {
-        Some(((scroll_offset.min(max_scroll) as f32 / max_scroll as f32) * 100.0) as u8)
-    } else {
-        None
-    };
-
-    // Build content area
-    let content = if total_lines == 0 {
-        RnkBox::new()
-            .flex_direction(FlexDirection::Column)
-            .width(term_width as i32)
-            .into_element()
-    } else {
-        let visible_start = scroll_offset.min(total_lines.saturating_sub(viewport_height));
-        let visible_end = (visible_start + viewport_height).min(total_lines);
-        render_content_with_scrollbar(
-            &all_lines[visible_start..visible_end],
-            term_width,
-            viewport_height,
-            total_lines,
-            scroll_offset,
-        )
-    };
-
-    // Build bottom area
-    let separator = "─".repeat(term_width as usize);
-    let header = render_header(&ui_state.app_state.session, term_width);
-
-    if !ui_state.mouse_enabled {
-        set_mouse_enabled(false);
-    } else {
-        // Handle mouse scroll
-        use_mouse({
-            let scroll = scroll.clone();
-            move |mouse| {
-                match mouse.action {
-                    MouseAction::ScrollUp => {
-                        scroll.scroll_up(3);
-                        rnk::request_render();
-                    }
-                    MouseAction::ScrollDown => {
-                        scroll.scroll_down(3);
-                        rnk::request_render();
-                    }
-                    _ => {}
-                }
-            }
-        });
-    }
     RnkBox::new()
         .flex_direction(FlexDirection::Column)
-        .align_items(AlignItems::FlexStart)  // Force left alignment
-        .width(term_width as i32)
-        .height(term_height as i32)
-        // Header
-        .child(header)
-        // Content area with flex_grow
         .child(
-            RnkBox::new()
-                .flex_grow(1.0)
-                .width(term_width as i32)
-                .align_items(AlignItems::FlexStart)  // Force left alignment
-                .flex_direction(FlexDirection::Column)
-                .overflow_y(Overflow::Hidden)
-                .child(content)
+            Text::new(truncate_to_width(&title, term_width))
+                .color(Color::Cyan)
+                .bold()
                 .into_element(),
         )
-        .child(Text::new(separator).color(Color::BrightBlack).into_element())
-        .child(render_input_or_status(&ui_state.input_text, &ui_state.app_state.phase))
-        .child(render_status_bar(
-            ui_state.permission_mode,
-            scroll_percent,
-            ui_state.mouse_enabled,
-            term_width,
-        ))
+        .child(
+            Text::new(truncate_to_width(&model_line, term_width))
+                .color(Color::Blue)
+                .into_element(),
+        )
+        .child(
+            Text::new(truncate_to_width(&cwd_line, term_width))
+                .color(Color::BrightBlack)
+                .into_element(),
+        )
+        .child(Newline::new().into_element())
+        .child(
+            Text::new(truncate_to_width(hint_line, term_width))
+                .color(Color::BrightBlack)
+                .into_element(),
+        )
         .into_element()
 }
 
-/// Represents a wrapped line with information about its origin
-struct WrappedLine {
-    text: String,
-    /// True if this line is a continuation of the previous line (soft wrap)
-    /// False if this is a new paragraph (hard line break from source)
-    is_continuation: bool,
+/// Render user message
+fn render_user_message(text: &str) -> Element {
+    RnkBox::new()
+        .flex_direction(FlexDirection::Row)
+        .child(
+            Text::new("user: ")
+                .color(Color::Blue)
+                .bold()
+                .into_element(),
+        )
+        .child(Text::new(text).color(Color::Blue).into_element())
+        .into_element()
 }
 
-/// Wrap text into lines that fit within max_width
-/// Returns WrappedLine with is_continuation flag to distinguish:
-/// - Hard line breaks (explicit \n in source) -> is_continuation = false
-/// - Soft wraps (word wrapping within a paragraph) -> is_continuation = true
-fn wrap_text_lines(text: &str, max_width: usize) -> Vec<WrappedLine> {
-    if max_width == 0 {
-        return vec![];
+/// Render assistant message
+fn render_assistant_message(text: &str) -> Element {
+    let term_width = crossterm::terminal::size()
+        .map(|(w, _)| w as usize)
+        .unwrap_or(80);
+
+    let mut container = RnkBox::new().flex_direction(FlexDirection::Column);
+    let lines = wrap_text_with_prefix("assistant: ", text, term_width);
+
+    for (i, line) in lines.iter().enumerate() {
+        let text_elem = if i == 0 {
+            Text::new(line.as_str()).color(Color::Green).bold()
+        } else {
+            Text::new(line.as_str()).color(Color::Green)
+        };
+        container = container.child(text_elem.into_element());
     }
 
-    let mut result = Vec::new();
+    container.into_element()
+}
 
-    for paragraph in text.split('\n') {
-        if paragraph.is_empty() {
-            result.push(WrappedLine {
-                text: String::new(),
-                is_continuation: false,
-            });
-            continue;
-        }
+/// Render tool call
+fn render_tool_call(tool_name: &str, params: &str) -> Element {
+    let term_width = crossterm::terminal::size()
+        .map(|(w, _)| w as usize)
+        .unwrap_or(80);
 
-        let mut current_line = String::new();
-        let mut current_width = 0;
-        let mut first_line = true;
+    let mut container = RnkBox::new().flex_direction(FlexDirection::Column);
 
-        for ch in paragraph.chars() {
-            if ch == '\t' {
-                for _ in 0..2 {
-                    if current_width + 1 > max_width && current_width > 0 {
-                        result.push(WrappedLine {
-                            text: current_line,
-                            is_continuation: !first_line,
-                        });
-                        current_line = String::new();
-                        current_width = 0;
-                        first_line = false;
-                    }
-                    current_line.push(' ');
-                    current_width += 1;
-                }
-                continue;
-            }
+    // Tool header
+    let header = format!("● {}", tool_name);
+    container = container.child(
+        Text::new(truncate_to_width(&header, term_width))
+            .color(Color::Magenta)
+            .bold()
+            .into_element(),
+    );
 
-            let ch_width = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
-            if ch_width == 0 {
-                continue;
-            }
-
-            if current_width + ch_width > max_width && current_width > 0 {
-                result.push(WrappedLine {
-                    text: current_line,
-                    is_continuation: !first_line,
-                });
-                current_line = String::new();
-                current_width = 0;
-                first_line = false;
-            }
-
-            current_line.push(ch);
-            current_width += ch_width;
-        }
-
-        if !current_line.is_empty() {
-            result.push(WrappedLine {
-                text: current_line,
-                is_continuation: !first_line,
-            });
+    // Params
+    if !params.trim().is_empty() {
+        let param_lines = wrap_text_with_prefix("  args: ", params, term_width);
+        for line in param_lines {
+            container = container.child(Text::new(line).color(Color::Magenta).into_element());
         }
     }
 
-    if result.is_empty() {
-        result.push(WrappedLine {
-            text: String::new(),
-            is_continuation: false,
-        });
-    }
-
-    result
+    container.into_element()
 }
 
-struct RenderLine {
-    text: String,
-    color: Color,
-    bold: bool,
+/// Render tool result
+fn render_tool_result(output: Option<&str>, error: Option<&str>, success: bool) -> Element {
+    let term_width = crossterm::terminal::size()
+        .map(|(w, _)| w as usize)
+        .unwrap_or(80);
+
+    let (label, color, content) = if success {
+        ("  ⎿ ", Color::Ansi256(245), output.unwrap_or(""))
+    } else {
+        ("  ✗ ", Color::Red, error.unwrap_or("Unknown error"))
+    };
+
+    if content.is_empty() {
+        return Text::new("").into_element();
+    }
+
+    let mut container = RnkBox::new().flex_direction(FlexDirection::Column);
+    let result_lines = wrap_text_with_prefix(label, content, term_width);
+    for line in result_lines {
+        container = container.child(Text::new(line).color(color).into_element());
+    }
+
+    container.into_element()
 }
 
-fn build_render_lines(
-    messages: &[sage_core::ui::bridge::state::Message],
-    status_line: Option<RenderLine>,
-    max_width: usize,
-) -> Vec<RenderLine> {
-    let mut lines = Vec::new();
-    for msg in messages {
-        append_message_lines(&mut lines, msg, max_width);
-        lines.push(RenderLine {
-            text: String::new(),
-            color: Color::Black,
-            bold: false,
-        });
-    }
-    if let Some(line) = status_line {
-        while lines.last().map(|l| l.text.is_empty()).unwrap_or(false) {
-            lines.pop();
-        }
-        lines.push(line);
-    }
-    while lines.last().map(|l| l.text.is_empty()).unwrap_or(false) {
-        lines.pop();
-    }
-    lines
+/// Render prompt
+fn render_prompt() -> Element {
+    Text::new("❯ ").color(Color::Green).bold().into_element()
 }
 
-fn append_message_lines(
-    lines: &mut Vec<RenderLine>,
-    msg: &sage_core::ui::bridge::state::Message,
-    max_width: usize,
-) {
-    use sage_core::ui::bridge::state::MessageContent;
-
+/// Print a message from state
+fn print_message(msg: &Message) {
     match &msg.content {
-        MessageContent::Text(text) => {
-            let (prefix, color) = match msg.role {
-                Role::User => ("user: ", Color::Blue),
-                Role::Assistant => ("assistant: ", Color::Green),
-                Role::System => ("system: ", Color::Cyan),
-            };
-            append_wrapped_text(lines, prefix, color, true, text, max_width);
-        }
+        MessageContent::Text(text) => match msg.role {
+            Role::User => print_element(&render_user_message(text)),
+            Role::Assistant => print_element(&render_assistant_message(text)),
+            Role::System => {
+                println!("\x1b[36msystem: {}\x1b[0m", text);
+            }
+        },
         MessageContent::Thinking(text) => {
-            append_wrapped_text(lines, "thinking: ", Color::BrightBlack, false, text, max_width);
+            let preview: String = text.lines().take(3).collect::<Vec<_>>().join(" ");
+            println!("\x1b[90mthinking: {}...\x1b[0m", truncate_to_width(&preview, 60));
         }
         MessageContent::ToolCall {
             tool_name,
             params,
             result,
         } => {
-            let header = format!("tool: {}", tool_name);
-            lines.push(RenderLine {
-                text: truncate_to_width(&header, max_width),
-                color: Color::Magenta,
-                bold: true,
-            });
-
-            if !params.trim().is_empty() {
-                append_wrapped_text(lines, "  args: ", Color::Magenta, false, params, max_width);
-            }
-
+            print_element(&render_tool_call(tool_name, params));
             if let Some(r) = result {
-                let (label, color, content) = if r.success {
-                    ("  result: ", Color::Magenta, r.output.as_deref().unwrap_or(""))
-                } else {
-                    ("  error: ", Color::Red, r.error.as_deref().unwrap_or("Unknown error"))
-                };
-                if !content.is_empty() {
-                    append_wrapped_text(lines, label, color, false, content, max_width);
+                print_element(&render_tool_result(
+                    r.output.as_deref(),
+                    r.error.as_deref(),
+                    r.success,
+                ));
+            }
+        }
+    }
+}
+
+/// Read a line of input with proper CJK character handling
+fn read_line_with_cjk() -> io::Result<String> {
+    let mut input = String::new();
+    let mut stdout = io::stdout();
+
+    terminal::enable_raw_mode()?;
+
+    loop {
+        if event::poll(Duration::from_millis(100))? {
+            if let Event::Key(KeyEvent {
+                code, modifiers, ..
+            }) = event::read()?
+            {
+                match code {
+                    KeyCode::Enter => {
+                        print!("\r\n");
+                        stdout.flush()?;
+                        break;
+                    }
+                    KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => {
+                        terminal::disable_raw_mode()?;
+                        println!();
+                        return Err(io::Error::new(io::ErrorKind::Interrupted, "Ctrl+C"));
+                    }
+                    KeyCode::Char('d') if modifiers.contains(KeyModifiers::CONTROL) => {
+                        terminal::disable_raw_mode()?;
+                        println!();
+                        return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "Ctrl+D"));
+                    }
+                    KeyCode::Char(c) => {
+                        input.push(c);
+                        print!("{}", c);
+                        stdout.flush()?;
+                    }
+                    KeyCode::Backspace => {
+                        if let Some(ch) = input.pop() {
+                            let char_width = ch.width().unwrap_or(1);
+                            for _ in 0..char_width {
+                                print!("\x08 \x08");
+                            }
+                            stdout.flush()?;
+                        }
+                    }
+                    KeyCode::Esc => {
+                        // Clear input
+                        let total_width: usize =
+                            input.chars().map(|c| c.width().unwrap_or(1)).sum();
+                        for _ in 0..total_width {
+                            print!("\x08 \x08");
+                        }
+                        stdout.flush()?;
+                        input.clear();
+                    }
+                    _ => {}
                 }
             }
         }
     }
+
+    terminal::disable_raw_mode()?;
+    Ok(input)
 }
 
-fn append_wrapped_text(
-    lines: &mut Vec<RenderLine>,
-    prefix: &str,
-    color: Color,
-    bold: bool,
-    text: &str,
-    max_width: usize,
-) {
+/// Spinner for loading animation with ESC cancellation support
+struct Spinner {
+    running: Arc<AtomicBool>,
+    cancel_rx: watch::Receiver<bool>,
+    handle: Option<std::thread::JoinHandle<()>>,
+}
+
+impl Spinner {
+    fn new(message: &str) -> Self {
+        let running = Arc::new(AtomicBool::new(true));
+        let running_clone = running.clone();
+        let (cancel_tx, cancel_rx) = watch::channel(false);
+        let message = message.to_string();
+
+        let handle = std::thread::spawn(move || {
+            let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+            let mut i = 0;
+
+            let _ = terminal::enable_raw_mode();
+
+            while running_clone.load(Ordering::Relaxed) {
+                // Check for ESC key
+                if event::poll(Duration::from_millis(80)).unwrap_or(false) {
+                    if let Ok(Event::Key(KeyEvent {
+                        code: KeyCode::Esc, ..
+                    })) = event::read()
+                    {
+                        let _ = cancel_tx.send(true);
+                        running_clone.store(false, Ordering::Relaxed);
+                        break;
+                    }
+                }
+
+                print!(
+                    "\x1b[2K\r\x1b[33m{} {} \x1b[2m(ESC to cancel)\x1b[0m",
+                    frames[i], message
+                );
+                io::stdout().flush().unwrap();
+                i = (i + 1) % frames.len();
+            }
+
+            let _ = terminal::disable_raw_mode();
+            print!("\x1b[2K\r");
+            io::stdout().flush().unwrap();
+        });
+
+        Self {
+            running,
+            cancel_rx,
+            handle: Some(handle),
+        }
+    }
+
+    fn get_cancel_receiver(&self) -> watch::Receiver<bool> {
+        self.cancel_rx.clone()
+    }
+
+    fn stop(mut self) -> bool {
+        self.running.store(false, Ordering::Relaxed);
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
+        *self.cancel_rx.borrow()
+    }
+}
+
+impl Drop for Spinner {
+    fn drop(&mut self) {
+        self.running.store(false, Ordering::Relaxed);
+    }
+}
+
+/// Wrap text with a prefix
+fn wrap_text_with_prefix(prefix: &str, text: &str, max_width: usize) -> Vec<String> {
     let prefix_width = unicode_width::UnicodeWidthStr::width(prefix);
     let text_width = max_width.saturating_sub(prefix_width);
-    let wrapped = wrap_text_lines(text, text_width);
-    let mut is_first_line = true;
 
-    for line in wrapped {
-        if is_first_line {
-            is_first_line = false;
-            let combined = format!("{}{}", prefix, line.text);
-            lines.push(RenderLine {
-                text: truncate_to_width(&combined, max_width),
-                color,
-                bold,
-            });
+    if text_width == 0 {
+        return vec![truncate_to_width(prefix, max_width)];
+    }
+
+    let mut result = Vec::new();
+    let mut first_line = true;
+
+    for paragraph in text.split('\n') {
+        if paragraph.is_empty() {
+            if first_line {
+                result.push(prefix.to_string());
+                first_line = false;
+            } else {
+                result.push(String::new());
+            }
             continue;
         }
 
-        if line.is_continuation {
-            let indent = " ".repeat(prefix_width);
-            let combined = format!("{}{}", indent, line.text);
-            lines.push(RenderLine {
-                text: truncate_to_width(&combined, max_width),
-                color,
-                bold: false,
-            });
-        } else {
-            lines.push(RenderLine {
-                text: truncate_to_width(line.text.as_str(), max_width),
-                color,
-                bold: false,
-            });
-        }
-    }
-}
-
-fn render_visible_lines(lines: &[RenderLine], width: u16) -> Element {
-    let mut content_box = RnkBox::new()
-        .flex_direction(FlexDirection::Column)
-        .align_items(AlignItems::FlexStart)
-        .width(width as i32);
-
-    for line in lines {
-        let mut text = Text::new(line.text.as_str()).color(line.color);
-        if line.bold {
-            text = text.bold();
-        }
-        content_box = content_box.child(text.into_element());
-    }
-
-    content_box.into_element()
-}
-
-/// Render a visual scrollbar track with thumb
-/// Returns a Column element with scrollbar characters for each visible line
-fn render_scrollbar(
-    viewport_height: usize,
-    total_lines: usize,
-    scroll_offset: usize,
-) -> Element {
-    // If content fits in viewport, no scrollbar needed
-    if total_lines <= viewport_height || viewport_height == 0 {
-        // Return empty column
-        return RnkBox::new()
-            .flex_direction(FlexDirection::Column)
-            .width(1)
-            .into_element();
-    }
-
-    // Calculate thumb size and position
-    // Thumb size is proportional to viewport/total ratio (min 1 line)
-    let thumb_size = ((viewport_height as f32 / total_lines as f32) * viewport_height as f32)
-        .ceil()
-        .max(1.0) as usize;
-
-    // Thumb position based on scroll offset
-    let max_scroll = total_lines.saturating_sub(viewport_height);
-    let thumb_position = if max_scroll > 0 {
-        let scroll_ratio = scroll_offset.min(max_scroll) as f32 / max_scroll as f32;
-        (scroll_ratio * (viewport_height - thumb_size) as f32).round() as usize
-    } else {
-        0
-    };
-
-    // Build scrollbar column
-    let mut scrollbar = RnkBox::new()
-        .flex_direction(FlexDirection::Column)
-        .width(1);
-
-    for i in 0..viewport_height {
-        let ch = if i >= thumb_position && i < thumb_position + thumb_size {
-            "█" // Thumb (solid block)
-        } else {
-            "░" // Track (light shade)
-        };
-        scrollbar = scrollbar.child(
-            Text::new(ch)
-                .color(Color::BrightBlack)
-                .into_element(),
-        );
-    }
-
-    scrollbar.into_element()
-}
-
-/// Render content area with scrollbar on the right
-fn render_content_with_scrollbar(
-    lines: &[RenderLine],
-    content_width: u16,
-    viewport_height: usize,
-    total_lines: usize,
-    scroll_offset: usize,
-) -> Element {
-    let content = render_visible_lines(lines, content_width.saturating_sub(1)); // Reserve 1 col for scrollbar
-    let scrollbar = render_scrollbar(viewport_height, total_lines, scroll_offset);
-
-    RnkBox::new()
-        .flex_direction(FlexDirection::Row)
-        .width(content_width as i32)
-        .child(content)
-        .child(scrollbar)
-        .into_element()
-}
-
-/// Render header banner
-fn render_header(session: &SessionState, width: u16) -> Element {
-    let version = env!("CARGO_PKG_VERSION");
-    let title = truncate_to_width(
-        &format!("▐▛███▜▌   Sage Code v{}", version),
-        width as usize,
-    );
-    let model_info = format!("{} · {}", session.model, session.provider);
-    let model_line = truncate_to_width(
-        &format!("▝▜█████▛▘  {}", model_info),
-        width as usize,
-    );
-    let cwd_line = truncate_to_width(
-        &format!("  ▘▘ ▝▝    {}", session.working_dir),
-        width as usize,
-    );
-    let hint_line = truncate_to_width("  /model to try another model", width as usize);
-
-    RnkBox::new()
-        .flex_direction(FlexDirection::Column)
-        .width(width as i32)
-        .child(
-            Text::new(title)
-                .color(Color::Cyan)
-                .bold()
-                .into_element(),
-        )
-        .child(
-            Text::new(model_line)
-                .color(Color::Blue)
-                .into_element(),
-        )
-        .child(Text::new(cwd_line).color(Color::BrightBlack).into_element())
-        .child(Newline::new().into_element())
-        .child(
-            Text::new(hint_line)
-                .color(Color::BrightBlack)
-                .into_element(),
-        )
-        .child(Newline::new().into_element())
-        .into_element()
-}
-
-/// Render spinner indicator (text-based)
-fn render_spinner_indicator(message: &str, color: Color) -> Element {
-    let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-    let frame_idx = (std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis()
-        / 80) as usize
-        % frames.len();
-
-    RnkBox::new()
-        .flex_direction(FlexDirection::Row)
-        .child(Text::new(frames[frame_idx]).color(color).into_element())
-        .child(Text::new(format!(" {}", message)).color(color).into_element())
-        .into_element()
-}
-
-/// Render input line or current status
-fn render_input_or_status(input_text: &str, phase: &ExecutionPhase) -> Element {
-    match phase {
-        ExecutionPhase::Idle | ExecutionPhase::Thinking | ExecutionPhase::Streaming { .. } | ExecutionPhase::ExecutingTool { .. } => {
-            let is_placeholder = input_text.is_empty() && matches!(phase, ExecutionPhase::Idle);
-            let display_text = if is_placeholder {
-                "Try \"edit base.rs to...\""
+        let wrapped = wrap_single_line(paragraph, text_width);
+        for line in wrapped {
+            if first_line {
+                result.push(format!("{}{}", prefix, line));
+                first_line = false;
             } else {
-                input_text
-            };
-            // Placeholder uses dim grey, actual input uses white
-            let text_color = if is_placeholder {
-                Color::BrightBlack
-            } else {
-                Color::White
-            };
-            RnkBox::new()
-                .flex_direction(FlexDirection::Row)
-                .child(Text::new("❯ ").color(Color::Green).bold().into_element())
-                .child(
-                    Text::new(display_text)
-                        .color(text_color)
-                        .into_element(),
-                )
-                .into_element()
-        }
-        ExecutionPhase::WaitingConfirmation { prompt } => {
-            RnkBox::new()
-                .flex_direction(FlexDirection::Row)
-                .child(Text::new("? ").color(Color::Yellow).bold().into_element())
-                .child(Text::new(prompt).color(Color::White).into_element())
-                .into_element()
-        }
-        ExecutionPhase::Error { message } => {
-            RnkBox::new()
-                .flex_direction(FlexDirection::Row)
-                .child(Text::new("✗ ").color(Color::Red).bold().into_element())
-                .child(Text::new(message).color(Color::Red).into_element())
-                .into_element()
+                let indent = " ".repeat(prefix_width);
+                result.push(format!("{}{}", indent, line));
+            }
         }
     }
-}
 
-/// Render status bar
-fn render_status_bar(
-    permission_mode: PermissionMode,
-    scroll_percent: Option<u8>,
-    mouse_enabled: bool,
-    term_width: u16,
-) -> Element {
-    // Mode indicator with different colors per mode
-    let (mode_icon, mode_color) = match permission_mode {
-        PermissionMode::Normal => ("⏵⏵", Color::Yellow),
-        PermissionMode::Bypass => ("⏵⏵", Color::Red),
-        PermissionMode::Plan => ("⏵⏵", Color::Cyan),
-    };
-
-    // Left side: mode indicator + permission text + hints
-    let left_content = RnkBox::new()
-        .flex_direction(FlexDirection::Row)
-        .child(Text::new(mode_icon).color(mode_color).into_element())
-        .child(
-            Text::new(format!(" {}", permission_mode.display_text()))
-                .color(Color::BrightBlack)
-                .into_element(),
-        )
-        .child(Text::new(" (shift+tab to cycle)").color(Color::BrightBlack).into_element())
-        .child(
-            Text::new(format!(" | mouse {}", if mouse_enabled { "on" } else { "off" }))
-                .color(Color::BrightBlack)
-                .into_element(),
-        )
-        .into_element();
-
-    // Right side: scroll indicator (if any)
-    let right_content = if let Some(percent) = scroll_percent {
-        Text::new(format!("[{:3}%]", percent))
-            .color(Color::BrightBlack)
-            .into_element()
-    } else {
-        Text::new("").into_element()
-    };
-
-    // Use justify_content to space between left and right
-    RnkBox::new()
-        .flex_direction(FlexDirection::Row)
-        .justify_content(JustifyContent::SpaceBetween)
-        .width(term_width as i32)
-        .child(left_content)
-        .child(right_content)
-        .into_element()
-}
-
-fn status_render_line(app_state: &AppState) -> Option<RenderLine> {
-    let now_ms = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis();
-    let spinner_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-    let spinner = spinner_frames[(now_ms / 80 % spinner_frames.len() as u128) as usize];
-    let dot_count = ((now_ms / 400) % 4) as usize;
-    let dots = ".".repeat(dot_count);
-
-    match app_state.phase {
-        ExecutionPhase::Idle => None,
-        ExecutionPhase::Thinking
-        | ExecutionPhase::Streaming { .. }
-        | ExecutionPhase::ExecutingTool { .. } => Some(RenderLine {
-            text: format!("{} {}{}", spinner, app_state.status_text(), dots),
-            color: Color::Yellow,
-            bold: false,
-        }),
-        ExecutionPhase::WaitingConfirmation { .. } | ExecutionPhase::Error { .. } => Some(RenderLine {
-            text: app_state.status_text(),
-            color: Color::Yellow,
-            bold: false,
-        }),
+    if result.is_empty() {
+        result.push(prefix.to_string());
     }
+
+    result
+}
+
+/// Wrap a single line
+fn wrap_single_line(text: &str, max_width: usize) -> Vec<String> {
+    if max_width == 0 {
+        return vec![];
+    }
+
+    let mut result = Vec::new();
+    let mut current_line = String::new();
+    let mut current_width = 0;
+
+    for ch in text.chars() {
+        let ch_width = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
+
+        if ch == '\t' {
+            for _ in 0..2 {
+                if current_width + 1 > max_width && current_width > 0 {
+                    result.push(current_line);
+                    current_line = String::new();
+                    current_width = 0;
+                }
+                current_line.push(' ');
+                current_width += 1;
+            }
+            continue;
+        }
+
+        if ch_width == 0 {
+            continue;
+        }
+
+        if current_width + ch_width > max_width && current_width > 0 {
+            result.push(current_line);
+            current_line = String::new();
+            current_width = 0;
+        }
+
+        current_line.push(ch);
+        current_width += ch_width;
+    }
+
+    if !current_line.is_empty() || result.is_empty() {
+        result.push(current_line);
+    }
+
+    result
 }
 
 fn truncate_to_width(text: &str, max_width: usize) -> String {
@@ -954,154 +458,201 @@ fn truncate_to_width(text: &str, max_width: usize) -> String {
     trimmed
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{build_render_lines, status_render_line, wrap_text_lines};
-    use chrono::Utc;
-    use sage_core::ui::bridge::state::{
-        AppState, Message, MessageContent, MessageMetadata, Role, ToolResult,
-    };
-    use unicode_width::UnicodeWidthStr;
+/// Create executor
+async fn create_executor() -> SageResult<UnifiedExecutor> {
+    let config = load_config()?;
+    let working_dir = std::env::current_dir().unwrap_or_default();
+    let mode = ExecutionMode::interactive();
+    let options = ExecutionOptions::default()
+        .with_mode(mode)
+        .with_working_directory(&working_dir);
 
-    #[test]
-    fn wrap_text_lines_cjk_respects_width() {
-        let text = "你好世界这是一个很长的中文句子用于测试换行是否正确对齐";
-        let max_width = 12;
-        let lines = wrap_text_lines(text, max_width);
-
-        assert!(!lines.is_empty(), "Expected wrapped lines");
-        for line in lines {
-            let width = UnicodeWidthStr::width(line.text.as_str());
-            assert!(
-                width <= max_width,
-                "Line width {} exceeds max width {}: '{}'",
-                width,
-                max_width,
-                line.text
-            );
-        }
-    }
-
-    #[test]
-    fn wrap_text_lines_preserves_paragraph_breaks() {
-        let text = "第一段\n\n第二段";
-        let lines = wrap_text_lines(text, 10);
-        let rendered: Vec<&str> = lines.iter().map(|l| l.text.as_str()).collect();
-        assert!(
-            rendered.contains(&""),
-            "Expected empty line to preserve paragraph break"
-        );
-        assert!(rendered.contains(&"第一段"));
-        assert!(rendered.contains(&"第二段"));
-    }
-
-    #[test]
-    fn tool_call_lines_respect_width() {
-        let msg = Message {
-            role: Role::Assistant,
-            content: MessageContent::ToolCall {
-                tool_name: "Read".to_string(),
-                params: "这是一个很长很长的参数用于测试工具调用换行是否正常".to_string(),
-                result: Some(ToolResult {
-                    success: true,
-                    output: Some("输出内容也很长很长需要换行显示以避免错位".to_string()),
-                    error: None,
-                    duration: std::time::Duration::from_millis(5),
-                }),
-            },
-            timestamp: Utc::now(),
-            metadata: MessageMetadata::default(),
-        };
-
-        let lines = build_render_lines(&[msg], None, 20);
-        for line in lines {
-            let width = UnicodeWidthStr::width(line.text.as_str());
-            assert!(
-                width <= 20,
-                "Tool line width {} exceeds max width: '{}'",
-                width,
-                line.text
-            );
-        }
-    }
-
-    #[test]
-    fn status_line_renders_for_streaming() {
-        let mut state = AppState::default();
-        state.start_streaming();
-        let line = status_render_line(&state).expect("Streaming should produce status line");
-        let lines = build_render_lines(&[], Some(line), 40);
-        assert!(
-            lines.iter().any(|l| l.text.contains("Streaming")),
-            "Expected streaming status line in output"
-        );
-    }
+    let mut executor = UnifiedExecutor::with_options(config, options)?;
+    executor.set_output_mode(OutputMode::Rnk);
+    executor.register_tools(get_default_tools());
+    let _ = executor.init_subagent_support();
+    Ok(executor)
 }
 
-/// Run the rnk-based app
-pub fn run_rnk_app() -> io::Result<()> {
+/// Run the chat loop (async version - uses existing tokio runtime)
+pub async fn run_rnk_app() -> io::Result<()> {
+    // Initialize event adapter for state tracking
     let adapter = EventAdapter::with_default_state();
     set_global_adapter(adapter.clone());
 
-    // Create shared state
-    let state: SharedState = Arc::new(RwLock::new(UiState::default()));
-    let _ = GLOBAL_STATE.set(Arc::clone(&state));
-
-    // Create command channel
-    let (cmd_tx, cmd_rx) = mpsc::channel::<UiCommand>(16);
-    let _ = GLOBAL_CMD_TX.set(cmd_tx);
-
-    // Create input channel for executor
+    // Create input channel
     let (input_channel, _input_handle) = InputChannel::new(16);
 
-    // Clone state for executor thread
-    let executor_state = Arc::clone(&state);
+    // Print header
+    println!();
+    let session = SessionState {
+        session_id: None,
+        model: "unknown".to_string(),
+        provider: "unknown".to_string(),
+        working_dir: std::env::current_dir()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string(),
+        git_branch: None,
+        step: 0,
+        max_steps: None,
+    };
+    print_element(&render_header(&session));
+    println!();
 
-    // Spawn tokio runtime in background thread
-    std::thread::spawn(move || {
-        let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
-        rt.block_on(executor_loop(executor_state, cmd_rx, input_channel));
-    });
+    // Create executor
+    let mut executor = match create_executor().await {
+        Ok(e) => e,
+        Err(e) => {
+            eprintln!("\x1b[31mFailed to create executor: {}\x1b[0m", e);
+            return Err(io::Error::new(io::ErrorKind::Other, e.to_string()));
+        }
+    };
+    executor.set_input_channel(input_channel);
 
-    let state_for_updates = Arc::clone(&state);
-    std::thread::spawn(move || {
-        let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
-        rt.block_on(async move {
-            let mut rx = adapter.subscribe();
-            loop {
-                if rx.changed().await.is_err() {
-                    break;
-                }
-                let snapshot = rx.borrow().clone();
-                {
-                    let mut s = state_for_updates.write();
-                    s.app_state = snapshot;
-                }
-                rnk::request_render();
+    // Track printed messages
+    let mut printed_count = 0;
+
+    loop {
+        // Print any new messages from adapter
+        let state = adapter.get_state();
+        let messages = state.display_messages();
+        for msg in messages.iter().skip(printed_count) {
+            print_message(msg);
+        }
+        printed_count = messages.len();
+
+        // Print prompt
+        print_element_inline(&render_prompt());
+
+        // Read input using spawn_blocking to avoid blocking the async runtime
+        let input = match tokio::task::spawn_blocking(read_line_with_cjk).await {
+            Ok(Ok(s)) => s,
+            Ok(Err(e)) if e.kind() == io::ErrorKind::Interrupted => {
+                println!("\x1b[33mGoodbye!\x1b[0m");
+                break;
             }
-        });
-    });
+            Ok(Err(e)) if e.kind() == io::ErrorKind::UnexpectedEof => {
+                println!("\x1b[33mGoodbye!\x1b[0m");
+                break;
+            }
+            Ok(Err(e)) => return Err(e),
+            Err(e) => {
+                eprintln!("\x1b[31mInput error: {}\x1b[0m", e);
+                break;
+            }
+        };
 
-    let animation_state = Arc::clone(&state);
-    std::thread::spawn(move || loop {
-        std::thread::sleep(std::time::Duration::from_millis(120));
-        let s = animation_state.read();
-        if s.should_quit {
-            break;
+        let input = input.trim();
+        if input.is_empty() {
+            continue;
         }
-        if !matches!(s.app_state.phase, ExecutionPhase::Idle) {
-            rnk::request_render();
-        }
-    });
 
-    if let Ok(working_dir) = std::env::current_dir() {
-        emit_event(AgentEvent::WorkingDirectoryChanged {
-            path: working_dir.to_string_lossy().to_string(),
+        // Handle special commands
+        match input.to_lowercase().as_str() {
+            "quit" | "exit" | "/quit" | "/exit" => {
+                println!("\x1b[33mGoodbye!\x1b[0m");
+                break;
+            }
+            "clear" | "/clear" => {
+                print!("\x1b[2J\x1b[H");
+                print_element(&render_header(&session));
+                println!();
+                printed_count = 0;
+                continue;
+            }
+            _ => {}
+        }
+
+        // Print user message (move cursor up to replace the input line)
+        print!("\x1b[1A\x1b[2K");
+        print_element(&render_user_message(input));
+
+        // Emit user input event
+        emit_event(AgentEvent::UserInputReceived {
+            input: input.to_string(),
         });
+
+        // Start spinner in background
+        let spinner = Spinner::new("Thinking...");
+        let cancel_rx = spinner.get_cancel_receiver();
+
+        // Execute task
+        let working_dir = std::env::current_dir()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+        let task_meta = TaskMetadata::new(input, &working_dir);
+
+        // Run with cancellation support
+        let result = tokio::select! {
+            result = executor.execute(task_meta) => Some(result),
+            _ = async {
+                let mut rx = cancel_rx;
+                loop {
+                    rx.changed().await.ok();
+                    if *rx.borrow() {
+                        break;
+                    }
+                }
+            } => None, // Cancelled
+        };
+
+        let was_cancelled = spinner.stop();
+
+        if was_cancelled {
+            println!("\x1b[33m● Cancelled\x1b[0m");
+            continue;
+        }
+
+        // Handle result
+        match result {
+            Some(Ok(_)) => {
+                // Print any new messages
+                let state = adapter.get_state();
+                let messages = state.display_messages();
+                for msg in messages.iter().skip(printed_count) {
+                    print_message(msg);
+                }
+                printed_count = messages.len();
+            }
+            Some(Err(e)) => {
+                println!("\x1b[31m● Error: {}\x1b[0m", e);
+            }
+            None => {
+                // Cancelled, already handled above
+            }
+        }
+
+        println!();
     }
 
-    // Run rnk app with inline mode (preserves terminal history, like Claude Code)
-    // Inline mode uses Raw Mode + main screen buffer (no alternate screen)
-    // This allows scrolling to see content from before the app started
-    render(app).run()
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wrap_text_basic() {
+        let lines = wrap_single_line("hello world", 20);
+        assert_eq!(lines, vec!["hello world"]);
+    }
+
+    #[test]
+    fn wrap_text_long() {
+        let lines = wrap_single_line("hello world this is a long line", 10);
+        assert!(lines.len() > 1);
+        for line in &lines {
+            assert!(unicode_width::UnicodeWidthStr::width(line.as_str()) <= 10);
+        }
+    }
+
+    #[test]
+    fn wrap_with_prefix() {
+        let lines = wrap_text_with_prefix("user: ", "hello world", 20);
+        assert!(!lines.is_empty());
+        assert!(lines[0].starts_with("user: "));
+    }
 }
