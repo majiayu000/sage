@@ -1,5 +1,6 @@
 //! Utility tools
 
+pub mod arg_sanitizer;
 pub mod enhanced_errors;
 pub mod monitoring;
 pub mod response_builder;
@@ -25,4 +26,10 @@ pub use util_functions::{
 pub use response_builder::{
     CommandResponse, FileOperationResponse, NetworkResponse, SearchResponse, simple_error,
     simple_success, with_file_info, with_pagination,
+};
+
+// Re-export argument sanitization utilities
+pub use arg_sanitizer::{
+    reject_shell_chars, validate_env_var, validate_image_reference, validate_namespace,
+    validate_path_arg, validate_port_mapping, validate_resource_name, validate_safe_arg,
 };
