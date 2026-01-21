@@ -253,9 +253,21 @@ fn render_header(session: &SessionState) -> Element {
 fn app() -> Element {
     let app_ctx = use_app();
 
-    // Get shared state
-    let state = GLOBAL_STATE.get().expect("State not initialized");
-    let cmd_tx = GLOBAL_CMD_TX.get().expect("Command channel not initialized");
+    // Get shared state (return error UI if not initialized)
+    let state = match GLOBAL_STATE.get() {
+        Some(s) => s,
+        None => {
+            tracing::error!("Global state not initialized");
+            return Text::new("Error: State not initialized").color(Color::Red).into_element();
+        }
+    };
+    let cmd_tx = match GLOBAL_CMD_TX.get() {
+        Some(tx) => tx,
+        None => {
+            tracing::error!("Command channel not initialized");
+            return Text::new("Error: Command channel not initialized").color(Color::Red).into_element();
+        }
+    };
 
     // Get terminal size
     let term_width = terminal::size().map(|(w, _)| w).unwrap_or(80);

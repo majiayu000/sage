@@ -148,6 +148,20 @@ impl SettingsLocations {
 
         Ok(sage_dir)
     }
+
+    /// Initialize a new .sage directory in the project root (async version)
+    pub async fn init_project_settings_async(&self) -> std::io::Result<PathBuf> {
+        let root = self
+            .project_root
+            .as_ref()
+            .cloned()
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+
+        let sage_dir = root.join(".sage");
+        tokio::fs::create_dir_all(&sage_dir).await?;
+
+        Ok(sage_dir)
+    }
 }
 
 impl Default for SettingsLocations {
