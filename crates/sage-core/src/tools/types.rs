@@ -2,6 +2,9 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
+
+use super::base::ToolError;
 
 /// A tool call from the LLM
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -85,6 +88,60 @@ impl ToolCall {
     /// Get a number argument
     pub fn get_number(&self, key: &str) -> Option<f64> {
         self.get_argument::<f64>(key)
+    }
+
+    /// Get an integer argument
+    pub fn get_i64(&self, key: &str) -> Option<i64> {
+        self.get_argument::<i64>(key)
+    }
+
+    /// Require a string argument, returning error if missing
+    ///
+    /// Use this instead of `get_string().ok_or_else(...)` to reduce boilerplate.
+    pub fn require_string(&self, key: &str) -> Result<String, ToolError> {
+        self.get_string(key).ok_or_else(|| {
+            ToolError::InvalidArguments(format!("Missing required parameter '{}'", key))
+        })
+    }
+
+    /// Require a path argument, returning error if missing
+    pub fn require_path(&self, key: &str) -> Result<PathBuf, ToolError> {
+        self.get_string(key)
+            .map(PathBuf::from)
+            .ok_or_else(|| {
+                ToolError::InvalidArguments(format!("Missing required parameter '{}'", key))
+            })
+    }
+
+    /// Require a boolean argument, returning error if missing
+    pub fn require_bool(&self, key: &str) -> Result<bool, ToolError> {
+        self.get_bool(key).ok_or_else(|| {
+            ToolError::InvalidArguments(format!("Missing required parameter '{}'", key))
+        })
+    }
+
+    /// Require a number argument, returning error if missing
+    pub fn require_number(&self, key: &str) -> Result<f64, ToolError> {
+        self.get_number(key).ok_or_else(|| {
+            ToolError::InvalidArguments(format!("Missing required parameter '{}'", key))
+        })
+    }
+
+    /// Require an integer argument, returning error if missing
+    pub fn require_i64(&self, key: &str) -> Result<i64, ToolError> {
+        self.get_i64(key).ok_or_else(|| {
+            ToolError::InvalidArguments(format!("Missing required parameter '{}'", key))
+        })
+    }
+
+    /// Get a typed argument, returning error if missing or wrong type
+    pub fn require_argument<T>(&self, key: &str) -> Result<T, ToolError>
+    where
+        T: for<'de> Deserialize<'de>,
+    {
+        self.get_argument::<T>(key).ok_or_else(|| {
+            ToolError::InvalidArguments(format!("Missing or invalid parameter '{}'", key))
+        })
     }
 }
 

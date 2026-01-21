@@ -31,19 +31,19 @@ pub fn get_global_memory_manager() -> Option<SharedMemoryManager> {
 }
 
 /// Ensure memory manager is initialized (creates in-memory if not)
-pub(crate) async fn ensure_memory_manager() -> SharedMemoryManager {
+pub(crate) async fn ensure_memory_manager() -> Result<SharedMemoryManager, String> {
     if let Some(manager) = GLOBAL_MEMORY_MANAGER.get() {
-        return manager.clone();
+        return Ok(manager.clone());
     }
 
     // Initialize with default in-memory storage
     let config = MemoryConfig::default();
     let manager = MemoryManager::new(config)
         .await
-        .expect("Failed to create default memory manager");
+        .map_err(|e| format!("Failed to create default memory manager: {}", e))?;
     let shared = Arc::new(manager);
 
     // Try to set, if fails (race condition), just get the existing one
     let _ = GLOBAL_MEMORY_MANAGER.set(shared.clone());
-    GLOBAL_MEMORY_MANAGER.get().cloned().unwrap_or(shared)
+    Ok(GLOBAL_MEMORY_MANAGER.get().cloned().unwrap_or(shared))
 }

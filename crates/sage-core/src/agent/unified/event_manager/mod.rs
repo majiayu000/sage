@@ -41,9 +41,9 @@ pub enum ExecutionEvent {
 
 /// Event manager that dispatches events to the UI
 pub struct EventManager {
-    current_step: u32,
+    pub(crate) current_step: u32,
     debug_events: bool,
-    is_animating: bool,
+    pub(crate) is_animating: bool,
 }
 
 impl EventManager {

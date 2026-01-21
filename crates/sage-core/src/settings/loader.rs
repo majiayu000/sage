@@ -10,6 +10,9 @@ use super::locations::SettingsLocations;
 use super::types::Settings;
 use super::validation::SettingsValidator;
 
+// Re-export tokio::fs for async operations
+use tokio::fs as async_fs;
+
 /// Settings source priority (from lowest to highest)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SettingsSource {
@@ -248,6 +251,113 @@ impl SettingsLoader {
         Ok(())
     }
 
+    /// Load and merge settings from all sources (async version)
+    ///
+    /// This is the preferred method in async contexts to avoid blocking the runtime.
+    pub async fn load_async(&self) -> SageResult<Settings> {
+        let mut settings = Settings::default();
+
+        // Load user settings
+        if self.locations.user.exists() {
+            match self.load_from_file_async(&self.locations.user).await {
+                Ok(user_settings) => {
+                    tracing::debug!("Loaded user settings from {:?}", self.locations.user);
+                    settings.merge(user_settings);
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to load user settings from {:?}: {}",
+                        self.locations.user,
+                        e
+                    );
+                }
+            }
+        }
+
+        // Load project settings
+        if let Some(ref project_path) = self.locations.project {
+            if project_path.exists() {
+                match self.load_from_file_async(project_path).await {
+                    Ok(project_settings) => {
+                        tracing::debug!("Loaded project settings from {:?}", project_path);
+                        settings.merge(project_settings);
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "Failed to load project settings from {:?}: {}",
+                            project_path,
+                            e
+                        );
+                    }
+                }
+            }
+        }
+
+        // Load local settings
+        if let Some(ref local_path) = self.locations.local {
+            if local_path.exists() {
+                match self.load_from_file_async(local_path).await {
+                    Ok(local_settings) => {
+                        tracing::debug!("Loaded local settings from {:?}", local_path);
+                        settings.merge(local_settings);
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "Failed to load local settings from {:?}: {}",
+                            local_path,
+                            e
+                        );
+                    }
+                }
+            }
+        }
+
+        // Apply environment variable overrides
+        settings.apply_env_overrides();
+
+        // Validate if enabled
+        if self.validate {
+            self.validator.validate(&settings)?;
+        }
+
+        Ok(settings)
+    }
+
+    /// Load settings from a specific file (async version)
+    pub async fn load_from_file_async(&self, path: impl AsRef<Path>) -> SageResult<Settings> {
+        let path = path.as_ref();
+        let content = async_fs::read_to_string(path).await.map_err(|e| {
+            SageError::config(format!("Failed to read settings file {:?}: {}", path, e))
+        })?;
+
+        self.parse_settings(&content, path)
+    }
+
+    /// Save settings to a specific file (async version)
+    pub async fn save_to_file_async(
+        &self,
+        settings: &Settings,
+        path: impl AsRef<Path>,
+    ) -> SageResult<()> {
+        let path = path.as_ref();
+
+        // Create parent directories if needed
+        if let Some(parent) = path.parent() {
+            async_fs::create_dir_all(parent).await.map_err(|e| {
+                SageError::config(format!("Failed to create settings directory: {}", e))
+            })?;
+        }
+
+        let content = serde_json::to_string_pretty(settings)
+            .map_err(|e| SageError::config(format!("Failed to serialize settings: {}", e)))?;
+
+        async_fs::write(path, content).await.map_err(|e| {
+            SageError::config(format!("Failed to write settings file {:?}: {}", path, e))
+        })?;
+
+        Ok(())
+    }
+
     /// Get information about loaded settings
     pub fn get_load_info(&self) -> SettingsLoadInfo {
         SettingsLoadInfo {
@@ -442,5 +552,43 @@ mod tests {
         assert!(info.project_exists);
         assert!(!info.local_exists);
         assert_eq!(info.existing_count(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_load_async() {
+        let temp_dir = TempDir::new().unwrap();
+        let sage_dir = temp_dir.path().join(".sage");
+        fs::create_dir(&sage_dir).unwrap();
+
+        let settings_content = r#"{"permissions": {"allow": ["Read(*)"], "default_behavior": "allow"}}"#;
+        fs::write(sage_dir.join("settings.json"), settings_content).unwrap();
+
+        let loader = SettingsLoader::from_directory(temp_dir.path());
+        let settings = loader.load_async().await.unwrap();
+
+        assert_eq!(settings.permissions.allow.len(), 1);
+        assert_eq!(
+            settings.permissions.default_behavior,
+            PermissionBehavior::Allow
+        );
+    }
+
+    #[tokio::test]
+    async fn test_save_and_load_async() {
+        let temp_dir = TempDir::new().unwrap();
+        let settings_path = temp_dir.path().join("settings.json");
+
+        let loader = SettingsLoader::from_directory(temp_dir.path());
+
+        let mut settings = Settings::default();
+        settings.permissions.allow.push("Read(*)".to_string());
+
+        loader
+            .save_to_file_async(&settings, &settings_path)
+            .await
+            .unwrap();
+        let loaded = loader.load_from_file_async(&settings_path).await.unwrap();
+
+        assert_eq!(loaded.permissions.allow, settings.permissions.allow);
     }
 }

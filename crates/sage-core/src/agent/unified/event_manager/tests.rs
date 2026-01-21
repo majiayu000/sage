@@ -6,7 +6,7 @@ use super::*;
 async fn test_event_manager_creation() {
     let manager = EventManager::new();
     assert_eq!(manager.current_step, 0);
-    assert!(!manager.is_animating());
+    assert!(!manager.is_animating);
 }
 
 #[tokio::test]
@@ -27,13 +27,11 @@ async fn test_emit_thinking_started_and_stopped() {
         .emit(ExecutionEvent::ThinkingStarted { step_number: 1 })
         .await;
 
-    // Small delay to let animation start
-    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+    assert!(manager.is_animating);
 
     // Stop thinking
     manager.emit(ExecutionEvent::ThinkingStopped).await;
 
     // Animation should be stopped
-    let state = manager.animation_state().await;
-    assert_eq!(state, AnimationState::Idle);
+    assert!(!manager.is_animating);
 }

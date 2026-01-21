@@ -50,9 +50,7 @@ impl Tool for ReadTool {
     }
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
-        let file_path = call.get_string("file_path").ok_or_else(|| {
-            ToolError::InvalidArguments("Missing 'file_path' parameter".to_string())
-        })?;
+        let file_path = call.require_string("file_path")?;
 
         let offset = call.get_number("offset").map(|n| n as usize);
         let limit = call.get_number("limit").map(|n| n as usize);
@@ -63,9 +61,7 @@ impl Tool for ReadTool {
     }
 
     fn validate(&self, call: &ToolCall) -> Result<(), ToolError> {
-        let _file_path = call.get_string("file_path").ok_or_else(|| {
-            ToolError::InvalidArguments("Missing 'file_path' parameter".to_string())
-        })?;
+        call.require_string("file_path")?;
 
         // Validate offset if provided
         if let Some(offset) = call.get_number("offset") {

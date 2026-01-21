@@ -65,7 +65,9 @@ impl Tool for RememberTool {
         };
 
         // Get or initialize memory manager
-        let manager = ensure_memory_manager().await;
+        let manager = ensure_memory_manager().await.map_err(|e| {
+            ToolError::ExecutionFailed(format!("Failed to initialize memory manager: {}", e))
+        })?;
 
         // Create memory with metadata including tags
         let metadata = MemoryMetadata::default().with_tags(tags.clone());

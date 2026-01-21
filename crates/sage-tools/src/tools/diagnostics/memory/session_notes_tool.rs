@@ -43,7 +43,9 @@ impl Tool for SessionNotesTool {
             .get_string("action")
             .ok_or_else(|| ToolError::InvalidArguments("Missing 'action' parameter".to_string()))?;
 
-        let manager = ensure_memory_manager().await;
+        let manager = ensure_memory_manager().await.map_err(|e| {
+            ToolError::ExecutionFailed(format!("Failed to initialize memory manager: {}", e))
+        })?;
 
         let response = match action.to_lowercase().as_str() {
             "list" => {
