@@ -1,0 +1,235 @@
+//! rnk App Mode - Claude Code-style UI with terminal native scrolling
+//!
+//! This module implements a UI similar to Claude Code using rnk's inline mode:
+//! - Messages are printed using rnk::println() (persists in terminal scrollback)
+//! - Fixed bottom UI with separator, input, and status bar
+//! - Terminal native scrolling for message history
+//!
+//! Key architecture:
+//! - render(app).run() for inline mode with fixed bottom UI
+//! - rnk::println() for messages that persist in scrollback
+//! - Background thread polls for new messages and prints them
+
+mod components;
+mod executor;
+mod formatting;
+mod state;
+
+pub use state::{SharedState, UiCommand, UiState};
+
+use components::{render_input, render_spinner, render_status_bar};
+use crossterm::terminal;
+use executor::{background_loop, executor_loop};
+use parking_lot::RwLock;
+use rnk::prelude::*;
+use sage_core::input::InputChannel;
+use sage_core::ui::bridge::{set_global_adapter, EventAdapter};
+use std::io;
+use std::sync::Arc;
+use tokio::sync::mpsc;
+
+// Alias rnk's Box to avoid conflict with std::boxed::Box
+use rnk::prelude::Box as RnkBox;
+
+/// Global state for the app component
+static GLOBAL_STATE: std::sync::OnceLock<SharedState> = std::sync::OnceLock::new();
+static GLOBAL_CMD_TX: std::sync::OnceLock<mpsc::Sender<UiCommand>> = std::sync::OnceLock::new();
+static GLOBAL_ADAPTER: std::sync::OnceLock<EventAdapter> = std::sync::OnceLock::new();
+
+/// The main app component - renders fixed bottom UI (separator + input/spinner + status bar)
+fn app() -> Element {
+    let app_ctx = use_app();
+
+    // Get shared state (return error UI if not initialized)
+    let state = match GLOBAL_STATE.get() {
+        Some(s) => s,
+        None => {
+            tracing::error!("Global state not initialized");
+            return Text::new("Error: State not initialized")
+                .color(Color::Red)
+                .into_element();
+        }
+    };
+    let cmd_tx = match GLOBAL_CMD_TX.get() {
+        Some(tx) => tx,
+        None => {
+            tracing::error!("Command channel not initialized");
+            return Text::new("Error: Command channel not initialized")
+                .color(Color::Red)
+                .into_element();
+        }
+    };
+
+    // Get terminal size
+    let term_width = terminal::size().map(|(w, _)| w).unwrap_or(80);
+
+    // Check if should quit
+    {
+        let ui_state = state.read();
+        if ui_state.should_quit {
+            drop(ui_state);
+            app_ctx.exit();
+            return Text::new("Goodbye!").into_element();
+        }
+    }
+
+    // Handle keyboard input
+    use_input({
+        let state = Arc::clone(state);
+        let cmd_tx = cmd_tx.clone();
+        let app_ctx = app_ctx.clone();
+
+        move |ch, key| {
+            // Ctrl+C to quit
+            if key.ctrl && ch == "c" {
+                let _ = cmd_tx.blocking_send(UiCommand::Quit);
+                app_ctx.exit();
+                return;
+            }
+
+            // ESC to cancel
+            if key.escape {
+                let s = state.read();
+                if s.is_busy {
+                    drop(s);
+                    let _ = cmd_tx.blocking_send(UiCommand::Cancel);
+                }
+                return;
+            }
+
+            // Shift+Tab to cycle permission mode
+            if key.shift && ch == "\t" {
+                let mut s = state.write();
+                s.permission_mode = s.permission_mode.cycle();
+                return;
+            }
+
+            // Don't accept input while busy
+            {
+                let s = state.read();
+                if s.is_busy {
+                    return;
+                }
+            }
+
+            // Backspace
+            if key.backspace {
+                let mut s = state.write();
+                s.input_text.pop();
+                return;
+            }
+
+            // Enter to submit
+            if key.return_key {
+                let text = {
+                    let mut s = state.write();
+                    let text = s.input_text.clone();
+                    s.input_text.clear();
+                    text
+                };
+                if !text.is_empty() {
+                    let _ = cmd_tx.blocking_send(UiCommand::Submit(text));
+                }
+                return;
+            }
+
+            // Regular character input
+            if !ch.is_empty() && !key.ctrl && !key.alt {
+                let mut s = state.write();
+                s.input_text.push_str(ch);
+            }
+        }
+    });
+
+    // Read current state
+    let ui_state = state.read();
+    let is_busy = ui_state.is_busy;
+    let input_text = ui_state.input_text.clone();
+    let status_text = ui_state.status_text.clone();
+    let permission_mode = ui_state.permission_mode;
+    drop(ui_state);
+
+    // Build UI components
+    let separator = Text::new("─".repeat(term_width as usize))
+        .color(Color::BrightBlack)
+        .dim()
+        .into_element();
+
+    let input_or_spinner = if is_busy {
+        render_spinner(&status_text)
+    } else {
+        render_input(&input_text)
+    };
+
+    let status_bar = render_status_bar(permission_mode);
+
+    // Layout: separator, input/spinner, status bar
+    RnkBox::new()
+        .flex_direction(FlexDirection::Column)
+        .child(separator)
+        .child(input_or_spinner)
+        .child(status_bar)
+        .into_element()
+}
+
+/// Run the rnk-based app (async version)
+pub async fn run_rnk_app() -> io::Result<()> {
+    // Initialize event adapter
+    let adapter = EventAdapter::with_default_state();
+    set_global_adapter(adapter.clone());
+    let _ = GLOBAL_ADAPTER.set(adapter.clone());
+
+    // Create shared state
+    let state: SharedState = Arc::new(RwLock::new(UiState::default()));
+    let _ = GLOBAL_STATE.set(Arc::clone(&state));
+
+    // Create command channel
+    let (cmd_tx, cmd_rx) = mpsc::channel::<UiCommand>(16);
+    let _ = GLOBAL_CMD_TX.set(cmd_tx);
+
+    // Create input channel for executor
+    let (input_channel, _input_handle) = InputChannel::new(16);
+
+    // Spawn executor task
+    let executor_state = Arc::clone(&state);
+    tokio::spawn(async move {
+        executor_loop(executor_state, cmd_rx, input_channel).await;
+    });
+
+    // Background thread for printing messages and updating spinner
+    let bg_state = Arc::clone(&state);
+    let bg_adapter = adapter;
+    std::thread::spawn(move || {
+        background_loop(bg_state, bg_adapter);
+    });
+
+    // Run rnk app in inline mode (preserves terminal history)
+    render(app).run()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::formatting::{wrap_single_line, wrap_text_with_prefix};
+
+    #[test]
+    fn wrap_text_basic() {
+        let lines = wrap_single_line("hello world", 20);
+        assert_eq!(lines, vec!["hello world"]);
+    }
+
+    #[test]
+    fn wrap_text_long() {
+        let lines = wrap_single_line("hello world this is a long line", 10);
+        assert!(lines.len() > 1);
+        for line in &lines {
+            assert!(unicode_width::UnicodeWidthStr::width(line.as_str()) <= 10);
+        }
+    }
+
+    #[test]
+    fn wrap_with_prefix() {
+        let lines = wrap_text_with_prefix("user: ", "hello world", 20);
+        assert!(!lines.is_empty());
+        assert!(lines[0].starts_with("user: "));
+    }
+}

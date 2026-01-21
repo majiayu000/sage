@@ -10,6 +10,9 @@ pub mod openai;
 pub mod openrouter;
 pub mod provider_trait;
 
+#[cfg(test)]
+mod openai_tests;
+
 pub use anthropic::AnthropicProvider;
 pub use azure::AzureProvider;
 pub use doubao::DoubaoProvider;

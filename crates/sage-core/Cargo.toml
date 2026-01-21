@@ -86,5 +86,6 @@ mockall = { workspace = true }
 tokio-test = "0.4"
 tracing-subscriber = { workspace = true }
 serial_test = "3"
+wiremock = "0.6"
 
 # Note: Examples are defined in the root workspace package to avoid filename collisions
