@@ -420,6 +420,7 @@ mod tests {
         // Create a fake home directory
         let fake_home = temp_dir.path().join("home");
         std::fs::create_dir_all(&fake_home).unwrap();
+        // SAFETY: This test runs in isolation and does not access HOME concurrently
         unsafe {
             std::env::set_var("HOME", &fake_home);
         }

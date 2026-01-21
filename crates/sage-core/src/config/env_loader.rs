@@ -120,11 +120,20 @@ fn load_provider_from_env(config: &mut Config, provider: &str, env_prefix: &str)
 
 #[cfg(test)]
 mod tests {
+    //! Test module for environment variable loading.
+    //!
+    //! # Safety
+    //! All unsafe blocks in this module use `std::env::set_var`/`remove_var` which are
+    //! unsafe in Rust 2024 due to potential data races in multi-threaded environments.
+    //! These tests are marked with `#[serial]` to ensure they run sequentially,
+    //! preventing any concurrent access to environment variables.
+
     use super::*;
     use serial_test::serial;
 
     /// Clean up any leftover env vars from other tests that might run in parallel
     fn clean_test_env() {
+        // SAFETY: Tests are run serially (#[serial]) so no concurrent access to env vars
         unsafe {
             std::env::remove_var("GOOGLE_TEMPERATURE");
             std::env::remove_var("GOOGLE_API_KEY");
@@ -135,6 +144,7 @@ mod tests {
     #[serial]
     fn test_load_from_env_basic() {
         clean_test_env();
+        // SAFETY: Tests are run serially (#[serial]) so no concurrent access to env vars
         unsafe {
             std::env::set_var("SAGE_DEFAULT_PROVIDER", "google");
             std::env::set_var("SAGE_MAX_STEPS", "75");
@@ -144,6 +154,7 @@ mod tests {
         assert_eq!(config.default_provider, "google");
         assert_eq!(config.max_steps, Some(75));
 
+        // SAFETY: Tests are run serially (#[serial]) so no concurrent access to env vars
         unsafe {
             std::env::remove_var("SAGE_DEFAULT_PROVIDER");
             std::env::remove_var("SAGE_MAX_STEPS");
