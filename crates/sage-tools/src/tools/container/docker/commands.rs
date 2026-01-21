@@ -1,10 +1,14 @@
 //! Docker command execution logic
 
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use tokio::process::Command;
 use tracing::debug;
 
 use super::types::DockerOperation;
+use super::validation::{
+    validate_container, validate_dockerfile_path, validate_env_key, validate_image,
+    validate_network, validate_port_mapping, validate_volume, validate_volume_mount,
+};
 
 /// Execute a docker command
 pub async fn execute_docker_command(args: &[&str], working_dir: Option<&str>) -> Result<String> {
@@ -63,6 +67,35 @@ pub async fn handle_container_operation(operation: &DockerOperation, working_dir
             execute_docker_command(&args, working_dir).await
         }
         DockerOperation::RunContainer { image, name, ports, volumes, environment, detach, remove, command } => {
+            // Validate image
+            validate_image(image)?;
+
+            // Validate container name if provided
+            if let Some(name) = name {
+                validate_container(name)?;
+            }
+
+            // Validate port mappings
+            if let Some(ports) = ports {
+                for port in ports {
+                    validate_port_mapping(port)?;
+                }
+            }
+
+            // Validate volume mounts
+            if let Some(volumes) = volumes {
+                for volume in volumes {
+                    validate_volume_mount(volume)?;
+                }
+            }
+
+            // Validate environment variable keys
+            if let Some(env) = environment {
+                for (key, _) in env {
+                    validate_env_key(key)?;
+                }
+            }
+
             let mut args = vec!["run"];
 
             if *detach {
@@ -103,12 +136,15 @@ pub async fn handle_container_operation(operation: &DockerOperation, working_dir
             execute_docker_command(&args, working_dir).await
         }
         DockerOperation::StopContainer { container } => {
+            validate_container(container)?;
             execute_docker_command(&["stop", container], working_dir).await
         }
         DockerOperation::StartContainer { container } => {
+            validate_container(container)?;
             execute_docker_command(&["start", container], working_dir).await
         }
         DockerOperation::RemoveContainer { container, force } => {
+            validate_container(container)?;
             let mut args = vec!["rm"];
             if *force {
                 args.push("-f");
@@ -117,6 +153,7 @@ pub async fn handle_container_operation(operation: &DockerOperation, working_dir
             execute_docker_command(&args, working_dir).await
         }
         DockerOperation::ContainerLogs { container, follow, tail } => {
+            validate_container(container)?;
             let mut args = vec!["logs"];
             if *follow {
                 args.push("-f");
@@ -128,6 +165,7 @@ pub async fn handle_container_operation(operation: &DockerOperation, working_dir
             execute_docker_command(&args, working_dir).await
         }
         DockerOperation::Exec { container, command, interactive } => {
+            validate_container(container)?;
             let mut args = vec!["exec"];
             if *interactive {
                 args.push("-it");
@@ -137,6 +175,7 @@ pub async fn handle_container_operation(operation: &DockerOperation, working_dir
             execute_docker_command(&args, working_dir).await
         }
         DockerOperation::InspectContainer { container } => {
+            validate_container(container)?;
             execute_docker_command(&["inspect", container], working_dir).await
         }
         _ => Err(anyhow::anyhow!("Invalid container operation")),
@@ -154,6 +193,17 @@ pub async fn handle_image_operation(operation: &DockerOperation, working_dir: Op
             execute_docker_command(&args, working_dir).await
         }
         DockerOperation::BuildImage { dockerfile_path, tag, context, build_args } => {
+            // Validate dockerfile path and tag
+            validate_dockerfile_path(dockerfile_path)?;
+            validate_image(tag)?;
+
+            // Validate build args keys
+            if let Some(build_args) = build_args {
+                for (key, _) in build_args {
+                    validate_env_key(key)?;
+                }
+            }
+
             let mut args = vec!["build"];
             args.extend(vec!["-t", tag]);
 
@@ -171,12 +221,15 @@ pub async fn handle_image_operation(operation: &DockerOperation, working_dir: Op
             execute_docker_command(&args, working_dir).await
         }
         DockerOperation::PullImage { image } => {
+            validate_image(image)?;
             execute_docker_command(&["pull", image], working_dir).await
         }
         DockerOperation::PushImage { image } => {
+            validate_image(image)?;
             execute_docker_command(&["push", image], working_dir).await
         }
         DockerOperation::RemoveImage { image, force } => {
+            validate_image(image)?;
             let mut args = vec!["rmi"];
             if *force {
                 args.push("-f");
@@ -185,6 +238,8 @@ pub async fn handle_image_operation(operation: &DockerOperation, working_dir: Op
             execute_docker_command(&args, working_dir).await
         }
         DockerOperation::TagImage { source, target } => {
+            validate_image(source)?;
+            validate_image(target)?;
             execute_docker_command(&["tag", source, target], working_dir).await
         }
         _ => Err(anyhow::anyhow!("Invalid image operation")),
@@ -198,9 +253,11 @@ pub async fn handle_volume_operation(operation: &DockerOperation, working_dir: O
             execute_docker_command(&["volume", "ls"], working_dir).await
         }
         DockerOperation::CreateVolume { name } => {
+            validate_volume(name)?;
             execute_docker_command(&["volume", "create", name], working_dir).await
         }
         DockerOperation::RemoveVolume { name } => {
+            validate_volume(name)?;
             execute_docker_command(&["volume", "rm", name], working_dir).await
         }
         _ => Err(anyhow::anyhow!("Invalid volume operation")),
@@ -214,6 +271,7 @@ pub async fn handle_network_operation(operation: &DockerOperation, working_dir: 
             execute_docker_command(&["network", "ls"], working_dir).await
         }
         DockerOperation::CreateNetwork { name, driver } => {
+            validate_network(name)?;
             let mut args = vec!["network", "create"];
             if let Some(driver) = driver {
                 args.extend(vec!["--driver", driver]);
@@ -222,6 +280,7 @@ pub async fn handle_network_operation(operation: &DockerOperation, working_dir: 
             execute_docker_command(&args, working_dir).await
         }
         DockerOperation::RemoveNetwork { name } => {
+            validate_network(name)?;
             execute_docker_command(&["network", "rm", name], working_dir).await
         }
         _ => Err(anyhow::anyhow!("Invalid network operation")),
