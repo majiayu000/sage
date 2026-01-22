@@ -11,7 +11,7 @@ mod input;
 mod mcp;
 mod outcome;
 mod session;
-mod slash_commands;
+pub mod slash_commands;
 mod stream;
 mod utils;
 

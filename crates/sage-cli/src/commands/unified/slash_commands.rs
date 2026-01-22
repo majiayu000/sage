@@ -2,7 +2,7 @@
 
 use crate::console::CliConsole;
 use sage_core::commands::{CommandExecutor, CommandRegistry};
-use sage_core::error::{SageError, SageResult};
+use sage_core::error::SageResult;
 use sage_core::output::OutputMode;
 use std::sync::Arc;
 
@@ -14,6 +14,8 @@ pub enum SlashCommandAction {
     Handled,
     /// Set output mode
     SetOutputMode(OutputMode),
+    /// Resume a session
+    Resume { session_id: Option<String> },
 }
 
 /// Process slash commands
@@ -76,12 +78,9 @@ pub async fn handle_interactive_command_v2(
     use sage_core::commands::types::InteractiveCommand;
 
     match cmd {
-        InteractiveCommand::Resume { session_id, .. } => Err(SageError::invalid_input(
-            format!(
-                "Resume is not available here. Use `sage -c` or `sage -r {}`.",
-                session_id.as_deref().unwrap_or("<id>")
-            ),
-        )),
+        InteractiveCommand::Resume { session_id, .. } => {
+            Ok(SlashCommandAction::Resume { session_id: session_id.clone() })
+        }
         InteractiveCommand::Title { title } => {
             console.warn(&format!(
                 "Title command not available in non-interactive mode. Title: {}",

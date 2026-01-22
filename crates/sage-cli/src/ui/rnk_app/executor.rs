@@ -1,6 +1,8 @@
 //! Executor logic for rnk app
 
 use super::state::{SharedState, UiCommand};
+use crate::commands::unified::slash_commands::{process_slash_command, SlashCommandAction};
+use crate::console::CliConsole;
 use rnk::prelude::*;
 use sage_core::agent::{ExecutionMode, ExecutionOptions, UnifiedExecutor};
 use sage_core::config::load_config;
@@ -12,6 +14,34 @@ use sage_core::ui::bridge::state::ExecutionPhase;
 use sage_core::ui::bridge::{emit_event, AgentEvent};
 use sage_tools::get_default_tools;
 use tokio::sync::mpsc;
+
+/// Handle resume command
+async fn handle_resume(
+    executor: &mut UnifiedExecutor,
+    session_id: Option<&str>,
+) -> SageResult<String> {
+    let session_id = match session_id {
+        Some(id) => id.to_string(),
+        None => {
+            // Get most recent session
+            match executor.get_most_recent_session().await? {
+                Some(metadata) => metadata.id,
+                None => {
+                    return Err(sage_core::error::SageError::config(
+                        "No previous sessions found. Start a new session first.",
+                    ));
+                }
+            }
+        }
+    };
+
+    // Restore the session
+    let restored_messages = executor.restore_session(&session_id).await?;
+    Ok(format!(
+        "Session {} restored ({} messages)",
+        session_id, restored_messages.len()
+    ))
+}
 
 /// Create executor with default configuration
 pub async fn create_executor() -> SageResult<UnifiedExecutor> {
@@ -55,6 +85,75 @@ pub async fn executor_loop(
     while let Some(cmd) = rx.recv().await {
         match cmd {
             UiCommand::Submit(task) => {
+                let working_dir = std::env::current_dir().unwrap_or_default();
+                let console = CliConsole::new(false);
+
+                // Process slash commands first
+                let prompt = match process_slash_command(&task, &console, &working_dir).await {
+                    Ok(SlashCommandAction::Prompt(p)) => p,
+                    Ok(SlashCommandAction::Handled) => {
+                        // Command was handled locally, no LLM needed
+                        rnk::request_render();
+                        continue;
+                    }
+                    Ok(SlashCommandAction::SetOutputMode(mode)) => {
+                        executor.set_output_mode(mode);
+                        rnk::println(
+                            Text::new(format!("Output mode set to {:?}", mode))
+                                .color(Color::Cyan)
+                                .dim()
+                                .into_element(),
+                        );
+                        rnk::request_render();
+                        continue;
+                    }
+                    Ok(SlashCommandAction::Resume { session_id }) => {
+                        // Handle resume command
+                        {
+                            let mut s = state.write();
+                            s.is_busy = true;
+                            s.status_text = "Resuming session...".to_string();
+                        }
+                        rnk::request_render();
+
+                        let result = handle_resume(&mut executor, session_id.as_deref()).await;
+
+                        {
+                            let mut s = state.write();
+                            s.is_busy = false;
+                            s.status_text.clear();
+                        }
+
+                        match result {
+                            Ok(msg) => {
+                                rnk::println(
+                                    Text::new(format!("✓ {}", msg))
+                                        .color(Color::Green)
+                                        .into_element(),
+                                );
+                            }
+                            Err(e) => {
+                                rnk::println(
+                                    Text::new(format!("✗ Resume failed: {}", e))
+                                        .color(Color::Red)
+                                        .into_element(),
+                                );
+                            }
+                        }
+                        rnk::request_render();
+                        continue;
+                    }
+                    Err(e) => {
+                        rnk::println(
+                            Text::new(format!("Command error: {}", e))
+                                .color(Color::Red)
+                                .into_element(),
+                        );
+                        rnk::request_render();
+                        continue;
+                    }
+                };
+
                 {
                     let mut s = state.write();
                     s.is_busy = true;
@@ -62,15 +161,12 @@ pub async fn executor_loop(
                 }
                 rnk::request_render();
 
-                emit_event(AgentEvent::UserInputReceived { input: task.clone() });
+                emit_event(AgentEvent::UserInputReceived { input: prompt.clone() });
                 emit_event(AgentEvent::ThinkingStarted);
 
                 // Execute task
-                let working_dir = std::env::current_dir()
-                    .unwrap_or_default()
-                    .to_string_lossy()
-                    .to_string();
-                let task_meta = TaskMetadata::new(&task, &working_dir);
+                let working_dir_str = working_dir.to_string_lossy().to_string();
+                let task_meta = TaskMetadata::new(&prompt, &working_dir_str);
 
                 match executor.execute(task_meta).await {
                     Ok(_) => {}
@@ -115,7 +211,7 @@ pub fn background_loop(
     state: SharedState,
     adapter: sage_core::ui::bridge::EventAdapter,
 ) {
-    use super::components::{format_message, render_header};
+    use super::components::{format_message, render_error, render_header};
 
     loop {
         std::thread::sleep(std::time::Duration::from_millis(80));
@@ -172,12 +268,7 @@ pub fn background_loop(
                 if !ui_state.error_displayed {
                     ui_state.error_displayed = true;
                     drop(ui_state);
-                    rnk::println(
-                        Text::new(format!("Error: {}", message))
-                            .color(Color::Red)
-                            .bold()
-                            .into_element(),
-                    );
+                    rnk::println(render_error(message));
                     rnk::println(""); // Empty line
                     ui_state = state.write();
                 }

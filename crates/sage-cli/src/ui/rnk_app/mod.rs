@@ -17,7 +17,7 @@ mod state;
 
 pub use state::{SharedState, UiCommand, UiState};
 
-use components::{render_input, render_spinner, render_status_bar};
+use components::{render_command_suggestions, render_input, render_spinner, render_status_bar};
 use crossterm::terminal;
 use executor::{background_loop, executor_loop};
 use parking_lot::RwLock;
@@ -163,10 +163,23 @@ fn app() -> Element {
 
     let status_bar = render_status_bar(permission_mode);
 
-    // Layout: separator, input/spinner, status bar
-    RnkBox::new()
+    // Show command suggestions when typing /
+    let suggestions = if !is_busy {
+        render_command_suggestions(&input_text)
+    } else {
+        None
+    };
+
+    // Layout: separator, suggestions (if any), input/spinner, status bar
+    let mut layout = RnkBox::new()
         .flex_direction(FlexDirection::Column)
-        .child(separator)
+        .child(separator);
+
+    if let Some(sugg) = suggestions {
+        layout = layout.child(sugg);
+    }
+
+    layout
         .child(input_or_spinner)
         .child(status_bar)
         .into_element()

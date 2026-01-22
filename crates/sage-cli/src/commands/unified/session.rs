@@ -39,6 +39,14 @@ pub async fn execute_single_task(
             console.info("Output mode updated.");
             return Ok(());
         }
+        SlashCommandAction::Resume { session_id } => {
+            // Resume is handled at a higher level, not here
+            console.warn(&format!(
+                "Resume command should be handled at session level. Use `sage -c` or `sage -r {}`.",
+                session_id.as_deref().unwrap_or("<id>")
+            ));
+            return Ok(());
+        }
     };
 
     // Execute the task
