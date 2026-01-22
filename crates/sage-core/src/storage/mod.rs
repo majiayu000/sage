@@ -30,7 +30,7 @@ pub use backend::{
     QueryResult, SqliteBackend,
 };
 pub use config::{
-    ConnectionPool, FallbackStrategy, PostgresConfig, RetryConfig, SqliteConfig, StorageConfig,
+    ConnectionPool, FallbackStrategy, PostgresConfig, SqliteConfig, StorageConfig,
 };
 pub use manager::{
     ConnectionStatus, HealthInfo, SharedStorageManager, StorageManager, StorageStats,

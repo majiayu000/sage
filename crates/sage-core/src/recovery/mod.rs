@@ -19,7 +19,8 @@ pub use circuit_breaker::{
     CircuitBreakerStats, CircuitState,
 };
 pub use rate_limiter::{
-    RateLimitError, RateLimitGuard, RateLimiter, RateLimiterConfig, SlidingWindowRateLimiter,
+    RateLimitConfig, RateLimitError, RateLimitGuard, RateLimiter, RateLimiterConfig,
+    SlidingWindowRateLimiter,
 };
 pub use retry::{RetryConfig, RetryPolicy, RetryResult, Retryable};
 pub use supervisor::{SupervisionPolicy, SupervisionResult, Supervisor, TaskSupervisor};

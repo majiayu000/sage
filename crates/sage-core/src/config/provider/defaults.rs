@@ -14,11 +14,7 @@ impl ProviderDefaults {
             .with_base_url("https://api.openai.com/v1")
             .with_timeouts(TimeoutConfig::default())
             .with_max_retries(3)
-            .with_rate_limit(RateLimitConfig {
-                requests_per_minute: Some(60),
-                tokens_per_minute: Some(100_000),
-                max_concurrent_requests: Some(10),
-            })
+            .with_rate_limit(RateLimitConfig::for_provider("openai"))
     }
 
     /// Get default configuration for Anthropic
@@ -28,11 +24,7 @@ impl ProviderDefaults {
             .with_api_version("2023-06-01")
             .with_timeouts(TimeoutConfig::default())
             .with_max_retries(3)
-            .with_rate_limit(RateLimitConfig {
-                requests_per_minute: Some(50),
-                tokens_per_minute: Some(80_000),
-                max_concurrent_requests: Some(5),
-            })
+            .with_rate_limit(RateLimitConfig::for_provider("anthropic"))
     }
 
     /// Get default configuration for Google
@@ -41,11 +33,7 @@ impl ProviderDefaults {
             .with_base_url("https://generativelanguage.googleapis.com")
             .with_timeouts(TimeoutConfig::default())
             .with_max_retries(3)
-            .with_rate_limit(RateLimitConfig {
-                requests_per_minute: Some(60),
-                tokens_per_minute: Some(120_000),
-                max_concurrent_requests: Some(10),
-            })
+            .with_rate_limit(RateLimitConfig::for_provider("google"))
     }
 
     /// Get default configuration for Ollama (local models)
@@ -58,11 +46,7 @@ impl ProviderDefaults {
                     .with_request_timeout_secs(120),
             )
             .with_max_retries(1)
-            .with_rate_limit(RateLimitConfig {
-                requests_per_minute: None,
-                tokens_per_minute: None,
-                max_concurrent_requests: Some(1),
-            })
+            .with_rate_limit(RateLimitConfig::for_provider("ollama"))
     }
 
     /// Get default configuration for GLM (Zhipu AI)
@@ -71,11 +55,7 @@ impl ProviderDefaults {
             .with_base_url("https://open.bigmodel.cn/api/anthropic")
             .with_timeouts(TimeoutConfig::default())
             .with_max_retries(3)
-            .with_rate_limit(RateLimitConfig {
-                requests_per_minute: Some(60),
-                tokens_per_minute: Some(100_000),
-                max_concurrent_requests: Some(10),
-            })
+            .with_rate_limit(RateLimitConfig::for_provider("glm"))
     }
 
     /// Get default configuration for Azure OpenAI
@@ -83,11 +63,7 @@ impl ProviderDefaults {
         ProviderConfig::new("azure")
             .with_timeouts(TimeoutConfig::default())
             .with_max_retries(3)
-            .with_rate_limit(RateLimitConfig {
-                requests_per_minute: Some(60),
-                tokens_per_minute: Some(100_000),
-                max_concurrent_requests: Some(10),
-            })
+            .with_rate_limit(RateLimitConfig::for_provider("azure"))
     }
 
     /// Get default configuration for OpenRouter
@@ -100,11 +76,7 @@ impl ProviderDefaults {
                     .with_request_timeout_secs(90),
             )
             .with_max_retries(3)
-            .with_rate_limit(RateLimitConfig {
-                requests_per_minute: Some(60),
-                tokens_per_minute: Some(100_000),
-                max_concurrent_requests: Some(10),
-            })
+            .with_rate_limit(RateLimitConfig::for_provider("openrouter"))
     }
 
     /// Get default configuration for Doubao
@@ -112,11 +84,7 @@ impl ProviderDefaults {
         ProviderConfig::new("doubao")
             .with_timeouts(TimeoutConfig::default())
             .with_max_retries(3)
-            .with_rate_limit(RateLimitConfig {
-                requests_per_minute: Some(60),
-                tokens_per_minute: Some(100_000),
-                max_concurrent_requests: Some(10),
-            })
+            .with_rate_limit(RateLimitConfig::for_provider("doubao"))
     }
 
     /// Get default configuration for a provider by name

@@ -12,4 +12,4 @@ mod tests;
 
 pub use limiter::RateLimiter;
 pub use strategies::SlidingWindowRateLimiter;
-pub use types::{RateLimitError, RateLimitGuard, RateLimiterConfig};
+pub use types::{RateLimitConfig, RateLimitError, RateLimitGuard, RateLimiterConfig};

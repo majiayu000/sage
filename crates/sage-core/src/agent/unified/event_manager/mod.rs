@@ -28,7 +28,11 @@ pub enum ExecutionEvent {
         has_tool_calls: bool,
     },
     /// A session has started
-    SessionStarted { session_id: String },
+    SessionStarted {
+        session_id: String,
+        model: String,
+        provider: String,
+    },
     /// A session has ended
     SessionEnded { session_id: String },
     /// The agent has started thinking
@@ -107,12 +111,16 @@ impl EventManager {
                     result_preview: None,
                 });
             }
-            ExecutionEvent::SessionStarted { ref session_id } => {
-                tracing::info!("Session started: {}", session_id);
+            ExecutionEvent::SessionStarted {
+                ref session_id,
+                ref model,
+                ref provider,
+            } => {
+                tracing::info!("Session started: {} ({}/{})", session_id, provider, model);
                 emit_event(AgentEvent::SessionStarted {
                     session_id: session_id.clone(),
-                    model: String::new(),
-                    provider: String::new(),
+                    model: model.clone(),
+                    provider: provider.clone(),
                 });
             }
             ExecutionEvent::SessionEnded { ref session_id } => {

@@ -2,27 +2,60 @@
 //!
 //! Provides configurable retry behavior with backoff strategies.
 
-use super::backoff::{BackoffStrategy, ExponentialBackoff};
+use super::backoff::{BackoffConfig, BackoffStrategy, ExponentialBackoff};
 use super::{ErrorClass, RecoverableError, RecoveryError, classify_error};
 use crate::error::SageError;
+use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::time::Duration;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 
-/// Configuration for retry behavior
-#[derive(Debug, Clone)]
+/// Unified configuration for retry behavior
+///
+/// This configuration combines retry policy settings with backoff timing configuration.
+/// It supports both high-level retry decisions (what to retry) and timing details (how to retry).
+///
+/// # Example
+/// ```
+/// use sage_core::recovery::RetryConfig;
+/// use std::time::Duration;
+///
+/// let config = RetryConfig::default()
+///     .with_max_attempts(5)
+///     .with_initial_delay(Duration::from_millis(200))
+///     .with_max_delay(Duration::from_secs(10));
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RetryConfig {
     /// Maximum number of retry attempts
     pub max_attempts: u32,
     /// Maximum total time to spend retrying
+    #[serde(with = "humantime_serde")]
     pub max_duration: Duration,
     /// Whether to retry on unknown errors
     pub retry_unknown: bool,
     /// Specific error messages to always retry
+    #[serde(default)]
     pub retry_on_messages: Vec<String>,
     /// Specific error messages to never retry
+    #[serde(default)]
     pub no_retry_on_messages: Vec<String>,
+    /// Initial delay before first retry
+    #[serde(with = "humantime_serde")]
+    pub initial_delay: Duration,
+    /// Maximum delay between retries
+    #[serde(with = "humantime_serde")]
+    pub max_delay: Duration,
+    /// Backoff multiplier for exponential backoff
+    pub backoff_multiplier: f64,
+    /// Add random jitter to prevent thundering herd
+    #[serde(default = "default_jitter")]
+    pub jitter: bool,
+}
+
+fn default_jitter() -> bool {
+    true
 }
 
 impl Default for RetryConfig {
@@ -43,17 +76,29 @@ impl Default for RetryConfig {
                 "unauthorized".to_string(),
                 "forbidden".to_string(),
             ],
+            initial_delay: Duration::from_millis(100),
+            max_delay: Duration::from_secs(60),
+            backoff_multiplier: 2.0,
+            jitter: true,
         }
     }
 }
 
 impl RetryConfig {
+    /// Create a new RetryConfig with default values
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     /// Create a config for aggressive retrying
     pub fn aggressive() -> Self {
         Self {
             max_attempts: 10,
             max_duration: Duration::from_secs(600),
             retry_unknown: true,
+            initial_delay: Duration::from_millis(50),
+            max_delay: Duration::from_secs(5),
+            backoff_multiplier: 1.5,
             ..Default::default()
         }
     }
@@ -74,6 +119,51 @@ impl RetryConfig {
             retry_unknown: false,
             retry_on_messages: vec![],
             no_retry_on_messages: vec![],
+            initial_delay: Duration::ZERO,
+            max_delay: Duration::ZERO,
+            backoff_multiplier: 1.0,
+            jitter: false,
+        }
+    }
+
+    /// Create a config optimized for storage operations
+    pub fn for_storage() -> Self {
+        Self {
+            max_attempts: 3,
+            max_duration: Duration::from_secs(30),
+            retry_unknown: true,
+            retry_on_messages: vec![
+                "connection".to_string(),
+                "timeout".to_string(),
+                "busy".to_string(),
+            ],
+            no_retry_on_messages: vec![
+                "constraint".to_string(),
+                "syntax".to_string(),
+            ],
+            initial_delay: Duration::from_millis(100),
+            max_delay: Duration::from_secs(5),
+            backoff_multiplier: 2.0,
+            jitter: true,
+        }
+    }
+
+    /// Create a config optimized for rate-limited APIs
+    pub fn for_rate_limited() -> Self {
+        Self {
+            max_attempts: 5,
+            max_duration: Duration::from_secs(600),
+            retry_unknown: false,
+            retry_on_messages: vec![
+                "rate limit".to_string(),
+                "429".to_string(),
+                "too many requests".to_string(),
+            ],
+            no_retry_on_messages: vec![],
+            initial_delay: Duration::from_secs(1),
+            max_delay: Duration::from_secs(300),
+            backoff_multiplier: 2.0,
+            jitter: true,
         }
     }
 
@@ -87,6 +177,64 @@ impl RetryConfig {
     pub fn with_max_duration(mut self, duration: Duration) -> Self {
         self.max_duration = duration;
         self
+    }
+
+    /// Set initial delay before first retry
+    pub fn with_initial_delay(mut self, delay: Duration) -> Self {
+        self.initial_delay = delay;
+        self
+    }
+
+    /// Set maximum delay between retries
+    pub fn with_max_delay(mut self, delay: Duration) -> Self {
+        self.max_delay = delay;
+        self
+    }
+
+    /// Set backoff multiplier
+    pub fn with_backoff_multiplier(mut self, multiplier: f64) -> Self {
+        self.backoff_multiplier = multiplier;
+        self
+    }
+
+    /// Enable or disable jitter
+    pub fn with_jitter(mut self, jitter: bool) -> Self {
+        self.jitter = jitter;
+        self
+    }
+
+    /// Set whether to retry unknown errors
+    pub fn with_retry_unknown(mut self, retry: bool) -> Self {
+        self.retry_unknown = retry;
+        self
+    }
+
+    /// Add messages that should always trigger retry
+    pub fn with_retry_on_messages(mut self, messages: Vec<String>) -> Self {
+        self.retry_on_messages = messages;
+        self
+    }
+
+    /// Add messages that should never trigger retry
+    pub fn with_no_retry_on_messages(mut self, messages: Vec<String>) -> Self {
+        self.no_retry_on_messages = messages;
+        self
+    }
+
+    /// Convert to BackoffConfig for use with backoff strategies
+    pub fn to_backoff_config(&self) -> BackoffConfig {
+        BackoffConfig {
+            initial_delay: self.initial_delay,
+            max_delay: self.max_delay,
+            multiplier: self.backoff_multiplier,
+            jitter: self.jitter,
+            jitter_ratio: 0.2,
+        }
+    }
+
+    /// Create an ExponentialBackoff from this config
+    pub fn create_backoff(&self) -> ExponentialBackoff {
+        ExponentialBackoff::with_config(self.to_backoff_config())
     }
 }
 
@@ -143,17 +291,21 @@ pub struct RetryPolicy {
 impl RetryPolicy {
     /// Create a new retry policy with default config and exponential backoff
     pub fn new() -> Self {
+        let config = RetryConfig::default();
+        let backoff = config.create_backoff();
         Self {
-            config: RetryConfig::default(),
-            backoff: Box::new(ExponentialBackoff::new()),
+            config,
+            backoff: Box::new(backoff),
         }
     }
 
     /// Create a new retry policy with custom config
+    /// Uses the backoff settings from the config
     pub fn with_config(config: RetryConfig) -> Self {
+        let backoff = config.create_backoff();
         Self {
             config,
-            backoff: Box::new(ExponentialBackoff::new()),
+            backoff: Box::new(backoff),
         }
     }
 

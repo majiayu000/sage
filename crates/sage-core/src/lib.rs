@@ -194,10 +194,10 @@ pub use plugins::{
 };
 pub use recovery::{
     BackoffConfig, BackoffStrategy, CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError,
-    CircuitBreakerRegistry, CircuitBreakerStats, CircuitState, ErrorClass, RateLimitError,
-    RateLimitGuard, RateLimiter, RateLimiterConfig, RecoverableError, RecoveryError, RetryConfig,
-    RetryPolicy, RetryResult, SlidingWindowRateLimiter, SupervisionPolicy, SupervisionResult,
-    Supervisor, TaskSupervisor,
+    CircuitBreakerRegistry, CircuitBreakerStats, CircuitState, ErrorClass, RateLimitConfig,
+    RateLimitError, RateLimitGuard, RateLimiter, RateLimiterConfig, RecoverableError,
+    RecoveryError, RetryConfig, RetryPolicy, RetryResult, SlidingWindowRateLimiter,
+    SupervisionPolicy, SupervisionResult, Supervisor, TaskSupervisor,
 };
 pub use sandbox::{
     DefaultSandbox, ResourceLimits, ResourceUsage, Sandbox, SandboxBuilder, SandboxConfig,
@@ -276,7 +276,7 @@ pub use prompts::{
 pub use storage::{
     BackendType, ConnectionPool, ConnectionStatus, DatabaseBackend, DatabaseError, DatabaseRow,
     DatabaseValue, FallbackStrategy, Migration, MigrationRunner, PostgresBackend, PostgresConfig,
-    QueryResult, RetryConfig as StorageRetryConfig, SchemaVersion, SharedStorageManager,
+    QueryResult, SchemaVersion, SharedStorageManager,
     SqliteBackend, SqliteConfig, StorageConfig, StorageManager, StorageStats,
     create_storage_manager,
 };

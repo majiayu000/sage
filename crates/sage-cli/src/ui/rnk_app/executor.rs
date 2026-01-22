@@ -128,20 +128,6 @@ pub fn background_loop(
             }
         }
 
-        // Print header once
-        {
-            let s = state.read();
-            if !s.header_printed {
-                drop(s);
-                let mut s = state.write();
-                if !s.header_printed {
-                    rnk::println(render_header(&s.session));
-                    rnk::println(""); // Empty line
-                    s.header_printed = true;
-                }
-            }
-        }
-
         // Check for new messages and print them
         {
             let app_state = adapter.get_state();
@@ -150,10 +136,54 @@ pub fn background_loop(
 
             let mut ui_state = state.write();
 
-            // Update busy state from adapter
-            ui_state.is_busy = !matches!(app_state.phase, ExecutionPhase::Idle);
+            // Update session info from adapter if changed
+            if app_state.session.model != "unknown" && ui_state.session.model == "unknown" {
+                ui_state.session.model = app_state.session.model.clone();
+                ui_state.session.provider = app_state.session.provider.clone();
+                if let Some(ref sid) = app_state.session.session_id {
+                    ui_state.session.session_id = Some(sid.clone());
+                }
+            }
+
+            // Print header once (after session info is available)
+            if !ui_state.header_printed {
+                // Wait for session info or print with defaults after a short delay
+                let has_session_info = ui_state.session.model != "unknown";
+                if has_session_info || ui_state.printed_count > 0 {
+                    drop(ui_state);
+                    let s = state.read();
+                    rnk::println(render_header(&s.session));
+                    rnk::println(""); // Empty line
+                    drop(s);
+                    let mut s = state.write();
+                    s.header_printed = true;
+                    ui_state = s;
+                }
+            }
+
+            // Update busy state from adapter - Error state is not busy
+            ui_state.is_busy = !matches!(app_state.phase, ExecutionPhase::Idle | ExecutionPhase::Error { .. });
             if ui_state.is_busy && ui_state.status_text.is_empty() {
                 ui_state.status_text = app_state.status_text();
+            }
+
+            // Check for error state and display error message
+            if let ExecutionPhase::Error { ref message } = app_state.phase {
+                if !ui_state.error_displayed {
+                    ui_state.error_displayed = true;
+                    drop(ui_state);
+                    rnk::println(
+                        Text::new(format!("Error: {}", message))
+                            .color(Color::Red)
+                            .bold()
+                            .into_element(),
+                    );
+                    rnk::println(""); // Empty line
+                    ui_state = state.write();
+                }
+            } else {
+                // Reset error_displayed flag when not in error state
+                ui_state.error_displayed = false;
             }
 
             // Print new messages

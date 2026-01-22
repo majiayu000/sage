@@ -2,7 +2,7 @@
 
 use crate::console::CliConsole;
 use sage_core::commands::{CommandExecutor, CommandRegistry};
-use sage_core::error::SageResult;
+use sage_core::error::{SageError, SageResult};
 use sage_core::output::OutputMode;
 use std::sync::Arc;
 
@@ -76,18 +76,12 @@ pub async fn handle_interactive_command_v2(
     use sage_core::commands::types::InteractiveCommand;
 
     match cmd {
-        InteractiveCommand::Resume { session_id, .. } => {
-            if let Some(id) = session_id {
-                console.warn(&format!(
-                    "Interactive resume is not available here. Use `sage -r {}` instead.",
-                    id
-                ));
-            } else {
-                console.warn("Interactive resume is not available here.");
-            }
-            console.info("Use `sage -c` for the most recent session, or `sage -r <id>`.");
-            Ok(SlashCommandAction::Handled)
-        }
+        InteractiveCommand::Resume { session_id, .. } => Err(SageError::invalid_input(
+            format!(
+                "Resume is not available here. Use `sage -c` or `sage -r {}`.",
+                session_id.as_deref().unwrap_or("<id>")
+            ),
+        )),
         InteractiveCommand::Title { title } => {
             console.warn(&format!(
                 "Title command not available in non-interactive mode. Title: {}",

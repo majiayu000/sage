@@ -279,7 +279,10 @@ impl AppState {
             thinking.completed = true;
             thinking.duration = Some(thinking.started_at.elapsed());
         }
-        self.phase = ExecutionPhase::Idle;
+        // Don't overwrite Error state
+        if !matches!(self.phase, ExecutionPhase::Error { .. }) {
+            self.phase = ExecutionPhase::Idle;
+        }
     }
 
     /// Start streaming

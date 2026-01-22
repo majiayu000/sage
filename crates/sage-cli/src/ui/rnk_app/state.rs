@@ -55,6 +55,8 @@ pub struct UiState {
     pub printed_count: usize,
     /// Header already printed
     pub header_printed: bool,
+    /// Error already displayed (to avoid duplicate error messages)
+    pub error_displayed: bool,
     /// Session info
     pub session: SessionState,
 }
@@ -69,6 +71,7 @@ impl Default for UiState {
             should_quit: false,
             printed_count: 0,
             header_printed: false,
+            error_displayed: false,
             session: SessionState {
                 session_id: None,
                 model: "unknown".to_string(),

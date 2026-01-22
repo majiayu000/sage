@@ -8,10 +8,13 @@ use std::time::{Duration, Instant};
 #[tokio::test]
 async fn test_rate_limiter_allows_burst() {
     let limiter = RateLimiter::new(RateLimitConfig {
-        requests_per_minute: 60,
+        requests_per_minute: Some(60),
         burst_size: 5,
         max_concurrent: 0, // unlimited
         enabled: true,
+        blocking: true,
+        max_wait: Duration::from_secs(30),
+        tokens_per_minute: None,
     });
 
     // Should be able to acquire burst_size tokens immediately
@@ -36,10 +39,13 @@ async fn test_rate_limiter_disabled() {
 #[tokio::test]
 async fn test_rate_limiter_refills() {
     let limiter = RateLimiter::new(RateLimitConfig {
-        requests_per_minute: 600, // 10 per second for faster test
+        requests_per_minute: Some(600), // 10 per second for faster test
         burst_size: 2,
         max_concurrent: 0, // unlimited
         enabled: true,
+        blocking: true,
+        max_wait: Duration::from_secs(30),
+        tokens_per_minute: None,
     });
 
     // Exhaust tokens
@@ -57,10 +63,13 @@ async fn test_rate_limiter_refills() {
 #[tokio::test]
 async fn test_available_tokens() {
     let limiter = RateLimiter::new(RateLimitConfig {
-        requests_per_minute: 60,
+        requests_per_minute: Some(60),
         burst_size: 5,
         max_concurrent: 0, // unlimited
         enabled: true,
+        blocking: true,
+        max_wait: Duration::from_secs(30),
+        tokens_per_minute: None,
     });
 
     assert_eq!(limiter.available_tokens().await, 5);
@@ -73,25 +82,28 @@ async fn test_available_tokens() {
 async fn test_provider_configs() {
     // Test that provider-specific configs are reasonable
     let openai = RateLimitConfig::for_provider("openai");
-    assert!(openai.requests_per_minute >= 60);
+    assert!(openai.requests_per_minute.unwrap_or(0) >= 60);
     assert!(openai.max_concurrent >= 5);
 
     let anthropic = RateLimitConfig::for_provider("anthropic");
-    assert!(anthropic.requests_per_minute >= 60);
+    assert!(anthropic.requests_per_minute.unwrap_or(0) >= 50); // Anthropic uses 50 RPM
     assert!(anthropic.max_concurrent >= 5);
 
     let ollama = RateLimitConfig::for_provider("ollama");
-    assert!(ollama.requests_per_minute >= 60);
+    assert!(ollama.requests_per_minute.unwrap_or(0) >= 60);
     assert!(ollama.max_concurrent >= 10); // Local providers can handle more
 }
 
 #[tokio::test]
 async fn test_acquire_waits() {
     let limiter = RateLimiter::new(RateLimitConfig {
-        requests_per_minute: 600, // 10 per second for faster test
+        requests_per_minute: Some(600), // 10 per second for faster test
         burst_size: 1,
         max_concurrent: 0, // unlimited
         enabled: true,
+        blocking: true,
+        max_wait: Duration::from_secs(30),
+        tokens_per_minute: None,
     });
 
     // First should not wait
@@ -146,7 +158,7 @@ async fn test_set_rate_limit() {
     limiter::set_rate_limit("custom_provider", RateLimitConfig::new(120, 20)).await;
 
     let limiter = limiter::get_rate_limiter("custom_provider").await;
-    assert_eq!(limiter.config().requests_per_minute, 120);
+    assert_eq!(limiter.config().requests_per_minute, Some(120));
     assert_eq!(limiter.config().burst_size, 20);
 }
 
@@ -181,10 +193,13 @@ async fn test_rate_limiter_clone_shares_state() {
 #[tokio::test]
 async fn test_rate_limiter_burst_size_limit() {
     let limiter = RateLimiter::new(RateLimitConfig {
-        requests_per_minute: 600, // 10 per second
+        requests_per_minute: Some(600), // 10 per second
         burst_size: 3,
         max_concurrent: 0, // unlimited
         enabled: true,
+        blocking: true,
+        max_wait: Duration::from_secs(30),
+        tokens_per_minute: None,
     });
 
     // Wait to ensure bucket is full
@@ -211,7 +226,7 @@ async fn test_rate_limiter_config_for_known_providers() {
     for provider in providers {
         let config = RateLimitConfig::for_provider(provider);
         assert!(config.enabled);
-        assert!(config.requests_per_minute > 0);
+        assert!(config.requests_per_minute.unwrap_or(0) > 0);
         assert!(config.burst_size > 0);
         assert!(config.max_concurrent > 0);
     }
@@ -239,7 +254,7 @@ fn test_rate_limit_config_disabled() {
 #[test]
 fn test_rate_limit_config_new() {
     let config = RateLimitConfig::new(100, 25);
-    assert_eq!(config.requests_per_minute, 100);
+    assert_eq!(config.requests_per_minute, Some(100));
     assert_eq!(config.burst_size, 25);
     assert!(config.enabled);
 }
@@ -248,10 +263,13 @@ fn test_rate_limit_config_new() {
 async fn test_rate_limiter_precise_timing() {
     // Test that refill happens correctly over time
     let limiter = RateLimiter::new(RateLimitConfig {
-        requests_per_minute: 600, // 10 tokens per second
+        requests_per_minute: Some(600), // 10 tokens per second
         burst_size: 5,
         max_concurrent: 0, // unlimited
         enabled: true,
+        blocking: true,
+        max_wait: Duration::from_secs(30),
+        tokens_per_minute: None,
     });
 
     // Exhaust all tokens
@@ -280,10 +298,13 @@ async fn test_acquire_returns_none_when_token_available() {
 #[tokio::test]
 async fn test_available_tokens_after_partial_refill() {
     let limiter = RateLimiter::new(RateLimitConfig {
-        requests_per_minute: 600, // 10 per second
+        requests_per_minute: Some(600), // 10 per second
         burst_size: 10,
         max_concurrent: 0, // unlimited
         enabled: true,
+        blocking: true,
+        max_wait: Duration::from_secs(30),
+        tokens_per_minute: None,
     });
 
     // Use all tokens
@@ -303,10 +324,13 @@ async fn test_available_tokens_after_partial_refill() {
 #[tokio::test]
 async fn test_concurrent_requests_tracking() {
     let limiter = RateLimiter::new(RateLimitConfig {
-        requests_per_minute: 60,
+        requests_per_minute: Some(60),
         burst_size: 10,
         max_concurrent: 5,
         enabled: true,
+        blocking: true,
+        max_wait: Duration::from_secs(30),
+        tokens_per_minute: None,
     });
 
     // Initially should have 0 concurrent requests
@@ -319,7 +343,7 @@ async fn test_concurrent_requests_tracking() {
 #[tokio::test]
 async fn test_with_concurrent_constructor() {
     let config = RateLimitConfig::with_concurrent(120, 25, 10);
-    assert_eq!(config.requests_per_minute, 120);
+    assert_eq!(config.requests_per_minute, Some(120));
     assert_eq!(config.burst_size, 25);
     assert_eq!(config.max_concurrent, 10);
     assert!(config.enabled);
