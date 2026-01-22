@@ -8,7 +8,6 @@
 mod args;
 mod execute;
 mod input;
-mod interactive;
 mod mcp;
 mod outcome;
 mod session;

@@ -66,10 +66,6 @@ pub struct Cli {
     #[arg(long, short)]
     pub verbose: bool,
 
-    /// Use legacy CLI UI instead of new rnk-based UI
-    #[arg(long)]
-    pub legacy_ui: bool,
-
     /// Output in streaming JSON format (for SDK/programmatic use)
     #[arg(long)]
     pub stream_json: bool,

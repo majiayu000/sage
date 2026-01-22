@@ -23,21 +23,17 @@ pub async fn execute_single_task(
     executor: &mut UnifiedExecutor,
     console: &CliConsole,
     working_dir: &std::path::Path,
-    jsonl_storage: &Arc<JsonlSessionStorage>,
+    _jsonl_storage: &Arc<JsonlSessionStorage>,
     session_recorder: &Option<Arc<Mutex<SessionRecorder>>>,
     task_description: &str,
 ) -> SageResult<()> {
     // Process slash commands if needed
-    let action = process_slash_command(task_description, console, working_dir, jsonl_storage).await?;
+    let action = process_slash_command(task_description, console, working_dir).await?;
 
     // Handle the command action
     let task_description = match action {
         SlashCommandAction::Prompt(desc) => desc,
         SlashCommandAction::Handled => return Ok(()),
-        SlashCommandAction::ResumeSession(_) => {
-            console.warn("Use 'sage -r <session_id>' to resume sessions in single-task mode.");
-            return Ok(());
-        }
         SlashCommandAction::SetOutputMode(mode) => {
             executor.set_output_mode(mode);
             console.info("Output mode updated.");
@@ -59,29 +55,6 @@ pub async fn execute_single_task(
         None
     };
     display_outcome(console, &outcome, duration, session_path.as_ref());
-
-    Ok(())
-}
-
-/// Resume a session inline (within the REPL loop)
-pub async fn resume_session_inline(
-    executor: &mut UnifiedExecutor,
-    session_id: &str,
-    _storage: &Arc<JsonlSessionStorage>,
-    console: &CliConsole,
-) -> SageResult<()> {
-    console.info(&format!(
-        "Loading session {}...",
-        &session_id[..session_id.len().min(16)]
-    ));
-
-    // Restore the session - this loads messages and sets up session state
-    let restored_messages = executor.restore_session(session_id).await?;
-
-    console.success(&format!(
-        "Loaded {} messages from previous session.",
-        restored_messages.len()
-    ));
 
     Ok(())
 }

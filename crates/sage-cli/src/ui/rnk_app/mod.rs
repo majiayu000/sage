@@ -82,7 +82,7 @@ fn app() -> Element {
         move |ch, key| {
             // Ctrl+C to quit
             if key.ctrl && ch == "c" {
-                let _ = cmd_tx.blocking_send(UiCommand::Quit);
+                let _ = cmd_tx.try_send(UiCommand::Quit);
                 app_ctx.exit();
                 return;
             }
@@ -92,7 +92,7 @@ fn app() -> Element {
                 let s = state.read();
                 if s.is_busy {
                     drop(s);
-                    let _ = cmd_tx.blocking_send(UiCommand::Cancel);
+                    let _ = cmd_tx.try_send(UiCommand::Cancel);
                 }
                 return;
             }
@@ -128,7 +128,7 @@ fn app() -> Element {
                     text
                 };
                 if !text.is_empty() {
-                    let _ = cmd_tx.blocking_send(UiCommand::Submit(text));
+                    let _ = cmd_tx.try_send(UiCommand::Submit(text));
                 }
                 return;
             }
