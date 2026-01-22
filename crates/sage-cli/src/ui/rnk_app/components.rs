@@ -16,31 +16,45 @@ pub fn format_message(msg: &Message) -> Element {
 
     match &msg.content {
         MessageContent::Text(text) => {
-            let (prefix, color) = match msg.role {
-                Role::User => ("user: ", Color::Blue),
-                Role::Assistant => ("assistant: ", Color::Green),
-                Role::System => ("system: ", Color::Cyan),
-            };
-
-            let mut container = RnkBox::new().flex_direction(FlexDirection::Column);
-            let lines = wrap_text_with_prefix(prefix, text, term_width);
-
-            for (i, line) in lines.iter().enumerate() {
-                let text_elem = if i == 0 {
-                    Text::new(line.as_str()).color(color).bold()
-                } else {
-                    Text::new(line.as_str()).color(color)
-                };
-                container = container.child(text_elem.into_element());
+            match msg.role {
+                Role::User => {
+                    // User message: simple "> " prefix
+                    let mut container = RnkBox::new().flex_direction(FlexDirection::Column);
+                    let lines = wrap_text_with_prefix("> ", text, term_width);
+                    for line in lines {
+                        container = container.child(
+                            Text::new(line).color(Color::White).into_element()
+                        );
+                    }
+                    container.into_element()
+                }
+                Role::Assistant => {
+                    // Assistant message: no prefix, just content
+                    let mut container = RnkBox::new().flex_direction(FlexDirection::Column);
+                    for line in text.lines() {
+                        let wrapped = wrap_text_with_prefix("", line, term_width);
+                        for w in wrapped {
+                            container = container.child(
+                                Text::new(w).color(Color::White).into_element()
+                            );
+                        }
+                    }
+                    container.into_element()
+                }
+                Role::System => {
+                    // System message: dim italic
+                    Text::new(truncate_to_width(text, term_width))
+                        .color(Color::BrightBlack)
+                        .italic()
+                        .into_element()
+                }
             }
-
-            container.into_element()
         }
         MessageContent::Thinking(text) => {
             let preview: String = text.lines().take(3).collect::<Vec<_>>().join(" ");
             Text::new(format!(
-                "thinking: {}...",
-                truncate_to_width(&preview, term_width.saturating_sub(12))
+                "💭 {}...",
+                truncate_to_width(&preview, term_width.saturating_sub(5))
             ))
             .color(Color::BrightBlack)
             .italic()
@@ -53,39 +67,46 @@ pub fn format_message(msg: &Message) -> Element {
         } => {
             let mut container = RnkBox::new().flex_direction(FlexDirection::Column);
 
-            // Tool header
+            // Tool header with icon
+            let icon = get_tool_icon(tool_name);
             container = container.child(
-                Text::new(format!("● {}", tool_name))
+                Text::new(format!("{} {}", icon, tool_name))
                     .color(Color::Magenta)
                     .bold()
                     .into_element(),
             );
 
-            // Params
+            // Params (truncated)
             if !params.trim().is_empty() {
-                let param_lines = wrap_text_with_prefix("  args: ", params, term_width);
-                for line in param_lines {
-                    container =
-                        container.child(Text::new(line).color(Color::Magenta).into_element());
-                }
+                let param_preview = truncate_to_width(params.trim(), term_width.saturating_sub(4));
+                container = container.child(
+                    Text::new(format!("  ⎿ {}", param_preview))
+                        .color(Color::BrightBlack)
+                        .into_element()
+                );
             }
 
             // Result
             if let Some(r) = result {
-                let (label, color, content) = if r.success {
-                    ("  ⎿ ", Color::Ansi256(245), r.output.as_deref().unwrap_or(""))
-                } else {
-                    (
-                        "  ✗ ",
-                        Color::Red,
-                        r.error.as_deref().unwrap_or("Unknown error"),
-                    )
-                };
-                if !content.is_empty() {
-                    let result_lines = wrap_text_with_prefix(label, content, term_width);
-                    for line in result_lines {
-                        container = container.child(Text::new(line).color(color).into_element());
+                if r.success {
+                    if let Some(ref output) = r.output {
+                        let preview = truncate_to_width(output.lines().next().unwrap_or(""), term_width.saturating_sub(4));
+                        if !preview.is_empty() {
+                            container = container.child(
+                                Text::new(format!("  ✓ {}", preview))
+                                    .color(Color::Green)
+                                    .into_element()
+                            );
+                        }
                     }
+                } else {
+                    let error_msg = r.error.as_deref().unwrap_or("Unknown error");
+                    let preview = truncate_to_width(error_msg, term_width.saturating_sub(4));
+                    container = container.child(
+                        Text::new(format!("  ✗ {}", preview))
+                            .color(Color::Red)
+                            .into_element()
+                    );
                 }
             }
 
@@ -94,16 +115,59 @@ pub fn format_message(msg: &Message) -> Element {
     }
 }
 
+/// Get icon for tool name
+fn get_tool_icon(tool_name: &str) -> &'static str {
+    match tool_name {
+        "bash" | "Bash" => "⚡",
+        "read" | "Read" => "📄",
+        "write" | "Write" => "✏️",
+        "edit" | "Edit" => "📝",
+        "glob" | "Glob" => "🔍",
+        "grep" | "Grep" => "🔎",
+        "task" | "Task" => "🤖",
+        "web_fetch" | "WebFetch" => "🌐",
+        _ => "●",
+    }
+}
+
+/// Render error message
+pub fn render_error(message: &str) -> Element {
+    let term_width = terminal::size().map(|(w, _)| w as usize).unwrap_or(80);
+
+    let mut container = RnkBox::new().flex_direction(FlexDirection::Column);
+
+    // Error header
+    container = container.child(
+        Text::new("✗ Error")
+            .color(Color::Red)
+            .bold()
+            .into_element()
+    );
+
+    // Error message (wrapped)
+    let lines = wrap_text_with_prefix("  ", message, term_width);
+    for line in lines {
+        container = container.child(
+            Text::new(line)
+                .color(Color::Red)
+                .into_element()
+        );
+    }
+
+    container.into_element()
+}
+
 /// Render header banner
 pub fn render_header(session: &SessionState) -> Element {
     let version = env!("CARGO_PKG_VERSION");
     let term_width = terminal::size().map(|(w, _)| w as usize).unwrap_or(80);
 
-    let title = format!("▐▛███▜▌   Sage Code v{}", version);
-    let model_info = format!("{} · {}", session.model, session.provider);
-    let model_line = format!("▝▜█████▛▘  {}", model_info);
-    let cwd_line = format!("  ▘▘ ▝▝    {}", session.working_dir);
-    let hint_line = "  /model to try another model";
+    // Simpler, cleaner header
+    let title = format!("╭─ Sage Code v{}", version);
+    let model_info = format!("│  {} · {}", session.model, session.provider);
+    let cwd = truncate_to_width(&session.working_dir, term_width.saturating_sub(5));
+    let cwd_line = format!("│  {}", cwd);
+    let bottom = "╰─────────────────────────────────";
 
     RnkBox::new()
         .flex_direction(FlexDirection::Column)
@@ -114,7 +178,7 @@ pub fn render_header(session: &SessionState) -> Element {
                 .into_element(),
         )
         .child(
-            Text::new(truncate_to_width(&model_line, term_width))
+            Text::new(truncate_to_width(&model_info, term_width))
                 .color(Color::Blue)
                 .into_element(),
         )
@@ -123,10 +187,10 @@ pub fn render_header(session: &SessionState) -> Element {
                 .color(Color::BrightBlack)
                 .into_element(),
         )
-        .child(Newline::new().into_element())
         .child(
-            Text::new(truncate_to_width(hint_line, term_width))
+            Text::new(truncate_to_width(bottom, term_width))
                 .color(Color::BrightBlack)
+                .dim()
                 .into_element(),
         )
         .into_element()
@@ -134,8 +198,22 @@ pub fn render_header(session: &SessionState) -> Element {
 
 /// Render input line
 pub fn render_input(input_text: &str) -> Element {
+    let hints = [
+        "edit main.rs to add error handling",
+        "explain this function",
+        "write tests for auth module",
+        "fix the bug in line 42",
+        "refactor to use async/await",
+    ];
+
+    // Rotate hints based on time
+    let hint_idx = (std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() / 5) as usize % hints.len();
+
     let display_text = if input_text.is_empty() {
-        "Try \"edit base.rs to...\""
+        hints[hint_idx]
     } else {
         input_text
     };
@@ -166,8 +244,14 @@ pub fn render_spinner(status_text: &str) -> Element {
         .flex_direction(FlexDirection::Row)
         .child(Text::new(spinner).color(Color::Yellow).into_element())
         .child(
-            Text::new(format!(" {} (ESC to cancel)", status_text))
+            Text::new(format!(" {}", status_text))
                 .color(Color::Yellow)
+                .into_element(),
+        )
+        .child(
+            Text::new(" (ESC to cancel)")
+                .color(Color::BrightBlack)
+                .dim()
                 .into_element(),
         )
         .into_element()
@@ -183,9 +267,88 @@ pub fn render_status_bar(permission_mode: PermissionMode) -> Element {
         .child(Text::new("⏵⏵ ").color(mode_color).into_element())
         .child(Text::new(mode_text).color(mode_color).into_element())
         .child(
-            Text::new(" (shift+tab to cycle)")
+            Text::new(" · shift+tab to cycle")
                 .color(Color::BrightBlack)
+                .dim()
                 .into_element(),
         )
         .into_element()
+}
+
+/// Built-in commands for suggestions
+const BUILTIN_COMMANDS: &[(&str, &str)] = &[
+    ("help", "Show help information"),
+    ("clear", "Clear conversation"),
+    ("compact", "Compact conversation context"),
+    ("commands", "List slash commands"),
+    ("config", "Manage configuration"),
+    ("context", "Show context usage"),
+    ("cost", "Show session cost and usage"),
+    ("init", "Initialize Sage in project"),
+    ("login", "Configure API credentials"),
+    ("output", "Switch output mode (streaming|batch|silent)"),
+    ("plan", "View execution plan"),
+    ("resume", "Resume a conversation"),
+    ("status", "Show agent status"),
+    ("tasks", "List background tasks"),
+    ("title", "Set session title"),
+    ("undo", "Undo file changes"),
+];
+
+/// Render command suggestions when input starts with /
+pub fn render_command_suggestions(input: &str) -> Option<Element> {
+    if !input.starts_with('/') {
+        return None;
+    }
+
+    let query = &input[1..]; // Remove leading /
+    let term_width = terminal::size().map(|(w, _)| w as usize).unwrap_or(80);
+
+    // Filter commands that match the query
+    let matches: Vec<_> = BUILTIN_COMMANDS
+        .iter()
+        .filter(|(name, _)| name.starts_with(query))
+        .take(6) // Show max 6 suggestions
+        .collect();
+
+    if matches.is_empty() {
+        return None;
+    }
+
+    let mut container = RnkBox::new().flex_direction(FlexDirection::Column);
+
+    // Header
+    container = container.child(
+        Text::new("  Commands:")
+            .color(Color::BrightBlack)
+            .dim()
+            .into_element(),
+    );
+
+    // Command list
+    for (name, desc) in matches {
+        let cmd_text = format!("  /{}", name);
+        let desc_text = format!(" - {}", desc);
+        let full_line = format!("{}{}", cmd_text, desc_text);
+        let _ = truncate_to_width(&full_line, term_width);
+
+        container = container.child(
+            RnkBox::new()
+                .flex_direction(FlexDirection::Row)
+                .child(
+                    Text::new(format!("  /{}", name))
+                        .color(Color::Cyan)
+                        .into_element(),
+                )
+                .child(
+                    Text::new(format!(" - {}", truncate_to_width(desc, term_width.saturating_sub(cmd_text.len() + 3))))
+                        .color(Color::BrightBlack)
+                        .dim()
+                        .into_element(),
+                )
+                .into_element(),
+        );
+    }
+
+    Some(container.into_element())
 }
