@@ -1,11 +1,7 @@
 //! Sage CLI Main Application
 //!
 //! Claude Code style UI using rnk components for rendering.
-//! Supports two modes:
-//! 1. App mode (default): Fullscreen declarative UI with fixed-bottom layout
-//! 2. Streaming mode: Traditional println-based streaming output
-//!
-//! Note: Some functions in this module are for legacy mode compatibility.
+//! Supports app mode with a fullscreen declarative UI and fixed-bottom layout.
 
 #![allow(dead_code)]
 

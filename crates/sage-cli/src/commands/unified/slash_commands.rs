@@ -4,10 +4,7 @@ use crate::console::CliConsole;
 use sage_core::commands::{CommandExecutor, CommandRegistry};
 use sage_core::error::SageResult;
 use sage_core::output::OutputMode;
-use sage_core::session::JsonlSessionStorage;
 use std::sync::Arc;
-
-use super::utils::{format_time_ago, truncate_str};
 
 /// Result of processing a slash command
 pub enum SlashCommandAction {
@@ -15,8 +12,6 @@ pub enum SlashCommandAction {
     Prompt(String),
     /// Command was handled locally, no further action needed
     Handled,
-    /// Resume a session with the given ID
-    ResumeSession(String),
     /// Set output mode
     SetOutputMode(OutputMode),
 }
@@ -26,7 +21,6 @@ pub async fn process_slash_command(
     input: &str,
     console: &CliConsole,
     working_dir: &std::path::Path,
-    jsonl_storage: &Arc<JsonlSessionStorage>,
 ) -> SageResult<SlashCommandAction> {
     if !CommandExecutor::is_command(input) {
         return Ok(SlashCommandAction::Prompt(input.to_string()));
@@ -44,8 +38,7 @@ pub async fn process_slash_command(
         Ok(Some(result)) => {
             // Handle interactive commands (e.g., /resume)
             if let Some(interactive_cmd) = result.interactive {
-                return handle_interactive_command_v2(&interactive_cmd, console, jsonl_storage)
-                    .await;
+                return handle_interactive_command_v2(&interactive_cmd, console).await;
             }
 
             // Handle local commands (output directly, no LLM)
@@ -79,15 +72,22 @@ pub async fn process_slash_command(
 pub async fn handle_interactive_command_v2(
     cmd: &sage_core::commands::types::InteractiveCommand,
     console: &CliConsole,
-    storage: &Arc<JsonlSessionStorage>,
 ) -> SageResult<SlashCommandAction> {
     use sage_core::commands::types::InteractiveCommand;
 
     match cmd {
-        InteractiveCommand::Resume {
-            session_id,
-            show_all,
-        } => handle_resume_interactive(session_id.as_deref(), *show_all, console, storage).await,
+        InteractiveCommand::Resume { session_id, .. } => {
+            if let Some(id) = session_id {
+                console.warn(&format!(
+                    "Interactive resume is not available here. Use `sage -r {}` instead.",
+                    id
+                ));
+            } else {
+                console.warn("Interactive resume is not available here.");
+            }
+            console.info("Use `sage -c` for the most recent session, or `sage -r <id>`.");
+            Ok(SlashCommandAction::Handled)
+        }
         InteractiveCommand::Title { title } => {
             console.warn(&format!(
                 "Title command not available in non-interactive mode. Title: {}",
@@ -124,81 +124,6 @@ pub async fn handle_interactive_command_v2(
                 }
             };
             Ok(SlashCommandAction::SetOutputMode(output_mode))
-        }
-    }
-}
-
-/// Handle /resume command with interactive selection
-pub async fn handle_resume_interactive(
-    session_id: Option<&str>,
-    show_all: bool,
-    console: &CliConsole,
-    storage: &Arc<JsonlSessionStorage>,
-) -> SageResult<SlashCommandAction> {
-    use dialoguer::{theme::ColorfulTheme, Select};
-
-    let sessions = storage.list_sessions().await?;
-
-    if sessions.is_empty() {
-        console.info("No previous sessions found.");
-        console.info("Start a conversation to create a new session.");
-        return Ok(SlashCommandAction::Handled);
-    }
-
-    // If a specific session ID was provided, resume it directly
-    if let Some(id) = session_id {
-        if let Some(session) = sessions
-            .iter()
-            .find(|s| s.id == id || s.id.starts_with(id))
-        {
-            console.success(&format!("Resuming session: {}", session.resume_title()));
-            return Ok(SlashCommandAction::ResumeSession(session.id.clone()));
-        } else {
-            console.warn(&format!("Session not found: {}", id));
-            return Ok(SlashCommandAction::Handled);
-        }
-    }
-
-    // Build selection items
-    let display_count = if show_all {
-        sessions.len()
-    } else {
-        10.min(sessions.len())
-    };
-
-    let items: Vec<String> = sessions
-        .iter()
-        .take(display_count)
-        .map(|s| {
-            let title = truncate_str(s.resume_title(), 50);
-            let time_ago = format_time_ago(&s.updated_at);
-            format!("{} ({}, {} msgs)", title, time_ago, s.message_count)
-        })
-        .collect();
-
-    // Add cancel option
-    let mut items_with_cancel = items.clone();
-    items_with_cancel.push("Cancel".to_string());
-
-    println!();
-    console.info("Select a session to resume (↑/↓ to navigate, Enter to select):");
-    println!();
-
-    // Interactive selection
-    let selection = Select::with_theme(&ColorfulTheme::default())
-        .items(&items_with_cancel)
-        .default(0)
-        .interact_opt();
-
-    match selection {
-        Ok(Some(idx)) if idx < sessions.len().min(display_count) => {
-            let session = &sessions[idx];
-            console.success(&format!("Resuming: {}", session.resume_title()));
-            Ok(SlashCommandAction::ResumeSession(session.id.clone()))
-        }
-        _ => {
-            console.info("Cancelled.");
-            Ok(SlashCommandAction::Handled)
         }
     }
 }

@@ -1,63 +1,8 @@
 //! User input handling for the unified command
 
 use crate::console::CliConsole;
-use console::{Key, Term};
 use sage_core::input::{InputChannelHandle, InputRequestKind, InputResponse};
 use std::io::Write;
-
-/// Read raw input without printing prompt (we handle prompt ourselves)
-/// Properly handles UTF-8 characters including Chinese
-pub fn read_input_raw() -> std::io::Result<String> {
-    let term = Term::stdout();
-    let mut input = String::new();
-
-    loop {
-        match term.read_key()? {
-            Key::Enter => {
-                println!();
-                break;
-            }
-            Key::Backspace => {
-                if !input.is_empty() {
-                    let removed = input.pop();
-                    let width = if let Some(c) = removed {
-                        if c.is_ascii() { 1 } else { 2 }
-                    } else {
-                        1
-                    };
-                    for _ in 0..width {
-                        print!("\x08 \x08");
-                    }
-                    std::io::stdout().flush()?;
-                }
-            }
-            Key::Char(c) => {
-                if c == '\u{15}' {
-                    // Ctrl+U - clear entire line
-                    let total_width: usize = input
-                        .chars()
-                        .map(|c| if c.is_ascii() { 1 } else { 2 })
-                        .sum();
-                    for _ in 0..total_width {
-                        print!("\x08 \x08");
-                    }
-                    input.clear();
-                    std::io::stdout().flush()?;
-                } else {
-                    input.push(c);
-                    print!("{}", c);
-                    std::io::stdout().flush()?;
-                }
-            }
-            Key::CtrlC => {
-                continue; // Let global handler deal with it
-            }
-            _ => {}
-        }
-    }
-
-    Ok(input.trim().to_string())
-}
 
 /// Handle user input requests from the execution loop
 pub async fn handle_user_input(mut handle: InputChannelHandle, verbose: bool) {

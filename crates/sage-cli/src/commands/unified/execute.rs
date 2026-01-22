@@ -14,7 +14,6 @@ use tokio::sync::Mutex;
 
 use super::args::{OutputModeArg, UnifiedArgs};
 use super::input::handle_user_input;
-use super::interactive::execute_interactive_loop;
 use super::mcp::build_mcp_registry_from_config;
 use super::session::{execute_session_resume, execute_single_task};
 use super::stream::execute_stream_json;
@@ -168,28 +167,20 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
     }
 
     // Determine execution mode based on whether task was provided
-    match args.task {
-        Some(task) => {
-            let task_description = load_task_from_arg(&task, &console).await?;
-            execute_single_task(
-                &mut executor,
-                &console,
-                &working_dir,
-                &jsonl_storage,
-                &session_recorder,
-                &task_description,
-            )
-            .await
-        }
-        None => {
-            execute_interactive_loop(
-                &mut executor,
-                &console,
-                &config,
-                &working_dir,
-                &jsonl_storage,
-            )
-            .await
-        }
+    if let Some(task) = args.task {
+        let task_description = load_task_from_arg(&task, &console).await?;
+        return execute_single_task(
+            &mut executor,
+            &console,
+            &working_dir,
+            &jsonl_storage,
+            &session_recorder,
+            &task_description,
+        )
+        .await;
     }
+
+    Err(sage_core::error::SageError::invalid_input(
+        "Interactive mode requires a TTY. Run without piping, or provide a task with `sage \"task\"` or `sage -p \"task\"`.",
+    ))
 }

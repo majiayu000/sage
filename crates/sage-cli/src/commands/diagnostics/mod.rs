@@ -12,7 +12,6 @@ mod usage_cmd;
 
 pub use doctor::doctor;
 pub use status::status;
-pub use types::CheckStatus;
 pub use usage_cmd::usage_cmd as usage;
 
 #[cfg(test)]

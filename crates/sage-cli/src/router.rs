@@ -9,6 +9,7 @@ use crate::console::CliConsole;
 use crate::{app, commands};
 use sage_core::config::credential::ConfigStatus;
 use sage_core::error::SageResult;
+use std::io::IsTerminal;
 
 /// Route CLI commands to their respective handlers
 pub async fn route(cli: Cli) -> SageResult<()> {
@@ -66,9 +67,21 @@ async fn route_main(cli: Cli) -> SageResult<()> {
     // Determine execution mode
     let non_interactive = cli.print_mode;
 
-    // Use legacy UI if requested, print mode (non-interactive), or otherwise use new rnk UI as default
-    // Print mode requires legacy UI because rnk needs an interactive terminal
-    if cli.legacy_ui || non_interactive {
+    // Check if stdin is a TTY (required for rnk App mode to read user input)
+    let is_tty = std::io::stdin().is_terminal();
+
+    // Debug: log TTY detection
+    tracing::debug!(
+        "TTY detection: is_tty={}, non_interactive={}",
+        is_tty,
+        non_interactive
+    );
+
+    // Use non-UI execution if:
+    // 1. Print mode (non-interactive)
+    // 2. Not running in a TTY (rnk requires interactive terminal)
+    // Otherwise use new rnk UI as default
+    if non_interactive || !is_tty {
         // Execute using UnifiedExecutor (the single execution path)
         // Session resume is handled by unified_execute when continue_recent or resume_session_id is set
         commands::unified_execute(commands::UnifiedArgs {
