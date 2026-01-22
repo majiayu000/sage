@@ -47,7 +47,7 @@ impl RateLimiter {
 
     /// Check if rate limiting is enabled
     pub fn is_enabled(&self) -> bool {
-        self.config.enabled
+        self.config.enabled && !self.config.is_disabled()
     }
 
     /// Get the current configuration
@@ -97,7 +97,7 @@ impl RateLimiter {
         } else {
             // Calculate wait time until a token is available
             let tokens_needed = 1.0 - state.tokens;
-            let tokens_per_second = self.config.requests_per_minute as f64 / 60.0;
+            let tokens_per_second = self.config.requests_per_second();
             let wait_seconds = tokens_needed / tokens_per_second;
             let wait_duration = Duration::from_secs_f64(wait_seconds);
 
@@ -184,7 +184,7 @@ impl RateLimiter {
         let elapsed_seconds = elapsed.as_secs_f64();
 
         // Calculate tokens to add
-        let tokens_per_second = self.config.requests_per_minute as f64 / 60.0;
+        let tokens_per_second = self.config.requests_per_second();
         let tokens_to_add = elapsed_seconds * tokens_per_second;
 
         // Add tokens, capped at burst size

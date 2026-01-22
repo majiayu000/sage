@@ -1,5 +1,6 @@
 //! Storage configuration
 
+use crate::recovery::RetryConfig;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -49,32 +50,6 @@ impl Default for ConnectionPool {
             connect_timeout: Duration::from_secs(5),
             idle_timeout: Duration::from_secs(300),
             max_lifetime: Duration::from_secs(1800),
-        }
-    }
-}
-
-/// Retry configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RetryConfig {
-    /// Maximum retry attempts
-    pub max_retries: u32,
-    /// Initial delay between retries
-    #[serde(with = "humantime_serde")]
-    pub initial_delay: Duration,
-    /// Maximum delay between retries
-    #[serde(with = "humantime_serde")]
-    pub max_delay: Duration,
-    /// Backoff multiplier
-    pub backoff_multiplier: f32,
-}
-
-impl Default for RetryConfig {
-    fn default() -> Self {
-        Self {
-            max_retries: 3,
-            initial_delay: Duration::from_millis(100),
-            max_delay: Duration::from_secs(5),
-            backoff_multiplier: 2.0,
         }
     }
 }
@@ -223,7 +198,7 @@ impl Default for StorageConfig {
             postgres: None,
             sqlite: SqliteConfig::default(),
             fallback_strategy: FallbackStrategy::AutoFallback,
-            retry: RetryConfig::default(),
+            retry: RetryConfig::for_storage(),
             health_check_enabled: true,
             health_check_interval: Duration::from_secs(30),
             auto_migrate: true,
@@ -344,8 +319,8 @@ mod tests {
 
     #[test]
     fn test_retry_config() {
-        let retry = RetryConfig::default();
-        assert_eq!(retry.max_retries, 3);
+        let retry = RetryConfig::for_storage();
+        assert_eq!(retry.max_attempts, 3);
         assert_eq!(retry.backoff_multiplier, 2.0);
     }
 

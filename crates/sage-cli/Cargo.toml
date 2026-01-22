@@ -59,5 +59,7 @@ signal-hook-tokio = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3.10"
+expectrl = "0.7"
+rexpect = "0.5"
 
 

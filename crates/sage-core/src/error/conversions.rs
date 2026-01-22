@@ -155,3 +155,60 @@ impl From<crate::sandbox::SandboxError> for SageError {
         }
     }
 }
+
+impl From<crate::memory::storage::MemoryStorageError> for SageError {
+    fn from(error: crate::memory::storage::MemoryStorageError) -> Self {
+        use crate::memory::storage::MemoryStorageError;
+        match error {
+            MemoryStorageError::NotFound(id) => {
+                Self::not_found_resource(format!("Memory not found: {}", id), "memory")
+            }
+            MemoryStorageError::Io(err) => Self::io(err.to_string()),
+            MemoryStorageError::Serialization(err) => Self::json(err.to_string()),
+            MemoryStorageError::Corrupted(msg) => {
+                Self::storage(format!("Memory storage corrupted: {}", msg))
+            }
+            MemoryStorageError::StorageFull => Self::storage("Memory storage full"),
+        }
+    }
+}
+
+impl From<crate::learning::LearningError> for SageError {
+    fn from(error: crate::learning::LearningError) -> Self {
+        use crate::learning::LearningError;
+        match error {
+            LearningError::Disabled => {
+                Self::agent_with_context("Learning operation failed", "Learning mode is disabled")
+            }
+            LearningError::PatternNotFound(pattern) => {
+                Self::not_found_resource(format!("Pattern not found: {}", pattern), "pattern")
+            }
+            LearningError::StorageError(msg) => {
+                Self::storage(format!("Learning storage error: {}", msg))
+            }
+            LearningError::PatternLimitReached => {
+                Self::agent_with_context("Learning operation failed", "Pattern limit reached")
+            }
+        }
+    }
+}
+
+impl From<crate::recovery::rate_limiter::RateLimitError> for SageError {
+    fn from(error: crate::recovery::rate_limiter::RateLimitError) -> Self {
+        use crate::recovery::rate_limiter::RateLimitError;
+        match error {
+            RateLimitError::Timeout { waited } => Self::Timeout {
+                seconds: waited.as_secs(),
+                context: Some("Rate limit timeout".to_string()),
+            },
+            RateLimitError::WouldBlock => {
+                Self::agent_with_context("Rate limit exceeded", "Would block in non-blocking mode")
+            }
+            RateLimitError::ConcurrencyExceeded { max } => Self::agent_with_context(
+                "Concurrency limit exceeded",
+                format!("Maximum concurrent requests: {}", max),
+            ),
+            RateLimitError::Closed => Self::agent("Rate limiter closed"),
+        }
+    }
+}

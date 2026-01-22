@@ -7,6 +7,7 @@ use crate::types::TaskMetadata;
 use anyhow::Context;
 use tracing::instrument;
 
+use super::event_manager::ExecutionEvent;
 use super::UnifiedExecutor;
 
 impl UnifiedExecutor {
@@ -28,9 +29,10 @@ impl UnifiedExecutor {
         let execution = AgentExecution::new(task.clone());
 
         // Start session recording if available
+        let provider = self.config.get_default_provider().to_string();
+        let model = self.config.default_model_parameters()?.model.clone();
+
         if let Some(recorder) = self.session_manager.session_recorder() {
-            let provider = self.config.get_default_provider().to_string();
-            let model = self.config.default_model_parameters()?.model.clone();
             recorder
                 .lock()
                 .await
@@ -38,6 +40,20 @@ impl UnifiedExecutor {
                 .await
                 .context("Failed to start session recording")?;
         }
+
+        // Emit session started event to UI
+        let session_id = self
+            .session_manager
+            .current_session_id()
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| self.id.to_string());
+        self.event_manager
+            .emit(ExecutionEvent::SessionStarted {
+                session_id,
+                model: model.clone(),
+                provider: provider.clone(),
+            })
+            .await;
 
         // Build system prompt (includes skills for AI auto-invocation)
         let system_prompt = self.build_system_prompt().await?;

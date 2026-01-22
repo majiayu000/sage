@@ -185,9 +185,11 @@ pub fn global_adapter() -> Option<&'static EventAdapter> {
 /// Emit an event to the global adapter
 pub fn emit_event(event: AgentEvent) {
     if let Some(adapter) = global_adapter() {
-        adapter.handle_event(event);
+        adapter.handle_event(event.clone());
         // Notify rnk to re-render after state update
         rnk::request_render();
+    } else {
+        tracing::warn!("emit_event called but no global adapter set: {:?}", event);
     }
 }
 
@@ -230,5 +232,50 @@ mod tests {
 
         let state = state_handle.read().unwrap();
         assert!(matches!(state.phase, ExecutionPhase::Thinking));
+    }
+
+    #[test]
+    fn test_error_event_sets_error_phase() {
+        let adapter = EventAdapter::with_default_state();
+
+        // Simulate the error flow from execution_loop.rs
+        // 1. First ThinkingStopped is emitted (this sets phase to Idle)
+        adapter.handle_event(AgentEvent::ThinkingStopped);
+        let state = adapter.get_state();
+        assert!(matches!(state.phase, ExecutionPhase::Idle), "After ThinkingStopped: {:?}", state.phase);
+
+        // 2. Then error is emitted
+        adapter.handle_event(AgentEvent::error("api_error", "Test error message"));
+
+        // Verify state is Error
+        let state = adapter.get_state();
+        match &state.phase {
+            ExecutionPhase::Error { message } => {
+                assert_eq!(message, "Test error message");
+            }
+            other => {
+                panic!("Expected Error phase, got {:?}", other);
+            }
+        }
+    }
+
+    #[test]
+    fn test_error_not_overwritten_by_thinking_stopped() {
+        let adapter = EventAdapter::with_default_state();
+
+        // Set error state
+        adapter.handle_event(AgentEvent::error("api_error", "Test error"));
+
+        // Verify error is set
+        let state = adapter.get_state();
+        assert!(matches!(state.phase, ExecutionPhase::Error { .. }), "Error should be set");
+
+        // ThinkingStopped should NOT overwrite error
+        adapter.handle_event(AgentEvent::ThinkingStopped);
+
+        let state = adapter.get_state();
+        // This test will FAIL if ThinkingStopped overwrites Error
+        assert!(matches!(state.phase, ExecutionPhase::Error { .. }),
+            "Error should NOT be overwritten by ThinkingStopped, got {:?}", state.phase);
     }
 }

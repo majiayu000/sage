@@ -4,16 +4,15 @@
 
 use crate::args::{Cli, Commands, ConfigAction, TrajectoryAction};
 use crate::commands::interactive::{CliOnboarding, check_config_status};
-use crate::commands::unified::OutputModeArg;
 use crate::console::CliConsole;
 use crate::{app, commands};
 use sage_core::config::credential::ConfigStatus;
-use sage_core::error::SageResult;
-use std::io::IsTerminal;
+use sage_core::error::{SageError, SageResult};
+use std::io::{IsTerminal, Read};
 
 /// Route CLI commands to their respective handlers
 pub async fn route(cli: Cli) -> SageResult<()> {
-    // Handle subcommands first (utility commands and legacy support)
+    // Handle subcommands first (utility commands)
     if let Some(command) = &cli.command {
         return match command {
             // Utility commands
@@ -32,11 +31,6 @@ pub async fn route(cli: Cli) -> SageResult<()> {
                 session_dir,
                 detailed,
             } => commands::diagnostics::usage(session_dir.as_deref(), *detailed).await,
-
-            // Legacy commands (hidden but still supported for backward compatibility)
-            Commands::Run { .. } => route_legacy_run(&cli).await,
-            Commands::Interactive { .. } => route_legacy_interactive(&cli).await,
-            Commands::Unified { .. } => route_legacy_unified(&cli).await,
         };
     }
 
@@ -45,10 +39,15 @@ pub async fn route(cli: Cli) -> SageResult<()> {
 }
 
 /// Main execution route - unified entry point for all execution modes
-async fn route_main(cli: Cli) -> SageResult<()> {
+async fn route_main(mut cli: Cli) -> SageResult<()> {
     // Check configuration status and run onboarding if needed
     let (config_status, _status_hint) = check_config_status();
-    if config_status == ConfigStatus::Unconfigured {
+
+    // Check if stdin is a TTY (required for rnk App mode to read user input)
+    let is_tty = std::io::stdin().is_terminal();
+
+    // Only run onboarding if we're in a TTY (can interact with user)
+    if config_status == ConfigStatus::Unconfigured && is_tty {
         let console = CliConsole::new(true);
         let mut onboarding = CliOnboarding::new();
         match onboarding.run().await {
@@ -64,11 +63,20 @@ async fn route_main(cli: Cli) -> SageResult<()> {
         }
     }
 
-    // Determine execution mode
-    let non_interactive = cli.print_mode;
+    // If stdin is a pipe and no task was provided, read task from stdin
+    if !is_tty && cli.task.is_none() {
+        let mut input = String::new();
+        if std::io::stdin().read_to_string(&mut input).is_ok() {
+            let trimmed = input.trim();
+            if !trimmed.is_empty() {
+                cli.task = Some(trimmed.to_string());
+            }
+        }
+    }
 
-    // Check if stdin is a TTY (required for rnk App mode to read user input)
-    let is_tty = std::io::stdin().is_terminal();
+    // Determine execution mode
+    // When stdin is piped, force non-interactive mode
+    let non_interactive = cli.print_mode || !is_tty;
 
     // Debug: log TTY detection
     tracing::debug!(
@@ -77,11 +85,15 @@ async fn route_main(cli: Cli) -> SageResult<()> {
         non_interactive
     );
 
-    // Use non-UI execution if:
-    // 1. Print mode (non-interactive)
-    // 2. Not running in a TTY (rnk requires interactive terminal)
-    // Otherwise use new rnk UI as default
-    if non_interactive || !is_tty {
+    if non_interactive && cli.task.is_none() && !cli.continue_session && cli.resume_session.is_none()
+    {
+        return Err(SageError::invalid_input(
+            "No task provided. Supply a task argument, pipe input, or use `-c` / `-r` to resume.",
+        ));
+    }
+
+    // Use non-UI execution when non-interactive or not running in a TTY.
+    if non_interactive {
         // Execute using UnifiedExecutor (the single execution path)
         // Session resume is handled by unified_execute when continue_recent or resume_session_id is set
         commands::unified_execute(commands::UnifiedArgs {
@@ -104,99 +116,6 @@ async fn route_main(cli: Cli) -> SageResult<()> {
             path: None,
             context: Some("Running rnk App mode".to_string()),
         })
-    }
-}
-
-/// Route legacy `sage run "task"` command
-async fn route_legacy_run(cli: &Cli) -> SageResult<()> {
-    if let Some(Commands::Run {
-        task,
-        provider: _,
-        model: _,
-        model_base_url: _,
-        api_key: _,
-        max_steps,
-        working_dir,
-        config_file,
-        trajectory_file: _,
-        patch_path: _,
-        must_patch: _,
-        verbose,
-    }) = &cli.command
-    {
-        // Route to unified executor in non-interactive mode
-        commands::unified_execute(commands::UnifiedArgs {
-            task: Some(task.clone()),
-            config_file: config_file.clone(),
-            working_dir: working_dir.clone(),
-            max_steps: *max_steps,
-            verbose: *verbose,
-            non_interactive: true, // Legacy run is always non-interactive
-            resume_session_id: None,
-            continue_recent: false,
-            stream_json: false,
-            output_mode: OutputModeArg::default(),
-        })
-        .await
-    } else {
-        unreachable!()
-    }
-}
-
-/// Route legacy `sage interactive` command
-async fn route_legacy_interactive(cli: &Cli) -> SageResult<()> {
-    if let Some(Commands::Interactive {
-        config_file,
-        trajectory_file: _,
-        working_dir,
-        verbose,
-    }) = &cli.command
-    {
-        // Route to unified executor in interactive mode
-        commands::unified_execute(commands::UnifiedArgs {
-            task: None,
-            config_file: config_file.clone(),
-            working_dir: working_dir.clone(),
-            max_steps: None,
-            verbose: *verbose,
-            non_interactive: false,
-            resume_session_id: None,
-            continue_recent: false,
-            stream_json: false,
-            output_mode: OutputModeArg::default(),
-        })
-        .await
-    } else {
-        unreachable!()
-    }
-}
-
-/// Route legacy `sage unified` command
-async fn route_legacy_unified(cli: &Cli) -> SageResult<()> {
-    if let Some(Commands::Unified {
-        task,
-        config_file,
-        working_dir,
-        max_steps,
-        verbose,
-        non_interactive,
-    }) = &cli.command
-    {
-        commands::unified_execute(commands::UnifiedArgs {
-            task: task.clone(),
-            config_file: config_file.clone(),
-            working_dir: working_dir.clone(),
-            max_steps: *max_steps,
-            verbose: *verbose,
-            non_interactive: *non_interactive,
-            resume_session_id: None,
-            continue_recent: false,
-            stream_json: false,
-            output_mode: OutputModeArg::default(),
-        })
-        .await
-    } else {
-        unreachable!()
     }
 }
 

@@ -1,6 +1,6 @@
 //! Token bucket rate limiter implementation
 
-use super::types::{RateLimitError, RateLimitGuard, RateLimiterConfig};
+use super::types::{RateLimitConfig, RateLimitError, RateLimitGuard};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{Mutex, Semaphore};
@@ -10,7 +10,7 @@ use tokio::time::sleep;
 #[derive(Debug)]
 pub struct RateLimiter {
     /// Configuration
-    config: RateLimiterConfig,
+    config: RateLimitConfig,
     /// Current tokens available
     tokens: Arc<Mutex<f64>>,
     /// Last refill time
@@ -22,11 +22,11 @@ pub struct RateLimiter {
 impl RateLimiter {
     /// Create a new rate limiter with default configuration
     pub fn new() -> Self {
-        Self::with_config(RateLimiterConfig::default())
+        Self::with_config(RateLimitConfig::default())
     }
 
     /// Create a new rate limiter with custom configuration
-    pub fn with_config(config: RateLimiterConfig) -> Self {
+    pub fn with_config(config: RateLimitConfig) -> Self {
         let tokens = config.burst_size as f64;
         Self {
             concurrent_semaphore: Arc::new(Semaphore::new(config.max_concurrent as usize)),
@@ -43,7 +43,7 @@ impl RateLimiter {
 
         let now = Instant::now();
         let elapsed = now.duration_since(*last_refill).as_secs_f64();
-        let new_tokens = elapsed * self.config.requests_per_second;
+        let new_tokens = elapsed * self.config.requests_per_second();
 
         *tokens = (*tokens + new_tokens).min(self.config.burst_size as f64);
         *last_refill = now;
@@ -125,7 +125,7 @@ impl RateLimiter {
 
             // Calculate wait time for next token
             let tokens_needed = 1.0 - *tokens;
-            let wait_secs = tokens_needed / self.config.requests_per_second;
+            let wait_secs = tokens_needed / self.config.requests_per_second();
             let wait_duration = Duration::from_secs_f64(wait_secs).min(Duration::from_millis(100));
 
             drop(tokens);
@@ -150,7 +150,7 @@ impl RateLimiter {
     }
 
     /// Get configuration
-    pub fn config(&self) -> &RateLimiterConfig {
+    pub fn config(&self) -> &RateLimitConfig {
         &self.config
     }
 }

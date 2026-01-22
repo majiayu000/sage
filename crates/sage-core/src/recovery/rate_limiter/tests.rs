@@ -198,13 +198,19 @@ mod tests {
     #[test]
     fn test_config_presets() {
         let anthropic = RateLimiterConfig::for_anthropic();
-        assert!(anthropic.requests_per_second >= 50.0);
+        // Anthropic: 50 RPM = 0.833 RPS
+        assert!(anthropic.requests_per_second() >= 0.8);
+        assert!(anthropic.requests_per_minute.unwrap_or(0) >= 50);
 
         let openai = RateLimiterConfig::for_openai();
-        assert!(openai.requests_per_second >= 60.0);
+        // OpenAI: 60 RPM = 1.0 RPS
+        assert!(openai.requests_per_second() >= 1.0);
+        assert!(openai.requests_per_minute.unwrap_or(0) >= 60);
 
         let conservative = RateLimiterConfig::conservative();
-        assert!(conservative.requests_per_second <= 2.0);
+        // Conservative: 60 RPM = 1.0 RPS
+        assert!(conservative.requests_per_second() <= 2.0);
+        assert!(conservative.requests_per_minute.unwrap_or(0) <= 120);
     }
 
     #[tokio::test]
