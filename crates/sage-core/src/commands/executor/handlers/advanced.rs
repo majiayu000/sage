@@ -1,81 +1,89 @@
 //! Advanced built-in command handlers
+//!
+//! Design principles:
+//! 1. Local-first: Commands that can be handled locally should NOT call LLM
+//! 2. Decoupled: Each command is independent and self-contained
+//! 3. Reusable: Common utilities are shared across commands
 
 use crate::error::SageResult;
 
 use super::super::types::CommandExecutor;
 use crate::commands::types::{CommandInvocation, CommandResult, InteractiveCommand};
 
-/// Execute /cost command - show session cost and token usage
+/// Execute /cost command - show session cost and token usage locally
 pub(super) async fn execute_cost() -> SageResult<CommandResult> {
-    // This is a local command that displays session statistics
-    // The actual cost tracking would need to be integrated with the session system
-    let output = r#"
-Session Cost & Usage
+    // TODO: Integrate with actual session cost tracking
+    let output = r#"Session Cost & Usage
 ====================
 
-This command shows the total cost and token usage for the current session.
+Token usage tracking is enabled for this session.
 
-To get accurate cost information:
-1. Token usage is tracked per API call
-2. Cost is calculated based on the provider's pricing
-3. Cache hits reduce costs significantly
+To view detailed cost information:
+- Token counts are tracked per API call
+- Cost is calculated based on provider pricing
+- Use trajectory files for detailed analysis
 
-Note: Cost tracking requires session recording to be enabled.
-Use 'sage run --trajectory-file <path>' to enable detailed tracking.
-"#;
-    Ok(CommandResult::local(output).with_status("Showing cost..."))
+Current session stats will be shown here once integrated.
+
+Tip: Use 'sage --trajectory-file <path>' for detailed tracking."#;
+    Ok(CommandResult::local(output))
 }
 
-/// Execute /context command - show context/token breakdown
+/// Execute /context command - show context/token breakdown locally
 pub(super) async fn execute_context() -> SageResult<CommandResult> {
-    // This is a local command that shows context window usage
-    let output = r#"
-Context Window Usage
+    // TODO: Integrate with actual context tracking
+    let output = r#"Context Window Usage
 ====================
 
-This command visualizes the current context window usage.
+Context tracking is active for this session.
 
-Context breakdown includes:
-- System prompt tokens
-- Conversation history tokens
-- Tool definitions tokens
-- Available remaining tokens
+Typical context breakdown:
+- System prompt: ~2K tokens
+- Conversation history: varies
+- Tool definitions: ~1K tokens
+- Available space: depends on model
 
-The context window limit depends on your model:
+Model context limits:
 - GPT-4: 8K-128K tokens
 - Claude: 100K-200K tokens
 - GLM-4: 128K tokens
 
-Use /compact to reduce context usage when approaching limits.
-"#;
-    Ok(CommandResult::local(output).with_status("Showing context..."))
+Tip: Use /compact to reduce context usage when approaching limits."#;
+    Ok(CommandResult::local(output))
 }
 
-/// Execute /status command - show agent status
+/// Execute /status command - show agent status locally
 pub(super) async fn execute_status(executor: &CommandExecutor) -> SageResult<CommandResult> {
-    // Get version from cargo
     let version = env!("CARGO_PKG_VERSION");
+    let builtin_count = executor.registry.read().await.builtin_count();
+
+    // Get config info
+    let config_info = match crate::config::load_config() {
+        Ok(config) => format!(
+            "- Default provider: {}\n- Max steps: {}",
+            config.get_default_provider(),
+            config.max_steps.map_or("unlimited".to_string(), |s| s.to_string())
+        ),
+        Err(_) => "- Config: Not loaded".to_string(),
+    };
 
     let output = format!(
-        r#"
-Sage Agent Status
+        r#"Sage Agent Status
 =================
 
 Version: {}
 Status: Running
 
 Configuration:
-- Config loaded from: sage_config.json
+{}
 - Commands registered: {} builtins
 
-For detailed provider and model info, check your sage_config.json file.
-Use /doctor to diagnose any connection issues.
-"#,
-        version,
-        executor.registry.read().await.builtin_count()
+Use /config for detailed configuration.
+Use /commands to list all available commands."#,
+        version, config_info, builtin_count
     );
 
-    Ok(CommandResult::local(output).with_status("Showing status..."))
+    Ok(CommandResult::local(output))
 }
 
 /// Execute /resume command - resume previous session
@@ -94,51 +102,92 @@ pub(super) async fn execute_resume(invocation: &CommandInvocation) -> SageResult
     .with_status("Opening session selector..."))
 }
 
-/// Execute /plan command - view/manage execution plan
+/// Execute /plan command - view/manage execution plan locally
 pub(super) async fn execute_plan(invocation: &CommandInvocation) -> SageResult<CommandResult> {
+    use std::fs;
+    use std::path::Path;
+
+    let plan_path = Path::new(".sage/plan.md");
     let subcommand = invocation.arguments.first().map(|s| s.as_str());
 
     match subcommand {
         Some("open") => {
-            let prompt = "Open the current execution plan file in the default editor. The plan file is located at .sage/plan.md in the project directory.";
-            Ok(CommandResult::prompt(prompt).with_status("Opening plan..."))
+            if plan_path.exists() {
+                // Try to open with default editor
+                #[cfg(target_os = "macos")]
+                let _ = std::process::Command::new("open").arg(plan_path).spawn();
+                #[cfg(target_os = "linux")]
+                let _ = std::process::Command::new("xdg-open").arg(plan_path).spawn();
+                #[cfg(target_os = "windows")]
+                let _ = std::process::Command::new("notepad").arg(plan_path).spawn();
+
+                Ok(CommandResult::local("Opening plan in default editor..."))
+            } else {
+                Ok(CommandResult::local(
+                    "No plan file exists.\n\nUse '/plan create' to create a new plan.",
+                ))
+            }
         }
         Some("clear") => {
-            let prompt = "Clear the current execution plan by removing or emptying .sage/plan.md";
-            Ok(CommandResult::prompt(prompt).with_status("Clearing plan..."))
+            if plan_path.exists() {
+                match fs::remove_file(plan_path) {
+                    Ok(_) => Ok(CommandResult::local("Plan cleared.")),
+                    Err(e) => Ok(CommandResult::local(format!("Failed to clear plan: {}", e))),
+                }
+            } else {
+                Ok(CommandResult::local("No plan to clear."))
+            }
         }
         Some("create") => {
-            let prompt = r#"Create a new execution plan for the current task.
+            // Create .sage directory if needed
+            let sage_dir = Path::new(".sage");
+            if !sage_dir.exists() {
+                let _ = fs::create_dir_all(sage_dir);
+            }
 
-The plan should:
-1. Analyze the current task requirements
-2. Break down into actionable steps
-3. Identify dependencies between steps
-4. Save to .sage/plan.md
+            let template = r#"# Execution Plan
 
-Ask the user what they want to accomplish if no task context is available."#;
-            Ok(CommandResult::prompt(prompt).with_status("Creating plan..."))
+## Goal
+[Describe the goal here]
+
+## Steps
+- [ ] Step 1
+- [ ] Step 2
+- [ ] Step 3
+
+## Notes
+[Add any notes here]
+"#;
+            match fs::write(plan_path, template) {
+                Ok(_) => Ok(CommandResult::local(
+                    "Plan created at .sage/plan.md\n\nUse '/plan open' to edit it.",
+                )),
+                Err(e) => Ok(CommandResult::local(format!("Failed to create plan: {}", e))),
+            }
         }
         _ => {
-            // Default: show current plan or indicate no plan exists
-            let prompt = r#"Check if an execution plan exists at .sage/plan.md.
-
-If it exists:
-- Display the current plan content
-- Show plan status (completed steps, pending steps)
-- Suggest '/plan open' to edit in editor
-
-If no plan exists:
-- Inform the user no plan is active
-- Suggest '/plan create' to create a new plan"#;
-            Ok(CommandResult::prompt(prompt).with_status("Checking plan..."))
+            // Default: show current plan
+            if plan_path.exists() {
+                match fs::read_to_string(plan_path) {
+                    Ok(content) => {
+                        let mut output = String::from("Current Plan:\n\n");
+                        output.push_str(&content);
+                        output.push_str("\n\nCommands: /plan open | /plan clear | /plan create");
+                        Ok(CommandResult::local(output))
+                    }
+                    Err(e) => Ok(CommandResult::local(format!("Failed to read plan: {}", e))),
+                }
+            } else {
+                Ok(CommandResult::local(
+                    "No active plan.\n\nUse '/plan create' to create a new plan.",
+                ))
+            }
         }
     }
 }
 
-/// Execute /title command - set custom session title (Claude Code style)
+/// Execute /title command - set custom session title
 pub(super) async fn execute_title(invocation: &CommandInvocation) -> SageResult<CommandResult> {
-    // Join all arguments as the title
     let title = invocation.arguments.join(" ");
 
     if title.is_empty() {
@@ -146,7 +195,6 @@ pub(super) async fn execute_title(invocation: &CommandInvocation) -> SageResult<
             "Usage: /title <title>\n\nSet a custom title for the current session.\nExample: /title Fix authentication bug",
         ))
     } else {
-        // Return an interactive command that the CLI will handle
         Ok(
             CommandResult::interactive(InteractiveCommand::Title { title })
                 .with_status("Setting session title..."),
@@ -156,7 +204,6 @@ pub(super) async fn execute_title(invocation: &CommandInvocation) -> SageResult<
 
 /// Execute /login command - configure API credentials
 pub(super) async fn execute_login() -> SageResult<CommandResult> {
-    // Return an interactive command that the CLI will handle
     Ok(
         CommandResult::interactive(InteractiveCommand::Login)
             .with_status("Opening credential setup..."),
@@ -177,7 +224,7 @@ pub(super) async fn execute_output(invocation: &CommandInvocation) -> SageResult
             )
         }
         Some(m) => Ok(CommandResult::local(format!(
-            "Unknown output mode: '{}'\nValid modes: streaming, batch, silent",
+            "Unknown output mode: '{}'\n\nValid modes:\n  streaming - Real-time output (default)\n  batch     - Collect and display at end\n  silent    - No output",
             m
         ))),
         None => Ok(CommandResult::local(

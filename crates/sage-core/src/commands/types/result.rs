@@ -14,6 +14,8 @@ pub enum InteractiveCommand {
     Login,
     /// Switch output display mode
     OutputMode { mode: String },
+    /// Clear conversation history
+    Clear,
 }
 
 /// Command execution result
