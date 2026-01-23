@@ -17,7 +17,7 @@ mod state;
 
 pub use state::{SharedState, UiCommand, UiState};
 
-use components::{render_command_suggestions, render_input, render_spinner, render_status_bar};
+use components::{get_selected_command, render_command_suggestions, render_input, render_spinner, render_status_bar};
 use crossterm::terminal;
 use executor::{background_loop, executor_loop};
 use parking_lot::RwLock;
@@ -87,12 +87,15 @@ fn app() -> Element {
                 return;
             }
 
-            // ESC to cancel
+            // ESC to cancel or clear suggestions
             if key.escape {
-                let s = state.read();
+                let mut s = state.write();
                 if s.is_busy {
                     drop(s);
                     let _ = cmd_tx.try_send(UiCommand::Cancel);
+                } else {
+                    // Reset suggestion index
+                    s.suggestion_index = 0;
                 }
                 return;
             }
@@ -112,10 +115,41 @@ fn app() -> Element {
                 }
             }
 
+            // Up arrow - move selection up
+            if key.up_arrow {
+                let mut s = state.write();
+                if s.input_text.starts_with('/') && s.suggestion_index > 0 {
+                    s.suggestion_index -= 1;
+                }
+                return;
+            }
+
+            // Down arrow - move selection down
+            if key.down_arrow {
+                let mut s = state.write();
+                if s.input_text.starts_with('/') {
+                    s.suggestion_index += 1;
+                    // Will be clamped during render
+                }
+                return;
+            }
+
+            // Tab - auto-complete selected command
+            if key.tab && !key.shift {
+                let mut s = state.write();
+                if let Some(cmd) = get_selected_command(&s.input_text, s.suggestion_index) {
+                    s.input_text = cmd;
+                    s.suggestion_index = 0;
+                }
+                return;
+            }
+
             // Backspace
             if key.backspace {
                 let mut s = state.write();
                 s.input_text.pop();
+                // Reset suggestion index when input changes
+                s.suggestion_index = 0;
                 return;
             }
 
@@ -123,8 +157,18 @@ fn app() -> Element {
             if key.return_key {
                 let text = {
                     let mut s = state.write();
-                    let text = s.input_text.clone();
+                    // If showing suggestions and a command is selected, use that
+                    let text = if s.input_text.starts_with('/') {
+                        if let Some(cmd) = get_selected_command(&s.input_text, s.suggestion_index) {
+                            cmd
+                        } else {
+                            s.input_text.clone()
+                        }
+                    } else {
+                        s.input_text.clone()
+                    };
                     s.input_text.clear();
+                    s.suggestion_index = 0;
                     text
                 };
                 if !text.is_empty() {
@@ -137,6 +181,8 @@ fn app() -> Element {
             if !ch.is_empty() && !key.ctrl && !key.alt {
                 let mut s = state.write();
                 s.input_text.push_str(ch);
+                // Reset suggestion index when input changes
+                s.suggestion_index = 0;
             }
         }
     });
@@ -147,6 +193,7 @@ fn app() -> Element {
     let input_text = ui_state.input_text.clone();
     let status_text = ui_state.status_text.clone();
     let permission_mode = ui_state.permission_mode;
+    let suggestion_index = ui_state.suggestion_index;
     drop(ui_state);
 
     // Build UI components
@@ -165,7 +212,17 @@ fn app() -> Element {
 
     // Show command suggestions when typing /
     let suggestions = if !is_busy {
-        render_command_suggestions(&input_text)
+        if let Some((element, match_count)) = render_command_suggestions(&input_text, suggestion_index) {
+            // Clamp suggestion index if needed
+            let mut s = state.write();
+            if s.suggestion_index >= match_count {
+                s.suggestion_index = match_count.saturating_sub(1);
+            }
+            drop(s);
+            Some(element)
+        } else {
+            None
+        }
     } else {
         None
     };

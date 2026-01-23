@@ -296,7 +296,8 @@ const BUILTIN_COMMANDS: &[(&str, &str)] = &[
 ];
 
 /// Render command suggestions when input starts with /
-pub fn render_command_suggestions(input: &str) -> Option<Element> {
+/// Returns (Element, match_count) so caller can clamp selection index
+pub fn render_command_suggestions(input: &str, selected_index: usize) -> Option<(Element, usize)> {
     if !input.starts_with('/') {
         return None;
     }
@@ -314,27 +315,60 @@ pub fn render_command_suggestions(input: &str) -> Option<Element> {
         return None;
     }
 
+    let match_count = matches.len();
+    let selected = selected_index.min(match_count.saturating_sub(1));
+
     let mut container = RnkBox::new().flex_direction(FlexDirection::Column);
 
     // Command list - each command on its own line
-    for (name, desc) in matches {
-        container = container.child(
-            RnkBox::new()
-                .flex_direction(FlexDirection::Row)
-                .child(
-                    Text::new(format!("  /{}", name))
-                        .color(Color::Cyan)
-                        .into_element(),
-                )
-                .child(
-                    Text::new(format!(" - {}", desc))
-                        .color(Color::BrightBlack)
-                        .dim()
-                        .into_element(),
-                )
-                .into_element(),
-        );
+    for (i, (name, desc)) in matches.iter().enumerate() {
+        let is_selected = i == selected;
+        let prefix = if is_selected { "▸ " } else { "  " };
+        let cmd_color = if is_selected { Color::White } else { Color::Cyan };
+        let desc_color = if is_selected { Color::White } else { Color::BrightBlack };
+
+        let mut row = RnkBox::new()
+            .flex_direction(FlexDirection::Row)
+            .child(
+                Text::new(format!("{}/{}", prefix, name))
+                    .color(cmd_color)
+                    .bold()
+                    .into_element(),
+            )
+            .child(
+                Text::new(format!(" - {}", desc))
+                    .color(desc_color)
+                    .into_element(),
+            );
+
+        if is_selected {
+            // Highlight the selected row
+            row = row;
+        }
+
+        container = container.child(row.into_element());
     }
 
-    Some(container.into_element())
+    Some((container.into_element(), match_count))
+}
+
+/// Get the selected command name based on input and index
+pub fn get_selected_command(input: &str, selected_index: usize) -> Option<String> {
+    if !input.starts_with('/') {
+        return None;
+    }
+
+    let query = &input[1..];
+    let matches: Vec<_> = BUILTIN_COMMANDS
+        .iter()
+        .filter(|(name, _)| name.starts_with(query))
+        .take(6)
+        .collect();
+
+    if matches.is_empty() {
+        return None;
+    }
+
+    let selected = selected_index.min(matches.len().saturating_sub(1));
+    Some(format!("/{}", matches[selected].0))
 }
