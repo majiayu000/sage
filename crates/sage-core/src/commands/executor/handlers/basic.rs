@@ -123,7 +123,7 @@ pub(super) async fn execute_commands(executor: &CommandExecutor) -> SageResult<C
         output.push_str("## Built-in Commands\n");
         for cmd in builtins {
             output.push_str(&format!(
-                "- **/{}`** - {}\n",
+                "- /{} - {}\n",
                 cmd.name,
                 cmd.description.as_deref().unwrap_or("No description")
             ));
@@ -135,7 +135,7 @@ pub(super) async fn execute_commands(executor: &CommandExecutor) -> SageResult<C
         output.push_str("## Project Commands\n");
         for cmd in project {
             output.push_str(&format!(
-                "- **/{}`** - {}\n",
+                "- /{} - {}\n",
                 cmd.name,
                 cmd.description.as_deref().unwrap_or("No description")
             ));
@@ -147,12 +147,12 @@ pub(super) async fn execute_commands(executor: &CommandExecutor) -> SageResult<C
         output.push_str("## User Commands\n");
         for cmd in user {
             output.push_str(&format!(
-                "- **/{}`** - {}\n",
+                "- /{} - {}\n",
                 cmd.name,
                 cmd.description.as_deref().unwrap_or("No description")
             ));
         }
     }
 
-    Ok(CommandResult::prompt(output).show())
+    Ok(CommandResult::local(output))
 }

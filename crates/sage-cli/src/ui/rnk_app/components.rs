@@ -302,7 +302,6 @@ pub fn render_command_suggestions(input: &str) -> Option<Element> {
     }
 
     let query = &input[1..]; // Remove leading /
-    let term_width = terminal::size().map(|(w, _)| w as usize).unwrap_or(80);
 
     // Filter commands that match the query
     let matches: Vec<_> = BUILTIN_COMMANDS
@@ -317,21 +316,8 @@ pub fn render_command_suggestions(input: &str) -> Option<Element> {
 
     let mut container = RnkBox::new().flex_direction(FlexDirection::Column);
 
-    // Header
-    container = container.child(
-        Text::new("  Commands:")
-            .color(Color::BrightBlack)
-            .dim()
-            .into_element(),
-    );
-
-    // Command list
+    // Command list - each command on its own line
     for (name, desc) in matches {
-        let cmd_text = format!("  /{}", name);
-        let desc_text = format!(" - {}", desc);
-        let full_line = format!("{}{}", cmd_text, desc_text);
-        let _ = truncate_to_width(&full_line, term_width);
-
         container = container.child(
             RnkBox::new()
                 .flex_direction(FlexDirection::Row)
@@ -341,7 +327,7 @@ pub fn render_command_suggestions(input: &str) -> Option<Element> {
                         .into_element(),
                 )
                 .child(
-                    Text::new(format!(" - {}", truncate_to_width(desc, term_width.saturating_sub(cmd_text.len() + 3))))
+                    Text::new(format!(" - {}", desc))
                         .color(Color::BrightBlack)
                         .dim()
                         .into_element(),
