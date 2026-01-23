@@ -120,5 +120,10 @@ pub async fn handle_interactive_command_v2(
             };
             Ok(SlashCommandAction::SetOutputMode(output_mode))
         }
+        InteractiveCommand::Clear => {
+            // Clear is handled locally - just acknowledge
+            console.info("Conversation cleared.");
+            Ok(SlashCommandAction::Handled)
+        }
     }
 }
