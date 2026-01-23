@@ -9,7 +9,6 @@ use sage_core::trajectory::SessionRecorder;
 use sage_core::types::TaskMetadata;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::Mutex;
 
 use super::args::UnifiedArgs;
@@ -124,14 +123,6 @@ pub async fn execute_session_resume(
         None
     };
 
-    // Set up input channel for interactive mode
-    let verbose = args.verbose;
-    if !args.non_interactive {
-        let (input_channel, input_handle) = InputChannel::new(16);
-        executor.set_input_channel(input_channel);
-        tokio::spawn(handle_user_input(input_handle, verbose));
-    }
-
     // Print session info
     console.info(&format!("Provider: {}", config.get_default_provider()));
     let max_steps_display = match executor.options().max_steps {
@@ -141,17 +132,34 @@ pub async fn execute_session_resume(
     console.info(&format!("Max Steps: {}", max_steps_display));
     console.print_separator();
 
-    // Prompt for next user input
-    console.info("Enter your next message to continue the conversation (Ctrl+D to finish):");
-    let mut input = String::new();
-    let stdin = tokio::io::stdin();
-    let mut reader = BufReader::new(stdin);
-    while reader.read_line(&mut input).await? > 0 {}
-    let next_message = input.trim().to_string();
+    // Read initial input BEFORE setting up InputChannel to avoid stdin competition
+    console.info("Enter your next message to continue the conversation (press Enter to submit):");
+    print!("> ");
+    let _ = std::io::Write::flush(&mut std::io::stdout());
+
+    // Use spawn_blocking to avoid blocking the async runtime
+    let next_message = tokio::task::spawn_blocking(|| {
+        let mut input = String::new();
+        match std::io::stdin().read_line(&mut input) {
+            Ok(0) => String::new(), // EOF
+            Ok(_) => input.trim().to_string(),
+            Err(_) => String::new(),
+        }
+    })
+    .await
+    .unwrap_or_default();
 
     if next_message.is_empty() {
         console.info("No input provided. Session ready for future continuation.");
         return Ok(());
+    }
+
+    // Now set up input channel for interactive mode (after initial input is read)
+    let verbose = args.verbose;
+    if !args.non_interactive {
+        let (input_channel, input_handle) = InputChannel::new(16);
+        executor.set_input_channel(input_channel);
+        tokio::spawn(handle_user_input(input_handle, verbose));
     }
 
     // Create task metadata with the new message

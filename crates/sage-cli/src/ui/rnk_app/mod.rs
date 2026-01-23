@@ -17,7 +17,7 @@ mod state;
 
 pub use state::{SharedState, UiCommand, UiState};
 
-use components::{get_selected_command, render_command_suggestions, render_input, render_spinner, render_status_bar};
+use components::{count_matching_commands, get_selected_command, render_command_suggestions, render_input, render_spinner, render_status_bar};
 use crossterm::terminal;
 use executor::{background_loop, executor_loop};
 use parking_lot::RwLock;
@@ -124,12 +124,14 @@ fn app() -> Element {
                 return;
             }
 
-            // Down arrow - move selection down
+            // Down arrow - move selection down (with clamping)
             if key.down_arrow {
                 let mut s = state.write();
                 if s.input_text.starts_with('/') {
-                    s.suggestion_index += 1;
-                    // Will be clamped during render
+                    let max_count = count_matching_commands(&s.input_text);
+                    if s.suggestion_index < max_count.saturating_sub(1) {
+                        s.suggestion_index += 1;
+                    }
                 }
                 return;
             }
@@ -211,18 +213,9 @@ fn app() -> Element {
     let status_bar = render_status_bar(permission_mode);
 
     // Show command suggestions when typing /
+    // Note: suggestion_index is clamped in input handler, not here (pure render)
     let suggestions = if !is_busy {
-        if let Some((element, match_count)) = render_command_suggestions(&input_text, suggestion_index) {
-            // Clamp suggestion index if needed
-            let mut s = state.write();
-            if s.suggestion_index >= match_count {
-                s.suggestion_index = match_count.saturating_sub(1);
-            }
-            drop(s);
-            Some(element)
-        } else {
-            None
-        }
+        render_command_suggestions(&input_text, suggestion_index).map(|(element, _)| element)
     } else {
         None
     };

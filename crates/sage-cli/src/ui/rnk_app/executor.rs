@@ -8,6 +8,7 @@ use sage_core::agent::{ExecutionMode, ExecutionOptions, UnifiedExecutor};
 use sage_core::config::load_config;
 use sage_core::error::SageResult;
 use sage_core::input::InputChannel;
+use sage_core::interrupt::{interrupt_current_task, reset_global_interrupt_manager, InterruptReason};
 use sage_core::output::OutputMode;
 use sage_core::types::TaskMetadata;
 use sage_core::ui::bridge::state::ExecutionPhase;
@@ -172,6 +173,9 @@ pub async fn executor_loop(
                 }
                 rnk::request_render();
 
+                // Reset interrupt manager for new task
+                reset_global_interrupt_manager();
+
                 emit_event(AgentEvent::UserInputReceived { input: prompt.clone() });
                 emit_event(AgentEvent::ThinkingStarted);
 
@@ -194,6 +198,9 @@ pub async fn executor_loop(
                 rnk::request_render();
             }
             UiCommand::Cancel => {
+                // Actually cancel the running task through interrupt manager
+                interrupt_current_task(InterruptReason::UserInterrupt);
+
                 emit_event(AgentEvent::ThinkingStopped);
                 rnk::println(
                     Text::new("⦻ Cancelled")
@@ -228,15 +235,12 @@ pub fn background_loop(
         std::thread::sleep(std::time::Duration::from_millis(80));
 
         // Check if should quit
-        {
-            let s = state.read();
-            if s.should_quit {
-                break;
-            }
+        if state.read().should_quit {
+            break;
         }
 
-        // Check for new messages and print them
-        {
+        // Collect data under lock, then process I/O outside lock
+        let pending_work = {
             let app_state = adapter.get_state();
             let messages = app_state.display_messages();
             let new_count = messages.len();
@@ -252,52 +256,71 @@ pub fn background_loop(
                 }
             }
 
-            // Print header once (after session info is available)
-            if !ui_state.header_printed {
-                // Wait for session info or print with defaults after a short delay
+            // Collect header work
+            let header_work = if !ui_state.header_printed {
                 let has_session_info = ui_state.session.model != "unknown";
                 if has_session_info || ui_state.printed_count > 0 {
-                    drop(ui_state);
-                    let s = state.read();
-                    rnk::println(render_header(&s.session));
-                    rnk::println(""); // Empty line
-                    drop(s);
-                    let mut s = state.write();
-                    s.header_printed = true;
-                    ui_state = s;
+                    ui_state.header_printed = true;
+                    Some(render_header(&ui_state.session))
+                } else {
+                    None
                 }
-            }
+            } else {
+                None
+            };
 
             // Update busy state from adapter - Error state is not busy
-            ui_state.is_busy = !matches!(app_state.phase, ExecutionPhase::Idle | ExecutionPhase::Error { .. });
+            ui_state.is_busy =
+                !matches!(app_state.phase, ExecutionPhase::Idle | ExecutionPhase::Error { .. });
             if ui_state.is_busy && ui_state.status_text.is_empty() {
                 ui_state.status_text = app_state.status_text();
             }
 
-            // Check for error state and display error message
-            if let ExecutionPhase::Error { ref message } = app_state.phase {
+            // Collect error work
+            let error_work = if let ExecutionPhase::Error { ref message } = app_state.phase {
                 if !ui_state.error_displayed {
                     ui_state.error_displayed = true;
-                    drop(ui_state);
-                    rnk::println(render_error(message));
-                    rnk::println(""); // Empty line
-                    ui_state = state.write();
+                    Some(render_error(message))
+                } else {
+                    None
                 }
             } else {
-                // Reset error_displayed flag when not in error state
                 ui_state.error_displayed = false;
-            }
+                None
+            };
 
-            // Print new messages
-            if new_count > ui_state.printed_count {
-                for msg in messages.iter().skip(ui_state.printed_count) {
-                    drop(ui_state);
-                    rnk::println(format_message(msg));
-                    rnk::println(""); // Empty line
-                    ui_state = state.write();
-                }
+            // Collect new messages - format them while holding lock
+            let new_messages: Vec<_> = if new_count > ui_state.printed_count {
+                let msgs: Vec<_> = messages
+                    .iter()
+                    .skip(ui_state.printed_count)
+                    .map(|msg| format_message(msg))
+                    .collect();
                 ui_state.printed_count = new_count;
-            }
+                msgs
+            } else {
+                Vec::new()
+            };
+
+            (header_work, error_work, new_messages)
+        }; // Lock released here
+
+        // Process all I/O outside the lock
+        let (header_work, error_work, new_messages) = pending_work;
+
+        if let Some(header) = header_work {
+            rnk::println(header);
+            rnk::println(""); // Empty line
+        }
+
+        if let Some(error) = error_work {
+            rnk::println(error);
+            rnk::println(""); // Empty line
+        }
+
+        for msg_element in new_messages {
+            rnk::println(msg_element);
+            rnk::println(""); // Empty line
         }
 
         // Request render to update spinner animation

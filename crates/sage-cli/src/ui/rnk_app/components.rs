@@ -367,3 +367,18 @@ pub fn get_selected_command(input: &str, selected_index: usize) -> Option<String
     let selected = selected_index.min(matches.len().saturating_sub(1));
     Some(format!("/{}", matches[selected].0))
 }
+
+/// Count matching commands for suggestion index clamping
+/// Used by input handler to clamp index before render
+pub fn count_matching_commands(input: &str) -> usize {
+    if !input.starts_with('/') {
+        return 0;
+    }
+
+    let query = &input[1..];
+    BUILTIN_COMMANDS
+        .iter()
+        .filter(|(name, _)| name.starts_with(query))
+        .take(6)
+        .count()
+}
