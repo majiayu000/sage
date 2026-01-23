@@ -59,6 +59,8 @@ pub struct UiState {
     pub error_displayed: bool,
     /// Session info
     pub session: SessionState,
+    /// Selected command suggestion index (0-based, default 0 for first match)
+    pub suggestion_index: usize,
 }
 
 impl Default for UiState {
@@ -84,6 +86,7 @@ impl Default for UiState {
                 step: 0,
                 max_steps: None,
             },
+            suggestion_index: 0,
         }
     }
 }
