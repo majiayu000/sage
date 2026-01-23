@@ -12,6 +12,8 @@ pub enum SlashCommandAction {
     Prompt(String),
     /// Command was handled locally, no further action needed
     Handled,
+    /// Command was handled locally with output to display
+    HandledWithOutput(String),
     /// Set output mode
     SetOutputMode(OutputMode),
     /// Resume a session
@@ -49,7 +51,7 @@ pub async fn process_slash_command(
                     console.info(status);
                 }
                 if let Some(output) = &result.local_output {
-                    println!("{}", output);
+                    return Ok(SlashCommandAction::HandledWithOutput(output.clone()));
                 }
                 return Ok(SlashCommandAction::Handled);
             }

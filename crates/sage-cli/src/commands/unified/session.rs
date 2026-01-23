@@ -34,6 +34,10 @@ pub async fn execute_single_task(
     let task_description = match action {
         SlashCommandAction::Prompt(desc) => desc,
         SlashCommandAction::Handled => return Ok(()),
+        SlashCommandAction::HandledWithOutput(output) => {
+            println!("{}", output);
+            return Ok(());
+        }
         SlashCommandAction::SetOutputMode(mode) => {
             executor.set_output_mode(mode);
             console.info("Output mode updated.");

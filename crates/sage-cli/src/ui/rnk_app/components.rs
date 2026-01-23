@@ -327,7 +327,7 @@ pub fn render_command_suggestions(input: &str, selected_index: usize) -> Option<
         let cmd_color = if is_selected { Color::White } else { Color::Cyan };
         let desc_color = if is_selected { Color::White } else { Color::BrightBlack };
 
-        let mut row = RnkBox::new()
+        let row = RnkBox::new()
             .flex_direction(FlexDirection::Row)
             .child(
                 Text::new(format!("{}/{}", prefix, name))
@@ -340,11 +340,6 @@ pub fn render_command_suggestions(input: &str, selected_index: usize) -> Option<
                     .color(desc_color)
                     .into_element(),
             );
-
-        if is_selected {
-            // Highlight the selected row
-            row = row;
-        }
 
         container = container.child(row.into_element());
     }
