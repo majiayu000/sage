@@ -96,6 +96,17 @@ pub async fn executor_loop(
                         rnk::request_render();
                         continue;
                     }
+                    Ok(SlashCommandAction::HandledWithOutput(output)) => {
+                        // Command was handled locally with output to display
+                        // Print each line separately to avoid rnk layout issues
+                        for line in output.lines() {
+                            rnk::println(
+                                Text::new(line).color(Color::White).into_element(),
+                            );
+                        }
+                        rnk::request_render();
+                        continue;
+                    }
                     Ok(SlashCommandAction::SetOutputMode(mode)) => {
                         executor.set_output_mode(mode);
                         rnk::println(
