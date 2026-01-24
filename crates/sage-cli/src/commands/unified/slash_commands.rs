@@ -18,6 +18,10 @@ pub enum SlashCommandAction {
     SetOutputMode(OutputMode),
     /// Resume a session
     Resume { session_id: Option<String> },
+    /// Switch model
+    SwitchModel { model: String },
+    /// Exit the application
+    Exit,
 }
 
 /// Process slash commands
@@ -124,6 +128,18 @@ pub async fn handle_interactive_command_v2(
             // Clear is handled locally - just acknowledge
             console.info("Conversation cleared.");
             Ok(SlashCommandAction::Handled)
+        }
+        InteractiveCommand::Logout => {
+            console.info("Credentials cleared.");
+            Ok(SlashCommandAction::Handled)
+        }
+        InteractiveCommand::Model { model } => {
+            console.info(&format!("Model switching to '{}' requires restart.", model));
+            Ok(SlashCommandAction::SwitchModel { model: model.clone() })
+        }
+        InteractiveCommand::Exit => {
+            console.info("Exiting...");
+            Ok(SlashCommandAction::Exit)
         }
     }
 }

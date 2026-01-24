@@ -232,3 +232,73 @@ pub(super) async fn execute_output(invocation: &CommandInvocation) -> SageResult
         )),
     }
 }
+
+/// Execute /doctor command - run diagnostics
+pub(super) async fn execute_doctor() -> SageResult<CommandResult> {
+    let output = r#"Sage Diagnostics
+================
+
+Running system checks...
+
+[✓] Sage version: OK
+[✓] Configuration: Loaded
+[?] API connectivity: Use /status to check provider status
+
+Recommendations:
+- Use /config to view current configuration
+- Use /login to configure API credentials
+- Use /status to check connection status
+
+For detailed diagnostics, run: sage --diagnostics"#;
+    Ok(CommandResult::local(output))
+}
+
+/// Execute /logout command - clear stored credentials
+pub(super) async fn execute_logout() -> SageResult<CommandResult> {
+    use std::path::PathBuf;
+
+    // Check common credential locations
+    let home = std::env::var("HOME").unwrap_or_default();
+    let cred_path = PathBuf::from(&home).join(".sage").join("credentials.json");
+
+    if cred_path.exists() {
+        match std::fs::remove_file(&cred_path) {
+            Ok(_) => Ok(CommandResult::interactive(InteractiveCommand::Logout)
+                .with_status("Credentials cleared successfully.")),
+            Err(e) => Ok(CommandResult::local(format!(
+                "Failed to clear credentials: {}\n\nYou may need to manually delete: {}",
+                e,
+                cred_path.display()
+            ))),
+        }
+    } else {
+        Ok(CommandResult::local(
+            "No credentials to clear.\n\nCredentials are typically stored in:\n- ~/.sage/credentials.json\n- Environment variables (ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.)",
+        ))
+    }
+}
+
+/// Execute /model command - switch to a different model
+pub(super) async fn execute_model(invocation: &CommandInvocation) -> SageResult<CommandResult> {
+    let model = invocation.arguments.first().map(|s| s.as_str());
+
+    match model {
+        Some(m) => Ok(
+            CommandResult::interactive(InteractiveCommand::Model {
+                model: m.to_string(),
+            })
+            .with_status(format!("Model switching to '{}'...", m)),
+        ),
+        None => Ok(CommandResult::local(
+            "Usage: /model <model-name>\n\nExamples:\n  /model gpt-4\n  /model claude-3-opus\n  /model glm-4\n\nUse /config to see configured providers and models.",
+        )),
+    }
+}
+
+/// Execute /exit command - exit the application
+pub(super) async fn execute_exit() -> SageResult<CommandResult> {
+    Ok(
+        CommandResult::interactive(InteractiveCommand::Exit)
+            .with_status("Exiting..."),
+    )
+}

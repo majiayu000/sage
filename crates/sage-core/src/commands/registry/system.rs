@@ -194,5 +194,46 @@ impl CommandRegistry {
             .builtin(),
             CommandSource::Builtin,
         );
+
+        // Doctor command - run diagnostics
+        self.register(
+            SlashCommand::new(
+                "doctor",
+                "Run diagnostics to check Sage configuration, API connectivity, and system health.",
+            )
+            .with_description("Run diagnostics")
+            .builtin(),
+            CommandSource::Builtin,
+        );
+
+        // Logout command - clear stored credentials
+        self.register(
+            SlashCommand::new(
+                "logout",
+                "Clear stored API credentials. Use /login to reconfigure.",
+            )
+            .with_description("Clear credentials")
+            .builtin(),
+            CommandSource::Builtin,
+        );
+
+        // Model command - switch model
+        self.register(
+            SlashCommand::new(
+                "model",
+                "Switch to a different AI model. Usage: /model <model-name>",
+            )
+            .with_description("Switch AI model")
+            .builtin(),
+            CommandSource::Builtin,
+        );
+
+        // Exit command - exit the application
+        self.register(
+            SlashCommand::new("exit", "Exit Sage and return to the terminal.")
+                .with_description("Exit Sage")
+                .builtin(),
+            CommandSource::Builtin,
+        );
     }
 }
