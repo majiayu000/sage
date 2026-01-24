@@ -50,6 +50,22 @@ pub async fn execute_single_task(
             ));
             return Ok(());
         }
+        SlashCommandAction::SwitchModel { model } => {
+            console.warn(&format!(
+                "Model switch to '{}' requires restart. Use `sage --model {}`.",
+                model, model
+            ));
+            return Ok(());
+        }
+        SlashCommandAction::Doctor => {
+            // Run the doctor command
+            crate::commands::diagnostics::doctor("sage_config.json").await?;
+            return Ok(());
+        }
+        SlashCommandAction::Exit => {
+            console.info("Exiting...");
+            return Ok(());
+        }
     };
 
     // Execute the task

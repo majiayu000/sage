@@ -155,6 +155,60 @@ pub async fn executor_loop(
                         rnk::request_render();
                         continue;
                     }
+                    Ok(SlashCommandAction::SwitchModel { model }) => {
+                        // Try to switch model dynamically
+                        match executor.switch_model(&model) {
+                            Ok(_) => {
+                                rnk::println(
+                                    Text::new(format!("✓ Switched to model: {}", model))
+                                        .color(Color::Green)
+                                        .into_element(),
+                                );
+                            }
+                            Err(e) => {
+                                rnk::println(
+                                    Text::new(format!("✗ Failed to switch model: {}", e))
+                                        .color(Color::Red)
+                                        .into_element(),
+                                );
+                            }
+                        }
+                        rnk::request_render();
+                        continue;
+                    }
+                    Ok(SlashCommandAction::Doctor) => {
+                        // Run diagnostics
+                        {
+                            let mut s = state.write();
+                            s.is_busy = true;
+                            s.status_text = "Running diagnostics...".to_string();
+                        }
+                        rnk::request_render();
+
+                        // Run doctor command
+                        let result = crate::commands::diagnostics::doctor("sage_config.json").await;
+
+                        {
+                            let mut s = state.write();
+                            s.is_busy = false;
+                            s.status_text.clear();
+                        }
+
+                        if let Err(e) = result {
+                            rnk::println(
+                                Text::new(format!("Diagnostics failed: {}", e))
+                                    .color(Color::Red)
+                                    .into_element(),
+                            );
+                        }
+                        rnk::request_render();
+                        continue;
+                    }
+                    Ok(SlashCommandAction::Exit) => {
+                        state.write().should_quit = true;
+                        rnk::request_render();
+                        break;
+                    }
                     Err(e) => {
                         rnk::println(
                             Text::new(format!("Command error: {}", e))

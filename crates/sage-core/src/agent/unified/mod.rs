@@ -272,4 +272,20 @@ impl UnifiedExecutor {
             )),
         }
     }
+
+    /// Switch to a different model
+    ///
+    /// This updates the configuration and recreates the LLM orchestrator.
+    /// Returns the new model name on success.
+    pub fn switch_model(&mut self, model: &str) -> SageResult<String> {
+        // Update the config with the new model
+        self.config.set_default_model(model.to_string());
+
+        // Recreate the LLM orchestrator with the new config
+        self.llm_orchestrator = LlmOrchestrator::from_config(&self.config)
+            .map_err(|e| SageError::config(format!("Failed to switch model: {}", e)))?;
+
+        tracing::info!("Switched to model: {}", model);
+        Ok(model.to_string())
+    }
 }

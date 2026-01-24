@@ -99,6 +99,13 @@ impl Config {
         Ok(())
     }
 
+    /// Set the model for the default provider
+    pub fn set_default_model(&mut self, model: String) {
+        if let Some(params) = self.model_providers.get_mut(&self.default_provider) {
+            params.model = model;
+        }
+    }
+
     /// Validate the entire configuration
     pub fn validate(&self) -> SageResult<()> {
         // Validate default provider exists

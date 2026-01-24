@@ -20,6 +20,8 @@ pub enum SlashCommandAction {
     Resume { session_id: Option<String> },
     /// Switch model
     SwitchModel { model: String },
+    /// Run diagnostics
+    Doctor,
     /// Exit the application
     Exit,
 }
@@ -136,6 +138,9 @@ pub async fn handle_interactive_command_v2(
         InteractiveCommand::Model { model } => {
             console.info(&format!("Model switching to '{}' requires restart.", model));
             Ok(SlashCommandAction::SwitchModel { model: model.clone() })
+        }
+        InteractiveCommand::Doctor => {
+            Ok(SlashCommandAction::Doctor)
         }
         InteractiveCommand::Exit => {
             console.info("Exiting...");

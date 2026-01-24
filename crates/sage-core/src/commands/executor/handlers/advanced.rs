@@ -235,22 +235,10 @@ pub(super) async fn execute_output(invocation: &CommandInvocation) -> SageResult
 
 /// Execute /doctor command - run diagnostics
 pub(super) async fn execute_doctor() -> SageResult<CommandResult> {
-    let output = r#"Sage Diagnostics
-================
-
-Running system checks...
-
-[✓] Sage version: OK
-[✓] Configuration: Loaded
-[?] API connectivity: Use /status to check provider status
-
-Recommendations:
-- Use /config to view current configuration
-- Use /login to configure API credentials
-- Use /status to check connection status
-
-For detailed diagnostics, run: sage --diagnostics"#;
-    Ok(CommandResult::local(output))
+    Ok(
+        CommandResult::interactive(InteractiveCommand::Doctor)
+            .with_status("Running diagnostics..."),
+    )
 }
 
 /// Execute /logout command - clear stored credentials
