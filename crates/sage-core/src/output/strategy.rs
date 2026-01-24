@@ -396,6 +396,9 @@ impl OutputStrategy for SilentOutput {
 ///
 /// Uses the event bridge to update AppState, which rnk then renders.
 /// This replaces terminal print! calls with state updates.
+///
+/// **Note**: This implementation uses the deprecated `emit_event` function.
+/// In a future version, this should be refactored to use `UiContext` instead.
 #[derive(Debug, Default)]
 pub struct RnkOutput {
     content_buffer: Mutex<String>,
@@ -409,6 +412,7 @@ impl RnkOutput {
     }
 }
 
+#[allow(deprecated)]
 impl OutputStrategy for RnkOutput {
     fn on_content_start(&self) {
         if let Ok(mut buffer) = self.content_buffer.lock() {

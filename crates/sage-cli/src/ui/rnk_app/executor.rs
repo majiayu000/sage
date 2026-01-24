@@ -12,6 +12,7 @@ use sage_core::interrupt::{interrupt_current_task, reset_global_interrupt_manage
 use sage_core::output::OutputMode;
 use sage_core::types::TaskMetadata;
 use sage_core::ui::bridge::state::ExecutionPhase;
+#[allow(deprecated)]
 use sage_core::ui::bridge::{emit_event, AgentEvent};
 use sage_tools::get_default_tools;
 use tokio::sync::mpsc;
