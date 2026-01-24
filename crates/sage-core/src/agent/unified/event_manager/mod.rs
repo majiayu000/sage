@@ -1,12 +1,13 @@
 //! Event management for unified executor
 //!
 //! Provides a centralized event dispatch system that coordinates UI updates
-//! through the rnk-based UI bridge.
+//! through the UI abstraction layer (UiContext).
 
 #[cfg(test)]
 mod tests;
 
-use crate::ui::bridge::{emit_event, AgentEvent};
+use crate::ui::bridge::AgentEvent;
+use crate::ui::traits::UiContext;
 
 /// Execution events that can be observed throughout the agent lifecycle
 #[derive(Debug, Clone)]
@@ -44,19 +45,34 @@ pub enum ExecutionEvent {
 }
 
 /// Event manager that dispatches events to the UI
+///
+/// Uses `UiContext` for dependency injection instead of global state.
 pub struct EventManager {
     pub(crate) current_step: u32,
     debug_events: bool,
     pub(crate) is_animating: bool,
+    /// UI context for emitting events (replaces global emit_event)
+    ui_context: UiContext,
 }
 
 impl EventManager {
-    /// Create a new event manager
+    /// Create a new event manager with default (no-op) UI context
     pub fn new() -> Self {
         Self {
             current_step: 0,
             debug_events: false,
             is_animating: false,
+            ui_context: UiContext::noop(),
+        }
+    }
+
+    /// Create a new event manager with a custom UI context
+    pub fn with_ui_context(ui_context: UiContext) -> Self {
+        Self {
+            current_step: 0,
+            debug_events: false,
+            is_animating: false,
+            ui_context,
         }
     }
 
@@ -64,6 +80,21 @@ impl EventManager {
     pub fn with_debug(mut self, enabled: bool) -> Self {
         self.debug_events = enabled;
         self
+    }
+
+    /// Set the UI context
+    pub fn set_ui_context(&mut self, ui_context: UiContext) {
+        self.ui_context = ui_context;
+    }
+
+    /// Get a reference to the UI context
+    pub fn ui_context(&self) -> &UiContext {
+        &self.ui_context
+    }
+
+    /// Emit an event to the UI
+    fn emit_ui_event(&self, event: AgentEvent) {
+        self.ui_context.emit(event);
     }
 
     /// Emit an execution event
@@ -79,18 +110,18 @@ impl EventManager {
             ExecutionEvent::ThinkingStarted { step_number } => {
                 self.current_step = step_number;
                 self.is_animating = true;
-                emit_event(AgentEvent::ThinkingStarted);
+                self.emit_ui_event(AgentEvent::ThinkingStarted);
             }
             ExecutionEvent::ThinkingStopped => {
                 self.is_animating = false;
-                emit_event(AgentEvent::ThinkingStopped);
+                self.emit_ui_event(AgentEvent::ThinkingStopped);
             }
             ExecutionEvent::ToolExecutionStarted {
                 ref tool_name,
                 ref tool_id,
             } => {
                 self.is_animating = true;
-                emit_event(AgentEvent::ToolExecutionStarted {
+                self.emit_ui_event(AgentEvent::ToolExecutionStarted {
                     tool_name: tool_name.clone(),
                     tool_id: tool_id.clone(),
                     description: tool_name.clone(),
@@ -103,7 +134,7 @@ impl EventManager {
                 duration_ms,
             } => {
                 self.is_animating = false;
-                emit_event(AgentEvent::ToolExecutionCompleted {
+                self.emit_ui_event(AgentEvent::ToolExecutionCompleted {
                     tool_name: tool_name.clone(),
                     tool_id: tool_id.clone(),
                     success,
@@ -117,7 +148,7 @@ impl EventManager {
                 ref provider,
             } => {
                 tracing::info!("Session started: {} ({}/{})", session_id, provider, model);
-                emit_event(AgentEvent::SessionStarted {
+                self.emit_ui_event(AgentEvent::SessionStarted {
                     session_id: session_id.clone(),
                     model: model.clone(),
                     provider: provider.clone(),
@@ -126,7 +157,7 @@ impl EventManager {
             ExecutionEvent::SessionEnded { ref session_id } => {
                 tracing::info!("Session ended: {}", session_id);
                 self.is_animating = false;
-                emit_event(AgentEvent::SessionEnded {
+                self.emit_ui_event(AgentEvent::SessionEnded {
                     session_id: session_id.clone(),
                 });
             }
@@ -136,7 +167,7 @@ impl EventManager {
             } => {
                 tracing::error!("Execution error [{}]: {}", error_type, message);
                 self.is_animating = false;
-                emit_event(AgentEvent::ErrorOccurred {
+                self.emit_ui_event(AgentEvent::ErrorOccurred {
                     error_type: error_type.clone(),
                     message: message.clone(),
                 });
@@ -159,7 +190,7 @@ impl EventManager {
                 ref tool_id,
             } => {
                 self.is_animating = true;
-                emit_event(AgentEvent::ToolExecutionStarted {
+                self.emit_ui_event(AgentEvent::ToolExecutionStarted {
                     tool_name: tool_name.clone(),
                     tool_id: tool_id.clone(),
                     description: detail,
@@ -173,7 +204,7 @@ impl EventManager {
 
     /// Stop any running animation
     pub async fn stop_animation(&self) {
-        emit_event(AgentEvent::ThinkingStopped);
+        self.emit_ui_event(AgentEvent::ThinkingStopped);
     }
 
     /// Set the current step number
@@ -195,13 +226,13 @@ impl EventManager {
     pub async fn start_animation_thinking(&mut self, step: u32) {
         self.current_step = step;
         self.is_animating = true;
-        emit_event(AgentEvent::ThinkingStarted);
+        self.emit_ui_event(AgentEvent::ThinkingStarted);
     }
 
     /// Start tool execution animation
     pub async fn start_animation_tool(&mut self, tool_name: &str) {
         self.is_animating = true;
-        emit_event(AgentEvent::ToolExecutionStarted {
+        self.emit_ui_event(AgentEvent::ToolExecutionStarted {
             tool_name: tool_name.to_string(),
             tool_id: String::new(),
             description: tool_name.to_string(),

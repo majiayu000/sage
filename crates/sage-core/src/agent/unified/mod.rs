@@ -54,6 +54,7 @@ use crate::output::{OutputMode, OutputStrategy};
 use crate::skills::SkillRegistry;
 use crate::trajectory::SessionRecorder;
 use crate::types::Id;
+use crate::ui::traits::UiContext;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 use tracing::instrument;
@@ -179,6 +180,19 @@ impl UnifiedExecutor {
     pub fn set_hook_registry(&mut self, registry: HookRegistry) {
         use crate::hooks::HookExecutor;
         self.tool_orchestrator.set_hook_executor(HookExecutor::new(registry));
+    }
+
+    /// Set the UI context for event handling
+    ///
+    /// This replaces the global event adapter with dependency injection,
+    /// allowing for testable and framework-agnostic UI updates.
+    pub fn set_ui_context(&mut self, ui_context: UiContext) {
+        self.event_manager.set_ui_context(ui_context);
+    }
+
+    /// Get a reference to the UI context
+    pub fn ui_context(&self) -> &UiContext {
+        self.event_manager.ui_context()
     }
 
     /// Get a reference to the hook executor

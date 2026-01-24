@@ -5,6 +5,7 @@ use crate::config::model::Config;
 use crate::error::SageResult;
 use crate::input::InputChannel;
 use crate::trajectory::SessionRecorder;
+use crate::ui::traits::UiContext;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -16,6 +17,7 @@ pub struct UnifiedExecutorBuilder {
     options: ExecutionOptions,
     input_channel: Option<InputChannel>,
     session_recorder: Option<Arc<Mutex<SessionRecorder>>>,
+    ui_context: Option<UiContext>,
 }
 
 impl UnifiedExecutorBuilder {
@@ -26,6 +28,7 @@ impl UnifiedExecutorBuilder {
             options: ExecutionOptions::default(),
             input_channel: None,
             session_recorder: None,
+            ui_context: None,
         }
     }
 
@@ -50,6 +53,15 @@ impl UnifiedExecutorBuilder {
     /// Set session recorder
     pub fn with_session_recorder(mut self, recorder: Arc<Mutex<SessionRecorder>>) -> Self {
         self.session_recorder = Some(recorder);
+        self
+    }
+
+    /// Set UI context for event handling
+    ///
+    /// This enables dependency injection for UI updates instead of using
+    /// global state.
+    pub fn with_ui_context(mut self, ui_context: UiContext) -> Self {
+        self.ui_context = Some(ui_context);
         self
     }
 
@@ -81,6 +93,10 @@ impl UnifiedExecutorBuilder {
 
         if let Some(recorder) = self.session_recorder {
             executor.set_session_recorder(recorder);
+        }
+
+        if let Some(ui_context) = self.ui_context {
+            executor.set_ui_context(ui_context);
         }
 
         Ok(executor)

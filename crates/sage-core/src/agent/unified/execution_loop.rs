@@ -3,6 +3,7 @@
 use crate::agent::{AgentExecution, AgentState, AgentStep, ExecutionError, ExecutionOutcome};
 use crate::error::{SageError, SageResult, UnifiedError};
 use crate::session::{EnhancedTokenUsage, EnhancedToolCall};
+#[allow(deprecated)]
 use crate::ui::bridge::{emit_event, AgentEvent};
 
 use super::UnifiedExecutor;

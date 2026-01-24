@@ -17,13 +17,16 @@ mod state;
 
 pub use state::{SharedState, UiCommand, UiState};
 
+use super::adapters::RnkEventSink;
 use components::{count_matching_commands, get_selected_command, render_command_suggestions, render_input, render_spinner, render_status_bar};
 use crossterm::terminal;
 use executor::{background_loop, executor_loop};
 use parking_lot::RwLock;
 use rnk::prelude::*;
 use sage_core::input::InputChannel;
-use sage_core::ui::bridge::{set_global_adapter, EventAdapter};
+#[allow(deprecated)]
+use sage_core::ui::bridge::{set_global_adapter, set_refresh_callback, EventAdapter};
+use sage_core::ui::traits::UiContext;
 use std::io;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -237,10 +240,22 @@ fn app() -> Element {
 
 /// Run the rnk-based app (async version)
 pub async fn run_rnk_app() -> io::Result<()> {
-    // Initialize event adapter
-    let adapter = EventAdapter::with_default_state();
-    set_global_adapter(adapter.clone());
-    let _ = GLOBAL_ADAPTER.set(adapter.clone());
+    // Create the RnkEventSink adapter (implements EventSink trait)
+    let (rnk_sink, adapter) = RnkEventSink::with_default_adapter();
+
+    // Set up the global adapter for backward compatibility
+    // This will be deprecated in favor of UiContext
+    #[allow(deprecated)]
+    set_global_adapter((*adapter).clone());
+    let _ = GLOBAL_ADAPTER.set((*adapter).clone());
+
+    // Set up the refresh callback (replaces direct rnk::request_render() in sage-core)
+    set_refresh_callback(|| {
+        rnk::request_render();
+    });
+
+    // Create UiContext for dependency injection (new approach)
+    let _ui_context = UiContext::new(Arc::new(rnk_sink));
 
     // Create shared state
     let state: SharedState = Arc::new(RwLock::new(UiState::default()));
@@ -261,7 +276,7 @@ pub async fn run_rnk_app() -> io::Result<()> {
 
     // Background thread for printing messages and updating spinner
     let bg_state = Arc::clone(&state);
-    let bg_adapter = adapter;
+    let bg_adapter = (*adapter).clone();
     std::thread::spawn(move || {
         background_loop(bg_state, bg_adapter);
     });

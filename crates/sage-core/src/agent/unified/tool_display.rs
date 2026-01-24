@@ -4,6 +4,7 @@
 //! in the terminal, including icons, parameter formatting, and activity descriptions.
 
 use crate::tools::types::{ToolCall, ToolResult};
+#[allow(deprecated)]
 use crate::ui::bridge::global_adapter;
 use crate::ui::Icons;
 use colored::Colorize;

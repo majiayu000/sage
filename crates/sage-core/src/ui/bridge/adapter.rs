@@ -170,24 +170,68 @@ impl Clone for EventAdapter {
 }
 
 /// Global event adapter instance for Agent to use
+///
+/// **Deprecated**: Use `UiContext` with dependency injection instead.
+/// This global singleton will be removed in a future version.
 static GLOBAL_ADAPTER: std::sync::OnceLock<EventAdapter> = std::sync::OnceLock::new();
 
+/// Callback for requesting UI refresh after state updates
+///
+/// This replaces the direct `rnk::request_render()` call, allowing
+/// sage-core to be UI-framework agnostic.
+static REFRESH_CALLBACK: std::sync::OnceLock<Box<dyn Fn() + Send + Sync>> =
+    std::sync::OnceLock::new();
+
 /// Set the global event adapter
+///
+/// **Deprecated**: Use `UiContext` with dependency injection instead.
+/// This function is kept for backward compatibility during the migration period.
+#[deprecated(
+    since = "0.6.0",
+    note = "Use UiContext with dependency injection instead. See sage_core::ui::traits::UiContext."
+)]
 pub fn set_global_adapter(adapter: EventAdapter) {
     let _ = GLOBAL_ADAPTER.set(adapter);
 }
 
+/// Set the refresh callback for UI updates
+///
+/// This should be called by the UI layer to register a callback that
+/// triggers UI refresh after state changes.
+pub fn set_refresh_callback<F>(callback: F)
+where
+    F: Fn() + Send + Sync + 'static,
+{
+    let _ = REFRESH_CALLBACK.set(Box::new(callback));
+}
+
 /// Get the global event adapter
+///
+/// **Deprecated**: Use `UiContext` with dependency injection instead.
+#[deprecated(
+    since = "0.6.0",
+    note = "Use UiContext with dependency injection instead. See sage_core::ui::traits::UiContext."
+)]
 pub fn global_adapter() -> Option<&'static EventAdapter> {
     GLOBAL_ADAPTER.get()
 }
 
 /// Emit an event to the global adapter
+///
+/// **Deprecated**: Use `UiContext::emit()` with dependency injection instead.
+/// This function is kept for backward compatibility during the migration period.
+#[deprecated(
+    since = "0.6.0",
+    note = "Use UiContext::emit() with dependency injection instead. See sage_core::ui::traits::UiContext."
+)]
 pub fn emit_event(event: AgentEvent) {
+    #[allow(deprecated)]
     if let Some(adapter) = global_adapter() {
         adapter.handle_event(event.clone());
-        // Notify rnk to re-render after state update
-        rnk::request_render();
+        // Call the refresh callback if set (replaces rnk::request_render())
+        if let Some(callback) = REFRESH_CALLBACK.get() {
+            callback();
+        }
     } else {
         tracing::warn!("emit_event called but no global adapter set: {:?}", event);
     }
