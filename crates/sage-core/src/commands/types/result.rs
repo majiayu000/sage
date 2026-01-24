@@ -12,10 +12,16 @@ pub enum InteractiveCommand {
     Title { title: String },
     /// Run login/credential setup wizard
     Login,
+    /// Clear stored credentials
+    Logout,
     /// Switch output display mode
     OutputMode { mode: String },
+    /// Switch to a different model
+    Model { model: String },
     /// Clear conversation history
     Clear,
+    /// Exit the application
+    Exit,
 }
 
 /// Command execution result

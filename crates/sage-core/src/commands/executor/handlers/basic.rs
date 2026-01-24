@@ -23,15 +23,19 @@ Just type your request and press Enter. Sage will help you with coding tasks.
 - /commands  - List all available commands
 - /config    - Show current configuration
 - /status    - Show agent status
+- /doctor    - Run diagnostics
 - /clear     - Clear conversation history
 - /compact   - Summarize conversation to save context
 - /cost      - Show session cost and token usage
 - /context   - Show context window usage
 - /undo      - Undo last file changes (via git restore)
 - /login     - Configure API credentials
+- /logout    - Clear stored credentials
+- /model     - Switch AI model
 - /output    - Switch output mode (streaming/batch/silent)
 - /resume    - Resume a previous session
 - /title     - Set session title
+- /exit      - Exit Sage
 
 ## Tips
 - Use Tab to auto-complete commands
