@@ -20,6 +20,8 @@ pub enum InteractiveCommand {
     Model { model: String },
     /// Clear conversation history
     Clear,
+    /// Run diagnostics
+    Doctor,
     /// Exit the application
     Exit,
 }
