@@ -2346,7 +2346,7 @@ dependencies = [
 
 [[package]]
 name = "rnk"
-version = "0.6.6"
+version = "0.6.13"
 dependencies = [
  "crossterm 0.28.1",
  "ctrlc",
@@ -2354,6 +2354,7 @@ dependencies = [
  "taffy",
  "textwrap",
  "thiserror 2.0.18",
+ "tokio",
  "unicode-segmentation",
  "unicode-width",
 ]
