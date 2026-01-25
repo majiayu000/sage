@@ -257,6 +257,42 @@ pub fn render_spinner(status_text: &str) -> Element {
         .into_element()
 }
 
+/// Render thinking indicator above separator (Claude Code style)
+pub fn render_thinking_indicator(status_text: &str) -> Element {
+    // Use time-based frame selection for animation
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+
+    // Rotating star animation like Claude Code
+    let star_frames = ["✱", "✲", "✳", "✴", "✵", "✶", "✷", "✸"];
+    let star = star_frames[(now_ms / 120 % star_frames.len() as u128) as usize];
+
+    // Display text - use "Cerebrating..." if status is generic
+    let display_text = if status_text.is_empty() || status_text == "Thinking..." {
+        "Cerebrating..."
+    } else {
+        status_text
+    };
+
+    RnkBox::new()
+        .flex_direction(FlexDirection::Row)
+        .child(Text::new(star).color(Color::Yellow).into_element())
+        .child(
+            Text::new(format!(" {}", display_text))
+                .color(Color::Yellow)
+                .into_element(),
+        )
+        .child(
+            Text::new(" (Esc to interrupt)")
+                .color(Color::BrightBlack)
+                .dim()
+                .into_element(),
+        )
+        .into_element()
+}
+
 /// Render status bar
 pub fn render_status_bar(permission_mode: PermissionMode) -> Element {
     let mode_color = permission_mode.color();
