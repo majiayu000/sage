@@ -18,7 +18,7 @@ mod state;
 pub use state::{SharedState, UiCommand, UiState};
 
 use super::adapters::RnkEventSink;
-use components::{count_matching_commands, get_selected_command, render_command_suggestions, render_input, render_spinner, render_status_bar};
+use components::{count_matching_commands, get_selected_command, render_command_suggestions, render_input, render_status_bar, render_thinking_indicator};
 use crossterm::terminal;
 use executor::{background_loop, executor_loop};
 use parking_lot::RwLock;
@@ -202,18 +202,20 @@ fn app() -> Element {
     drop(ui_state);
 
     // Build UI components
+    let mut layout = RnkBox::new().flex_direction(FlexDirection::Column);
+
+    // Thinking indicator above separator (in message area)
+    if is_busy {
+        layout = layout.child(render_thinking_indicator(&status_text));
+        layout = layout.child(Text::new("").into_element()); // Empty line
+    }
+
+    // Separator line
     let separator = Text::new("─".repeat(term_width as usize))
         .color(Color::BrightBlack)
         .dim()
         .into_element();
-
-    let input_or_spinner = if is_busy {
-        render_spinner(&status_text)
-    } else {
-        render_input(&input_text)
-    };
-
-    let status_bar = render_status_bar(permission_mode);
+    layout = layout.child(separator);
 
     // Show command suggestions when typing /
     // Note: suggestion_index is clamped in input handler, not here (pure render)
@@ -223,17 +225,16 @@ fn app() -> Element {
         None
     };
 
-    // Layout: separator, suggestions (if any), input/spinner, status bar
-    let mut layout = RnkBox::new()
-        .flex_direction(FlexDirection::Column)
-        .child(separator);
-
     if let Some(sugg) = suggestions {
         layout = layout.child(sugg);
     }
 
+    // Input always below separator
+    let input = render_input(&input_text);
+    let status_bar = render_status_bar(permission_mode);
+
     layout
-        .child(input_or_spinner)
+        .child(input)
         .child(status_bar)
         .into_element()
 }
