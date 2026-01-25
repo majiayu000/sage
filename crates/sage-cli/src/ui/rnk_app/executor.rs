@@ -297,7 +297,9 @@ pub fn background_loop(
         // Collect data under lock, then process I/O outside lock
         let pending_work = {
             let app_state = adapter.get_state();
-            let messages = app_state.display_messages();
+            // Use completed messages only (not streaming/temporary messages)
+            // This avoids truncation issues where partial messages get printed
+            let messages = &app_state.messages;
             let new_count = messages.len();
 
             let mut ui_state = state.write();
