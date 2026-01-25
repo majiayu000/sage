@@ -18,7 +18,7 @@ mod state;
 pub use state::{SharedState, UiCommand, UiState};
 
 use super::adapters::RnkEventSink;
-use components::{count_matching_commands, get_selected_command, render_command_suggestions, render_input, render_status_bar, render_thinking_indicator};
+use components::{count_matching_commands, get_selected_command, render_command_suggestions, render_header, render_input, render_status_bar, render_thinking_indicator};
 use crossterm::terminal;
 use executor::{background_loop, executor_loop};
 use parking_lot::RwLock;
@@ -38,6 +38,8 @@ use rnk::prelude::Box as RnkBox;
 static GLOBAL_STATE: std::sync::OnceLock<SharedState> = std::sync::OnceLock::new();
 static GLOBAL_CMD_TX: std::sync::OnceLock<mpsc::Sender<UiCommand>> = std::sync::OnceLock::new();
 static GLOBAL_ADAPTER: std::sync::OnceLock<EventAdapter> = std::sync::OnceLock::new();
+/// Track if header has been printed (for startup)
+static HEADER_PRINTED: std::sync::OnceLock<()> = std::sync::OnceLock::new();
 
 /// The main app component - renders fixed bottom UI (separator + input/spinner + status bar)
 fn app() -> Element {
@@ -62,6 +64,13 @@ fn app() -> Element {
                 .into_element();
         }
     };
+
+    // Print header on first render (rnk is now initialized)
+    if HEADER_PRINTED.set(()).is_ok() {
+        let ui_state = state.read();
+        rnk::println(render_header(&ui_state.session));
+        rnk::println(""); // Empty line after header
+    }
 
     // Get terminal size
     let term_width = terminal::size().map(|(w, _)| w).unwrap_or(80);

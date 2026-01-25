@@ -284,7 +284,7 @@ pub fn background_loop(
     state: SharedState,
     adapter: sage_core::ui::bridge::EventAdapter,
 ) {
-    use super::components::{format_message, render_error, render_header};
+    use super::components::{format_message, render_error};
 
     loop {
         std::thread::sleep(std::time::Duration::from_millis(80));
@@ -312,19 +312,6 @@ pub fn background_loop(
                     ui_state.session.session_id = Some(sid.clone());
                 }
             }
-
-            // Collect header work
-            let header_work = if !ui_state.header_printed {
-                let has_session_info = ui_state.session.model != "unknown";
-                if has_session_info || ui_state.printed_count > 0 {
-                    ui_state.header_printed = true;
-                    Some(render_header(&ui_state.session))
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
 
             // Update busy state from adapter - Error state is not busy
             ui_state.is_busy =
@@ -359,16 +346,11 @@ pub fn background_loop(
                 Vec::new()
             };
 
-            (header_work, error_work, new_messages)
+            (error_work, new_messages)
         }; // Lock released here
 
         // Process all I/O outside the lock
-        let (header_work, error_work, new_messages) = pending_work;
-
-        if let Some(header) = header_work {
-            rnk::println(header);
-            rnk::println(""); // Empty line
-        }
+        let (error_work, new_messages) = pending_work;
 
         if let Some(error) = error_work {
             rnk::println(error);
