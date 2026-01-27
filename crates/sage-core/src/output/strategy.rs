@@ -15,6 +15,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
+use tokio::runtime::Handle as TokioHandle;
+use tokio::task::JoinHandle as TokioJoinHandle;
+use tokio::time::sleep;
 
 /// Output strategy trait for different display modes
 ///
@@ -61,7 +64,12 @@ pub struct StreamingOutput {
 /// Thinking animation that runs in a background thread
 struct ThinkingAnimation {
     running: Arc<AtomicBool>,
-    handle: Option<JoinHandle<()>>,
+    handle: Option<AnimationHandle>,
+}
+
+enum AnimationHandle {
+    Thread(JoinHandle<()>),
+    Tokio(TokioJoinHandle<()>),
 }
 
 impl ThinkingAnimation {
@@ -70,24 +78,44 @@ impl ThinkingAnimation {
         let running_clone = running.clone();
         let message = message.to_string();
 
-        let handle = thread::spawn(move || {
-            let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-            let mut i = 0;
+        let handle = if let Ok(rt_handle) = TokioHandle::try_current() {
+            // If we're on a Tokio runtime, use an async task + tokio::time::sleep
+            // to avoid blocking the runtime with thread::sleep.
+            let join = rt_handle.spawn(async move {
+                let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+                let mut i = 0;
 
-            while running_clone.load(Ordering::Relaxed) {
-                print!(
-                    "\r\x1b[K\x1b[2m{} {}\x1b[0m",
-                    frames[i], message
-                );
+                while running_clone.load(Ordering::Relaxed) {
+                    print!("\r\x1b[K\x1b[2m{} {}\x1b[0m", frames[i], message);
+                    let _ = io::stdout().flush();
+                    i = (i + 1) % frames.len();
+                    sleep(Duration::from_millis(80)).await;
+                }
+
+                // Clear the line when done
+                print!("\r\x1b[K");
                 let _ = io::stdout().flush();
-                i = (i + 1) % frames.len();
-                thread::sleep(Duration::from_millis(80));
-            }
+            });
+            AnimationHandle::Tokio(join)
+        } else {
+            // Fallback to a dedicated thread when no runtime is available.
+            let join = thread::spawn(move || {
+                let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+                let mut i = 0;
 
-            // Clear the line when done
-            print!("\r\x1b[K");
-            let _ = io::stdout().flush();
-        });
+                while running_clone.load(Ordering::Relaxed) {
+                    print!("\r\x1b[K\x1b[2m{} {}\x1b[0m", frames[i], message);
+                    let _ = io::stdout().flush();
+                    i = (i + 1) % frames.len();
+                    thread::sleep(Duration::from_millis(80));
+                }
+
+                // Clear the line when done
+                print!("\r\x1b[K");
+                let _ = io::stdout().flush();
+            });
+            AnimationHandle::Thread(join)
+        };
 
         Self {
             running,
@@ -97,8 +125,19 @@ impl ThinkingAnimation {
 
     fn stop(&mut self) {
         self.running.store(false, Ordering::Relaxed);
+        // Best-effort clear in case an async task is aborted before it
+        // reaches its own clear step.
+        print!("\r\x1b[K");
+        let _ = io::stdout().flush();
         if let Some(handle) = self.handle.take() {
-            let _ = handle.join();
+            match handle {
+                AnimationHandle::Thread(handle) => {
+                    let _ = handle.join();
+                }
+                AnimationHandle::Tokio(handle) => {
+                    handle.abort();
+                }
+            }
         }
     }
 }

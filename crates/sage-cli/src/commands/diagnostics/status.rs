@@ -73,10 +73,10 @@ pub async fn status(config_file: &str) -> SageResult<()> {
     // Git info
     if is_git_repository() {
         println!("{}", "Git Repository".cyan().bold());
-        if let Ok(branch) = get_git_branch() {
+        if let Ok(branch) = get_git_branch().await {
             println!("  Branch: {}", branch.green());
         }
-        if let Ok(status) = get_git_status_summary() {
+        if let Ok(status) = get_git_status_summary().await {
             println!("  Status: {}", status);
         }
         println!();

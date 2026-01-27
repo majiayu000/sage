@@ -5,6 +5,7 @@ use colored::*;
 use sage_core::config::Config;
 use std::env;
 use std::path::Path;
+use tokio::process::Command;
 
 /// Check if configuration file exists and is valid JSON
 pub fn check_config_file(config_file: &str) -> CheckResult {
@@ -150,10 +151,11 @@ pub fn is_git_repository() -> bool {
 }
 
 /// Get current git branch name
-pub fn get_git_branch() -> Result<String, std::io::Error> {
-    let output = std::process::Command::new("git")
+pub async fn get_git_branch() -> Result<String, std::io::Error> {
+    let output = Command::new("git")
         .args(["branch", "--show-current"])
-        .output()?;
+        .output()
+        .await?;
 
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
@@ -166,10 +168,11 @@ pub fn get_git_branch() -> Result<String, std::io::Error> {
 }
 
 /// Get summary of git working tree status
-pub fn get_git_status_summary() -> Result<String, std::io::Error> {
-    let output = std::process::Command::new("git")
+pub async fn get_git_status_summary() -> Result<String, std::io::Error> {
+    let output = Command::new("git")
         .args(["status", "--porcelain"])
-        .output()?;
+        .output()
+        .await?;
 
     if output.status.success() {
         let status = String::from_utf8_lossy(&output.stdout);

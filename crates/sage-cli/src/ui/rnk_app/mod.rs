@@ -30,6 +30,7 @@ use sage_core::ui::traits::UiContext;
 use std::io;
 use std::sync::Arc;
 use tokio::sync::mpsc;
+use tokio::time::{sleep, Duration};
 
 // Alias rnk's Box to avoid conflict with std::boxed::Box
 use rnk::prelude::Box as RnkBox;
@@ -65,12 +66,7 @@ fn app() -> Element {
         }
     };
 
-    // Print header on first render (rnk is now initialized)
-    if HEADER_PRINTED.set(()).is_ok() {
-        let ui_state = state.read();
-        rnk::println(render_header(&ui_state.session));
-        rnk::println(""); // Empty line after header
-    }
+    // Header is now printed in background_loop when session info is available
 
     // Get terminal size
     let term_width = terminal::size().map(|(w, _)| w).unwrap_or(80);
@@ -208,6 +204,7 @@ fn app() -> Element {
     let status_text = ui_state.status_text.clone();
     let permission_mode = ui_state.permission_mode;
     let suggestion_index = ui_state.suggestion_index;
+    let animation_frame = ui_state.animation_frame;
     drop(ui_state);
 
     // Build UI components
@@ -215,7 +212,7 @@ fn app() -> Element {
 
     // Thinking indicator above separator (in message area)
     if is_busy {
-        layout = layout.child(render_thinking_indicator(&status_text));
+        layout = layout.child(render_thinking_indicator(&status_text, animation_frame));
         layout = layout.child(Text::new("").into_element()); // Empty line
     }
 
@@ -250,6 +247,26 @@ fn app() -> Element {
 
 /// Run the rnk-based app (async version)
 pub async fn run_rnk_app() -> io::Result<()> {
+    // Load config to get model/provider info for header
+    let (model, provider) = match sage_core::config::load_config() {
+        Ok(config) => {
+            let provider = config.default_provider.clone();
+            let keys: Vec<_> = config.model_providers.keys().cloned().collect();
+            let model = config
+                .model_providers
+                .get(&provider)
+                .map(|p| p.model.clone())
+                .unwrap_or_else(|| format!("no-provider-{}-keys:{:?}", provider, keys));
+            (model, provider)
+        }
+        Err(e) => (format!("err:{}", e), "config-error".to_string()),
+    };
+
+    // Print header immediately using println (before rnk takes over)
+    // Header is now printed in background_loop using rnk::println()
+    // Just print a blank line here to ensure clean start
+    println!();
+
     // Create the RnkEventSink adapter (implements EventSink trait)
     let (rnk_sink, adapter) = RnkEventSink::with_default_adapter();
 
@@ -265,11 +282,21 @@ pub async fn run_rnk_app() -> io::Result<()> {
     });
 
     // Create UiContext for dependency injection (new approach)
-    let _ui_context = UiContext::new(Arc::new(rnk_sink));
+    let ui_context = UiContext::new(Arc::new(rnk_sink));
 
-    // Create shared state
-    let state: SharedState = Arc::new(RwLock::new(UiState::default()));
-    let _ = GLOBAL_STATE.set(Arc::clone(&state));
+    // Create shared state with config info
+    let mut initial_state = UiState::default();
+    initial_state.session.model = model.clone();
+    initial_state.session.provider = provider.clone();
+
+    // Debug: write to file
+    std::fs::write("/tmp/sage_debug.txt", format!("model={}, provider={}", model, provider)).ok();
+
+    let state: SharedState = Arc::new(RwLock::new(initial_state));
+    let set_result = GLOBAL_STATE.set(Arc::clone(&state));
+
+    // Debug: check if set succeeded
+    std::fs::write("/tmp/sage_debug2.txt", format!("set_result={:?}", set_result.is_ok())).ok();
 
     // Create command channel
     let (cmd_tx, cmd_rx) = mpsc::channel::<UiCommand>(16);
@@ -278,18 +305,22 @@ pub async fn run_rnk_app() -> io::Result<()> {
     // Create input channel for executor
     let (input_channel, _input_handle) = InputChannel::new(16);
 
-    // Spawn executor task
+    // Spawn executor task with UI context
     let executor_state = Arc::clone(&state);
+    let executor_ui_context = ui_context.clone();
     tokio::spawn(async move {
-        executor_loop(executor_state, cmd_rx, input_channel).await;
+        executor_loop(executor_state, cmd_rx, input_channel, executor_ui_context).await;
     });
 
-    // Background thread for printing messages and updating spinner
+    // Background task for printing messages and updating spinner
     let bg_state = Arc::clone(&state);
     let bg_adapter = (*adapter).clone();
-    std::thread::spawn(move || {
-        background_loop(bg_state, bg_adapter);
+    tokio::spawn(async move {
+        background_loop(bg_state, bg_adapter).await;
     });
+
+    // Small delay to ensure background thread starts and prints header
+    sleep(Duration::from_millis(100)).await;
 
     // Run rnk app in inline mode (preserves terminal history)
     render(app).run()
