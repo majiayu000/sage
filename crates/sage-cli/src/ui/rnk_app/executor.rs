@@ -299,7 +299,7 @@ pub async fn background_loop(
 
     let theme = current_theme();
 
-    // Print compact header using rnk::println
+    // Print enhanced header banner using rnk::println
     let version = env!("CARGO_PKG_VERSION");
     let (model, provider, working_dir) = {
         let ui_state = state.read();
@@ -313,22 +313,33 @@ pub async fn background_loop(
     // Get terminal width for full-width separator
     let term_width = crossterm::terminal::size().map(|(w, _)| w as usize).unwrap_or(80);
 
-    // Compact header - dark colors for light background
+    // Enhanced header banner with more visual presence
+    rnk::println(Text::new("").into_element());
     rnk::println(Text::new("").into_element());
     rnk::println(
-        Text::new(format!("sage v{} · {} · {}", version, model, provider))
+        Text::new("═".repeat(term_width))
             .color(theme.accent_assistant)
             .bold()
             .into_element(),
     );
+    rnk::println(Text::new("").into_element());
     rnk::println(
-        Text::new(working_dir)
+        Text::new(format!("  SAGE v{}  ·  {}  ·  {}", version, model, provider))
+            .color(theme.accent_assistant)
+            .bold()
+            .into_element(),
+    );
+    rnk::println(Text::new("").into_element());
+    rnk::println(
+        Text::new(format!("  {}", working_dir))
             .color(theme.text_muted)
             .into_element(),
     );
+    rnk::println(Text::new("").into_element());
     rnk::println(
-        Text::new("─".repeat(term_width))
-            .color(theme.separator)
+        Text::new("═".repeat(term_width))
+            .color(theme.accent_assistant)
+            .bold()
             .into_element(),
     );
     rnk::println(Text::new("").into_element());
