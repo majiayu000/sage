@@ -72,7 +72,7 @@ fn detect_theme_kind() -> ThemeKind {
         }
     }
 
-    ThemeKind::Dark
+    ThemeKind::Light
 }
 
 fn dark_theme() -> Theme {
