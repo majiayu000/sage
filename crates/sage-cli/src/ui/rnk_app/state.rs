@@ -61,6 +61,10 @@ pub struct UiState {
     pub session: SessionState,
     /// Selected command suggestion index (0-based, default 0 for first match)
     pub suggestion_index: usize,
+    /// Currently printed tool (to avoid duplicate tool start messages)
+    pub current_tool_printed: Option<String>,
+    /// Animation frame counter for spinner
+    pub animation_frame: usize,
 }
 
 impl Default for UiState {
@@ -87,6 +91,8 @@ impl Default for UiState {
                 max_steps: None,
             },
             suggestion_index: 0,
+            current_tool_printed: None,
+            animation_frame: 0,
         }
     }
 }
