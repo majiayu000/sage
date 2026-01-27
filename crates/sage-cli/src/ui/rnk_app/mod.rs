@@ -73,8 +73,8 @@ fn app() -> Element {
 
     // Header is now printed in background_loop when session info is available
 
-    // Get terminal size
-    let term_width = terminal::size().map(|(w, _)| w).unwrap_or(80);
+    // Get terminal size (width + height) each render so resize is handled naturally
+    let (term_width, term_height) = terminal::size().unwrap_or((80, 24));
 
     // Check if should quit
     {
@@ -214,13 +214,20 @@ fn app() -> Element {
 
     let theme = current_theme();
 
-    // Build UI components
-    let mut layout = RnkBox::new().flex_direction(FlexDirection::Column);
+    // Build a full-height root so the bottom UI can be anchored to the terminal bottom
+    // in inline mode. Without an explicit height constraint, flex-grow spacers have
+    // no extra space to consume.
+    let mut root = RnkBox::new()
+        .flex_direction(FlexDirection::Column)
+        .height(term_height as usize);
+
+    // Bottom section contains all fixed UI elements that should stay anchored to bottom.
+    let mut bottom = RnkBox::new().flex_direction(FlexDirection::Column);
 
     // Thinking indicator above separator (in message area)
     if is_busy {
-        layout = layout.child(render_thinking_indicator(&status_text, animation_frame, theme));
-        layout = layout.child(Text::new("").into_element()); // Empty line
+        bottom = bottom.child(render_thinking_indicator(&status_text, animation_frame, theme));
+        bottom = bottom.child(Text::new("").into_element()); // Empty line
     }
 
     // Static separator line (no animation to avoid eye strain)
@@ -230,7 +237,7 @@ fn app() -> Element {
         .color(theme.separator)
         .dim()
         .into_element();
-    layout = layout.child(separator);
+    bottom = bottom.child(separator);
 
     // Show command suggestions when typing /
     // Note: suggestion_index is clamped in input handler, not here (pure render)
@@ -241,16 +248,18 @@ fn app() -> Element {
     };
 
     if let Some(sugg) = suggestions {
-        layout = layout.child(sugg);
+        bottom = bottom.child(sugg);
     }
 
     // Input always below separator
     let input = render_input(&input_text, theme, animation_frame);
     let status_bar = render_status_bar(permission_mode, theme);
 
-    layout
-        .child(input)
-        .child(status_bar)
+    bottom = bottom.child(input).child(status_bar);
+
+    // Spacer grows to consume all remaining vertical space above the fixed bottom UI.
+    root.child(Spacer::new().into_element())
+        .child(bottom.into_element())
         .into_element()
 }
 
