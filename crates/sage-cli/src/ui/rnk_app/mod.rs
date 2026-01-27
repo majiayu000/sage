@@ -223,20 +223,12 @@ fn app() -> Element {
         layout = layout.child(Text::new("").into_element()); // Empty line
     }
 
-    // Animated separator line
+    // Static separator line (no animation to avoid eye strain)
     let term_width_usize = term_width as usize;
-    let pos = if term_width_usize > 2 {
-        animation_frame % term_width_usize
-    } else {
-        0
-    };
-    let left = "─".repeat(pos);
-    let right = "─".repeat(term_width_usize.saturating_sub(pos + 1));
-    let separator = RnkBox::new()
-        .flex_direction(FlexDirection::Row)
-        .child(Text::new(left).color(theme.separator).dim().into_element())
-        .child(Text::new("●").color(theme.separator_active).into_element())
-        .child(Text::new(right).color(theme.separator).dim().into_element())
+    let separator_line = "─".repeat(term_width_usize);
+    let separator = Text::new(separator_line)
+        .color(theme.separator)
+        .dim()
         .into_element();
     layout = layout.child(separator);
 
