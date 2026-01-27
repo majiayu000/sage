@@ -79,8 +79,8 @@ fn dark_theme() -> Theme {
     Theme {
         kind: ThemeKind::Dark,
         text_primary: Color::White,
-        text_muted: Color::BrightBlack,
-        text_dim: Color::BrightBlack,
+        text_muted: Color::White,
+        text_dim: Color::White,
 
         accent_assistant: Color::Cyan,
         accent_user: Color::Green,
@@ -95,7 +95,7 @@ fn dark_theme() -> Theme {
         err: Color::Red,
 
         tool: Color::Magenta,
-        tool_param: Color::BrightBlack,
+        tool_param: Color::White,
         tool_result: Color::White,
 
         status_normal: Color::Yellow,

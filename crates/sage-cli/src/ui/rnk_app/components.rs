@@ -320,7 +320,7 @@ pub fn render_thinking_indicator(status_text: &str, animation_frame: usize, them
 /// Render status bar
 pub fn render_status_bar(permission_mode: PermissionMode, theme: &Theme) -> Element {
     let (mode_color, mode_label, mode_icon) = match permission_mode {
-        PermissionMode::Normal => (theme.status_normal, "permissions required", "🔒"),
+        PermissionMode::Normal => (theme.status_normal, "permissions required", ""),
         PermissionMode::Bypass => (theme.status_bypass, "bypass permissions", "⚠"),
         PermissionMode::Plan => (theme.status_plan, "plan mode", "🧭"),
     };
@@ -337,7 +337,6 @@ pub fn render_status_bar(permission_mode: PermissionMode, theme: &Theme) -> Elem
         .child(
             Text::new("  ·  ⇧Tab cycle  ·  / commands")
                 .color(theme.text_muted)
-                .dim()
                 .into_element(),
         )
         .into_element()
