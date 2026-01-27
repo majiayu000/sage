@@ -2,116 +2,83 @@
 
 use crossterm::terminal;
 use rnk::prelude::*;
-use sage_core::ui::bridge::state::{Message, MessageContent, Role, SessionState};
+use sage_core::ui::bridge::state::{Message, MessageContent, Role, SessionState, ToolResult};
 
 use super::formatting::{truncate_to_width, wrap_text_with_prefix};
 use super::state::PermissionMode;
+use super::theme::Theme;
 
 // Alias rnk's Box to avoid conflict with std::boxed::Box
 use rnk::prelude::Box as RnkBox;
 
+fn role_style(role: &Role, theme: &Theme) -> (&'static str, Color) {
+    match role {
+        Role::User => ("👤", theme.accent_user),
+        Role::Assistant => ("🤖", theme.accent_assistant),
+        Role::System => ("⚙", theme.accent_system),
+    }
+}
+
+fn gutter_line(icon: &str, gutter_color: Color, text: String, text_color: Color) -> Element {
+    RnkBox::new()
+        .flex_direction(FlexDirection::Row)
+        .child(Text::new("│ ").color(gutter_color).bold().into_element())
+        .child(Text::new(format!("{icon} ")).color(gutter_color).bold().into_element())
+        .child(Text::new(text).color(text_color).into_element())
+        .into_element()
+}
+
 /// Format a message for printing via rnk::println
-pub fn format_message(msg: &Message) -> Element {
+pub fn format_message(msg: &Message, theme: &Theme) -> Element {
     let term_width = terminal::size().map(|(w, _)| w as usize).unwrap_or(80);
+    let (icon, gutter_color) = role_style(&msg.role, theme);
 
     match &msg.content {
         MessageContent::Text(text) => {
-            match msg.role {
-                Role::User => {
-                    // User message: simple "> " prefix
-                    let mut container = RnkBox::new().flex_direction(FlexDirection::Column);
-                    let lines = wrap_text_with_prefix("> ", text, term_width);
-                    for line in lines {
-                        container = container.child(
-                            Text::new(line).color(Color::White).into_element()
-                        );
-                    }
-                    container.into_element()
-                }
-                Role::Assistant => {
-                    // Assistant message: no prefix, just content
-                    let mut container = RnkBox::new().flex_direction(FlexDirection::Column);
-                    for line in text.lines() {
-                        let wrapped = wrap_text_with_prefix("", line, term_width);
-                        for w in wrapped {
-                            container = container.child(
-                                Text::new(w).color(Color::White).into_element()
-                            );
-                        }
-                    }
-                    container.into_element()
-                }
-                Role::System => {
-                    // System message: dim italic
-                    Text::new(truncate_to_width(text, term_width))
-                        .color(Color::BrightBlack)
-                        .italic()
-                        .into_element()
-                }
-            }
-        }
-        MessageContent::Thinking(text) => {
-            let preview: String = text.lines().take(3).collect::<Vec<_>>().join(" ");
-            Text::new(format!(
-                "💭 {}...",
-                truncate_to_width(&preview, term_width.saturating_sub(5))
-            ))
-            .color(Color::BrightBlack)
-            .italic()
-            .into_element()
-        }
-        MessageContent::ToolCall {
-            tool_name,
-            params,
-            result,
-        } => {
             let mut container = RnkBox::new().flex_direction(FlexDirection::Column);
 
-            // Tool header with icon
-            let icon = get_tool_icon(tool_name);
-            container = container.child(
-                Text::new(format!("{} {}", icon, tool_name))
-                    .color(Color::Magenta)
-                    .bold()
-                    .into_element(),
-            );
-
-            // Params (truncated)
-            if !params.trim().is_empty() {
-                let param_preview = truncate_to_width(params.trim(), term_width.saturating_sub(4));
-                container = container.child(
-                    Text::new(format!("  ⎿ {}", param_preview))
-                        .color(Color::BrightBlack)
-                        .into_element()
-                );
-            }
-
-            // Result
-            if let Some(r) = result {
-                if r.success {
-                    if let Some(ref output) = r.output {
-                        let preview = truncate_to_width(output.lines().next().unwrap_or(""), term_width.saturating_sub(4));
-                        if !preview.is_empty() {
-                            container = container.child(
-                                Text::new(format!("  ✓ {}", preview))
-                                    .color(Color::Green)
-                                    .into_element()
-                            );
+            match msg.role {
+                Role::User | Role::Assistant => {
+                    for paragraph in text.split('\n') {
+                        let wrapped =
+                            wrap_text_with_prefix("", paragraph, term_width.saturating_sub(4));
+                        for line in wrapped {
+                            container = container.child(gutter_line(
+                                icon,
+                                gutter_color,
+                                line,
+                                theme.text_primary,
+                            ));
                         }
+                        container = container.child(Text::new("").into_element());
                     }
-                } else {
-                    let error_msg = r.error.as_deref().unwrap_or("Unknown error");
-                    let preview = truncate_to_width(error_msg, term_width.saturating_sub(4));
-                    container = container.child(
-                        Text::new(format!("  ✗ {}", preview))
-                            .color(Color::Red)
-                            .into_element()
-                    );
+                }
+                Role::System => {
+                    let sys_text = truncate_to_width(text, term_width.saturating_sub(4));
+                    container =
+                        container.child(gutter_line(icon, gutter_color, sys_text, theme.text_muted));
                 }
             }
 
             container.into_element()
         }
+        MessageContent::Thinking(text) => {
+            let preview: String = text.lines().take(2).collect::<Vec<_>>().join(" ");
+            gutter_line(
+                "💭",
+                theme.text_muted,
+                format!(
+                    "{}…",
+                    truncate_to_width(&preview, term_width.saturating_sub(8))
+                ),
+                theme.text_muted,
+            )
+        }
+        MessageContent::ToolCall {
+            tool_name,
+            params,
+            result,
+        } => render_tool_call(tool_name, params, result.as_ref(), theme),
     }
 }
 
@@ -130,74 +97,128 @@ fn get_tool_icon(tool_name: &str) -> &'static str {
     }
 }
 
+fn render_tool_call(
+    tool_name: &str,
+    params: &str,
+    result: Option<&ToolResult>,
+    theme: &Theme,
+) -> Element {
+    let term_width = terminal::size().map(|(w, _)| w as usize).unwrap_or(80);
+    let icon = get_tool_icon(tool_name);
+
+    let mut col = RnkBox::new().flex_direction(FlexDirection::Column);
+
+    // Header
+    col = col.child(
+        Text::new(format!("╭─ {icon} {tool_name}"))
+            .color(theme.tool)
+            .bold()
+            .into_element(),
+    );
+
+    // Params preview
+    if !params.trim().is_empty() {
+        let preview = truncate_to_width(params.trim(), term_width.saturating_sub(6));
+        col = col.child(
+            Text::new(format!("│  ⤷ {preview}"))
+                .color(theme.tool_param)
+                .into_element(),
+        );
+    }
+
+    // Result
+    if let Some(r) = result {
+        if r.success {
+            let out = r.output.as_deref().unwrap_or("").lines().next().unwrap_or("");
+            let preview = truncate_to_width(out, term_width.saturating_sub(8));
+            if !preview.is_empty() {
+                col = col.child(
+                    Text::new(format!("│  ✓ {preview}"))
+                        .color(theme.ok)
+                        .into_element(),
+                );
+            }
+        } else {
+            let err = r.error.as_deref().unwrap_or("Unknown error");
+            let preview = truncate_to_width(err, term_width.saturating_sub(8));
+            col = col.child(
+                Text::new(format!("│  ✗ {preview}"))
+                    .color(theme.err)
+                    .into_element(),
+            );
+        }
+    }
+
+    // Footer
+    col = col.child(Text::new("╰─").color(theme.border).into_element());
+
+    col.into_element()
+}
+
+/// Format tool execution start for printing
+pub fn format_tool_start(tool_name: &str, description: &str, theme: &Theme) -> Element {
+    render_tool_call(tool_name, description, None, theme)
+}
+
 /// Render error message
-pub fn render_error(message: &str) -> Element {
+pub fn render_error(message: &str, theme: &Theme) -> Element {
     let term_width = terminal::size().map(|(w, _)| w as usize).unwrap_or(80);
 
     let mut container = RnkBox::new().flex_direction(FlexDirection::Column);
 
-    // Error header
     container = container.child(
         Text::new("✗ Error")
-            .color(Color::Red)
+            .color(theme.err)
             .bold()
-            .into_element()
+            .into_element(),
     );
 
-    // Error message (wrapped)
     let lines = wrap_text_with_prefix("  ", message, term_width);
     for line in lines {
-        container = container.child(
-            Text::new(line)
-                .color(Color::Red)
-                .into_element()
-        );
+        container = container.child(Text::new(line).color(theme.err).into_element());
     }
 
     container.into_element()
 }
 
-/// Render header banner
-pub fn render_header(session: &SessionState) -> Element {
+/// Render header banner - compact single-line style
+pub fn render_header(session: &SessionState, theme: &Theme) -> Element {
     let version = env!("CARGO_PKG_VERSION");
     let term_width = terminal::size().map(|(w, _)| w as usize).unwrap_or(80);
 
-    // Simpler, cleaner header
-    let title = format!("╭─ Sage Code v{}", version);
-    let model_info = format!("│  {} · {}", session.model, session.provider);
-    let cwd = truncate_to_width(&session.working_dir, term_width.saturating_sub(5));
-    let cwd_line = format!("│  {}", cwd);
-    let bottom = "╰─────────────────────────────────";
+    let header_text = format!("sage v{} · {} · {}", version, session.model, session.provider);
+
+    let max_cwd_len = term_width.saturating_sub(4);
+    let cwd_display = if session.working_dir.len() > max_cwd_len {
+        format!(
+            "...{}",
+            &session.working_dir[session
+                .working_dir
+                .len()
+                .saturating_sub(max_cwd_len.saturating_sub(3))..]
+        )
+    } else {
+        session.working_dir.clone()
+    };
 
     RnkBox::new()
         .flex_direction(FlexDirection::Column)
         .child(
-            Text::new(truncate_to_width(&title, term_width))
-                .color(Color::Cyan)
+            Text::new(truncate_to_width(&header_text, term_width))
+                .color(theme.accent_assistant)
                 .bold()
                 .into_element(),
         )
         .child(
-            Text::new(truncate_to_width(&model_info, term_width))
-                .color(Color::Blue)
-                .into_element(),
-        )
-        .child(
-            Text::new(truncate_to_width(&cwd_line, term_width))
-                .color(Color::BrightBlack)
-                .into_element(),
-        )
-        .child(
-            Text::new(truncate_to_width(bottom, term_width))
-                .color(Color::BrightBlack)
-                .dim()
+            Text::new(truncate_to_width(&cwd_display, term_width))
+                .color(theme.text_muted)
                 .into_element(),
         )
         .into_element()
 }
 
 /// Render input line
-pub fn render_input(input_text: &str) -> Element {
+pub fn render_input(input_text: &str, theme: &Theme, animation_frame: usize) -> Element {
     let hints = [
         "edit main.rs to add error handling",
         "explain this function",
@@ -206,33 +227,41 @@ pub fn render_input(input_text: &str) -> Element {
         "refactor to use async/await",
     ];
 
-    // Rotate hints based on time
     let hint_idx = (std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
-        .as_secs() / 5) as usize % hints.len();
+        .as_secs()
+        / 5) as usize
+        % hints.len();
 
-    let display_text = if input_text.is_empty() {
-        hints[hint_idx]
+    let is_empty = input_text.is_empty();
+    let display_text = if is_empty { hints[hint_idx] } else { input_text };
+
+    let caret_frames = ["▏", "▎", "▍", "▋"];
+    let caret = caret_frames[animation_frame % caret_frames.len()];
+
+    let text_color = if is_empty {
+        theme.text_muted
     } else {
-        input_text
-    };
-    let text_color = if input_text.is_empty() {
-        Color::BrightBlack
-    } else {
-        Color::White
+        theme.text_primary
     };
 
     RnkBox::new()
         .flex_direction(FlexDirection::Row)
-        .child(Text::new("❯ ").color(Color::Green).bold().into_element())
+        .child(
+            Text::new("❯ ")
+                .color(theme.accent_user)
+                .bold()
+                .into_element(),
+        )
+        .child(Text::new(caret).color(theme.accent_user).into_element())
+        .child(Text::new(" ").into_element())
         .child(Text::new(display_text).color(text_color).into_element())
         .into_element()
 }
 
 /// Render spinner line
 pub fn render_spinner(status_text: &str) -> Element {
-    // Use time-based frame selection for animation
     let now_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
@@ -258,35 +287,27 @@ pub fn render_spinner(status_text: &str) -> Element {
 }
 
 /// Render thinking indicator above separator (Claude Code style)
-pub fn render_thinking_indicator(status_text: &str) -> Element {
-    // Use time-based frame selection for animation
-    let now_ms = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis();
+pub fn render_thinking_indicator(status_text: &str, animation_frame: usize, theme: &Theme) -> Element {
+    let dots = match animation_frame % 4 {
+        0 => "·",
+        1 => "··",
+        2 => "···",
+        _ => "····",
+    };
 
-    // Rotating star animation like Claude Code
-    let star_frames = ["✱", "✲", "✳", "✴", "✵", "✶", "✷", "✸"];
-    let star = star_frames[(now_ms / 120 % star_frames.len() as u128) as usize];
-
-    // Display text - use "Cerebrating..." if status is generic
-    let display_text = if status_text.is_empty() || status_text == "Thinking..." {
-        "Cerebrating..."
+    let display_text = if status_text.is_empty() {
+        format!("Thinking{dots}")
     } else {
-        status_text
+        format!("{status_text} {dots}")
     };
 
     RnkBox::new()
         .flex_direction(FlexDirection::Row)
-        .child(Text::new(star).color(Color::Yellow).into_element())
+        .child(Text::new("⏺ ").color(theme.warn).bold().into_element())
+        .child(Text::new(display_text).color(theme.warn).into_element())
         .child(
-            Text::new(format!(" {}", display_text))
-                .color(Color::Yellow)
-                .into_element(),
-        )
-        .child(
-            Text::new(" (Esc to interrupt)")
-                .color(Color::BrightBlack)
+            Text::new("  Esc to interrupt")
+                .color(theme.text_muted)
                 .dim()
                 .into_element(),
         )
@@ -294,17 +315,25 @@ pub fn render_thinking_indicator(status_text: &str) -> Element {
 }
 
 /// Render status bar
-pub fn render_status_bar(permission_mode: PermissionMode) -> Element {
-    let mode_color = permission_mode.color();
-    let mode_text = permission_mode.display_text();
+pub fn render_status_bar(permission_mode: PermissionMode, theme: &Theme) -> Element {
+    let (mode_color, mode_label, mode_icon) = match permission_mode {
+        PermissionMode::Normal => (theme.status_normal, "permissions required", "🔒"),
+        PermissionMode::Bypass => (theme.status_bypass, "bypass permissions", "⚠"),
+        PermissionMode::Plan => (theme.status_plan, "plan mode", "🧭"),
+    };
 
     RnkBox::new()
         .flex_direction(FlexDirection::Row)
-        .child(Text::new("⏵⏵ ").color(mode_color).into_element())
-        .child(Text::new(mode_text).color(mode_color).into_element())
+        .child(Text::new(" ").into_element())
         .child(
-            Text::new(" · shift+tab to cycle")
-                .color(Color::BrightBlack)
+            Text::new(format!("{mode_icon} {mode_label}"))
+                .color(mode_color)
+                .bold()
+                .into_element(),
+        )
+        .child(
+            Text::new("  ·  ⇧Tab cycle  ·  / commands")
+                .color(theme.text_muted)
                 .dim()
                 .into_element(),
         )
@@ -333,18 +362,21 @@ const BUILTIN_COMMANDS: &[(&str, &str)] = &[
 
 /// Render command suggestions when input starts with /
 /// Returns (Element, match_count) so caller can clamp selection index
-pub fn render_command_suggestions(input: &str, selected_index: usize) -> Option<(Element, usize)> {
+pub fn render_command_suggestions(
+    input: &str,
+    selected_index: usize,
+    theme: &Theme,
+) -> Option<(Element, usize)> {
     if !input.starts_with('/') {
         return None;
     }
 
-    let query = &input[1..]; // Remove leading /
+    let query = &input[1..];
 
-    // Filter commands that match the query
     let matches: Vec<_> = BUILTIN_COMMANDS
         .iter()
         .filter(|(name, _)| name.starts_with(query))
-        .take(6) // Show max 6 suggestions
+        .take(6)
         .collect();
 
     if matches.is_empty() {
@@ -356,26 +388,32 @@ pub fn render_command_suggestions(input: &str, selected_index: usize) -> Option<
 
     let mut container = RnkBox::new().flex_direction(FlexDirection::Column);
 
-    // Command list - each command on its own line
+    container = container.child(
+        Text::new("⌘ commands")
+            .color(theme.text_muted)
+            .bold()
+            .into_element(),
+    );
+
     for (i, (name, desc)) in matches.iter().enumerate() {
         let is_selected = i == selected;
-        let prefix = if is_selected { "▸ " } else { "  " };
-        let cmd_color = if is_selected { Color::White } else { Color::Cyan };
-        let desc_color = if is_selected { Color::White } else { Color::BrightBlack };
+        let prefix = if is_selected { "▸" } else { " " };
+        let cmd_color = if is_selected {
+            theme.text_primary
+        } else {
+            theme.accent_assistant
+        };
+        let desc_color = theme.text_muted;
 
         let row = RnkBox::new()
             .flex_direction(FlexDirection::Row)
             .child(
-                Text::new(format!("{}/{}", prefix, name))
+                Text::new(format!("{prefix} /{name}"))
                     .color(cmd_color)
                     .bold()
                     .into_element(),
             )
-            .child(
-                Text::new(format!(" - {}", desc))
-                    .color(desc_color)
-                    .into_element(),
-            );
+            .child(Text::new(format!("  {desc}")).color(desc_color).into_element());
 
         container = container.child(row.into_element());
     }

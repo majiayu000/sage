@@ -1,6 +1,7 @@
 //! Executor logic for rnk app
 
 use super::state::{SharedState, UiCommand};
+use super::theme::current_theme;
 use crate::commands::unified::slash_commands::{process_slash_command, SlashCommandAction};
 use crate::console::CliConsole;
 use rnk::prelude::*;
@@ -296,6 +297,8 @@ pub async fn background_loop(
     use super::components::{format_message, format_tool_start, render_error};
     use rnk::prelude::*;
 
+    let theme = current_theme();
+
     // Print compact header using rnk::println
     let version = env!("CARGO_PKG_VERSION");
     let (model, provider, working_dir) = {
@@ -314,19 +317,19 @@ pub async fn background_loop(
     rnk::println(Text::new("").into_element());
     rnk::println(
         Text::new(format!("sage v{} · {} · {}", version, model, provider))
-            .color(Color::Rgb(0, 100, 100))  // Dark teal
+            .color(theme.accent_assistant)
             .bold()
-            .into_element()
+            .into_element(),
     );
     rnk::println(
         Text::new(working_dir)
-            .color(Color::Rgb(100, 100, 100))  // Dark gray
-            .into_element()
+            .color(theme.text_muted)
+            .into_element(),
     );
     rnk::println(
         Text::new("─".repeat(term_width))
-            .color(Color::Rgb(180, 180, 180))  // Light gray line
-            .into_element()
+            .color(theme.separator)
+            .into_element(),
     );
     rnk::println(Text::new("").into_element());
 
@@ -375,7 +378,11 @@ pub async fn background_loop(
                 let tool_key = format!("{}:{}", tool_exec.tool_name, tool_exec.description);
                 if ui_state.current_tool_printed.as_ref() != Some(&tool_key) {
                     ui_state.current_tool_printed = Some(tool_key);
-                    Some(format_tool_start(&tool_exec.tool_name, &tool_exec.description))
+                    Some(format_tool_start(
+                        &tool_exec.tool_name,
+                        &tool_exec.description,
+                        theme,
+                    ))
                 } else {
                     None
                 }
@@ -389,7 +396,7 @@ pub async fn background_loop(
             let error_work = if let ExecutionPhase::Error { ref message } = app_state.phase {
                 if !ui_state.error_displayed {
                     ui_state.error_displayed = true;
-                    Some(render_error(message))
+                    Some(render_error(message, theme))
                 } else {
                     None
                 }
@@ -403,7 +410,7 @@ pub async fn background_loop(
                 let msgs: Vec<_> = messages
                     .iter()
                     .skip(ui_state.printed_count)
-                    .map(|msg| format_message(msg))
+                    .map(|msg| format_message(msg, theme))
                     .collect();
                 ui_state.printed_count = new_count;
                 msgs

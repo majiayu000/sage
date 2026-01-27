@@ -14,11 +14,15 @@ mod components;
 mod executor;
 mod formatting;
 mod state;
+mod theme;
 
 pub use state::{SharedState, UiCommand, UiState};
 
 use super::adapters::RnkEventSink;
-use components::{count_matching_commands, get_selected_command, render_command_suggestions, render_header, render_input, render_status_bar, render_thinking_indicator};
+use components::{
+    count_matching_commands, get_selected_command, render_command_suggestions, render_header,
+    render_input, render_status_bar, render_thinking_indicator,
+};
 use crossterm::terminal;
 use executor::{background_loop, executor_loop};
 use parking_lot::RwLock;
@@ -29,6 +33,7 @@ use sage_core::ui::bridge::{set_global_adapter, set_refresh_callback, EventAdapt
 use sage_core::ui::traits::UiContext;
 use std::io;
 use std::sync::Arc;
+use theme::current_theme;
 use tokio::sync::mpsc;
 use tokio::time::{sleep, Duration};
 
@@ -207,26 +212,38 @@ fn app() -> Element {
     let animation_frame = ui_state.animation_frame;
     drop(ui_state);
 
+    let theme = current_theme();
+
     // Build UI components
     let mut layout = RnkBox::new().flex_direction(FlexDirection::Column);
 
     // Thinking indicator above separator (in message area)
     if is_busy {
-        layout = layout.child(render_thinking_indicator(&status_text, animation_frame));
+        layout = layout.child(render_thinking_indicator(&status_text, animation_frame, theme));
         layout = layout.child(Text::new("").into_element()); // Empty line
     }
 
-    // Separator line
-    let separator = Text::new("─".repeat(term_width as usize))
-        .color(Color::BrightBlack)
-        .dim()
+    // Animated separator line
+    let term_width_usize = term_width as usize;
+    let pos = if term_width_usize > 2 {
+        animation_frame % term_width_usize
+    } else {
+        0
+    };
+    let left = "─".repeat(pos);
+    let right = "─".repeat(term_width_usize.saturating_sub(pos + 1));
+    let separator = RnkBox::new()
+        .flex_direction(FlexDirection::Row)
+        .child(Text::new(left).color(theme.separator).dim().into_element())
+        .child(Text::new("●").color(theme.separator_active).into_element())
+        .child(Text::new(right).color(theme.separator).dim().into_element())
         .into_element();
     layout = layout.child(separator);
 
     // Show command suggestions when typing /
     // Note: suggestion_index is clamped in input handler, not here (pure render)
     let suggestions = if !is_busy {
-        render_command_suggestions(&input_text, suggestion_index).map(|(element, _)| element)
+        render_command_suggestions(&input_text, suggestion_index, theme).map(|(element, _)| element)
     } else {
         None
     };
@@ -236,8 +253,8 @@ fn app() -> Element {
     }
 
     // Input always below separator
-    let input = render_input(&input_text);
-    let status_bar = render_status_bar(permission_mode);
+    let input = render_input(&input_text, theme, animation_frame);
+    let status_bar = render_status_bar(permission_mode, theme);
 
     layout
         .child(input)
