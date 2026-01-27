@@ -313,9 +313,7 @@ pub async fn background_loop(
     // Get terminal width for full-width separator
     let term_width = crossterm::terminal::size().map(|(w, _)| w as usize).unwrap_or(80);
 
-    // Enhanced header banner with more visual presence
-    rnk::println(Text::new("").into_element());
-    rnk::println(Text::new("").into_element());
+    // Enhanced header banner at the top of the window
     rnk::println(
         Text::new("═".repeat(term_width))
             .color(theme.accent_assistant)
