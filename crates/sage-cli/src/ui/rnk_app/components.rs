@@ -39,16 +39,19 @@ pub fn format_message(msg: &Message, theme: &Theme) -> Element {
 
             match msg.role {
                 Role::User | Role::Assistant => {
+                    let mut is_first_line = true;
                     for paragraph in text.split('\n') {
                         let wrapped =
                             wrap_text_with_prefix("", paragraph, term_width.saturating_sub(4));
                         for line in wrapped {
+                            let display_icon = if is_first_line { "·" } else { "" };
                             container = container.child(gutter_line(
-                                icon,
+                                display_icon,
                                 gutter_color,
                                 line,
                                 theme.text_primary,
                             ));
+                            is_first_line = false;
                         }
                         container = container.child(Text::new("").into_element());
                     }
