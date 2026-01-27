@@ -12,10 +12,12 @@ use sage_core::interrupt::{interrupt_current_task, reset_global_interrupt_manage
 use sage_core::output::OutputMode;
 use sage_core::types::TaskMetadata;
 use sage_core::ui::bridge::state::ExecutionPhase;
+use sage_core::ui::traits::UiContext;
 #[allow(deprecated)]
 use sage_core::ui::bridge::{emit_event, AgentEvent};
 use sage_tools::get_default_tools;
 use tokio::sync::mpsc;
+use tokio::time::{sleep, Duration};
 
 /// Handle resume command
 async fn handle_resume(
@@ -46,7 +48,7 @@ async fn handle_resume(
 }
 
 /// Create executor with default configuration
-pub async fn create_executor() -> SageResult<UnifiedExecutor> {
+pub async fn create_executor(ui_context: Option<UiContext>) -> SageResult<UnifiedExecutor> {
     let config = load_config()?;
     let working_dir = std::env::current_dir().unwrap_or_default();
     let mode = ExecutionMode::interactive();
@@ -55,6 +57,12 @@ pub async fn create_executor() -> SageResult<UnifiedExecutor> {
         .with_working_directory(&working_dir);
 
     let mut executor = UnifiedExecutor::with_options(config, options)?;
+
+    // Set UI context for event handling
+    if let Some(ctx) = ui_context {
+        executor.set_ui_context(ctx);
+    }
+
     executor.set_output_mode(OutputMode::Rnk);
     executor.register_tools(get_default_tools());
     let _ = executor.init_subagent_support();
@@ -66,9 +74,10 @@ pub async fn executor_loop(
     state: SharedState,
     mut rx: mpsc::Receiver<UiCommand>,
     input_channel: InputChannel,
+    ui_context: UiContext,
 ) {
-    // Create executor
-    let mut executor = match create_executor().await {
+    // Create executor with UI context
+    let mut executor = match create_executor(Some(ui_context)).await {
         Ok(e) => e,
         Err(e) => {
             rnk::println(
@@ -280,14 +289,49 @@ pub async fn executor_loop(
 }
 
 /// Background thread logic for printing messages and updating UI
-pub fn background_loop(
+pub async fn background_loop(
     state: SharedState,
     adapter: sage_core::ui::bridge::EventAdapter,
 ) {
-    use super::components::{format_message, render_error};
+    use super::components::{format_message, format_tool_start, render_error};
+    use rnk::prelude::*;
+
+    // Print compact header using rnk::println
+    let version = env!("CARGO_PKG_VERSION");
+    let (model, provider, working_dir) = {
+        let ui_state = state.read();
+        (
+            ui_state.session.model.clone(),
+            ui_state.session.provider.clone(),
+            ui_state.session.working_dir.clone(),
+        )
+    };
+
+    // Get terminal width for full-width separator
+    let term_width = crossterm::terminal::size().map(|(w, _)| w as usize).unwrap_or(80);
+
+    // Compact header - dark colors for light background
+    rnk::println(Text::new("").into_element());
+    rnk::println(
+        Text::new(format!("sage v{} · {} · {}", version, model, provider))
+            .color(Color::Rgb(0, 100, 100))  // Dark teal
+            .bold()
+            .into_element()
+    );
+    rnk::println(
+        Text::new(working_dir)
+            .color(Color::Rgb(100, 100, 100))  // Dark gray
+            .into_element()
+    );
+    rnk::println(
+        Text::new("─".repeat(term_width))
+            .color(Color::Rgb(180, 180, 180))  // Light gray line
+            .into_element()
+    );
+    rnk::println(Text::new("").into_element());
 
     loop {
-        std::thread::sleep(std::time::Duration::from_millis(80));
+        sleep(Duration::from_millis(80)).await;
 
         // Check if should quit
         if state.read().should_quit {
@@ -313,12 +357,33 @@ pub fn background_loop(
                 }
             }
 
+            // Header printing removed - now done in run_rnk_app() before rnk starts
+
             // Update busy state from adapter - Error state is not busy
             ui_state.is_busy =
                 !matches!(app_state.phase, ExecutionPhase::Idle | ExecutionPhase::Error { .. });
-            if ui_state.is_busy && ui_state.status_text.is_empty() {
+            if ui_state.is_busy {
                 ui_state.status_text = app_state.status_text();
+                // Increment animation frame for spinner
+                ui_state.animation_frame = ui_state.animation_frame.wrapping_add(1);
+            } else {
+                ui_state.status_text.clear();
             }
+
+            // Check for tool execution start - print tool info when a new tool starts
+            let tool_start_work = if let Some(ref tool_exec) = app_state.tool_execution {
+                let tool_key = format!("{}:{}", tool_exec.tool_name, tool_exec.description);
+                if ui_state.current_tool_printed.as_ref() != Some(&tool_key) {
+                    ui_state.current_tool_printed = Some(tool_key);
+                    Some(format_tool_start(&tool_exec.tool_name, &tool_exec.description))
+                } else {
+                    None
+                }
+            } else {
+                // Tool finished, clear the tracking
+                ui_state.current_tool_printed = None;
+                None
+            };
 
             // Collect error work
             let error_work = if let ExecutionPhase::Error { ref message } = app_state.phase {
@@ -346,11 +411,16 @@ pub fn background_loop(
                 Vec::new()
             };
 
-            (error_work, new_messages)
+            (tool_start_work, error_work, new_messages)
         }; // Lock released here
 
         // Process all I/O outside the lock
-        let (error_work, new_messages) = pending_work;
+        let (tool_start_work, error_work, new_messages) = pending_work;
+
+        // Print tool start info
+        if let Some(tool_element) = tool_start_work {
+            rnk::println(tool_element);
+        }
 
         if let Some(error) = error_work {
             rnk::println(error);

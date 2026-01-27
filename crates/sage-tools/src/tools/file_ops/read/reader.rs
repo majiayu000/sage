@@ -114,9 +114,18 @@ fn format_content(
         .map(|(idx, line)| {
             let line_num = start_line + idx + 1; // 1-indexed
             let truncated_line = if line.len() > MAX_LINE_LENGTH {
+                // Truncate on a valid UTF-8 boundary to avoid panics when
+                // MAX_LINE_LENGTH falls in the middle of a multi-byte char.
+                let safe_end = line
+                    .char_indices()
+                    .take_while(|(i, _)| *i < MAX_LINE_LENGTH)
+                    .map(|(i, ch)| i + ch.len_utf8())
+                    .last()
+                    .unwrap_or(0);
+                let safe_prefix = &line[..safe_end];
                 format!(
                     "{}... [line truncated, {} chars total]",
-                    &line[..MAX_LINE_LENGTH],
+                    safe_prefix,
                     line.len()
                 )
             } else {
