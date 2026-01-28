@@ -1,7 +1,6 @@
 //! UI state management for rnk app
 
 use parking_lot::RwLock;
-use rnk::prelude::Color;
 use sage_core::ui::bridge::state::SessionState;
 use std::sync::Arc;
 
@@ -21,22 +20,6 @@ impl PermissionMode {
             PermissionMode::Plan => PermissionMode::Normal,
         }
     }
-
-    pub fn display_text(self) -> &'static str {
-        match self {
-            PermissionMode::Normal => "permissions required",
-            PermissionMode::Bypass => "bypass permissions",
-            PermissionMode::Plan => "plan mode",
-        }
-    }
-
-    pub fn color(self) -> Color {
-        match self {
-            PermissionMode::Normal => Color::Yellow,
-            PermissionMode::Bypass => Color::Red,
-            PermissionMode::Plan => Color::Cyan,
-        }
-    }
 }
 
 /// UI state shared between render loop and background tasks
@@ -53,8 +36,6 @@ pub struct UiState {
     pub should_quit: bool,
     /// Number of messages already printed
     pub printed_count: usize,
-    /// Header already printed
-    pub header_printed: bool,
     /// Error already displayed (to avoid duplicate error messages)
     pub error_displayed: bool,
     /// Session info
@@ -63,6 +44,8 @@ pub struct UiState {
     pub suggestion_index: usize,
     /// Currently printed tool (to avoid duplicate tool start messages)
     pub current_tool_printed: Option<String>,
+    /// Pending tool to print (waits for message to be printed first)
+    pub pending_tool: Option<(String, String)>,
     /// Animation frame counter for spinner
     pub animation_frame: usize,
 }
@@ -76,7 +59,6 @@ impl Default for UiState {
             status_text: String::new(),
             should_quit: false,
             printed_count: 0,
-            header_printed: false,
             error_displayed: false,
             session: SessionState {
                 session_id: None,
@@ -92,6 +74,7 @@ impl Default for UiState {
             },
             suggestion_index: 0,
             current_tool_printed: None,
+            pending_tool: None,
             animation_frame: 0,
         }
     }

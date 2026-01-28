@@ -13,8 +13,10 @@ use super::tool_orchestrator::ToolOrchestrator;
 #[derive(Debug, Clone, PartialEq)]
 pub enum PermissionChoice {
     YesOnce,
+    #[allow(dead_code)]
     YesAlways,
     NoOnce,
+    #[allow(dead_code)]
     NoAlways,
     Cancelled,
 }

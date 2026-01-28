@@ -8,9 +8,8 @@
 //! - `adapters/` - Framework-specific implementations of sage-core UI traits
 //! - `rnk_app/` - rnk-based terminal UI implementation
 
-pub mod adapters;
+mod adapters;
 mod rnk_app;
 
-pub use adapters::RnkEventSink;
 pub use rnk_app::run_rnk_app;
 
