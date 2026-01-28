@@ -473,23 +473,14 @@ impl OutputStrategy for RnkOutput {
         crate::ui::bridge::emit_event(crate::ui::bridge::AgentEvent::ContentStreamEnded);
     }
 
-    fn on_tool_start(&self, name: &str, params: &str) {
-        crate::ui::bridge::emit_event(crate::ui::bridge::AgentEvent::ToolExecutionStarted {
-            tool_name: name.to_string(),
-            tool_id: String::new(),
-            description: params.to_string(),
-        });
+    fn on_tool_start(&self, _name: &str, _params: &str) {
+        // No-op: tool events are emitted by tool_display::display_tool_start via EventManager
+        // to avoid duplicate ToolExecutionStarted events
     }
 
-    fn on_tool_result(&self, success: bool, output: Option<&str>, error: Option<&str>) {
-        let result_preview = if success { output } else { error };
-        crate::ui::bridge::emit_event(crate::ui::bridge::AgentEvent::ToolExecutionCompleted {
-            tool_name: String::new(),
-            tool_id: String::new(),
-            success,
-            duration_ms: 0,
-            result_preview: result_preview.map(|s| s.to_string()),
-        });
+    fn on_tool_result(&self, _success: bool, _output: Option<&str>, _error: Option<&str>) {
+        // No-op: tool events are emitted by tool_display::display_tool_result via EventManager
+        // to avoid duplicate ToolExecutionCompleted events
     }
 
     fn on_thinking(&self, _message: &str) {
