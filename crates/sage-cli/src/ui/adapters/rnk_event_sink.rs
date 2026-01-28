@@ -28,11 +28,6 @@ impl RnkEventSink {
         let sink = Self::new(Arc::clone(&adapter));
         (sink, adapter)
     }
-
-    /// Get a reference to the underlying EventAdapter
-    pub fn adapter(&self) -> &Arc<EventAdapter> {
-        &self.adapter
-    }
 }
 
 impl EventSink for RnkEventSink {

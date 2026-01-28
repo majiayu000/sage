@@ -20,8 +20,8 @@ pub use state::{SharedState, UiCommand, UiState};
 
 use super::adapters::RnkEventSink;
 use components::{
-    count_matching_commands, get_selected_command, render_command_suggestions, render_header,
-    render_input, render_status_bar, render_thinking_indicator,
+    count_matching_commands, get_selected_command, render_command_suggestions,
+    render_input, render_separator, render_status_bar, render_thinking_indicator,
 };
 use crossterm::terminal;
 use executor::{background_loop, executor_loop};
@@ -29,7 +29,7 @@ use parking_lot::RwLock;
 use rnk::prelude::*;
 use sage_core::input::InputChannel;
 #[allow(deprecated)]
-use sage_core::ui::bridge::{set_global_adapter, set_refresh_callback, EventAdapter};
+use sage_core::ui::bridge::{set_global_adapter, set_refresh_callback};
 use sage_core::ui::traits::UiContext;
 use std::io;
 use std::sync::Arc;
@@ -43,9 +43,6 @@ use rnk::prelude::Box as RnkBox;
 /// Global state for the app component
 static GLOBAL_STATE: std::sync::OnceLock<SharedState> = std::sync::OnceLock::new();
 static GLOBAL_CMD_TX: std::sync::OnceLock<mpsc::Sender<UiCommand>> = std::sync::OnceLock::new();
-static GLOBAL_ADAPTER: std::sync::OnceLock<EventAdapter> = std::sync::OnceLock::new();
-/// Track if header has been printed (for startup)
-static HEADER_PRINTED: std::sync::OnceLock<()> = std::sync::OnceLock::new();
 
 /// The main app component - renders fixed bottom UI (separator + input/spinner + status bar)
 fn app() -> Element {
@@ -73,8 +70,8 @@ fn app() -> Element {
 
     // Header is now printed in background_loop when session info is available
 
-    // Get terminal size (width + height) each render so resize is handled naturally
-    let (term_width, term_height) = terminal::size().unwrap_or((80, 24));
+    // Get terminal width each render so resize is handled naturally
+    let (term_width, _) = terminal::size().unwrap_or((80, 24));
 
     // Check if should quit
     {
@@ -210,18 +207,13 @@ fn app() -> Element {
     let permission_mode = ui_state.permission_mode;
     let suggestion_index = ui_state.suggestion_index;
     let animation_frame = ui_state.animation_frame;
+    let model_name = ui_state.session.model.clone();
     drop(ui_state);
 
     let theme = current_theme();
+    let term_width_usize = term_width as usize;
 
-    // Build a full-height root so the bottom UI can be anchored to the terminal bottom
-    // in inline mode. Without an explicit height constraint, flex-grow spacers have
-    // no extra space to consume.
-    let mut root = RnkBox::new()
-        .flex_direction(FlexDirection::Column)
-        .height(term_height as usize);
-
-    // Bottom section contains all fixed UI elements that should stay anchored to bottom.
+    // Bottom section contains all fixed UI elements (no header - it's printed via rnk::println)
     let mut bottom = RnkBox::new().flex_direction(FlexDirection::Column);
 
     // Thinking indicator above separator (in message area)
@@ -230,14 +222,8 @@ fn app() -> Element {
         bottom = bottom.child(Text::new("").into_element()); // Empty line
     }
 
-    // Static separator line (no animation to avoid eye strain)
-    let term_width_usize = term_width as usize;
-    let separator_line = "─".repeat(term_width_usize);
-    let separator = Text::new(separator_line)
-        .color(theme.separator)
-        .dim()
-        .into_element();
-    bottom = bottom.child(separator);
+    // Top separator line
+    bottom = bottom.child(render_separator(term_width_usize, theme));
 
     // Show command suggestions when typing /
     // Note: suggestion_index is clamped in input handler, not here (pure render)
@@ -251,16 +237,18 @@ fn app() -> Element {
         bottom = bottom.child(sugg);
     }
 
-    // Input always below separator
+    // Input line
     let input = render_input(&input_text, theme, animation_frame);
-    let status_bar = render_status_bar(permission_mode, theme);
+    bottom = bottom.child(input);
 
-    bottom = bottom.child(input).child(status_bar);
+    // Bottom separator line
+    bottom = bottom.child(render_separator(term_width_usize, theme));
 
-    // Spacer grows to consume all remaining vertical space above the fixed bottom UI.
-    root.child(Spacer::new().into_element())
-        .child(bottom.into_element())
-        .into_element()
+    // Status bar
+    let status_bar = render_status_bar(permission_mode, Some(&model_name), theme);
+    bottom = bottom.child(status_bar);
+
+    bottom.into_element()
 }
 
 /// Run the rnk-based app (async version)
@@ -280,10 +268,7 @@ pub async fn run_rnk_app() -> io::Result<()> {
         Err(e) => (format!("err:{}", e), "config-error".to_string()),
     };
 
-    // Print header immediately using println (before rnk takes over)
-    // Header is now printed in background_loop using rnk::println()
-    // Just print a blank line here to ensure clean start
-    println!();
+    // Header will be printed via rnk::println() in background_loop
 
     // Create the RnkEventSink adapter (implements EventSink trait)
     let (rnk_sink, adapter) = RnkEventSink::with_default_adapter();
@@ -292,7 +277,6 @@ pub async fn run_rnk_app() -> io::Result<()> {
     // This will be deprecated in favor of UiContext
     #[allow(deprecated)]
     set_global_adapter((*adapter).clone());
-    let _ = GLOBAL_ADAPTER.set((*adapter).clone());
 
     // Set up the refresh callback (replaces direct rnk::request_render() in sage-core)
     set_refresh_callback(|| {
@@ -307,14 +291,8 @@ pub async fn run_rnk_app() -> io::Result<()> {
     initial_state.session.model = model.clone();
     initial_state.session.provider = provider.clone();
 
-    // Debug: write to file
-    std::fs::write("/tmp/sage_debug.txt", format!("model={}, provider={}", model, provider)).ok();
-
     let state: SharedState = Arc::new(RwLock::new(initial_state));
-    let set_result = GLOBAL_STATE.set(Arc::clone(&state));
-
-    // Debug: check if set succeeded
-    std::fs::write("/tmp/sage_debug2.txt", format!("set_result={:?}", set_result.is_ok())).ok();
+    let _ = GLOBAL_STATE.set(Arc::clone(&state));
 
     // Create command channel
     let (cmd_tx, cmd_rx) = mpsc::channel::<UiCommand>(16);

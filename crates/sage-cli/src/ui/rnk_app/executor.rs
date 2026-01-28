@@ -13,12 +13,12 @@ use sage_core::interrupt::{interrupt_current_task, reset_global_interrupt_manage
 use sage_core::output::OutputMode;
 use sage_core::types::TaskMetadata;
 use sage_core::ui::bridge::state::ExecutionPhase;
+use sage_core::ui::bridge::AgentEvent;
 use sage_core::ui::traits::UiContext;
-#[allow(deprecated)]
-use sage_core::ui::bridge::{emit_event, AgentEvent};
 use sage_tools::get_default_tools;
 use tokio::sync::mpsc;
 use tokio::time::{sleep, Duration};
+use unicode_width::UnicodeWidthStr;
 
 /// Handle resume command
 async fn handle_resume(
@@ -77,6 +77,9 @@ pub async fn executor_loop(
     input_channel: InputChannel,
     ui_context: UiContext,
 ) {
+    // Clone ui_context for event emission, pass original to executor
+    let event_ctx = ui_context.clone();
+
     // Create executor with UI context
     let mut executor = match create_executor(Some(ui_context)).await {
         Ok(e) => e,
@@ -241,8 +244,8 @@ pub async fn executor_loop(
                 // Reset interrupt manager for new task
                 reset_global_interrupt_manager();
 
-                emit_event(AgentEvent::UserInputReceived { input: prompt.clone() });
-                emit_event(AgentEvent::ThinkingStarted);
+                event_ctx.emit(AgentEvent::UserInputReceived { input: prompt.clone() });
+                event_ctx.emit(AgentEvent::ThinkingStarted);
 
                 // Execute task
                 let working_dir_str = working_dir.to_string_lossy().to_string();
@@ -251,7 +254,7 @@ pub async fn executor_loop(
                 match executor.execute(task_meta).await {
                     Ok(_) => {}
                     Err(e) => {
-                        emit_event(AgentEvent::error("execution", e.to_string()));
+                        event_ctx.emit(AgentEvent::error("execution", e.to_string()));
                     }
                 }
 
@@ -266,7 +269,7 @@ pub async fn executor_loop(
                 // Actually cancel the running task through interrupt manager
                 interrupt_current_task(InterruptReason::UserInterrupt);
 
-                emit_event(AgentEvent::ThinkingStopped);
+                event_ctx.emit(AgentEvent::ThinkingStopped);
                 rnk::println(
                     Text::new("⦻ Cancelled")
                         .color(Color::Yellow)
@@ -295,11 +298,10 @@ pub async fn background_loop(
     adapter: sage_core::ui::bridge::EventAdapter,
 ) {
     use super::components::{format_message, format_tool_start, render_error};
-    use rnk::prelude::*;
 
     let theme = current_theme();
 
-    // Print enhanced header banner using rnk::println
+    // Print header banner with border (Claude Code style)
     let version = env!("CARGO_PKG_VERSION");
     let (model, provider, working_dir) = {
         let ui_state = state.read();
@@ -310,36 +312,55 @@ pub async fn background_loop(
         )
     };
 
-    // Get terminal width for full-width separator
-    let term_width = crossterm::terminal::size().map(|(w, _)| w as usize).unwrap_or(80);
+    // Calculate box width based on content
+    let title_line = format!("  ◆ Sage v{}", version);
+    let model_line = format!("    {} · {}", model, provider);
+    let dir_line = format!("    {}", working_dir);
+    let content_width = [&title_line, &model_line, &dir_line]
+        .iter()
+        .map(|s| s.width())
+        .max()
+        .unwrap_or(40);
+    let box_width = content_width + 4; // padding
 
-    // Enhanced header banner at the top of the window
-    rnk::println(
-        Text::new("═".repeat(term_width))
-            .color(theme.accent_assistant)
-            .bold()
-            .into_element(),
-    );
+    let top_border = format!("╭{}╮", "─".repeat(box_width));
+    let bottom_border = format!("╰{}╯", "─".repeat(box_width));
+
+    // Helper to pad line to box width
+    let pad_line = |s: &str| -> String {
+        let w = s.width();
+        let padding = box_width.saturating_sub(w);
+        format!("│{}{}│", s, " ".repeat(padding))
+    };
+
     rnk::println(Text::new("").into_element());
     rnk::println(
-        Text::new(format!("  SAGE v{}  ·  {}  ·  {}", version, model, provider))
-            .color(theme.accent_assistant)
-            .bold()
+        Text::new(&top_border)
+            .color(theme.border_subtle)
             .into_element(),
     );
-    rnk::println(Text::new("").into_element());
     rnk::println(
-        Text::new(format!("  {}", working_dir))
-            .color(theme.text_muted)
+        Text::new(pad_line(&title_line))
+            .color(theme.border_subtle)
             .into_element(),
     );
-    rnk::println(Text::new("").into_element());
     rnk::println(
-        Text::new("═".repeat(term_width))
-            .color(theme.accent_assistant)
-            .bold()
+        Text::new(pad_line(&model_line))
+            .color(theme.border_subtle)
             .into_element(),
     );
+    rnk::println(
+        Text::new(pad_line(&dir_line))
+            .color(theme.border_subtle)
+            .into_element(),
+    );
+    rnk::println(
+        Text::new(&bottom_border)
+            .color(theme.border_subtle)
+            .into_element(),
+    );
+    // Spacing before bottom UI
+    rnk::println(Text::new("").into_element());
     rnk::println(Text::new("").into_element());
 
     loop {
@@ -382,24 +403,18 @@ pub async fn background_loop(
                 ui_state.status_text.clear();
             }
 
-            // Check for tool execution start - print tool info when a new tool starts
-            let tool_start_work = if let Some(ref tool_exec) = app_state.tool_execution {
+            // Check for tool execution start - cache tool info to print after messages
+            if let Some(ref tool_exec) = app_state.tool_execution {
                 let tool_key = format!("{}:{}", tool_exec.tool_name, tool_exec.description);
                 if ui_state.current_tool_printed.as_ref() != Some(&tool_key) {
+                    // New tool detected, cache it
+                    ui_state.pending_tool = Some((tool_exec.tool_name.clone(), tool_exec.description.clone()));
                     ui_state.current_tool_printed = Some(tool_key);
-                    Some(format_tool_start(
-                        &tool_exec.tool_name,
-                        &tool_exec.description,
-                        theme,
-                    ))
-                } else {
-                    None
                 }
             } else {
                 // Tool finished, clear the tracking
                 ui_state.current_tool_printed = None;
-                None
-            };
+            }
 
             // Collect error work
             let error_work = if let ExecutionPhase::Error { ref message } = app_state.phase {
@@ -415,36 +430,46 @@ pub async fn background_loop(
             };
 
             // Collect new messages - format them while holding lock
-            let new_messages: Vec<_> = if new_count > ui_state.printed_count {
+            // Skip ToolCall messages - they are printed via pending_tool mechanism
+            let (new_messages, pending_tool_to_print) = if new_count > ui_state.printed_count {
                 let msgs: Vec<_> = messages
                     .iter()
                     .skip(ui_state.printed_count)
+                    .filter(|msg| !matches!(msg.content, sage_core::ui::bridge::state::MessageContent::ToolCall { .. }))
                     .map(|msg| format_message(msg, theme))
                     .collect();
                 ui_state.printed_count = new_count;
-                msgs
+                // Only take pending tool if there are new text messages
+                // This ensures text messages are printed before tool calls
+                let pending = if !msgs.is_empty() {
+                    ui_state.pending_tool.take()
+                } else {
+                    None
+                };
+                (msgs, pending)
             } else {
-                Vec::new()
+                (Vec::new(), None)
             };
 
-            (tool_start_work, error_work, new_messages)
+            (error_work, new_messages, pending_tool_to_print)
         }; // Lock released here
 
         // Process all I/O outside the lock
-        let (tool_start_work, error_work, new_messages) = pending_work;
+        let (error_work, new_messages, pending_tool_to_print) = pending_work;
 
-        // Print tool start info
-        if let Some(tool_element) = tool_start_work {
-            rnk::println(tool_element);
+        // Print new messages first (Assistant response comes before tool call)
+        for msg_element in new_messages {
+            rnk::println(msg_element);
+            rnk::println(""); // Empty line
+        }
+
+        // Print pending tool after messages
+        if let Some((tool_name, description)) = pending_tool_to_print {
+            rnk::println(format_tool_start(&tool_name, &description, theme));
         }
 
         if let Some(error) = error_work {
             rnk::println(error);
-            rnk::println(""); // Empty line
-        }
-
-        for msg_element in new_messages {
-            rnk::println(msg_element);
             rnk::println(""); // Empty line
         }
 

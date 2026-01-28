@@ -163,6 +163,7 @@ impl UnifiedExecutor {
                         execution.complete(false, Some(format!("Task failed: {}", e)));
 
                         // Emit error event to UI
+                        #[allow(deprecated)]
                         emit_event(AgentEvent::error(error_type, &error_message));
 
                         let exec_error =

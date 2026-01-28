@@ -3,8 +3,7 @@
 //! This test ensures that Sage preserves terminal history by not
 //! using the alternate screen buffer.
 
-use std::process::{Command, Stdio};
-use std::io::Write;
+use std::process::Command;
 
 #[test]
 fn test_sage_no_alternate_screen_escape_sequences() {

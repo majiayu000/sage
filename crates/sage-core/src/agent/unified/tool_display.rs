@@ -134,6 +134,7 @@ pub async fn display_tool_start(event_manager: &mut EventManager, tool_call: &To
     let params_preview = format_tool_params(&tool_call.arguments);
 
     // Claude Code style: blue filled circle for tools, with 2-space indent for result
+    #[allow(deprecated)]
     if global_adapter().is_none() {
         println!();
         print!(
@@ -187,6 +188,7 @@ pub async fn display_tool_result(
         .await;
 
     // Claude Code style: result indicator with corner bracket
+    #[allow(deprecated)]
     if global_adapter().is_none() {
         if tool_result.success {
             // Show brief output preview if available

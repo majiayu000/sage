@@ -1,10 +1,13 @@
 //! Terminal-safe theming (light/dark + no-color)
+//!
+//! Color palettes based on Catppuccin (https://catppuccin.com/)
+//! - Dark theme: Catppuccin Mocha
+//! - Light theme: Catppuccin Latte
 
 use rnk::prelude::Color;
 use std::sync::OnceLock;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ThemeKind {
+enum ThemeKind {
     Dark,
     Light,
     NoColor,
@@ -12,19 +15,20 @@ pub enum ThemeKind {
 
 #[derive(Clone, Copy, Debug)]
 pub struct Theme {
-    pub kind: ThemeKind,
-
     pub text_primary: Color,
     pub text_muted: Color,
-    pub text_dim: Color,
+    pub text_subtle: Color,
 
     pub accent_assistant: Color,
     pub accent_user: Color,
     pub accent_system: Color,
+    pub accent_primary: Color,
 
     pub border: Color,
+    pub border_subtle: Color,
     pub separator: Color,
-    pub separator_active: Color,
+
+    pub surface: Color,
 
     pub ok: Color,
     pub warn: Color,
@@ -32,7 +36,6 @@ pub struct Theme {
 
     pub tool: Color,
     pub tool_param: Color,
-    pub tool_result: Color,
 
     pub status_normal: Color,
     pub status_bypass: Color,
@@ -76,77 +79,83 @@ fn detect_theme_kind() -> ThemeKind {
 }
 
 fn dark_theme() -> Theme {
+    // Catppuccin Mocha palette
     Theme {
-        kind: ThemeKind::Dark,
-        text_primary: Color::White,
-        text_muted: Color::White,
-        text_dim: Color::White,
+        text_primary: Color::Rgb(205, 214, 244),  // #cdd6f4
+        text_muted: Color::Rgb(108, 112, 134),    // #6c7086
+        text_subtle: Color::Rgb(88, 91, 112),     // #585b70
 
-        accent_assistant: Color::Cyan,
-        accent_user: Color::Green,
-        accent_system: Color::Magenta,
+        accent_assistant: Color::Rgb(137, 180, 250), // #89b4fa (blue)
+        accent_user: Color::Rgb(166, 227, 161),      // #a6e3a1 (green)
+        accent_system: Color::Rgb(203, 166, 247),    // #cba6f7 (mauve)
+        accent_primary: Color::Rgb(137, 180, 250),   // #89b4fa (blue)
 
-        border: Color::BrightBlack,
-        separator: Color::BrightBlack,
-        separator_active: Color::Cyan,
+        border: Color::Rgb(88, 91, 112),          // #585b70
+        border_subtle: Color::Rgb(69, 71, 90),    // #45475a
+        separator: Color::Rgb(69, 71, 90),        // #45475a
 
-        ok: Color::Green,
-        warn: Color::Yellow,
-        err: Color::Red,
+        surface: Color::Rgb(49, 50, 68),          // #313244
 
-        tool: Color::Magenta,
-        tool_param: Color::White,
-        tool_result: Color::White,
+        ok: Color::Rgb(166, 227, 161),            // #a6e3a1 (green)
+        warn: Color::Rgb(249, 226, 175),          // #f9e2af (yellow)
+        err: Color::Rgb(243, 139, 168),           // #f38ba8 (red)
 
-        status_normal: Color::Yellow,
-        status_bypass: Color::Red,
-        status_plan: Color::Cyan,
+        tool: Color::Rgb(203, 166, 247),          // #cba6f7 (mauve)
+        tool_param: Color::Rgb(166, 173, 200),    // #a6adc8 (subtext0)
+
+        status_normal: Color::Rgb(249, 226, 175), // #f9e2af (yellow)
+        status_bypass: Color::Rgb(243, 139, 168), // #f38ba8 (red)
+        status_plan: Color::Rgb(137, 180, 250),   // #89b4fa (blue)
     }
 }
 
 fn light_theme() -> Theme {
+    // Catppuccin Latte palette
     Theme {
-        kind: ThemeKind::Light,
-        text_primary: Color::Black,
-        text_muted: Color::BrightBlack,
-        text_dim: Color::BrightBlack,
+        text_primary: Color::Rgb(76, 79, 105),    // #4c4f69
+        text_muted: Color::Rgb(108, 111, 133),    // #6c6f85
+        text_subtle: Color::Rgb(140, 143, 161),   // #8c8fa1
 
-        accent_assistant: Color::Blue,
-        accent_user: Color::Green,
-        accent_system: Color::Magenta,
+        accent_assistant: Color::Rgb(30, 102, 245),  // #1e66f5 (blue)
+        accent_user: Color::Rgb(64, 160, 43),        // #40a02b (green)
+        accent_system: Color::Rgb(136, 57, 239),     // #8839ef (mauve)
+        accent_primary: Color::Rgb(30, 102, 245),    // #1e66f5 (blue)
 
-        border: Color::BrightBlack,
-        separator: Color::BrightBlack,
-        separator_active: Color::Blue,
+        border: Color::Rgb(140, 143, 161),        // #8c8fa1
+        border_subtle: Color::Rgb(172, 176, 190), // #acb0be
+        separator: Color::Rgb(188, 192, 204),     // #bcc0cc
 
-        ok: Color::Green,
-        warn: Color::Yellow,
-        err: Color::Red,
+        surface: Color::Rgb(230, 233, 239),       // #e6e9ef
 
-        tool: Color::Magenta,
-        tool_param: Color::BrightBlack,
-        tool_result: Color::Black,
+        ok: Color::Rgb(64, 160, 43),              // #40a02b (green)
+        warn: Color::Rgb(223, 142, 29),           // #df8e1d (yellow)
+        err: Color::Rgb(210, 15, 57),             // #d20f39 (red)
 
-        status_normal: Color::Yellow,
-        status_bypass: Color::Red,
-        status_plan: Color::Blue,
+        tool: Color::Rgb(136, 57, 239),           // #8839ef (mauve)
+        tool_param: Color::Rgb(92, 95, 119),      // #5c5f77 (subtext1)
+
+        status_normal: Color::Rgb(223, 142, 29),  // #df8e1d (yellow)
+        status_bypass: Color::Rgb(210, 15, 57),   // #d20f39 (red)
+        status_plan: Color::Rgb(30, 102, 245),    // #1e66f5 (blue)
     }
 }
 
 fn no_color_theme() -> Theme {
     Theme {
-        kind: ThemeKind::NoColor,
         text_primary: Color::White,
         text_muted: Color::White,
-        text_dim: Color::White,
+        text_subtle: Color::White,
 
         accent_assistant: Color::White,
         accent_user: Color::White,
         accent_system: Color::White,
+        accent_primary: Color::White,
 
         border: Color::White,
+        border_subtle: Color::White,
         separator: Color::White,
-        separator_active: Color::White,
+
+        surface: Color::White,
 
         ok: Color::White,
         warn: Color::White,
@@ -154,7 +163,6 @@ fn no_color_theme() -> Theme {
 
         tool: Color::White,
         tool_param: Color::White,
-        tool_result: Color::White,
 
         status_normal: Color::White,
         status_bypass: Color::White,
