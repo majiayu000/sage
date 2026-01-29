@@ -110,33 +110,33 @@ fn dark_theme() -> Theme {
 }
 
 fn light_theme() -> Theme {
-    // Catppuccin Latte palette
+    // All black text for maximum readability on light backgrounds
     Theme {
-        text_primary: Color::Rgb(76, 79, 105),    // #4c4f69
-        text_muted: Color::Rgb(108, 111, 133),    // #6c6f85
-        text_subtle: Color::Rgb(140, 143, 161),   // #8c8fa1
+        text_primary: Color::Black,
+        text_muted: Color::Black,
+        text_subtle: Color::Black,
 
-        accent_assistant: Color::Rgb(30, 102, 245),  // #1e66f5 (blue)
-        accent_user: Color::Rgb(64, 160, 43),        // #40a02b (green)
-        accent_system: Color::Rgb(136, 57, 239),     // #8839ef (mauve)
-        accent_primary: Color::Rgb(30, 102, 245),    // #1e66f5 (blue)
+        accent_assistant: Color::Black,
+        accent_user: Color::Black,
+        accent_system: Color::Black,
+        accent_primary: Color::Black,
 
-        border: Color::Rgb(140, 143, 161),        // #8c8fa1
-        border_subtle: Color::Rgb(172, 176, 190), // #acb0be
-        separator: Color::Rgb(188, 192, 204),     // #bcc0cc
+        border: Color::Black,
+        border_subtle: Color::Black,
+        separator: Color::Black,
 
-        surface: Color::Rgb(230, 233, 239),       // #e6e9ef
+        surface: Color::Black,
 
-        ok: Color::Rgb(64, 160, 43),              // #40a02b (green)
-        warn: Color::Rgb(223, 142, 29),           // #df8e1d (yellow)
-        err: Color::Rgb(210, 15, 57),             // #d20f39 (red)
+        ok: Color::Black,
+        warn: Color::Black,
+        err: Color::Black,
 
-        tool: Color::Rgb(136, 57, 239),           // #8839ef (mauve)
-        tool_param: Color::Rgb(92, 95, 119),      // #5c5f77 (subtext1)
+        tool: Color::Black,
+        tool_param: Color::Black,
 
-        status_normal: Color::Rgb(223, 142, 29),  // #df8e1d (yellow)
-        status_bypass: Color::Rgb(210, 15, 57),   // #d20f39 (red)
-        status_plan: Color::Rgb(30, 102, 245),    // #1e66f5 (blue)
+        status_normal: Color::Black,
+        status_bypass: Color::Black,
+        status_plan: Color::Black,
     }
 }
 
