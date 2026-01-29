@@ -14,6 +14,7 @@ enum ThemeKind {
 }
 
 #[derive(Clone, Copy, Debug)]
+#[allow(dead_code)]
 pub struct Theme {
     pub text_primary: Color,
     pub text_muted: Color,
