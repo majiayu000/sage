@@ -112,26 +112,26 @@ fn main() -> io::Result<()> {
 
     // Wait for key
     loop {
-        if event::poll(Duration::from_millis(100))? {
-            if let Event::Key(key) = event::read()? {
-                match key.code {
-                    KeyCode::Char('q') | KeyCode::Esc => break,
-                    KeyCode::Char('d') => {
-                        // Debug mode - print layout info to file
-                        let debug_output = format!(
-                            "Terminal: {}x{}\n\n=== Raw Output ===\n{}\n\n=== Line Analysis ===\n{}",
-                            term_width, term_height,
-                            output,
-                            output.lines().enumerate().map(|(i, line)| {
-                                let stripped = strip_ansi(line);
-                                let leading = stripped.len() - stripped.trim_start().len();
-                                format!("Line {:3}: col={:3} |{}|\n", i, leading, stripped)
-                            }).collect::<String>()
-                        );
-                        std::fs::write("/tmp/ui_debug.txt", debug_output)?;
-                    }
-                    _ => {}
+        if event::poll(Duration::from_millis(100))?
+            && let Event::Key(key) = event::read()?
+        {
+            match key.code {
+                KeyCode::Char('q') | KeyCode::Esc => break,
+                KeyCode::Char('d') => {
+                    // Debug mode - print layout info to file
+                    let debug_output = format!(
+                        "Terminal: {}x{}\n\n=== Raw Output ===\n{}\n\n=== Line Analysis ===\n{}",
+                        term_width, term_height,
+                        output,
+                        output.lines().enumerate().map(|(i, line)| {
+                            let stripped = strip_ansi(line);
+                            let leading = stripped.len() - stripped.trim_start().len();
+                            format!("Line {:3}: col={:3} |{}|\n", i, leading, stripped)
+                        }).collect::<String>()
+                    );
+                    std::fs::write("/tmp/ui_debug.txt", debug_output)?;
                 }
+                _ => {}
             }
         }
     }
