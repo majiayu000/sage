@@ -46,8 +46,8 @@ fn app() -> Element {
     let scroll = use_scroll();
 
     // State: messages, input buffer, permission mode
-    let messages = use_signal(|| Vec::<ChatMessage>::new());
-    let input = use_signal(|| String::new());
+    let messages = use_signal(Vec::<ChatMessage>::new);
+    let input = use_signal(String::new);
     let mode = use_signal(|| PermissionMode::Normal);
 
     // Get terminal size

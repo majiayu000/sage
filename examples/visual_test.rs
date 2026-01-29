@@ -112,11 +112,12 @@ fn main() -> io::Result<()> {
     // Check Taffy layouts
     println!("=== Taffy Layout Summary ===");
     fn check_layout(element: &Element, engine: &LayoutEngine, path: &str) {
-        if let Some(layout) = engine.get_layout(element.id) {
-            if layout.x > 0.1 && element.children.is_empty() {
-                // Only flag leaf nodes with x > 0 that aren't in Row layout
-                println!("  {} x={:.1} (potential issue)", path, layout.x);
-            }
+        if let Some(layout) = engine.get_layout(element.id)
+            && layout.x > 0.1
+            && element.children.is_empty()
+        {
+            // Only flag leaf nodes with x > 0 that aren't in Row layout
+            println!("  {} x={:.1} (potential issue)", path, layout.x);
         }
         for (i, child) in element.children.iter().enumerate() {
             check_layout(child, engine, &format!("{}/{}", path, i));
@@ -156,12 +157,11 @@ fn main() -> io::Result<()> {
 
     // Wait for exit
     loop {
-        if event::poll(Duration::from_millis(100))? {
-            if let Event::Key(key) = event::read()? {
-                if key.code == KeyCode::Char('q') || key.code == KeyCode::Esc {
-                    break;
-                }
-            }
+        if event::poll(Duration::from_millis(100))?
+            && let Event::Key(key) = event::read()?
+            && (key.code == KeyCode::Char('q') || key.code == KeyCode::Esc)
+        {
+            break;
         }
     }
 

@@ -47,8 +47,8 @@ fn app() -> Element {
     let scroll = use_scroll();
 
     // State: messages, input buffer, permission mode
-    let messages = use_signal(|| Vec::<ChatMessage>::new());
-    let input = use_signal(|| String::new());
+    let messages = use_signal(Vec::<ChatMessage>::new);
+    let input = use_signal(String::new);
     let mode = use_signal(|| PermissionMode::Normal);
     let msg_counter = use_signal(|| 0usize);
 
@@ -279,13 +279,13 @@ fn main() -> std::io::Result<()> {
     eprintln!("=== FIXED BOTTOM DEBUG START ===");
     eprintln!("Terminal size: {:?}", crossterm::terminal::size());
     eprintln!("TERM_PROGRAM: {:?}", std::env::var("TERM_PROGRAM").ok());
-    eprintln!("");
+    eprintln!();
     eprintln!("Instructions:");
     eprintln!("  1. Type text and press Enter to add messages");
     eprintln!("  2. Use Up/Down arrows to scroll");
     eprintln!("  3. Check /tmp/debug.log for render analysis");
     eprintln!("  4. Ctrl+C to quit");
-    eprintln!("");
+    eprintln!();
 
     // Run in inline mode
     render(app).run()

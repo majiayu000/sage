@@ -9,7 +9,7 @@ use std::process::Command;
 fn test_sage_no_alternate_screen_escape_sequences() {
     // Build Sage first
     let build_output = Command::new("cargo")
-        .args(&["build", "--release"])
+        .args(["build", "--release"])
         .output()
         .expect("Failed to build Sage");
 
@@ -22,7 +22,7 @@ fn test_sage_no_alternate_screen_escape_sequences() {
     // Run Sage with print mode (-p) to execute and exit quickly
     // Capture both stdout and stderr to look for escape sequences
     let output = Command::new("./target/release/sage")
-        .args(&["-p", "echo test"])
+        .args(["-p", "echo test"])
         .env("TERM", "xterm-256color")  // Ensure terminal support
         .output()
         .expect("Failed to run Sage");
