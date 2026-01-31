@@ -32,6 +32,7 @@
 // Core prompt modules (Claude Code style)
 pub mod agent_prompts;
 pub mod builder;
+pub mod context_aware;
 pub mod system_prompt;
 pub mod system_reminders;
 pub mod tool_descriptions;
@@ -45,6 +46,9 @@ pub mod template;
 // Re-exports for new modular system
 pub use agent_prompts::AgentPrompts;
 pub use builder::SystemPromptBuilder;
+pub use context_aware::{
+    ContextAwareConfig, ConversationPhase, PhaseDetector, PhasePrompts, PhaseSignals,
+};
 pub use system_prompt::{GitPrompts, SecurityPolicy, SystemPrompt};
 pub use system_reminders::{PlanPhase, SystemReminder};
 pub use tool_descriptions::ToolDescriptions;
