@@ -33,6 +33,7 @@
 pub mod agent_prompts;
 pub mod builder;
 pub mod context_aware;
+pub mod language_prompts;
 pub mod system_prompt;
 pub mod system_reminders;
 pub mod tool_descriptions;
@@ -49,6 +50,7 @@ pub use builder::SystemPromptBuilder;
 pub use context_aware::{
     ContextAwareConfig, ConversationPhase, PhaseDetector, PhasePrompts, PhaseSignals,
 };
+pub use language_prompts::{detect_primary_language, Language, LanguagePrompts};
 pub use system_prompt::{GitPrompts, SecurityPolicy, SystemPrompt};
 pub use system_reminders::{PlanPhase, SystemReminder};
 pub use tool_descriptions::ToolDescriptions;
