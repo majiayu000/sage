@@ -143,7 +143,7 @@ pub async fn execute_stream_json(
         }
         Err(ref e) => {
             writer
-                .write_event(&OutputEvent::error(&e.to_string()))
+                .write_event(&OutputEvent::error(e.to_string()))
                 .ok();
         }
     }

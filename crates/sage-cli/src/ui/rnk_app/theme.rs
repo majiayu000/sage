@@ -69,7 +69,7 @@ fn detect_theme_kind() -> ThemeKind {
 
     // Heuristic: COLORFGBG=fg;bg where bg>=7 often means light bg
     if let Ok(cfgbg) = std::env::var("COLORFGBG") {
-        if let Some(bg) = cfgbg.split(';').last().and_then(|s| s.parse::<u8>().ok()) {
+        if let Some(bg) = cfgbg.rsplit(';').next().and_then(|s| s.parse::<u8>().ok()) {
             if bg >= 7 {
                 return ThemeKind::Light;
             }

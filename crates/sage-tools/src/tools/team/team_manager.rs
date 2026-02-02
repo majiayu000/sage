@@ -102,6 +102,7 @@ pub struct TeamManager {
     current_team: RwLock<Option<String>>,
     /// Current agent info
     current_agent: RwLock<Option<TeamMember>>,
+    #[allow(dead_code)]
     /// Pending join requests (for team leaders)
     pending_requests: RwLock<HashMap<String, JoinRequest>>,
     /// Message inbox

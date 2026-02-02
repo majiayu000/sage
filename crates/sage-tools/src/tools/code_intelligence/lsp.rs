@@ -101,6 +101,7 @@ pub struct LspServerConfig {
 
 /// LSP tool for code intelligence
 pub struct LspTool {
+    #[allow(dead_code)]
     /// LSP clients by language
     clients: Arc<RwLock<HashMap<String, LspClient>>>,
     /// Configuration
