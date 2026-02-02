@@ -15,9 +15,9 @@ path = "src/main.rs"
 
 [dependencies]
 # Core library
-sage-core = { path = "../sage-core" }
-sage-tools = { path = "../sage-tools" }
-sage-sdk = { path = "../sage-sdk" }
+sage-core = { path = "../sage-core", version = "0.9.0" }
+sage-tools = { path = "../sage-tools", version = "0.9.0" }
+sage-sdk = { path = "../sage-sdk", version = "0.9.0" }
 
 # CLI
 clap = { workspace = true }
