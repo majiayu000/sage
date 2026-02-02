@@ -16,7 +16,7 @@ mod tests {
             .with_api_key("test-api-key")
             .with_base_url(base_url);
         let model_params = ModelParameters::new("gpt-4");
-        let http_client = Client::new();
+        let http_client = Client::builder().no_proxy().build().expect("Failed to create HTTP client");
         OpenAiProvider::new(config, model_params, http_client)
     }
 
@@ -249,7 +249,7 @@ mod tests {
             .with_api_key("test-key")
             .with_base_url(&mock_server.uri());
         let model_params = ModelParameters::new("gpt-4").with_temperature(0.9);
-        let http_client = Client::new();
+        let http_client = Client::builder().no_proxy().build().expect("Failed to create HTTP client");
         let provider = OpenAiProvider::new(config, model_params, http_client);
 
         let messages = vec![LlmMessage::user("Be creative")];
