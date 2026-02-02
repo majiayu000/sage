@@ -160,9 +160,9 @@ pub async fn get_git_branch() -> Result<String, std::io::Error> {
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     } else {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "Failed to get git branch",
+        Err(std::io::Error::other(
+            
+            "Failed to get git branch"
         ))
     }
 }
@@ -184,9 +184,9 @@ pub async fn get_git_status_summary() -> Result<String, std::io::Error> {
             Ok(format!("{} changed file(s)", lines.len()).yellow().to_string())
         }
     } else {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "Failed to get git status",
+        Err(std::io::Error::other(
+            
+            "Failed to get git status"
         ))
     }
 }

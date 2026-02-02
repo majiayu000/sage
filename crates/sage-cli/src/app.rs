@@ -305,7 +305,7 @@ pub async fn run_app() -> io::Result<()> {
 
     // Create executor
     let mut executor = create_executor().await.map_err(|e| {
-        io::Error::new(io::ErrorKind::Other, format!("Init error: {}", e))
+        io::Error::other(format!("Init error: {}", e))
     })?;
 
     // Set up input channel for interactive mode

@@ -166,6 +166,7 @@ pub struct PhaseDetector {
     exploration_tools: Vec<String>,
     /// Tool names that indicate implementation
     implementation_tools: Vec<String>,
+    #[allow(dead_code)]
     /// Tool names that indicate testing
     testing_tools: Vec<String>,
     /// Keywords that suggest debugging
