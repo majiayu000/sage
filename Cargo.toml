@@ -1,12 +1,11 @@
 [package]
 name = "sage"
-version = "0.8.0"
+version = "0.9.0"
 edition = "2024"
 authors = ["Sage Agent Team"]
 license = "MIT"
 repository = "https://github.com/majiayu000/sage"
 description = "LLM-based agent for general purpose software engineering tasks"
-publish = false
 
 [dependencies]
 sage-sdk = { path = "crates/sage-sdk" }
@@ -34,7 +33,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.8.0"
+version = "0.9.0"
 edition = "2024"
 authors = ["Sage Agent Team"]
 license = "MIT"
