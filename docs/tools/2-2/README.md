@@ -19,11 +19,16 @@
 |------|------|------|
 | Bash | [bash.md](./bash.md) | Shell 命令执行 |
 | Task | [task.md](./task.md) | 子 Agent 启动 |
+| TaskOutput | [task-output.md](./task-output.md) | 获取后台任务输出 |
+| TaskStop | [task-stop.md](./task-stop.md) | 停止后台任务 |
 
 ### 任务管理工具
 | 工具 | 文件 | 说明 |
 |------|------|------|
-| TaskCreate | [task-create.md](./task-create.md) | 创建任务列表 |
+| TaskCreate | [task-create.md](./task-create.md) | 创建任务 |
+| TaskUpdate | [task-update.md](./task-update.md) | 更新任务状态 |
+| TaskList | [task-list.md](./task-list.md) | 列出所有任务 |
+| TaskGet | [task-get.md](./task-get.md) | 获取任务详情 |
 | TodoWrite | [todo-write.md](./todo-write.md) | Todo 列表管理 |
 
 ### 规划工具
@@ -47,6 +52,39 @@
 | 工具 | 文件 | 说明 |
 |------|------|------|
 | Skill | [skill.md](./skill.md) | 执行技能 |
+| ToolSearch | [tool-search.md](./tool-search.md) | 搜索延迟加载工具 |
+
+### 代码智能工具
+| 工具 | 文件 | 说明 |
+|------|------|------|
+| LSP | [lsp.md](./lsp.md) | Language Server Protocol |
+
+### 浏览器自动化工具
+| 工具 | 文件 | 说明 |
+|------|------|------|
+| Computer | [computer.md](./computer.md) | 浏览器鼠标键盘控制 |
+
+### 团队协作工具
+| 工具 | 文件 | 说明 |
+|------|------|------|
+| TeammateTool | [teammate-tool.md](./teammate-tool.md) | 团队管理 |
+| SendMessageTool | [send-message-tool.md](./send-message-tool.md) | 队友消息发送 |
+
+## 工具统计
+
+| 类别 | 数量 |
+|------|------|
+| 文件操作 | 6 |
+| 执行工具 | 4 |
+| 任务管理 | 5 |
+| 规划工具 | 2 |
+| 交互工具 | 1 |
+| 网络工具 | 2 |
+| 扩展工具 | 2 |
+| 代码智能 | 1 |
+| 浏览器自动化 | 1 |
+| 团队协作 | 2 |
+| **总计** | **26** |
 
 ## Prompt 设计原则
 
@@ -100,27 +138,38 @@ assistant: [Assistant response]
 | NotebookEdit | NotebookEditTool | ✅ 完整 |
 | Bash | BashTool | ✅ 完整 |
 | Task | TaskTool | ✅ 完整 |
-| TaskCreate | TaskCreate/TodoWrite | ✅ 完整 |
+| TaskOutput | TaskOutputTool | ✅ 完整 |
+| TaskStop | KillShellTool | ✅ 完整 |
+| TaskCreate | TaskCreate | ✅ 完整 |
+| TaskUpdate | TaskUpdate | ✅ 完整 |
+| TaskList | TaskList | ✅ 完整 |
+| TaskGet | TaskGet | ✅ 完整 |
+| TodoWrite | TodoWriteTool | ✅ 完整 |
 | EnterPlanMode | EnterPlanModeTool | ✅ 完整 |
 | ExitPlanMode | ExitPlanModeTool | ✅ 完整 |
 | AskUserQuestion | AskUserQuestionTool | ✅ 完整 |
 | WebFetch | WebFetchTool | ✅ 完整 |
 | WebSearch | WebSearchTool | ✅ 完整 |
 | Skill | SkillTool | ✅ 完整 |
-| Computer | - | ❌ 未实现 |
-| LSP | - | ❌ 未实现 |
+| ToolSearch | - | ❌ 未实现 |
+| LSP | DiagnosticsTool (部分) | ⚠️ 部分 |
+| Computer | BrowserTool (替代) | ⚠️ 替代 |
 | TeammateTool | - | ❌ 未实现 |
 | SendMessageTool | - | ❌ 未实现 |
-| ToolSearch | - | ❌ 未实现 |
 
 ### Sage 独有工具
 | 工具 | 说明 |
 |------|------|
 | GitTool | Git 版本控制 |
 | HttpClientTool | HTTP 客户端 |
-| BrowserTool | 浏览器自动化 |
+| BrowserTool | 浏览器自动化 (Playwright) |
 | DockerTool | Docker 操作 |
 | SqlTool | SQL 数据库操作 |
 | LearnTool | 学习用户偏好 |
 | RememberTool | 长期记忆管理 |
 | SequentialThinkingTool | 顺序思考模式 |
+| LogAnalyzerTool | 日志分析 |
+| TestGeneratorTool | 测试生成 |
+| SecurityScannerTool | 安全扫描 |
+| KubernetesTool | K8s 操作 |
+| TerraformTool | 基础设施即代码 |
