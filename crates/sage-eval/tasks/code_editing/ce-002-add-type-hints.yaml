@@ -1,0 +1,50 @@
+id: ce-002-add-type-hints
+name: Add Type Hints
+description: |
+  Add type hints to all functions in `utils.py`. Use appropriate types
+  from the `typing` module where needed (List, Dict, Optional, etc.).
+category: code_editing
+difficulty: easy
+timeout_secs: 120
+expected_max_turns: 5
+languages:
+  - python
+tags:
+  - type-hints
+  - typing
+setup_files:
+  utils.py: |
+    def add_numbers(a, b):
+        return a + b
+
+    def concat_strings(strings):
+        return "".join(strings)
+
+    def find_max(numbers):
+        if not numbers:
+            return None
+        return max(numbers)
+
+    def create_user(name, age, email=None):
+        return {"name": name, "age": age, "email": email}
+verifier:
+  type: all
+  verifiers:
+    - type: file_contains
+      path: utils.py
+      contains: "->"
+    - type: file_contains
+      path: utils.py
+      contains: ": "
+    - type: test_command
+      command: |
+        python3 -c "
+        from utils import add_numbers, concat_strings, find_max, create_user
+        # Verify functions still work
+        assert add_numbers(1, 2) == 3
+        assert concat_strings(['a', 'b']) == 'ab'
+        assert find_max([1, 3, 2]) == 3
+        assert find_max([]) is None
+        assert create_user('Alice', 30)['name'] == 'Alice'
+        print('Type hints added successfully!')
+        "

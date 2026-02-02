@@ -1,0 +1,91 @@
+id: mf-001-split-module
+name: Split Module into Multiple Files
+description: |
+  The `app.py` file contains multiple classes that should be in separate files.
+  Split it into:
+  - `models.py` - containing User and Product classes
+  - `services.py` - containing UserService and ProductService classes
+  - `app.py` - importing and using the other modules
+
+  Make sure all imports work correctly after the split.
+category: multi_file
+difficulty: medium
+timeout_secs: 240
+expected_max_turns: 15
+languages:
+  - python
+tags:
+  - module-organization
+  - imports
+setup_files:
+  app.py: |
+    class User:
+        def __init__(self, id, name, email):
+            self.id = id
+            self.name = name
+            self.email = email
+
+    class Product:
+        def __init__(self, id, name, price):
+            self.id = id
+            self.name = name
+            self.price = price
+
+    class UserService:
+        def __init__(self):
+            self.users = {}
+
+        def create_user(self, id, name, email):
+            user = User(id, name, email)
+            self.users[id] = user
+            return user
+
+        def get_user(self, id):
+            return self.users.get(id)
+
+    class ProductService:
+        def __init__(self):
+            self.products = {}
+
+        def create_product(self, id, name, price):
+            product = Product(id, name, price)
+            self.products[id] = product
+            return product
+
+        def get_product(self, id):
+            return self.products.get(id)
+
+    def main():
+        user_service = UserService()
+        product_service = ProductService()
+
+        user = user_service.create_user(1, "Alice", "alice@example.com")
+        product = product_service.create_product(1, "Widget", 9.99)
+
+        print(f"Created user: {user.name}")
+        print(f"Created product: {product.name}")
+
+    if __name__ == "__main__":
+        main()
+verifier:
+  type: all
+  verifiers:
+    - type: files_exist
+      paths:
+        - models.py
+        - services.py
+        - app.py
+    - type: file_contains
+      path: models.py
+      contains: "class User"
+    - type: file_contains
+      path: models.py
+      contains: "class Product"
+    - type: file_contains
+      path: services.py
+      contains: "class UserService"
+    - type: file_contains
+      path: services.py
+      contains: "from models import"
+    - type: test_command
+      command: python app.py

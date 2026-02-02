@@ -1,0 +1,37 @@
+id: cg-003-prime-checker
+name: Prime Number Checker
+description: |
+  Create a Python file named `prime.py` that contains a function `is_prime(n)`
+  which returns True if n is a prime number, False otherwise.
+
+  Examples:
+  - is_prime(2) should return True
+  - is_prime(17) should return True
+  - is_prime(4) should return False
+  - is_prime(1) should return False
+category: code_generation
+difficulty: easy
+timeout_secs: 120
+expected_max_turns: 5
+languages:
+  - python
+tags:
+  - function
+  - math
+  - algorithm
+verifier:
+  type: all
+  verifiers:
+    - type: file_exists
+      path: prime.py
+    - type: test_command
+      command: |
+        python3 -c "
+        from prime import is_prime
+        assert is_prime(2) == True
+        assert is_prime(17) == True
+        assert is_prime(4) == False
+        assert is_prime(1) == False
+        assert is_prime(97) == True
+        print('All tests passed!')
+        "

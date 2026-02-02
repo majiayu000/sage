@@ -1,0 +1,84 @@
+id: rf-001-extract-function
+name: Extract Function Refactoring
+description: |
+  The `process_order` function in `orders.py` is too long and does multiple things.
+  Refactor it by extracting the validation logic into a separate `validate_order`
+  function and the discount calculation into a `calculate_discount` function.
+category: refactoring
+difficulty: easy
+timeout_secs: 150
+expected_max_turns: 8
+languages:
+  - python
+tags:
+  - extract-function
+  - single-responsibility
+setup_files:
+  orders.py: |
+    def process_order(order):
+        """Process an order and return the final price."""
+        # Validation
+        if not order:
+            raise ValueError("Order cannot be empty")
+        if 'items' not in order:
+            raise ValueError("Order must have items")
+        if len(order['items']) == 0:
+            raise ValueError("Order must have at least one item")
+        if 'customer_id' not in order:
+            raise ValueError("Order must have customer_id")
+
+        # Calculate subtotal
+        subtotal = sum(item['price'] * item['quantity'] for item in order['items'])
+
+        # Calculate discount
+        discount = 0
+        if subtotal > 100:
+            discount = subtotal * 0.1
+        elif subtotal > 50:
+            discount = subtotal * 0.05
+
+        # Apply discount
+        final_price = subtotal - discount
+
+        return final_price
+verifier:
+  type: all
+  verifiers:
+    - type: file_contains
+      path: orders.py
+      contains: "def validate_order"
+    - type: file_contains
+      path: orders.py
+      contains: "def calculate_discount"
+    - type: test_command
+      command: |
+        python3 -c "
+        from orders import process_order, validate_order, calculate_discount
+
+        # Test validate_order
+        try:
+            validate_order(None)
+            assert False
+        except ValueError:
+            pass
+
+        try:
+            validate_order({})
+            assert False
+        except ValueError:
+            pass
+
+        # Test calculate_discount
+        assert calculate_discount(50) == 0
+        assert calculate_discount(60) == 3.0
+        assert calculate_discount(120) == 12.0
+
+        # Test process_order still works
+        order = {
+            'customer_id': 1,
+            'items': [{'price': 50, 'quantity': 2}]
+        }
+        assert process_order(order) == 90.0  # 100 - 10% discount
+
+        print('Refactoring successful!')
+        "

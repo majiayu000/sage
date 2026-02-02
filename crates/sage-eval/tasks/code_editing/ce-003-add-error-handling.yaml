@@ -1,0 +1,47 @@
+id: ce-003-add-error-handling
+name: Add Error Handling
+description: |
+  Add proper error handling to the `divide` and `parse_int` functions in `math_utils.py`.
+
+  - `divide(a, b)` should raise a `ValueError` with message "Cannot divide by zero" when b is 0
+  - `parse_int(s)` should return `None` instead of raising an exception for invalid input
+category: code_editing
+difficulty: medium
+timeout_secs: 150
+expected_max_turns: 8
+languages:
+  - python
+tags:
+  - error-handling
+  - exceptions
+setup_files:
+  math_utils.py: |
+    def divide(a, b):
+        return a / b
+
+    def parse_int(s):
+        return int(s)
+
+    def safe_get(dictionary, key):
+        return dictionary[key]
+verifier:
+  type: test_command
+  command: |
+    python3 -c "
+    from math_utils import divide, parse_int
+
+    # Test divide
+    assert divide(10, 2) == 5
+    try:
+        divide(10, 0)
+        assert False, 'Should have raised ValueError'
+    except ValueError as e:
+        assert 'zero' in str(e).lower()
+
+    # Test parse_int
+    assert parse_int('42') == 42
+    assert parse_int('invalid') is None
+    assert parse_int('') is None
+
+    print('Error handling added successfully!')
+    "
