@@ -1,0 +1,77 @@
+{
+  "pass_at_1": {
+    "k": 1,
+    "passed": 1,
+    "total": 1,
+    "rate": 1.0
+  },
+  "pass_at_3": null,
+  "token_efficiency": {
+    "avg_tokens_per_success": 47137.0,
+    "avg_tokens_per_turn": 23568.5,
+    "total_tokens": 47137,
+    "total_input_tokens": 46841,
+    "total_output_tokens": 296,
+    "input_output_ratio": 158.2466216216216
+  },
+  "turn_metrics": {
+    "avg_turns": 2.0,
+    "avg_turns_success": 2.0,
+    "min_turns": 2,
+    "max_turns": 2,
+    "total_turns": 2
+  },
+  "cost_estimate": {
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-20250514",
+    "input_cost_per_million": 3.0,
+    "output_cost_per_million": 15.0,
+    "input_tokens": 46841,
+    "output_tokens": 296,
+    "input_cost_usd": 0.140523,
+    "output_cost_usd": 0.0044399999999999995,
+    "total_cost_usd": 0.144963
+  },
+  "by_category": {
+    "code_generation": {
+      "category": "code_generation",
+      "task_count": 1,
+      "pass_rate": 1.0,
+      "avg_turns": 2.0,
+      "avg_tokens": 47137.0,
+      "by_difficulty": {
+        "easy": {
+          "task_count": 1,
+          "passed": 1,
+          "pass_rate": 1.0
+        }
+      }
+    }
+  },
+  "task_results": [
+    {
+      "task_id": "cg-001-hello-world",
+      "task_name": "Hello World Function",
+      "category": "code_generation",
+      "difficulty": "easy",
+      "status": "passed",
+      "turns": 2,
+      "total_tokens": 47137,
+      "input_tokens": 46841,
+      "output_tokens": 296,
+      "execution_time_secs": 17.811393458,
+      "attempt": 1,
+      "error_message": null,
+      "verifier_output": null,
+      "timestamp": "2026-01-30T18:25:15.828517Z",
+      "tool_usage": {
+        "Write": 1
+      }
+    }
+  ],
+  "total_execution_time_secs": 17.811854208,
+  "timestamp": "2026-01-30T18:25:15.828738Z",
+  "model": "claude-sonnet-4-20250514",
+  "provider": "anthropic",
+  "sage_version": "0.8.0"
+}

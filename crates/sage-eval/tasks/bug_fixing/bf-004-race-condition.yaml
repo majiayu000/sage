@@ -1,0 +1,60 @@
+id: bf-004-race-condition
+name: Fix Thread Safety Bug
+description: |
+  The `Counter` class in `counter.py` has a race condition bug when used
+  with multiple threads. Fix it to be thread-safe using appropriate
+  synchronization primitives.
+category: bug_fixing
+difficulty: hard
+timeout_secs: 240
+expected_max_turns: 12
+languages:
+  - python
+tags:
+  - threading
+  - race-condition
+  - synchronization
+setup_files:
+  counter.py: |
+    class Counter:
+        def __init__(self):
+            self.value = 0
+
+        def increment(self):
+            current = self.value
+            self.value = current + 1
+
+        def decrement(self):
+            current = self.value
+            self.value = current - 1
+
+        def get_value(self):
+            return self.value
+verifier:
+  type: test_command
+  command: |
+    python3 -c "
+    import threading
+    from counter import Counter
+
+    counter = Counter()
+    num_threads = 10
+    increments_per_thread = 1000
+
+    def increment_many():
+        for _ in range(increments_per_thread):
+            counter.increment()
+
+    threads = [threading.Thread(target=increment_many) for _ in range(num_threads)]
+
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    expected = num_threads * increments_per_thread
+    actual = counter.get_value()
+
+    assert actual == expected, f'Race condition! Expected {expected}, got {actual}'
+    print(f'Thread safety verified! Counter = {actual}')
+    "

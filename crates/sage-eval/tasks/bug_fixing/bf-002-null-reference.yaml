@@ -1,0 +1,48 @@
+id: bf-002-null-reference
+name: Fix Null Reference Bug
+description: |
+  The `get_user_name` function in `user_utils.py` crashes when the user
+  dictionary is None or when the 'name' key is missing. Fix the bug to
+  return "Unknown" in these cases.
+category: bug_fixing
+difficulty: easy
+timeout_secs: 120
+expected_max_turns: 5
+languages:
+  - python
+tags:
+  - null-check
+  - defensive-programming
+setup_files:
+  user_utils.py: |
+    def get_user_name(user):
+        """Get the user's name from a user dictionary."""
+        return user['name']
+
+    def get_user_email(user):
+        """Get the user's email from a user dictionary."""
+        return user['email']
+
+    def format_user(user):
+        """Format user info as a string."""
+        return f"{get_user_name(user)} <{get_user_email(user)}>"
+verifier:
+  type: test_command
+  command: |
+    python3 -c "
+    from user_utils import get_user_name
+
+    # Normal case
+    assert get_user_name({'name': 'Alice'}) == 'Alice'
+
+    # None user
+    assert get_user_name(None) == 'Unknown'
+
+    # Missing name key
+    assert get_user_name({'email': 'test@test.com'}) == 'Unknown'
+
+    # Empty dict
+    assert get_user_name({}) == 'Unknown'
+
+    print('Null reference bug fixed!')
+    "

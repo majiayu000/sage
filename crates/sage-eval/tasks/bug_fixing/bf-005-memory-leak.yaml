@@ -1,0 +1,68 @@
+id: bf-005-memory-leak
+name: Fix Resource Leak
+description: |
+  The `FileProcessor` class in `processor.py` has a resource leak - it opens
+  files but doesn't close them properly. Fix the bug by ensuring files are
+  always closed, even if an exception occurs.
+category: bug_fixing
+difficulty: medium
+timeout_secs: 180
+expected_max_turns: 10
+languages:
+  - python
+tags:
+  - resource-leak
+  - file-handling
+  - context-manager
+setup_files:
+  processor.py: |
+    class FileProcessor:
+        def __init__(self):
+            self.processed_files = []
+
+        def process_file(self, filepath):
+            """Process a file and return its line count."""
+            f = open(filepath, 'r')
+            lines = f.readlines()
+            self.processed_files.append(filepath)
+            # Bug: file is never closed!
+            return len(lines)
+
+        def process_multiple(self, filepaths):
+            """Process multiple files."""
+            results = {}
+            for path in filepaths:
+                results[path] = self.process_file(path)
+            return results
+verifier:
+  type: test_command
+  command: |
+    python3 -c "
+    import os
+    import tempfile
+    from processor import FileProcessor
+
+    # Create test files
+    test_files = []
+    for i in range(5):
+        fd, path = tempfile.mkstemp(suffix='.txt')
+        os.write(fd, b'line1\nline2\nline3\n')
+        os.close(fd)
+        test_files.append(path)
+
+    processor = FileProcessor()
+
+    # Process files
+    for f in test_files:
+        count = processor.process_file(f)
+        assert count == 3
+
+    # Check that files can be deleted (not held open)
+    for f in test_files:
+        try:
+            os.remove(f)
+        except PermissionError:
+            raise AssertionError(f'File {f} is still open - resource leak!')
+
+    print('Resource leak fixed!')
+    "

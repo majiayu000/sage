@@ -1,0 +1,56 @@
+id: ce-005-add-caching
+name: Add Memoization Cache
+description: |
+  Add memoization caching to the `expensive_computation` function in `compute.py`.
+  Use either `functools.lru_cache` decorator or implement a manual cache.
+  The function should return the same results but be much faster on repeated calls.
+category: code_editing
+difficulty: medium
+timeout_secs: 180
+expected_max_turns: 10
+languages:
+  - python
+tags:
+  - caching
+  - memoization
+  - optimization
+setup_files:
+  compute.py: |
+    import time
+
+    def expensive_computation(n):
+        """Simulate an expensive computation."""
+        time.sleep(0.1)  # Simulate slow operation
+        result = 0
+        for i in range(n):
+            result += i * i
+        return result
+
+    def get_result(n):
+        """Get computation result."""
+        return expensive_computation(n)
+verifier:
+  type: test_command
+  command: |
+    python3 -c "
+    import time
+    from compute import expensive_computation
+
+    # First call
+    start = time.time()
+    result1 = expensive_computation(100)
+    first_call_time = time.time() - start
+
+    # Second call (should be cached)
+    start = time.time()
+    result2 = expensive_computation(100)
+    second_call_time = time.time() - start
+
+    # Results should be the same
+    assert result1 == result2
+
+    # Second call should be much faster (cached)
+    assert second_call_time < first_call_time / 2, f'Second call not faster: {second_call_time} vs {first_call_time}'
+
+    print(f'Caching works! First: {first_call_time:.3f}s, Second: {second_call_time:.3f}s')
+    "
