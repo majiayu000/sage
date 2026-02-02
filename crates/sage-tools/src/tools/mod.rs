@@ -7,14 +7,17 @@
 //! - `task_mgmt`: Task management tools (task_management, reorganize_tasklist, task_done)
 //! - `planning`: Planning mode tools (enter_plan_mode, exit_plan_mode)
 //! - `interaction`: User interaction tools (ask_user_question)
-//! - `extensions`: Extension tools (skill, slash_command)
+//! - `extensions`: Extension tools (skill, slash_command, tool_search)
 //! - `utils`: Utility tools (sequential_thinking, monitoring, enhanced_errors)
 //! - `network`: Network and browser tools (web_search, web_fetch, browser)
 //! - `diagnostics`: Diagnostics and content processing tools
 //! - `vcs`: Version control system tools (git)
 //! - `monitoring`: Monitoring tools (log_analyzer, test_generator)
 //! - `infrastructure`: Infrastructure tools (kubernetes, terraform, cloud)
+//! - `code_intelligence`: Code intelligence tools (lsp)
+//! - `team`: Team collaboration tools (teammate, send_message)
 
+pub mod code_intelligence;
 pub mod diagnostics;
 pub mod extensions;
 pub mod file_ops;
@@ -24,6 +27,7 @@ pub mod monitoring;
 pub mod planning;
 pub mod process;
 pub mod task_mgmt;
+pub mod team;
 pub mod utils;
 
 // VCS module with only updated git_simple
@@ -49,13 +53,17 @@ pub mod network {
 
 // Re-export all tools for easy access
 // Note: JsonEditTool, MultiEditTool are Sage-specific and currently disabled
+pub use code_intelligence::LspTool;
 pub use diagnostics::{
     DiagnosticsTool, LearnTool, LearningPatternsTool, RememberTool, RenderMermaidTool,
     SearchUntruncatedTool, SessionNotesTool, ViewRangeUntruncatedTool, get_global_learning_engine,
     get_global_memory_manager, get_learning_patterns_for_context, get_memories_for_context,
     init_global_learning_engine, init_global_memory_manager,
 };
-pub use extensions::{PlatformToolProxy, SkillTool, SlashCommandTool};
+pub use extensions::{
+    DeferredToolInfo, DeferredToolRegistry, PlatformToolProxy, SkillTool, SlashCommandTool,
+    ToolSearchResult, ToolSearchTool,
+};
 pub use file_ops::{
     CodebaseRetrievalTool, EditTool, GlobTool, GrepTool, NotebookEditTool, ReadTool, WriteTool,
 };
@@ -73,6 +81,7 @@ pub use task_mgmt::{
     TodoWriteTool, UpdateTasksTool, ViewTasklistTool, get_current_task, get_current_todos,
     get_todo_display,
 };
+pub use team::{SendMessageTool, TeamConfig, TeamManager, TeamMember, TeammateTool};
 pub use utils::{SequentialThinkingTool, TelemetryStatsTool};
 pub use vcs::GitTool;
 
@@ -119,6 +128,7 @@ pub fn get_default_tools() -> Vec<Arc<dyn Tool>> {
         // Extensions
         Arc::new(SkillTool::new()),
         Arc::new(SlashCommandTool::new()),
+        Arc::new(ToolSearchTool::new()), // Claude Code compatible deferred tool search
         // Platform tool proxies (for LLM platform built-in tools)
         Arc::new(PlatformToolProxy::glm_claim_coupon()),
         // Utilities
@@ -150,6 +160,11 @@ pub fn get_default_tools() -> Vec<Arc<dyn Tool>> {
         Arc::new(KubernetesTool::new()),
         Arc::new(TerraformTool::new()),
         Arc::new(CloudTool::new()),
+        // Code intelligence
+        Arc::new(LspTool::new()),
+        // Team collaboration
+        Arc::new(TeammateTool::new()),
+        Arc::new(SendMessageTool::new()),
     ]
 }
 
@@ -241,6 +256,17 @@ pub fn get_infrastructure_tools() -> Vec<Arc<dyn Tool>> {
         Arc::new(KubernetesTool::new()),
         Arc::new(TerraformTool::new()),
         Arc::new(CloudTool::new()),
+    ]
+}
+
+pub fn get_code_intelligence_tools() -> Vec<Arc<dyn Tool>> {
+    vec![Arc::new(LspTool::new())]
+}
+
+pub fn get_team_tools() -> Vec<Arc<dyn Tool>> {
+    vec![
+        Arc::new(TeammateTool::new()),
+        Arc::new(SendMessageTool::new()),
     ]
 }
 
