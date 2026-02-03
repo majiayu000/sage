@@ -11,7 +11,7 @@ pub fn create_default_providers() -> HashMap<String, ModelParameters> {
     providers.insert(
         "anthropic".to_string(),
         ModelParameters {
-            model: "claude-sonnet-4-20250514".to_string(),
+            model: "claude-sonnet-4-5-20250929".to_string(),
             api_key: None,
             base_url: Some("https://api.anthropic.com".to_string()),
             max_tokens: Some(4096),
