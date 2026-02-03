@@ -8,7 +8,8 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
-use tracing::{debug, warn};
+use crate::config::models_api::{FetchedModel, ModelsApiClient};
+use tracing::{debug, info, warn};
 
 /// Default cache TTL (24 hours)
 const DEFAULT_CACHE_TTL_SECS: u64 = 24 * 60 * 60;
@@ -229,22 +230,22 @@ impl ProviderRegistry {
                 requires_api_key: true,
                 models: vec![
                     ModelInfo {
-                        id: "claude-sonnet-4-20250514".to_string(),
-                        name: "Claude 4 Sonnet".to_string(),
+                        id: "claude-sonnet-4-5-20250929".to_string(),
+                        name: "Claude 4.5 Sonnet".to_string(),
                         default: true,
                         context_window: Some(200_000),
                         max_output_tokens: Some(64_000),
                     },
                     ModelInfo {
-                        id: "claude-opus-4-20250514".to_string(),
-                        name: "Claude 4 Opus".to_string(),
+                        id: "claude-opus-4-5-20251101".to_string(),
+                        name: "Claude 4.5 Opus".to_string(),
                         default: false,
                         context_window: Some(200_000),
                         max_output_tokens: Some(32_000),
                     },
                     ModelInfo {
-                        id: "claude-3-5-haiku-20241022".to_string(),
-                        name: "Claude 3.5 Haiku".to_string(),
+                        id: "claude-haiku-4-5-20251001".to_string(),
+                        name: "Claude 4.5 Haiku".to_string(),
                         default: false,
                         context_window: Some(200_000),
                         max_output_tokens: Some(8_192),

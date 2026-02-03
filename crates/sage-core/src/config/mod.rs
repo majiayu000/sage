@@ -12,6 +12,7 @@ mod lakeview_config;
 mod logging_config;
 mod mcp_config;
 mod model_params;
+pub mod models_api;
 mod provider_defaults;
 mod tool_config;
 mod trajectory_config;
@@ -36,6 +37,7 @@ pub use logging_config::LoggingConfig;
 pub use mcp_config::{McpConfig, McpServerConfig};
 pub use api_key_helpers::format_api_key_status_for_provider;
 pub use model_params::ModelParameters;
+pub use models_api::{ModelsApiClient, FetchedModel};
 pub use persistence::{ConfigPersistence, ConfigUpdate};
 pub use provider::{
     ApiAuthConfig, ApiKeyInfo, ApiKeySource, NetworkConfig, ProviderConfig, RateLimitConfig,
