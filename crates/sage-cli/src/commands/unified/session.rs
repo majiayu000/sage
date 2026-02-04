@@ -14,7 +14,7 @@ use tokio::sync::Mutex;
 use super::args::UnifiedArgs;
 use super::input::handle_user_input;
 use super::outcome::display_outcome;
-use super::slash_commands::{process_slash_command, SlashCommandAction};
+use super::slash_commands::{SlashCommandAction, process_slash_command};
 use sage_core::input::InputChannel;
 
 /// Execute a single task (one-shot mode)
@@ -55,6 +55,16 @@ pub async fn execute_single_task(
                 "Model switch to '{}' requires restart. Use `sage --model {}`.",
                 model, model
             ));
+            return Ok(());
+        }
+        SlashCommandAction::ModelSelect { models } => {
+            // In non-interactive mode, just show the list
+            let mut output = "Available models:\n".to_string();
+            for model in &models {
+                output.push_str(&format!("  - {}\n", model));
+            }
+            output.push_str("\nUse /model <name> to switch.");
+            println!("{}", output);
             return Ok(());
         }
         SlashCommandAction::Doctor => {

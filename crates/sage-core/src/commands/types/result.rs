@@ -18,6 +18,8 @@ pub enum InteractiveCommand {
     OutputMode { mode: String },
     /// Switch to a different model
     Model { model: String },
+    /// Open model selector (no model specified)
+    ModelSelect,
     /// Clear conversation history
     Clear,
     /// Run diagnostics

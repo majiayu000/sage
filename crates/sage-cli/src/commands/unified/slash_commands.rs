@@ -20,6 +20,8 @@ pub enum SlashCommandAction {
     Resume { session_id: Option<String> },
     /// Switch model
     SwitchModel { model: String },
+    /// Enter model selection mode with available models
+    ModelSelect { models: Vec<String> },
     /// Run diagnostics
     Doctor,
     /// Exit the application
@@ -86,9 +88,9 @@ pub async fn handle_interactive_command_v2(
     use sage_core::commands::types::InteractiveCommand;
 
     match cmd {
-        InteractiveCommand::Resume { session_id, .. } => {
-            Ok(SlashCommandAction::Resume { session_id: session_id.clone() })
-        }
+        InteractiveCommand::Resume { session_id, .. } => Ok(SlashCommandAction::Resume {
+            session_id: session_id.clone(),
+        }),
         InteractiveCommand::Title { title } => {
             console.warn(&format!(
                 "Title command not available in non-interactive mode. Title: {}",
@@ -136,12 +138,113 @@ pub async fn handle_interactive_command_v2(
             Ok(SlashCommandAction::Handled)
         }
         InteractiveCommand::Model { model } => {
-            console.info(&format!("Model switching to '{}' requires restart.", model));
-            Ok(SlashCommandAction::SwitchModel { model: model.clone() })
+            // Return SwitchModel action - the executor will handle the actual switch
+            Ok(SlashCommandAction::SwitchModel {
+                model: model.clone(),
+            })
         }
-        InteractiveCommand::Doctor => {
-            Ok(SlashCommandAction::Doctor)
+        InteractiveCommand::ModelSelect => {
+            // Fetch models and return them for interactive selection
+            use sage_core::config::{load_config, ModelsApiClient, ProviderRegistry};
+
+            // Get current provider
+            let config = match load_config() {
+                Ok(c) => c,
+                Err(e) => {
+                    return Ok(SlashCommandAction::HandledWithOutput(format!(
+                        "Failed to load config: {}",
+                        e
+                    )));
+                }
+            };
+            let provider_name = config.get_default_provider();
+
+            // Get provider info
+            let mut registry = ProviderRegistry::with_defaults();
+            let provider_info = registry.get_provider(provider_name).cloned();
+
+            // Get credentials
+            let (base_url, api_key) = {
+                let mut base_url = provider_info
+                    .as_ref()
+                    .map(|p| p.api_base_url.clone())
+                    .unwrap_or_default();
+                let mut api_key = None;
+
+                if let Some(params) = config.model_providers.get(provider_name) {
+                    if let Some(url) = &params.base_url {
+                        base_url = url.clone();
+                    }
+                    api_key = params.api_key.clone();
+                }
+
+                // Check environment variables
+                if api_key.is_none() {
+                    let env_var = match provider_name {
+                        "anthropic" => "ANTHROPIC_API_KEY",
+                        "openai" => "OPENAI_API_KEY",
+                        "google" => "GOOGLE_API_KEY",
+                        "glm" | "zhipu" => "GLM_API_KEY",
+                        _ => "",
+                    };
+                    if !env_var.is_empty() {
+                        api_key = std::env::var(env_var).ok();
+                    }
+                }
+
+                (base_url, api_key)
+            };
+
+            // Fetch models from API
+            let client = ModelsApiClient::new();
+            let models: Vec<String> = match provider_name {
+                "anthropic" | "glm" | "zhipu" => {
+                    match client
+                        .fetch_anthropic_models(&base_url, api_key.as_deref().unwrap_or(""))
+                        .await
+                    {
+                        Ok(m) => m.into_iter().map(|m| m.id).collect(),
+                        Err(_) => provider_info
+                            .as_ref()
+                            .map(|p| p.models.iter().map(|m| m.id.clone()).collect())
+                            .unwrap_or_default(),
+                    }
+                }
+                "openai" | "openrouter" => {
+                    match client
+                        .fetch_openai_models(&base_url, api_key.as_deref().unwrap_or(""))
+                        .await
+                    {
+                        Ok(m) => m.into_iter().map(|m| m.id).collect(),
+                        Err(_) => provider_info
+                            .as_ref()
+                            .map(|p| p.models.iter().map(|m| m.id.clone()).collect())
+                            .unwrap_or_default(),
+                    }
+                }
+                "ollama" => match client.fetch_ollama_models(&base_url).await {
+                    Ok(m) => m.into_iter().map(|m| m.id).collect(),
+                    Err(_) => provider_info
+                        .as_ref()
+                        .map(|p| p.models.iter().map(|m| m.id.clone()).collect())
+                        .unwrap_or_default(),
+                },
+                _ => provider_info
+                    .as_ref()
+                    .map(|p| p.models.iter().map(|m| m.id.clone()).collect())
+                    .unwrap_or_default(),
+            };
+
+            if models.is_empty() {
+                return Ok(SlashCommandAction::HandledWithOutput(
+                    "No models available for this provider".to_string(),
+                ));
+            }
+
+            // Return models for interactive selection
+            Ok(SlashCommandAction::ModelSelect { models })
         }
+        InteractiveCommand::Doctor => Ok(SlashCommandAction::Doctor),
         InteractiveCommand::Exit => {
             console.info("Exiting...");
             Ok(SlashCommandAction::Exit)

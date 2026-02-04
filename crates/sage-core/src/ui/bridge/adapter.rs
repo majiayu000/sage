@@ -74,6 +74,10 @@ impl EventAdapter {
                 state.phase = ExecutionPhase::Idle;
             }
 
+            AgentEvent::ModelSwitched { new_model, .. } => {
+                state.session.model = new_model;
+            }
+
             AgentEvent::StepStarted { step_number } => {
                 state.session.step = step_number;
             }
@@ -112,7 +116,11 @@ impl EventAdapter {
                 ..
             } => {
                 // Convert result_preview to the format expected by finish_tool
-                let output = if success { result_preview.clone() } else { None };
+                let output = if success {
+                    result_preview.clone()
+                } else {
+                    None
+                };
                 let error = if success { None } else { result_preview };
                 state.finish_tool(success, output, error);
             }
@@ -286,7 +294,11 @@ mod tests {
         // 1. First ThinkingStopped is emitted (this sets phase to Idle)
         adapter.handle_event(AgentEvent::ThinkingStopped);
         let state = adapter.get_state();
-        assert!(matches!(state.phase, ExecutionPhase::Idle), "After ThinkingStopped: {:?}", state.phase);
+        assert!(
+            matches!(state.phase, ExecutionPhase::Idle),
+            "After ThinkingStopped: {:?}",
+            state.phase
+        );
 
         // 2. Then error is emitted
         adapter.handle_event(AgentEvent::error("api_error", "Test error message"));
@@ -312,14 +324,20 @@ mod tests {
 
         // Verify error is set
         let state = adapter.get_state();
-        assert!(matches!(state.phase, ExecutionPhase::Error { .. }), "Error should be set");
+        assert!(
+            matches!(state.phase, ExecutionPhase::Error { .. }),
+            "Error should be set"
+        );
 
         // ThinkingStopped should NOT overwrite error
         adapter.handle_event(AgentEvent::ThinkingStopped);
 
         let state = adapter.get_state();
         // This test will FAIL if ThinkingStopped overwrites Error
-        assert!(matches!(state.phase, ExecutionPhase::Error { .. }),
-            "Error should NOT be overwritten by ThinkingStopped, got {:?}", state.phase);
+        assert!(
+            matches!(state.phase, ExecutionPhase::Error { .. }),
+            "Error should NOT be overwritten by ThinkingStopped, got {:?}",
+            state.phase
+        );
     }
 }
