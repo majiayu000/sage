@@ -16,6 +16,12 @@ pub enum AgentEvent {
     /// Session ended
     SessionEnded { session_id: String },
 
+    /// Model switched during session
+    ModelSwitched {
+        old_model: String,
+        new_model: String,
+    },
+
     /// Step started
     StepStarted { step_number: u32 },
 
@@ -68,11 +74,23 @@ pub enum AgentEvent {
 
 impl AgentEvent {
     /// Create a session started event
-    pub fn session_started(session_id: impl Into<String>, model: impl Into<String>, provider: impl Into<String>) -> Self {
+    pub fn session_started(
+        session_id: impl Into<String>,
+        model: impl Into<String>,
+        provider: impl Into<String>,
+    ) -> Self {
         Self::SessionStarted {
             session_id: session_id.into(),
             model: model.into(),
             provider: provider.into(),
+        }
+    }
+
+    /// Create a model switched event
+    pub fn model_switched(old_model: impl Into<String>, new_model: impl Into<String>) -> Self {
+        Self::ModelSwitched {
+            old_model: old_model.into(),
+            new_model: new_model.into(),
         }
     }
 
@@ -128,8 +146,14 @@ mod tests {
 
     #[test]
     fn test_event_creation() {
-        let event = AgentEvent::session_started("sess-123", "claude-sonnet-4-20250514", "anthropic");
-        if let AgentEvent::SessionStarted { session_id, model, provider } = event {
+        let event =
+            AgentEvent::session_started("sess-123", "claude-sonnet-4-20250514", "anthropic");
+        if let AgentEvent::SessionStarted {
+            session_id,
+            model,
+            provider,
+        } = event
+        {
             assert_eq!(session_id, "sess-123");
             assert_eq!(model, "claude-sonnet-4-20250514");
             assert_eq!(provider, "anthropic");

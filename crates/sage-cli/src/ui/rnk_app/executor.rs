@@ -2,22 +2,24 @@
 
 use super::state::{SharedState, UiCommand};
 use super::theme::current_theme;
-use crate::commands::unified::slash_commands::{process_slash_command, SlashCommandAction};
+use crate::commands::unified::slash_commands::{SlashCommandAction, process_slash_command};
 use crate::console::CliConsole;
 use rnk::prelude::*;
 use sage_core::agent::{ExecutionMode, ExecutionOptions, UnifiedExecutor};
 use sage_core::config::load_config;
 use sage_core::error::SageResult;
 use sage_core::input::InputChannel;
-use sage_core::interrupt::{interrupt_current_task, reset_global_interrupt_manager, InterruptReason};
+use sage_core::interrupt::{
+    InterruptReason, interrupt_current_task, reset_global_interrupt_manager,
+};
 use sage_core::output::OutputMode;
 use sage_core::types::TaskMetadata;
-use sage_core::ui::bridge::state::ExecutionPhase;
 use sage_core::ui::bridge::AgentEvent;
+use sage_core::ui::bridge::state::ExecutionPhase;
 use sage_core::ui::traits::UiContext;
 use sage_tools::get_default_tools;
 use tokio::sync::mpsc;
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 use unicode_width::UnicodeWidthStr;
 
 /// Handle resume command
@@ -44,7 +46,8 @@ async fn handle_resume(
     let restored_messages = executor.restore_session(&session_id).await?;
     Ok(format!(
         "Session {} restored ({} messages)",
-        session_id, restored_messages.len()
+        session_id,
+        restored_messages.len()
     ))
 }
 
@@ -115,9 +118,7 @@ pub async fn executor_loop(
                         // Command was handled locally with output to display
                         // Print each line separately to avoid rnk layout issues
                         for line in output.lines() {
-                            rnk::println(
-                                Text::new(line).color(Color::White).into_element(),
-                            );
+                            rnk::println(Text::new(line).color(Color::White).into_element());
                         }
                         rnk::request_render();
                         continue;
@@ -173,6 +174,11 @@ pub async fn executor_loop(
                         // Try to switch model dynamically
                         match executor.switch_model(&model) {
                             Ok(_) => {
+                                // Update UI state with new model
+                                {
+                                    let mut s = state.write();
+                                    s.session.model = model.clone();
+                                }
                                 rnk::println(
                                     Text::new(format!("✓ Switched to model: {}", model))
                                         .color(Color::Green)
@@ -186,6 +192,17 @@ pub async fn executor_loop(
                                         .into_element(),
                                 );
                             }
+                        }
+                        rnk::request_render();
+                        continue;
+                    }
+                    Ok(SlashCommandAction::ModelSelect { models }) => {
+                        // Enter model selection mode
+                        {
+                            let mut s = state.write();
+                            s.model_select_mode = true;
+                            s.available_models = models;
+                            s.model_select_index = 0;
                         }
                         rnk::request_render();
                         continue;
@@ -244,7 +261,9 @@ pub async fn executor_loop(
                 // Reset interrupt manager for new task
                 reset_global_interrupt_manager();
 
-                event_ctx.emit(AgentEvent::UserInputReceived { input: prompt.clone() });
+                event_ctx.emit(AgentEvent::UserInputReceived {
+                    input: prompt.clone(),
+                });
                 event_ctx.emit(AgentEvent::ThinkingStarted);
 
                 // Execute task
@@ -293,10 +312,7 @@ pub async fn executor_loop(
 }
 
 /// Background thread logic for printing messages and updating UI
-pub async fn background_loop(
-    state: SharedState,
-    adapter: sage_core::ui::bridge::EventAdapter,
-) {
+pub async fn background_loop(state: SharedState, adapter: sage_core::ui::bridge::EventAdapter) {
     use super::components::{format_message, format_tool_start, render_error};
 
     let theme = current_theme();
@@ -393,8 +409,10 @@ pub async fn background_loop(
             // Header printing removed - now done in run_rnk_app() before rnk starts
 
             // Update busy state from adapter - Error state is not busy
-            ui_state.is_busy =
-                !matches!(app_state.phase, ExecutionPhase::Idle | ExecutionPhase::Error { .. });
+            ui_state.is_busy = !matches!(
+                app_state.phase,
+                ExecutionPhase::Idle | ExecutionPhase::Error { .. }
+            );
             if ui_state.is_busy {
                 ui_state.status_text = app_state.status_text();
                 // Increment animation frame for spinner
@@ -408,7 +426,8 @@ pub async fn background_loop(
                 let tool_key = format!("{}:{}", tool_exec.tool_name, tool_exec.description);
                 if ui_state.current_tool_printed.as_ref() != Some(&tool_key) {
                     // New tool detected, cache it
-                    ui_state.pending_tool = Some((tool_exec.tool_name.clone(), tool_exec.description.clone()));
+                    ui_state.pending_tool =
+                        Some((tool_exec.tool_name.clone(), tool_exec.description.clone()));
                     ui_state.current_tool_printed = Some(tool_key);
                 }
             } else {
@@ -435,7 +454,12 @@ pub async fn background_loop(
                 let msgs: Vec<_> = messages
                     .iter()
                     .skip(ui_state.printed_count)
-                    .filter(|msg| !matches!(msg.content, sage_core::ui::bridge::state::MessageContent::ToolCall { .. }))
+                    .filter(|msg| {
+                        !matches!(
+                            msg.content,
+                            sage_core::ui::bridge::state::MessageContent::ToolCall { .. }
+                        )
+                    })
                     .map(|msg| format_message(msg, theme))
                     .collect();
                 ui_state.printed_count = new_count;

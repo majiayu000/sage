@@ -62,7 +62,9 @@ pub(super) async fn execute_status(executor: &CommandExecutor) -> SageResult<Com
         Ok(config) => format!(
             "- Default provider: {}\n- Max steps: {}",
             config.get_default_provider(),
-            config.max_steps.map_or("unlimited".to_string(), |s| s.to_string())
+            config
+                .max_steps
+                .map_or("unlimited".to_string(), |s| s.to_string())
         ),
         Err(_) => "- Config: Not loaded".to_string(),
     };
@@ -117,7 +119,9 @@ pub(super) async fn execute_plan(invocation: &CommandInvocation) -> SageResult<C
                 #[cfg(target_os = "macos")]
                 let _ = std::process::Command::new("open").arg(plan_path).spawn();
                 #[cfg(target_os = "linux")]
-                let _ = std::process::Command::new("xdg-open").arg(plan_path).spawn();
+                let _ = std::process::Command::new("xdg-open")
+                    .arg(plan_path)
+                    .spawn();
                 #[cfg(target_os = "windows")]
                 let _ = std::process::Command::new("notepad").arg(plan_path).spawn();
 
@@ -162,7 +166,10 @@ pub(super) async fn execute_plan(invocation: &CommandInvocation) -> SageResult<C
                 Ok(_) => Ok(CommandResult::local(
                     "Plan created at .sage/plan.md\n\nUse '/plan open' to edit it.",
                 )),
-                Err(e) => Ok(CommandResult::local(format!("Failed to create plan: {}", e))),
+                Err(e) => Ok(CommandResult::local(format!(
+                    "Failed to create plan: {}",
+                    e
+                ))),
             }
         }
         _ => {
@@ -204,10 +211,8 @@ pub(super) async fn execute_title(invocation: &CommandInvocation) -> SageResult<
 
 /// Execute /login command - configure API credentials
 pub(super) async fn execute_login() -> SageResult<CommandResult> {
-    Ok(
-        CommandResult::interactive(InteractiveCommand::Login)
-            .with_status("Opening credential setup..."),
-    )
+    Ok(CommandResult::interactive(InteractiveCommand::Login)
+        .with_status("Opening credential setup..."))
 }
 
 /// Execute /output command - switch output display mode
@@ -216,12 +221,10 @@ pub(super) async fn execute_output(invocation: &CommandInvocation) -> SageResult
 
     match mode {
         Some(m) if ["streaming", "batch", "silent"].contains(&m) => {
-            Ok(
-                CommandResult::interactive(InteractiveCommand::OutputMode {
-                    mode: m.to_string(),
-                })
-                .with_status(format!("Switching to {} mode...", m)),
-            )
+            Ok(CommandResult::interactive(InteractiveCommand::OutputMode {
+                mode: m.to_string(),
+            })
+            .with_status(format!("Switching to {} mode...", m)))
         }
         Some(m) => Ok(CommandResult::local(format!(
             "Unknown output mode: '{}'\n\nValid modes:\n  streaming - Real-time output (default)\n  batch     - Collect and display at end\n  silent    - No output",
@@ -271,22 +274,18 @@ pub(super) async fn execute_model(invocation: &CommandInvocation) -> SageResult<
     let model = invocation.arguments.first().map(|s| s.as_str());
 
     match model {
-        Some(m) => Ok(
-            CommandResult::interactive(InteractiveCommand::Model {
-                model: m.to_string(),
-            })
-            .with_status(format!("Model switching to '{}'...", m)),
-        ),
-        None => Ok(CommandResult::local(
-            "Usage: /model <model-name>\n\nExamples:\n  /model gpt-4\n  /model claude-3-opus\n  /model glm-4\n\nUse /config to see configured providers and models.",
-        )),
+        Some(m) => Ok(CommandResult::interactive(InteractiveCommand::Model {
+            model: m.to_string(),
+        })
+        .with_status(format!("Model switching to '{}'...", m))),
+        None => {
+            // No model specified - open model selector
+            Ok(CommandResult::interactive(InteractiveCommand::ModelSelect))
+        }
     }
 }
 
 /// Execute /exit command - exit the application
 pub(super) async fn execute_exit() -> SageResult<CommandResult> {
-    Ok(
-        CommandResult::interactive(InteractiveCommand::Exit)
-            .with_status("Exiting..."),
-    )
+    Ok(CommandResult::interactive(InteractiveCommand::Exit).with_status("Exiting..."))
 }

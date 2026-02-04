@@ -43,7 +43,9 @@ pub use context_builder::{ContextBuilder, GitInfo, ProjectContext};
 pub use event_manager::{EventManager, ExecutionEvent};
 pub use llm_orchestrator::LlmOrchestrator;
 pub use session_manager::SessionManager;
-pub use tool_orchestrator::{CheckpointConfig, PreExecutionResult, SupervisionConfig, ToolExecutionContext, ToolOrchestrator};
+pub use tool_orchestrator::{
+    CheckpointConfig, PreExecutionResult, SupervisionConfig, ToolExecutionContext, ToolOrchestrator,
+};
 
 use crate::agent::subagent::init_global_runner_from_config;
 use crate::context::AutoCompact;
@@ -122,13 +124,17 @@ impl UnifiedExecutor {
 
     /// Register a tool with the executor
     pub fn register_tool(&mut self, tool: Arc<dyn crate::tools::base::Tool>) {
-        self.tool_orchestrator.tool_executor_mut().register_tool(tool);
+        self.tool_orchestrator
+            .tool_executor_mut()
+            .register_tool(tool);
     }
 
     /// Register multiple tools with the executor
     pub fn register_tools(&mut self, tools: Vec<Arc<dyn crate::tools::base::Tool>>) {
         for tool in tools {
-            self.tool_orchestrator.tool_executor_mut().register_tool(tool);
+            self.tool_orchestrator
+                .tool_executor_mut()
+                .register_tool(tool);
         }
     }
 
@@ -179,7 +185,8 @@ impl UnifiedExecutor {
     /// - Modify tool behavior
     pub fn set_hook_registry(&mut self, registry: HookRegistry) {
         use crate::hooks::HookExecutor;
-        self.tool_orchestrator.set_hook_executor(HookExecutor::new(registry));
+        self.tool_orchestrator
+            .set_hook_executor(HookExecutor::new(registry));
     }
 
     /// Set the UI context for event handling
@@ -292,14 +299,41 @@ impl UnifiedExecutor {
     /// This updates the configuration and recreates the LLM orchestrator.
     /// Returns the new model name on success.
     pub fn switch_model(&mut self, model: &str) -> SageResult<String> {
+        let old_model = self
+            .config
+            .default_model_parameters()
+            .map(|p| p.model.clone())
+            .unwrap_or_else(|_| "unknown".to_string());
+
+        tracing::info!("Switching model: {} -> {}", old_model, model);
+
         // Update the config with the new model
         self.config.set_default_model(model.to_string());
+
+        // Verify the config was updated
+        let new_model = self
+            .config
+            .default_model_parameters()
+            .map(|p| p.model.clone())
+            .unwrap_or_else(|_| "unknown".to_string());
+
+        if new_model != model {
+            return Err(SageError::config(format!(
+                "Failed to update model in config: expected '{}', got '{}'",
+                model, new_model
+            )));
+        }
 
         // Recreate the LLM orchestrator with the new config
         self.llm_orchestrator = LlmOrchestrator::from_config(&self.config)
             .map_err(|e| SageError::config(format!("Failed to switch model: {}", e)))?;
 
-        tracing::info!("Switched to model: {}", model);
+        tracing::info!(
+            "Successfully switched to model: {} (orchestrator model: {})",
+            model,
+            self.llm_orchestrator.model_name()
+        );
+
         Ok(model.to_string())
     }
 }

@@ -20,8 +20,8 @@ pub use state::{SharedState, UiCommand, UiState};
 
 use super::adapters::RnkEventSink;
 use components::{
-    count_matching_commands, get_selected_command, render_command_suggestions,
-    render_input, render_separator, render_status_bar, render_thinking_indicator,
+    count_matching_commands, get_selected_command, render_command_suggestions, render_input,
+    render_model_selector, render_separator, render_status_bar, render_thinking_indicator,
 };
 use crossterm::terminal;
 use executor::{background_loop, executor_loop};
@@ -35,7 +35,7 @@ use std::io;
 use std::sync::Arc;
 use theme::current_theme;
 use tokio::sync::mpsc;
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 
 // Alias rnk's Box to avoid conflict with std::boxed::Box
 use rnk::prelude::Box as RnkBox;
@@ -97,10 +97,18 @@ fn app() -> Element {
                 return;
             }
 
-            // ESC to cancel or clear suggestions
+            // Check if in model select mode
+            let in_model_mode = state.read().model_select_mode;
+
+            // ESC to cancel or exit model select mode
             if key.escape {
                 let mut s = state.write();
-                if s.is_busy {
+                if s.model_select_mode {
+                    // Exit model selection mode
+                    s.model_select_mode = false;
+                    s.model_select_index = 0;
+                    s.available_models.clear();
+                } else if s.is_busy {
                     drop(s);
                     let _ = cmd_tx.try_send(UiCommand::Cancel);
                 } else {
@@ -125,7 +133,46 @@ fn app() -> Element {
                 }
             }
 
-            // Up arrow - move selection up
+            // Model selection mode - handle separately
+            if in_model_mode {
+                if key.up_arrow {
+                    let mut s = state.write();
+                    if s.model_select_index > 0 {
+                        s.model_select_index -= 1;
+                    }
+                    return;
+                }
+
+                if key.down_arrow {
+                    let mut s = state.write();
+                    let max = s.available_models.len().saturating_sub(1);
+                    if s.model_select_index < max {
+                        s.model_select_index += 1;
+                    }
+                    return;
+                }
+
+                if key.return_key || (key.tab && !key.shift) {
+                    // Select the model and switch
+                    let model = {
+                        let mut s = state.write();
+                        let model = s.available_models.get(s.model_select_index).cloned();
+                        s.model_select_mode = false;
+                        s.model_select_index = 0;
+                        s.available_models.clear();
+                        model
+                    };
+                    if let Some(m) = model {
+                        let _ = cmd_tx.try_send(UiCommand::Submit(format!("/model {}", m)));
+                    }
+                    return;
+                }
+
+                // Any other key exits model select mode
+                return;
+            }
+
+            // Normal mode - Up arrow - move selection up
             if key.up_arrow {
                 let mut s = state.write();
                 if s.input_text.starts_with('/') && s.suggestion_index > 0 {
@@ -208,6 +255,9 @@ fn app() -> Element {
     let suggestion_index = ui_state.suggestion_index;
     let animation_frame = ui_state.animation_frame;
     let model_name = ui_state.session.model.clone();
+    let model_select_mode = ui_state.model_select_mode;
+    let available_models = ui_state.available_models.clone();
+    let model_select_index = ui_state.model_select_index;
     drop(ui_state);
 
     let theme = current_theme();
@@ -218,24 +268,16 @@ fn app() -> Element {
 
     // Thinking indicator above separator (in message area)
     if is_busy {
-        bottom = bottom.child(render_thinking_indicator(&status_text, animation_frame, theme));
+        bottom = bottom.child(render_thinking_indicator(
+            &status_text,
+            animation_frame,
+            theme,
+        ));
         bottom = bottom.child(Text::new("").into_element()); // Empty line
     }
 
     // Top separator line
     bottom = bottom.child(render_separator(term_width_usize, theme));
-
-    // Show command suggestions when typing /
-    // Note: suggestion_index is clamped in input handler, not here (pure render)
-    let suggestions = if !is_busy {
-        render_command_suggestions(&input_text, suggestion_index, theme).map(|(element, _)| element)
-    } else {
-        None
-    };
-
-    if let Some(sugg) = suggestions {
-        bottom = bottom.child(sugg);
-    }
 
     // Input line
     let input = render_input(&input_text, theme, animation_frame);
@@ -243,6 +285,22 @@ fn app() -> Element {
 
     // Bottom separator line
     bottom = bottom.child(render_separator(term_width_usize, theme));
+
+    // Show model selector or command suggestions below input
+    if model_select_mode && !available_models.is_empty() {
+        // Model selection mode
+        bottom = bottom.child(render_model_selector(
+            &available_models,
+            model_select_index,
+            theme,
+        ));
+    } else if !is_busy {
+        // Show command suggestions when typing /
+        if let Some((element, _)) = render_command_suggestions(&input_text, suggestion_index, theme)
+        {
+            bottom = bottom.child(element);
+        }
+    }
 
     // Status bar
     let status_bar = render_status_bar(permission_mode, Some(&model_name), theme);
