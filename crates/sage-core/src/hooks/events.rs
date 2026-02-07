@@ -240,7 +240,7 @@ mod tests {
     #[test]
     fn test_hook_event_clone() {
         let event = HookEvent::SessionStart;
-        let cloned = event.clone();
+        let cloned = event;
         assert_eq!(event, cloned);
     }
 

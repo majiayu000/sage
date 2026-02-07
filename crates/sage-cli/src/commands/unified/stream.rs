@@ -34,7 +34,7 @@ pub async fn execute_stream_json(
             if let Ok(task_path) = std::path::Path::new(&task).canonicalize() {
                 if task_path.is_file() {
                     writer
-                        .write_event(&OutputEvent::system(&format!(
+                        .write_event(&OutputEvent::system(format!(
                             "Loading task from file: {}",
                             task_path.display()
                         )))
@@ -61,7 +61,7 @@ pub async fn execute_stream_json(
 
     // Emit task received event
     writer
-        .write_event(&OutputEvent::system(&format!(
+        .write_event(&OutputEvent::system(format!(
             "Task: {}",
             &task_description[..task_description.len().min(100)]
         )))

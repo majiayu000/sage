@@ -420,7 +420,7 @@ mod tests {
 
         assert_eq!(summary.role, MessageRole::System);
         assert_eq!(summary.content, "Test summary");
-        assert!(summary.metadata.get(COMPACT_SUMMARY_KEY).is_some());
+        assert!(summary.metadata.contains_key(COMPACT_SUMMARY_KEY));
         assert_eq!(
             summary.metadata.get("messages_compacted"),
             Some(&serde_json::json!(50))

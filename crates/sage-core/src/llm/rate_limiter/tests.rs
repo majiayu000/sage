@@ -316,7 +316,7 @@ async fn test_available_tokens_after_partial_refill() {
     tokio::time::sleep(Duration::from_millis(500)).await;
 
     let available = limiter.available_tokens().await;
-    assert!(available >= 4 && available <= 6); // Allow some timing variance
+    assert!((4..=6).contains(&available)); // Allow some timing variance
 }
 
 // New tests for concurrent request limiting

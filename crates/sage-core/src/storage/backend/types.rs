@@ -294,8 +294,8 @@ mod tests {
         let v: DatabaseValue = 42i64.into();
         assert_eq!(v.as_i64(), Some(42));
 
-        let v: DatabaseValue = 3.14f64.into();
-        assert_eq!(v.as_f64(), Some(3.14));
+        let v: DatabaseValue = 2.5f64.into();
+        assert_eq!(v.as_f64(), Some(2.5));
 
         let v: DatabaseValue = true.into();
         assert_eq!(v.as_bool(), Some(true));

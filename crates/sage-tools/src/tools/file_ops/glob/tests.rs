@@ -1,7 +1,5 @@
 //! Tests for glob tool
 
-#![cfg(test)]
-
 use sage_core::tools::base::Tool;
 use sage_core::tools::types::ToolCall;
 use serde_json::json;

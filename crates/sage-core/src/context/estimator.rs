@@ -138,7 +138,7 @@ mod tests {
         // ~40 chars = ~10 tokens + 4 overhead = ~14 tokens
         let msg = create_message(MessageRole::User, "Hello, how are you doing today?");
         let tokens = estimator.estimate_message(&msg);
-        assert!(tokens >= 10 && tokens <= 20);
+        assert!((10..=20).contains(&tokens));
     }
 
     #[test]

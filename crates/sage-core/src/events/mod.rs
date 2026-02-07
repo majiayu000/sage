@@ -383,7 +383,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_event_types() {
-        let events = vec![
+        let events = [
             Event::StreamConnected {
                 provider: "openai".into(),
                 model: "gpt-4".into(),

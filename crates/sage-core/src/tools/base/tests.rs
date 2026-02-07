@@ -1,7 +1,5 @@
 //! Tests for tool base functionality
 
-#![cfg(test)]
-
 // Test modules - use path attributes since files are in parent directory
 #[path = "test_command.rs"]
 mod test_command;

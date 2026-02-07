@@ -216,7 +216,7 @@ impl LayoutAssertion {
     }
 
     fn get_line(&self, idx: usize) -> Option<String> {
-        self.output.lines().nth(idx).map(|l| strip_ansi(l))
+        self.output.lines().nth(idx).map(strip_ansi)
     }
 }
 
@@ -1101,8 +1101,6 @@ mod phase3_message_rendering {
 // ============================================================================
 
 mod phase4_animation {
-    use super::*;
-
     const SPINNER_FRAMES: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
     const SPINNER_INTERVAL_MS: u128 = 80;
 

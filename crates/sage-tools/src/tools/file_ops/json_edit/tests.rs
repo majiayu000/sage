@@ -1,7 +1,7 @@
 //! Tests for JSON editing tool
 
 #[cfg(test)]
-mod tests {
+mod suite {
     use crate::tools::file_ops::json_edit::JsonEditTool;
     use sage_core::tools::base::Tool;
     use sage_core::tools::types::ToolCall;

@@ -1,7 +1,7 @@
 //! Test suite for WriteTool
 
 #[cfg(test)]
-mod tests {
+mod suite {
     use crate::tools::file_ops::write::WriteTool;
     use sage_core::tools::base::Tool;
     use sage_core::tools::types::ToolCall;

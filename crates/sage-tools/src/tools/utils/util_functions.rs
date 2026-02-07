@@ -286,7 +286,7 @@ mod tests {
     #[test]
     fn test_no_truncation_needed() {
         let content = "Short content\nWith a few lines\nNothing special";
-        let result = truncate_output(&content);
+        let result = truncate_output(content);
 
         assert!(!result.was_truncated);
         assert_eq!(result.content, content);

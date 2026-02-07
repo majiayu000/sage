@@ -1,7 +1,5 @@
 //! Tests for JSONL storage
 
-#![cfg(test)]
-
 use std::path::PathBuf;
 use tempfile::TempDir;
 

@@ -397,7 +397,6 @@ mod tests {
             .unwrap()
             .clone()
             .into_iter()
-            .map(|(k, v)| (k, v))
             .collect(),
             call_id: None,
         };
@@ -441,7 +440,6 @@ mod tests {
             .unwrap()
             .clone()
             .into_iter()
-            .map(|(k, v)| (k, v))
             .collect(),
             call_id: None,
         };
@@ -477,7 +475,6 @@ mod tests {
             .unwrap()
             .clone()
             .into_iter()
-            .map(|(k, v)| (k, v))
             .collect(),
             call_id: None,
         };

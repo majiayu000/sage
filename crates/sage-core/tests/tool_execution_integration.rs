@@ -2,11 +2,10 @@
 
 use async_trait::async_trait;
 use sage_core::tools::base::{Tool, ToolError};
-use sage_core::tools::executor::{ToolExecutor, ToolExecutorBuilder};
+use sage_core::tools::executor::ToolExecutorBuilder;
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 
 // Mock echo tool
 struct EchoTool;
@@ -325,7 +324,6 @@ async fn test_execution_timing() {
 
     assert!(result.success);
     assert!(result.execution_time_ms.is_some());
-    assert!(result.execution_time_ms.unwrap() >= 0);
 }
 
 #[tokio::test]
@@ -356,7 +354,7 @@ async fn test_get_specific_tool_schemas() {
         .build();
 
     let schemas =
-        executor.get_schemas_for_tools(&vec!["echo".to_string(), "calculator".to_string()]);
+        executor.get_schemas_for_tools(&["echo".to_string(), "calculator".to_string()]);
 
     assert_eq!(schemas.len(), 2);
     let names: Vec<String> = schemas.iter().map(|s| s.name.clone()).collect();

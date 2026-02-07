@@ -310,7 +310,7 @@ mod tests {
         ]);
 
         let schemas =
-            executor.get_schemas_for_tools(&vec!["tool1".to_string(), "tool3".to_string()]);
+            executor.get_schemas_for_tools(&["tool1".to_string(), "tool3".to_string()]);
         assert_eq!(schemas.len(), 2);
 
         let names: Vec<String> = schemas.iter().map(|s| s.name.clone()).collect();

@@ -60,7 +60,7 @@ fn test_ctrl_c_cancellation() {
     let mut p = spawn_bash(Some(TIMEOUT_MS)).expect("Failed to spawn bash");
 
     // Start sage interactively
-    p.send_line(&format!("{}", sage_binary()))
+    p.send_line(&sage_binary().to_string())
         .expect("Failed to start sage");
 
     // Wait a bit for startup

@@ -334,7 +334,7 @@ mod tests {
 
         // Should keep 1 system + 2 first + 3 last = 6
         assert_eq!(result.kept.len(), 6);
-        assert!(result.removed.len() > 0);
+        assert!(!result.removed.is_empty());
     }
 
     #[test]

@@ -1,7 +1,5 @@
 //! Tests for memory tools
 
-#![cfg(test)]
-
 use sage_core::tools::{Tool, ToolCall};
 use serde_json::json;
 
@@ -22,7 +20,6 @@ async fn test_remember_tool() {
         .unwrap()
         .clone()
         .into_iter()
-        .map(|(k, v)| (k, v))
         .collect(),
         call_id: None,
     };
@@ -49,7 +46,6 @@ async fn test_session_notes_list() {
         .unwrap()
         .clone()
         .into_iter()
-        .map(|(k, v)| (k, v))
         .collect(),
         call_id: None,
     };
@@ -66,7 +62,6 @@ async fn test_session_notes_list() {
         .unwrap()
         .clone()
         .into_iter()
-        .map(|(k, v)| (k, v))
         .collect(),
         call_id: None,
     };
@@ -89,7 +84,6 @@ async fn test_session_notes_stats() {
         .unwrap()
         .clone()
         .into_iter()
-        .map(|(k, v)| (k, v))
         .collect(),
         call_id: None,
     };

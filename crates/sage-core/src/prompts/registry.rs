@@ -406,7 +406,7 @@ mod tests {
     fn test_registry_builtins() {
         let registry = PromptRegistry::with_builtins();
 
-        assert!(registry.len() > 0);
+        assert!(!registry.is_empty());
         assert!(registry.get("system_default").is_some());
         assert!(registry.get("code_review").is_some());
     }
