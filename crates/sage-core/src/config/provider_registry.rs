@@ -8,8 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
-use crate::config::models_api::{FetchedModel, ModelsApiClient};
-use tracing::{debug, info, warn};
+use tracing::{debug, warn};
 
 /// Default cache TTL (24 hours)
 const DEFAULT_CACHE_TTL_SECS: u64 = 24 * 60 * 60;

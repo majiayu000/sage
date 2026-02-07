@@ -267,9 +267,9 @@ mod tests {
         assert!(!FieldType::String.matches(&serde_json::json!(123)));
 
         assert!(FieldType::Integer.matches(&serde_json::json!(42)));
-        assert!(!FieldType::Integer.matches(&serde_json::json!(3.14)));
+        assert!(!FieldType::Integer.matches(&serde_json::json!(2.5)));
 
-        assert!(FieldType::Number.matches(&serde_json::json!(3.14)));
+        assert!(FieldType::Number.matches(&serde_json::json!(2.5)));
         assert!(FieldType::Number.matches(&serde_json::json!(42)));
 
         assert!(FieldType::Boolean.matches(&serde_json::json!(true)));

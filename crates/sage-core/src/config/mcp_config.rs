@@ -269,6 +269,6 @@ mod tests {
     #[test]
     fn test_default_functions() {
         assert_eq!(default_mcp_timeout(), 300);
-        assert_eq!(default_true(), true);
+        assert!(default_true());
     }
 }

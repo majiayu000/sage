@@ -24,7 +24,6 @@ async fn test_execute_with_timing_success() {
     let result = tool.execute_with_timing(&call).await;
     assert!(result.success);
     assert!(result.execution_time_ms.is_some());
-    assert!(result.execution_time_ms.unwrap() >= 0);
 }
 
 #[tokio::test]

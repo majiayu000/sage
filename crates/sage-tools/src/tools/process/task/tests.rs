@@ -1,7 +1,7 @@
 //! Tests for task tool
 
 #[cfg(test)]
-mod tests {
+mod suite {
     use serde_json::json;
     use std::sync::Arc;
 
@@ -28,7 +28,6 @@ mod tests {
             .unwrap()
             .clone()
             .into_iter()
-            .map(|(k, v)| (k, v))
             .collect(),
             call_id: None,
         };
@@ -79,7 +78,6 @@ mod tests {
             .unwrap()
             .clone()
             .into_iter()
-            .map(|(k, v)| (k, v))
             .collect(),
             call_id: None,
         };

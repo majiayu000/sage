@@ -1,7 +1,7 @@
 //! Tests for learning tools
 
 #[cfg(test)]
-mod tests {
+mod suite {
     use sage_core::tools::{Tool, ToolCall};
     use serde_json::json;
 

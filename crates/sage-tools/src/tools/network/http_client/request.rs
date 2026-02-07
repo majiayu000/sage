@@ -210,12 +210,12 @@ mod tests {
     #[test]
     fn test_graphql_request_creation() {
         let query = "query { user { name } }";
-        let variables = Some(json!({ "id": 1 }));
+        let variables = json!({ "id": 1 });
 
-        let request = create_graphql_request(query, variables.as_ref());
+        let request = create_graphql_request(query, Some(&variables));
 
         assert_eq!(request["query"], query);
-        assert_eq!(request["variables"], variables.unwrap());
+        assert_eq!(request["variables"], variables);
     }
 
     #[test]

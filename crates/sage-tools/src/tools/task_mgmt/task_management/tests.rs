@@ -1,7 +1,7 @@
 //! Tests for task management tools
 
 #[cfg(test)]
-mod tests {
+mod suite {
     use super::super::add_tool::AddTasksTool;
     use super::super::task_list::GLOBAL_TASK_LIST;
     use super::super::types::TaskState;

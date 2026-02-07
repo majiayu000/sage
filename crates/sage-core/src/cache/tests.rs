@@ -173,7 +173,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_key_generation() {
-        let _messages = vec![LlmMessage {
+        let _messages = [LlmMessage {
             role: MessageRole::User,
             content: "Test message".to_string(),
             tool_calls: None,

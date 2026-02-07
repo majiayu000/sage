@@ -1,7 +1,7 @@
 //! Tests for enhanced error handling
 
 #[cfg(test)]
-mod tests {
+mod suite {
     use crate::tools::utils::enhanced_errors::{EnhancedToolError, ErrorCategory, helpers};
     use sage_core::tools::base::ToolError;
     use std::error::Error;
@@ -75,10 +75,7 @@ mod tests {
     fn test_error_category_user_input() {
         let errors = vec![
             ToolError::InvalidArguments("test".to_string()),
-            ToolError::Json(serde_json::Error::io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "test",
-            ))),
+            ToolError::Json(serde_json::Error::io(std::io::Error::other("test"))),
             ToolError::ValidationFailed("test".to_string()),
         ];
 
@@ -138,7 +135,7 @@ mod tests {
 
     #[test]
     fn test_not_recoverable_io_error() {
-        let error = ToolError::Io(std::io::Error::new(std::io::ErrorKind::Other, "test"));
+        let error = ToolError::Io(std::io::Error::other("test"));
         let enhanced = EnhancedToolError::new(error);
         assert!(!enhanced.recoverable);
     }
@@ -203,7 +200,7 @@ mod tests {
 
     #[test]
     fn test_user_friendly_message_not_recoverable() {
-        let error = ToolError::Io(std::io::Error::new(std::io::ErrorKind::Other, "disk error"));
+        let error = ToolError::Io(std::io::Error::other("disk error"));
         let enhanced = EnhancedToolError::new(error);
 
         let message = enhanced.user_friendly_message();
@@ -261,7 +258,7 @@ mod tests {
 
         assert_eq!(error.category, ErrorCategory::FileSystem);
         assert!(error.context.contains_key("file_path"));
-        assert!(error.suggestions.len() > 0);
+        assert!(!error.suggestions.is_empty());
         assert!(error.original_error_message.contains("File not found"));
     }
 
@@ -353,7 +350,7 @@ mod tests {
                 "InvalidArguments",
             ),
             (
-                ToolError::Io(std::io::Error::new(std::io::ErrorKind::Other, "test")),
+                ToolError::Io(std::io::Error::other("test")),
                 "Io",
             ),
             (
@@ -363,10 +360,7 @@ mod tests {
             (ToolError::NotFound("test".into()), "NotFound"),
             (ToolError::Timeout, "Timeout"),
             (
-                ToolError::Json(serde_json::Error::io(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "test",
-                ))),
+                ToolError::Json(serde_json::Error::io(std::io::Error::other("test"))),
                 "Json",
             ),
             (ToolError::ExecutionFailed("test".into()), "ExecutionFailed"),

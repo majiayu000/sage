@@ -179,8 +179,7 @@ async fn test_router_reload() {
 
     let router = CommandRouter::new(&temp_dir).await.unwrap();
 
-    let count = router.reload().await.unwrap();
-    assert!(count == 0 || count > 0);
+    let _count = router.reload().await.unwrap();
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }

@@ -1,7 +1,7 @@
 //! Tests for codebase retrieval functionality
 
 #[cfg(test)]
-mod tests {
+mod suite {
     use crate::tools::file_ops::codebase_retrieval::CodebaseRetrievalTool;
     use sage_core::tools::base::Tool;
     use sage_core::tools::types::ToolCall;

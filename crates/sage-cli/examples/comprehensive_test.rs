@@ -367,7 +367,7 @@ async fn test_sse_functionality() -> SageResult<()> {
     println!("🌐 Testing Server-Sent Events (SSE)");
     println!("===================================");
 
-    let chunks = vec![
+    let chunks = [
         StreamChunk::content("Hello "),
         StreamChunk::content("from "),
         StreamChunk::content("SSE!"),

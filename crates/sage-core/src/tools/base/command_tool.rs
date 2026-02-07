@@ -37,11 +37,9 @@ use std::path::Path;
 ///     }
 ///
 ///     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
-///         let command = call.arguments.get("command")
-///             .and_then(|v| v.as_str())
-///             .ok_or_else(|| ToolError::InvalidArguments("command required".into()))?;
+///         let argv = call.require_string_array("argv")?;
 ///
-///         if !self.is_command_allowed(command) {
+///         if !self.is_command_allowed(&argv) {
 ///             return Err(ToolError::PermissionDenied("Command not allowed".into()));
 ///         }
 ///
@@ -74,7 +72,7 @@ pub trait CommandTool: Tool {
     ///
     /// # Arguments
     ///
-    /// * `command` - The command string to check
+    /// * `argv` - The command argv to check (first element is the executable)
     ///
     /// # Examples
     ///
@@ -104,21 +102,27 @@ pub trait CommandTool: Tool {
     /// # fn example() {
     /// let tool = MyTool { working_dir: PathBuf::from(".") };
     ///
-    /// assert!(tool.is_command_allowed("git status"));
-    /// assert!(tool.is_command_allowed("npm install"));
-    /// assert!(!tool.is_command_allowed("rm -rf /"));
+    /// assert!(tool.is_command_allowed(&vec!["git".into(), "status".into()]));
+    /// assert!(tool.is_command_allowed(&vec!["npm".into(), "install".into()]));
+    /// assert!(!tool.is_command_allowed(&vec!["rm".into(), "-rf".into(), "/".into()]));
     /// # }
     /// ```
-    fn is_command_allowed(&self, command: &str) -> bool {
+    fn is_command_allowed(&self, argv: &[String]) -> bool {
         let allowed = self.allowed_commands();
         if allowed.is_empty() {
             return true; // No restrictions
         }
 
-        allowed.iter().any(|&allowed_cmd| {
-            // Match exact command or command followed by space (subcommand)
-            command == allowed_cmd || command.starts_with(&format!("{} ", allowed_cmd))
-        })
+        let Some(command) = argv.first() else {
+            return false;
+        };
+
+        let base = Path::new(command)
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or(command.as_str());
+
+        allowed.contains(&base)
     }
 
     /// Get the working directory for command execution.

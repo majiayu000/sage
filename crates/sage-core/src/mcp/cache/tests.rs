@@ -1,7 +1,5 @@
 //! Cache tests
 
-#![cfg(test)]
-
 use super::{CacheConfig, CacheEntry, McpCache};
 use crate::mcp::types::McpTool;
 use std::time::Duration;

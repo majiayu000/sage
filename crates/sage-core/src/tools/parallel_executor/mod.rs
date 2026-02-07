@@ -66,7 +66,7 @@ mod tests {
         }
 
         fn concurrency_mode(&self) -> ConcurrencyMode {
-            self.concurrency_mode.clone()
+            self.concurrency_mode
         }
 
         async fn check_permission(

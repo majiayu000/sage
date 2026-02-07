@@ -1,9 +1,8 @@
 //! Tests for test generator tool
 
 #[cfg(test)]
-mod tests {
+mod suite {
     use super::super::TestGeneratorTool;
-    use sage_core::tools::base::Tool;
 
     #[tokio::test]
     async fn test_test_generator_creation() {

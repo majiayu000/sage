@@ -466,7 +466,7 @@ async fn test_auto_compact_boundary_system() -> SageResult<()> {
 
     // 4. Verify boundary marker exists
     println!("🔍 Checking boundary marker...");
-    let has_boundary = messages.iter().any(|m| is_compact_boundary(m));
+    let has_boundary = messages.iter().any(is_compact_boundary);
     assert!(has_boundary, "Should have a compact boundary marker");
     println!("✅ Boundary marker found");
 

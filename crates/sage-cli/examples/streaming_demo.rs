@@ -153,7 +153,7 @@ async fn demonstrate_stream_utilities() -> SageResult<()> {
 async fn demonstrate_sse_conversion() -> SageResult<()> {
     use sage_core::llm::streaming::sse;
 
-    let chunks = vec![
+    let chunks = [
         StreamChunk::content("Hello "),
         StreamChunk::content("world!"),
         StreamChunk::final_chunk(None, Some("stop".to_string())),

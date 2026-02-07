@@ -1,7 +1,5 @@
 //! Tests for command executor
 
-#![cfg(test)]
-
 use super::types::CommandExecutor;
 use crate::commands::registry::CommandRegistry;
 use crate::commands::types::SlashCommand;
@@ -140,8 +138,7 @@ async fn test_reload() {
     let executor = create_test_executor().await;
 
     // Should preserve builtins
-    let count = executor.reload().await.unwrap();
-    assert!(count >= 0); // May find files or not
+    let _count = executor.reload().await.unwrap();
 
     let result = executor.process("/help").await.unwrap();
     assert!(result.is_some()); // Builtins still work

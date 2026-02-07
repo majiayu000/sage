@@ -1,7 +1,5 @@
 //! Tests for notebook edit tool
 
-#![cfg(test)]
-
 use super::NotebookEditTool;
 use super::conversion::{source_to_string, string_to_source};
 use sage_core::tools::base::Tool;

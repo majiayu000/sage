@@ -1,7 +1,5 @@
 //! Tests for the Read tool
 
-#![cfg(test)]
-
 use super::tool::ReadTool;
 use sage_core::tools::base::Tool;
 use sage_core::tools::types::ToolCall;
