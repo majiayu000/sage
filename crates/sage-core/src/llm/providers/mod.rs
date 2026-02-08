@@ -1,6 +1,7 @@
 //! Provider-specific implementations
 
 pub mod anthropic;
+pub mod anthropic_stream;
 pub mod azure;
 pub mod doubao;
 pub mod glm;
