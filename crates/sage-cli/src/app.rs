@@ -10,13 +10,11 @@ use crossterm::{
     terminal,
 };
 use rnk::prelude::*;
-use sage_core::agent::{ExecutionMode, ExecutionOptions, UnifiedExecutor};
-use sage_core::config::load_config;
+use sage_core::agent::UnifiedExecutor;
 use sage_core::error::SageResult;
 use sage_core::input::InputChannel;
 use sage_core::output::OutputMode;
 use sage_core::types::TaskMetadata;
-use sage_tools::get_default_tools;
 use std::io::{self, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -271,25 +269,7 @@ fn read_line_with_cjk() -> io::Result<String> {
 
 /// Create and configure UnifiedExecutor
 async fn create_executor() -> SageResult<UnifiedExecutor> {
-    let config = load_config()?;
-    let working_dir = std::env::current_dir().unwrap_or_default();
-    let mode = ExecutionMode::interactive();
-    let options = ExecutionOptions::default()
-        .with_mode(mode)
-        .with_working_directory(&working_dir);
-
-    let mut executor = UnifiedExecutor::with_options(config, options)?;
-
-    // Use Streaming output mode - real-time display with animated thinking indicator
-    executor.set_output_mode(OutputMode::Streaming);
-
-    // Register default tools
-    executor.register_tools(get_default_tools());
-
-    // Initialize sub-agent support
-    let _ = executor.init_subagent_support();
-
-    Ok(executor)
+    crate::executor_factory::create_executor(OutputMode::Streaming, None).await
 }
 
 // ============================================================================

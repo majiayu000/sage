@@ -60,6 +60,7 @@ mod app;
 mod args;
 mod commands;
 mod console;
+mod executor_factory;
 mod progress;
 mod router;
 mod signal_handler;
