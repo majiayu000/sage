@@ -1,5 +1,6 @@
 //! LLM provider error sanitization helpers.
 
+use crate::error::SageError;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serde_json::Value;
@@ -91,6 +92,35 @@ fn truncate_with_suffix(input: String) -> String {
         "{}... [truncated {} chars]",
         truncated,
         char_count - MAX_ERROR_TEXT_CHARS
+    )
+}
+
+/// Build a SageError from a non-success HTTP response.
+pub async fn handle_http_error(response: reqwest::Response, provider: &str) -> SageError {
+    let status = response.status();
+    let error_text = response.text().await.unwrap_or_default();
+    let sanitized = sanitize_provider_error_text(&error_text);
+    SageError::llm(format!(
+        "{} API error (status {}): {}",
+        provider, status, sanitized
+    ))
+}
+
+/// Build a SageError from a non-success HTTP response (streaming variant, no status).
+pub async fn handle_stream_http_error(response: reqwest::Response, provider: &str) -> SageError {
+    let error_text = response.text().await.unwrap_or_default();
+    let sanitized = sanitize_provider_error_text(&error_text);
+    SageError::llm(format!("{} streaming API error: {}", provider, sanitized))
+}
+
+/// Build a SageError from a JSON parse failure.
+pub fn handle_parse_error(err: reqwest::Error, provider: &str) -> SageError {
+    SageError::llm_with_context(
+        format!("Failed to parse {} response: {}", provider, err),
+        format!(
+            "Failed to deserialize {} API response as JSON",
+            provider
+        ),
     )
 }
 

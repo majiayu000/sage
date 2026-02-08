@@ -87,19 +87,11 @@ impl OllamaProvider {
         })?;
 
         if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_default();
-            return Err(SageError::llm(format!(
-                "Ollama API error (status {}): {}",
-                status, error_text
-            )));
+            return Err(super::error_utils::handle_http_error(response, "Ollama").await);
         }
 
         let response_json: Value = response.json().await.map_err(|e| {
-            SageError::llm_with_context(
-                format!("Failed to parse Ollama response: {}", e),
-                "Failed to deserialize Ollama API response as JSON",
-            )
+            super::error_utils::handle_parse_error(e, "Ollama")
         })?;
 
         tracing::debug!(
@@ -165,11 +157,7 @@ impl OllamaProvider {
         })?;
 
         if !response.status().is_success() {
-            let error_text = response.text().await.unwrap_or_default();
-            return Err(SageError::llm(format!(
-                "Ollama streaming API error: {}",
-                error_text
-            )));
+            return Err(super::error_utils::handle_stream_http_error(response, "Ollama").await);
         }
 
         // Convert response to stream

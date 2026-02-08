@@ -101,19 +101,11 @@ impl OpenRouterProvider {
         })?;
 
         if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_default();
-            return Err(SageError::llm(format!(
-                "OpenRouter API error (status {}): {}",
-                status, error_text
-            )));
+            return Err(super::error_utils::handle_http_error(response, "OpenRouter").await);
         }
 
         let response_json: Value = response.json().await.map_err(|e| {
-            SageError::llm_with_context(
-                format!("Failed to parse OpenRouter response: {}", e),
-                "Failed to deserialize OpenRouter API response as JSON",
-            )
+            super::error_utils::handle_parse_error(e, "OpenRouter")
         })?;
 
         tracing::debug!(
@@ -185,11 +177,7 @@ impl OpenRouterProvider {
         })?;
 
         if !response.status().is_success() {
-            let error_text = response.text().await.unwrap_or_default();
-            return Err(SageError::llm(format!(
-                "OpenRouter streaming API error: {}",
-                error_text
-            )));
+            return Err(super::error_utils::handle_stream_http_error(response, "OpenRouter").await);
         }
 
         // Convert response to stream
