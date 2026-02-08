@@ -2,7 +2,7 @@
 //!
 //! This module contains all the tools available to the Sage Agent, organized by category:
 //!
-//! - `file_ops`: File and code operations (edit, json_edit, codebase_retrieval, notebook_edit)
+//! - `file_ops`: File and code operations (edit, codebase_retrieval, notebook_edit)
 //! - `process`: Process and terminal tools (bash, kill_shell)
 //! - `task_mgmt`: Task management tools (task_management, reorganize_tasklist, task_done)
 //! - `planning`: Planning mode tools (enter_plan_mode, exit_plan_mode)
@@ -52,7 +52,6 @@ pub mod network {
 }
 
 // Re-export all tools for easy access
-// Note: JsonEditTool, MultiEditTool are Sage-specific and currently disabled
 pub use code_intelligence::LspTool;
 pub use diagnostics::{
     DiagnosticsTool, LearnTool, LearningPatternsTool, RememberTool, RenderMermaidTool,
@@ -105,7 +104,6 @@ pub fn get_default_tools() -> Vec<Arc<dyn Tool>> {
         Arc::new(GrepTool::new()),
         Arc::new(NotebookEditTool::new()),
         Arc::new(CodebaseRetrievalTool::new()), // Smart codebase search
-        // Disabled Sage-specific tools: JsonEditTool, MultiEditTool
 
         // Process tools
         Arc::new(BashTool::new()),
@@ -178,7 +176,6 @@ pub fn get_file_ops_tools() -> Vec<Arc<dyn Tool>> {
         Arc::new(GrepTool::new()),
         Arc::new(NotebookEditTool::new()),
         Arc::new(CodebaseRetrievalTool::new()),
-        // Disabled Sage-specific tools: JsonEditTool, MultiEditTool
     ]
 }
 
