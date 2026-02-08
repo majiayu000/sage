@@ -11,8 +11,8 @@ categories.workspace = true
 
 [dependencies]
 # Core library
-sage-core = { path = "../sage-core", version = "0.10.3" }
-sage-tools = { path = "../sage-tools", version = "0.10.3" }
+sage-core = { path = "../sage-core", version = "0.10.4" }
+sage-tools = { path = "../sage-tools", version = "0.10.4" }
 
 # Async runtime
 tokio = { workspace = true }

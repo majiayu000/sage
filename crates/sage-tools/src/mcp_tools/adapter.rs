@@ -6,7 +6,6 @@ use async_trait::async_trait;
 use sage_core::mcp::{McpClient, McpTool, McpToolResult};
 use sage_core::tools::{Tool, ToolCall, ToolError, ToolParameter, ToolResult, ToolSchema};
 use serde_json::Value;
-use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -110,19 +109,10 @@ impl McpToolAdapter {
             .collect::<Vec<_>>()
             .join("\n");
 
-        ToolResult {
-            call_id: call.id.clone(),
-            tool_name: self.name().to_string(),
-            success: !mcp_result.is_error,
-            output: Some(output),
-            error: if mcp_result.is_error {
-                Some("MCP tool execution failed".to_string())
-            } else {
-                None
-            },
-            exit_code: None,
-            execution_time_ms: None,
-            metadata: HashMap::new(),
+        if mcp_result.is_error {
+            ToolResult::error(&call.id, self.name(), format!("MCP tool execution failed: {}", output))
+        } else {
+            ToolResult::success(&call.id, self.name(), output)
         }
     }
 }

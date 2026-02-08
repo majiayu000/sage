@@ -188,15 +188,6 @@ impl Tool for SessionNotesTool {
             }
         };
 
-        Ok(ToolResult {
-            call_id: call.id.clone(),
-            tool_name: self.name().to_string(),
-            success: true,
-            output: Some(response),
-            error: None,
-            exit_code: None,
-            execution_time_ms: None,
-            metadata: HashMap::new(),
-        })
+        Ok(ToolResult::success(&call.id, self.name(), response))
     }
 }
