@@ -36,6 +36,22 @@ pub enum ProviderInstance {
     Glm(super::GlmProvider),
 }
 
+/// Dispatch a method call to the inner provider for all variants
+macro_rules! dispatch_provider {
+    ($self:expr, $method:ident($($arg:expr),*)) => {
+        match $self {
+            Self::OpenAI(p) => p.$method($($arg),*).await,
+            Self::Anthropic(p) => p.$method($($arg),*).await,
+            Self::Google(p) => p.$method($($arg),*).await,
+            Self::Azure(p) => p.$method($($arg),*).await,
+            Self::OpenRouter(p) => p.$method($($arg),*).await,
+            Self::Ollama(p) => p.$method($($arg),*).await,
+            Self::Doubao(p) => p.$method($($arg),*).await,
+            Self::Glm(p) => p.$method($($arg),*).await,
+        }
+    };
+}
+
 #[async_trait]
 impl LlmProviderTrait for ProviderInstance {
     async fn chat(
@@ -43,16 +59,7 @@ impl LlmProviderTrait for ProviderInstance {
         messages: &[LlmMessage],
         tools: Option<&[ToolSchema]>,
     ) -> SageResult<LlmResponse> {
-        match self {
-            Self::OpenAI(p) => p.chat(messages, tools).await,
-            Self::Anthropic(p) => p.chat(messages, tools).await,
-            Self::Google(p) => p.chat(messages, tools).await,
-            Self::Azure(p) => p.chat(messages, tools).await,
-            Self::OpenRouter(p) => p.chat(messages, tools).await,
-            Self::Ollama(p) => p.chat(messages, tools).await,
-            Self::Doubao(p) => p.chat(messages, tools).await,
-            Self::Glm(p) => p.chat(messages, tools).await,
-        }
+        dispatch_provider!(self, chat(messages, tools))
     }
 
     async fn chat_stream(
@@ -60,15 +67,6 @@ impl LlmProviderTrait for ProviderInstance {
         messages: &[LlmMessage],
         tools: Option<&[ToolSchema]>,
     ) -> SageResult<LlmStream> {
-        match self {
-            Self::OpenAI(p) => p.chat_stream(messages, tools).await,
-            Self::Anthropic(p) => p.chat_stream(messages, tools).await,
-            Self::Google(p) => p.chat_stream(messages, tools).await,
-            Self::Azure(p) => p.chat_stream(messages, tools).await,
-            Self::OpenRouter(p) => p.chat_stream(messages, tools).await,
-            Self::Ollama(p) => p.chat_stream(messages, tools).await,
-            Self::Doubao(p) => p.chat_stream(messages, tools).await,
-            Self::Glm(p) => p.chat_stream(messages, tools).await,
-        }
+        dispatch_provider!(self, chat_stream(messages, tools))
     }
 }
