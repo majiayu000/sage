@@ -4,12 +4,9 @@ use sage_core::agent::{ExecutionOutcome, UnifiedExecutor};
 use sage_core::config::Config;
 use sage_core::error::{SageError, SageResult};
 use sage_core::output::{CostInfo, OutputEvent, OutputFormat, OutputWriter};
-use sage_core::trajectory::SessionRecorder;
 use sage_core::types::TaskMetadata;
 use std::io::stdout;
 use std::path::PathBuf;
-use std::sync::Arc;
-use tokio::sync::Mutex;
 
 use super::args::UnifiedArgs;
 
@@ -69,14 +66,11 @@ pub async fn execute_stream_json(
 
     // Set up session recording
     let session_recorder = if config.trajectory.is_enabled() {
-        match SessionRecorder::new(&working_dir) {
-            Ok(recorder) => {
-                let recorder = Arc::new(Mutex::new(recorder));
-                executor.set_session_recorder(recorder.clone());
-                Some(recorder)
-            }
-            Err(_) => None,
+        let recorder = sage_core::trajectory::init_session_recorder(&working_dir);
+        if let Some(ref r) = recorder {
+            executor.set_session_recorder(r.clone());
         }
+        recorder
     } else {
         None
     };

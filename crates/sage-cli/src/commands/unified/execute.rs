@@ -7,10 +7,8 @@ use sage_core::config::load_config_from_file;
 use sage_core::error::SageResult;
 use sage_core::input::InputChannel;
 use sage_core::output::OutputMode;
-use sage_core::trajectory::SessionRecorder;
 use sage_tools::get_default_tools;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 use super::args::{OutputModeArg, UnifiedArgs};
 use super::input::handle_user_input;
@@ -143,17 +141,11 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
 
     // Set up session recording
     let session_recorder = if config.trajectory.is_enabled() {
-        match SessionRecorder::new(&working_dir) {
-            Ok(recorder) => {
-                let recorder = Arc::new(Mutex::new(recorder));
-                executor.set_session_recorder(recorder.clone());
-                Some(recorder)
-            }
-            Err(e) => {
-                console.warn(&format!("Failed to initialize session recorder: {}", e));
-                None
-            }
+        let recorder = sage_core::trajectory::init_session_recorder(&working_dir);
+        if let Some(ref r) = recorder {
+            executor.set_session_recorder(r.clone());
         }
+        recorder
     } else {
         None
     };
