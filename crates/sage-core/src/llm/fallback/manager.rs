@@ -1,5 +1,6 @@
 //! Fallback chain manager
 
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::RwLock;
@@ -15,7 +16,7 @@ pub struct FallbackChain {
     /// Current model index
     pub(super) current_index: Arc<RwLock<usize>>,
     /// Fallback history
-    pub(super) history: Arc<RwLock<Vec<FallbackEvent>>>,
+    pub(super) history: Arc<RwLock<VecDeque<FallbackEvent>>>,
     /// Maximum history entries
     pub(super) max_history: usize,
 }
@@ -26,7 +27,7 @@ impl FallbackChain {
         Self {
             models: Arc::new(RwLock::new(Vec::new())),
             current_index: Arc::new(RwLock::new(0)),
-            history: Arc::new(RwLock::new(Vec::new())),
+            history: Arc::new(RwLock::new(VecDeque::new())),
             max_history: 100,
         }
     }

@@ -1,5 +1,6 @@
 //! Fallback behavior tests
 
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
@@ -106,7 +107,7 @@ async fn test_history_max_size() {
     let chain = FallbackChain {
         models: Arc::new(RwLock::new(Vec::new())),
         current_index: Arc::new(RwLock::new(0)),
-        history: Arc::new(RwLock::new(Vec::new())),
+        history: Arc::new(RwLock::new(VecDeque::new())),
         max_history: 5,
     };
 

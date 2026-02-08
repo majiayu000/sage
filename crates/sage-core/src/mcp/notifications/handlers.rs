@@ -3,6 +3,7 @@
 use super::types::{LogLevel, NotificationEvent, methods};
 use crate::mcp::error::McpError;
 use async_trait::async_trait;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
@@ -121,7 +122,7 @@ impl NotificationHandler for CacheInvalidationHandler {
 /// A handler that collects notifications for later retrieval
 pub struct CollectorHandler {
     /// Collected events
-    events: RwLock<Vec<NotificationEvent>>,
+    events: RwLock<VecDeque<NotificationEvent>>,
     /// Maximum events to store
     max_events: usize,
 }
@@ -130,14 +131,14 @@ impl CollectorHandler {
     /// Create a new collector handler
     pub fn new(max_events: usize) -> Self {
         Self {
-            events: RwLock::new(Vec::new()),
+            events: RwLock::new(VecDeque::new()),
             max_events,
         }
     }
 
     /// Get collected events
     pub async fn events(&self) -> Vec<NotificationEvent> {
-        self.events.read().await.clone()
+        self.events.read().await.iter().cloned().collect()
     }
 
     /// Clear collected events
@@ -164,10 +165,10 @@ impl NotificationHandler for CollectorHandler {
 
         // Remove oldest if at capacity
         if events.len() >= self.max_events {
-            events.remove(0);
+            events.pop_front();
         }
 
-        events.push(event);
+        events.push_back(event);
         Ok(())
     }
 }

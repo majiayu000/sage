@@ -85,8 +85,12 @@ Example: task_output(shell_id="shell_1", incremental=false)"#
 
         let incremental = call.get_bool("incremental").unwrap_or(false);
         let block = call.get_bool("block").unwrap_or(false);
-        let timeout_ms = call.get_number("timeout").unwrap_or(30000.0) as u64;
-        let timeout_ms = timeout_ms.min(600000); // Cap at 10 minutes
+        let timeout_raw = call.get_number("timeout").unwrap_or(30000.0);
+        let timeout_ms = if timeout_raw.is_finite() && timeout_raw >= 0.0 {
+            (timeout_raw as u64).min(600000)
+        } else {
+            30000u64
+        };
 
         // Get task from registry
         let task = BACKGROUND_REGISTRY.get(&shell_id).ok_or_else(|| {

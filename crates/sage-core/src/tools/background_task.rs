@@ -69,6 +69,8 @@ pub struct BackgroundShellTask {
     pub command: String,
     /// Working directory
     pub working_dir: String,
+    /// Spawned task handles for cleanup
+    task_handles: Vec<tokio::task::JoinHandle<()>>,
 }
 
 impl BackgroundShellTask {
@@ -99,11 +101,12 @@ impl BackgroundShellTask {
         let stdout = Arc::new(RwLock::new(String::new()));
         let stderr = Arc::new(RwLock::new(String::new()));
         let status = Arc::new(RwLock::new(BackgroundTaskStatus::Running));
+        let mut task_handles = Vec::new();
 
         // Spawn stdout capture task
         if let Some(pipe) = stdout_pipe {
             let stdout_clone = stdout.clone();
-            tokio::spawn(async move {
+            let handle = tokio::spawn(async move {
                 let reader = BufReader::new(pipe);
                 let mut lines = reader.lines();
                 while let Ok(Some(line)) = lines.next_line().await {
@@ -112,12 +115,13 @@ impl BackgroundShellTask {
                     buf.push('\n');
                 }
             });
+            task_handles.push(handle);
         }
 
         // Spawn stderr capture task
         if let Some(pipe) = stderr_pipe {
             let stderr_clone = stderr.clone();
-            tokio::spawn(async move {
+            let handle = tokio::spawn(async move {
                 let reader = BufReader::new(pipe);
                 let mut lines = reader.lines();
                 while let Ok(Some(line)) = lines.next_line().await {
@@ -126,15 +130,17 @@ impl BackgroundShellTask {
                     buf.push('\n');
                 }
             });
+            task_handles.push(handle);
         }
 
         // Spawn process monitor task
         let status_clone = status.clone();
         let cancel_token_clone = cancel_token.clone();
         let shell_id_clone = shell_id.clone();
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             Self::monitor_process(child, status_clone, cancel_token_clone, &shell_id_clone).await;
         });
+        task_handles.push(handle);
 
         info!("Background shell '{}' started with PID {:?}", shell_id, pid);
 
@@ -150,6 +156,7 @@ impl BackgroundShellTask {
             last_stderr_pos: Arc::new(RwLock::new(0)),
             command: command.to_string(),
             working_dir: working_dir.to_string_lossy().to_string(),
+            task_handles,
         })
     }
 
@@ -248,9 +255,13 @@ impl BackgroundShellTask {
             use nix::sys::signal::{Signal, kill};
             use nix::unistd::Pid;
 
-            let pid = Pid::from_raw(pid as i32);
-            if let Err(e) = kill(pid, Signal::SIGKILL) {
-                warn!("Failed to SIGKILL process {}: {}", pid, e);
+            if let Ok(pid_i32) = i32::try_from(pid) {
+                let pid = Pid::from_raw(pid_i32);
+                if let Err(e) = kill(pid, Signal::SIGKILL) {
+                    warn!("Failed to SIGKILL process {}: {}", pid, e);
+                }
+            } else {
+                warn!("PID {} exceeds i32 range, cannot send SIGKILL", pid);
             }
         }
 
@@ -267,6 +278,14 @@ impl BackgroundShellTask {
             self.working_dir,
             self.uptime_secs()
         )
+    }
+}
+
+impl Drop for BackgroundShellTask {
+    fn drop(&mut self) {
+        for handle in &self.task_handles {
+            handle.abort();
+        }
     }
 }
 

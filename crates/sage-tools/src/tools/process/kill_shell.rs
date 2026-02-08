@@ -81,7 +81,13 @@ impl KillShellTool {
             use nix::sys::signal::{Signal, kill};
             use nix::unistd::Pid;
 
-            let pid_val = Pid::from_raw(pid as i32);
+            let pid_i32 = i32::try_from(pid).map_err(|_| {
+                ToolError::ExecutionFailed(format!(
+                    "PID {} exceeds i32 range for shell {}",
+                    pid, shell_id
+                ))
+            })?;
+            let pid_val = Pid::from_raw(pid_i32);
 
             // Try graceful termination first (SIGTERM)
             match kill(pid_val, Signal::SIGTERM) {

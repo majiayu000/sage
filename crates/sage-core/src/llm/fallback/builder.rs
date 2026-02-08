@@ -1,5 +1,6 @@
 //! Builder for creating fallback chains
 
+use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -45,7 +46,7 @@ impl FallbackChainBuilder {
         let chain = FallbackChain {
             models: Arc::new(RwLock::new(Vec::new())),
             current_index: Arc::new(RwLock::new(0)),
-            history: Arc::new(RwLock::new(Vec::new())),
+            history: Arc::new(RwLock::new(VecDeque::new())),
             max_history: self.max_history,
         };
 

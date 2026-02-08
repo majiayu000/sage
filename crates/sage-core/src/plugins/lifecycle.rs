@@ -2,6 +2,7 @@
 
 use super::{Plugin, PluginContext, PluginError, PluginResult};
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 use std::time::Instant;
 
 /// Plugin lifecycle state
@@ -68,7 +69,7 @@ pub struct PluginLifecycle {
     state: PluginState,
 
     /// State change history
-    history: Vec<StateChange>,
+    history: VecDeque<StateChange>,
 
     /// Maximum history entries
     max_history: usize,
@@ -95,7 +96,7 @@ impl PluginLifecycle {
     pub fn new() -> Self {
         Self {
             state: PluginState::Created,
-            history: Vec::new(),
+            history: VecDeque::new(),
             max_history: 100,
         }
     }
@@ -106,7 +107,7 @@ impl PluginLifecycle {
     }
 
     /// Get state history
-    pub fn history(&self) -> &[StateChange] {
+    pub fn history(&self) -> &VecDeque<StateChange> {
         &self.history
     }
 
@@ -166,9 +167,9 @@ impl PluginLifecycle {
             reason,
         };
 
-        self.history.push(change);
+        self.history.push_back(change);
         if self.history.len() > self.max_history {
-            self.history.remove(0);
+            self.history.pop_front();
         }
 
         self.state = new_state;

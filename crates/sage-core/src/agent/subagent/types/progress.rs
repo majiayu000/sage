@@ -1,13 +1,14 @@
 //! Progress tracking and execution metadata
 
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 use std::fmt;
 
 /// Progress information for running agent
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AgentProgress {
     /// Recent activity descriptions
-    pub recent_activities: Vec<String>,
+    pub recent_activities: VecDeque<String>,
     /// Total tokens consumed so far
     pub token_count: u64,
     /// Number of tools used
@@ -34,10 +35,10 @@ impl AgentProgress {
 
     /// Add a new activity to the progress tracker
     pub fn add_activity(&mut self, activity: String) {
-        self.recent_activities.push(activity);
+        self.recent_activities.push_back(activity);
         // Keep only the last 10 activities
         if self.recent_activities.len() > 10 {
-            self.recent_activities.remove(0);
+            self.recent_activities.pop_front();
         }
     }
 

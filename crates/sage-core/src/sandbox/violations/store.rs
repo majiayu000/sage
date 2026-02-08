@@ -2,7 +2,7 @@
 
 use super::types::{Violation, ViolationSeverity, ViolationType};
 use parking_lot::RwLock;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 
 /// Thread-safe violation store
@@ -12,7 +12,7 @@ pub type SharedViolationStore = Arc<ViolationStore>;
 #[derive(Debug)]
 pub struct ViolationStore {
     /// All recorded violations
-    violations: RwLock<Vec<Violation>>,
+    violations: RwLock<VecDeque<Violation>>,
     /// Count by type for quick lookup
     counts: RwLock<HashMap<ViolationType, usize>>,
     /// Maximum violations to store (prevents memory exhaustion)
@@ -29,7 +29,7 @@ impl ViolationStore {
     /// Create a new violation store with max capacity
     pub fn new(max_violations: usize) -> Self {
         Self {
-            violations: RwLock::new(Vec::new()),
+            violations: RwLock::new(VecDeque::new()),
             counts: RwLock::new(HashMap::new()),
             max_violations,
         }
@@ -48,17 +48,17 @@ impl ViolationStore {
 
         // Enforce max capacity by removing oldest
         if violations.len() >= self.max_violations {
-            if let Some(removed) = violations.first() {
+            if let Some(removed) = violations.front() {
                 let removed_type = removed.violation_type;
                 let mut counts = self.counts.write();
                 if let Some(count) = counts.get_mut(&removed_type) {
                     *count = count.saturating_sub(1);
                 }
             }
-            violations.remove(0);
+            violations.pop_front();
         }
 
-        violations.push(violation);
+        violations.push_back(violation);
         drop(violations);
 
         // Update count
@@ -68,7 +68,7 @@ impl ViolationStore {
 
     /// Get all violations
     pub fn get_all(&self) -> Vec<Violation> {
-        self.violations.read().clone()
+        self.violations.read().iter().cloned().collect()
     }
 
     /// Get violations of a specific type
@@ -133,8 +133,7 @@ impl ViolationStore {
     /// Get the most recent violations (up to n)
     pub fn get_recent(&self, n: usize) -> Vec<Violation> {
         let violations = self.violations.read();
-        let start = violations.len().saturating_sub(n);
-        violations[start..].to_vec()
+        violations.iter().rev().take(n).rev().cloned().collect()
     }
 
     /// Get a summary of violations

@@ -22,7 +22,8 @@ impl UnifiedExecutor {
         // Repetition detection: track recent outputs to detect loops
         const MAX_RECENT_OUTPUTS: usize = 3;
         const REPETITION_THRESHOLD: usize = 2; // Force completion after N similar outputs
-        let mut recent_outputs: Vec<String> = Vec::with_capacity(MAX_RECENT_OUTPUTS);
+        let mut recent_outputs: std::collections::VecDeque<String> =
+            std::collections::VecDeque::with_capacity(MAX_RECENT_OUTPUTS);
 
         // Set max steps in event manager
         self.event_manager.set_max_steps(max_steps);
@@ -83,9 +84,9 @@ impl UnifiedExecutor {
 
                                 // Track this output
                                 if recent_outputs.len() >= MAX_RECENT_OUTPUTS {
-                                    recent_outputs.remove(0);
+                                    recent_outputs.pop_front();
                                 }
-                                recent_outputs.push(output_key);
+                                recent_outputs.push_back(output_key);
                             }
                         }
 

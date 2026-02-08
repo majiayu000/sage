@@ -21,29 +21,15 @@ pub fn apply_sandbox_exec(
         return Ok(());
     }
 
-    // Generate sandbox profile
+    // Generate sandbox profile to validate config, but we cannot apply it
+    // to an existing Command due to Tokio Command API limitations.
+    // Callers should use `run_sandboxed()` instead for actual sandboxing.
     let profile = generate_sandbox_profile(config)?;
-
-    // Write profile to temp file
-    let profile_file = write_profile_to_temp(&profile)?;
-    let profile_path = profile_file.path().to_string_lossy().to_string();
-
-    // We need to keep the temp file alive, so we leak it
-    // The file will be cleaned up when the process exits
-    std::mem::forget(profile_file);
-
-    tracing::debug!("Applying macOS sandbox with profile: {}", profile_path);
-
-    // Modify the command to use sandbox-exec
-    // Note: This is a simplified approach. A more robust implementation would
-    // reconstruct the command entirely.
-    // For now, we just log that sandbox would be applied.
-    tracing::info!(
-        "macOS sandbox-exec profile generated (profile not applied due to Command API limitations)"
-    );
     tracing::debug!("Generated SBPL profile:\n{}", profile);
 
-    Ok(())
+    Err(SandboxError::InitializationFailed(
+        "Cannot apply sandbox-exec to an existing Command. Use run_sandboxed() instead.".into(),
+    ))
 }
 
 /// Generate a Sandbox Profile Language (SBPL) profile

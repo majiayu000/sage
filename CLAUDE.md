@@ -146,3 +146,28 @@ Tests are organized as:
 - Treat acronyms as words in PascalCase: `LlmClient` (not `LLMClient`), `HttpRequest` (not `HTTPRequest`)
 - Correct examples: `LlmProvider`, `SseDecoder`, `McpServer`, `CliConsole`
 - Keep files under 200 lines - split large modules into focused submodules
+
+## Rust Coding Rules (Mandatory)
+
+These rules are derived from real bugs found in this codebase. **Every rule corresponds to a past incident.**
+
+### Type Conversions
+- **NEVER use `as` for narrowing integer casts** (e.g., `u32 as i32`, `u64 as u32`). Always use `TryFrom`/`try_from` and handle the error. Example: `i32::try_from(pid)?` instead of `pid as i32`
+- **NEVER use `as` to convert `f64` to integer types.** Always validate with `is_finite()` and range checks first, then cast. Provide a sensible default for invalid values (NaN, Infinity, negative)
+
+### Collections: No Vec::remove(0)
+- **NEVER use `Vec::remove(0)` or `Vec::drain(..1)` for FIFO/ring-buffer patterns.** It is O(n) per call and O(n²) in loops
+- Use `VecDeque` with `push_back()`/`pop_front()` instead
+- Similarly, **NEVER use `String::remove(0)` in a loop.** Use `drain(..n)` to remove multiple leading chars in one O(n) pass
+
+### Async Task Spawning
+- **NEVER call `tokio::spawn()` without storing the returned `JoinHandle`.** Fire-and-forget tasks leak resources and silently swallow panics
+- Store handles in the parent struct and `abort()` them in `Drop`
+- If a task is truly fire-and-forget, document why explicitly
+
+### Stub/Unimplemented Functions
+- **NEVER return `Ok(())` from a function that doesn't actually do what its signature promises.** If a feature is not implemented, return `Err` with a clear message, or mark the function `unimplemented!()`/`todo!()`
+- Specifically: do not accept `&mut Command` and silently skip modifying it. Do not use `std::mem::forget` to "keep things alive" as a workaround
+
+### Resource Management
+- **NEVER use `std::mem::forget` to extend lifetimes.** It leaks the resource. Use `Arc`, struct fields, or explicit ownership transfer instead

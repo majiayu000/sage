@@ -168,8 +168,13 @@ impl SseDecoder {
 
     /// Skip the delimiter after extracting an event
     fn skip_delimiter(&mut self) {
-        while self.buffer.starts_with('\n') || self.buffer.starts_with('\r') {
-            self.buffer.remove(0);
+        let skip = self
+            .buffer
+            .bytes()
+            .take_while(|b| *b == b'\n' || *b == b'\r')
+            .count();
+        if skip > 0 {
+            self.buffer.drain(..skip);
         }
     }
 

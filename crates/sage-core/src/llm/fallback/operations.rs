@@ -48,17 +48,17 @@ impl FallbackChain {
 
     /// Get fallback history
     pub async fn get_history(&self) -> Vec<FallbackEvent> {
-        self.history.read().await.clone()
+        self.history.read().await.iter().cloned().collect()
     }
 
     /// Add history event
     pub(super) async fn add_history_event(&self, event: FallbackEvent) {
         let mut history = self.history.write().await;
-        history.push(event);
+        history.push_back(event);
 
         // Trim to max size
         while history.len() > self.max_history {
-            history.remove(0);
+            history.pop_front();
         }
     }
 
