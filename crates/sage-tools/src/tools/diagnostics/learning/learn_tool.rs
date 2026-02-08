@@ -4,7 +4,6 @@ use async_trait::async_trait;
 use sage_core::learning::{Pattern, PatternSource};
 use sage_core::tools::{Tool, ToolCall, ToolError, ToolResult, ToolSchema};
 use serde_json::json;
-use std::collections::HashMap;
 
 use super::analyzer::parse_pattern_type;
 use super::schema::learn_tool_schema;
@@ -129,20 +128,8 @@ Do NOT use for:
             stats.high_confidence_count
         );
 
-        Ok(ToolResult {
-            call_id: call.id.clone(),
-            tool_name: self.name().to_string(),
-            success: true,
-            output: Some(response),
-            error: None,
-            exit_code: None,
-            execution_time_ms: None,
-            metadata: {
-                let mut meta = HashMap::new();
-                meta.insert("pattern_id".to_string(), json!(pattern_id.as_str()));
-                meta.insert("pattern_type".to_string(), json!(pattern_type_str));
-                meta
-            },
-        })
+        Ok(ToolResult::success(&call.id, self.name(), response)
+            .with_metadata("pattern_id", json!(pattern_id.as_str()))
+            .with_metadata("pattern_type", json!(pattern_type_str)))
     }
 }

@@ -3,7 +3,6 @@
 use sage_core::agent::subagent::{AgentType, SubAgentConfig, Thoroughness, execute_subagent};
 use sage_core::tools::types::{ToolCall, ToolResult};
 use serde_json::json;
-use std::collections::HashMap;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -68,30 +67,13 @@ pub async fn execute_task_sync(
                 result.content
             );
 
-            Ok(ToolResult {
-                call_id: call.id.clone(),
-                tool_name: "Task".to_string(),
-                success: true,
-                output: Some(response),
-                error: None,
-                exit_code: None,
-                execution_time_ms: Some(result.metadata.execution_time_ms),
-                metadata: {
-                    let mut meta = HashMap::new();
-                    meta.insert("task_id".to_string(), json!(task_id));
-                    meta.insert("agent_id".to_string(), json!(result.agent_id));
-                    meta.insert(
-                        "subagent_type".to_string(),
-                        json!(task_params.subagent_type),
-                    );
-                    meta.insert("tools_used".to_string(), json!(result.metadata.tools_used));
-                    meta.insert(
-                        "total_tool_uses".to_string(),
-                        json!(result.metadata.total_tool_uses),
-                    );
-                    meta
-                },
-            })
+            Ok(ToolResult::success(&call.id, "Task", response)
+                .with_execution_time(result.metadata.execution_time_ms)
+                .with_metadata("task_id", json!(task_id))
+                .with_metadata("agent_id", json!(result.agent_id))
+                .with_metadata("subagent_type", json!(task_params.subagent_type))
+                .with_metadata("tools_used", json!(result.metadata.tools_used))
+                .with_metadata("total_tool_uses", json!(result.metadata.total_tool_uses)))
         }
         Err(e) => {
             // Update task status to failed
@@ -109,24 +91,9 @@ pub async fn execute_task_sync(
                 format!("Sub-agent execution failed: {}", e)
             };
 
-            Ok(ToolResult {
-                call_id: call.id.clone(),
-                tool_name: "Task".to_string(),
-                success: false,
-                output: None,
-                error: Some(error_msg),
-                exit_code: Some(1),
-                execution_time_ms: None,
-                metadata: {
-                    let mut meta = HashMap::new();
-                    meta.insert("task_id".to_string(), json!(task_id));
-                    meta.insert(
-                        "subagent_type".to_string(),
-                        json!(task_params.subagent_type),
-                    );
-                    meta
-                },
-            })
+            Ok(ToolResult::error(&call.id, "Task", error_msg)
+                .with_metadata("task_id", json!(task_id))
+                .with_metadata("subagent_type", json!(task_params.subagent_type)))
         }
     }
 }
@@ -167,25 +134,10 @@ pub fn execute_task_background(
         task_params.description, task_id, task_params.subagent_type, task_id, task_id
     );
 
-    Ok(ToolResult {
-        call_id: call.id.clone(),
-        tool_name: "Task".to_string(),
-        success: true,
-        output: Some(response),
-        error: None,
-        exit_code: None,
-        execution_time_ms: None,
-        metadata: {
-            let mut meta = HashMap::new();
-            meta.insert("task_id".to_string(), json!(task_id));
-            meta.insert(
-                "subagent_type".to_string(),
-                json!(task_params.subagent_type),
-            );
-            meta.insert("run_in_background".to_string(), json!(true));
-            meta
-        },
-    })
+    Ok(ToolResult::success(&call.id, "Task", response)
+        .with_metadata("task_id", json!(task_id))
+        .with_metadata("subagent_type", json!(task_params.subagent_type))
+        .with_metadata("run_in_background", json!(true)))
 }
 
 /// Task parameters parsed from tool call

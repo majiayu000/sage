@@ -4,7 +4,6 @@
 
 use async_trait::async_trait;
 use sage_core::tools::{Tool, ToolCall, ToolError, ToolParameter, ToolResult, ToolSchema};
-use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
 
@@ -91,19 +90,11 @@ Example:
         let registry = match get_global_mcp_registry() {
             Some(r) => r,
             None => {
-                return Ok(ToolResult {
-                    call_id: call.id.clone(),
-                    tool_name: self.name().to_string(),
-                    success: true,
-                    output: Some(
-                        "MCP integration is not initialized. No MCP servers are configured."
-                            .to_string(),
-                    ),
-                    error: None,
-                    exit_code: None,
-                    execution_time_ms: None,
-                    metadata: HashMap::new(),
-                });
+                return Ok(ToolResult::success(
+                    &call.id,
+                    self.name(),
+                    "MCP integration is not initialized. No MCP servers are configured.",
+                ));
             }
         };
 
@@ -225,16 +216,7 @@ Example:
             }
         };
 
-        Ok(ToolResult {
-            call_id: call.id.clone(),
-            tool_name: self.name().to_string(),
-            success: true,
-            output: Some(response),
-            error: None,
-            exit_code: None,
-            execution_time_ms: None,
-            metadata: HashMap::new(),
-        })
+        Ok(ToolResult::success(&call.id, self.name(), response))
     }
 }
 

@@ -4,7 +4,6 @@ use async_trait::async_trait;
 use sage_core::memory::{Memory, MemoryCategory, MemoryId, MemoryMetadata, MemoryType};
 use sage_core::tools::{Tool, ToolCall, ToolError, ToolResult, ToolSchema};
 use serde_json::json;
-use std::collections::HashMap;
 
 use super::schema::{remember_schema, session_notes_schema};
 use super::types::ensure_memory_manager;
@@ -121,21 +120,9 @@ Do NOT use for:
             stats.pinned
         );
 
-        Ok(ToolResult {
-            call_id: call.id.clone(),
-            tool_name: self.name().to_string(),
-            success: true,
-            output: Some(response),
-            error: None,
-            exit_code: None,
-            execution_time_ms: None,
-            metadata: {
-                let mut meta = HashMap::new();
-                meta.insert("memory_id".to_string(), json!(id.as_str()));
-                meta.insert("memory_type".to_string(), json!(memory_type_str));
-                meta
-            },
-        })
+        Ok(ToolResult::success(&call.id, self.name(), response)
+            .with_metadata("memory_id", json!(id.as_str()))
+            .with_metadata("memory_type", json!(memory_type_str)))
     }
 }
 
@@ -326,15 +313,6 @@ Actions:
             }
         };
 
-        Ok(ToolResult {
-            call_id: call.id.clone(),
-            tool_name: self.name().to_string(),
-            success: true,
-            output: Some(response),
-            error: None,
-            exit_code: None,
-            execution_time_ms: None,
-            metadata: HashMap::new(),
-        })
+        Ok(ToolResult::success(&call.id, self.name(), response))
     }
 }
