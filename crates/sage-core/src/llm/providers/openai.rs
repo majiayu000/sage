@@ -2,7 +2,6 @@
 
 use crate::config::provider::ProviderConfig;
 use crate::error::{SageError, SageResult};
-use crate::llm::converters::{MessageConverter, ToolConverter};
 use crate::llm::messages::LlmMessage;
 use crate::llm::parsers::ResponseParser;
 use crate::llm::provider_types::ModelParameters;
@@ -38,29 +37,21 @@ impl OpenAiProvider {
     ) -> SageResult<crate::llm::messages::LlmResponse> {
         let url = format!("{}/chat/completions", self.config.get_base_url());
 
-        let mut request_body = json!({
-            "model": self.model_params.model,
-            "messages": MessageConverter::to_openai(messages)?,
-        });
+        let mut request_body = super::request_builder::build_openai_request_body(
+            &self.model_params.model,
+            messages,
+            tools,
+            &self.model_params,
+            true,
+            false,
+        )?;
 
-        // Add optional parameters
-        if let Some(max_tokens) = self.model_params.max_tokens {
-            request_body["max_tokens"] = json!(max_tokens);
-        }
-        if let Some(temperature) = self.model_params.temperature {
-            request_body["temperature"] = json!(temperature);
-        }
-        if let Some(top_p) = self.model_params.top_p {
-            request_body["top_p"] = json!(top_p);
-        }
+        // OpenAI-specific parameters
         if let Some(stop) = &self.model_params.stop {
             request_body["stop"] = json!(stop);
         }
-
-        // Add tools if provided
         if let Some(tools) = tools {
             if !tools.is_empty() {
-                request_body["tools"] = json!(ToolConverter::to_openai(tools)?);
                 if let Some(parallel) = self.model_params.parallel_tool_calls {
                     request_body["parallel_tool_calls"] = json!(parallel);
                 }
@@ -105,29 +96,14 @@ impl OpenAiProvider {
     ) -> SageResult<LlmStream> {
         let url = format!("{}/chat/completions", self.config.get_base_url());
 
-        let mut request_body = json!({
-            "model": self.model_params.model,
-            "messages": MessageConverter::to_openai(messages)?,
-            "stream": true,
-        });
-
-        // Add optional parameters
-        if let Some(max_tokens) = self.model_params.max_tokens {
-            request_body["max_tokens"] = json!(max_tokens);
-        }
-        if let Some(temperature) = self.model_params.temperature {
-            request_body["temperature"] = json!(temperature);
-        }
-        if let Some(top_p) = self.model_params.top_p {
-            request_body["top_p"] = json!(top_p);
-        }
-
-        // Add tools if provided
-        if let Some(tools) = tools {
-            if !tools.is_empty() {
-                request_body["tools"] = json!(ToolConverter::to_openai(tools)?);
-            }
-        }
+        let request_body = super::request_builder::build_openai_request_body(
+            &self.model_params.model,
+            messages,
+            tools,
+            &self.model_params,
+            true,
+            true,
+        )?;
 
         let mut request = self.http_client.post(&url).json(&request_body);
 

@@ -2,14 +2,12 @@
 
 use crate::config::provider::ProviderConfig;
 use crate::error::{SageError, SageResult};
-use crate::llm::converters::{MessageConverter, ToolConverter};
 use crate::llm::messages::{LlmMessage, LlmResponse};
 use crate::llm::parsers::ResponseParser;
 use crate::llm::provider_types::ModelParameters;
 use crate::llm::streaming::LlmStream;
 use crate::tools::types::ToolSchema;
 use reqwest::Client;
-use serde_json::{Value, json};
 use tracing::instrument;
 
 /// Azure OpenAI provider handler
@@ -51,25 +49,14 @@ impl AzureProvider {
                 .unwrap_or("2025-02-15-preview")
         );
 
-        let mut request_body = json!({
-            "messages": MessageConverter::to_openai(messages)?,
-        });
-
-        // Add optional parameters
-        if let Some(max_tokens) = self.model_params.max_tokens {
-            request_body["max_tokens"] = json!(max_tokens);
-        }
-        if let Some(temperature) = self.model_params.temperature {
-            request_body["temperature"] = json!(temperature);
-        }
-        if let Some(top_p) = self.model_params.top_p {
-            request_body["top_p"] = json!(top_p);
-        }
-
-        // Add tools if provided
-        if let Some(tools) = tools {
-            request_body["tools"] = json!(ToolConverter::to_openai(tools)?);
-        }
+        let request_body = super::request_builder::build_openai_request_body(
+            &self.model_params.model,
+            messages,
+            tools,
+            &self.model_params,
+            false,
+            false,
+        )?;
 
         let request = self
             .http_client
@@ -97,7 +84,7 @@ impl AzureProvider {
             return Err(super::error_utils::handle_http_error(response, "Azure OpenAI").await);
         }
 
-        let response_json: Value = response.json().await.map_err(|e| {
+        let response_json: serde_json::Value = response.json().await.map_err(|e| {
             super::error_utils::handle_parse_error(e, "Azure OpenAI")
         })?;
 
@@ -130,26 +117,14 @@ impl AzureProvider {
                 .unwrap_or("2025-02-15-preview")
         );
 
-        let mut request_body = json!({
-            "messages": MessageConverter::to_openai(messages)?,
-            "stream": true,
-        });
-
-        // Add optional parameters
-        if let Some(max_tokens) = self.model_params.max_tokens {
-            request_body["max_tokens"] = json!(max_tokens);
-        }
-        if let Some(temperature) = self.model_params.temperature {
-            request_body["temperature"] = json!(temperature);
-        }
-        if let Some(top_p) = self.model_params.top_p {
-            request_body["top_p"] = json!(top_p);
-        }
-
-        // Add tools if provided
-        if let Some(tools) = tools {
-            request_body["tools"] = json!(ToolConverter::to_openai(tools)?);
-        }
+        let request_body = super::request_builder::build_openai_request_body(
+            &self.model_params.model,
+            messages,
+            tools,
+            &self.model_params,
+            false,
+            true,
+        )?;
 
         let request = self
             .http_client

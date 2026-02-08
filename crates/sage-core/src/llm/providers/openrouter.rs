@@ -2,14 +2,13 @@
 
 use crate::config::provider::ProviderConfig;
 use crate::error::{SageError, SageResult};
-use crate::llm::converters::{MessageConverter, ToolConverter};
 use crate::llm::messages::{LlmMessage, LlmResponse};
 use crate::llm::parsers::ResponseParser;
 use crate::llm::provider_types::ModelParameters;
 use crate::llm::streaming::LlmStream;
 use crate::tools::types::ToolSchema;
 use reqwest::Client;
-use serde_json::{Value, json};
+use serde_json::json;
 use tracing::instrument;
 
 /// OpenRouter provider handler
@@ -43,30 +42,16 @@ impl OpenRouterProvider {
 
         let url = format!("{}/api/v1/chat/completions", self.config.get_base_url());
 
-        let mut request_body = json!({
-            "model": self.model_params.model,
-            "messages": MessageConverter::to_openai(messages)?,
-        });
-
-        // Add optional parameters
-        if let Some(max_tokens) = self.model_params.max_tokens {
-            request_body["max_tokens"] = json!(max_tokens);
-        }
-        if let Some(temperature) = self.model_params.temperature {
-            request_body["temperature"] = json!(temperature);
-        }
-        if let Some(top_p) = self.model_params.top_p {
-            request_body["top_p"] = json!(top_p);
-        }
-
-        // Add tools if provided
-        if let Some(tools) = tools {
-            request_body["tools"] = json!(ToolConverter::to_openai(tools)?);
-        }
+        let mut request_body = super::request_builder::build_openai_request_body(
+            &self.model_params.model,
+            messages,
+            tools,
+            &self.model_params,
+            true,
+            false,
+        )?;
 
         // Force Google provider only to avoid Anthropic 403 errors and Bedrock tool_call format issues
-        // OpenRouter sometimes routes to Anthropic which returns "Request not allowed"
-        // Amazon Bedrock has issues with tool_call/tool_result format translation
         request_body["provider"] = json!({
             "order": ["Google"],
             "allow_fallbacks": false
@@ -104,7 +89,7 @@ impl OpenRouterProvider {
             return Err(super::error_utils::handle_http_error(response, "OpenRouter").await);
         }
 
-        let response_json: Value = response.json().await.map_err(|e| {
+        let response_json: serde_json::Value = response.json().await.map_err(|e| {
             super::error_utils::handle_parse_error(e, "OpenRouter")
         })?;
 
@@ -129,27 +114,14 @@ impl OpenRouterProvider {
 
         let url = format!("{}/api/v1/chat/completions", self.config.get_base_url());
 
-        let mut request_body = json!({
-            "model": self.model_params.model,
-            "messages": MessageConverter::to_openai(messages)?,
-            "stream": true,
-        });
-
-        // Add optional parameters
-        if let Some(max_tokens) = self.model_params.max_tokens {
-            request_body["max_tokens"] = json!(max_tokens);
-        }
-        if let Some(temperature) = self.model_params.temperature {
-            request_body["temperature"] = json!(temperature);
-        }
-        if let Some(top_p) = self.model_params.top_p {
-            request_body["top_p"] = json!(top_p);
-        }
-
-        // Add tools if provided
-        if let Some(tools) = tools {
-            request_body["tools"] = json!(ToolConverter::to_openai(tools)?);
-        }
+        let mut request_body = super::request_builder::build_openai_request_body(
+            &self.model_params.model,
+            messages,
+            tools,
+            &self.model_params,
+            true,
+            true,
+        )?;
 
         // Force Google provider only (same as non-streaming chat)
         request_body["provider"] = json!({
