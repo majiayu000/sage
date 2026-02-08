@@ -7,6 +7,7 @@ pub mod glm;
 pub mod google;
 pub mod ollama;
 pub mod openai;
+pub mod openai_stream;
 pub mod openrouter;
 pub mod provider_trait;
 
