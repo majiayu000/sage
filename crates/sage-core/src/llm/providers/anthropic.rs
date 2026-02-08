@@ -116,19 +116,11 @@ impl AnthropicProvider {
         })?;
 
         if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_default();
-            return Err(SageError::llm(format!(
-                "Anthropic API error (status {}): {}",
-                status, error_text
-            )));
+            return Err(super::error_utils::handle_http_error(response, "Anthropic").await);
         }
 
         let response_json: Value = response.json().await.map_err(|e| {
-            SageError::llm_with_context(
-                format!("Failed to parse Anthropic response: {}", e),
-                "Failed to deserialize Anthropic API response as JSON",
-            )
+            super::error_utils::handle_parse_error(e, "Anthropic")
         })?;
 
         ResponseParser::parse_anthropic(response_json)
@@ -223,11 +215,7 @@ impl AnthropicProvider {
         })?;
 
         if !response.status().is_success() {
-            let error_text = response.text().await.unwrap_or_default();
-            return Err(SageError::llm(format!(
-                "Anthropic streaming API error: {}",
-                error_text
-            )));
+            return Err(super::error_utils::handle_stream_http_error(response, "Anthropic").await);
         }
 
         let byte_stream = response.bytes_stream();

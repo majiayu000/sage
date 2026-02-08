@@ -4,6 +4,7 @@ pub mod anthropic;
 pub mod anthropic_stream;
 pub mod azure;
 pub mod doubao;
+pub mod error_utils;
 pub mod glm;
 pub mod google;
 pub mod ollama;
