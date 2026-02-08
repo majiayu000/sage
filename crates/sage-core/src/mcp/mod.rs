@@ -34,6 +34,7 @@
 
 pub mod cache;
 pub mod client;
+pub mod config_builder;
 pub mod discovery;
 pub mod error;
 pub mod notifications;
@@ -44,6 +45,7 @@ pub mod transport;
 pub mod types;
 
 pub use cache::{CacheConfig, CacheStats, McpCache};
+pub use config_builder::build_mcp_registry_from_config;
 pub use client::McpClient;
 pub use discovery::{
     DiscoverySource, McpServerManager, McpServerManagerBuilder, ServerHealth, ServerStatus,
