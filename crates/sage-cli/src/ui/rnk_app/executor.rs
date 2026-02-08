@@ -5,8 +5,7 @@ use super::theme::current_theme;
 use crate::commands::unified::slash_commands::{SlashCommandAction, process_slash_command};
 use crate::console::CliConsole;
 use rnk::prelude::*;
-use sage_core::agent::{ExecutionMode, ExecutionOptions, UnifiedExecutor};
-use sage_core::config::load_config;
+use sage_core::agent::UnifiedExecutor;
 use sage_core::error::SageResult;
 use sage_core::input::InputChannel;
 use sage_core::interrupt::{
@@ -17,7 +16,6 @@ use sage_core::types::TaskMetadata;
 use sage_core::ui::bridge::AgentEvent;
 use sage_core::ui::bridge::state::ExecutionPhase;
 use sage_core::ui::traits::UiContext;
-use sage_tools::get_default_tools;
 use tokio::sync::mpsc;
 use tokio::time::{Duration, sleep};
 use unicode_width::UnicodeWidthStr;
@@ -53,24 +51,7 @@ async fn handle_resume(
 
 /// Create executor with default configuration
 pub async fn create_executor(ui_context: Option<UiContext>) -> SageResult<UnifiedExecutor> {
-    let config = load_config()?;
-    let working_dir = std::env::current_dir().unwrap_or_default();
-    let mode = ExecutionMode::interactive();
-    let options = ExecutionOptions::default()
-        .with_mode(mode)
-        .with_working_directory(&working_dir);
-
-    let mut executor = UnifiedExecutor::with_options(config, options)?;
-
-    // Set UI context for event handling
-    if let Some(ctx) = ui_context {
-        executor.set_ui_context(ctx);
-    }
-
-    executor.set_output_mode(OutputMode::Rnk);
-    executor.register_tools(get_default_tools());
-    let _ = executor.init_subagent_support();
-    Ok(executor)
+    crate::executor_factory::create_executor(OutputMode::Rnk, ui_context).await
 }
 
 /// Executor loop in background - processes commands and runs tasks
