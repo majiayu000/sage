@@ -82,25 +82,10 @@ impl GlmProvider {
         // Add API version header
         request = request.header("anthropic-version", "2023-06-01");
 
-        // Debug: Write full request to file for debugging
-        let debug_enabled = std::env::var("SAGE_DEBUG_API").is_ok();
-        if debug_enabled {
-            if let Ok(json_str) = serde_json::to_string_pretty(&request_body) {
-                let debug_dir = std::env::var("SAGE_DEBUG_DIR")
-                    .unwrap_or_else(|_| "/tmp/sage_debug".to_string());
-                let _ = std::fs::create_dir_all(&debug_dir);
-                let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
-                let _ = std::fs::write(
-                    format!("{}/glm_request_{}.json", debug_dir, timestamp),
-                    &json_str,
-                );
-                tracing::debug!(
-                    "Saved GLM request to {}/glm_request_{}.json",
-                    debug_dir,
-                    timestamp
-                );
-            }
-        }
+        tracing::debug!(
+            "GLM request body: {}",
+            serde_json::to_string_pretty(&request_body).unwrap_or_default()
+        );
 
         let response = request.send().await.map_err(|e| {
             SageError::llm_with_context(
@@ -116,27 +101,12 @@ impl GlmProvider {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
 
-            // Save error response for debugging
-            if debug_enabled {
-                let debug_dir = std::env::var("SAGE_DEBUG_DIR")
-                    .unwrap_or_else(|_| "/tmp/sage_debug".to_string());
-                let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
-                let error_info = serde_json::json!({
-                    "status": status.as_u16(),
-                    "error": error_text,
-                    "model": self.model_params.model,
-                    "timestamp": timestamp.to_string()
-                });
-                let _ = std::fs::write(
-                    format!("{}/glm_error_{}.json", debug_dir, timestamp),
-                    serde_json::to_string_pretty(&error_info).unwrap_or_default(),
-                );
-                tracing::error!(
-                    "Saved GLM error to {}/glm_error_{}.json",
-                    debug_dir,
-                    timestamp
-                );
-            }
+            tracing::debug!(
+                status = status.as_u16(),
+                model = %self.model_params.model,
+                "GLM error response: {}",
+                error_text
+            );
 
             return Err(SageError::llm(format!(
                 "GLM API error (status {}): {}",

@@ -23,7 +23,8 @@ impl BashTool {
         shell_id: Option<String>,
     ) -> Result<ToolResult, ToolError> {
         // Check if command is allowed
-        if !self.is_command_allowed(command) {
+        let argv: Vec<String> = command.split_whitespace().map(String::from).collect();
+        if !self.is_command_allowed(&argv) {
             return Err(ToolError::PermissionDenied(format!(
                 "Command not allowed: {}",
                 command
@@ -81,7 +82,8 @@ impl BashTool {
     #[instrument(skip(self), fields(command_preview = %command.chars().take(50).collect::<String>()))]
     pub async fn execute_command(&self, command: &str) -> Result<ToolResult, ToolError> {
         // Check if command is allowed
-        if !self.is_command_allowed(command) {
+        let argv: Vec<String> = command.split_whitespace().map(String::from).collect();
+        if !self.is_command_allowed(&argv) {
             return Err(ToolError::PermissionDenied(format!(
                 "Command not allowed: {}",
                 command
