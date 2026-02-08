@@ -107,7 +107,7 @@ impl SageAgentSdk {
         // Load MCP tools if MCP is enabled
         if self.config.mcp.enabled {
             tracing::info!("MCP is enabled, building MCP registry...");
-            match super::unified::build_mcp_registry_from_config(&self.config).await {
+            match sage_core::mcp::build_mcp_registry_from_config(&self.config).await {
                 Ok(mcp_registry) => {
                     let mcp_tools = mcp_registry.as_tools().await;
                     tracing::info!("Loaded {} MCP tools from {} servers",
