@@ -3,7 +3,6 @@
 pub mod arg_sanitizer;
 pub mod enhanced_errors;
 pub mod monitoring;
-pub mod response_builder;
 pub mod sequential_thinking;
 pub mod telemetry_stats;
 pub mod tool_validator;
@@ -20,12 +19,6 @@ pub use util_functions::{
     check_command_efficiency, estimate_tokens, maybe_truncate, maybe_truncate_by_tokens,
     maybe_truncate_with_limit, suggest_efficient_alternative, truncate_output,
     truncate_output_with_limit,
-};
-
-// Re-export response builder utilities
-pub use response_builder::{
-    CommandResponse, FileOperationResponse, NetworkResponse, SearchResponse, simple_error,
-    simple_success, with_file_info, with_pagination,
 };
 
 // Re-export argument sanitization utilities
