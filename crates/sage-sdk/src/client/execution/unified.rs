@@ -6,13 +6,10 @@ use sage_core::{
     error::SageResult,
     input::{InputChannel, InputChannelHandle},
     mcp::build_mcp_registry_from_config,
-    trajectory::SessionRecorder,
     types::TaskMetadata,
 };
 use sage_tools::get_default_tools;
 use std::path::PathBuf;
-use std::sync::Arc;
-use tokio::sync::Mutex;
 
 impl SageAgentSdk {
 
@@ -90,8 +87,8 @@ impl SageAgentSdk {
 
         // Session recording - always enabled, stored in ~/.sage/projects/{cwd}/
         if self.config.trajectory.is_enabled() {
-            if let Ok(recorder) = SessionRecorder::new(&working_dir) {
-                executor.set_session_recorder(Arc::new(Mutex::new(recorder)));
+            if let Some(recorder) = sage_core::trajectory::init_session_recorder(&working_dir) {
+                executor.set_session_recorder(recorder);
             }
         }
 

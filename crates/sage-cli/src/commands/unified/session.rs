@@ -134,17 +134,11 @@ pub async fn execute_session_resume(
 
     // Set up session recording
     let session_recorder = if config.trajectory.is_enabled() {
-        match SessionRecorder::new(&working_dir) {
-            Ok(recorder) => {
-                let recorder = Arc::new(Mutex::new(recorder));
-                executor.set_session_recorder(recorder.clone());
-                Some(recorder)
-            }
-            Err(e) => {
-                console.warn(&format!("Failed to initialize session recorder: {}", e));
-                None
-            }
+        let recorder = sage_core::trajectory::init_session_recorder(&working_dir);
+        if let Some(ref r) = recorder {
+            executor.set_session_recorder(r.clone());
         }
+        recorder
     } else {
         None
     };
