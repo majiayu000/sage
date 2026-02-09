@@ -133,8 +133,8 @@ fn test_command_with_model() {
 
 #[test]
 fn test_command_result_tool_restrictions() {
-    let result =
-        CommandResult::prompt("test").with_tool_restrictions(vec!["Read".to_string(), "Write".to_string()]);
+    let result = CommandResult::prompt("test")
+        .with_tool_restrictions(vec!["Read".to_string(), "Write".to_string()]);
 
     assert!(result.has_tool_restrictions());
     assert_eq!(

@@ -51,10 +51,10 @@ For more information, visit: https://github.com/anthropics/sage"#;
 /// Execute /clear command - clear conversation (handled by executor)
 pub(super) async fn execute_clear() -> SageResult<CommandResult> {
     // Return interactive command for clear - the CLI will handle the actual clearing
-    Ok(CommandResult::interactive(
-        crate::commands::types::InteractiveCommand::Clear,
+    Ok(
+        CommandResult::interactive(crate::commands::types::InteractiveCommand::Clear)
+            .with_status("Conversation cleared"),
     )
-    .with_status("Conversation cleared"))
 }
 
 /// Execute /compact command - needs LLM to summarize
@@ -199,9 +199,7 @@ pub(super) async fn execute_restore(invocation: &CommandInvocation) -> SageResul
 
     if invocation.arguments.is_empty() {
         // List available checkpoints
-        let output = Command::new("git")
-            .args(["stash", "list"])
-            .output();
+        let output = Command::new("git").args(["stash", "list"]).output();
 
         match output {
             Ok(result) => {
@@ -216,20 +214,23 @@ pub(super) async fn execute_restore(invocation: &CommandInvocation) -> SageResul
                         }
                     }
                     if list == "Available checkpoints:\n\n" {
-                        list.push_str("(No sage checkpoints found. Use /checkpoint to create one.)");
+                        list.push_str(
+                            "(No sage checkpoints found. Use /checkpoint to create one.)",
+                        );
                     }
                     Ok(CommandResult::local(list))
                 }
             }
-            Err(e) => Ok(CommandResult::local(format!("Failed to list checkpoints: {}", e))),
+            Err(e) => Ok(CommandResult::local(format!(
+                "Failed to list checkpoints: {}",
+                e
+            ))),
         }
     } else {
         let checkpoint_name = &invocation.arguments[0];
 
         // Find and restore the checkpoint
-        let list_output = Command::new("git")
-            .args(["stash", "list"])
-            .output();
+        let list_output = Command::new("git").args(["stash", "list"]).output();
 
         match list_output {
             Ok(result) => {
@@ -267,7 +268,10 @@ pub(super) async fn execute_restore(invocation: &CommandInvocation) -> SageResul
                     ))),
                 }
             }
-            Err(e) => Ok(CommandResult::local(format!("Failed to list checkpoints: {}", e))),
+            Err(e) => Ok(CommandResult::local(format!(
+                "Failed to list checkpoints: {}",
+                e
+            ))),
         }
     }
 }
@@ -285,9 +289,7 @@ pub(super) async fn execute_undo(_invocation: &CommandInvocation) -> SageResult<
     use std::process::Command;
 
     // First check git status
-    let status = Command::new("git")
-        .args(["status", "--porcelain"])
-        .output();
+    let status = Command::new("git").args(["status", "--porcelain"]).output();
 
     match status {
         Ok(result) => {

@@ -1,8 +1,7 @@
 //! Plugin entry for the registry
 
 use crate::plugins::{
-    Plugin, PluginCapability, PluginContext, PluginInfo, PluginLifecycle, PluginResult,
-    PluginState,
+    Plugin, PluginCapability, PluginContext, PluginInfo, PluginLifecycle, PluginResult, PluginState,
 };
 use std::sync::Arc;
 use tokio::sync::RwLock;

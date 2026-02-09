@@ -74,7 +74,11 @@ async fn test_execute_checkpoint_with_name() {
     assert!(result.is_local);
     assert!(result.local_output.is_some());
     let output = result.local_output.as_ref().unwrap();
-    assert!(output.contains("my-save") || output.contains("checkpoint") || output.contains("No changes"));
+    assert!(
+        output.contains("my-save")
+            || output.contains("checkpoint")
+            || output.contains("No changes")
+    );
 }
 
 #[tokio::test]
@@ -86,7 +90,6 @@ async fn test_execute_commands() {
     assert!(result.local_output.is_some());
     let output = result.local_output.as_ref().unwrap();
     assert!(output.contains("help") || output.contains("Available") || output.contains("commands"));
-    
 }
 
 #[tokio::test]

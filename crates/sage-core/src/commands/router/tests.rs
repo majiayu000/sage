@@ -72,7 +72,9 @@ fn test_command_result_kind() {
     let local = CommandResult::local("output text");
     assert!(matches!(
         local.kind(),
-        CommandResultKind::Local { output: "output text" }
+        CommandResultKind::Local {
+            output: "output text"
+        }
     ));
 
     // Prompt result
@@ -260,7 +262,10 @@ fn test_command_result_kind_local_empty_output() {
         tool_restrictions: None,
         model_override: None,
     };
-    assert!(matches!(local.kind(), CommandResultKind::Local { output: "" }));
+    assert!(matches!(
+        local.kind(),
+        CommandResultKind::Local { output: "" }
+    ));
 }
 
 #[test]
