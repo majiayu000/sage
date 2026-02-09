@@ -72,9 +72,7 @@ jobs:
             ${{ runner.os }}-cargo-clippy-
 
       - name: Run clippy
-        # Note: Using -W warnings instead of -D warnings to allow build to pass
-        # TODO: Enable -D warnings after fixing all clippy warnings
-        run: cargo clippy --all-targets --all-features -- -W clippy::all
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
   test:
     name: Test

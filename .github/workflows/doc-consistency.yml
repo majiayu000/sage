@@ -38,8 +38,11 @@ jobs:
       - name: Run documentation consistency check
         id: consistency-check
         run: |
+          set +e
           python scripts/check_doc_consistency.py
-          echo "check_result=$?" >> $GITHUB_OUTPUT
+          status=$?
+          echo "check_result=$status" >> "$GITHUB_OUTPUT"
+          exit $status
         continue-on-error: true
       
       - name: Upload consistency report
@@ -176,10 +179,17 @@ jobs:
               console.error('Error creating consistency issue:', error);
             }
       
-      - name: Warn about consistency check failure
-        if: steps.consistency-check.outputs.check_result != '0'
+      - name: Fail workflow on consistency issues
         run: |
-          echo "⚠️ Documentation consistency check found issues."
-          echo "Please review the issues and ensure Chinese documentation is up-to-date."
-          echo "Note: This is currently a warning only, not a blocking failure."
-          # exit 1  # Temporarily disabled until Chinese docs are complete
+          result="${{ steps.consistency-check.outputs.check_result }}"
+          if [ -z "$result" ]; then
+            result=1
+          fi
+
+          if [ "$result" != "0" ]; then
+            echo "❌ Documentation consistency check found issues."
+            echo "Please review the issues and ensure Chinese documentation is up-to-date."
+            exit 1
+          fi
+
+          echo "✅ Documentation consistency check passed."

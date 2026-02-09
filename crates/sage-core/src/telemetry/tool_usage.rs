@@ -64,10 +64,12 @@ impl TelemetryCollector {
         error: Option<String>,
         agent_type: Option<String>,
     ) {
+        let duration_ms = u64::try_from(duration.as_millis()).unwrap_or(u64::MAX);
+
         let event = ToolUsageEvent {
             tool_name: tool_name.into(),
             timestamp: self.start_time.elapsed().as_secs(),
-            duration_ms: duration.as_millis() as u64,
+            duration_ms,
             success,
             error,
             agent_type,
@@ -92,9 +94,10 @@ impl TelemetryCollector {
             return None;
         }
 
-        let total_calls = tool_events.len() as u64;
-        let successful_calls = tool_events.iter().filter(|e| e.success).count() as u64;
-        let failed_calls = total_calls - successful_calls;
+        let total_calls = u64::try_from(tool_events.len()).unwrap_or(u64::MAX);
+        let successful_calls =
+            u64::try_from(tool_events.iter().filter(|e| e.success).count()).unwrap_or(u64::MAX);
+        let failed_calls = total_calls.saturating_sub(successful_calls);
         let total_duration_ms: u64 = tool_events.iter().map(|e| e.duration_ms).sum();
         let avg_duration_ms = total_duration_ms as f64 / total_calls as f64;
 

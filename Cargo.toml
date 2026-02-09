@@ -1,6 +1,6 @@
 [package]
 name = "sage"
-version = "0.11.5"
+version = "0.11.6"
 edition = "2024"
 authors = ["Sage Agent Team"]
 license = "MIT"
@@ -33,7 +33,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.11.5"
+version = "0.11.6"
 edition = "2024"
 authors = ["Sage Agent Team"]
 license = "MIT"
@@ -70,7 +70,7 @@ thiserror = "1.0"
 
 # Logging
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 # Utilities
 uuid = { version = "1.0", features = ["v4", "serde"] }

@@ -45,6 +45,7 @@ impl ConfigValidator {
         validate_limits(config)?;
         validate_paths(config)?;
         validate_tools(config)?;
+        validate_logging(config)?;
         Ok(())
     }
 

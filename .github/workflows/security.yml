@@ -42,7 +42,7 @@ jobs:
         run: cargo install cargo-deny
 
       - name: Check dependencies
-        run: cargo deny check || true  # Don't fail yet, just report
+        run: cargo deny check
 
   outdated:
     name: Check Outdated Dependencies

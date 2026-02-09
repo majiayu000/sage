@@ -4,6 +4,7 @@ use crate::config::model::{
     LakeviewConfig, LoggingConfig, McpConfig, ModelParameters, ToolConfig, TrajectoryConfig,
 };
 use crate::config::provider_defaults::create_default_providers;
+use crate::config::validation::validate_logging;
 use crate::error::{SageError, SageResult};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -144,6 +145,8 @@ impl Config {
                 )));
             }
         }
+
+        validate_logging(self)?;
 
         Ok(())
     }

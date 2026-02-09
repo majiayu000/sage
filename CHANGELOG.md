@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sage-cli: complete no-backward-compat CLI architecture cutover to a single unified execution path.
 - Removed unreachable legacy command families and deprecated app/executor/progress paths.
 - Unified rnk UI executor bootstrap with unified command semantics (`/doctor`, `/resume`, `/model`, dynamic tools list).
+- Config logging consistency: wired `validate_logging` into aggregate validation and `Config::validate`, and initialized CLI tracing from config with `RUST_LOG` precedence.
+- CI and security gates tightened: clippy runs with `-D warnings`, `cargo deny check` is blocking, and doc-consistency now fails in final gate while preserving reports/comments.
+- Telemetry numeric conversions hardened to checked/saturating behavior in tool usage and metrics collector snapshots.
 
 ## [0.11.5] - 2026-02-09
 

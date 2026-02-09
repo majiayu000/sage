@@ -43,6 +43,7 @@ mod signal_handler;
 mod ui;
 
 use clap::Parser;
+use sage_core::config::{load_config, load_config_from_file};
 use sage_core::error::SageResult;
 
 // Re-export for external use
@@ -50,15 +51,49 @@ pub use args::{Cli, Commands, ConfigAction};
 
 #[tokio::main]
 async fn main() -> SageResult<()> {
-    // Initialize logging with environment-based filtering
-    // Set RUST_LOG=debug for verbose logging
-    tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .init();
+    let cli = Cli::parse();
+
+    let config = if cli.config_file == "sage_config.json" {
+        load_config().ok()
+    } else {
+        load_config_from_file(&cli.config_file).ok()
+    };
+
+    if let Some(config) = config {
+        let env_filter = if std::env::var_os("RUST_LOG").is_some() {
+            tracing_subscriber::EnvFilter::from_default_env()
+        } else {
+            tracing_subscriber::EnvFilter::new(config.logging.level)
+        };
+
+        match config.logging.format.as_str() {
+            "json" => {
+                tracing_subscriber::fmt()
+                    .json()
+                    .with_env_filter(env_filter)
+                    .init();
+            }
+            "pretty" => {
+                tracing_subscriber::fmt()
+                    .pretty()
+                    .with_env_filter(env_filter)
+                    .init();
+            }
+            _ => {
+                tracing_subscriber::fmt()
+                    .compact()
+                    .with_env_filter(env_filter)
+                    .init();
+            }
+        }
+    } else {
+        tracing_subscriber::fmt()
+            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .init();
+    }
 
     // Initialize icon mode from environment (SAGE_NERD_FONTS=false to disable)
     sage_core::ui::init_icons();
 
-    let cli = Cli::parse();
     router::route(cli).await
 }

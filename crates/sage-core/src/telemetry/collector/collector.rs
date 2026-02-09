@@ -5,6 +5,7 @@ use super::types::MetricsSnapshot;
 use chrono::Utc;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::RwLock;
 
 /// Metrics collector for agent monitoring
@@ -218,9 +219,25 @@ impl MetricsCollector {
 
     /// Get a snapshot of all metrics
     pub async fn snapshot(&self) -> MetricsSnapshot {
+        let uptime_seconds_i64 = (Utc::now() - self.started_at).num_seconds();
+        let uptime_seconds = if uptime_seconds_i64 < 0 {
+            0
+        } else {
+            u64::try_from(uptime_seconds_i64).unwrap_or(u64::MAX)
+        };
+
+        let active_sessions_value = self.active_sessions.get();
+        let active_sessions = if !active_sessions_value.is_finite() || active_sessions_value < 0.0 {
+            0
+        } else {
+            Duration::try_from_secs_f64(active_sessions_value)
+                .map(|d| d.as_secs())
+                .unwrap_or(u64::MAX)
+        };
+
         MetricsSnapshot {
             timestamp: Utc::now(),
-            uptime_seconds: (Utc::now() - self.started_at).num_seconds() as u64,
+            uptime_seconds,
 
             // LLM metrics
             llm_requests: self.llm_requests.get(),
@@ -236,7 +253,7 @@ impl MetricsCollector {
             tool_latency: self.tool_latency.get_data(),
 
             // Session metrics
-            active_sessions: self.active_sessions.get() as u64,
+            active_sessions,
             total_sessions: self.total_sessions.get(),
             session_duration: self.session_duration.get_data(),
 
