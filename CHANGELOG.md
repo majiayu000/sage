@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- sage-cli: complete no-backward-compat CLI architecture cutover to a single unified execution path.
+- Removed unreachable legacy command families and deprecated app/executor/progress paths.
+- Unified rnk UI executor bootstrap with unified command semantics (`/doctor`, `/resume`, `/model`, dynamic tools list).
+
+## [0.11.5] - 2026-02-09
+
 ### Added
 
 #### Testing & Quality

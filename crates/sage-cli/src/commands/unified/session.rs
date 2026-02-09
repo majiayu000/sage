@@ -25,6 +25,7 @@ pub async fn execute_single_task(
     _jsonl_storage: &Arc<JsonlSessionStorage>,
     session_recorder: &Option<Arc<Mutex<SessionRecorder>>>,
     task_description: &str,
+    config_file: &str,
 ) -> SageResult<()> {
     // Process slash commands if needed
     let action = process_slash_command(task_description, console, working_dir).await?;
@@ -43,18 +44,35 @@ pub async fn execute_single_task(
             return Ok(());
         }
         SlashCommandAction::Resume { session_id } => {
-            // Resume is handled at a higher level, not here
-            console.warn(&format!(
-                "Resume command should be handled at session level. Use `sage -c` or `sage -r {}`.",
-                session_id.as_deref().unwrap_or("<id>")
-            ));
+            let resume_result: SageResult<String> = if let Some(id) = session_id {
+                executor
+                    .restore_session(&id)
+                    .await
+                    .map(|msgs| format!("Session {} restored ({} messages)", id, msgs.len()))
+            } else {
+                match executor.get_most_recent_session().await? {
+                    Some(metadata) => {
+                        let id = metadata.id;
+                        let msgs = executor.restore_session(&id).await?;
+                        Ok(format!("Session {} restored ({} messages)", id, msgs.len()))
+                    }
+                    None => Err(SageError::config(
+                        "No previous sessions found. Start a new session first.",
+                    )),
+                }
+            };
+
+            match resume_result {
+                Ok(msg) => console.success(&msg),
+                Err(e) => console.error(&format!("Resume failed: {}", e)),
+            }
             return Ok(());
         }
         SlashCommandAction::SwitchModel { model } => {
-            console.warn(&format!(
-                "Model switch to '{}' requires restart. Use `sage --model {}`.",
-                model, model
-            ));
+            match executor.switch_model(&model) {
+                Ok(_) => console.success(&format!("Switched to model: {}", model)),
+                Err(e) => console.error(&format!("Failed to switch model: {}", e)),
+            }
             return Ok(());
         }
         SlashCommandAction::ModelSelect { models } => {
@@ -69,7 +87,7 @@ pub async fn execute_single_task(
         }
         SlashCommandAction::Doctor => {
             // Run the doctor command
-            crate::commands::diagnostics::doctor("sage_config.json").await?;
+            crate::commands::diagnostics::doctor(config_file).await?;
             return Ok(());
         }
         SlashCommandAction::Exit => {
@@ -103,6 +121,7 @@ pub async fn execute_session_resume(
     console: CliConsole,
     config: Config,
     working_dir: PathBuf,
+    config_file: String,
 ) -> SageResult<()> {
     // Determine which session to resume
     let session_id = if let Some(id) = args.resume_session_id {
@@ -183,7 +202,73 @@ pub async fn execute_session_resume(
     }
 
     // Create task metadata with the new message
-    let task = TaskMetadata::new(&next_message, &working_dir.display().to_string());
+    // Process slash commands before executing resumed input
+    let working_dir_path = std::path::Path::new(&working_dir);
+    let action = process_slash_command(&next_message, &console, working_dir_path).await?;
+    let task_description = match action {
+        SlashCommandAction::Prompt(desc) => desc,
+        SlashCommandAction::Handled => return Ok(()),
+        SlashCommandAction::HandledWithOutput(output) => {
+            println!("{}", output);
+            return Ok(());
+        }
+        SlashCommandAction::SetOutputMode(mode) => {
+            executor.set_output_mode(mode);
+            console.info("Output mode updated.");
+            return Ok(());
+        }
+        SlashCommandAction::Resume { session_id } => {
+            let resume_result = if let Some(id) = session_id {
+                executor
+                    .restore_session(&id)
+                    .await
+                    .map(|_| format!("Session {} restored", id))
+            } else {
+                match executor.get_most_recent_session().await? {
+                    Some(metadata) => {
+                        let id = metadata.id;
+                        executor.restore_session(&id).await?;
+                        Ok(format!("Session {} restored", id))
+                    }
+                    None => Err(SageError::config(
+                        "No previous sessions found. Start a new session first.",
+                    )),
+                }
+            };
+
+            match resume_result {
+                Ok(msg) => console.success(&msg),
+                Err(e) => console.error(&format!("Resume failed: {}", e)),
+            }
+            return Ok(());
+        }
+        SlashCommandAction::SwitchModel { model } => {
+            match executor.switch_model(&model) {
+                Ok(_) => console.success(&format!("Switched to model: {}", model)),
+                Err(e) => console.error(&format!("Failed to switch model: {}", e)),
+            }
+            return Ok(());
+        }
+        SlashCommandAction::ModelSelect { models } => {
+            let mut output = "Available models:\n".to_string();
+            for model in &models {
+                output.push_str(&format!("  - {}\n", model));
+            }
+            output.push_str("\nUse /model <name> to switch.");
+            println!("{}", output);
+            return Ok(());
+        }
+        SlashCommandAction::Doctor => {
+            crate::commands::diagnostics::doctor(&config_file).await?;
+            return Ok(());
+        }
+        SlashCommandAction::Exit => {
+            console.info("Exiting...");
+            return Ok(());
+        }
+    };
+
+    let task = TaskMetadata::new(&task_description, &working_dir.display().to_string());
 
     // Execute the task
     let start_time = std::time::Instant::now();

@@ -10,35 +10,14 @@
 //!
 //! # CLI Modes Overview
 //!
-//! This CLI provides multiple execution modes for different use cases:
+//! This CLI uses a single unified execution architecture.
 //!
-//! ## 1. Interactive Mode (Default)
-//! Start a conversation loop where you can have multi-turn conversations with the AI.
-//! The AI remembers context across messages within the same conversation.
-//!
-//! - **Use when:** You want to have a back-and-forth conversation, iterating on tasks
-//! - **Command:** `sage` or `sage interactive`
-//! - **Example:** Ask the AI to create a file, then ask it to modify that file
-//!
-//! ## 2. Run Mode (One-shot)
-//! Execute a single task and exit. Best for automation and scripting.
-//! The AI completes the task and returns immediately.
-//!
-//! - **Use when:** You have a single, well-defined task to complete
-//! - **Command:** `sage run "<task>"`
-//! - **Example:** `sage run "Create a Python hello world script"`
-//!
-//! ## 3. Unified Mode (Advanced)
-//! New execution model with inline user input blocking. Supports both interactive
-//! and non-interactive modes via flag.
-//!
-//! - **Use when:** You need fine-grained control over execution behavior
-//! - **Command:** `sage unified "<task>"`
-//! - **Example:** `sage unified --non-interactive "Run tests"`
-//!
-//! ## 4. Utility Commands
-//! Additional commands for configuration, trajectory analysis, and tool inspection.
-//! See `sage --help` for full list.
+//! - `sage`                     # Start interactive mode (TTY)
+//! - `sage "task"`              # Execute a task
+//! - `sage -p "task"`           # Non-interactive one-shot mode
+//! - `sage -c`                  # Resume most recent session
+//! - `sage -r <id>`             # Resume specific session
+//! - `sage <utility command>`   # Config/diagnostics/tools commands
 
 // Allow common clippy lints that are stylistic preferences
 #![allow(clippy::collapsible_if)]
@@ -56,12 +35,9 @@
 #![allow(clippy::filter_map_identity)]
 
 mod api_types;
-mod app;
 mod args;
 mod commands;
 mod console;
-mod executor_factory;
-mod progress;
 mod router;
 mod signal_handler;
 mod ui;
@@ -70,7 +46,7 @@ use clap::Parser;
 use sage_core::error::SageResult;
 
 // Re-export for external use
-pub use args::{Cli, Commands, ConfigAction, TrajectoryAction};
+pub use args::{Cli, Commands, ConfigAction};
 
 #[tokio::main]
 async fn main() -> SageResult<()> {

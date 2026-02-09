@@ -6,7 +6,7 @@
 //! - sage -p "task"           # Print mode (non-interactive, one-shot)
 //! - sage -c                  # Resume most recent session
 //! - sage -r <id>             # Resume specific session
-//! - sage config/trajectory   # Utility commands
+//! - sage config/tools        # Utility commands
 
 use crate::commands::unified::OutputModeArg;
 use clap::{Parser, Subcommand};
@@ -28,7 +28,6 @@ USAGE:
 UTILITY COMMANDS:
   sage config init               # Create config file
   sage config show               # Show current config
-  sage trajectory list           # List session trajectories
   sage tools                     # List available tools
 
 For detailed help: sage --help"#
@@ -85,13 +84,6 @@ pub enum Commands {
     Config {
         #[command(subcommand)]
         action: ConfigAction,
-    },
-
-    /// Analyze and manage trajectory files
-    #[command(verbatim_doc_comment)]
-    Trajectory {
-        #[command(subcommand)]
-        action: TrajectoryAction,
     },
 
     /// List all available tools and their descriptions
@@ -152,33 +144,5 @@ pub enum ConfigAction {
         /// Overwrite existing file without prompting
         #[arg(long)]
         force: bool,
-    },
-}
-
-#[derive(Subcommand, Clone)]
-pub enum TrajectoryAction {
-    /// List all trajectory files in a directory
-    List {
-        /// Directory to search for trajectories
-        #[arg(long, default_value = ".")]
-        directory: PathBuf,
-    },
-
-    /// Display detailed information about a trajectory
-    Show {
-        /// Path to trajectory file
-        trajectory_file: PathBuf,
-    },
-
-    /// Calculate statistics for trajectory file(s)
-    Stats {
-        /// Path to trajectory file or directory
-        path: PathBuf,
-    },
-
-    /// Analyze execution patterns and performance
-    Analyze {
-        /// Path to trajectory file or directory
-        path: PathBuf,
     },
 }

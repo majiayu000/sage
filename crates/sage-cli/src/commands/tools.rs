@@ -9,25 +9,13 @@ pub async fn show_tools() -> SageResult<()> {
 
     console.print_header("Available Tools");
 
-    // Tool information - this should ideally come from the tools registry
-    let tools = vec![
-        (
-            "str_replace_based_edit_tool",
-            "Edit files using string replacement operations",
-        ),
-        (
-            "sequentialthinking",
-            "Sequential thinking and reasoning tool",
-        ),
-        ("json_edit_tool", "Edit JSON files with JSONPath operations"),
-        ("task_done", "Mark a task as completed"),
-        ("bash", "Execute bash commands in the system"),
-    ];
+    let mut tools = sage_tools::get_default_tools();
+    tools.sort_by(|a, b| a.name().cmp(b.name()));
 
     console.print_table_header(&["Tool Name", "Description"]);
 
-    for (name, description) in &tools {
-        console.print_table_row(&[name, description]);
+    for tool in &tools {
+        console.print_table_row(&[tool.name(), tool.description()]);
     }
 
     console.info("");

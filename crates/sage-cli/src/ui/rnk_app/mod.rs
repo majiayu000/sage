@@ -19,6 +19,7 @@ mod theme;
 pub use state::{SharedState, UiCommand, UiState};
 
 use super::adapters::RnkEventSink;
+use crate::args::Cli;
 use components::{
     count_matching_commands, get_selected_command, render_command_suggestions, render_input,
     render_model_selector, render_separator, render_status_bar, render_thinking_indicator,
@@ -310,9 +311,13 @@ fn app() -> Element {
 }
 
 /// Run the rnk-based app (async version)
-pub async fn run_rnk_app() -> io::Result<()> {
+pub async fn run_rnk_app(cli: &Cli) -> io::Result<()> {
     // Load config to get model/provider info for header
-    let (model, provider) = match sage_core::config::load_config() {
+    let (model, provider) = match if std::path::Path::new(&cli.config_file).exists() {
+        sage_core::config::load_config_from_file(&cli.config_file)
+    } else {
+        sage_core::config::load_config()
+    } {
         Ok(config) => {
             let provider = config.default_provider.clone();
             let keys: Vec<_> = config.model_providers.keys().cloned().collect();
@@ -357,13 +362,30 @@ pub async fn run_rnk_app() -> io::Result<()> {
     let _ = GLOBAL_CMD_TX.set(cmd_tx);
 
     // Create input channel for executor
-    let (input_channel, _input_handle) = InputChannel::new(16);
+    let (input_channel, input_handle) = InputChannel::new(16);
+
+    // Spawn input handler for tool/user interaction requests
+    tokio::spawn(async move {
+        crate::commands::unified::handle_user_input(input_handle, false).await;
+    });
 
     // Spawn executor task with UI context
     let executor_state = Arc::clone(&state);
     let executor_ui_context = ui_context.clone();
+    let config_file = cli.config_file.clone();
+    let working_dir = cli.working_dir.clone();
+    let max_steps = cli.max_steps;
     tokio::spawn(async move {
-        executor_loop(executor_state, cmd_rx, input_channel, executor_ui_context).await;
+        executor_loop(
+            executor_state,
+            cmd_rx,
+            input_channel,
+            executor_ui_context,
+            config_file,
+            working_dir,
+            max_steps,
+        )
+        .await;
     });
 
     // Background task for printing messages and updating spinner

@@ -6,6 +6,7 @@ use crate::commands::unified::slash_commands::{SlashCommandAction, process_slash
 use crate::console::CliConsole;
 use rnk::prelude::*;
 use sage_core::agent::UnifiedExecutor;
+use sage_core::agent::{ExecutionMode, ExecutionOptions};
 use sage_core::error::SageResult;
 use sage_core::input::InputChannel;
 use sage_core::interrupt::{
@@ -20,38 +21,83 @@ use tokio::sync::mpsc;
 use tokio::time::{Duration, sleep};
 use unicode_width::UnicodeWidthStr;
 
-/// Handle resume command
-async fn handle_resume(
-    executor: &mut UnifiedExecutor,
-    session_id: Option<&str>,
-) -> SageResult<String> {
-    let session_id = match session_id {
-        Some(id) => id.to_string(),
-        None => {
-            // Get most recent session
-            match executor.get_most_recent_session().await? {
-                Some(metadata) => metadata.id,
-                None => {
-                    return Err(sage_core::error::SageError::config(
-                        "No previous sessions found. Start a new session first.",
-                    ));
-                }
-            }
-        }
+/// Create executor with unified configuration path
+pub async fn create_executor(
+    ui_context: Option<UiContext>,
+    config_file: &str,
+    working_dir: Option<std::path::PathBuf>,
+    max_steps: Option<u32>,
+) -> SageResult<UnifiedExecutor> {
+    let mut config = if std::path::Path::new(config_file).exists() {
+        sage_core::config::load_config_from_file(config_file)?
+    } else {
+        sage_core::config::load_config()?
     };
 
-    // Restore the session
-    let restored_messages = executor.restore_session(&session_id).await?;
-    Ok(format!(
-        "Session {} restored ({} messages)",
-        session_id,
-        restored_messages.len()
-    ))
-}
+    // If the default provider has no key, pick the first provider that does.
+    if let Some(params) = config.model_providers.get(&config.default_provider) {
+        if params
+            .get_api_key_info_for_provider(&config.default_provider)
+            .key
+            .is_none()
+        {
+            if let Some((provider, _)) = config.model_providers.iter().find(|(provider, params)| {
+                params.get_api_key_info_for_provider(provider).key.is_some()
+                    || provider.as_str() == "ollama"
+            }) {
+                config.default_provider = provider.clone();
+            }
+        }
+    }
 
-/// Create executor with default configuration
-pub async fn create_executor(ui_context: Option<UiContext>) -> SageResult<UnifiedExecutor> {
-    crate::executor_factory::create_executor(OutputMode::Rnk, ui_context).await
+    let resolved_working_dir =
+        working_dir.unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
+    let mut options = ExecutionOptions::default()
+        .with_mode(ExecutionMode::interactive())
+        .with_working_directory(&resolved_working_dir);
+
+    if let Some(steps) = max_steps {
+        options = options.with_step_limit(steps);
+    }
+
+    let mut executor = UnifiedExecutor::with_options(config.clone(), options)?;
+
+    if let Some(ctx) = ui_context {
+        executor.set_ui_context(ctx);
+    }
+
+    executor.set_output_mode(OutputMode::Rnk);
+
+    // Register default tools
+    let mut all_tools = sage_tools::get_default_tools();
+
+    // Load MCP tools if MCP is enabled
+    if config.mcp.enabled {
+        match crate::commands::unified::build_mcp_registry_from_config(&config).await {
+            Ok(mcp_registry) => {
+                let mcp_tools = mcp_registry.as_tools().await;
+                if !mcp_tools.is_empty() {
+                    all_tools.extend(mcp_tools);
+                }
+            }
+            Err(e) => {
+                tracing::error!("Failed to build MCP registry: {}", e);
+            }
+        }
+    }
+
+    executor.register_tools(all_tools);
+    let _ = executor.init_subagent_support();
+
+    // Set up JSONL storage for session management
+    let jsonl_storage = sage_core::session::JsonlSessionStorage::default_path()?;
+    executor.set_jsonl_storage(std::sync::Arc::new(jsonl_storage));
+
+    // Enable JSONL session recording
+    let _ = executor.enable_session_recording().await;
+
+    Ok(executor)
 }
 
 /// Executor loop in background - processes commands and runs tasks
@@ -60,12 +106,22 @@ pub async fn executor_loop(
     mut rx: mpsc::Receiver<UiCommand>,
     input_channel: InputChannel,
     ui_context: UiContext,
+    config_file: String,
+    working_dir: Option<std::path::PathBuf>,
+    max_steps: Option<u32>,
 ) {
     // Clone ui_context for event emission, pass original to executor
     let event_ctx = ui_context.clone();
 
     // Create executor with UI context
-    let mut executor = match create_executor(Some(ui_context)).await {
+    let mut executor = match create_executor(
+        Some(ui_context),
+        &config_file,
+        working_dir.clone(),
+        max_steps,
+    )
+    .await
+    {
         Ok(e) => e,
         Err(e) => {
             rnk::println(
@@ -84,7 +140,11 @@ pub async fn executor_loop(
     while let Some(cmd) = rx.recv().await {
         match cmd {
             UiCommand::Submit(task) => {
-                let working_dir = std::env::current_dir().unwrap_or_default();
+                let working_dir = executor
+                    .options()
+                    .working_directory
+                    .clone()
+                    .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
                 let console = CliConsole::new(false);
 
                 // Process slash commands first
@@ -124,7 +184,29 @@ pub async fn executor_loop(
                         }
                         rnk::request_render();
 
-                        let result = handle_resume(&mut executor, session_id.as_deref()).await;
+                        let resume_result = if let Some(id) = session_id {
+                            executor.restore_session(&id).await.map(|msgs| {
+                                format!("Session {} restored ({} messages)", id, msgs.len())
+                            })
+                        } else {
+                            match executor.get_most_recent_session().await {
+                                Ok(Some(metadata)) => {
+                                    let id = metadata.id;
+                                    match executor.restore_session(&id).await {
+                                        Ok(msgs) => Ok(format!(
+                                            "Session {} restored ({} messages)",
+                                            id,
+                                            msgs.len()
+                                        )),
+                                        Err(e) => Err(e),
+                                    }
+                                }
+                                Ok(None) => Err(sage_core::error::SageError::config(
+                                    "No previous sessions found. Start a new session first.",
+                                )),
+                                Err(e) => Err(e),
+                            }
+                        };
 
                         {
                             let mut s = state.write();
@@ -132,7 +214,7 @@ pub async fn executor_loop(
                             s.status_text.clear();
                         }
 
-                        match result {
+                        match resume_result {
                             Ok(msg) => {
                                 rnk::println(
                                     Text::new(format!("✓ {}", msg))
@@ -198,7 +280,7 @@ pub async fn executor_loop(
                         rnk::request_render();
 
                         // Run doctor command
-                        let result = crate::commands::diagnostics::doctor("sage_config.json").await;
+                        let result = crate::commands::diagnostics::doctor(&config_file).await;
 
                         {
                             let mut s = state.write();
@@ -248,8 +330,7 @@ pub async fn executor_loop(
                 event_ctx.emit(AgentEvent::ThinkingStarted);
 
                 // Execute task
-                let working_dir_str = working_dir.to_string_lossy().to_string();
-                let task_meta = TaskMetadata::new(&prompt, &working_dir_str);
+                let task_meta = TaskMetadata::new(&prompt, &working_dir.display().to_string());
 
                 match executor.execute(task_meta).await {
                     Ok(_) => {}

@@ -2,10 +2,11 @@
 //!
 //! Unified routing: all execution modes go through UnifiedExecutor
 
-use crate::args::{Cli, Commands, ConfigAction, TrajectoryAction};
+use crate::args::{Cli, Commands, ConfigAction};
+use crate::commands;
 use crate::commands::interactive::{CliOnboarding, check_config_status};
 use crate::console::CliConsole;
-use crate::{app, commands};
+use crate::ui;
 use sage_core::config::credential::ConfigStatus;
 use sage_core::error::{SageError, SageResult};
 use std::io::{IsTerminal, Read};
@@ -17,16 +18,11 @@ pub async fn route(cli: Cli) -> SageResult<()> {
         return match command {
             // Utility commands
             Commands::Config { action } => route_config(action.clone()).await,
-            Commands::Trajectory { action } => route_trajectory(action.clone()).await,
             Commands::Tools => commands::tools::show_tools().await,
 
             // Diagnostic commands
-            Commands::Doctor { config_file } => {
-                commands::diagnostics::doctor(config_file).await
-            }
-            Commands::Status { config_file } => {
-                commands::diagnostics::status(config_file).await
-            }
+            Commands::Doctor { config_file } => commands::diagnostics::doctor(config_file).await,
+            Commands::Status { config_file } => commands::diagnostics::status(config_file).await,
             Commands::Usage {
                 session_dir,
                 detailed,
@@ -85,18 +81,25 @@ async fn route_main(mut cli: Cli) -> SageResult<()> {
         non_interactive
     );
 
-    if non_interactive && cli.task.is_none() && !cli.continue_session && cli.resume_session.is_none()
+    if non_interactive
+        && cli.task.is_none()
+        && !cli.continue_session
+        && cli.resume_session.is_none()
     {
         return Err(SageError::invalid_input(
             "No task provided. Supply a task argument, pipe input, or use `-c` / `-r` to resume.",
         ));
     }
 
-    // Use non-UI execution when non-interactive or not running in a TTY.
-    if non_interactive {
+    let should_use_unified = non_interactive
+        || cli.task.is_some()
+        || cli.continue_session
+        || cli.resume_session.is_some();
+
+    if should_use_unified {
         // Execute using UnifiedExecutor (the single execution path)
         // Session resume is handled by unified_execute when continue_recent or resume_session_id is set
-        commands::unified_execute(commands::UnifiedArgs {
+        return commands::unified_execute(commands::UnifiedArgs {
             task: cli.task,
             config_file: cli.config_file,
             working_dir: cli.working_dir,
@@ -108,15 +111,17 @@ async fn route_main(mut cli: Cli) -> SageResult<()> {
             stream_json: cli.stream_json,
             output_mode: cli.output_mode,
         })
+        .await;
+    }
+
+    // No task/resume in TTY: run rnk app frontend.
+    ui::run_rnk_app_with_cli(&cli)
         .await
-    } else {
-        // New rnk App mode is the default (fullscreen with fixed-bottom layout)
-        app::run_app_mode().await.map_err(|e| sage_core::error::SageError::Io {
+        .map_err(|e| sage_core::error::SageError::Io {
             message: e.to_string(),
             path: None,
             context: Some("Running rnk App mode".to_string()),
         })
-    }
 }
 
 async fn route_config(action: ConfigAction) -> SageResult<()> {
@@ -126,16 +131,5 @@ async fn route_config(action: ConfigAction) -> SageResult<()> {
         ConfigAction::Init { config_file, force } => {
             commands::config::init(&config_file, force).await
         }
-    }
-}
-
-async fn route_trajectory(action: TrajectoryAction) -> SageResult<()> {
-    match action {
-        TrajectoryAction::List { directory } => commands::trajectory::list(&directory).await,
-        TrajectoryAction::Show { trajectory_file } => {
-            commands::trajectory::show(&trajectory_file).await
-        }
-        TrajectoryAction::Stats { path } => commands::trajectory::stats(&path).await,
-        TrajectoryAction::Analyze { path } => commands::trajectory::analyze(&path).await,
     }
 }

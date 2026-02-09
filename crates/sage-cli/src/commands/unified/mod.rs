@@ -17,3 +17,5 @@ mod utils;
 
 pub use args::{OutputModeArg, UnifiedArgs};
 pub use execute::execute;
+pub(crate) use input::handle_user_input;
+pub(crate) use mcp::build_mcp_registry_from_config;

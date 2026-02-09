@@ -11,5 +11,9 @@
 mod adapters;
 mod rnk_app;
 
-pub use rnk_app::run_rnk_app;
+use crate::args::Cli;
+use std::io;
 
+pub async fn run_rnk_app_with_cli(cli: &Cli) -> io::Result<()> {
+    rnk_app::run_rnk_app(cli).await
+}

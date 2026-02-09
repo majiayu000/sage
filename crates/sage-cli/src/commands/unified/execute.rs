@@ -129,9 +129,12 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
         console.warn(&format!("Failed to enable session recording: {}", e));
     }
 
+    let config_file = args.config_file.clone();
+
     // Handle session resume (-c or -r flags)
     if args.continue_recent || args.resume_session_id.is_some() {
-        return execute_session_resume(args, executor, console, config, working_dir).await;
+        return execute_session_resume(args, executor, console, config, working_dir, config_file)
+            .await;
     }
 
     // Handle stream JSON mode (for SDK/programmatic use)
@@ -168,6 +171,7 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
             &jsonl_storage,
             &session_recorder,
             &task_description,
+            &args.config_file,
         )
         .await;
     }

@@ -8,6 +8,7 @@ This directory contains comprehensive analysis and refactoring plans for the Sag
 |----------|-------------|
 | [COMPREHENSIVE_REFACTOR_PLAN.md](./COMPREHENSIVE_REFACTOR_PLAN.md) | Full analysis across 7 dimensions with detailed findings and recommendations |
 | [QUICK_ACTION_CHECKLIST.md](./QUICK_ACTION_CHECKLIST.md) | Priority-ordered actionable checklist for implementation |
+| [CLI_ARCH_CUTOVER_PLAN_2026_02.md](./CLI_ARCH_CUTOVER_PLAN_2026_02.md) | 无向后兼容的 sage-cli 架构收敛方案（删除旧链路与不可达命令） |
 
 ## Analysis Summary
 
