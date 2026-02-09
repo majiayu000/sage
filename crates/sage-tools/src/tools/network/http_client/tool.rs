@@ -28,6 +28,30 @@ impl HttpClientTool {
         }
     }
 
+    fn parse_timeout_seconds(call: &ToolCall) -> Result<Option<u64>, ToolError> {
+        let Some(timeout) = call.get_number("timeout") else {
+            return Ok(None);
+        };
+
+        if !timeout.is_finite() {
+            return Err(ToolError::InvalidArguments(
+                "timeout must be a finite number".to_string(),
+            ));
+        }
+
+        if timeout < 0.0 {
+            return Err(ToolError::InvalidArguments(
+                "timeout must be non-negative".to_string(),
+            ));
+        }
+
+        let timeout_secs = std::time::Duration::try_from_secs_f64(timeout)
+            .map(|duration| duration.as_secs())
+            .map_err(|_| ToolError::InvalidArguments("timeout is too large".to_string()))?;
+
+        Ok(Some(timeout_secs))
+    }
+
     /// Get or create HTTP client
     fn get_or_create_client(
         &mut self,
@@ -142,13 +166,15 @@ impl Tool for HttpClientTool {
                 ToolError::InvalidArguments(format!("Invalid graphql_variables JSON: {}", e))
             })?;
 
+        let timeout = Self::parse_timeout_seconds(call)?;
+
         let params = HttpClientParams {
             method,
             url: url.clone(),
             headers,
             body,
             auth,
-            timeout: call.get_number("timeout").map(|n| n as u64),
+            timeout,
             follow_redirects: call.get_bool("follow_redirects"),
             verify_ssl: call.get_bool("verify_ssl"),
             save_to_file: call.get_string("save_to_file"),
@@ -207,6 +233,8 @@ impl Tool for HttpClientTool {
                 )));
             }
         }
+
+        Self::parse_timeout_seconds(call)?;
 
         Ok(())
     }

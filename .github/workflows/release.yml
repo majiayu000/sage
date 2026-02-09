@@ -267,26 +267,22 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Publish sage-core
-        run: cargo publish -p sage-core --token ${{ secrets.CRATES_IO_TOKEN }} || true
-        continue-on-error: true
+        run: cargo publish -p sage-core --token ${{ secrets.CRATES_IO_TOKEN }}
 
       - name: Wait for crates.io
         run: sleep 30
 
       - name: Publish sage-tools
-        run: cargo publish -p sage-tools --token ${{ secrets.CRATES_IO_TOKEN }} || true
-        continue-on-error: true
+        run: cargo publish -p sage-tools --token ${{ secrets.CRATES_IO_TOKEN }}
 
       - name: Wait for crates.io
         run: sleep 30
 
       - name: Publish sage-sdk
-        run: cargo publish -p sage-sdk --token ${{ secrets.CRATES_IO_TOKEN }} || true
-        continue-on-error: true
+        run: cargo publish -p sage-sdk --token ${{ secrets.CRATES_IO_TOKEN }}
 
       - name: Wait for crates.io
         run: sleep 30
 
       - name: Publish sage-cli
-        run: cargo publish -p sage-cli --token ${{ secrets.CRATES_IO_TOKEN }} || true
-        continue-on-error: true
+        run: cargo publish -p sage-cli --token ${{ secrets.CRATES_IO_TOKEN }}

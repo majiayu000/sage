@@ -50,8 +50,11 @@ pub async fn create_executor(
         }
     }
 
-    let resolved_working_dir =
-        working_dir.unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+    let resolved_working_dir = working_dir
+        .or_else(|| config.working_directory.clone())
+        .unwrap_or_else(|| {
+            std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
+        });
 
     let mut options = ExecutionOptions::default()
         .with_mode(ExecutionMode::interactive())

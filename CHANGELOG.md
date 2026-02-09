@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- unified execute + RNK executor now resolve working directory consistently with precedence: arg/param > config.working_directory > current_dir > ".".
+- unified input handling now tracks spawned input tasks and aborts them on exit paths to avoid untracked background tasks.
+- http_client timeout parsing now validates finite/non-negative/range-safe numeric inputs and removes f64->u64 narrowing casts.
+- release workflow crates publish steps are fail-closed (removed `|| true` and `continue-on-error: true`).
 - sage-cli: complete no-backward-compat CLI architecture cutover to a single unified execution path.
 - Removed unreachable legacy command families and deprecated app/executor/progress paths.
 - Unified rnk UI executor bootstrap with unified command semantics (`/doctor`, `/resume`, `/model`, dynamic tools list).

@@ -10,6 +10,7 @@ use sage_core::types::TaskMetadata;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
 
 use super::args::UnifiedArgs;
 use super::input::handle_user_input;
@@ -123,6 +124,17 @@ pub async fn execute_session_resume(
     working_dir: PathBuf,
     config_file: String,
 ) -> SageResult<()> {
+    struct InputTaskGuard(Option<JoinHandle<()>>);
+
+    impl Drop for InputTaskGuard {
+        fn drop(&mut self) {
+            if let Some(handle) = self.0.take() {
+                handle.abort();
+            }
+        }
+    }
+
+    let mut input_task = InputTaskGuard(None);
     // Determine which session to resume
     let session_id = if let Some(id) = args.resume_session_id {
         id
@@ -198,7 +210,7 @@ pub async fn execute_session_resume(
     if !args.non_interactive {
         let (input_channel, input_handle) = InputChannel::new(16);
         executor.set_input_channel(input_channel);
-        tokio::spawn(handle_user_input(input_handle, verbose));
+        input_task.0 = Some(tokio::spawn(handle_user_input(input_handle, verbose)));
     }
 
     // Create task metadata with the new message

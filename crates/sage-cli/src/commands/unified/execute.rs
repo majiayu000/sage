@@ -8,7 +8,9 @@ use sage_core::error::SageResult;
 use sage_core::input::InputChannel;
 use sage_core::output::OutputMode;
 use sage_tools::get_default_tools;
+use std::path::PathBuf;
 use std::sync::Arc;
+use tokio::task::JoinHandle;
 
 use super::args::{OutputModeArg, UnifiedArgs};
 use super::input::handle_user_input;
@@ -60,7 +62,8 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
     let working_dir = args
         .working_dir
         .clone()
-        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+        .or_else(|| config.working_directory.clone())
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
 
     // Set up execution options
     let mode = if args.non_interactive {
@@ -154,17 +157,18 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
     };
 
     // Set up input channel for interactive mode
+    let mut input_task: Option<JoinHandle<()>> = None;
     let verbose = args.verbose;
     if !args.non_interactive {
         let (input_channel, input_handle) = InputChannel::new(16);
         executor.set_input_channel(input_channel);
-        tokio::spawn(handle_user_input(input_handle, verbose));
+        input_task = Some(tokio::spawn(handle_user_input(input_handle, verbose)));
     }
 
     // Determine execution mode based on whether task was provided
     if let Some(task) = args.task {
         let task_description = load_task_from_arg(&task, &console).await?;
-        return execute_single_task(
+        let result = execute_single_task(
             &mut executor,
             &console,
             &working_dir,
@@ -174,6 +178,16 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
             &args.config_file,
         )
         .await;
+
+        if let Some(handle) = input_task.take() {
+            handle.abort();
+        }
+
+        return result;
+    }
+
+    if let Some(handle) = input_task.take() {
+        handle.abort();
     }
 
     Err(sage_core::error::SageError::invalid_input(
