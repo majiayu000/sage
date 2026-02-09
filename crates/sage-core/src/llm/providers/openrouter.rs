@@ -89,9 +89,10 @@ impl OpenRouterProvider {
             return Err(super::error_utils::handle_http_error(response, "OpenRouter").await);
         }
 
-        let response_json: serde_json::Value = response.json().await.map_err(|e| {
-            super::error_utils::handle_parse_error(e, "OpenRouter")
-        })?;
+        let response_json: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| super::error_utils::handle_parse_error(e, "OpenRouter"))?;
 
         tracing::debug!(
             "OpenRouter API response: {}",

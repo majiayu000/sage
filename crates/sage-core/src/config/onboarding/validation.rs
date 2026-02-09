@@ -43,16 +43,12 @@ pub async fn validate_api_key_format(provider: &str, api_key: &str) -> Validatio
         }
         "openai" => {
             if !api_key.starts_with("sk-") {
-                return ValidationResult::failure(
-                    "OpenAI API keys typically start with 'sk-'",
-                );
+                return ValidationResult::failure("OpenAI API keys typically start with 'sk-'");
             }
         }
         "google" => {
             if api_key.len() < 30 {
-                return ValidationResult::failure(
-                    "Google API keys are typically longer",
-                );
+                return ValidationResult::failure("Google API keys are typically longer");
             }
         }
         "glm" => {

@@ -136,11 +136,7 @@ impl ContextBuilder {
     /// Load git information
     pub fn load_git_info(&self) -> Option<GitInfo> {
         let info = GitInfo::detect(&self.working_dir);
-        if info.is_repo {
-            Some(info)
-        } else {
-            None
-        }
+        if info.is_repo { Some(info) } else { None }
     }
 
     /// Build complete project context

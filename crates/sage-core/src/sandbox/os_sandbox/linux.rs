@@ -4,7 +4,7 @@
 //! Note: Full seccomp implementation requires the `libseccomp` library.
 //! This module provides a placeholder implementation.
 
-use super::types::{OsSandboxConfig, OsSandboxMode};
+use super::types::OsSandboxConfig;
 use crate::sandbox::SandboxError;
 use tokio::process::Command;
 
@@ -20,29 +20,15 @@ pub fn apply_seccomp(_cmd: &mut Command, config: &OsSandboxConfig) -> Result<(),
         return Ok(());
     }
 
-    tracing::info!("Linux seccomp sandbox requested (mode: {:?})", config.mode);
-
-    // Log what would be restricted
-    match config.mode {
-        OsSandboxMode::ReadOnly => {
-            tracing::debug!("Would filter: write, unlink, mkdir, rmdir, rename, truncate, etc.");
-        }
-        OsSandboxMode::NoNetwork => {
-            tracing::debug!("Would filter: socket, connect, bind, listen, accept, etc.");
-        }
-        OsSandboxMode::Strict => {
-            tracing::debug!("Would apply allowlist of minimal required syscalls");
-        }
-        _ => {}
-    }
-
-    // For now, just return success with a warning
-    tracing::warn!(
-        "seccomp filtering not fully implemented. \
-        Consider using Docker/Firejail for production sandboxing."
+    tracing::error!(
+        "Linux seccomp sandbox requested (mode: {:?}) but not implemented",
+        config.mode
     );
 
-    Ok(())
+    Err(SandboxError::InitializationFailed(
+        "Linux seccomp sandbox is not implemented; disable OS sandbox or use another platform"
+            .to_string(),
+    ))
 }
 
 /// List of syscalls typically needed for basic process execution

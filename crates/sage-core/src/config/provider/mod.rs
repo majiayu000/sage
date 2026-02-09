@@ -16,7 +16,9 @@ mod defaults;
 mod network;
 mod resilience;
 
-pub use api_key::{format_api_key_status, get_standard_env_vars, mask_api_key, ApiKeyInfo, ApiKeySource};
+pub use api_key::{
+    ApiKeyInfo, ApiKeySource, format_api_key_status, get_standard_env_vars, mask_api_key,
+};
 pub use auth::ApiAuthConfig;
 pub use config::ProviderConfig;
 pub use defaults::ProviderDefaults;

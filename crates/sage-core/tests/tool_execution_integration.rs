@@ -353,8 +353,7 @@ async fn test_get_specific_tool_schemas() {
         .with_tool(Arc::new(FileReaderTool))
         .build();
 
-    let schemas =
-        executor.get_schemas_for_tools(&["echo".to_string(), "calculator".to_string()]);
+    let schemas = executor.get_schemas_for_tools(&["echo".to_string(), "calculator".to_string()]);
 
     assert_eq!(schemas.len(), 2);
     let names: Vec<String> = schemas.iter().map(|s| s.name.clone()).collect();

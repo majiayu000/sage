@@ -29,21 +29,21 @@ pub mod timeouts;
 pub mod validation;
 
 // Re-export public API
+pub use api_key_helpers::format_api_key_status_for_provider;
 pub use config::Config;
 pub use defaults::{load_config, load_config_from_file, load_config_with_overrides};
 pub use lakeview_config::LakeviewConfig;
 pub use loader::{ConfigLoader, ConfigSource};
 pub use logging_config::LoggingConfig;
 pub use mcp_config::{McpConfig, McpServerConfig};
-pub use api_key_helpers::format_api_key_status_for_provider;
 pub use model_params::ModelParameters;
-pub use models_api::{ModelsApiClient, FetchedModel};
+pub use models_api::{FetchedModel, ModelsApiClient};
 pub use persistence::{ConfigPersistence, ConfigUpdate};
 pub use provider::{
     ApiAuthConfig, ApiKeyInfo, ApiKeySource, NetworkConfig, ProviderConfig, RateLimitConfig,
     ResilienceConfig, format_api_key_status,
 };
-pub use provider_registry::{ProviderRegistry, ProviderInfo, ModelInfo};
+pub use provider_registry::{ModelInfo, ProviderInfo, ProviderRegistry};
 pub use tool_config::ToolConfig;
 pub use trajectory_config::TrajectoryConfig;
 pub use validation::ConfigValidator;

@@ -163,7 +163,9 @@ async fn test_onboarding_manager_validate_glm_key_format() {
     // Valid length key should pass
     let mut manager = OnboardingManager::new(dir.path());
     manager.select_provider("glm").unwrap();
-    manager.set_api_key("abcdefghij1234567890abcdefghij12").unwrap();
+    manager
+        .set_api_key("abcdefghij1234567890abcdefghij12")
+        .unwrap();
     let result = manager.validate_api_key().await;
     assert!(result.valid);
 }

@@ -82,7 +82,12 @@ mod tests {
 
     #[test]
     fn test_provider_option_new() {
-        let opt = ProviderOption::new("test", "Test Provider", "A test provider", "https://test.com");
+        let opt = ProviderOption::new(
+            "test",
+            "Test Provider",
+            "A test provider",
+            "https://test.com",
+        );
         assert_eq!(opt.id, "test");
         assert_eq!(opt.name, "Test Provider");
         assert!(!opt.recommended);

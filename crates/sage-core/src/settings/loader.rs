@@ -560,7 +560,8 @@ mod tests {
         let sage_dir = temp_dir.path().join(".sage");
         fs::create_dir(&sage_dir).unwrap();
 
-        let settings_content = r#"{"permissions": {"allow": ["Read(*)"], "default_behavior": "allow"}}"#;
+        let settings_content =
+            r#"{"permissions": {"allow": ["Read(*)"], "default_behavior": "allow"}}"#;
         fs::write(sage_dir.join("settings.json"), settings_content).unwrap();
 
         let loader = SettingsLoader::from_directory(temp_dir.path());

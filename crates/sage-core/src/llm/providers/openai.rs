@@ -81,9 +81,10 @@ impl OpenAiProvider {
             return Err(super::error_utils::handle_http_error(response, "OpenAI").await);
         }
 
-        let response_json: Value = response.json().await.map_err(|e| {
-            super::error_utils::handle_parse_error(e, "OpenAI")
-        })?;
+        let response_json: Value = response
+            .json()
+            .await
+            .map_err(|e| super::error_utils::handle_parse_error(e, "OpenAI"))?;
 
         ResponseParser::parse_openai(response_json)
     }

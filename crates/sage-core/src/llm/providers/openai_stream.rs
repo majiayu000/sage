@@ -14,10 +14,9 @@ use serde_json::Value;
 /// - JSON with `choices[0].delta.content`
 /// - `[DONE]` termination marker
 pub fn openai_sse_stream(
-    byte_stream: impl futures::Stream<
-            Item = Result<impl AsRef<[u8]> + Send + 'static, reqwest::Error>,
-        > + Send
-        + 'static,
+    byte_stream: impl futures::Stream<Item = Result<impl AsRef<[u8]> + Send + 'static, reqwest::Error>>
+    + Send
+    + 'static,
 ) -> LlmStream {
     let stream = byte_stream.filter_map(|chunk_result| async move {
         match chunk_result {

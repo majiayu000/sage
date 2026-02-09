@@ -78,7 +78,10 @@ impl UnifiedExecutor {
             .create_user_message(content);
 
         let storage = self.session_manager.jsonl_storage().cloned();
-        let session_id = self.session_manager.current_session_id().map(|s| s.to_string());
+        let session_id = self
+            .session_manager
+            .current_session_id()
+            .map(|s| s.to_string());
 
         if let (Some(storage), Some(session_id)) = (storage, session_id) {
             storage

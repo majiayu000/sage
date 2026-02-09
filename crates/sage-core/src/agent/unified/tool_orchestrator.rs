@@ -1,7 +1,7 @@
 //! Tool orchestration with three-phase execution model:
 //! Pre-execution (hooks), Execution (tool), Post-execution (result hooks)
 
-use crate::checkpoints::{CheckpointManager, CheckpointId, RestoreOptions};
+use crate::checkpoints::{CheckpointId, CheckpointManager, RestoreOptions};
 use crate::error::{SageError, SageResult};
 use crate::hooks::{HookEvent, HookExecutor, HookInput};
 use crate::recovery::supervisor::{SupervisionPolicy, SupervisionResult, TaskSupervisor};
@@ -227,7 +227,10 @@ impl ToolOrchestrator {
                 if manager.should_checkpoint_for_tool(&tool_call.name) {
                     let affected_files = self.extract_affected_files(tool_call);
                     if !affected_files.is_empty() {
-                        match manager.create_pre_tool_checkpoint(&tool_call.name, &affected_files).await {
+                        match manager
+                            .create_pre_tool_checkpoint(&tool_call.name, &affected_files)
+                            .await
+                        {
                             Ok(checkpoint) => {
                                 tracing::debug!(
                                     tool = %tool_call.name,
@@ -271,10 +274,7 @@ impl ToolOrchestrator {
         // Check if any hook blocked execution
         for result in &results {
             if !result.should_continue() {
-                let reason = result
-                    .message()
-                    .unwrap_or("Blocked by hook")
-                    .to_string();
+                let reason = result.message().unwrap_or("Blocked by hook").to_string();
                 tracing::warn!(
                     tool = %tool_call.name,
                     reason = %reason,
@@ -292,7 +292,9 @@ impl ToolOrchestrator {
         let mut files = Vec::new();
 
         // Write/Edit tools use file_path or path
-        if let Some(path) = tool_call.arguments.get("file_path")
+        if let Some(path) = tool_call
+            .arguments
+            .get("file_path")
             .or_else(|| tool_call.arguments.get("path"))
             .and_then(|v| v.as_str())
         {
@@ -300,9 +302,7 @@ impl ToolOrchestrator {
         }
 
         // MultiEdit may have multiple files
-        if let Some(edits) = tool_call.arguments.get("edits")
-            .and_then(|v| v.as_array())
-        {
+        if let Some(edits) = tool_call.arguments.get("edits").and_then(|v| v.as_array()) {
             for edit in edits {
                 if let Some(path) = edit.get("file_path").and_then(|v| v.as_str()) {
                     files.push(PathBuf::from(path));
@@ -347,7 +347,10 @@ impl ToolOrchestrator {
                         // Create an error from the tool failure for supervision to handle
                         Err(SageError::tool(
                             &call.name,
-                            result.output.clone().unwrap_or_else(|| "Tool failed".to_string()),
+                            result
+                                .output
+                                .clone()
+                                .unwrap_or_else(|| "Tool failed".to_string()),
                         ))
                     }
                 }
@@ -433,7 +436,10 @@ impl ToolOrchestrator {
             if let Some(manager) = &self.checkpoint_manager {
                 let last_id = self.last_checkpoint_id.read().await;
                 if let Some(checkpoint_id) = last_id.as_ref() {
-                    match manager.restore(checkpoint_id, RestoreOptions::files_only()).await {
+                    match manager
+                        .restore(checkpoint_id, RestoreOptions::files_only())
+                        .await
+                    {
                         Ok(result) => {
                             tracing::info!(
                                 tool = %tool_call.name,
@@ -494,7 +500,9 @@ impl ToolOrchestrator {
         if let Some(manager) = &self.checkpoint_manager {
             let last_id = self.last_checkpoint_id.read().await;
             if let Some(checkpoint_id) = last_id.as_ref() {
-                let result = manager.restore(checkpoint_id, RestoreOptions::files_only()).await?;
+                let result = manager
+                    .restore(checkpoint_id, RestoreOptions::files_only())
+                    .await?;
                 tracing::info!(
                     checkpoint_id = %checkpoint_id.short(),
                     restored = result.restored_count(),

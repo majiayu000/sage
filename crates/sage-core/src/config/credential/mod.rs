@@ -54,8 +54,8 @@ mod unified_loader;
 pub use cli_overrides::CliOverrides;
 pub use credentials_file::CredentialsFile;
 pub use hint::{
-    HintType, StatusBarHint, hint_configured, hint_from_status,
-    hint_validation_failed, hint_welcome,
+    HintType, StatusBarHint, hint_configured, hint_from_status, hint_validation_failed,
+    hint_welcome,
 };
 pub use loaded_config::LoadedConfig;
 pub use providers::{ProviderEnvConfig, auto_import_paths, default_providers};

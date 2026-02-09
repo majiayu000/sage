@@ -117,11 +117,11 @@ impl LlmClient {
         // Create circuit breaker for this provider
         // LLM calls benefit from a lenient configuration due to natural latency variance
         let circuit_breaker_config = CircuitBreakerConfig {
-            failure_threshold: 5,        // Open after 5 consecutive failures
-            success_threshold: 2,        // Close after 2 successes in half-open
+            failure_threshold: 5,                   // Open after 5 consecutive failures
+            success_threshold: 2,                   // Close after 2 successes in half-open
             reset_timeout: Duration::from_secs(30), // Try again after 30s
             window_size: Duration::from_secs(60),   // Count failures in 60s window
-            half_open_max_requests: 2,   // Allow 2 test requests in half-open
+            half_open_max_requests: 2,              // Allow 2 test requests in half-open
         };
         let circuit_breaker = Arc::new(CircuitBreaker::with_config(
             format!("llm_{}", provider.name()),

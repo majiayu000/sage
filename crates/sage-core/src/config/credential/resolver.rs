@@ -61,7 +61,10 @@ impl CredentialResolver {
         // 2. Check environment variables
         if let Ok(key) = env::var(env_var) {
             if !key.is_empty() {
-                debug!("Found {} key from environment variable {}", provider, env_var);
+                debug!(
+                    "Found {} key from environment variable {}",
+                    provider, env_var
+                );
                 return ResolvedCredential::new(key, provider, CredentialSource::env(env_var));
             }
         }

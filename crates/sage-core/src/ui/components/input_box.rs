@@ -34,7 +34,11 @@ impl InputBox {
                     .bold()
                     .into_element(),
             )
-            .child(Text::new(&self.state.text).color(Colors::TEXT).into_element())
+            .child(
+                Text::new(&self.state.text)
+                    .color(Colors::TEXT)
+                    .into_element(),
+            )
             .child(
                 Text::new("█") // Cursor
                     .color(Colors::CURSOR)

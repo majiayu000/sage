@@ -85,7 +85,10 @@ impl OnboardingManager {
     /// Select a provider
     pub fn select_provider(&mut self, provider_id: &str) -> SageResult<()> {
         if !self.providers.iter().any(|p| p.id == provider_id) {
-            return Err(SageError::config(format!("Unknown provider: {}", provider_id)));
+            return Err(SageError::config(format!(
+                "Unknown provider: {}",
+                provider_id
+            )));
         }
         self.state.set_provider(provider_id);
         debug!("Selected provider: {}", provider_id);
@@ -98,7 +101,10 @@ impl OnboardingManager {
             return Err(SageError::config("API key cannot be empty"));
         }
         self.state.set_api_key(api_key);
-        debug!("API key set for {}", self.state.selected_provider.as_deref().unwrap_or("unknown"));
+        debug!(
+            "API key set for {}",
+            self.state.selected_provider.as_deref().unwrap_or("unknown")
+        );
         Ok(())
     }
 
@@ -120,7 +126,8 @@ impl OnboardingManager {
         if result.valid {
             self.state.mark_key_validated();
         } else {
-            self.state.mark_key_invalid(result.error.clone().unwrap_or_default());
+            self.state
+                .mark_key_invalid(result.error.clone().unwrap_or_default());
         }
         result
     }

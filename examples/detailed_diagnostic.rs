@@ -2,8 +2,8 @@
 //! Run: cargo run --example detailed_diagnostic
 
 use crossterm::terminal;
-use rnk::prelude::*;
 use rnk::prelude::Box as RnkBox;
+use rnk::prelude::*;
 
 fn main() {
     let (term_width, term_height) = terminal::size().unwrap_or((80, 24));
@@ -72,7 +72,12 @@ fn main() {
     println!("=== Test 5: Full sage-like UI ===");
     let welcome = RnkBox::new()
         .flex_direction(FlexDirection::Column)
-        .child(Text::new("Sage Agent").color(Color::Cyan).bold().into_element())
+        .child(
+            Text::new("Sage Agent")
+                .color(Color::Cyan)
+                .bold()
+                .into_element(),
+        )
         .child(Text::new("Subtitle").dim().into_element())
         .into_element();
 
@@ -102,9 +107,13 @@ fn main() {
     for (i, line) in output.lines().enumerate() {
         let has_ansi = line.contains('\x1b');
         let display_len = strip_ansi(line).len();
-        println!("  Line {}: len={}, has_ansi={}, content='{}'",
-            i, display_len, has_ansi,
-            strip_ansi(line).chars().take(40).collect::<String>());
+        println!(
+            "  Line {}: len={}, has_ansi={}, content='{}'",
+            i,
+            display_len,
+            has_ansi,
+            strip_ansi(line).chars().take(40).collect::<String>()
+        );
     }
     println!();
 

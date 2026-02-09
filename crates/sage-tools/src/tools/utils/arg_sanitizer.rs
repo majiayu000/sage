@@ -219,10 +219,7 @@ pub fn validate_env_var(env_var: &str) -> Result<(), ToolError> {
         ));
     }
 
-    if !key
-        .chars()
-        .all(|c| c.is_alphanumeric() || c == '_')
-    {
+    if !key.chars().all(|c| c.is_alphanumeric() || c == '_') {
         return Err(ToolError::InvalidArguments(format!(
             "Environment variable key contains invalid characters: '{}'",
             key

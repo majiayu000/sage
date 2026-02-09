@@ -135,7 +135,10 @@ impl PhaseSignals {
 
     /// Record a tool usage
     pub fn record_tool_use(&mut self, tool_name: &str) {
-        *self.recent_tool_usage.entry(tool_name.to_string()).or_insert(0) += 1;
+        *self
+            .recent_tool_usage
+            .entry(tool_name.to_string())
+            .or_insert(0) += 1;
     }
 
     /// Check if a specific tool was used
@@ -155,7 +158,9 @@ impl PhaseSignals {
 
     /// Check if a keyword was detected
     pub fn has_keyword(&self, keyword: &str) -> bool {
-        self.detected_keywords.iter().any(|k| k.eq_ignore_ascii_case(keyword))
+        self.detected_keywords
+            .iter()
+            .any(|k| k.eq_ignore_ascii_case(keyword))
     }
 }
 
@@ -268,17 +273,12 @@ impl PhaseDetector {
 
     /// Count tool usage in a category
     fn count_tool_category(&self, signals: &PhaseSignals, tools: &[String]) -> usize {
-        tools
-            .iter()
-            .map(|t| signals.tool_usage_count(t))
-            .sum()
+        tools.iter().map(|t| signals.tool_usage_count(t)).sum()
     }
 
     /// Check if debug keywords are present
     fn has_debug_keywords(&self, signals: &PhaseSignals) -> bool {
-        self.debug_keywords
-            .iter()
-            .any(|kw| signals.has_keyword(kw))
+        self.debug_keywords.iter().any(|kw| signals.has_keyword(kw))
     }
 
     /// Check if completion keywords are present
@@ -464,7 +464,11 @@ impl ContextAwareConfig {
     }
 
     /// Add a custom phase override
-    pub fn with_phase_override(mut self, phase: ConversationPhase, prompt: impl Into<String>) -> Self {
+    pub fn with_phase_override(
+        mut self,
+        phase: ConversationPhase,
+        prompt: impl Into<String>,
+    ) -> Self {
         self.phase_overrides.insert(phase, prompt.into());
         self
     }

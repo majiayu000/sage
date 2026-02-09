@@ -117,10 +117,7 @@ pub async fn handle_stream_http_error(response: reqwest::Response, provider: &st
 pub fn handle_parse_error(err: reqwest::Error, provider: &str) -> SageError {
     SageError::llm_with_context(
         format!("Failed to parse {} response: {}", provider, err),
-        format!(
-            "Failed to deserialize {} API response as JSON",
-            provider
-        ),
+        format!("Failed to deserialize {} API response as JSON", provider),
     )
 }
 

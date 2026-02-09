@@ -231,10 +231,7 @@ mod tests {
         let sanitized = SchemaTranslator::sanitize_json_schema(&schema);
 
         // null description should be converted to empty string
-        assert_eq!(
-            sanitized["properties"]["name"]["description"],
-            json!("")
-        );
+        assert_eq!(sanitized["properties"]["name"]["description"], json!(""));
     }
 
     #[test]

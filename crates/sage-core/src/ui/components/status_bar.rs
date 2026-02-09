@@ -44,9 +44,12 @@ impl StatusBar {
 
         // Model and provider
         row = row.child(
-            Text::new(format!("{} · {}", self.session.model, self.session.provider))
-                .color(Colors::TEXT_DIM)
-                .into_element(),
+            Text::new(format!(
+                "{} · {}",
+                self.session.model, self.session.provider
+            ))
+            .color(Colors::TEXT_DIM)
+            .into_element(),
         );
 
         // Git branch if available

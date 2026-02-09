@@ -7,8 +7,8 @@ use crate::types::TaskMetadata;
 use anyhow::Context;
 use tracing::instrument;
 
-use super::event_manager::ExecutionEvent;
 use super::UnifiedExecutor;
+use super::event_manager::ExecutionEvent;
 
 impl UnifiedExecutor {
     /// Execute a task with the unified execution loop

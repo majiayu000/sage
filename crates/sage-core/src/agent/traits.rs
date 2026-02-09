@@ -203,7 +203,11 @@ impl SessionRecorderService for NoopSessionRecorder {
     async fn record_user_message(&mut self, _: &str) -> SageResult<()> {
         Ok(())
     }
-    async fn record_assistant_message(&mut self, _: &str, _: Option<&[ToolCall]>) -> SageResult<()> {
+    async fn record_assistant_message(
+        &mut self,
+        _: &str,
+        _: Option<&[ToolCall]>,
+    ) -> SageResult<()> {
         Ok(())
     }
     async fn record_tool_result(&mut self, _: &ToolResult) -> SageResult<()> {

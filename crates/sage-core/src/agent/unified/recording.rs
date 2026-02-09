@@ -16,7 +16,12 @@ pub async fn record_tool_call(
     arguments: &serde_json::Value,
 ) {
     let tool_input = arguments.clone();
-    if let Err(e) = recorder.lock().await.record_tool_call(tool_name, tool_input).await {
+    if let Err(e) = recorder
+        .lock()
+        .await
+        .record_tool_call(tool_name, tool_input)
+        .await
+    {
         tracing::warn!(error = %e, tool_name = %tool_name, "Failed to record tool call");
     }
 }

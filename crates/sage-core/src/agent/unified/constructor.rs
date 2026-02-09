@@ -40,8 +40,8 @@ impl UnifiedExecutor {
         );
 
         // Create LLM orchestrator (handles all LLM communication)
-        let llm_orchestrator = LlmOrchestrator::from_config(&config)
-            .context("Failed to create LLM orchestrator")?;
+        let llm_orchestrator =
+            LlmOrchestrator::from_config(&config).context("Failed to create LLM orchestrator")?;
 
         // Create tool executor and hook executor
         let tool_executor = ToolExecutor::new();

@@ -106,11 +106,9 @@ impl ToolCall {
 
     /// Require a path argument, returning error if missing
     pub fn require_path(&self, key: &str) -> Result<PathBuf, ToolError> {
-        self.get_string(key)
-            .map(PathBuf::from)
-            .ok_or_else(|| {
-                ToolError::InvalidArguments(format!("Missing required parameter '{}'", key))
-            })
+        self.get_string(key).map(PathBuf::from).ok_or_else(|| {
+            ToolError::InvalidArguments(format!("Missing required parameter '{}'", key))
+        })
     }
 
     /// Require a boolean argument, returning error if missing
@@ -475,10 +473,7 @@ mod tests {
         let call = ToolCall::new("1", "Write", args);
 
         // Should find "filePath" when asking for "file_path"
-        assert_eq!(
-            call.get_string("file_path"),
-            Some("/test/path".to_string())
-        );
+        assert_eq!(call.get_string("file_path"), Some("/test/path".to_string()));
 
         // Should find exact match
         assert_eq!(call.get_string("content"), Some("hello".to_string()));
@@ -492,9 +487,6 @@ mod tests {
         let call = ToolCall::new("1", "Write", args);
 
         // Should find "file_path" when asking for "filePath"
-        assert_eq!(
-            call.get_string("filePath"),
-            Some("/test/path".to_string())
-        );
+        assert_eq!(call.get_string("filePath"), Some("/test/path".to_string()));
     }
 }

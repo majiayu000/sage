@@ -7,8 +7,8 @@ pub mod task_output;
 
 // Re-export tools
 pub use bash::{
-    BashTool, requires_user_confirmation, validate_command_comprehensive, validate_command_security,
-    validate_command_with_strictness,
+    BashTool, requires_user_confirmation, validate_command_comprehensive,
+    validate_command_security, validate_command_with_strictness,
 };
 pub use kill_shell::KillShellTool;
 pub use task::{

@@ -4,7 +4,7 @@ use crate::agent::{AgentExecution, AgentState, AgentStep, ExecutionError, Execut
 use crate::error::{SageError, SageResult, UnifiedError};
 use crate::session::{EnhancedTokenUsage, EnhancedToolCall};
 #[allow(deprecated)]
-use crate::ui::bridge::{emit_event, AgentEvent};
+use crate::ui::bridge::{AgentEvent, emit_event};
 
 use super::UnifiedExecutor;
 
@@ -153,7 +153,8 @@ impl UnifiedExecutor {
                         }
 
                         // Record error in JSONL session (for user visibility)
-                        if let Err(e) = self.record_error_message(error_type, &error_message).await {
+                        if let Err(e) = self.record_error_message(error_type, &error_message).await
+                        {
                             tracing::warn!(
                                 error = %e,
                                 "Failed to record error message in session (non-fatal)"

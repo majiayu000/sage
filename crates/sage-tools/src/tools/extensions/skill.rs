@@ -97,8 +97,7 @@ impl SkillTool {
         let registry = self.registry.read().await;
         let skill = registry.get(skill_name)?;
 
-        let context = SkillContext::new("")
-            .with_working_dir(&self.working_dir);
+        let context = SkillContext::new("").with_working_dir(&self.working_dir);
 
         Some(skill.get_prompt_with_args(&context, args))
     }
@@ -114,12 +113,15 @@ impl SkillTool {
     }
 
     /// Execute the skill
-    async fn execute_skill(&self, skill_name: &str, args: Option<&str>) -> Result<String, ToolError> {
+    async fn execute_skill(
+        &self,
+        skill_name: &str,
+        args: Option<&str>,
+    ) -> Result<String, ToolError> {
         let registry = self.registry.read().await;
 
         if let Some(skill) = registry.get(skill_name) {
-            let context = SkillContext::new("")
-                .with_working_dir(&self.working_dir);
+            let context = SkillContext::new("").with_working_dir(&self.working_dir);
 
             let prompt = skill.get_prompt_with_args(&context, args);
 
@@ -249,14 +251,17 @@ mod tests {
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
-        assert!(result.output.as_ref().unwrap().contains("rust-expert") ||
-                result.output.as_ref().unwrap().contains("Rust"));
+        assert!(
+            result.output.as_ref().unwrap().contains("rust-expert")
+                || result.output.as_ref().unwrap().contains("Rust")
+        );
     }
 
     #[tokio::test]
     async fn test_skill_with_args() {
         let tool = SkillTool::new();
-        let call = create_tool_call_with_args("test-args", "Skill", "comprehensive-testing", "src/lib.rs");
+        let call =
+            create_tool_call_with_args("test-args", "Skill", "comprehensive-testing", "src/lib.rs");
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);

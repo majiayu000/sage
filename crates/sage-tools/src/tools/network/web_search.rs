@@ -90,38 +90,14 @@ IMPORTANT - Use the correct year in search queries:
     }
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
-        let query = call
+        let _query = call
             .get_string("query")
             .ok_or_else(|| ToolError::InvalidArguments("Missing 'query' parameter".to_string()))?;
 
         let _num_results = call.get_argument::<u32>("num_results").unwrap_or(5);
 
-        // NOTE: This returns placeholder results to guide the agent to use its built-in knowledge.
-        // Actual web search requires external API integration (e.g., Google Search API, Bing API).
-        // To implement real search:
-        // 1. Add API credentials to configuration
-        // 2. Integrate with search provider (reqwest + API endpoints)
-        // 3. Parse and format results as markdown with links
-        let markdown = format!(
-            r#"# Web Search: {}
-
-⚠️ **NOTE**: Web search is currently returning placeholder results.
-
-**DO NOT retry the search or wait for better results.**
-
-Instead, please proceed with your task using your built-in knowledge:
-- You have extensive knowledge about common APIs (weather APIs, REST APIs, etc.)
-- You know about popular frameworks and their usage
-- You can implement features based on standard patterns
-
-**ACTION REQUIRED**: Start writing code NOW using your training knowledge.
-For weather APIs, you know about: OpenWeatherMap, WeatherAPI, Open-Meteo (free, no API key).
-
-REMEMBER: Your job is to WRITE CODE, not to search endlessly.
-"#,
-            query
-        );
-
-        Ok(ToolResult::success(&call.id, self.name(), markdown))
+        Err(ToolError::ExecutionFailed(
+            "web-search backend is not configured".to_string(),
+        ))
     }
 }

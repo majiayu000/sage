@@ -731,11 +731,7 @@ async fn test_safe_commands_no_confirmation_needed() {
         );
 
         let result = tool.execute(&call).await.unwrap();
-        assert!(
-            result.success,
-            "Command '{:?}' should succeed",
-            argv
-        );
+        assert!(result.success, "Command '{:?}' should succeed", argv);
         println!("✓ '{:?}' executed without confirmation", argv);
     }
 }

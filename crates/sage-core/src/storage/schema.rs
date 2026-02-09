@@ -105,7 +105,13 @@ impl MigrationRunner {
 
         if let Some(row) = result.first() {
             if let Some(version) = row.get_i64("version") {
-                return Ok(Some(SchemaVersion::new(version as u32)));
+                let version = u32::try_from(version).map_err(|_| {
+                    DatabaseError::Migration(format!(
+                        "Invalid schema version in database: {} (expected non-negative u32)",
+                        version
+                    ))
+                })?;
+                return Ok(Some(SchemaVersion::new(version)));
             }
         }
 
@@ -219,8 +225,15 @@ impl MigrationRunner {
         let mut records = Vec::new();
         for row in result.rows {
             if let (Some(version), Some(name)) = (row.get_i64("version"), row.get_str("name")) {
+                let version = u32::try_from(version).map_err(|_| {
+                    DatabaseError::Migration(format!(
+                        "Invalid migration history version in database: {} (expected non-negative u32)",
+                        version
+                    ))
+                })?;
+
                 records.push(MigrationRecord {
-                    version: SchemaVersion::new(version as u32),
+                    version: SchemaVersion::new(version),
                     name: name.to_string(),
                     applied_at: row.get_str("applied_at").map(|s| s.to_string()),
                 });

@@ -118,12 +118,19 @@ impl UnifiedConfigLoader {
                 }
                 Err(e) => {
                     warn!("Failed to load config file {}: {}", path.display(), e);
-                    warnings.push(format!("Config file {} could not be loaded: {}", path.display(), e));
+                    warnings.push(format!(
+                        "Config file {} could not be loaded: {}",
+                        path.display(),
+                        e
+                    ));
                 }
             }
         } else {
             debug!("Config file {} not found, using defaults", path.display());
-            warnings.push(format!("Config file {} not found, using defaults", path.display()));
+            warnings.push(format!(
+                "Config file {} not found, using defaults",
+                path.display()
+            ));
         }
         None
     }
@@ -155,11 +162,10 @@ impl UnifiedConfigLoader {
 
     /// Load a config file
     fn load_config_file(&self, path: &Path) -> Result<Config, String> {
-        let content = std::fs::read_to_string(path)
-            .map_err(|e| format!("Failed to read file: {}", e))?;
+        let content =
+            std::fs::read_to_string(path).map_err(|e| format!("Failed to read file: {}", e))?;
 
-        serde_json::from_str(&content)
-            .map_err(|e| format!("Failed to parse config: {}", e))
+        serde_json::from_str(&content).map_err(|e| format!("Failed to parse config: {}", e))
     }
 
     /// Apply CLI overrides to the config
@@ -193,10 +199,17 @@ impl UnifiedConfigLoader {
                 if let Some(params) = config.model_providers.get_mut(&cred.provider) {
                     let should_update = params.api_key.is_none()
                         || params.api_key.as_deref() == Some("")
-                        || params.api_key.as_deref().is_some_and(|k| k.starts_with("${"));
+                        || params
+                            .api_key
+                            .as_deref()
+                            .is_some_and(|k| k.starts_with("${"));
                     if should_update {
                         params.api_key = Some(value.to_string());
-                        debug!("Applied {} API key from {}", cred.provider, cred.source.priority().name());
+                        debug!(
+                            "Applied {} API key from {}",
+                            cred.provider,
+                            cred.source.priority().name()
+                        );
                     }
                 }
             }
@@ -205,11 +218,14 @@ impl UnifiedConfigLoader {
 
     /// Create a credential resolver based on current settings
     fn create_credential_resolver(&self) -> CredentialResolver {
-        let mut config = ResolverConfig::new(&self.working_dir)
-            .with_global_dir(&self.global_dir);
+        let mut config = ResolverConfig::new(&self.working_dir).with_global_dir(&self.global_dir);
 
         if let Some(ref api_key) = self.cli_overrides.api_key {
-            let provider = self.cli_overrides.provider.as_deref().unwrap_or("anthropic");
+            let provider = self
+                .cli_overrides
+                .provider
+                .as_deref()
+                .unwrap_or("anthropic");
             config = config.with_cli_key(provider, api_key);
         }
 

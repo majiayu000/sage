@@ -143,7 +143,15 @@ impl SessionManager {
         execution_time_ms: u64,
     ) {
         if let Some(recorder) = &self.session_recorder {
-            recording::record_tool_result(recorder, tool_name, success, output, error, execution_time_ms).await;
+            recording::record_tool_result(
+                recorder,
+                tool_name,
+                success,
+                output,
+                error,
+                execution_time_ms,
+            )
+            .await;
         }
     }
 

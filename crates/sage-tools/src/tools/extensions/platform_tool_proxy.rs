@@ -80,8 +80,7 @@ impl Tool for PlatformToolProxy {
             self.name(),
             format!(
                 "Platform tool '{}' has been invoked with the following parameters:\n\n{}\n\n⚠️  Note: This is a platform-provided tool (e.g., GLM built-in tool).\nThe execution result will be provided by the platform in its next response.\nPlease wait for the platform to complete the operation.",
-                call.name,
-                args_display
+                call.name, args_display
             ),
         ))
     }
@@ -159,10 +158,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_custom_platform_tool() {
-        let tool = PlatformToolProxy::new(
-            "custom_tool",
-            "Custom platform tool for testing",
-        );
+        let tool = PlatformToolProxy::new("custom_tool", "Custom platform tool for testing");
         assert_eq!(tool.name(), "custom_tool");
         assert!(tool.description().contains("Custom platform tool"));
     }

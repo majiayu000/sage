@@ -137,10 +137,7 @@ impl RetryConfig {
                 "timeout".to_string(),
                 "busy".to_string(),
             ],
-            no_retry_on_messages: vec![
-                "constraint".to_string(),
-                "syntax".to_string(),
-            ],
+            no_retry_on_messages: vec!["constraint".to_string(), "syntax".to_string()],
             initial_delay: Duration::from_millis(100),
             max_delay: Duration::from_secs(5),
             backoff_multiplier: 2.0,

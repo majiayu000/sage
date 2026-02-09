@@ -229,7 +229,11 @@ impl LspTool {
             return Err(ToolError::ExecutionFailed(format!(
                 "LSP server for '{}' is not installed. Install '{}' to enable this feature.",
                 language,
-                self.config.servers.get(&language).map(|c| c.command.as_str()).unwrap_or("unknown")
+                self.config
+                    .servers
+                    .get(&language)
+                    .map(|c| c.command.as_str())
+                    .unwrap_or("unknown")
             )));
         }
 
@@ -278,12 +282,7 @@ impl LspTool {
     }
 
     /// Get hover information
-    async fn hover(
-        &self,
-        file_path: &str,
-        line: u32,
-        character: u32,
-    ) -> Result<String, ToolError> {
+    async fn hover(&self, file_path: &str, line: u32, character: u32) -> Result<String, ToolError> {
         let path = Path::new(file_path);
         let language = self.detect_language(path).ok_or_else(|| {
             ToolError::ExecutionFailed(format!(

@@ -101,9 +101,10 @@ impl GlmProvider {
             return Err(super::error_utils::handle_http_error(response, "GLM").await);
         }
 
-        let response_json: Value = response.json().await.map_err(|e| {
-            super::error_utils::handle_parse_error(e, "GLM")
-        })?;
+        let response_json: Value = response
+            .json()
+            .await
+            .map_err(|e| super::error_utils::handle_parse_error(e, "GLM"))?;
 
         tracing::debug!(
             "GLM API response: {}",
@@ -162,9 +163,16 @@ impl GlmProvider {
             "GLM streaming: url={}, has_api_key={}, key_preview={}",
             url,
             api_key.is_some(),
-            api_key.as_ref().map(|k| {
-                if k.len() > 8 { format!("{}...{}", &k[..4], &k[k.len()-4..]) } else { "***".to_string() }
-            }).unwrap_or_else(|| "NONE".to_string())
+            api_key
+                .as_ref()
+                .map(|k| {
+                    if k.len() > 8 {
+                        format!("{}...{}", &k[..4], &k[k.len() - 4..])
+                    } else {
+                        "***".to_string()
+                    }
+                })
+                .unwrap_or_else(|| "NONE".to_string())
         );
         if let Some(key) = api_key {
             request = request.header("x-api-key", key);
@@ -188,7 +196,8 @@ impl GlmProvider {
 
         let byte_stream = response.bytes_stream();
         Ok(super::anthropic_stream::anthropic_sse_stream(
-            byte_stream, "GLM",
+            byte_stream,
+            "GLM",
         ))
     }
 }

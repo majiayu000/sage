@@ -109,7 +109,11 @@ impl TeammateTool {
 
         let request = self
             .manager
-            .request_join(&team_name, proposed_name.as_deref(), capabilities.as_deref())
+            .request_join(
+                &team_name,
+                proposed_name.as_deref(),
+                capabilities.as_deref(),
+            )
             .await
             .map_err(|e| ToolError::ExecutionFailed(e))?;
 

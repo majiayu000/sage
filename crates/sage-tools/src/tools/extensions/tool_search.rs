@@ -344,9 +344,7 @@ impl ToolSearchTool {
             ));
         }
 
-        output.push_str(
-            "All returned tools are now loaded and available to call directly.",
-        );
+        output.push_str("All returned tools are now loaded and available to call directly.");
 
         output
     }
@@ -439,13 +437,21 @@ mod tests {
             registry.register_deferred(DeferredToolInfo {
                 name: "mcp__slack__read_channel".to_string(),
                 description: "Read messages from a Slack channel".to_string(),
-                keywords: vec!["slack".to_string(), "message".to_string(), "read".to_string()],
+                keywords: vec![
+                    "slack".to_string(),
+                    "message".to_string(),
+                    "read".to_string(),
+                ],
                 source: "mcp".to_string(),
             });
             registry.register_deferred(DeferredToolInfo {
                 name: "mcp__slack__send_message".to_string(),
                 description: "Send a message to a Slack channel".to_string(),
-                keywords: vec!["slack".to_string(), "message".to_string(), "send".to_string()],
+                keywords: vec![
+                    "slack".to_string(),
+                    "message".to_string(),
+                    "send".to_string(),
+                ],
                 source: "mcp".to_string(),
             });
         }
@@ -487,13 +493,21 @@ mod tests {
             registry.register_deferred(DeferredToolInfo {
                 name: "linear_create_issue".to_string(),
                 description: "Create a Linear issue".to_string(),
-                keywords: vec!["linear".to_string(), "issue".to_string(), "create".to_string()],
+                keywords: vec![
+                    "linear".to_string(),
+                    "issue".to_string(),
+                    "create".to_string(),
+                ],
                 source: "mcp".to_string(),
             });
             registry.register_deferred(DeferredToolInfo {
                 name: "github_create_issue".to_string(),
                 description: "Create a GitHub issue".to_string(),
-                keywords: vec!["github".to_string(), "issue".to_string(), "create".to_string()],
+                keywords: vec![
+                    "github".to_string(),
+                    "issue".to_string(),
+                    "create".to_string(),
+                ],
                 source: "mcp".to_string(),
             });
         }
@@ -521,7 +535,13 @@ mod tests {
         let call = create_tool_call("nonexistent_tool_xyz");
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
-        assert!(result.output.as_ref().unwrap().contains("No matching tools"));
+        assert!(
+            result
+                .output
+                .as_ref()
+                .unwrap()
+                .contains("No matching tools")
+        );
     }
 
     #[test]

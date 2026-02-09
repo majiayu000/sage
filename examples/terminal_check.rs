@@ -30,7 +30,9 @@ fn main() {
     println!("\n4. Visual ruler (every 10 chars):");
     let ruler: String = (1..=20).map(|n| format!("{:<10}", n * 10)).collect();
     println!("   {}", ruler);
-    let ticks: String = (0..200).map(|i| if i % 10 == 0 { '|' } else { '-' }).collect();
+    let ticks: String = (0..200)
+        .map(|i| if i % 10 == 0 { '|' } else { '-' })
+        .collect();
     println!("   {}", &ticks[..ticks.len().min(200)]);
 
     // Test what sage sees
@@ -45,7 +47,10 @@ fn main() {
             println!("Large terminal width detected ({}). This is fine.", w);
             println!("If UI is misaligned, the issue is in the layout code.");
         } else if w < 60 {
-            println!("Small terminal width detected ({}). Try widening your terminal.", w);
+            println!(
+                "Small terminal width detected ({}). Try widening your terminal.",
+                w
+            );
         } else {
             println!("Normal terminal width ({}).", w);
         }

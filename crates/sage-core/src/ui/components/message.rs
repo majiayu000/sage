@@ -11,7 +11,11 @@ use rnk::prelude::*;
 pub fn MessageList(messages: Vec<Message>) -> Element {
     Box::new()
         .flex_direction(FlexDirection::Column)
-        .children(messages.into_iter().map(|msg| MessageView::new(msg).render()))
+        .children(
+            messages
+                .into_iter()
+                .map(|msg| MessageView::new(msg).render()),
+        )
         .into_element()
 }
 
@@ -57,7 +61,12 @@ impl MessageView {
                 children.push(
                     Box::new()
                         .flex_direction(FlexDirection::Row)
-                        .child(Text::new(format!("{} ", icon)).color(color).bold().into_element())
+                        .child(
+                            Text::new(format!("{} ", icon))
+                                .color(color)
+                                .bold()
+                                .into_element(),
+                        )
                         .child(Text::new(*line).color(Colors::TEXT).into_element())
                         .into_element(),
                 );

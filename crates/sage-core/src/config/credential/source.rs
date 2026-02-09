@@ -288,7 +288,10 @@ mod tests {
     #[test]
     fn test_priority_name() {
         assert_eq!(CredentialPriority::CliArgument.name(), "CLI argument");
-        assert_eq!(CredentialPriority::Environment.name(), "Environment variable");
+        assert_eq!(
+            CredentialPriority::Environment.name(),
+            "Environment variable"
+        );
         assert_eq!(CredentialPriority::ProjectConfig.name(), "Project config");
         assert_eq!(CredentialPriority::GlobalConfig.name(), "Global config");
         assert_eq!(CredentialPriority::AutoImported.name(), "Auto-imported");
@@ -323,7 +326,10 @@ mod tests {
 
     #[test]
     fn test_priority_display() {
-        assert_eq!(format!("{}", CredentialPriority::CliArgument), "CLI argument");
+        assert_eq!(
+            format!("{}", CredentialPriority::CliArgument),
+            "CLI argument"
+        );
         assert_eq!(format!("{}", CredentialPriority::Default), "Default");
     }
 

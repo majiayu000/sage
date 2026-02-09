@@ -21,9 +21,11 @@ use super::types::{
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::Mutex as StdMutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 use tokio::sync::{Mutex, RwLock, mpsc, oneshot};
+use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tracing::{debug, error, instrument, warn};
 
@@ -67,6 +69,8 @@ pub struct McpClient {
     request_timeout: Duration,
     /// Notification handler
     notification_handler: RwLock<Option<Box<dyn NotificationHandler>>>,
+    /// Background message receiver task handle
+    receiver_handle: StdMutex<Option<JoinHandle<()>>>,
 }
 
 /// Trait for handling MCP notifications
@@ -96,7 +100,16 @@ impl McpClient {
         let transport = Arc::new(Mutex::new(transport));
         let running = Arc::new(AtomicBool::new(true));
 
-        let client = Self {
+        // Start background message receiver
+        let transport_clone = Arc::clone(&transport);
+        let running_clone = Arc::clone(&running);
+        let receiver_handle = tokio::spawn(Self::message_receiver(
+            transport_clone,
+            command_receiver,
+            running_clone,
+        ));
+
+        Self {
             transport: Arc::clone(&transport),
             server_info: RwLock::new(None),
             capabilities: RwLock::new(McpCapabilities::default()),
@@ -109,18 +122,8 @@ impl McpClient {
             running: Arc::clone(&running),
             request_timeout,
             notification_handler: RwLock::new(Some(Box::new(LoggingNotificationHandler))),
-        };
-
-        // Start background message receiver
-        let transport_clone = Arc::clone(&transport);
-        let running_clone = Arc::clone(&running);
-        tokio::spawn(Self::message_receiver(
-            transport_clone,
-            command_receiver,
-            running_clone,
-        ));
-
-        client
+            receiver_handle: StdMutex::new(Some(receiver_handle)),
+        }
     }
 
     /// Background task that receives messages and routes them
@@ -354,6 +357,19 @@ impl McpClient {
         // Close the transport
         let mut transport = self.transport.lock().await;
         transport.close().await?;
+
+        // Wait for background receiver to finish
+        let handle = {
+            let mut guard = self
+                .receiver_handle
+                .lock()
+                .map_err(|_| McpError::other("receiver handle lock poisoned"))?;
+            guard.take()
+        };
+        if let Some(handle) = handle {
+            let _ = handle.await;
+        }
+
         *self.initialized.write().await = false;
         Ok(())
     }
@@ -419,7 +435,11 @@ impl McpClient {
 
     /// Generate next request ID
     fn next_request_id(&self) -> RequestId {
-        RequestId::Number(self.request_id.fetch_add(1, Ordering::SeqCst) as i64)
+        let id = self.request_id.fetch_add(1, Ordering::SeqCst);
+        match i64::try_from(id) {
+            Ok(n) => RequestId::Number(n),
+            Err(_) => RequestId::String(format!("req-{}", id)),
+        }
     }
 
     /// Ensure the client is initialized
@@ -462,6 +482,11 @@ impl McpClient {
 impl Drop for McpClient {
     fn drop(&mut self) {
         self.running.store(false, Ordering::SeqCst);
+        if let Ok(mut guard) = self.receiver_handle.lock() {
+            if let Some(handle) = guard.take() {
+                handle.abort();
+            }
+        }
     }
 }
 

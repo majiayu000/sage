@@ -104,7 +104,6 @@ pub fn get_default_tools() -> Vec<Arc<dyn Tool>> {
         Arc::new(GrepTool::new()),
         Arc::new(NotebookEditTool::new()),
         Arc::new(CodebaseRetrievalTool::new()), // Smart codebase search
-
         // Process tools
         Arc::new(BashTool::new()),
         Arc::new(KillShellTool::new()),

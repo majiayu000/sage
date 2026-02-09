@@ -2,32 +2,24 @@
 //!
 //! This module handles saving credentials and configuration during onboarding.
 
-use crate::config::credential::CredentialsFile;
 use crate::config::Config;
 use crate::config::ModelParameters;
+use crate::config::credential::CredentialsFile;
 use crate::error::{SageError, SageResult};
 use std::path::Path;
 use tracing::info;
 
 /// Save credentials to the credentials file
-pub fn save_credentials(
-    global_dir: &Path,
-    provider: &str,
-    api_key: &str,
-) -> SageResult<()> {
+pub fn save_credentials(global_dir: &Path, provider: &str, api_key: &str) -> SageResult<()> {
     let creds_path = global_dir.join("credentials.json");
     let mut creds = CredentialsFile::load(&creds_path).unwrap_or_default();
     creds.set_api_key(provider, api_key);
 
-    creds.save(&creds_path).map_err(|e| {
-        SageError::config(format!("Failed to save credentials: {}", e))
-    })?;
+    creds
+        .save(&creds_path)
+        .map_err(|e| SageError::config(format!("Failed to save credentials: {}", e)))?;
 
-    info!(
-        "Saved {} credentials to {}",
-        provider,
-        creds_path.display()
-    );
+    info!("Saved {} credentials to {}", provider, creds_path.display());
 
     Ok(())
 }
@@ -51,9 +43,8 @@ pub fn save_global_config(global_dir: &Path, provider: &str) -> SageResult<()> {
         }
     }
 
-    std::fs::create_dir_all(global_dir).map_err(|e| {
-        SageError::config(format!("Failed to create config directory: {}", e))
-    })?;
+    std::fs::create_dir_all(global_dir)
+        .map_err(|e| SageError::config(format!("Failed to create config directory: {}", e)))?;
 
     let config_json = serde_json::to_string_pretty(&config)
         .map_err(|e| SageError::config(format!("Failed to serialize config: {}", e)))?;

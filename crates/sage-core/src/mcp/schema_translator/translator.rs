@@ -44,8 +44,10 @@ impl SchemaTranslator {
                         if let Value::Object(props) = value {
                             let mut new_props = Map::new();
                             for (prop_name, prop_schema) in props {
-                                new_props
-                                    .insert(prop_name.clone(), Self::sanitize_json_schema(prop_schema));
+                                new_props.insert(
+                                    prop_name.clone(),
+                                    Self::sanitize_json_schema(prop_schema),
+                                );
                             }
                             new_obj.insert(key.clone(), Value::Object(new_props));
                         } else {

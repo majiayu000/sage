@@ -29,10 +29,12 @@ pub use subagent::{
     AgentDefinition, AgentRegistry, AgentType, ToolAccessControl, get_builtin_agents,
     register_builtin_agents,
 };
-pub use unified::{ContextBuilder, GitInfo, ProjectContext, UnifiedExecutor, UnifiedExecutorBuilder};
+pub use unified::{
+    ContextBuilder, GitInfo, ProjectContext, UnifiedExecutor, UnifiedExecutorBuilder,
+};
 
 // Core trait abstractions for dependency injection and testability
 pub use traits::{
-    LlmService, NoopProgressReporter, NoopSessionRecorder, ProgressReporter, SessionRecorderService,
-    ToolService, UserInteractionService,
+    LlmService, NoopProgressReporter, NoopSessionRecorder, ProgressReporter,
+    SessionRecorderService, ToolService, UserInteractionService,
 };

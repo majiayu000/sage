@@ -120,12 +120,8 @@ pub fn validate_command_comprehensive(
         for warning in &result.warnings {
             if warning.severity == sage_core::sandbox::validation::WarningSeverity::Critical {
                 store.record(
-                    Violation::warning(
-                        ViolationType::DangerousPattern,
-                        &warning.message,
-                        command,
-                    )
-                    .with_context(warning.suggestion.clone().unwrap_or_default()),
+                    Violation::warning(ViolationType::DangerousPattern, &warning.message, command)
+                        .with_context(warning.suggestion.clone().unwrap_or_default()),
                 );
             }
         }

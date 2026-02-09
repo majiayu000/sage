@@ -32,9 +32,7 @@ impl ConfigPersistence {
 
     /// Create persistence manager with default paths (~/.sage)
     pub fn with_defaults() -> Self {
-        let base_dir = dirs::home_dir()
-            .unwrap_or_default()
-            .join(".sage");
+        let base_dir = dirs::home_dir().unwrap_or_default().join(".sage");
         Self::new(&base_dir)
     }
 
@@ -96,7 +94,11 @@ impl ConfigPersistence {
         let mut creds = self.load_credentials_json()?;
 
         // Ensure api_keys object exists
-        if !creds.get("api_keys").map(|v| v.is_object()).unwrap_or(false) {
+        if !creds
+            .get("api_keys")
+            .map(|v| v.is_object())
+            .unwrap_or(false)
+        {
             creds["api_keys"] = Value::Object(serde_json::Map::new());
         }
 
@@ -107,7 +109,8 @@ impl ConfigPersistence {
     /// Get an API key for a provider from the credentials file
     pub fn get_api_key(&self, provider: &str) -> Option<String> {
         let creds = self.load_credentials_json().ok()?;
-        creds.get("api_keys")?
+        creds
+            .get("api_keys")?
             .get(provider)?
             .as_str()
             .map(String::from)
@@ -357,7 +360,9 @@ mod tests {
         let dir = tempdir().unwrap();
         let persistence = ConfigPersistence::new(dir.path());
 
-        persistence.set_field("default_provider", json!("anthropic")).unwrap();
+        persistence
+            .set_field("default_provider", json!("anthropic"))
+            .unwrap();
         assert_eq!(
             persistence.get_field("default_provider"),
             Some(json!("anthropic"))
@@ -369,7 +374,9 @@ mod tests {
         let dir = tempdir().unwrap();
         let persistence = ConfigPersistence::new(dir.path());
 
-        persistence.set_field("providers.openai.model", json!("gpt-4")).unwrap();
+        persistence
+            .set_field("providers.openai.model", json!("gpt-4"))
+            .unwrap();
         assert_eq!(
             persistence.get_field("providers.openai.model"),
             Some(json!("gpt-4"))

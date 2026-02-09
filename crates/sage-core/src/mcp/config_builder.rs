@@ -27,7 +27,10 @@ pub async fn build_mcp_registry_from_config(config: &Config) -> SageResult<McpRe
                 TransportConfig::Http { base_url, headers }
             }
             _ => {
-                tracing::warn!("Unsupported MCP transport type: {}", server_config.transport);
+                tracing::warn!(
+                    "Unsupported MCP transport type: {}",
+                    server_config.transport
+                );
                 continue;
             }
         };

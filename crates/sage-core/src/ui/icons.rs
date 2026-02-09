@@ -44,54 +44,54 @@ impl Icons {
     pub const PROMPT: &'static str = "❯";
 
     // === Application ===
-    pub const SAGE: &'static str = "󰚩";           // nf-md-robot
+    pub const SAGE: &'static str = "󰚩"; // nf-md-robot
     pub const SAGE_ASCII: &'static str = "[S]";
 
     // === Status ===
-    pub const SUCCESS: &'static str = "";        // nf-fa-check
+    pub const SUCCESS: &'static str = ""; // nf-fa-check
     pub const SUCCESS_ASCII: &'static str = "✓";
 
-    pub const ERROR: &'static str = "";          // nf-fa-times
+    pub const ERROR: &'static str = ""; // nf-fa-times
     pub const ERROR_ASCII: &'static str = "✗";
 
-    pub const WARNING: &'static str = "";        // nf-fa-warning
+    pub const WARNING: &'static str = ""; // nf-fa-warning
     pub const WARNING_ASCII: &'static str = "⚠";
 
-    pub const INFO: &'static str = "";           // nf-fa-info_circle
+    pub const INFO: &'static str = ""; // nf-fa-info_circle
     pub const INFO_ASCII: &'static str = "ℹ";
 
-    pub const THINKING: &'static str = "󰔟";       // nf-md-timer_sand
+    pub const THINKING: &'static str = "󰔟"; // nf-md-timer_sand
     pub const THINKING_ASCII: &'static str = "⏳";
 
-    pub const RUNNING: &'static str = "";        // nf-fa-spinner
+    pub const RUNNING: &'static str = ""; // nf-fa-spinner
     pub const RUNNING_ASCII: &'static str = "▶";
 
     // === Tools ===
-    pub const TOOL: &'static str = "";           // nf-fa-wrench
+    pub const TOOL: &'static str = ""; // nf-fa-wrench
     pub const TOOL_ASCII: &'static str = "🔧";
 
-    pub const TERMINAL: &'static str = "";       // nf-oct-terminal
+    pub const TERMINAL: &'static str = ""; // nf-oct-terminal
     pub const TERMINAL_ASCII: &'static str = "$";
 
-    pub const FILE: &'static str = "";           // nf-oct-file
+    pub const FILE: &'static str = ""; // nf-oct-file
     pub const FILE_ASCII: &'static str = "📄";
 
-    pub const EDIT: &'static str = "";           // nf-fa-pencil
+    pub const EDIT: &'static str = ""; // nf-fa-pencil
     pub const EDIT_ASCII: &'static str = "✎";
 
-    pub const SEARCH: &'static str = "";         // nf-fa-search
+    pub const SEARCH: &'static str = ""; // nf-fa-search
     pub const SEARCH_ASCII: &'static str = "🔍";
 
-    pub const CODE: &'static str = "";           // nf-fa-code
+    pub const CODE: &'static str = ""; // nf-fa-code
     pub const CODE_ASCII: &'static str = "<>";
 
-    pub const WEB: &'static str = "󰖟";            // nf-md-web
+    pub const WEB: &'static str = "󰖟"; // nf-md-web
     pub const WEB_ASCII: &'static str = "🌐";
 
-    pub const TASK: &'static str = "";           // nf-fa-tasks
+    pub const TASK: &'static str = ""; // nf-fa-tasks
     pub const TASK_ASCII: &'static str = "☐";
 
-    pub const FOLDER: &'static str = "";         // nf-oct-file_directory
+    pub const FOLDER: &'static str = ""; // nf-oct-file_directory
     pub const FOLDER_ASCII: &'static str = "📁";
 
     // === Dynamic getters ===
@@ -118,82 +118,146 @@ impl Icons {
 
     /// Get sage icon based on current mode
     pub fn sage() -> &'static str {
-        if is_nerd_fonts_enabled() { Self::SAGE } else { Self::SAGE_ASCII }
+        if is_nerd_fonts_enabled() {
+            Self::SAGE
+        } else {
+            Self::SAGE_ASCII
+        }
     }
 
     /// Get success icon based on current mode
     pub fn success() -> &'static str {
-        if is_nerd_fonts_enabled() { Self::SUCCESS } else { Self::SUCCESS_ASCII }
+        if is_nerd_fonts_enabled() {
+            Self::SUCCESS
+        } else {
+            Self::SUCCESS_ASCII
+        }
     }
 
     /// Get error icon based on current mode
     pub fn error() -> &'static str {
-        if is_nerd_fonts_enabled() { Self::ERROR } else { Self::ERROR_ASCII }
+        if is_nerd_fonts_enabled() {
+            Self::ERROR
+        } else {
+            Self::ERROR_ASCII
+        }
     }
 
     /// Get warning icon based on current mode
     pub fn warning() -> &'static str {
-        if is_nerd_fonts_enabled() { Self::WARNING } else { Self::WARNING_ASCII }
+        if is_nerd_fonts_enabled() {
+            Self::WARNING
+        } else {
+            Self::WARNING_ASCII
+        }
     }
 
     /// Get info icon based on current mode
     pub fn info() -> &'static str {
-        if is_nerd_fonts_enabled() { Self::INFO } else { Self::INFO_ASCII }
+        if is_nerd_fonts_enabled() {
+            Self::INFO
+        } else {
+            Self::INFO_ASCII
+        }
     }
 
     /// Get thinking icon based on current mode
     pub fn thinking() -> &'static str {
-        if is_nerd_fonts_enabled() { Self::THINKING } else { Self::THINKING_ASCII }
+        if is_nerd_fonts_enabled() {
+            Self::THINKING
+        } else {
+            Self::THINKING_ASCII
+        }
     }
 
     /// Get running icon based on current mode
     pub fn running() -> &'static str {
-        if is_nerd_fonts_enabled() { Self::RUNNING } else { Self::RUNNING_ASCII }
+        if is_nerd_fonts_enabled() {
+            Self::RUNNING
+        } else {
+            Self::RUNNING_ASCII
+        }
     }
 
     /// Get tool icon based on current mode
     pub fn tool() -> &'static str {
-        if is_nerd_fonts_enabled() { Self::TOOL } else { Self::TOOL_ASCII }
+        if is_nerd_fonts_enabled() {
+            Self::TOOL
+        } else {
+            Self::TOOL_ASCII
+        }
     }
 
     /// Get terminal icon based on current mode
     pub fn terminal() -> &'static str {
-        if is_nerd_fonts_enabled() { Self::TERMINAL } else { Self::TERMINAL_ASCII }
+        if is_nerd_fonts_enabled() {
+            Self::TERMINAL
+        } else {
+            Self::TERMINAL_ASCII
+        }
     }
 
     /// Get file icon based on current mode
     pub fn file() -> &'static str {
-        if is_nerd_fonts_enabled() { Self::FILE } else { Self::FILE_ASCII }
+        if is_nerd_fonts_enabled() {
+            Self::FILE
+        } else {
+            Self::FILE_ASCII
+        }
     }
 
     /// Get edit icon based on current mode
     pub fn edit() -> &'static str {
-        if is_nerd_fonts_enabled() { Self::EDIT } else { Self::EDIT_ASCII }
+        if is_nerd_fonts_enabled() {
+            Self::EDIT
+        } else {
+            Self::EDIT_ASCII
+        }
     }
 
     /// Get search icon based on current mode
     pub fn search() -> &'static str {
-        if is_nerd_fonts_enabled() { Self::SEARCH } else { Self::SEARCH_ASCII }
+        if is_nerd_fonts_enabled() {
+            Self::SEARCH
+        } else {
+            Self::SEARCH_ASCII
+        }
     }
 
     /// Get code icon based on current mode
     pub fn code() -> &'static str {
-        if is_nerd_fonts_enabled() { Self::CODE } else { Self::CODE_ASCII }
+        if is_nerd_fonts_enabled() {
+            Self::CODE
+        } else {
+            Self::CODE_ASCII
+        }
     }
 
     /// Get web icon based on current mode
     pub fn web() -> &'static str {
-        if is_nerd_fonts_enabled() { Self::WEB } else { Self::WEB_ASCII }
+        if is_nerd_fonts_enabled() {
+            Self::WEB
+        } else {
+            Self::WEB_ASCII
+        }
     }
 
     /// Get task icon based on current mode
     pub fn task() -> &'static str {
-        if is_nerd_fonts_enabled() { Self::TASK } else { Self::TASK_ASCII }
+        if is_nerd_fonts_enabled() {
+            Self::TASK
+        } else {
+            Self::TASK_ASCII
+        }
     }
 
     /// Get folder icon based on current mode
     pub fn folder() -> &'static str {
-        if is_nerd_fonts_enabled() { Self::FOLDER } else { Self::FOLDER_ASCII }
+        if is_nerd_fonts_enabled() {
+            Self::FOLDER
+        } else {
+            Self::FOLDER_ASCII
+        }
     }
 
     /// Get icon for a specific tool by name

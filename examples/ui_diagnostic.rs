@@ -2,12 +2,13 @@
 //! Run with: cargo run --example ui_diagnostic
 
 use crossterm::{
-    terminal::{self, ClearType},
-    cursor, execute,
+    cursor,
     event::{self, Event, KeyCode},
+    execute,
+    terminal::{self, ClearType},
 };
-use rnk::prelude::*;
 use rnk::prelude::Box as RnkBox;
+use rnk::prelude::*;
 use std::io::{self, Write};
 use std::time::Duration;
 
@@ -104,7 +105,11 @@ fn main() -> io::Result<()> {
         .into_element();
 
     // Clear and render
-    execute!(stdout, terminal::Clear(ClearType::All), cursor::MoveTo(0, 0))?;
+    execute!(
+        stdout,
+        terminal::Clear(ClearType::All),
+        cursor::MoveTo(0, 0)
+    )?;
 
     let output = rnk::render_to_string(&root, term_width);
     print!("{}", output);
@@ -121,13 +126,18 @@ fn main() -> io::Result<()> {
                     // Debug mode - print layout info to file
                     let debug_output = format!(
                         "Terminal: {}x{}\n\n=== Raw Output ===\n{}\n\n=== Line Analysis ===\n{}",
-                        term_width, term_height,
+                        term_width,
+                        term_height,
                         output,
-                        output.lines().enumerate().map(|(i, line)| {
-                            let stripped = strip_ansi(line);
-                            let leading = stripped.len() - stripped.trim_start().len();
-                            format!("Line {:3}: col={:3} |{}|\n", i, leading, stripped)
-                        }).collect::<String>()
+                        output
+                            .lines()
+                            .enumerate()
+                            .map(|(i, line)| {
+                                let stripped = strip_ansi(line);
+                                let leading = stripped.len() - stripped.trim_start().len();
+                                format!("Line {:3}: col={:3} |{}|\n", i, leading, stripped)
+                            })
+                            .collect::<String>()
                     );
                     std::fs::write("/tmp/ui_debug.txt", debug_output)?;
                 }

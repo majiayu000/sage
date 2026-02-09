@@ -6,8 +6,8 @@ use crate::prompts::SystemPromptBuilder;
 use std::path::PathBuf;
 use tracing::instrument;
 
-use super::context_builder::ContextBuilder;
 use super::UnifiedExecutor;
+use super::context_builder::ContextBuilder;
 
 impl UnifiedExecutor {
     /// Build the system prompt

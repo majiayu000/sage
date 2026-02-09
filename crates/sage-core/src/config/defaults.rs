@@ -1,10 +1,10 @@
 //! Default configuration loading functions
 
+use crate::config::ModelParameters;
 use crate::config::credential::CredentialsFile;
 use crate::config::loader::ConfigLoader;
 use crate::config::model::Config;
 use crate::config::provider_defaults::create_default_providers;
-use crate::config::ModelParameters;
 use crate::error::SageResult;
 use std::collections::HashMap;
 use std::path::Path;
@@ -92,7 +92,11 @@ pub fn load_config_with_overrides(
                     tracing::debug!(
                         "Provider '{}' exists: current_key_preview='{}...', should_update={}",
                         provider,
-                        if current_key.len() > 8 { &current_key[..8] } else { current_key },
+                        if current_key.len() > 8 {
+                            &current_key[..8]
+                        } else {
+                            current_key
+                        },
                         should_update
                     );
                     if should_update {
@@ -111,14 +115,10 @@ pub fn load_config_with_overrides(
             .key
             .is_some();
         if !has_key {
-            if let Some((provider, _)) = config
-                .model_providers
-                .iter()
-                .find(|(provider, params)| {
-                    params.get_api_key_info_for_provider(provider).key.is_some()
-                        || provider.as_str() == "ollama"
-                })
-            {
+            if let Some((provider, _)) = config.model_providers.iter().find(|(provider, params)| {
+                params.get_api_key_info_for_provider(provider).key.is_some()
+                    || provider.as_str() == "ollama"
+            }) {
                 config.default_provider = provider.clone();
             }
         }

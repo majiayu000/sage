@@ -110,7 +110,11 @@ impl McpToolAdapter {
             .join("\n");
 
         if mcp_result.is_error {
-            ToolResult::error(&call.id, self.name(), format!("MCP tool execution failed: {}", output))
+            ToolResult::error(
+                &call.id,
+                self.name(),
+                format!("MCP tool execution failed: {}", output),
+            )
         } else {
             ToolResult::success(&call.id, self.name(), output)
         }

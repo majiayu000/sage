@@ -29,9 +29,7 @@ pub use backend::{
     BackendType, DatabaseBackend, DatabaseError, DatabaseRow, DatabaseValue, PostgresBackend,
     QueryResult, SqliteBackend,
 };
-pub use config::{
-    ConnectionPool, FallbackStrategy, PostgresConfig, SqliteConfig, StorageConfig,
-};
+pub use config::{ConnectionPool, FallbackStrategy, PostgresConfig, SqliteConfig, StorageConfig};
 pub use manager::{
     ConnectionStatus, HealthInfo, SharedStorageManager, StorageManager, StorageStats,
     create_storage_manager,

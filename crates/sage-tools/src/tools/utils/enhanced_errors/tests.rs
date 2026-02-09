@@ -349,10 +349,7 @@ mod suite {
                 ToolError::InvalidArguments("test".into()),
                 "InvalidArguments",
             ),
-            (
-                ToolError::Io(std::io::Error::other("test")),
-                "Io",
-            ),
+            (ToolError::Io(std::io::Error::other("test")), "Io"),
             (
                 ToolError::PermissionDenied("test".into()),
                 "PermissionDenied",

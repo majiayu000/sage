@@ -50,7 +50,7 @@ pub use builder::SystemPromptBuilder;
 pub use context_aware::{
     ContextAwareConfig, ConversationPhase, PhaseDetector, PhasePrompts, PhaseSignals,
 };
-pub use language_prompts::{detect_primary_language, Language, LanguagePrompts};
+pub use language_prompts::{Language, LanguagePrompts, detect_primary_language};
 pub use system_prompt::{GitPrompts, SecurityPolicy, SystemPrompt};
 pub use system_reminders::{PlanPhase, SystemReminder};
 pub use tool_descriptions::ToolDescriptions;

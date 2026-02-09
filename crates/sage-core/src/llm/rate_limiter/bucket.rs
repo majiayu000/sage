@@ -66,12 +66,7 @@ impl RateLimiter {
         }
 
         // First acquire concurrent permit (waits if at max concurrency)
-        let permit = self
-            .concurrent_semaphore
-            .clone()
-            .acquire_owned()
-            .await
-            .ok();
+        let permit = self.concurrent_semaphore.clone().acquire_owned().await.ok();
 
         if permit.is_none() {
             warn!("Rate limiter: concurrent semaphore closed");

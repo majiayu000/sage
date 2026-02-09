@@ -214,7 +214,8 @@ mod tests {
     #[test]
     fn test_agent_progress_serde() {
         let progress = AgentProgress {
-            recent_activities: vec!["Reading files".to_string(), "Analyzing code".to_string()].into(),
+            recent_activities: vec!["Reading files".to_string(), "Analyzing code".to_string()]
+                .into(),
             token_count: 500,
             tool_use_count: 3,
             current_step: 2,

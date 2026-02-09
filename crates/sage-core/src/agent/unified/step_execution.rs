@@ -7,11 +7,11 @@ use crate::llm::messages::LlmMessage;
 use crate::tools::types::{ToolCall, ToolSchema};
 use tracing::instrument;
 
+use super::UnifiedExecutor;
 use super::event_manager::ExecutionEvent;
 use super::permission_handler;
 use super::tool_display;
 use super::tool_orchestrator::ToolExecutionContext;
-use super::UnifiedExecutor;
 
 impl UnifiedExecutor {
     /// Execute a single step in the loop
@@ -98,8 +98,13 @@ impl UnifiedExecutor {
 
         // Handle tool calls
         if !llm_response.tool_calls.is_empty() {
-            self.handle_tool_calls(&mut step, &mut new_messages, &llm_response.tool_calls, task_scope)
-                .await?;
+            self.handle_tool_calls(
+                &mut step,
+                &mut new_messages,
+                &llm_response.tool_calls,
+                task_scope,
+            )
+            .await?;
         }
 
         // Check for completion
@@ -200,7 +205,8 @@ impl UnifiedExecutor {
             )
         } else {
             // Phase 2: Execution
-            self.execute_tool_phase(tool_call, cancel_token.clone()).await?
+            self.execute_tool_phase(tool_call, cancel_token.clone())
+                .await?
         };
 
         // Phase 3: Post-execution
@@ -237,7 +243,10 @@ impl UnifiedExecutor {
         if requires_interaction && tool_call.name == "ask_user_question" {
             self.handle_ask_user_question(tool_call).await
         } else if requires_interaction {
-            Ok(self.tool_orchestrator.execution_phase(tool_call, cancel_token).await)
+            Ok(self
+                .tool_orchestrator
+                .execution_phase(tool_call, cancel_token)
+                .await)
         } else {
             Ok(permission_handler::execute_with_permission_check(
                 &self.tool_orchestrator,

@@ -1,6 +1,6 @@
 //! Main ProviderConfig struct
 
-use super::api_key::{get_standard_env_vars, ApiKeyInfo, ApiKeySource};
+use super::api_key::{ApiKeyInfo, ApiKeySource, get_standard_env_vars};
 use super::auth::ApiAuthConfig;
 use super::network::NetworkConfig;
 use super::resilience::{RateLimitConfig, ResilienceConfig};

@@ -4,9 +4,9 @@
 //! in the terminal, including icons, parameter formatting, and activity descriptions.
 
 use crate::tools::types::{ToolCall, ToolResult};
+use crate::ui::Icons;
 #[allow(deprecated)]
 use crate::ui::bridge::global_adapter;
-use crate::ui::Icons;
 use colored::Colorize;
 use std::collections::HashMap;
 
@@ -164,10 +164,13 @@ pub async fn display_tool_start(event_manager: &mut EventManager, tool_call: &To
 
     // Emit tool execution started event with detail
     event_manager
-        .emit_with_detail(ExecutionEvent::ToolExecutionStarted {
-            tool_name: tool_call.name.clone(),
-            tool_id: tool_call.id.clone(),
-        }, detail)
+        .emit_with_detail(
+            ExecutionEvent::ToolExecutionStarted {
+                tool_name: tool_call.name.clone(),
+                tool_id: tool_call.id.clone(),
+            },
+            detail,
+        )
         .await;
 }
 

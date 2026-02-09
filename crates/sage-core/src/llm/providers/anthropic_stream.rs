@@ -11,6 +11,10 @@ use futures::StreamExt;
 use serde_json::Value;
 use std::collections::HashMap;
 
+fn u64_to_u32_saturating(value: u64) -> u32 {
+    u32::try_from(value).unwrap_or(u32::MAX)
+}
+
 struct StreamState {
     decoder: SseDecoder,
     current_block_type: Option<String>,
@@ -26,10 +30,9 @@ struct StreamState {
 
 /// Parse an Anthropic-compatible SSE byte stream into an LlmStream.
 pub fn anthropic_sse_stream(
-    byte_stream: impl futures::Stream<
-            Item = Result<impl AsRef<[u8]> + Send + 'static, reqwest::Error>,
-        > + Send
-        + 'static,
+    byte_stream: impl futures::Stream<Item = Result<impl AsRef<[u8]> + Send + 'static, reqwest::Error>>
+    + Send
+    + 'static,
     provider_name: &str,
 ) -> LlmStream {
     let state = std::sync::Arc::new(tokio::sync::Mutex::new(StreamState {
@@ -56,9 +59,9 @@ pub fn anthropic_sse_stream(
                     process_events(&mut state, events, &mut chunks);
                     futures::stream::iter(chunks)
                 }
-                Err(e) => futures::stream::iter(vec![Err(SageError::llm(
-                    format!("Stream error: {}", e),
-                ))]),
+                Err(e) => {
+                    futures::stream::iter(vec![Err(SageError::llm(format!("Stream error: {}", e)))])
+                }
             }
         })
     });
@@ -85,10 +88,8 @@ fn process_events(
         match event_type {
             Some("message_start") => {
                 if let Some(usage_data) = data["message"]["usage"].as_object() {
-                    if let Some(input) =
-                        usage_data.get("input_tokens").and_then(|v| v.as_u64())
-                    {
-                        state.input_tokens = input as u32;
+                    if let Some(input) = usage_data.get("input_tokens").and_then(|v| v.as_u64()) {
+                        state.input_tokens = u64_to_u32_saturating(input);
                     }
                 }
             }
@@ -96,8 +97,7 @@ fn process_events(
                 let block_type = data["content_block"]["type"].as_str();
                 state.current_block_type = block_type.map(String::from);
                 if block_type == Some("tool_use") {
-                    state.current_block_id =
-                        data["content_block"]["id"].as_str().map(String::from);
+                    state.current_block_id = data["content_block"]["id"].as_str().map(String::from);
                     state.current_tool_name =
                         data["content_block"]["name"].as_str().map(String::from);
                     state.tool_input_buffer.clear();
@@ -124,8 +124,7 @@ fn process_events(
             Some("content_block_stop") => {
                 if state.current_block_type.as_deref() == Some("tool_use") {
                     let arguments: HashMap<String, Value> =
-                        serde_json::from_str(&state.tool_input_buffer)
-                            .unwrap_or_default();
+                        serde_json::from_str(&state.tool_input_buffer).unwrap_or_default();
 
                     if arguments.is_empty() && !state.tool_input_buffer.is_empty() {
                         tracing::warn!(
@@ -164,9 +163,7 @@ fn process_events(
                 )));
             }
             Some("error") => {
-                let error_msg = data["error"]["message"]
-                    .as_str()
-                    .unwrap_or("Unknown error");
+                let error_msg = data["error"]["message"].as_str().unwrap_or("Unknown error");
                 chunks.push(Err(SageError::llm(format!(
                     "{} stream error: {}",
                     state.provider_name, error_msg
@@ -191,22 +188,23 @@ fn handle_message_delta(state: &mut StreamState, data: &Value) {
         let input_tokens = usage_data
             .get("input_tokens")
             .and_then(|v| v.as_u64())
-            .map(|v| v as u32)
+            .map(u64_to_u32_saturating)
             .unwrap_or(state.input_tokens);
 
         let cache_creation_input_tokens = usage_data
             .get("cache_creation_input_tokens")
             .and_then(|v| v.as_u64())
-            .map(|v| v as u32);
+            .map(u64_to_u32_saturating);
         let cache_read_input_tokens = usage_data
             .get("cache_read_input_tokens")
             .and_then(|v| v.as_u64())
-            .map(|v| v as u32);
+            .map(u64_to_u32_saturating);
 
+        let completion_tokens = u64_to_u32_saturating(output_tokens);
         state.usage = Some(LlmUsage {
             prompt_tokens: input_tokens,
-            completion_tokens: output_tokens as u32,
-            total_tokens: input_tokens + output_tokens as u32,
+            completion_tokens,
+            total_tokens: input_tokens.saturating_add(completion_tokens),
             cost_usd: None,
             cache_creation_input_tokens,
             cache_read_input_tokens,

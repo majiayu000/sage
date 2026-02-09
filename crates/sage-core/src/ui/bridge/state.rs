@@ -421,10 +421,7 @@ mod tests {
         let mut state = AppState::default();
 
         state.start_tool("bash".to_string(), "ls -la".to_string());
-        assert!(matches!(
-            state.phase,
-            ExecutionPhase::ExecutingTool { .. }
-        ));
+        assert!(matches!(state.phase, ExecutionPhase::ExecutingTool { .. }));
 
         state.finish_tool(true, Some("file1\nfile2".to_string()), None);
         assert!(matches!(state.phase, ExecutionPhase::Idle));

@@ -2,13 +2,14 @@
 //! Run: cargo run --example visual_test
 
 use crossterm::{
-    terminal::{self, ClearType},
-    cursor, execute,
+    cursor,
     event::{self, Event, KeyCode},
+    execute,
+    terminal::{self, ClearType},
 };
-use rnk::prelude::*;
-use rnk::prelude::Box as RnkBox;
 use rnk::layout::LayoutEngine;
+use rnk::prelude::Box as RnkBox;
+use rnk::prelude::*;
 use std::io::{self, Write};
 use std::time::Duration;
 
@@ -133,8 +134,12 @@ fn main() -> io::Result<()> {
         let stripped = strip_ansi(line);
         let leading = stripped.len() - stripped.trim_start().len();
         if leading > 0 && !stripped.trim().is_empty() {
-            println!("  Line {}: {} leading spaces - '{}'",
-                i, leading, stripped.chars().take(40).collect::<String>());
+            println!(
+                "  Line {}: {} leading spaces - '{}'",
+                i,
+                leading,
+                stripped.chars().take(40).collect::<String>()
+            );
             issues_found = true;
         }
     }
@@ -150,7 +155,11 @@ fn main() -> io::Result<()> {
     // === Fullscreen test ===
     execute!(stdout, terminal::EnterAlternateScreen)?;
     terminal::enable_raw_mode()?;
-    execute!(stdout, terminal::Clear(ClearType::All), cursor::MoveTo(0, 0))?;
+    execute!(
+        stdout,
+        terminal::Clear(ClearType::All),
+        cursor::MoveTo(0, 0)
+    )?;
 
     print!("{}", output);
     stdout.flush()?;

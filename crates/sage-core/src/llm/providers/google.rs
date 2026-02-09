@@ -109,9 +109,10 @@ impl GoogleProvider {
             return Err(super::error_utils::handle_http_error(response, "Google").await);
         }
 
-        let response_json: Value = response.json().await.map_err(|e| {
-            super::error_utils::handle_parse_error(e, "Google")
-        })?;
+        let response_json: Value = response
+            .json()
+            .await
+            .map_err(|e| super::error_utils::handle_parse_error(e, "Google"))?;
 
         tracing::debug!(
             "Google API response: {}",

@@ -3,7 +3,7 @@
 //! Verifiers check whether an evaluation task was completed successfully.
 
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 use std::process::Stdio;
 use tokio::process::Command;
 
@@ -147,6 +147,23 @@ fn default_interpreter() -> String {
     "bash".to_string()
 }
 
+fn safe_join_under_root(root: &Path, relative: &str) -> Result<PathBuf, String> {
+    let rel_path = Path::new(relative);
+
+    if rel_path.is_absolute() {
+        return Err(format!("Absolute paths are not allowed: {}", relative));
+    }
+
+    if rel_path
+        .components()
+        .any(|c| matches!(c, Component::ParentDir | Component::Prefix(_)))
+    {
+        return Err(format!("Path traversal is not allowed: {}", relative));
+    }
+
+    Ok(root.join(rel_path))
+}
+
 impl Verifier {
     /// Run the verifier in the given sandbox directory
     pub async fn verify(&self, sandbox_root: &Path) -> VerifierResult {
@@ -196,7 +213,11 @@ impl Verifier {
             }
 
             Verifier::FileExists { path } => {
-                let full_path = sandbox_root.join(path);
+                let full_path = match safe_join_under_root(sandbox_root, path) {
+                    Ok(path) => path,
+                    Err(msg) => return VerifierResult::fail(msg),
+                };
+
                 if full_path.exists() {
                     VerifierResult::pass(format!("File exists: {}", path))
                 } else {
@@ -209,7 +230,11 @@ impl Verifier {
                 contains,
                 ignore_case,
             } => {
-                let full_path = sandbox_root.join(path);
+                let full_path = match safe_join_under_root(sandbox_root, path) {
+                    Ok(path) => path,
+                    Err(msg) => return VerifierResult::fail(msg),
+                };
+
                 match tokio::fs::read_to_string(&full_path).await {
                     Ok(content) => {
                         let (content_cmp, contains_cmp) = if *ignore_case {
@@ -233,7 +258,11 @@ impl Verifier {
             }
 
             Verifier::FileMatches { path, pattern } => {
-                let full_path = sandbox_root.join(path);
+                let full_path = match safe_join_under_root(sandbox_root, path) {
+                    Ok(path) => path,
+                    Err(msg) => return VerifierResult::fail(msg),
+                };
+
                 match tokio::fs::read_to_string(&full_path).await {
                     Ok(content) => match regex::Regex::new(pattern) {
                         Ok(re) => {
@@ -256,7 +285,10 @@ impl Verifier {
             Verifier::FilesExist { paths } => {
                 let mut missing = Vec::new();
                 for path in paths {
-                    let full_path = sandbox_root.join(path);
+                    let full_path = match safe_join_under_root(sandbox_root, path) {
+                        Ok(pathbuf) => pathbuf,
+                        Err(msg) => return VerifierResult::fail(msg),
+                    };
                     if !full_path.exists() {
                         missing.push(path.clone());
                     }

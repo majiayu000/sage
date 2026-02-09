@@ -107,9 +107,11 @@ impl SageAgentSdk {
             match sage_core::mcp::build_mcp_registry_from_config(&self.config).await {
                 Ok(mcp_registry) => {
                     let mcp_tools = mcp_registry.as_tools().await;
-                    tracing::info!("Loaded {} MCP tools from {} servers",
+                    tracing::info!(
+                        "Loaded {} MCP tools from {} servers",
                         mcp_tools.len(),
-                        mcp_registry.server_names().len());
+                        mcp_registry.server_names().len()
+                    );
 
                     if !mcp_tools.is_empty() {
                         all_tools.extend(mcp_tools);

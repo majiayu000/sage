@@ -35,7 +35,11 @@ async fn main() -> Result<()> {
 
     println!("✅ 找到 {} 个可用工具:", tools.len());
     for tool in &tools {
-        println!("  - {}: {}", tool.name, tool.description.as_deref().unwrap_or("无描述"));
+        println!(
+            "  - {}: {}",
+            tool.name,
+            tool.description.as_deref().unwrap_or("无描述")
+        );
     }
     println!();
 

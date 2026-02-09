@@ -109,10 +109,7 @@ impl ConfigStatusReport {
             configured_providers: configured,
             missing_credentials: missing.clone(),
             message,
-            suggestion: Some(format!(
-                "Run /login to configure: {}",
-                missing.join(", ")
-            )),
+            suggestion: Some(format!("Run /login to configure: {}", missing.join(", "))),
         }
     }
 
@@ -179,8 +176,14 @@ mod tests {
 
     #[test]
     fn test_config_status_description() {
-        assert_eq!(ConfigStatus::Complete.description(), "Configuration complete");
-        assert_eq!(ConfigStatus::Partial.description(), "Configuration incomplete");
+        assert_eq!(
+            ConfigStatus::Complete.description(),
+            "Configuration complete"
+        );
+        assert_eq!(
+            ConfigStatus::Partial.description(),
+            "Configuration incomplete"
+        );
         assert_eq!(
             ConfigStatus::Unconfigured.description(),
             "No configuration found"
@@ -189,9 +192,18 @@ mod tests {
 
     #[test]
     fn test_config_status_display() {
-        assert_eq!(format!("{}", ConfigStatus::Complete), "Configuration complete");
-        assert_eq!(format!("{}", ConfigStatus::Partial), "Configuration incomplete");
-        assert_eq!(format!("{}", ConfigStatus::Unconfigured), "No configuration found");
+        assert_eq!(
+            format!("{}", ConfigStatus::Complete),
+            "Configuration complete"
+        );
+        assert_eq!(
+            format!("{}", ConfigStatus::Partial),
+            "Configuration incomplete"
+        );
+        assert_eq!(
+            format!("{}", ConfigStatus::Unconfigured),
+            "No configuration found"
+        );
     }
 
     #[test]
@@ -238,7 +250,8 @@ mod tests {
 
     #[test]
     fn test_status_report_complete() {
-        let report = ConfigStatusReport::complete(vec!["anthropic".to_string(), "openai".to_string()]);
+        let report =
+            ConfigStatusReport::complete(vec!["anthropic".to_string(), "openai".to_string()]);
         assert_eq!(report.status, ConfigStatus::Complete);
         assert_eq!(report.configured_providers.len(), 2);
         assert!(report.missing_credentials.is_empty());
@@ -247,10 +260,8 @@ mod tests {
 
     #[test]
     fn test_status_report_partial() {
-        let report = ConfigStatusReport::partial(
-            vec!["anthropic".to_string()],
-            vec!["openai".to_string()],
-        );
+        let report =
+            ConfigStatusReport::partial(vec!["anthropic".to_string()], vec!["openai".to_string()]);
         assert_eq!(report.status, ConfigStatus::Partial);
         assert_eq!(report.configured_providers.len(), 1);
         assert_eq!(report.missing_credentials.len(), 1);

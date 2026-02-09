@@ -22,11 +22,21 @@ fn app() -> Element {
     // Simple column layout with 5 elements
     Box::new()
         .flex_direction(FlexDirection::Column)
-        .child(Text::new(format!("Line 1 - Terminal: {}x{}", term_width, term_height)).into_element())
+        .child(
+            Text::new(format!("Line 1 - Terminal: {}x{}", term_width, term_height)).into_element(),
+        )
         .child(Text::new("Line 2 - Content area").into_element())
         .child(Text::new("Line 3 - Separator").dim().into_element())
-        .child(Text::new("Line 4 - Input").color(Color::Yellow).into_element())
-        .child(Text::new("Line 5 - Status").color(Color::Cyan).into_element())
+        .child(
+            Text::new("Line 4 - Input")
+                .color(Color::Yellow)
+                .into_element(),
+        )
+        .child(
+            Text::new("Line 5 - Status")
+                .color(Color::Cyan)
+                .into_element(),
+        )
         .into_element()
 }
 

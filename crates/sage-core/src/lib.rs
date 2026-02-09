@@ -276,9 +276,8 @@ pub use prompts::{
 pub use storage::{
     BackendType, ConnectionPool, ConnectionStatus, DatabaseBackend, DatabaseError, DatabaseRow,
     DatabaseValue, FallbackStrategy, Migration, MigrationRunner, PostgresBackend, PostgresConfig,
-    QueryResult, SchemaVersion, SharedStorageManager,
-    SqliteBackend, SqliteConfig, StorageConfig, StorageManager, StorageStats,
-    create_storage_manager,
+    QueryResult, SchemaVersion, SharedStorageManager, SqliteBackend, SqliteConfig, StorageConfig,
+    StorageManager, StorageStats, create_storage_manager,
 };
 pub use telemetry::{
     Counter, Gauge, Histogram, HistogramData, HistogramTimer, LabeledCounter, Metric, MetricType,

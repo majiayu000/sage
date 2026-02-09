@@ -146,7 +146,10 @@ fn test_unified_loader_env_var_resolution() {
 
     // Should resolve API key from environment
     let anthropic_params = result.config.model_providers.get("anthropic").unwrap();
-    assert_eq!(anthropic_params.api_key, Some("env-anthropic-key".to_string()));
+    assert_eq!(
+        anthropic_params.api_key,
+        Some("env-anthropic-key".to_string())
+    );
 
     // Should be at least partial status
     assert!(result.is_ready());

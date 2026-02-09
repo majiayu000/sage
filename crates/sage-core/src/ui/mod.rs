@@ -24,13 +24,13 @@ pub use traits::{EventSink, NoopEventSink, UiContext};
 
 // === Re-exports: Bridge ===
 pub use bridge::{
-    AgentEvent, AppState, EventAdapter, ExecutionPhase, InputState, Message, MessageContent,
-    Role, SessionState, ThinkingState, ToolExecution, ToolStatus,
+    AgentEvent, AppState, EventAdapter, ExecutionPhase, InputState, Message, MessageContent, Role,
+    SessionState, ThinkingState, ToolExecution, ToolStatus,
 };
 
 // === Re-exports: Components ===
 pub use components::{
     InputBox, MessageList, MessageView, Spinner, StatusBar, ThinkingIndicator, ToolExecutionView,
 };
-pub use icons::{init_from_env as init_icons, is_nerd_fonts_enabled, set_nerd_fonts, Icons};
+pub use icons::{Icons, init_from_env as init_icons, is_nerd_fonts_enabled, set_nerd_fonts};
 pub use theme::{Colors, Icons as ThemeIcons, Styles};

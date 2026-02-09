@@ -79,9 +79,10 @@ impl OllamaProvider {
             return Err(super::error_utils::handle_http_error(response, "Ollama").await);
         }
 
-        let response_json: serde_json::Value = response.json().await.map_err(|e| {
-            super::error_utils::handle_parse_error(e, "Ollama")
-        })?;
+        let response_json: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| super::error_utils::handle_parse_error(e, "Ollama"))?;
 
         tracing::debug!(
             "Ollama API response: {}",

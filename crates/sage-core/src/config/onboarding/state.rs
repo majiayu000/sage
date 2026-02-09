@@ -218,7 +218,9 @@ impl OnboardingState {
         match self.current_step {
             OnboardingStep::Welcome => true,
             OnboardingStep::SelectProvider => self.selected_provider.is_some(),
-            OnboardingStep::EnterApiKey => self.api_key.is_some() && !self.api_key.as_ref().unwrap().is_empty(),
+            OnboardingStep::EnterApiKey => {
+                self.api_key.is_some() && !self.api_key.as_ref().unwrap().is_empty()
+            }
             OnboardingStep::ValidateKey => self.key_validated,
             OnboardingStep::OptionalSettings => true,
             OnboardingStep::Complete => false, // Already at the end
@@ -418,10 +420,7 @@ mod tests {
         state.set_api_key("bad-key");
         state.mark_key_invalid("Invalid API key");
         assert!(!state.key_validated);
-        assert_eq!(
-            state.validation_error,
-            Some("Invalid API key".to_string())
-        );
+        assert_eq!(state.validation_error, Some("Invalid API key".to_string()));
     }
 
     #[test]

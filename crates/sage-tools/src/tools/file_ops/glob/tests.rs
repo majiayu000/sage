@@ -332,5 +332,8 @@ fn test_glob_tool_properties() {
     assert_eq!(tool.name(), "Glob");
     assert!(tool.is_read_only());
     assert!(tool.supports_parallel_execution());
-    assert_eq!(tool.max_execution_duration(), Some(std::time::Duration::from_secs(30)));
+    assert_eq!(
+        tool.max_execution_duration(),
+        Some(std::time::Duration::from_secs(30))
+    );
 }

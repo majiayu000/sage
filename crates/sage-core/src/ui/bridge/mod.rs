@@ -12,13 +12,12 @@ pub mod state;
 
 #[allow(deprecated)]
 pub use adapter::{
-    emit_event, global_adapter, set_global_adapter, set_refresh_callback, EventAdapter,
+    EventAdapter, emit_event, global_adapter, set_global_adapter, set_refresh_callback,
 };
 pub use events::AgentEvent;
 pub use state::{
     AppState, ExecutionPhase, InputState, Message, MessageContent, MessageMetadata, Role,
-    SessionState, StreamingContent, ThinkingState, ToolExecution, ToolResult, ToolStatus,
-    UiConfig,
+    SessionState, StreamingContent, ThinkingState, ToolExecution, ToolResult, ToolStatus, UiConfig,
 };
 
 // Re-export tokio watch types for subscribers

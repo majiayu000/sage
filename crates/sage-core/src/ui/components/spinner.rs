@@ -38,7 +38,8 @@ impl Spinner {
         let frames = Icons::spinner_frames();
         let frame_duration = Duration::from_millis(80);
         let elapsed = self.started_at.elapsed();
-        let frame_index = (elapsed.as_millis() / frame_duration.as_millis()) as usize % frames.len();
+        let frame_index =
+            (elapsed.as_millis() / frame_duration.as_millis()) as usize % frames.len();
         frames[frame_index]
     }
 

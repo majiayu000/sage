@@ -23,7 +23,7 @@ fn test_sage_no_alternate_screen_escape_sequences() {
     // Capture both stdout and stderr to look for escape sequences
     let output = Command::new("./target/release/sage")
         .args(["-p", "echo test"])
-        .env("TERM", "xterm-256color")  // Ensure terminal support
+        .env("TERM", "xterm-256color") // Ensure terminal support
         .output()
         .expect("Failed to run Sage");
 
@@ -37,10 +37,8 @@ fn test_sage_no_alternate_screen_escape_sequences() {
     // CSI ?47h - Enter alternate screen (older)
     // CSI ?47l - Leave alternate screen (older)
 
-    let has_enter_alt_screen = combined.contains("\x1b[?1049h")
-        || combined.contains("\x1b[?47h");
-    let has_leave_alt_screen = combined.contains("\x1b[?1049l")
-        || combined.contains("\x1b[?47l");
+    let has_enter_alt_screen = combined.contains("\x1b[?1049h") || combined.contains("\x1b[?47h");
+    let has_leave_alt_screen = combined.contains("\x1b[?1049l") || combined.contains("\x1b[?47l");
 
     if has_enter_alt_screen {
         panic!(
@@ -75,10 +73,7 @@ fn test_sage_uses_raw_mode() {
         .output()
         .expect("Failed to run Sage");
 
-    assert!(
-        output.status.success(),
-        "Sage --version failed"
-    );
+    assert!(output.status.success(), "Sage --version failed");
 
     let version_output = String::from_utf8_lossy(&output.stdout);
     assert!(

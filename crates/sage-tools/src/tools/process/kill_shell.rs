@@ -412,7 +412,10 @@ mod tests {
 
         assert_eq!(tool.name(), "kill_shell");
         assert!(!tool.description().is_empty());
-        assert_eq!(tool.max_execution_duration(), Some(std::time::Duration::from_secs(30)));
+        assert_eq!(
+            tool.max_execution_duration(),
+            Some(std::time::Duration::from_secs(30))
+        );
         assert!(tool.supports_parallel_execution());
         assert!(!tool.is_read_only());
     }

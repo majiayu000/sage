@@ -291,7 +291,13 @@ impl RateLimitConfig {
 
     /// Set requests per second (converts to requests_per_minute)
     pub fn with_rps(mut self, rps: f64) -> Self {
-        self.requests_per_minute = Some((rps * 60.0) as u32);
+        if rps.is_finite() && rps > 0.0 {
+            let rpm = rps * 60.0;
+            let bounded = rpm.min(u32::MAX as f64);
+            self.requests_per_minute = Some(bounded as u32);
+        } else {
+            self.requests_per_minute = Some(0);
+        }
         self
     }
 

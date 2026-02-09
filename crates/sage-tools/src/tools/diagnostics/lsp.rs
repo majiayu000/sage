@@ -122,23 +122,22 @@ Note: LSP servers must be configured for the file type. If no server is availabl
     }
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
-        let operation = call
-            .get_string("operation")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'operation' parameter".to_string()))?;
+        let operation = call.get_string("operation").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'operation' parameter".to_string())
+        })?;
 
-        let file_path = call
-            .get_string("filePath")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'filePath' parameter".to_string()))?;
+        let file_path = call.get_string("filePath").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'filePath' parameter".to_string())
+        })?;
 
         let line = call
             .get_number("line")
             .ok_or_else(|| ToolError::InvalidArguments("Missing 'line' parameter".to_string()))?
             as usize;
 
-        let character = call
-            .get_number("character")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'character' parameter".to_string()))?
-            as usize;
+        let character = call.get_number("character").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing 'character' parameter".to_string())
+        })? as usize;
 
         let _op = LspOperation::from_str(&operation).ok_or_else(|| {
             ToolError::InvalidArguments(format!("Unknown operation: {}", operation))

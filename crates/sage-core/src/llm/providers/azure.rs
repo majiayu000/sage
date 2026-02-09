@@ -84,9 +84,10 @@ impl AzureProvider {
             return Err(super::error_utils::handle_http_error(response, "Azure OpenAI").await);
         }
 
-        let response_json: serde_json::Value = response.json().await.map_err(|e| {
-            super::error_utils::handle_parse_error(e, "Azure OpenAI")
-        })?;
+        let response_json: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| super::error_utils::handle_parse_error(e, "Azure OpenAI"))?;
 
         tracing::debug!(
             "Azure API response: {}",
@@ -146,7 +147,9 @@ impl AzureProvider {
         })?;
 
         if !response.status().is_success() {
-            return Err(super::error_utils::handle_stream_http_error(response, "Azure OpenAI").await);
+            return Err(
+                super::error_utils::handle_stream_http_error(response, "Azure OpenAI").await,
+            );
         }
 
         // Convert response to stream

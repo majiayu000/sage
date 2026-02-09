@@ -115,5 +115,8 @@ async fn test_event_manager_tool_events() {
     let events = sink.events();
     assert_eq!(events.len(), 2);
     assert!(matches!(events[0], AgentEvent::ToolExecutionStarted { .. }));
-    assert!(matches!(events[1], AgentEvent::ToolExecutionCompleted { .. }));
+    assert!(matches!(
+        events[1],
+        AgentEvent::ToolExecutionCompleted { .. }
+    ));
 }

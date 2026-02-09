@@ -34,7 +34,7 @@ impl HintType {
     /// Get the ANSI color code for terminal display
     pub fn color(&self) -> &'static str {
         match self {
-            HintType::Info => "\x1b[36m",  // Cyan
+            HintType::Info => "\x1b[36m",    // Cyan
             HintType::Warning => "\x1b[33m", // Yellow
             HintType::Error => "\x1b[31m",   // Red
             HintType::Success => "\x1b[32m", // Green
@@ -290,10 +290,8 @@ mod tests {
 
     #[test]
     fn test_hint_from_status_partial() {
-        let status = ConfigStatusReport::partial(
-            vec!["anthropic".to_string()],
-            vec!["openai".to_string()],
-        );
+        let status =
+            ConfigStatusReport::partial(vec!["anthropic".to_string()], vec!["openai".to_string()]);
         let hint = hint_from_status(&status);
         assert!(hint.is_some());
         let hint = hint.unwrap();

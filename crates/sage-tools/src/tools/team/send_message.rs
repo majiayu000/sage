@@ -154,11 +154,9 @@ impl SendMessageTool {
             ToolError::InvalidArguments("Missing required parameter: request_id".to_string())
         })?;
 
-        let approve = call
-            .get_bool("approve")
-            .ok_or_else(|| {
-                ToolError::InvalidArguments("Missing required parameter: approve".to_string())
-            })?;
+        let approve = call.get_bool("approve").ok_or_else(|| {
+            ToolError::InvalidArguments("Missing required parameter: approve".to_string())
+        })?;
 
         let content = call.get_string("content");
         let recipient = call.get_string("recipient");
@@ -230,8 +228,11 @@ IMPORTANT: Your plain text output is NOT visible to teammates. You MUST use this
                     "type",
                     "Message type: message, broadcast, request, response",
                 ),
-                ToolParameter::string("recipient", "Recipient teammate name (for message, request)")
-                    .optional(),
+                ToolParameter::string(
+                    "recipient",
+                    "Recipient teammate name (for message, request)",
+                )
+                .optional(),
                 ToolParameter::string("content", "Message content").optional(),
                 ToolParameter::string(
                     "subtype",
@@ -299,7 +300,9 @@ IMPORTANT: Your plain text output is NOT visible to teammates. You MUST use this
                     ToolError::InvalidArguments("response requires subtype parameter".to_string())
                 })?;
                 call.get_string("request_id").ok_or_else(|| {
-                    ToolError::InvalidArguments("response requires request_id parameter".to_string())
+                    ToolError::InvalidArguments(
+                        "response requires request_id parameter".to_string(),
+                    )
                 })?;
                 call.get_bool("approve").ok_or_else(|| {
                     ToolError::InvalidArguments("response requires approve parameter".to_string())
@@ -386,10 +389,7 @@ mod tests {
         // Missing approve
         let call = create_tool_call(
             "response",
-            vec![
-                ("subtype", json!("shutdown")),
-                ("request_id", json!("123")),
-            ],
+            vec![("subtype", json!("shutdown")), ("request_id", json!("123"))],
         );
         assert!(tool.validate(&call).is_err());
     }

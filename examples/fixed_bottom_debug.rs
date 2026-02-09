@@ -68,7 +68,11 @@ fn app() -> Element {
     eprintln!("  Viewport height: {}", viewport_height);
     eprintln!("  Message count: {}", msg_count);
     eprintln!("  Scroll offset Y: {}", scroll.offset_y());
-    eprintln!("  Can scroll up: {}, down: {}", scroll.can_scroll_up(), scroll.can_scroll_down());
+    eprintln!(
+        "  Can scroll up: {}, down: {}",
+        scroll.can_scroll_up(),
+        scroll.can_scroll_down()
+    );
 
     // Handle keyboard input
     use_input({
@@ -176,11 +180,20 @@ fn app() -> Element {
     } else {
         let visible_count = viewport_height;
         let msgs: Vec<_> = current_messages.iter().rev().take(visible_count).collect();
-        eprintln!("    Content: {} messages (showing last {})", current_messages.len(), msgs.len());
+        eprintln!(
+            "    Content: {} messages (showing last {})",
+            current_messages.len(),
+            msgs.len()
+        );
 
         let mut msg_box = Box::new().flex_direction(FlexDirection::Column);
         for msg in msgs.into_iter().rev() {
-            eprintln!("      - Message #{}: {} '{}'", msg.id, msg.role, &msg.content[..msg.content.len().min(30)]);
+            eprintln!(
+                "      - Message #{}: {} '{}'",
+                msg.id,
+                msg.role,
+                &msg.content[..msg.content.len().min(30)]
+            );
             msg_box = msg_box.child(render_message(msg));
         }
         msg_box.into_element()

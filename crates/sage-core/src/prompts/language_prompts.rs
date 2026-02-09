@@ -117,14 +117,21 @@ impl Language {
 
     /// Check if this is a systems programming language
     pub fn is_systems_language(&self) -> bool {
-        matches!(self, Language::Rust | Language::C | Language::Cpp | Language::Go)
+        matches!(
+            self,
+            Language::Rust | Language::C | Language::Cpp | Language::Go
+        )
     }
 
     /// Check if this is a scripting language
     pub fn is_scripting_language(&self) -> bool {
         matches!(
             self,
-            Language::Python | Language::JavaScript | Language::Ruby | Language::Php | Language::Shell
+            Language::Python
+                | Language::JavaScript
+                | Language::Ruby
+                | Language::Php
+                | Language::Shell
         )
     }
 

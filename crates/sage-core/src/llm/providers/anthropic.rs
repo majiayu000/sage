@@ -119,9 +119,10 @@ impl AnthropicProvider {
             return Err(super::error_utils::handle_http_error(response, "Anthropic").await);
         }
 
-        let response_json: Value = response.json().await.map_err(|e| {
-            super::error_utils::handle_parse_error(e, "Anthropic")
-        })?;
+        let response_json: Value = response
+            .json()
+            .await
+            .map_err(|e| super::error_utils::handle_parse_error(e, "Anthropic"))?;
 
         ResponseParser::parse_anthropic(response_json)
     }

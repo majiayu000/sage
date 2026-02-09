@@ -62,7 +62,10 @@ fn default_true() -> bool {
 impl ProviderInfo {
     /// Get the default model for this provider
     pub fn default_model(&self) -> Option<&ModelInfo> {
-        self.models.iter().find(|m| m.default).or(self.models.first())
+        self.models
+            .iter()
+            .find(|m| m.default)
+            .or(self.models.first())
     }
 }
 
@@ -99,9 +102,7 @@ impl ProviderRegistry {
 
     /// Create a registry with default paths (~/.sage)
     pub fn with_defaults() -> Self {
-        let cache_dir = dirs::home_dir()
-            .unwrap_or_default()
-            .join(".sage");
+        let cache_dir = dirs::home_dir().unwrap_or_default().join(".sage");
         Self::new(&cache_dir)
     }
 

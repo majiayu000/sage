@@ -11,8 +11,8 @@ pub mod ollama;
 pub mod openai;
 pub mod openai_stream;
 pub mod openrouter;
-pub mod request_builder;
 pub mod provider_trait;
+pub mod request_builder;
 
 #[cfg(test)]
 mod openai_tests;

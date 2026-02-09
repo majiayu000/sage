@@ -37,7 +37,8 @@ fn test_resolve_from_env() {
 fn test_resolve_missing_provider() {
     // Use a unique env var name that definitely doesn't exist
     let resolver = CredentialResolver::with_defaults();
-    let credential = resolver.resolve_provider("nonexistent_provider_xyz", "NONEXISTENT_XYZ_API_KEY");
+    let credential =
+        resolver.resolve_provider("nonexistent_provider_xyz", "NONEXISTENT_XYZ_API_KEY");
 
     assert!(!credential.has_value());
 }

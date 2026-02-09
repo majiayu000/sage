@@ -6,6 +6,10 @@ use crate::types::LlmUsage;
 use serde_json::Value;
 use std::collections::HashMap;
 
+fn u64_to_u32_saturating(value: u64) -> u32 {
+    u32::try_from(value).unwrap_or(u32::MAX)
+}
+
 /// Response parser for various providers
 pub struct ResponseParser;
 
@@ -46,15 +50,18 @@ impl ResponseParser {
             prompt_tokens: usage_data
                 .get("prompt_tokens")
                 .and_then(|v| v.as_u64())
-                .unwrap_or(0) as u32,
+                .map(u64_to_u32_saturating)
+                .unwrap_or(0),
             completion_tokens: usage_data
                 .get("completion_tokens")
                 .and_then(|v| v.as_u64())
-                .unwrap_or(0) as u32,
+                .map(u64_to_u32_saturating)
+                .unwrap_or(0),
             total_tokens: usage_data
                 .get("total_tokens")
                 .and_then(|v| v.as_u64())
-                .unwrap_or(0) as u32,
+                .map(u64_to_u32_saturating)
+                .unwrap_or(0),
             cost_usd: None,
             cache_creation_input_tokens: None,
             cache_read_input_tokens: None,
@@ -141,11 +148,11 @@ impl ResponseParser {
             let cache_creation_input_tokens = usage_data
                 .get("cache_creation_input_tokens")
                 .and_then(|v| v.as_u64())
-                .map(|v| v as u32);
+                .map(u64_to_u32_saturating);
             let cache_read_input_tokens = usage_data
                 .get("cache_read_input_tokens")
                 .and_then(|v| v.as_u64())
-                .map(|v| v as u32);
+                .map(u64_to_u32_saturating);
 
             // Log cache metrics if present
             if cache_creation_input_tokens.is_some() || cache_read_input_tokens.is_some() {
@@ -165,9 +172,9 @@ impl ResponseParser {
             let total_input = input_tokens + cache_tokens;
 
             Some(LlmUsage {
-                prompt_tokens: total_input as u32, // Include all cache tokens
-                completion_tokens: output_tokens as u32,
-                total_tokens: (total_input + output_tokens) as u32,
+                prompt_tokens: u64_to_u32_saturating(total_input), // Include all cache tokens
+                completion_tokens: u64_to_u32_saturating(output_tokens),
+                total_tokens: u64_to_u32_saturating(total_input.saturating_add(output_tokens)),
                 cost_usd: None,
                 cache_creation_input_tokens,
                 cache_read_input_tokens,
@@ -240,24 +247,23 @@ impl ResponseParser {
         }
 
         let usage = if let Some(usage_metadata) = response["usageMetadata"].as_object() {
-            let prompt_tokens = usage_metadata
+            let prompt_tokens_u64 = usage_metadata
                 .get("promptTokenCount")
                 .and_then(|v| v.as_u64())
-                .unwrap_or(0) as u32;
-            let completion_tokens = usage_metadata
+                .unwrap_or(0);
+            let completion_tokens_u64 = usage_metadata
                 .get("candidatesTokenCount")
                 .and_then(|v| v.as_u64())
-                .unwrap_or(0) as u32;
-            let total_tokens = usage_metadata
+                .unwrap_or(0);
+            let total_tokens_u64 = usage_metadata
                 .get("totalTokenCount")
                 .and_then(|v| v.as_u64())
-                .unwrap_or((prompt_tokens + completion_tokens) as u64)
-                as u32;
+                .unwrap_or(prompt_tokens_u64.saturating_add(completion_tokens_u64));
 
             Some(LlmUsage {
-                prompt_tokens,
-                completion_tokens,
-                total_tokens,
+                prompt_tokens: u64_to_u32_saturating(prompt_tokens_u64),
+                completion_tokens: u64_to_u32_saturating(completion_tokens_u64),
+                total_tokens: u64_to_u32_saturating(total_tokens_u64),
                 cost_usd: None,
                 cache_creation_input_tokens: None,
                 cache_read_input_tokens: None,

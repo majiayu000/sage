@@ -165,7 +165,9 @@ impl ModelsApiClient {
         let models: Vec<FetchedModel> = api_response
             .data
             .into_iter()
-            .filter(|m| m.id.starts_with("gpt-") || m.id.starts_with("o1") || m.id.starts_with("o3"))
+            .filter(|m| {
+                m.id.starts_with("gpt-") || m.id.starts_with("o1") || m.id.starts_with("o3")
+            })
             .map(|m| FetchedModel {
                 name: m.id.clone(),
                 id: m.id,

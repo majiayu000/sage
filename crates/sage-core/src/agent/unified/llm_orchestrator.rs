@@ -64,9 +64,17 @@ impl LlmOrchestrator {
             provider_name,
             api_key_info.source,
             api_key_info.key.is_some(),
-            api_key_info.key.as_ref().map(|k| {
-                if k.len() > 8 { format!("{}...{}", &k[..4], &k[k.len()-4..]) } else { "***".to_string() }
-            }).unwrap_or_else(|| "NONE".to_string())
+            api_key_info
+                .key
+                .as_ref()
+                .map(|k| {
+                    if k.len() > 8 {
+                        format!("{}...{}", &k[..4], &k[k.len() - 4..])
+                    } else {
+                        "***".to_string()
+                    }
+                })
+                .unwrap_or_else(|| "NONE".to_string())
         );
         let mut provider_config = ProviderConfig::new(&provider_name)
             .with_api_key(api_key_info.key.unwrap_or_default())
@@ -83,8 +91,10 @@ impl LlmOrchestrator {
         let model_name = model_params.model.clone();
 
         // Create LLM client
-        let client = LlmClient::new(provider, provider_config, model_params)
-            .context(format!("Failed to create LLM client for: {}", provider_name))?;
+        let client = LlmClient::new(provider, provider_config, model_params).context(format!(
+            "Failed to create LLM client for: {}",
+            provider_name
+        ))?;
 
         Ok(Self {
             client,

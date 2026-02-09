@@ -43,12 +43,7 @@ fn test_command_tool_prefix_matching() {
 
     // All git commands should be allowed
     assert!(tool.is_command_allowed(&["git".into(), "status".into()]));
-    assert!(tool.is_command_allowed(&[
-        "git".into(),
-        "commit".into(),
-        "-m".into(),
-        "test".into()
-    ]));
+    assert!(tool.is_command_allowed(&["git".into(), "commit".into(), "-m".into(), "test".into()]));
     assert!(tool.is_command_allowed(&[
         "git".into(),
         "push".into(),

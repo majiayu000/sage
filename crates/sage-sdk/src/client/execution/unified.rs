@@ -12,7 +12,6 @@ use sage_tools::get_default_tools;
 use std::path::PathBuf;
 
 impl SageAgentSdk {
-
     /// Execute a task using the unified execution loop (Claude Code style)
     ///
     /// This method uses a unified execution model where:
@@ -98,15 +97,20 @@ impl SageAgentSdk {
         // Create the future that will execute the task
         let execution_future = async move {
             // Load MCP tools if MCP is enabled
-            tracing::debug!("Checking MCP configuration: enabled={}", config_for_mcp.mcp.enabled);
+            tracing::debug!(
+                "Checking MCP configuration: enabled={}",
+                config_for_mcp.mcp.enabled
+            );
             if config_for_mcp.mcp.enabled {
                 tracing::info!("MCP is enabled, building MCP registry...");
                 match build_mcp_registry_from_config(&config_for_mcp).await {
                     Ok(mcp_registry) => {
                         let mcp_tools = mcp_registry.as_tools().await;
-                        tracing::info!("Loaded {} MCP tools from {} servers",
+                        tracing::info!(
+                            "Loaded {} MCP tools from {} servers",
                             mcp_tools.len(),
-                            mcp_registry.server_names().len());
+                            mcp_registry.server_names().len()
+                        );
 
                         if !mcp_tools.is_empty() {
                             executor.register_tools(mcp_tools);

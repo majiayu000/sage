@@ -98,9 +98,7 @@ impl ResolvedCredential {
 
     /// Check if this credential is expired
     pub fn is_expired(&self) -> bool {
-        self.expires_at
-            .map(|exp| Utc::now() > exp)
-            .unwrap_or(false)
+        self.expires_at.map(|exp| Utc::now() > exp).unwrap_or(false)
     }
 
     /// Check if this credential is valid (has value, not expired, validated)
@@ -333,8 +331,7 @@ mod tests {
 
     #[test]
     fn test_resolved_credential_priority() {
-        let env_cred =
-            ResolvedCredential::new("key", "test", CredentialSource::env("TEST_KEY"));
+        let env_cred = ResolvedCredential::new("key", "test", CredentialSource::env("TEST_KEY"));
         assert_eq!(env_cred.priority(), CredentialPriority::Environment);
 
         let cli_cred = ResolvedCredential::new("key", "test", CredentialSource::cli("--api-key"));
@@ -391,8 +388,11 @@ mod tests {
             ResolvedCredential::new("key", "openai", CredentialSource::env("OPENAI_API_KEY"));
         assert_eq!(cred1, cred2);
 
-        let cred3 =
-            ResolvedCredential::new("different", "openai", CredentialSource::env("OPENAI_API_KEY"));
+        let cred3 = ResolvedCredential::new(
+            "different",
+            "openai",
+            CredentialSource::env("OPENAI_API_KEY"),
+        );
         assert_ne!(cred1, cred3);
     }
 
