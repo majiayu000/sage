@@ -16,10 +16,7 @@ pub async fn status(config_file: &str) -> SageResult<()> {
 
     // Version info
     println!("{}", "Version".cyan().bold());
-    println!(
-        "  Sage CLI: {}",
-        env!("CARGO_PKG_VERSION").green()
-    );
+    println!("  Sage CLI: {}", env!("CARGO_PKG_VERSION").green());
     println!();
 
     // Environment info
@@ -65,7 +62,10 @@ pub async fn status(config_file: &str) -> SageResult<()> {
 
         // Provider count
         let provider_count = config.model_providers.len();
-        println!("  Configured Providers: {}", provider_count.to_string().cyan());
+        println!(
+            "  Configured Providers: {}",
+            provider_count.to_string().cyan()
+        );
 
         println!();
     }

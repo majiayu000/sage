@@ -11,11 +11,7 @@ use rnk::prelude::Box as RnkBox;
 const MAX_VISIBLE: usize = 6;
 
 /// Render model selector when in model selection mode
-pub fn render_model_selector(
-    models: &[String],
-    selected_index: usize,
-    theme: &Theme,
-) -> Element {
+pub fn render_model_selector(models: &[String], selected_index: usize, theme: &Theme) -> Element {
     let match_count = models.len();
     let selected = selected_index.min(match_count.saturating_sub(1));
 
@@ -38,7 +34,11 @@ pub fn render_model_selector(
 
     // Header with scroll indicator
     let header = if match_count > MAX_VISIBLE {
-        format!("⌘ select model ({}/{}) - ↑↓ navigate, Enter select, Esc cancel", selected + 1, match_count)
+        format!(
+            "⌘ select model ({}/{}) - ↑↓ navigate, Enter select, Esc cancel",
+            selected + 1,
+            match_count
+        )
     } else {
         "⌘ select model - ↑↓ navigate, Enter select, Esc cancel".to_string()
     };
@@ -68,14 +68,12 @@ pub fn render_model_selector(
             theme.accent_assistant
         };
 
-        let row = RnkBox::new()
-            .flex_direction(FlexDirection::Row)
-            .child(
-                Text::new(format!("{} {}", prefix, model))
-                    .color(model_color)
-                    .bold()
-                    .into_element(),
-            );
+        let row = RnkBox::new().flex_direction(FlexDirection::Row).child(
+            Text::new(format!("{} {}", prefix, model))
+                .color(model_color)
+                .bold()
+                .into_element(),
+        );
 
         container = container.child(row.into_element());
     }

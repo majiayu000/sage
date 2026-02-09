@@ -11,8 +11,8 @@
 
 use chrono::Utc;
 use rnk::layout::LayoutEngine;
-use rnk::prelude::*;
 use rnk::prelude::Box as RnkBox;
+use rnk::prelude::*;
 use sage_core::ui::bridge::state::{
     AppState, ExecutionPhase, Message, MessageContent, MessageMetadata, Role, SessionState,
     ToolResult,
@@ -310,10 +310,7 @@ fn create_tool_call_message(tool_name: &str, params: &str, result: Option<ToolRe
 
 fn build_header(session: &SessionState, width: u16) -> Element {
     let version = env!("CARGO_PKG_VERSION");
-    let title = truncate_to_width(
-        &format!("▐▛███▜▌   Sage Code v{}", version),
-        width as usize,
-    );
+    let title = truncate_to_width(&format!("▐▛███▜▌   Sage Code v{}", version), width as usize);
     let model_info = format!("{} · {}", session.model, session.provider);
     let model_line = truncate_to_width(&format!("▝▜█████▛▘  {}", model_info), width as usize);
     let cwd_line = truncate_to_width(
@@ -343,12 +340,7 @@ fn build_input_prompt(input_text: &str, is_idle: bool) -> Element {
 
     RnkBox::new()
         .flex_direction(FlexDirection::Row)
-        .child(
-            Text::new("❯ ")
-                .color(Color::Yellow)
-                .bold()
-                .into_element(),
-        )
+        .child(Text::new("❯ ").color(Color::Yellow).bold().into_element())
         .child(Text::new(display_text).color(Color::Black).into_element())
         .into_element()
 }
@@ -859,10 +851,7 @@ mod phase2_virtual_scroll {
 
         let scroll_percent: Option<u8> = if max_scroll > 0 { Some(50) } else { None };
 
-        assert_eq!(
-            scroll_percent, None,
-            "Non-scrollable should return None"
-        );
+        assert_eq!(scroll_percent, None, "Non-scrollable should return None");
     }
 
     #[test]
@@ -946,10 +935,13 @@ mod phase3_message_rendering {
 
                 // Line 1: tool: Name
                 container = container.child(
-                    Text::new(truncate_to_width(&format!("tool: {}", tool_name), max_width))
-                        .color(Color::Magenta)
-                        .bold()
-                        .into_element(),
+                    Text::new(truncate_to_width(
+                        &format!("tool: {}", tool_name),
+                        max_width,
+                    ))
+                    .color(Color::Magenta)
+                    .bold()
+                    .into_element(),
                 );
 
                 // Line 2: args (if any)
@@ -976,12 +968,9 @@ mod phase3_message_rendering {
                         }
                     } else if let Some(error) = &r.error {
                         container = container.child(
-                            Text::new(truncate_to_width(
-                                &format!("  error: {}", error),
-                                max_width,
-                            ))
-                            .color(Color::Red)
-                            .into_element(),
+                            Text::new(truncate_to_width(&format!("  error: {}", error), max_width))
+                                .color(Color::Red)
+                                .into_element(),
                         );
                     }
                 }

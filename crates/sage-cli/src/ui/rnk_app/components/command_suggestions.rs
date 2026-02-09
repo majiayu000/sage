@@ -80,7 +80,11 @@ pub fn render_command_suggestions(
                     .bold()
                     .into_element(),
             )
-            .child(Text::new(format!("  {desc}")).color(desc_color).into_element());
+            .child(
+                Text::new(format!("  {desc}"))
+                    .color(desc_color)
+                    .into_element(),
+            );
 
         container = container.child(row.into_element());
     }

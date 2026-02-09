@@ -82,27 +82,27 @@ fn detect_theme_kind() -> ThemeKind {
 fn dark_theme() -> Theme {
     // Catppuccin Mocha palette
     Theme {
-        text_primary: Color::Rgb(205, 214, 244),  // #cdd6f4
-        text_muted: Color::Rgb(108, 112, 134),    // #6c7086
-        text_subtle: Color::Rgb(88, 91, 112),     // #585b70
+        text_primary: Color::Rgb(205, 214, 244), // #cdd6f4
+        text_muted: Color::Rgb(108, 112, 134),   // #6c7086
+        text_subtle: Color::Rgb(88, 91, 112),    // #585b70
 
         accent_assistant: Color::Rgb(137, 180, 250), // #89b4fa (blue)
         accent_user: Color::Rgb(166, 227, 161),      // #a6e3a1 (green)
         accent_system: Color::Rgb(203, 166, 247),    // #cba6f7 (mauve)
         accent_primary: Color::Rgb(137, 180, 250),   // #89b4fa (blue)
 
-        border: Color::Rgb(88, 91, 112),          // #585b70
-        border_subtle: Color::Rgb(69, 71, 90),    // #45475a
-        separator: Color::Rgb(69, 71, 90),        // #45475a
+        border: Color::Rgb(88, 91, 112),       // #585b70
+        border_subtle: Color::Rgb(69, 71, 90), // #45475a
+        separator: Color::Rgb(69, 71, 90),     // #45475a
 
-        surface: Color::Rgb(49, 50, 68),          // #313244
+        surface: Color::Rgb(49, 50, 68), // #313244
 
-        ok: Color::Rgb(166, 227, 161),            // #a6e3a1 (green)
-        warn: Color::Rgb(249, 226, 175),          // #f9e2af (yellow)
-        err: Color::Rgb(243, 139, 168),           // #f38ba8 (red)
+        ok: Color::Rgb(166, 227, 161),   // #a6e3a1 (green)
+        warn: Color::Rgb(249, 226, 175), // #f9e2af (yellow)
+        err: Color::Rgb(243, 139, 168),  // #f38ba8 (red)
 
-        tool: Color::Rgb(203, 166, 247),          // #cba6f7 (mauve)
-        tool_param: Color::Rgb(166, 173, 200),    // #a6adc8 (subtext0)
+        tool: Color::Rgb(203, 166, 247),       // #cba6f7 (mauve)
+        tool_param: Color::Rgb(166, 173, 200), // #a6adc8 (subtext0)
 
         status_normal: Color::Rgb(249, 226, 175), // #f9e2af (yellow)
         status_bypass: Color::Rgb(243, 139, 168), // #f38ba8 (red)

@@ -16,7 +16,7 @@ pub use usage_cmd::usage_cmd as usage;
 
 #[cfg(test)]
 mod tests {
-    use super::types::{format_number, CheckResult, CheckStatus};
+    use super::types::{CheckResult, CheckStatus, format_number};
     use super::usage::{extract_usage_from_content, extract_usage_from_json};
 
     #[test]

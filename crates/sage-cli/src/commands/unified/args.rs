@@ -69,8 +69,23 @@ mod tests {
     fn test_output_mode_value_enum() {
         use clap::ValueEnum;
         assert_eq!(OutputModeArg::value_variants().len(), 3);
-        assert_eq!(OutputModeArg::Streaming.to_possible_value().unwrap().get_name(), "streaming");
-        assert_eq!(OutputModeArg::Batch.to_possible_value().unwrap().get_name(), "batch");
-        assert_eq!(OutputModeArg::Silent.to_possible_value().unwrap().get_name(), "silent");
+        assert_eq!(
+            OutputModeArg::Streaming
+                .to_possible_value()
+                .unwrap()
+                .get_name(),
+            "streaming"
+        );
+        assert_eq!(
+            OutputModeArg::Batch.to_possible_value().unwrap().get_name(),
+            "batch"
+        );
+        assert_eq!(
+            OutputModeArg::Silent
+                .to_possible_value()
+                .unwrap()
+                .get_name(),
+            "silent"
+        );
     }
 }

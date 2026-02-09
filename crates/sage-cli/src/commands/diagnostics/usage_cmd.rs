@@ -22,10 +22,7 @@ pub async fn usage_cmd(session_dir: Option<&Path>, detailed: bool) -> SageResult
         .unwrap_or_else(|| Path::new("trajectories").to_path_buf());
 
     if !dir.exists() {
-        console.warn(&format!(
-            "Session directory not found: {}",
-            dir.display()
-        ));
+        console.warn(&format!("Session directory not found: {}", dir.display()));
         console.info("Run some tasks first to generate usage data.");
         return Ok(());
     }
@@ -66,7 +63,12 @@ pub async fn usage_cmd(session_dir: Option<&Path>, detailed: bool) -> SageResult
                 if detailed {
                     println!(
                         "  {} - {} prompt, {} completion",
-                        entry.path().file_name().unwrap_or_default().to_string_lossy().cyan(),
+                        entry
+                            .path()
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .cyan(),
                         format_number(usage.prompt_tokens),
                         format_number(usage.completion_tokens)
                     );
@@ -92,7 +94,9 @@ pub async fn usage_cmd(session_dir: Option<&Path>, detailed: bool) -> SageResult
     );
     println!(
         "  Total Tokens: {}",
-        format_number(total_prompt_tokens + total_completion_tokens).yellow().bold()
+        format_number(total_prompt_tokens + total_completion_tokens)
+            .yellow()
+            .bold()
     );
 
     if total_cache_read_tokens > 0 || total_cache_created_tokens > 0 {
@@ -109,12 +113,8 @@ pub async fn usage_cmd(session_dir: Option<&Path>, detailed: bool) -> SageResult
 
         // Calculate savings percentage
         if total_prompt_tokens > 0 {
-            let savings_pct =
-                (total_cache_read_tokens as f64 / total_prompt_tokens as f64) * 100.0;
-            println!(
-                "  Estimated Savings: {:.1}%",
-                savings_pct
-            );
+            let savings_pct = (total_cache_read_tokens as f64 / total_prompt_tokens as f64) * 100.0;
+            println!("  Estimated Savings: {:.1}%", savings_pct);
         }
     }
 

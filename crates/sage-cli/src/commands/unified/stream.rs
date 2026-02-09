@@ -114,7 +114,9 @@ pub async fn execute_stream_json(
                     format!("Error: {}", error.message)
                 }
                 ExecutionOutcome::Interrupted { .. } => "Task interrupted by user".to_string(),
-                ExecutionOutcome::MaxStepsReached { .. } => "Task reached maximum steps".to_string(),
+                ExecutionOutcome::MaxStepsReached { .. } => {
+                    "Task reached maximum steps".to_string()
+                }
                 ExecutionOutcome::UserCancelled { .. } => "Task cancelled by user".to_string(),
                 ExecutionOutcome::NeedsUserInput { last_response, .. } => {
                     format!("Waiting for input: {}", last_response)
@@ -136,9 +138,7 @@ pub async fn execute_stream_json(
             writer.write_event(&result_event).ok();
         }
         Err(ref e) => {
-            writer
-                .write_event(&OutputEvent::error(e.to_string()))
-                .ok();
+            writer.write_event(&OutputEvent::error(e.to_string())).ok();
         }
     }
 

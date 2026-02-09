@@ -20,10 +20,8 @@ pub fn check_config_file(config_file: &str) -> CheckResult {
     match std::fs::read_to_string(path) {
         Ok(content) => match serde_json::from_str::<serde_json::Value>(&content) {
             Ok(_) => CheckResult::pass("Config File", format!("Valid: {}", config_file)),
-            Err(e) => {
-                CheckResult::fail("Config File", format!("Invalid JSON: {}", e))
-                    .with_hint("Check the configuration file for syntax errors")
-            }
+            Err(e) => CheckResult::fail("Config File", format!("Invalid JSON: {}", e))
+                .with_hint("Check the configuration file for syntax errors"),
         },
         Err(e) => CheckResult::fail("Config File", format!("Cannot read: {}", e)),
     }
@@ -103,7 +101,10 @@ pub fn check_api_config(config: &Config) -> Vec<CheckResult> {
     }
 
     // Check default provider
-    if config.model_providers.contains_key(&config.default_provider) {
+    if config
+        .model_providers
+        .contains_key(&config.default_provider)
+    {
         results.push(CheckResult::pass(
             "Default Provider",
             format!("Set to '{}'", config.default_provider),
@@ -160,10 +161,7 @@ pub async fn get_git_branch() -> Result<String, std::io::Error> {
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     } else {
-        Err(std::io::Error::other(
-            
-            "Failed to get git branch"
-        ))
+        Err(std::io::Error::other("Failed to get git branch"))
     }
 }
 
@@ -181,12 +179,11 @@ pub async fn get_git_status_summary() -> Result<String, std::io::Error> {
         if lines.is_empty() {
             Ok("clean".green().to_string())
         } else {
-            Ok(format!("{} changed file(s)", lines.len()).yellow().to_string())
+            Ok(format!("{} changed file(s)", lines.len())
+                .yellow()
+                .to_string())
         }
     } else {
-        Err(std::io::Error::other(
-            
-            "Failed to get git status"
-        ))
+        Err(std::io::Error::other("Failed to get git status"))
     }
 }

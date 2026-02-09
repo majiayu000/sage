@@ -33,7 +33,9 @@ fn content_line(color: Color, text: String, text_color: Color, is_first: bool) -
 
 /// Format a message for printing via rnk::println
 pub fn format_message(msg: &Message, theme: &Theme) -> Element {
-    let term_width = crossterm::terminal::size().map(|(w, _)| w as usize).unwrap_or(80);
+    let term_width = crossterm::terminal::size()
+        .map(|(w, _)| w as usize)
+        .unwrap_or(80);
     let color = role_color(&msg.role, theme);
 
     match &msg.content {
@@ -59,7 +61,8 @@ pub fn format_message(msg: &Message, theme: &Theme) -> Element {
                 }
                 Role::System => {
                     let sys_text = truncate_to_width(text, term_width.saturating_sub(4));
-                    container = container.child(content_line(color, sys_text, theme.text_muted, true));
+                    container =
+                        container.child(content_line(color, sys_text, theme.text_muted, true));
                 }
             }
 

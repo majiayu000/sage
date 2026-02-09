@@ -145,7 +145,7 @@ pub async fn handle_interactive_command_v2(
         }
         InteractiveCommand::ModelSelect => {
             // Fetch models and return them for interactive selection
-            use sage_core::config::{load_config, ModelsApiClient, ProviderRegistry};
+            use sage_core::config::{ModelsApiClient, ProviderRegistry, load_config};
 
             // Get current provider
             let config = match load_config() {

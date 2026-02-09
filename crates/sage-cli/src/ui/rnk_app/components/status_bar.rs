@@ -29,11 +29,7 @@ pub fn render_status_bar(
                 .bold()
                 .into_element(),
         )
-        .child(
-            Text::new("  │  ")
-                .color(theme.border_subtle)
-                .into_element(),
-        )
+        .child(Text::new("  │  ").color(theme.border_subtle).into_element())
         .child(
             Text::new("shift+Tab to cycle")
                 .color(theme.text_subtle)
@@ -44,16 +40,8 @@ pub fn render_status_bar(
     if let Some(m) = model {
         if m != "unknown" {
             row = row
-                .child(
-                    Text::new("  │  ")
-                        .color(theme.border_subtle)
-                        .into_element(),
-                )
-                .child(
-                    Text::new(m)
-                        .color(theme.text_subtle)
-                        .into_element(),
-                );
+                .child(Text::new("  │  ").color(theme.border_subtle).into_element())
+                .child(Text::new(m).color(theme.text_subtle).into_element());
         }
     }
 

@@ -49,21 +49,25 @@ struct ValidationSpinner {
 impl ValidationSpinner {
     fn new(message: &str) -> Self {
         let bar = ProgressBar::new_spinner();
-        bar.set_style(ProgressStyle::default_spinner()
-            .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ")
-            .template("{spinner:.blue} {msg}")
-            .unwrap());
+        bar.set_style(
+            ProgressStyle::default_spinner()
+                .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ")
+                .template("{spinner:.blue} {msg}")
+                .unwrap(),
+        );
         bar.set_message(message.to_string());
         bar.enable_steady_tick(std::time::Duration::from_millis(100));
         Self { bar }
     }
 
     fn finish_success(&self, message: &str) {
-        self.bar.finish_with_message(format!("{} {}", "✓".green(), message));
+        self.bar
+            .finish_with_message(format!("{} {}", "✓".green(), message));
     }
 
     fn finish_warning(&self, message: &str) {
-        self.bar.finish_with_message(format!("{} {}", "⚠".yellow(), message));
+        self.bar
+            .finish_with_message(format!("{} {}", "⚠".yellow(), message));
     }
 }
 
@@ -114,7 +118,8 @@ impl CliOnboarding {
             spinner.finish_success(&format!("API key validated! Model: {}", model_info));
         } else if let Some(error) = &validation.error {
             spinner.finish_warning(&format!("Validation warning: {}", error));
-            self.console.info("The key will be saved but may not work correctly.");
+            self.console
+                .info("The key will be saved but may not work correctly.");
         }
 
         // Ask to save
@@ -158,7 +163,8 @@ impl CliOnboarding {
         // Save
         if self.confirm("Save this configuration?")? {
             self.manager.save_configuration()?;
-            self.console.success(&format!("{} API key configured!", provider));
+            self.console
+                .success(&format!("{} API key configured!", provider));
             return Ok(true);
         }
 
@@ -310,7 +316,9 @@ impl CliOnboarding {
 
         // Read API key with hidden input
         print!("  API Key: ");
-        io::stdout().flush().map_err(|e| SageError::io(format!("flush error: {}", e)))?;
+        io::stdout()
+            .flush()
+            .map_err(|e| SageError::io(format!("flush error: {}", e)))?;
 
         let key = self.read_password()?;
 
@@ -362,10 +370,14 @@ impl CliOnboarding {
 
     fn confirm(&self, message: &str) -> SageResult<bool> {
         print!("  {} {} [Y/n]: ", "?".yellow().bold(), message);
-        io::stdout().flush().map_err(|e| SageError::io(format!("flush error: {}", e)))?;
+        io::stdout()
+            .flush()
+            .map_err(|e| SageError::io(format!("flush error: {}", e)))?;
 
         // Use term.read_line() instead of stdin to work properly after read_key()
-        let input = self.term.read_line()
+        let input = self
+            .term
+            .read_line()
             .map_err(|e| SageError::io(format!("read error: {}", e)))?;
 
         let answer = input.trim().to_lowercase();

@@ -37,11 +37,7 @@ pub fn extract_usage_from_content(content: &str) -> Option<UsageData> {
         }
     }
 
-    if found_any {
-        Some(total)
-    } else {
-        None
-    }
+    if found_any { Some(total) } else { None }
 }
 
 /// Extract usage data from a JSON value

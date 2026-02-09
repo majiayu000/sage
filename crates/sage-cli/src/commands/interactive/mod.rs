@@ -2,4 +2,4 @@
 
 mod onboarding;
 
-pub use onboarding::{check_config_status, CliOnboarding};
+pub use onboarding::{CliOnboarding, check_config_status};

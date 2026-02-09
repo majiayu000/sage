@@ -26,7 +26,11 @@ pub fn render_input(input_text: &str, theme: &Theme, animation_frame: usize) -> 
         % HINTS.len();
 
     let is_empty = input_text.is_empty();
-    let display_text = if is_empty { HINTS[hint_idx] } else { input_text };
+    let display_text = if is_empty {
+        HINTS[hint_idx]
+    } else {
+        input_text
+    };
 
     let caret_frames = ["▏", "▎", "▍", "▋"];
     let caret = caret_frames[animation_frame % caret_frames.len()];

@@ -31,7 +31,9 @@ pub fn render_tool_call(
     result: Option<&ToolResult>,
     theme: &Theme,
 ) -> Element {
-    let term_width = crossterm::terminal::size().map(|(w, _)| w as usize).unwrap_or(80);
+    let term_width = crossterm::terminal::size()
+        .map(|(w, _)| w as usize)
+        .unwrap_or(80);
     let icon = get_tool_icon(tool_name);
 
     let mut col = RnkBox::new().flex_direction(FlexDirection::Column);
@@ -49,7 +51,11 @@ pub fn render_tool_call(
         RnkBox::new()
             .flex_direction(FlexDirection::Row)
             .child(Text::new("│ ").color(theme.border_subtle).into_element())
-            .child(Text::new(format!("{} ", icon)).color(theme.tool).into_element())
+            .child(
+                Text::new(format!("{} ", icon))
+                    .color(theme.tool)
+                    .into_element(),
+            )
             .child(Text::new(tool_name).color(theme.tool).bold().into_element())
             .into_element(),
     );
@@ -70,7 +76,13 @@ pub fn render_tool_call(
     // Result
     if let Some(r) = result {
         if r.success {
-            let out = r.output.as_deref().unwrap_or("").lines().next().unwrap_or("");
+            let out = r
+                .output
+                .as_deref()
+                .unwrap_or("")
+                .lines()
+                .next()
+                .unwrap_or("");
             let preview = truncate_to_width(out, term_width.saturating_sub(8));
             if !preview.is_empty() {
                 col = col.child(

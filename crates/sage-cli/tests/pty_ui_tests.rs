@@ -11,10 +11,7 @@ const TIMEOUT_MS: u64 = 30000;
 /// Helper to get the sage binary path
 fn sage_binary() -> String {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    format!(
-        "{}/../../target/debug/sage",
-        manifest_dir
-    )
+    format!("{}/../../target/debug/sage", manifest_dir)
 }
 
 /// Test that sage starts and shows the header
@@ -137,8 +134,8 @@ fn test_doctor_command() {
 mod ui_state_tests {
     //! Unit tests for UI state transitions
 
-    use std::sync::Arc;
     use parking_lot::RwLock;
+    use std::sync::Arc;
 
     /// Mock UI state for testing
     #[derive(Default)]
