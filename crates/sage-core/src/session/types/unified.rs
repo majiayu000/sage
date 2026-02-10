@@ -21,12 +21,6 @@ pub use super::super::enhanced::context::{
     SessionContext, ThinkingLevel, ThinkingMetadata, TodoItem, TodoStatus,
 };
 
-/// Type alias: `UnifiedTodoItem` is the same as `TodoItem` from the enhanced context module.
-pub type UnifiedTodoItem = TodoItem;
-
-/// Type alias: `UnifiedTodoStatus` is the same as `TodoStatus` from the enhanced context module.
-pub type UnifiedTodoStatus = TodoStatus;
-
 // ============================================================================
 // Type Aliases
 // ============================================================================
@@ -346,7 +340,7 @@ pub struct SessionMessage {
 
     /// Todo list snapshot
     #[serde(default)]
-    pub todos: Vec<UnifiedTodoItem>,
+    pub todos: Vec<TodoItem>,
 
     /// Whether this is a sidechain message
     #[serde(rename = "isSidechain")]
@@ -483,7 +477,7 @@ impl SessionMessage {
     }
 
     /// Set todos
-    pub fn with_todos(mut self, todos: Vec<UnifiedTodoItem>) -> Self {
+    pub fn with_todos(mut self, todos: Vec<TodoItem>) -> Self {
         self.todos = todos;
         self
     }

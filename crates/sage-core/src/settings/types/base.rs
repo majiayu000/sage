@@ -1,6 +1,6 @@
 //! Main settings structure
 
-use super::permissions::PermissionBehavior;
+use super::permissions::SettingsPermissionBehavior;
 use super::{
     HooksSettings, ModelSettings, PermissionSettings, ToolSettings, UiSettings, WorkspaceSettings,
 };
@@ -73,7 +73,7 @@ impl Settings {
 
         // SAGE_ALLOW_ALL
         if std::env::var("SAGE_ALLOW_ALL").is_ok() {
-            self.permissions.default_behavior = PermissionBehavior::Allow;
+            self.permissions.default_behavior = SettingsPermissionBehavior::Allow;
         }
     }
 }
@@ -89,7 +89,7 @@ mod tests {
         assert!(settings.permissions.deny.is_empty());
         assert_eq!(
             settings.permissions.default_behavior,
-            PermissionBehavior::Ask
+            SettingsPermissionBehavior::Ask
         );
     }
 
@@ -102,7 +102,7 @@ mod tests {
             permissions: PermissionSettings {
                 allow: vec!["Write(src/*)".to_string()],
                 deny: vec!["Bash(rm -rf *)".to_string()],
-                default_behavior: PermissionBehavior::Allow,
+                default_behavior: SettingsPermissionBehavior::Allow,
             },
             ..Default::default()
         };
@@ -111,7 +111,7 @@ mod tests {
 
         assert_eq!(base.permissions.allow.len(), 2);
         assert_eq!(base.permissions.deny.len(), 1);
-        assert_eq!(base.permissions.default_behavior, PermissionBehavior::Allow);
+        assert_eq!(base.permissions.default_behavior, SettingsPermissionBehavior::Allow);
     }
 
     #[test]
@@ -120,7 +120,7 @@ mod tests {
             permissions: PermissionSettings {
                 allow: vec!["Read(src/*)".to_string()],
                 deny: vec![],
-                default_behavior: PermissionBehavior::Ask,
+                default_behavior: SettingsPermissionBehavior::Ask,
             },
             ..Default::default()
         };

@@ -417,7 +417,7 @@ impl SettingsLoadInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::settings::types::PermissionBehavior;
+    use crate::settings::types::SettingsPermissionBehavior;
     use std::fs;
     use tempfile::TempDir;
 
@@ -429,7 +429,7 @@ mod tests {
 
         assert_eq!(
             settings.permissions.default_behavior,
-            PermissionBehavior::Ask
+            SettingsPermissionBehavior::Ask
         );
     }
 
@@ -456,7 +456,7 @@ mod tests {
         assert_eq!(settings.permissions.deny.len(), 1);
         assert_eq!(
             settings.permissions.default_behavior,
-            PermissionBehavior::Allow
+            SettingsPermissionBehavior::Allow
         );
     }
 
@@ -492,7 +492,7 @@ mod tests {
         // Local behavior should win
         assert_eq!(
             settings.permissions.default_behavior,
-            PermissionBehavior::Allow
+            SettingsPermissionBehavior::Allow
         );
     }
 
@@ -570,7 +570,7 @@ mod tests {
         assert_eq!(settings.permissions.allow.len(), 1);
         assert_eq!(
             settings.permissions.default_behavior,
-            PermissionBehavior::Allow
+            SettingsPermissionBehavior::Allow
         );
     }
 

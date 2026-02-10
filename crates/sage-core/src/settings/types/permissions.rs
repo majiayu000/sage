@@ -15,7 +15,7 @@ pub struct PermissionSettings {
 
     /// Default behavior when no rule matches
     #[serde(default)]
-    pub default_behavior: PermissionBehavior,
+    pub default_behavior: SettingsPermissionBehavior,
 }
 
 impl PermissionSettings {
@@ -26,7 +26,7 @@ impl PermissionSettings {
         self.deny.extend(other.deny);
 
         // Override default behavior if explicitly set
-        if other.default_behavior != PermissionBehavior::default() {
+        if other.default_behavior != SettingsPermissionBehavior::default() {
             self.default_behavior = other.default_behavior;
         }
     }
@@ -68,7 +68,7 @@ pub struct ParsedPattern {
 /// Permission behavior
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum PermissionBehavior {
+pub enum SettingsPermissionBehavior {
     /// Always allow
     Allow,
     /// Always deny
@@ -77,7 +77,7 @@ pub enum PermissionBehavior {
     Ask,
 }
 
-impl Default for PermissionBehavior {
+impl Default for SettingsPermissionBehavior {
     fn default() -> Self {
         Self::Ask
     }
@@ -110,6 +110,6 @@ mod tests {
 
     #[test]
     fn test_permission_behavior_default() {
-        assert_eq!(PermissionBehavior::default(), PermissionBehavior::Ask);
+        assert_eq!(SettingsPermissionBehavior::default(), SettingsPermissionBehavior::Ask);
     }
 }

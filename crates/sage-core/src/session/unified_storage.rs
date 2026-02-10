@@ -12,73 +12,11 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tracing::{debug, error, info, warn};
 
 use super::types::unified::{
-    FileBackupInfo, FileHistorySnapshot, MessageId, Session, SessionContext, SessionHeader,
+    FileHistorySnapshot, MessageId, Session, SessionContext, SessionHeader,
     SessionId, SessionMessage, SessionMessageType, SessionMetadataPatch, SessionRecord,
-    SessionRecordPayload, TrackedFileState, TrackedFilesSnapshot,
+    SessionRecordPayload,
 };
 use crate::error::{SageError, SageResult};
-use crate::session::types::{
-    FileBackupInfo as LegacyFileBackupInfo, FileHistorySnapshot as LegacyFileHistorySnapshot,
-    TrackedFileState as LegacyTrackedFileState, TrackedFilesSnapshot as LegacyTrackedFilesSnapshot,
-};
-
-impl From<&LegacyTrackedFileState> for TrackedFileState {
-    fn from(state: &LegacyTrackedFileState) -> Self {
-        Self {
-            original_content: state.original_content.clone(),
-            content_hash: state.content_hash.clone(),
-            size: state.size,
-            state: state.state.clone(),
-        }
-    }
-}
-
-impl From<&LegacyFileBackupInfo> for FileBackupInfo {
-    fn from(info: &LegacyFileBackupInfo) -> Self {
-        Self {
-            backup_path: info.backup_path.clone(),
-            original_hash: info.original_hash.clone(),
-        }
-    }
-}
-
-impl From<&LegacyTrackedFilesSnapshot> for TrackedFilesSnapshot {
-    fn from(snapshot: &LegacyTrackedFilesSnapshot) -> Self {
-        let tracked_files = snapshot
-            .tracked_files
-            .iter()
-            .map(|(k, v)| (k.clone(), TrackedFileState::from(v)))
-            .collect();
-        let file_backups = snapshot
-            .file_backups
-            .iter()
-            .map(|(k, v)| (k.clone(), FileBackupInfo::from(v)))
-            .collect();
-
-        Self {
-            tracked_files,
-            file_backups,
-        }
-    }
-}
-
-impl From<&LegacyFileHistorySnapshot> for FileHistorySnapshot {
-    fn from(snapshot: &LegacyFileHistorySnapshot) -> Self {
-        Self {
-            snapshot_type: snapshot.snapshot_type.clone(),
-            message_id: snapshot.message_id.clone(),
-            timestamp: snapshot.timestamp,
-            is_snapshot_update: snapshot.is_snapshot_update,
-            snapshot: TrackedFilesSnapshot::from(&snapshot.snapshot),
-        }
-    }
-}
-
-impl From<&FileHistorySnapshot> for FileHistorySnapshot {
-    fn from(snapshot: &FileHistorySnapshot) -> Self {
-        snapshot.clone()
-    }
-}
 
 /// Unified JSONL session storage
 ///

@@ -9,7 +9,7 @@ use crate::session::MessageChainTracker;
 use crate::session::UnifiedSessionStorage;
 use crate::session::types::unified::{
     FileHistorySnapshot, UnifiedMessageRole, SessionContext, SessionHeader, SessionMessage,
-    SessionMessageType, SessionMetadataPatch, SessionState, ThinkingMetadata, UnifiedTodoItem,
+    SessionMessageType, SessionMetadataPatch, SessionState, ThinkingMetadata, TodoItem,
     UnifiedTokenUsage, UnifiedToolCall, UnifiedToolResult,
 };
 use chrono::Utc;
@@ -134,7 +134,7 @@ impl MessagePersister {
     }
 
     /// Update todos on the tracker.
-    pub async fn set_todos(&self, todos: Vec<UnifiedTodoItem>) {
+    pub async fn set_todos(&self, todos: Vec<TodoItem>) {
         self.state.write().await.tracker.set_todos(todos);
     }
 

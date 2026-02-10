@@ -244,7 +244,7 @@ pub use output::{
 pub use prompts::{BuiltinPrompts, PromptRegistry, PromptTemplate, PromptVariable, RenderError};
 pub use settings::{
     HookDefinition as SettingsHookDefinition, HookDefinitionType as SettingsHookDefinitionType,
-    HooksSettings, ModelSettings, ParsedPattern, PermissionBehavior, PermissionSettings, Settings,
+    HooksSettings, ModelSettings, ParsedPattern, SettingsPermissionBehavior, PermissionSettings, Settings,
     SettingsLoadInfo, SettingsLoader, SettingsLocations, SettingsSource, SettingsValidator,
     ToolSettings, UiSettings, SettingsValidationResult, WorkspaceSettings,
 };

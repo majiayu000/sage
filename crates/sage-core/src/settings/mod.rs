@@ -80,6 +80,6 @@ pub use loader::{SettingsLoadInfo, SettingsLoader, SettingsSource};
 pub use locations::SettingsLocations;
 pub use types::{
     HookDefinition, HookDefinitionType, HooksSettings, ModelSettings, ParsedPattern,
-    PermissionBehavior, PermissionSettings, Settings, ToolSettings, UiSettings, WorkspaceSettings,
+    SettingsPermissionBehavior, PermissionSettings, Settings, ToolSettings, UiSettings, WorkspaceSettings,
 };
 pub use validation::{SettingsValidationResult, SettingsValidator};
