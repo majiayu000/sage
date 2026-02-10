@@ -13,17 +13,14 @@ use tracing::{debug, error, info, warn};
 
 use super::types::unified::{
     FileBackupInfo, FileHistorySnapshot, MessageId, Session, SessionContext, SessionHeader,
-    SessionMessage, SessionMessageType, SessionMetadataPatch, SessionRecord, SessionRecordPayload,
-    TrackedFileState, TrackedFilesSnapshot,
+    SessionId, SessionMessage, SessionMessageType, SessionMetadataPatch, SessionRecord,
+    SessionRecordPayload, TrackedFileState, TrackedFilesSnapshot,
 };
 use crate::error::{SageError, SageResult};
 use crate::session::types::{
     FileBackupInfo as LegacyFileBackupInfo, FileHistorySnapshot as LegacyFileHistorySnapshot,
     TrackedFileState as LegacyTrackedFileState, TrackedFilesSnapshot as LegacyTrackedFilesSnapshot,
 };
-
-/// Session ID type alias
-pub type SessionId = String;
 
 impl From<&LegacyTrackedFileState> for TrackedFileState {
     fn from(state: &LegacyTrackedFileState) -> Self {

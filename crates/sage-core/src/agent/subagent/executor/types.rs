@@ -1,56 +1,10 @@
 //! Types for sub-agent executor configuration and progress tracking
 
-use super::super::types::{AgentType, SubAgentResult};
-
-/// Configuration for sub-agent execution
-#[derive(Debug, Clone)]
-pub struct SubAgentConfig {
-    /// Agent type to use
-    pub agent_type: AgentType,
-    /// Task description
-    pub task: String,
-    /// Additional context
-    pub context: Option<String>,
-    /// Override maximum steps
-    pub max_steps: Option<usize>,
-    /// Override temperature
-    pub temperature: Option<f64>,
-}
-
-impl SubAgentConfig {
-    /// Create a new sub-agent configuration
-    pub fn new(agent_type: AgentType, task: impl Into<String>) -> Self {
-        Self {
-            agent_type,
-            task: task.into(),
-            context: None,
-            max_steps: None,
-            temperature: None,
-        }
-    }
-
-    /// Set context
-    pub fn with_context(mut self, context: impl Into<String>) -> Self {
-        self.context = Some(context.into());
-        self
-    }
-
-    /// Set max steps
-    pub fn with_max_steps(mut self, max_steps: usize) -> Self {
-        self.max_steps = Some(max_steps);
-        self
-    }
-
-    /// Set temperature
-    pub fn with_temperature(mut self, temperature: f64) -> Self {
-        self.temperature = Some(temperature);
-        self
-    }
-}
+use super::super::types::SubAgentResult;
 
 /// Progress update from executor
 #[derive(Debug, Clone)]
-pub struct AgentProgress {
+pub struct ExecutorProgress {
     /// Current step
     pub step: usize,
     /// Max steps
@@ -61,7 +15,7 @@ pub struct AgentProgress {
     pub percentage: u8,
 }
 
-impl AgentProgress {
+impl ExecutorProgress {
     /// Create progress update
     pub fn new(step: usize, max_steps: usize, action: impl Into<String>) -> Self {
         let percentage = if max_steps > 0 {
@@ -83,7 +37,7 @@ impl AgentProgress {
 #[derive(Debug, Clone)]
 pub enum ExecutorMessage {
     /// Progress update
-    Progress(AgentProgress),
+    Progress(ExecutorProgress),
     /// Tool call started
     ToolCall { name: String, id: String },
     /// Tool result received

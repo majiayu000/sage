@@ -68,11 +68,3 @@ pub mod tools;
 
 // Re-export tools from the organized structure
 pub use tools::*;
-
-use sage_core::tools::Tool;
-use std::sync::Arc;
-
-/// Get all default tools
-pub fn get_default_tools() -> Vec<Arc<dyn Tool>> {
-    tools::get_default_tools()
-}

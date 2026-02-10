@@ -44,7 +44,7 @@ pub mod schema_translator;
 pub mod transport;
 pub mod types;
 
-pub use cache::{CacheConfig, CacheStats, McpCache};
+pub use cache::{CacheStats, McpCache, McpCacheConfig};
 pub use client::McpClient;
 pub use config_builder::build_mcp_registry_from_config;
 pub use discovery::{

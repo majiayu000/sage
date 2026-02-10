@@ -2,22 +2,12 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Permission behavior types
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum PermissionBehavior {
-    /// Automatically allow
-    Allow,
-    /// Automatically deny
-    Deny,
-    /// Ask the user
-    Ask,
-    /// Pass through without checking
-    Passthrough,
-}
+// Import the canonical PermissionBehavior from the tools permission module
+pub use crate::tools::permission::PermissionBehavior;
 
 /// Permission check result
 #[derive(Debug, Clone)]
-pub enum PermissionResult {
+pub enum InputPermissionResult {
     /// Tool execution allowed
     Allow,
     /// Tool execution denied
@@ -29,20 +19,20 @@ pub enum PermissionResult {
     },
 }
 
-impl PermissionResult {
+impl InputPermissionResult {
     /// Check if permission is granted
     pub fn is_allowed(&self) -> bool {
-        matches!(self, PermissionResult::Allow)
+        matches!(self, InputPermissionResult::Allow)
     }
 
     /// Check if permission is denied
     pub fn is_denied(&self) -> bool {
-        matches!(self, PermissionResult::Deny { .. })
+        matches!(self, InputPermissionResult::Deny { .. })
     }
 
     /// Check if user input is needed
     pub fn needs_user_input(&self) -> bool {
-        matches!(self, PermissionResult::Ask { .. })
+        matches!(self, InputPermissionResult::Ask { .. })
     }
 }
 

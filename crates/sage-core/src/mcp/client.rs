@@ -68,13 +68,17 @@ pub struct McpClient {
     /// Request timeout duration
     request_timeout: Duration,
     /// Notification handler
-    notification_handler: RwLock<Option<Box<dyn NotificationHandler>>>,
+    notification_handler: RwLock<Option<Box<dyn SyncNotificationHandler>>>,
     /// Background message receiver task handle
     receiver_handle: StdMutex<Option<JoinHandle<()>>>,
 }
 
-/// Trait for handling MCP notifications
-pub trait NotificationHandler: Send + Sync {
+/// Sync trait for handling MCP notifications in the client message loop.
+///
+/// This is a lightweight synchronous handler used internally by `McpClient`.
+/// For the full async notification handling system with filtering and dispatching,
+/// see [`super::notifications::NotificationHandler`].
+pub trait SyncNotificationHandler: Send + Sync {
     /// Handle a notification
     fn handle(&self, method: &str, params: Option<Value>);
 }
@@ -82,7 +86,7 @@ pub trait NotificationHandler: Send + Sync {
 /// Default notification handler that logs notifications
 pub struct LoggingNotificationHandler;
 
-impl NotificationHandler for LoggingNotificationHandler {
+impl SyncNotificationHandler for LoggingNotificationHandler {
     fn handle(&self, method: &str, params: Option<Value>) {
         debug!("MCP notification: {} {:?}", method, params);
     }
@@ -197,7 +201,7 @@ impl McpClient {
     }
 
     /// Set a custom notification handler
-    pub async fn set_notification_handler(&self, handler: Box<dyn NotificationHandler>) {
+    pub async fn set_notification_handler(&self, handler: Box<dyn SyncNotificationHandler>) {
         *self.notification_handler.write().await = Some(handler);
     }
 

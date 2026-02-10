@@ -522,7 +522,7 @@ pub async fn background_loop(state: SharedState, adapter: sage_core::ui::bridge:
                     .filter(|msg| {
                         !matches!(
                             msg.content,
-                            sage_core::ui::bridge::state::MessageContent::ToolCall { .. }
+                            sage_core::ui::bridge::state::UiMessageContent::ToolCall { .. }
                         )
                     })
                     .map(|msg| format_message(msg, theme))

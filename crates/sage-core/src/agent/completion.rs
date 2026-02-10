@@ -9,7 +9,7 @@ use std::collections::HashSet;
 
 /// Task type classification for completion verification
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TaskType {
+pub enum CompletionTaskType {
     /// Task that requires code output (create, implement, build)
     CodeImplementation,
     /// Task that requires fixing existing code
@@ -22,7 +22,7 @@ pub enum TaskType {
     General,
 }
 
-impl TaskType {
+impl CompletionTaskType {
     /// Determine task type from description
     pub fn from_description(description: &str) -> Self {
         let lower = description.to_lowercase();
@@ -33,7 +33,7 @@ impl TaskType {
             || lower.contains("document")
             || lower.contains("write doc")
         {
-            return TaskType::Documentation;
+            return CompletionTaskType::Documentation;
         }
 
         // Check for research keywords
@@ -46,7 +46,7 @@ impl TaskType {
             || lower.contains("explain")
             || lower.contains("what is")
         {
-            return TaskType::Research;
+            return CompletionTaskType::Research;
         }
 
         // Check for bug fix keywords
@@ -57,7 +57,7 @@ impl TaskType {
             || lower.contains("issue")
             || lower.contains("problem")
         {
-            return TaskType::BugFix;
+            return CompletionTaskType::BugFix;
         }
 
         // Check for code implementation keywords
@@ -79,15 +79,15 @@ impl TaskType {
             || lower.contains("app")
             || lower.contains("应用")
         {
-            return TaskType::CodeImplementation;
+            return CompletionTaskType::CodeImplementation;
         }
 
-        TaskType::General
+        CompletionTaskType::General
     }
 
     /// Check if this task type requires code files to be created/modified
     pub fn requires_code(&self) -> bool {
-        matches!(self, TaskType::CodeImplementation | TaskType::BugFix)
+        matches!(self, CompletionTaskType::CodeImplementation | CompletionTaskType::BugFix)
     }
 }
 
@@ -203,7 +203,7 @@ pub enum LimitType {
 /// Completion checker for verifying task completion
 #[derive(Debug)]
 pub struct CompletionChecker {
-    task_type: TaskType,
+    task_type: CompletionTaskType,
     file_tracker: FileOperationTracker,
     strict_mode: bool,
 }
@@ -212,14 +212,14 @@ impl CompletionChecker {
     /// Create a new completion checker
     pub fn new(task_description: &str) -> Self {
         Self {
-            task_type: TaskType::from_description(task_description),
+            task_type: CompletionTaskType::from_description(task_description),
             file_tracker: FileOperationTracker::new(),
             strict_mode: true,
         }
     }
 
     /// Create with explicit task type
-    pub fn with_task_type(task_type: TaskType) -> Self {
+    pub fn with_task_type(task_type: CompletionTaskType) -> Self {
         Self {
             task_type,
             file_tracker: FileOperationTracker::new(),
@@ -233,7 +233,7 @@ impl CompletionChecker {
     }
 
     /// Get the detected task type
-    pub fn task_type(&self) -> &TaskType {
+    pub fn task_type(&self) -> &CompletionTaskType {
         &self.task_type
     }
 
@@ -326,34 +326,34 @@ mod tests {
     #[test]
     fn test_task_type_detection() {
         assert_eq!(
-            TaskType::from_description("设计一个天气网站"),
-            TaskType::CodeImplementation
+            CompletionTaskType::from_description("设计一个天气网站"),
+            CompletionTaskType::CodeImplementation
         );
         assert_eq!(
-            TaskType::from_description("Create a weather app"),
-            TaskType::CodeImplementation
+            CompletionTaskType::from_description("Create a weather app"),
+            CompletionTaskType::CodeImplementation
         );
         assert_eq!(
-            TaskType::from_description("Fix the bug in login"),
-            TaskType::BugFix
+            CompletionTaskType::from_description("Fix the bug in login"),
+            CompletionTaskType::BugFix
         );
-        assert_eq!(TaskType::from_description("修复登录问题"), TaskType::BugFix);
+        assert_eq!(CompletionTaskType::from_description("修复登录问题"), CompletionTaskType::BugFix);
         assert_eq!(
-            TaskType::from_description("分析这个代码的性能"),
-            TaskType::Research
+            CompletionTaskType::from_description("分析这个代码的性能"),
+            CompletionTaskType::Research
         );
         assert_eq!(
-            TaskType::from_description("Write documentation for API"),
-            TaskType::Documentation
+            CompletionTaskType::from_description("Write documentation for API"),
+            CompletionTaskType::Documentation
         );
     }
 
     #[test]
     fn test_task_type_requires_code() {
-        assert!(TaskType::CodeImplementation.requires_code());
-        assert!(TaskType::BugFix.requires_code());
-        assert!(!TaskType::Research.requires_code());
-        assert!(!TaskType::Documentation.requires_code());
+        assert!(CompletionTaskType::CodeImplementation.requires_code());
+        assert!(CompletionTaskType::BugFix.requires_code());
+        assert!(!CompletionTaskType::Research.requires_code());
+        assert!(!CompletionTaskType::Documentation.requires_code());
     }
 
     #[test]

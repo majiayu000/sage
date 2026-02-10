@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 /// Result of command validation
 #[derive(Debug, Clone)]
-pub struct ValidationResult {
+pub struct CommandValidationResult {
     /// Whether the command is allowed
     pub allowed: bool,
     /// Reason for blocking (if not allowed)
@@ -15,7 +15,7 @@ pub struct ValidationResult {
     pub check_type: CheckType,
 }
 
-impl ValidationResult {
+impl CommandValidationResult {
     /// Create a passing validation result
     pub fn pass(check_type: CheckType) -> Self {
         Self {
@@ -222,7 +222,7 @@ mod tests {
 
     #[test]
     fn test_validation_result_pass() {
-        let result = ValidationResult::pass(CheckType::Heredoc);
+        let result = CommandValidationResult::pass(CheckType::Heredoc);
         assert!(result.allowed);
         assert!(result.reason.is_none());
         assert!(result.warnings.is_empty());
@@ -230,7 +230,7 @@ mod tests {
 
     #[test]
     fn test_validation_result_block() {
-        let result = ValidationResult::block(CheckType::DangerousRemoval, "dangerous command");
+        let result = CommandValidationResult::block(CheckType::DangerousRemoval, "dangerous command");
         assert!(!result.allowed);
         assert_eq!(result.reason, Some("dangerous command".to_string()));
     }

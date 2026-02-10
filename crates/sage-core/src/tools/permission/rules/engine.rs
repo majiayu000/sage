@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::rule::PermissionRule;
-use crate::tools::permission::request::{PermissionRequest, PermissionResult};
+use crate::tools::permission::request::{PermissionRequest, ToolPermissionResult};
 use crate::tools::permission::types::{PermissionBehavior, RiskLevel};
 
 /// Permission rule engine for evaluating rules
@@ -138,17 +138,17 @@ pub struct PermissionEvaluation {
 }
 
 impl PermissionEvaluation {
-    /// Convert to PermissionResult
-    pub fn to_result(&self, risk_level: RiskLevel) -> PermissionResult {
+    /// Convert to ToolPermissionResult
+    pub fn to_result(&self, risk_level: RiskLevel) -> ToolPermissionResult {
         match self.behavior {
-            PermissionBehavior::Allow => PermissionResult::Allow,
-            PermissionBehavior::Deny => PermissionResult::Deny {
+            PermissionBehavior::Allow => ToolPermissionResult::Allow,
+            PermissionBehavior::Deny => ToolPermissionResult::Deny {
                 reason: self
                     .reason
                     .clone()
                     .unwrap_or_else(|| "Denied by rule".to_string()),
             },
-            PermissionBehavior::Ask | PermissionBehavior::Passthrough => PermissionResult::Ask {
+            PermissionBehavior::Ask | PermissionBehavior::Passthrough => ToolPermissionResult::Ask {
                 question: self
                     .reason
                     .clone()

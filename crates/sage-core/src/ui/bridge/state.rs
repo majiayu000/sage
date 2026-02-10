@@ -13,7 +13,7 @@ pub struct AppState {
     pub phase: ExecutionPhase,
 
     /// Session information
-    pub session: SessionState,
+    pub session: UiSessionInfo,
 
     /// Message history
     pub messages: Vec<Message>,
@@ -59,9 +59,9 @@ pub enum ExecutionPhase {
     Error { message: String },
 }
 
-/// Session state
+/// UI session information (model, provider, working directory, etc.)
 #[derive(Clone, Debug)]
-pub struct SessionState {
+pub struct UiSessionInfo {
     pub session_id: Option<String>,
     pub model: String,
     pub provider: String,
@@ -75,7 +75,7 @@ pub struct SessionState {
 #[derive(Clone, Debug)]
 pub struct Message {
     pub role: Role,
-    pub content: MessageContent,
+    pub content: UiMessageContent,
     pub timestamp: DateTime<Utc>,
     pub metadata: MessageMetadata,
 }
@@ -90,7 +90,7 @@ pub enum Role {
 
 /// Message content
 #[derive(Clone, Debug)]
-pub enum MessageContent {
+pub enum UiMessageContent {
     /// Plain text
     Text(String),
 
@@ -98,7 +98,7 @@ pub enum MessageContent {
     ToolCall {
         tool_name: String,
         params: String,
-        result: Option<ToolResult>,
+        result: Option<UiToolResult>,
     },
 
     /// Thinking process
@@ -131,9 +131,9 @@ pub enum ToolStatus {
     Failed { error: String },
 }
 
-/// Tool result
+/// UI-specific tool result (distinct from tools::types::ToolResult)
 #[derive(Clone, Debug)]
-pub struct ToolResult {
+pub struct UiToolResult {
     pub success: bool,
     pub output: Option<String>,
     pub error: Option<String>,
@@ -187,7 +187,7 @@ impl Default for AppState {
     fn default() -> Self {
         Self {
             phase: ExecutionPhase::Idle,
-            session: SessionState {
+            session: UiSessionInfo {
                 session_id: None,
                 model: "unknown".to_string(),
                 provider: "unknown".to_string(),
@@ -225,7 +225,7 @@ impl AppState {
         if let Some(streaming) = &self.streaming_content {
             messages.push(Message {
                 role: Role::Assistant,
-                content: MessageContent::Text(streaming.buffer.clone()),
+                content: UiMessageContent::Text(streaming.buffer.clone()),
                 timestamp: Utc::now(),
                 metadata: MessageMetadata::default(),
             });
@@ -309,7 +309,7 @@ impl AppState {
         if let Some(content) = self.streaming_content.take() {
             self.messages.push(Message {
                 role: Role::Assistant,
-                content: MessageContent::Text(content.buffer),
+                content: UiMessageContent::Text(content.buffer),
                 timestamp: Utc::now(),
                 metadata: MessageMetadata::default(),
             });
@@ -348,10 +348,10 @@ impl AppState {
             // Add tool call message
             self.messages.push(Message {
                 role: Role::Assistant,
-                content: MessageContent::ToolCall {
+                content: UiMessageContent::ToolCall {
                     tool_name: execution.tool_name.clone(),
                     params: execution.description.clone(),
-                    result: Some(ToolResult {
+                    result: Some(UiToolResult {
                         success,
                         output,
                         error,
@@ -370,7 +370,7 @@ impl AppState {
     pub fn add_user_message(&mut self, content: String) {
         self.messages.push(Message {
             role: Role::User,
-            content: MessageContent::Text(content),
+            content: UiMessageContent::Text(content),
             timestamp: Utc::now(),
             metadata: MessageMetadata::default(),
         });
@@ -409,7 +409,7 @@ mod tests {
 
         state.finish_streaming();
 
-        if let MessageContent::Text(text) = &state.messages.last().unwrap().content {
+        if let UiMessageContent::Text(text) = &state.messages.last().unwrap().content {
             assert_eq!(text, "Hello World");
         } else {
             panic!("Expected Text content");

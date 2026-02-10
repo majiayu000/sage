@@ -6,7 +6,7 @@
 //! - Network access commands
 //! - Process manipulation
 
-use super::types::{CheckType, ValidationResult, ValidationWarning, WarningSeverity};
+use super::types::{CheckType, CommandValidationResult, ValidationWarning, WarningSeverity};
 use regex::Regex;
 use std::sync::LazyLock;
 
@@ -53,12 +53,12 @@ static OBFUSCATION_PATTERN: LazyLock<Regex> =
 /// - Process manipulation
 /// - Shell spawning with -c
 /// - Base64 decoding
-pub fn check_dangerous_patterns(command: &str) -> ValidationResult {
+pub fn check_dangerous_patterns(command: &str) -> CommandValidationResult {
     let mut warnings = Vec::new();
 
     // Block: eval command
     if EVAL_PATTERN.is_match(command) {
-        return ValidationResult::block(
+        return CommandValidationResult::block(
             CheckType::DangerousPattern,
             "eval command is not allowed - potential code injection",
         );
@@ -66,7 +66,7 @@ pub fn check_dangerous_patterns(command: &str) -> ValidationResult {
 
     // Block: privilege escalation
     if PRIVILEGE_PATTERN.is_match(command) {
-        return ValidationResult::block(
+        return CommandValidationResult::block(
             CheckType::DangerousPattern,
             "sudo/su/pkexec commands are not allowed - use sandboxed execution",
         );
@@ -74,7 +74,7 @@ pub fn check_dangerous_patterns(command: &str) -> ValidationResult {
 
     // Block: filesystem destruction
     if FS_DESTROY_PATTERN.is_match(command) {
-        return ValidationResult::block(
+        return CommandValidationResult::block(
             CheckType::DangerousPattern,
             "Filesystem destruction commands (mkfs, wipefs, shred) are not allowed",
         );
@@ -122,9 +122,9 @@ pub fn check_dangerous_patterns(command: &str) -> ValidationResult {
     }
 
     if warnings.is_empty() {
-        ValidationResult::pass(CheckType::DangerousPattern)
+        CommandValidationResult::pass(CheckType::DangerousPattern)
     } else {
-        ValidationResult::pass_with_warnings(CheckType::DangerousPattern, warnings)
+        CommandValidationResult::pass_with_warnings(CheckType::DangerousPattern, warnings)
     }
 }
 

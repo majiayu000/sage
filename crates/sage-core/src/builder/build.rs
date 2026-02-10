@@ -11,7 +11,6 @@ use crate::events::EventBus;
 use crate::llm::client::LlmClient;
 use crate::llm::provider_types::LlmProvider;
 use crate::mcp::McpRegistry;
-use crate::tools::batch_executor::BatchToolExecutor;
 use crate::tools::executor::ToolExecutor;
 use crate::trajectory::SessionRecorder;
 use std::sync::Arc;
@@ -21,15 +20,6 @@ impl SageBuilder {
     /// Build a ToolExecutor
     pub fn build_tool_executor(&self) -> SageResult<ToolExecutor> {
         let mut executor = ToolExecutor::new();
-        for tool in &self.tools {
-            executor.register_tool(tool.clone());
-        }
-        Ok(executor)
-    }
-
-    /// Build a BatchToolExecutor
-    pub fn build_batch_executor(&self) -> SageResult<BatchToolExecutor> {
-        let mut executor = BatchToolExecutor::new();
         for tool in &self.tools {
             executor.register_tool(tool.clone());
         }
@@ -132,7 +122,6 @@ impl SageBuilder {
     /// Build all components into a SageComponents struct
     pub async fn build(&self) -> SageResult<SageComponents> {
         let tool_executor = self.build_tool_executor()?;
-        let batch_executor = self.build_batch_executor()?;
         let lifecycle_manager = self.build_lifecycle_manager().await?;
         let event_bus = self.build_event_bus();
         let cancellation = self.build_cancellation_hierarchy();
@@ -141,7 +130,6 @@ impl SageBuilder {
 
         Ok(SageComponents {
             tool_executor,
-            batch_executor,
             lifecycle_manager,
             event_bus,
             cancellation,

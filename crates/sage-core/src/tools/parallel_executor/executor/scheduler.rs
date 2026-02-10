@@ -5,7 +5,7 @@ use crate::tools::types::ToolCall;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use super::super::config::ExecutionResult;
+use super::super::config::ToolExecutionResult;
 use super::executor::ParallelToolExecutor;
 use super::types::PermitGuard;
 
@@ -87,13 +87,13 @@ impl ParallelToolExecutor {
     pub(super) fn reorder_results(
         &self,
         original_calls: &[ToolCall],
-        mut results: Vec<ExecutionResult>,
-    ) -> Vec<ExecutionResult> {
+        mut results: Vec<ToolExecutionResult>,
+    ) -> Vec<ToolExecutionResult> {
         use crate::tools::types::ToolResult;
         use std::time::Duration;
 
         let mut ordered = Vec::with_capacity(original_calls.len());
-        let mut result_map: HashMap<String, ExecutionResult> = results
+        let mut result_map: HashMap<String, ToolExecutionResult> = results
             .drain(..)
             .map(|r| (r.result.call_id.clone(), r))
             .collect();
@@ -102,7 +102,7 @@ impl ParallelToolExecutor {
             if let Some(result) = result_map.remove(&call.id) {
                 ordered.push(result);
             } else {
-                ordered.push(ExecutionResult {
+                ordered.push(ToolExecutionResult {
                     result: ToolResult::error(&call.id, &call.name, "Result not found"),
                     wait_time: Duration::ZERO,
                     execution_time: Duration::ZERO,

@@ -1,7 +1,7 @@
 //! Message display component
 
 use rnk::prelude::*;
-use sage_core::ui::bridge::state::{Message, MessageContent, Role};
+use sage_core::ui::bridge::state::{Message, UiMessageContent, Role};
 
 use crate::ui::rnk_app::formatting::{truncate_to_width, wrap_text_with_prefix};
 use crate::ui::rnk_app::theme::Theme;
@@ -39,7 +39,7 @@ pub fn format_message(msg: &Message, theme: &Theme) -> Element {
     let color = role_color(&msg.role, theme);
 
     match &msg.content {
-        MessageContent::Text(text) => {
+        UiMessageContent::Text(text) => {
             let mut container = RnkBox::new().flex_direction(FlexDirection::Column);
 
             match msg.role {
@@ -68,7 +68,7 @@ pub fn format_message(msg: &Message, theme: &Theme) -> Element {
 
             container.into_element()
         }
-        MessageContent::Thinking(text) => {
+        UiMessageContent::Thinking(text) => {
             let preview: String = text.lines().take(2).collect::<Vec<_>>().join(" ");
             RnkBox::new()
                 .flex_direction(FlexDirection::Row)
@@ -83,7 +83,7 @@ pub fn format_message(msg: &Message, theme: &Theme) -> Element {
                 )
                 .into_element()
         }
-        MessageContent::ToolCall {
+        UiMessageContent::ToolCall {
             tool_name,
             params,
             result,

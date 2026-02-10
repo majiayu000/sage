@@ -42,7 +42,7 @@ pub use builder::UnifiedExecutorBuilder;
 pub use context_builder::{ContextBuilder, GitInfo, ProjectContext};
 pub use event_manager::{EventManager, ExecutionEvent};
 pub use llm_orchestrator::LlmOrchestrator;
-pub use session_manager::SessionManager;
+pub use session_manager::AgentSessionManager;
 pub use tool_orchestrator::{
     CheckpointConfig, PreExecutionResult, SupervisionConfig, ToolExecutionContext, ToolOrchestrator,
 };
@@ -82,7 +82,7 @@ pub struct UnifiedExecutor {
     /// Event manager for unified event handling and UI animations
     event_manager: EventManager,
     /// Session manager encapsulating all session-related state
-    session_manager: SessionManager,
+    session_manager: AgentSessionManager,
     /// Auto-compact manager for context window management
     auto_compact: AutoCompact,
     /// Skill registry for AI auto-invocation (Claude Code compatible)
@@ -113,12 +113,12 @@ impl UnifiedExecutor {
     }
 
     /// Get the session manager for external session management
-    pub fn session_manager(&self) -> &SessionManager {
+    pub fn session_manager(&self) -> &AgentSessionManager {
         &self.session_manager
     }
 
     /// Get the session manager mutably
-    pub fn session_manager_mut(&mut self) -> &mut SessionManager {
+    pub fn session_manager_mut(&mut self) -> &mut AgentSessionManager {
         &mut self.session_manager
     }
 

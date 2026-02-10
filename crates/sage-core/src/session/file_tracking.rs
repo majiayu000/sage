@@ -27,7 +27,7 @@ pub struct FileHistorySnapshot {
 }
 
 /// Tracked files snapshot
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TrackedFilesSnapshot {
     /// Tracked files with their state
     #[serde(rename = "trackedFiles")]

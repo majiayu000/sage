@@ -24,8 +24,8 @@ pub use traits::{EventSink, NoopEventSink, UiContext};
 
 // === Re-exports: Bridge ===
 pub use bridge::{
-    AgentEvent, AppState, EventAdapter, ExecutionPhase, InputState, Message, MessageContent, Role,
-    SessionState, ThinkingState, ToolExecution, ToolStatus,
+    AgentEvent, AppState, EventAdapter, ExecutionPhase, InputState, Message, UiMessageContent, Role,
+    UiSessionInfo, ThinkingState, ToolExecution, ToolStatus,
 };
 
 // === Re-exports: Components ===

@@ -11,17 +11,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use super::super::types::SessionId;
-
-/// Truncate a string to a maximum number of characters (UTF-8 safe)
-fn truncate_string(s: &str, max_chars: usize) -> String {
-    let chars: Vec<char> = s.chars().collect();
-    if chars.len() > max_chars {
-        let truncated: String = chars[..max_chars.saturating_sub(3)].iter().collect();
-        format!("{}...", truncated)
-    } else {
-        s.to_string()
-    }
-}
+use crate::utils::truncate_with_ellipsis;
 
 /// Session metadata stored in metadata.json
 ///
@@ -141,7 +131,7 @@ impl SessionMetadata {
     pub fn with_first_prompt(mut self, prompt: impl Into<String>) -> Self {
         let prompt = prompt.into();
         // Truncate to 100 chars for preview (safe for UTF-8)
-        self.first_prompt = Some(truncate_string(&prompt, 100));
+        self.first_prompt = Some(truncate_with_ellipsis(&prompt, 100));
         self
     }
 
@@ -179,14 +169,14 @@ impl SessionMetadata {
     /// Update first prompt (only if not set)
     pub fn set_first_prompt_if_empty(&mut self, prompt: &str) {
         if self.first_prompt.is_none() {
-            self.first_prompt = Some(truncate_string(prompt, 100));
+            self.first_prompt = Some(truncate_with_ellipsis(prompt, 100));
             self.updated_at = Utc::now();
         }
     }
 
     /// Set last prompt (always updates)
     pub fn set_last_prompt(&mut self, prompt: &str) {
-        self.last_prompt = Some(truncate_string(prompt, 100));
+        self.last_prompt = Some(truncate_with_ellipsis(prompt, 100));
         self.updated_at = Utc::now();
     }
 

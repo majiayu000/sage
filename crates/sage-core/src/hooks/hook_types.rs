@@ -89,25 +89,25 @@ impl fmt::Display for HookImplementation {
 
 /// Permission decision from hook
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum PermissionDecision {
+pub enum HookPermissionDecision {
     Allow,
     Deny,
     Ask,
 }
 
-impl fmt::Display for PermissionDecision {
+impl fmt::Display for HookPermissionDecision {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            PermissionDecision::Allow => write!(f, "Allow"),
-            PermissionDecision::Deny => write!(f, "Deny"),
-            PermissionDecision::Ask => write!(f, "Ask"),
+            HookPermissionDecision::Allow => write!(f, "Allow"),
+            HookPermissionDecision::Deny => write!(f, "Deny"),
+            HookPermissionDecision::Ask => write!(f, "Ask"),
         }
     }
 }
 
-impl Default for PermissionDecision {
+impl Default for HookPermissionDecision {
     fn default() -> Self {
-        PermissionDecision::Ask
+        HookPermissionDecision::Ask
     }
 }
 
@@ -155,21 +155,21 @@ mod tests {
 
     #[test]
     fn test_permission_decision_display() {
-        assert_eq!(format!("{}", PermissionDecision::Allow), "Allow");
-        assert_eq!(format!("{}", PermissionDecision::Deny), "Deny");
-        assert_eq!(format!("{}", PermissionDecision::Ask), "Ask");
+        assert_eq!(format!("{}", HookPermissionDecision::Allow), "Allow");
+        assert_eq!(format!("{}", HookPermissionDecision::Deny), "Deny");
+        assert_eq!(format!("{}", HookPermissionDecision::Ask), "Ask");
     }
 
     #[test]
     fn test_permission_decision_default() {
-        assert_eq!(PermissionDecision::default(), PermissionDecision::Ask);
+        assert_eq!(HookPermissionDecision::default(), HookPermissionDecision::Ask);
     }
 
     #[test]
     fn test_permission_decision_serialization() {
-        let decision = PermissionDecision::Allow;
+        let decision = HookPermissionDecision::Allow;
         let json = serde_json::to_string(&decision).unwrap();
-        let deserialized: PermissionDecision = serde_json::from_str(&json).unwrap();
+        let deserialized: HookPermissionDecision = serde_json::from_str(&json).unwrap();
         assert_eq!(decision, deserialized);
     }
 

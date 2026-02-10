@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
 
-use super::hook_types::{PermissionDecision, default_continue};
+use super::hook_types::{HookPermissionDecision, default_continue};
 
 /// Output from a hook
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -12,7 +12,7 @@ pub struct HookOutput {
     #[serde(default = "default_continue")]
     pub should_continue: bool,
     pub modified_input: Option<serde_json::Value>,
-    pub permission_decision: Option<PermissionDecision>,
+    pub permission_decision: Option<HookPermissionDecision>,
     #[serde(default)]
     pub additional_context: Vec<String>,
     pub reason: Option<String>,
@@ -76,7 +76,7 @@ impl HookOutput {
     }
 
     /// Set the permission decision
-    pub fn with_permission(mut self, decision: PermissionDecision) -> Self {
+    pub fn with_permission(mut self, decision: HookPermissionDecision) -> Self {
         self.permission_decision = Some(decision);
         self
     }
@@ -137,13 +137,13 @@ mod tests {
     #[test]
     fn test_hook_output_builder() {
         let output = HookOutput::allow()
-            .with_permission(PermissionDecision::Allow)
+            .with_permission(HookPermissionDecision::Allow)
             .with_context("Additional info")
             .with_system_message("System msg")
             .with_reason("Test reason");
 
         assert!(output.should_continue);
-        assert_eq!(output.permission_decision, Some(PermissionDecision::Allow));
+        assert_eq!(output.permission_decision, Some(HookPermissionDecision::Allow));
         assert_eq!(output.additional_context.len(), 1);
         assert_eq!(output.system_message, Some("System msg".to_string()));
         assert_eq!(output.reason, Some("Test reason".to_string()));
@@ -152,7 +152,7 @@ mod tests {
     #[test]
     fn test_hook_output_display() {
         let output = HookOutput::allow()
-            .with_permission(PermissionDecision::Allow)
+            .with_permission(HookPermissionDecision::Allow)
             .with_reason("Test");
         let display = format!("{}", output);
         assert!(display.contains("Continue: true"));

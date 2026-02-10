@@ -5,7 +5,8 @@ use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
 use tracing::debug;
 
-use super::super::super::types::{EnhancedMessage, FileHistorySnapshot, SessionId};
+use super::super::super::types::{FileHistorySnapshot, SessionId};
+use crate::session::types::unified::SessionMessage;
 use super::core::JsonlSessionStorage;
 
 impl JsonlSessionStorage {
@@ -13,7 +14,7 @@ impl JsonlSessionStorage {
     pub async fn append_message(
         &self,
         id: &SessionId,
-        message: &EnhancedMessage,
+        message: &SessionMessage,
     ) -> SageResult<()> {
         self.ensure_session_dir(id).await?;
 

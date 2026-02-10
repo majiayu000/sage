@@ -6,7 +6,6 @@ use crate::config::model::Config;
 use crate::error::SageResult;
 use crate::events::EventBus;
 use crate::mcp::McpRegistry;
-use crate::tools::batch_executor::BatchToolExecutor;
 use crate::tools::executor::ToolExecutor;
 use crate::trajectory::SessionRecorder;
 use std::path::PathBuf;
@@ -17,8 +16,6 @@ use tokio::sync::Mutex;
 pub struct SageComponents {
     /// Tool executor for sequential tool execution
     pub tool_executor: ToolExecutor,
-    /// Batch executor for parallel tool execution
-    pub batch_executor: BatchToolExecutor,
     /// Lifecycle manager with registered hooks
     pub lifecycle_manager: LifecycleManager,
     /// Event bus for pub/sub events

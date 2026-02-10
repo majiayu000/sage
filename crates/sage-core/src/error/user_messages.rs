@@ -26,6 +26,14 @@ pub enum ErrorCategory {
     ResourceUnavailable,
     /// User-initiated cancellation
     Cancellation,
+    /// File system related errors
+    FileSystem,
+    /// Permission and security errors
+    Permission,
+    /// System resource errors (memory, disk, timeout, etc.)
+    Resource,
+    /// External dependency errors
+    Dependency,
 }
 
 impl ErrorCategory {
@@ -41,6 +49,10 @@ impl ErrorCategory {
             Self::Internal => "Internal Error",
             Self::ResourceUnavailable => "Resource Unavailable",
             Self::Cancellation => "Cancelled",
+            Self::FileSystem => "File System Error",
+            Self::Permission => "Permission Error",
+            Self::Resource => "Resource Error",
+            Self::Dependency => "Dependency Error",
         }
     }
 }

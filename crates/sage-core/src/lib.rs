@@ -159,7 +159,7 @@ pub mod workspace;
 
 // Re-export commonly used types
 pub use agent::{
-    AgentExecution, AgentLifecycle, AgentState, AgentStep, AutoResponse, ExecutionMode,
+    AgentExecution, AgentLifecycle, AgentState, AgentStep, AutoResponseConfig, ExecutionMode,
     ExecutionOptions, HookResult, LifecycleContext, LifecycleError, LifecycleHook,
     LifecycleHookRegistry, LifecycleManager, LifecyclePhase, LifecycleResult, LoggingHook,
     MetricsHook, UnifiedExecutor, UnifiedExecutorBuilder,
@@ -180,7 +180,7 @@ pub use events::{Event, EventBus, SharedEventBus};
 pub use hooks::{
     CallbackHook, CommandHook, HookConfig, HookEvent, HookExecutionResult, HookExecutor,
     HookImplementation, HookInput, HookMatcher, HookOutput, HookRegistry, HookType, HookVariant,
-    HooksConfig, PermissionDecision, PromptHook,
+    HooksConfig, HookPermissionDecision, PromptHook,
 };
 pub use input::{
     InputChannel, InputChannelHandle, InputContext, InputOption, InputRequest, InputResponse,
@@ -210,10 +210,9 @@ pub use session::{
 };
 pub use tools::{
     BACKGROUND_REGISTRY, BackgroundShellTask, BackgroundTaskRegistry, BackgroundTaskStatus,
-    BackgroundTaskSummary, BatchStrategy, BatchToolExecutor, Tool, ToolCall, ToolExecutor,
-    ToolResult,
+    BackgroundTaskSummary, Tool, ToolCall, ToolExecutor, ToolResult,
 };
-pub use trajectory::SessionSummary as TrajectorySessionSummary;
+pub use trajectory::TrajectorySessionSummary;
 pub use trajectory::TokenUsage as TrajectoryTokenUsage;
 pub use trajectory::{SessionEntry, SessionInfo, SessionRecorder, SessionReplayer};
 pub use types::*;
@@ -247,11 +246,11 @@ pub use settings::{
     HookDefinition as SettingsHookDefinition, HookDefinitionType as SettingsHookDefinitionType,
     HooksSettings, ModelSettings, ParsedPattern, PermissionBehavior, PermissionSettings, Settings,
     SettingsLoadInfo, SettingsLoader, SettingsLocations, SettingsSource, SettingsValidator,
-    ToolSettings, UiSettings, ValidationResult as SettingsValidationResult, WorkspaceSettings,
+    ToolSettings, UiSettings, SettingsValidationResult, WorkspaceSettings,
 };
 pub use skills::{
     Skill, SkillActivation, SkillContext, SkillInvocationConfig, SkillMetadata, SkillRegistry,
-    SkillSource, SkillSourceInfo, SkillSourceType, SkillTrigger, TaskType, ToolAccess,
+    SkillSource, SkillSourceInfo, SkillSourceType, SkillTrigger, SkillTaskType, ToolAccess,
 };
 pub use validation::{
     CommonRules, FieldError, FieldSchema, FieldType, InputSanitizer, RuleSet, SanitizeOptions,

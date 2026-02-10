@@ -11,4 +11,4 @@ mod types;
 mod tests;
 
 pub use cache::McpCache;
-pub use types::{CacheConfig, CacheEntry, CacheSizeBreakdown, CacheStats};
+pub use types::{CacheEntry, CacheSizeBreakdown, CacheStats, McpCacheConfig};

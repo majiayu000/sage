@@ -18,7 +18,7 @@ pub struct ToolsConfig {
     /// Enable debug logging
     pub debug_logging: bool,
     /// Tool-specific configurations
-    pub tool_configs: HashMap<String, ToolConfig>,
+    pub tool_configs: HashMap<String, ToolInstanceConfig>,
 }
 
 impl Default for ToolsConfig {
@@ -34,9 +34,14 @@ impl Default for ToolsConfig {
     }
 }
 
-/// Configuration for individual tools
+/// Configuration for individual tool instances
+///
+/// This is distinct from `sage_core::config::ToolConfig`, which holds
+/// global tool orchestration settings (parallel execution, shared settings).
+/// `ToolInstanceConfig` holds per-tool overrides like timeouts, output limits,
+/// and whether the tool is enabled.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ToolConfig {
+pub struct ToolInstanceConfig {
     /// Tool-specific maximum execution time
     pub max_execution_time_seconds: Option<u64>,
     /// Tool-specific maximum output size
@@ -47,7 +52,7 @@ pub struct ToolConfig {
     pub settings: HashMap<String, serde_json::Value>,
 }
 
-impl Default for ToolConfig {
+impl Default for ToolInstanceConfig {
     fn default() -> Self {
         Self {
             max_execution_time_seconds: None,
@@ -203,22 +208,22 @@ impl ToolsConfig {
         Ok(())
     }
 
-    /// Get configuration for a specific tool
-    pub fn get_tool_config(&self, tool_name: &str) -> ToolConfig {
+    /// Get configuration for a specific tool instance
+    pub fn get_tool_instance_config(&self, tool_name: &str) -> ToolInstanceConfig {
         self.tool_configs
             .get(tool_name)
             .cloned()
             .unwrap_or_default()
     }
 
-    /// Set configuration for a specific tool
-    pub fn set_tool_config(&mut self, tool_name: String, config: ToolConfig) {
+    /// Set configuration for a specific tool instance
+    pub fn set_tool_instance_config(&mut self, tool_name: String, config: ToolInstanceConfig) {
         self.tool_configs.insert(tool_name, config);
     }
 
     /// Get maximum execution time for a tool
     pub fn get_max_execution_time(&self, tool_name: &str) -> Duration {
-        let tool_config = self.get_tool_config(tool_name);
+        let tool_config = self.get_tool_instance_config(tool_name);
         let seconds = tool_config
             .max_execution_time_seconds
             .unwrap_or(self.max_execution_time_seconds);
@@ -227,7 +232,7 @@ impl ToolsConfig {
 
     /// Get maximum output size for a tool
     pub fn get_max_output_size(&self, tool_name: &str) -> usize {
-        let tool_config = self.get_tool_config(tool_name);
+        let tool_config = self.get_tool_instance_config(tool_name);
         tool_config
             .max_output_size_bytes
             .unwrap_or(self.max_output_size_bytes)
@@ -235,7 +240,7 @@ impl ToolsConfig {
 
     /// Check if a tool is enabled
     pub fn is_tool_enabled(&self, tool_name: &str) -> bool {
-        self.get_tool_config(tool_name).enabled
+        self.get_tool_instance_config(tool_name).enabled
     }
 }
 

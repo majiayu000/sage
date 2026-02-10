@@ -193,7 +193,7 @@ impl SettingsValidator {
 
 /// Validation result with details
 #[derive(Debug, Clone)]
-pub struct ValidationResult {
+pub struct SettingsValidationResult {
     /// Whether validation passed
     pub valid: bool,
     /// Warning messages (non-fatal)
@@ -202,7 +202,7 @@ pub struct ValidationResult {
     pub errors: Vec<String>,
 }
 
-impl ValidationResult {
+impl SettingsValidationResult {
     /// Create a successful validation result
     pub fn success() -> Self {
         Self {
@@ -367,7 +367,7 @@ mod tests {
 
     #[test]
     fn test_validation_result() {
-        let result = ValidationResult::success()
+        let result = SettingsValidationResult::success()
             .with_warning("This is a warning")
             .with_error("This is an error");
 

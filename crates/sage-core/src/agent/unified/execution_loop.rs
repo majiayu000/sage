@@ -2,7 +2,7 @@
 
 use crate::agent::{AgentExecution, AgentState, AgentStep, ExecutionError, ExecutionOutcome};
 use crate::error::{SageError, SageResult, UnifiedError};
-use crate::session::{EnhancedTokenUsage, EnhancedToolCall};
+use crate::session::{UnifiedTokenUsage, UnifiedToolCall};
 #[allow(deprecated)]
 use crate::ui::bridge::{AgentEvent, emit_event};
 
@@ -205,7 +205,7 @@ impl UnifiedExecutor {
                 llm_response
                     .tool_calls
                     .iter()
-                    .map(|c| EnhancedToolCall {
+                    .map(|c| UnifiedToolCall {
                         id: c.id.clone(),
                         name: c.name.clone(),
                         arguments: serde_json::to_value(&c.arguments)
@@ -218,11 +218,12 @@ impl UnifiedExecutor {
         };
 
         // Convert usage if available
-        let usage = llm_response.usage.as_ref().map(|u| EnhancedTokenUsage {
+        let usage = llm_response.usage.as_ref().map(|u| UnifiedTokenUsage {
             input_tokens: u.prompt_tokens as u64,
             output_tokens: u.completion_tokens as u64,
             cache_read_tokens: u.cache_read_input_tokens.unwrap_or(0) as u64,
             cache_write_tokens: u.cache_creation_input_tokens.unwrap_or(0) as u64,
+            cost_estimate: None,
         });
 
         // Record assistant message and get the message UUID

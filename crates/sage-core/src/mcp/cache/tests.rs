@@ -1,6 +1,6 @@
 //! Cache tests
 
-use super::{CacheConfig, CacheEntry, McpCache};
+use super::{CacheEntry, McpCache, McpCacheConfig};
 use crate::mcp::types::McpTool;
 use std::time::Duration;
 
@@ -80,7 +80,7 @@ fn test_cache_clear() {
 
 #[test]
 fn test_cache_expiration() {
-    let config = CacheConfig::with_ttl(Duration::from_millis(1));
+    let config = McpCacheConfig::with_ttl(Duration::from_millis(1));
     let cache = McpCache::with_config(config);
     let tools = vec![McpTool::new("test_tool")];
 

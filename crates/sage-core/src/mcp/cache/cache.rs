@@ -1,6 +1,6 @@
 //! MCP resource cache implementation
 
-use super::types::{CacheConfig, CacheEntry, CacheSizeBreakdown, CacheStats};
+use super::types::{CacheEntry, CacheSizeBreakdown, CacheStats, McpCacheConfig};
 use crate::mcp::types::{McpPrompt, McpResource, McpResourceContent, McpTool};
 use dashmap::DashMap;
 use std::sync::atomic::Ordering;
@@ -17,7 +17,7 @@ pub struct McpCache {
     /// Cached resource content by URI
     resource_content: DashMap<String, CacheEntry<McpResourceContent>>,
     /// Cache configuration
-    config: CacheConfig,
+    config: McpCacheConfig,
     /// Cache statistics
     stats: CacheStats,
 }
@@ -25,11 +25,11 @@ pub struct McpCache {
 impl McpCache {
     /// Create a new cache with default configuration
     pub fn new() -> Self {
-        Self::with_config(CacheConfig::default())
+        Self::with_config(McpCacheConfig::default())
     }
 
     /// Create a new cache with custom configuration
-    pub fn with_config(config: CacheConfig) -> Self {
+    pub fn with_config(config: McpCacheConfig) -> Self {
         Self {
             tools: DashMap::new(),
             resources: DashMap::new(),

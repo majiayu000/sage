@@ -5,7 +5,8 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 use super::executor::SubAgentExecutor;
-use super::types::{ExecutorMessage, SubAgentConfig};
+use super::types::ExecutorMessage;
+use super::super::types::SubAgentConfig;
 use crate::error::SageResult;
 
 impl SubAgentExecutor {

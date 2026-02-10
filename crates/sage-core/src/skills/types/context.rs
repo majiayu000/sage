@@ -1,6 +1,6 @@
 //! Skill context types
 
-use super::trigger::TaskType;
+use super::trigger::SkillTaskType;
 use std::path::PathBuf;
 
 /// Context for skill matching
@@ -22,7 +22,7 @@ pub struct SkillContext {
     pub explicit_skill: Option<String>,
 
     /// Detected task type
-    pub detected_task_type: Option<TaskType>,
+    pub detected_task_type: Option<SkillTaskType>,
 
     /// Additional file context
     pub file_context: Option<String>,
@@ -62,7 +62,7 @@ impl SkillContext {
     }
 
     /// Set detected task type
-    pub fn with_task_type(mut self, task_type: TaskType) -> Self {
+    pub fn with_task_type(mut self, task_type: SkillTaskType) -> Self {
         self.detected_task_type = Some(task_type);
         self
     }

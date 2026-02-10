@@ -1,7 +1,7 @@
 //! Tool call display component
 
 use rnk::prelude::*;
-use sage_core::ui::bridge::state::ToolResult;
+use sage_core::ui::bridge::state::UiToolResult;
 
 use crate::ui::rnk_app::formatting::truncate_to_width;
 use crate::ui::rnk_app::theme::Theme;
@@ -28,7 +28,7 @@ fn get_tool_icon(tool_name: &str) -> &'static str {
 pub fn render_tool_call(
     tool_name: &str,
     params: &str,
-    result: Option<&ToolResult>,
+    result: Option<&UiToolResult>,
     theme: &Theme,
 ) -> Element {
     let term_width = crossterm::terminal::size()

@@ -1,24 +1,14 @@
 //! Session replayer for JSONL trajectory files
 
 use crate::error::SageResult;
-
-/// Truncate a string to a maximum number of characters (UTF-8 safe)
-fn truncate_string(s: &str, max_chars: usize) -> String {
-    let chars: Vec<char> = s.chars().collect();
-    if chars.len() > max_chars {
-        let truncated: String = chars[..max_chars.saturating_sub(3)].iter().collect();
-        format!("{}...", truncated)
-    } else {
-        s.to_string()
-    }
-}
 use crate::trajectory::entry::{SessionEntry, TokenUsage};
+use crate::utils::truncate_with_ellipsis;
 use crate::trajectory::session::{SessionInfo, SessionRecorder};
 use std::path::Path;
 
 /// Session summary statistics
 #[derive(Debug, Clone, Default)]
-pub struct SessionSummary {
+pub struct TrajectorySessionSummary {
     /// Session ID
     pub session_id: Option<uuid::Uuid>,
     /// Task description
@@ -74,8 +64,8 @@ impl SessionReplayer {
     }
 
     /// Get session summary from entries
-    pub fn summarize(entries: &[SessionEntry]) -> SessionSummary {
-        let mut summary = SessionSummary::default();
+    pub fn summarize(entries: &[SessionEntry]) -> TrajectorySessionSummary {
+        let mut summary = TrajectorySessionSummary::default();
 
         for entry in entries {
             match entry {
@@ -142,7 +132,7 @@ impl SessionReplayer {
     pub fn get_session_preview(entries: &[SessionEntry]) -> Option<String> {
         for entry in entries {
             if let SessionEntry::SessionStart { task, .. } = entry {
-                let preview = truncate_string(task, 100);
+                let preview = truncate_with_ellipsis(task, 100);
                 return Some(preview);
             }
         }

@@ -64,19 +64,18 @@ pub use file_tracker::FileSnapshotTracker;
 pub use jsonl_storage::{JsonlSessionStorage, MessageChainTracker, SessionMetadata};
 pub use manager::SessionManager;
 pub use session_cache::{
-    McpServerCache, McpServerConfig, RecentSession, SessionCache, SessionCacheConfig,
+    CachedMcpServerConfig, McpServerCache, RecentSession, SessionCache, SessionCacheConfig,
     SessionCacheData, SessionCacheStats, ToolTrustSettings, UserPreferences,
 };
 pub use storage::{BoxedSessionStorage, FileSessionStorage, MemorySessionStorage, SessionStorage};
 pub use summary::SummaryGenerator;
 pub use types::{
     ConversationMessage,
-    // Enhanced types (Claude Code-inspired)
-    EnhancedMessage,
-    EnhancedMessageType,
-    EnhancedTokenUsage,
-    EnhancedToolCall,
-    EnhancedToolResult,
+    // Canonical session message types
+    SessionMessage,
+    SessionMessageType,
+    UnifiedTokenUsage,
+    UnifiedToolResult,
     FileBackupInfo,
     FileHistorySnapshot,
     MessageContent,
@@ -96,5 +95,7 @@ pub use types::{
     TrackedFileState,
     TrackedFilesSnapshot,
 };
+// Re-export UnifiedToolCall as the canonical session-level tool call type
+pub use types::unified::UnifiedToolCall;
 // Note: SessionId is defined as String type alias in types.rs
 // and is re-exported from concurrency module at crate level

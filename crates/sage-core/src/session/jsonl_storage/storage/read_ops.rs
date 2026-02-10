@@ -6,12 +6,13 @@ use tokio::fs::File;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tracing::{debug, warn};
 
-use super::super::super::types::{EnhancedMessage, FileHistorySnapshot, SessionId};
+use super::super::super::types::{FileHistorySnapshot, SessionId};
+use crate::session::types::unified::SessionMessage;
 use super::core::JsonlSessionStorage;
 
 impl JsonlSessionStorage {
     /// Load all messages from a session
-    pub async fn load_messages(&self, id: &SessionId) -> SageResult<Vec<EnhancedMessage>> {
+    pub async fn load_messages(&self, id: &SessionId) -> SageResult<Vec<SessionMessage>> {
         let path = self.messages_path(id);
 
         if !path.exists() {
@@ -35,7 +36,7 @@ impl JsonlSessionStorage {
                 continue;
             }
 
-            match serde_json::from_str::<EnhancedMessage>(&line) {
+            match serde_json::from_str::<SessionMessage>(&line) {
                 Ok(msg) => messages.push(msg),
                 Err(e) => {
                     warn!(
@@ -97,7 +98,7 @@ impl JsonlSessionStorage {
         &self,
         session_id: &SessionId,
         message_uuid: &str,
-    ) -> SageResult<Option<EnhancedMessage>> {
+    ) -> SageResult<Option<SessionMessage>> {
         let path = self.messages_path(session_id);
 
         if !path.exists() {
@@ -120,7 +121,7 @@ impl JsonlSessionStorage {
                 continue;
             }
 
-            match serde_json::from_str::<EnhancedMessage>(&line) {
+            match serde_json::from_str::<SessionMessage>(&line) {
                 Ok(msg) => {
                     if msg.uuid == message_uuid {
                         return Ok(Some(msg));
@@ -144,7 +145,7 @@ impl JsonlSessionStorage {
         &self,
         session_id: &SessionId,
         message_uuid: &str,
-    ) -> SageResult<Vec<EnhancedMessage>> {
+    ) -> SageResult<Vec<SessionMessage>> {
         let path = self.messages_path(session_id);
 
         if !path.exists() {
@@ -168,7 +169,7 @@ impl JsonlSessionStorage {
                 continue;
             }
 
-            match serde_json::from_str::<EnhancedMessage>(&line) {
+            match serde_json::from_str::<SessionMessage>(&line) {
                 Ok(msg) => {
                     let is_target = msg.uuid == message_uuid;
                     result.push(msg);
@@ -194,11 +195,11 @@ impl JsonlSessionStorage {
         &self,
         session_id: &SessionId,
         start_uuid: &str,
-    ) -> SageResult<Vec<EnhancedMessage>> {
+    ) -> SageResult<Vec<SessionMessage>> {
         let messages = self.load_messages(session_id).await?;
 
         // Build a map for quick lookup
-        let msg_map: HashMap<&str, &EnhancedMessage> =
+        let msg_map: HashMap<&str, &SessionMessage> =
             messages.iter().map(|m| (m.uuid.as_str(), m)).collect();
 
         // Follow the chain from start

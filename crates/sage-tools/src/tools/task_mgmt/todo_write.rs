@@ -6,42 +6,12 @@
 use async_trait::async_trait;
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
+// Re-export canonical types from sage_core so downstream modules can still import from here
+pub use sage_core::session::{TodoItem, TodoStatus};
 use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolResult, ToolSchema};
-use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::Arc;
-
-/// Todo item status
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "snake_case")]
-pub enum TodoStatus {
-    Pending,
-    InProgress,
-    Completed,
-}
-
-impl std::fmt::Display for TodoStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TodoStatus::Pending => write!(f, "pending"),
-            TodoStatus::InProgress => write!(f, "in_progress"),
-            TodoStatus::Completed => write!(f, "completed"),
-        }
-    }
-}
-
-/// A single todo item
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TodoItem {
-    /// The imperative form describing what needs to be done
-    pub content: String,
-    /// Current status of the task
-    pub status: TodoStatus,
-    /// Present continuous form shown during execution
-    #[serde(rename = "activeForm")]
-    pub active_form: String,
-}
 
 /// Global todo list storage
 #[derive(Debug, Default)]

@@ -42,9 +42,9 @@ impl<T> CacheEntry<T> {
     }
 }
 
-/// Configuration for the resource cache
+/// Configuration for the MCP resource cache
 #[derive(Debug, Clone)]
-pub struct CacheConfig {
+pub struct McpCacheConfig {
     /// Default TTL for cache entries
     pub default_ttl: Option<Duration>,
     /// Maximum number of entries to cache
@@ -59,7 +59,7 @@ pub struct CacheConfig {
     pub auto_cleanup: bool,
 }
 
-impl Default for CacheConfig {
+impl Default for McpCacheConfig {
     fn default() -> Self {
         Self {
             default_ttl: Some(Duration::from_secs(300)), // 5 minutes
@@ -72,7 +72,7 @@ impl Default for CacheConfig {
     }
 }
 
-impl CacheConfig {
+impl McpCacheConfig {
     /// Create config with no expiration
     pub fn no_expiry() -> Self {
         Self {

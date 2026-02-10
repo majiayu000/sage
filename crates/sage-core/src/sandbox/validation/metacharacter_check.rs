@@ -7,7 +7,7 @@
 //! - Subshells: () $()
 
 use super::types::{
-    CheckType, ValidationContext, ValidationResult, ValidationWarning, WarningSeverity,
+    CheckType, ValidationContext, CommandValidationResult, ValidationWarning, WarningSeverity,
 };
 
 /// Pattern to detect subshell execution
@@ -153,13 +153,13 @@ fn has_command_separator(command: &str) -> bool {
 /// - Piping (|)
 /// - Background execution (&)
 /// - Subshell execution
-pub fn check_shell_metacharacters(command: &str, context: &ValidationContext) -> ValidationResult {
+pub fn check_shell_metacharacters(command: &str, context: &ValidationContext) -> CommandValidationResult {
     let mut warnings = Vec::new();
 
     // Check for command separators
     if has_command_separator(command) {
         if !context.allow_chaining {
-            return ValidationResult::block(
+            return CommandValidationResult::block(
                 CheckType::ShellMetacharacter,
                 "Command chaining with ; && || is not allowed in strict mode",
             );
@@ -180,7 +180,7 @@ pub fn check_shell_metacharacters(command: &str, context: &ValidationContext) ->
     // Check for background execution
     if has_background(command) {
         if !context.allow_background {
-            return ValidationResult::block(
+            return CommandValidationResult::block(
                 CheckType::ShellMetacharacter,
                 "Background execution (&) is not allowed in strict mode",
             );
@@ -199,9 +199,9 @@ pub fn check_shell_metacharacters(command: &str, context: &ValidationContext) ->
     }
 
     if warnings.is_empty() {
-        ValidationResult::pass(CheckType::ShellMetacharacter)
+        CommandValidationResult::pass(CheckType::ShellMetacharacter)
     } else {
-        ValidationResult::pass_with_warnings(CheckType::ShellMetacharacter, warnings)
+        CommandValidationResult::pass_with_warnings(CheckType::ShellMetacharacter, warnings)
     }
 }
 

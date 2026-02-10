@@ -10,6 +10,7 @@
 mod base;
 mod metadata;
 mod session;
+pub mod unified;
 
 // =============================================================================
 // Re-exports from submodules
@@ -18,10 +19,14 @@ mod session;
 // Re-export conversation types
 pub use super::conversation::{ConversationMessage, SessionToolCall, SessionToolResult};
 
-// Re-export enhanced message types
+// Re-export enhanced context types and MessageContent
 pub use super::enhanced::{
-    EnhancedMessage, EnhancedMessageType, EnhancedTokenUsage, EnhancedToolCall, EnhancedToolResult,
     MessageContent, SessionContext, ThinkingLevel, ThinkingMetadata, TodoItem, TodoStatus,
+};
+
+// Re-export canonical session message types from unified module
+pub use unified::{
+    SessionMessage, SessionMessageType, UnifiedTokenUsage, UnifiedToolResult,
 };
 
 // Re-export file tracking types

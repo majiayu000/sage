@@ -6,7 +6,8 @@ mod tests {
     use std::sync::Arc;
 
     use super::super::executor::SubAgentExecutor;
-    use super::super::types::{AgentProgress, SubAgentConfig};
+    use super::super::super::types::SubAgentConfig;
+    use super::super::types::ExecutorProgress;
     use crate::agent::subagent::registry::AgentRegistry;
     use crate::agent::subagent::types::{AgentDefinition, AgentType, ToolAccessControl};
     use crate::tools::base::{Tool, ToolError};
@@ -135,7 +136,7 @@ mod tests {
             .with_temperature(0.5);
 
         assert_eq!(config.agent_type, AgentType::Explore);
-        assert_eq!(config.task, "Find all Rust files");
+        assert_eq!(config.prompt, "Find all Rust files");
         assert_eq!(
             config.context,
             Some("Working in /src directory".to_string())
@@ -146,15 +147,15 @@ mod tests {
 
     #[test]
     fn test_agent_progress() {
-        let progress = AgentProgress::new(5, 10, "Processing");
+        let progress = ExecutorProgress::new(5, 10, "Processing");
         assert_eq!(progress.step, 5);
         assert_eq!(progress.max_steps, 10);
         assert_eq!(progress.percentage, 50);
 
-        let progress = AgentProgress::new(10, 10, "Complete");
+        let progress = ExecutorProgress::new(10, 10, "Complete");
         assert_eq!(progress.percentage, 100);
 
-        let progress = AgentProgress::new(1, 3, "Starting");
+        let progress = ExecutorProgress::new(1, 3, "Starting");
         assert_eq!(progress.percentage, 33);
     }
 }

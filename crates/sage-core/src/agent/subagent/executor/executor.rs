@@ -5,9 +5,9 @@ use std::time::Instant;
 use tokio_util::sync::CancellationToken;
 
 use super::super::registry::AgentRegistry;
-use super::super::types::{AgentDefinition, ExecutionMetadata, SubAgentResult};
+use super::super::types::{AgentDefinition, ExecutionMetadata, SubAgentConfig, SubAgentResult};
 use super::handlers::StepExecutor;
-use super::types::{StepResult, SubAgentConfig};
+use super::types::StepResult;
 use crate::error::{SageError, SageResult};
 use crate::llm::client::LlmClient;
 use crate::llm::messages::LlmMessage;
@@ -159,10 +159,10 @@ impl SubAgentExecutor {
         let user_message = if let Some(context) = &config.context {
             format!(
                 "{}\n\nContext:\n{}\n\nTask: {}",
-                definition.description, context, config.task
+                definition.description, context, config.prompt
             )
         } else {
-            format!("{}\n\nTask: {}", definition.description, config.task)
+            format!("{}\n\nTask: {}", definition.description, config.prompt)
         };
         messages.push(LlmMessage::user(user_message));
 

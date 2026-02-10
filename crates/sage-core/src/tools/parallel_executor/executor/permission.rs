@@ -2,13 +2,13 @@
 
 use crate::tools::base::Tool;
 use crate::tools::permission::{
-    PermissionCache, PermissionDecision, PermissionRequest, PermissionResult,
+    PermissionCache, PermissionDecision, PermissionRequest, ToolPermissionResult,
 };
 use crate::tools::types::{ToolCall, ToolResult};
 use std::sync::Arc;
 use std::time::Duration;
 
-use super::super::config::ExecutionResult;
+use super::super::config::ToolExecutionResult;
 use super::executor::ParallelToolExecutor;
 
 impl ParallelToolExecutor {
@@ -17,14 +17,14 @@ impl ParallelToolExecutor {
         &self,
         call: &ToolCall,
         tool: &Arc<dyn Tool>,
-    ) -> Option<ExecutionResult> {
+    ) -> Option<ToolExecutionResult> {
         let cache_key = PermissionCache::cache_key(&call.name, call);
 
         if self.config.use_permission_cache {
             if let Some(cached) = self.permission_cache.get(&cache_key).await {
                 if !cached {
                     self.stats.write().await.permission_denials += 1;
-                    return Some(ExecutionResult {
+                    return Some(ToolExecutionResult {
                         result: ToolResult::error(
                             &call.id,
                             &call.name,
@@ -42,20 +42,20 @@ impl ParallelToolExecutor {
         let perm_result = tool.check_permission(call, &context).await;
 
         match perm_result {
-            PermissionResult::Allow => None,
-            PermissionResult::Deny { reason } => {
+            ToolPermissionResult::Allow => None,
+            ToolPermissionResult::Deny { reason } => {
                 self.stats.write().await.permission_denials += 1;
                 if self.config.use_permission_cache {
                     self.permission_cache.set(cache_key, false).await;
                 }
-                Some(ExecutionResult {
+                Some(ToolExecutionResult {
                     result: ToolResult::error(&call.id, &call.name, reason),
                     wait_time: Duration::ZERO,
                     execution_time: Duration::ZERO,
                     permission_checked: true,
                 })
             }
-            PermissionResult::Ask {
+            ToolPermissionResult::Ask {
                 question,
                 default,
                 risk_level,
@@ -63,7 +63,7 @@ impl ParallelToolExecutor {
                 self.handle_ask_permission(call, tool, &cache_key, question, default, risk_level)
                     .await
             }
-            PermissionResult::Transform { .. } => None, // Transform support planned
+            ToolPermissionResult::Transform { .. } => None, // Transform support planned
         }
     }
 
@@ -76,7 +76,7 @@ impl ParallelToolExecutor {
         question: String,
         default: bool,
         risk_level: crate::tools::permission::RiskLevel,
-    ) -> Option<ExecutionResult> {
+    ) -> Option<ToolExecutionResult> {
         let handler = self.permission_handler.read().await;
 
         if let Some(ref handler) = *handler {
@@ -93,7 +93,7 @@ impl ParallelToolExecutor {
                 }
                 PermissionDecision::Deny => {
                     self.stats.write().await.permission_denials += 1;
-                    Some(ExecutionResult {
+                    Some(ToolExecutionResult {
                         result: ToolResult::error(
                             &call.id,
                             &call.name,
@@ -111,7 +111,7 @@ impl ParallelToolExecutor {
                             .set(cache_key.to_string(), false)
                             .await;
                     }
-                    Some(ExecutionResult {
+                    Some(ToolExecutionResult {
                         result: ToolResult::error(
                             &call.id,
                             &call.name,
@@ -126,7 +126,7 @@ impl ParallelToolExecutor {
             }
         } else if !default {
             self.stats.write().await.permission_denials += 1;
-            Some(ExecutionResult {
+            Some(ToolExecutionResult {
                 result: ToolResult::error(&call.id, &call.name, "Permission denied (no handler)"),
                 wait_time: Duration::ZERO,
                 execution_time: Duration::ZERO,

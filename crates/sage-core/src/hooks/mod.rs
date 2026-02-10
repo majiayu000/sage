@@ -75,7 +75,7 @@ pub mod types {
     pub use super::hook_config::{HookConfig, HookMatcher};
     pub use super::hook_input::HookInput;
     pub use super::hook_output::HookOutput;
-    pub use super::hook_types::{HookImplementation, HookType, HookVariant, PermissionDecision};
+    pub use super::hook_types::{HookImplementation, HookType, HookVariant, HookPermissionDecision};
     pub use super::prompt_hook::PromptHook;
 }
 
@@ -87,7 +87,7 @@ pub use executor::{HookExecutionResult, HookExecutor};
 pub use hook_config::{HookConfig, HookMatcher};
 pub use hook_input::HookInput;
 pub use hook_output::HookOutput;
-pub use hook_types::{HookImplementation, HookType, HookVariant, PermissionDecision};
+pub use hook_types::{HookImplementation, HookType, HookVariant, HookPermissionDecision};
 pub use matcher::{PatternMatcher, matches};
 pub use prompt_hook::PromptHook;
 pub use registry::{HookRegistry, HooksConfig};

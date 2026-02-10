@@ -6,7 +6,7 @@
 use super::config_saver;
 use super::provider_option::{ProviderOption, default_provider_options};
 use super::state::{OnboardingState, OnboardingStep};
-use super::validation::{ValidationResult, validate_api_key_format};
+use super::validation::{ApiKeyValidationResult, validate_api_key_format};
 use crate::config::credential::{ConfigStatus, CredentialResolver, ResolverConfig};
 use crate::error::{SageError, SageResult};
 use std::path::PathBuf;
@@ -109,17 +109,17 @@ impl OnboardingManager {
     }
 
     /// Validate the API key
-    pub async fn validate_api_key(&mut self) -> ValidationResult {
+    pub async fn validate_api_key(&mut self) -> ApiKeyValidationResult {
         let Some(provider) = &self.state.selected_provider else {
-            return ValidationResult::failure("No provider selected");
+            return ApiKeyValidationResult::failure("No provider selected");
         };
         let Some(api_key) = &self.state.api_key else {
-            return ValidationResult::failure("No API key provided");
+            return ApiKeyValidationResult::failure("No API key provided");
         };
 
         if self.skip_validation {
             self.state.mark_key_validated();
-            return ValidationResult::success("Validation skipped");
+            return ApiKeyValidationResult::success("Validation skipped");
         }
 
         let result = validate_api_key_format(provider, api_key).await;

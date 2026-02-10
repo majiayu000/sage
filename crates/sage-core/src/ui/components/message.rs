@@ -2,7 +2,7 @@
 //!
 //! Renders user/assistant messages with appropriate styling.
 
-use crate::ui::bridge::state::{Message, MessageContent, Role, ToolResult};
+use crate::ui::bridge::state::{Message, UiMessageContent, Role, UiToolResult};
 use crate::ui::theme::{Colors, Icons};
 use rnk::prelude::*;
 
@@ -33,13 +33,13 @@ impl MessageView {
     /// Render the message
     pub fn render(self) -> Element {
         match &self.message.content {
-            MessageContent::Text(text) => Self::render_text_message(&self.message.role, text),
-            MessageContent::ToolCall {
+            UiMessageContent::Text(text) => Self::render_text_message(&self.message.role, text),
+            UiMessageContent::ToolCall {
                 tool_name,
                 params,
                 result,
             } => Self::render_tool_call(tool_name, params, result.as_ref()),
-            MessageContent::Thinking(text) => Self::render_thinking(text),
+            UiMessageContent::Thinking(text) => Self::render_thinking(text),
         }
     }
 
@@ -89,7 +89,7 @@ impl MessageView {
     }
 
     /// Render a tool call
-    fn render_tool_call(tool_name: &str, params: &str, result: Option<&ToolResult>) -> Element {
+    fn render_tool_call(tool_name: &str, params: &str, result: Option<&UiToolResult>) -> Element {
         let mut container = Box::new()
             .flex_direction(FlexDirection::Column)
             .padding_top(1.0);

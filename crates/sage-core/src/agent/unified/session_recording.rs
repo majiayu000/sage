@@ -1,7 +1,7 @@
 //! Session recording functionality for user and assistant messages.
 
 use crate::error::SageResult;
-use crate::session::{EnhancedMessage, EnhancedTokenUsage, EnhancedToolCall};
+use crate::session::{SessionMessage, UnifiedTokenUsage, UnifiedToolCall};
 use anyhow::Context;
 use tracing::instrument;
 
@@ -67,7 +67,7 @@ impl UnifiedExecutor {
     pub(super) async fn record_user_message(
         &mut self,
         content: &str,
-    ) -> SageResult<Option<EnhancedMessage>> {
+    ) -> SageResult<Option<SessionMessage>> {
         if !self.session_manager.is_recording_active() {
             return Ok(None);
         }
@@ -118,9 +118,9 @@ impl UnifiedExecutor {
     pub(super) async fn record_assistant_message(
         &mut self,
         content: &str,
-        tool_calls: Option<Vec<EnhancedToolCall>>,
-        usage: Option<EnhancedTokenUsage>,
-    ) -> SageResult<Option<EnhancedMessage>> {
+        tool_calls: Option<Vec<UnifiedToolCall>>,
+        usage: Option<UnifiedTokenUsage>,
+    ) -> SageResult<Option<SessionMessage>> {
         if !self.session_manager.is_recording_active() {
             return Ok(None);
         }
@@ -168,7 +168,7 @@ impl UnifiedExecutor {
         &mut self,
         error_type: &str,
         error_message: &str,
-    ) -> SageResult<Option<EnhancedMessage>> {
+    ) -> SageResult<Option<SessionMessage>> {
         if !self.session_manager.is_recording_active() {
             return Ok(None);
         }
@@ -186,7 +186,7 @@ impl UnifiedExecutor {
             .map(|s| s.to_string());
 
         let msg =
-            EnhancedMessage::error(error_type, error_message, &session_id, context, parent_uuid);
+            SessionMessage::error(error_type, error_message, &session_id, context, parent_uuid);
 
         if let Some(storage) = self.session_manager.jsonl_storage() {
             storage

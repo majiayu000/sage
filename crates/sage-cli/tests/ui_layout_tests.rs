@@ -14,8 +14,8 @@ use rnk::layout::LayoutEngine;
 use rnk::prelude::Box as RnkBox;
 use rnk::prelude::*;
 use sage_core::ui::bridge::state::{
-    AppState, ExecutionPhase, Message, MessageContent, MessageMetadata, Role, SessionState,
-    ToolResult,
+    AppState, ExecutionPhase, Message, UiMessageContent, MessageMetadata, Role, SessionState,
+    UiToolResult,
 };
 use std::time::Duration;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
@@ -267,7 +267,7 @@ fn create_default_session() -> SessionState {
 fn create_user_message(content: &str) -> Message {
     Message {
         role: Role::User,
-        content: MessageContent::Text(content.to_string()),
+        content: UiMessageContent::Text(content.to_string()),
         timestamp: Utc::now(),
         metadata: MessageMetadata::default(),
     }
@@ -276,7 +276,7 @@ fn create_user_message(content: &str) -> Message {
 fn create_assistant_message(content: &str) -> Message {
     Message {
         role: Role::Assistant,
-        content: MessageContent::Text(content.to_string()),
+        content: UiMessageContent::Text(content.to_string()),
         timestamp: Utc::now(),
         metadata: MessageMetadata::default(),
     }
@@ -285,16 +285,16 @@ fn create_assistant_message(content: &str) -> Message {
 fn create_thinking_message(content: &str) -> Message {
     Message {
         role: Role::Assistant,
-        content: MessageContent::Thinking(content.to_string()),
+        content: UiMessageContent::Thinking(content.to_string()),
         timestamp: Utc::now(),
         metadata: MessageMetadata::default(),
     }
 }
 
-fn create_tool_call_message(tool_name: &str, params: &str, result: Option<ToolResult>) -> Message {
+fn create_tool_call_message(tool_name: &str, params: &str, result: Option<UiToolResult>) -> Message {
     Message {
         role: Role::Assistant,
-        content: MessageContent::ToolCall {
+        content: UiMessageContent::ToolCall {
             tool_name: tool_name.to_string(),
             params: params.to_string(),
             result,
@@ -907,7 +907,7 @@ mod phase3_message_rendering {
 
     fn build_message_element(msg: &Message, max_width: usize) -> Element {
         match &msg.content {
-            MessageContent::Text(text) => {
+            UiMessageContent::Text(text) => {
                 let (prefix, color) = match msg.role {
                     Role::User => ("user: ", Color::Black),
                     Role::Assistant => ("assistant: ", Color::Black),
@@ -919,13 +919,13 @@ mod phase3_message_rendering {
                     .bold()
                     .into_element()
             }
-            MessageContent::Thinking(text) => {
+            UiMessageContent::Thinking(text) => {
                 let display_text = format!("∴ Thinking: {}", text);
                 Text::new(truncate_to_width(&display_text, max_width))
                     .color(Color::Magenta)
                     .into_element()
             }
-            MessageContent::ToolCall {
+            UiMessageContent::ToolCall {
                 tool_name,
                 params,
                 result,
@@ -1040,7 +1040,7 @@ mod phase3_message_rendering {
 
     #[test]
     fn test_tool_call_result_displayed() {
-        let result = ToolResult {
+        let result = UiToolResult {
             success: true,
             output: Some("Read 150 lines".to_string()),
             error: None,
@@ -1054,7 +1054,7 @@ mod phase3_message_rendering {
 
     #[test]
     fn test_tool_call_error_displayed() {
-        let result = ToolResult {
+        let result = UiToolResult {
             success: false,
             output: None,
             error: Some("File not found".to_string()),
@@ -1590,7 +1590,7 @@ mod phase6_integration {
         let display = state.display_messages();
         assert_eq!(display.len(), 2, "Should include streaming message");
 
-        if let MessageContent::Text(text) = &display[1].content {
+        if let UiMessageContent::Text(text) = &display[1].content {
             assert_eq!(text, "Partial response");
         } else {
             panic!("Expected text content for streaming");
@@ -1657,7 +1657,7 @@ mod edge_cases {
     fn test_unicode_emoji_in_message() {
         let msg = create_user_message("Hello 👋 World 🌍!");
         let content = match &msg.content {
-            MessageContent::Text(t) => t,
+            UiMessageContent::Text(t) => t,
             _ => panic!("Expected text"),
         };
 
@@ -1683,7 +1683,7 @@ mod edge_cases {
 
     #[test]
     fn test_special_characters_in_tool_args() {
-        let result = ToolResult {
+        let result = UiToolResult {
             success: true,
             output: Some("Output with \"quotes\" and 'apostrophes'".to_string()),
             error: None,
@@ -1696,14 +1696,14 @@ mod edge_cases {
         );
 
         let _content = match &msg.content {
-            MessageContent::ToolCall { params, .. } => params,
+            UiMessageContent::ToolCall { params, .. } => params,
             _ => panic!("Expected tool call"),
         };
     }
 
     #[test]
     fn test_multiline_tool_output() {
-        let result = ToolResult {
+        let result = UiToolResult {
             success: true,
             output: Some("Line 1\nLine 2\nLine 3".to_string()),
             error: None,
@@ -1711,7 +1711,7 @@ mod edge_cases {
         };
         let msg = create_tool_call_message("bash", "cat file.txt", Some(result));
 
-        if let MessageContent::ToolCall {
+        if let UiMessageContent::ToolCall {
             result: Some(r), ..
         } = &msg.content
         {

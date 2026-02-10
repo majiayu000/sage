@@ -1,5 +1,6 @@
 //! Enhanced error types for Sage Tools
 
+use sage_core::error::ErrorCategory;
 use sage_core::tools::base::ToolError;
 use std::collections::HashMap;
 
@@ -18,27 +19,6 @@ pub struct EnhancedToolError {
     pub category: ErrorCategory,
     /// Whether this error is recoverable
     pub recoverable: bool,
-}
-
-/// Error categories for better classification
-#[derive(Debug, Clone, PartialEq)]
-pub enum ErrorCategory {
-    /// User input validation errors
-    UserInput,
-    /// File system related errors
-    FileSystem,
-    /// Network related errors
-    Network,
-    /// Permission and security errors
-    Permission,
-    /// Configuration errors
-    Configuration,
-    /// System resource errors (memory, disk, etc.)
-    Resource,
-    /// External dependency errors
-    Dependency,
-    /// Internal logic errors
-    Internal,
 }
 
 impl EnhancedToolError {

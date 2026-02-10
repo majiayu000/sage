@@ -82,4 +82,4 @@ pub use types::{
     HookDefinition, HookDefinitionType, HooksSettings, ModelSettings, ParsedPattern,
     PermissionBehavior, PermissionSettings, Settings, ToolSettings, UiSettings, WorkspaceSettings,
 };
-pub use validation::{SettingsValidator, ValidationResult};
+pub use validation::{SettingsValidationResult, SettingsValidator};

@@ -5,7 +5,7 @@
 //! - Delimiter contains command substitution ($(cmd) or `cmd`)
 //! - Unquoted delimiters that could be manipulated
 
-use super::types::{CheckType, ValidationResult, ValidationWarning, WarningSeverity};
+use super::types::{CheckType, CommandValidationResult, ValidationWarning, WarningSeverity};
 
 /// Parsed heredoc information
 struct HeredocInfo {
@@ -120,7 +120,7 @@ fn has_command_substitution(s: &str) -> bool {
 /// - Variable references ($VAR, ${VAR})
 /// - Command substitution ($(cmd), `cmd`)
 /// - Suspicious patterns that could lead to injection
-pub fn check_heredoc_safety(command: &str) -> ValidationResult {
+pub fn check_heredoc_safety(command: &str) -> CommandValidationResult {
     let mut warnings = Vec::new();
 
     // Find all heredoc patterns
@@ -129,7 +129,7 @@ pub fn check_heredoc_safety(command: &str) -> ValidationResult {
 
         // Check for variable in delimiter
         if has_variable_reference(delimiter) {
-            return ValidationResult::block(
+            return CommandValidationResult::block(
                 CheckType::Heredoc,
                 format!(
                     "Heredoc delimiter '{}' contains variable reference - potential injection",
@@ -140,7 +140,7 @@ pub fn check_heredoc_safety(command: &str) -> ValidationResult {
 
         // Check for command substitution in delimiter
         if has_command_substitution(delimiter) {
-            return ValidationResult::block(
+            return CommandValidationResult::block(
                 CheckType::Heredoc,
                 format!(
                     "Heredoc delimiter '{}' contains command substitution - potential injection",
@@ -163,9 +163,9 @@ pub fn check_heredoc_safety(command: &str) -> ValidationResult {
     }
 
     if warnings.is_empty() {
-        ValidationResult::pass(CheckType::Heredoc)
+        CommandValidationResult::pass(CheckType::Heredoc)
     } else {
-        ValidationResult::pass_with_warnings(CheckType::Heredoc, warnings)
+        CommandValidationResult::pass_with_warnings(CheckType::Heredoc, warnings)
     }
 }
 

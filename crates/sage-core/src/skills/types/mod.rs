@@ -30,7 +30,7 @@ pub use metadata::SkillMetadata;
 pub use skill::Skill;
 pub use source::{SkillSource, SkillSourceInfo, SkillSourceType};
 pub use tool_access::ToolAccess;
-pub use trigger::{SkillTrigger, TaskType};
+pub use trigger::{SkillTrigger, SkillTaskType};
 
 #[cfg(test)]
 mod tests {
@@ -86,12 +86,12 @@ mod tests {
     fn test_skill_matches() {
         let skill = Skill::new("testing", "Testing skill")
             .with_trigger(SkillTrigger::Keyword("test".to_string()))
-            .with_trigger(SkillTrigger::TaskType(TaskType::Testing));
+            .with_trigger(SkillTrigger::SkillTaskType(SkillTaskType::Testing));
 
         let context1 = SkillContext::new("Write a test");
         assert!(skill.matches(&context1));
 
-        let context2 = SkillContext::new("Write code").with_task_type(TaskType::Testing);
+        let context2 = SkillContext::new("Write code").with_task_type(SkillTaskType::Testing);
         assert!(skill.matches(&context2));
 
         let context3 = SkillContext::new("Write code");
@@ -172,12 +172,12 @@ mod tests {
             .with_working_dir("/project")
             .with_file("main.rs")
             .with_recent_tool("Read")
-            .with_task_type(TaskType::Debugging);
+            .with_task_type(SkillTaskType::Debugging);
 
         assert_eq!(context.user_message, "message");
         assert_eq!(context.working_dir, PathBuf::from("/project"));
         assert_eq!(context.active_files.len(), 1);
         assert_eq!(context.recent_tools.len(), 1);
-        assert_eq!(context.detected_task_type, Some(TaskType::Debugging));
+        assert_eq!(context.detected_task_type, Some(SkillTaskType::Debugging));
     }
 }

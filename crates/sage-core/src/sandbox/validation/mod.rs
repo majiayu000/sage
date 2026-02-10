@@ -19,7 +19,7 @@ pub use metacharacter_check::check_shell_metacharacters;
 pub use pattern_check::check_dangerous_patterns;
 pub use removal_check::check_dangerous_removal;
 pub use types::{
-    CheckType, ValidationContext, ValidationResult, ValidationWarning, WarningSeverity,
+    CheckType, ValidationContext, CommandValidationResult, ValidationWarning, WarningSeverity,
 };
 pub use variable_check::check_dangerous_variables;
 
@@ -28,7 +28,7 @@ use crate::tools::ToolError;
 /// Perform comprehensive command validation
 ///
 /// Runs all validation checks and returns a combined result.
-pub fn validate_command(command: &str, context: &ValidationContext) -> ValidationResult {
+pub fn validate_command(command: &str, context: &ValidationContext) -> CommandValidationResult {
     let checks = [
         check_heredoc_safety(command),
         check_shell_metacharacters(command, context),
@@ -50,7 +50,7 @@ pub fn validate_command(command: &str, context: &ValidationContext) -> Validatio
         all_warnings.extend(result.warnings.clone());
     }
 
-    ValidationResult::pass_with_warnings(CheckType::Composite, all_warnings)
+    CommandValidationResult::pass_with_warnings(CheckType::Composite, all_warnings)
 }
 
 /// Validate command and return Result for tool integration

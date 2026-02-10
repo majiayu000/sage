@@ -1,5 +1,6 @@
 //! Type definitions for session caching
 
+use crate::config::McpServerConfig;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -58,24 +59,19 @@ pub struct ToolTrustSettings {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct McpServerCache {
     /// Server configurations by name
-    pub servers: HashMap<String, McpServerConfig>,
+    pub servers: HashMap<String, CachedMcpServerConfig>,
     /// Last updated timestamp
     pub updated_at: Option<DateTime<Utc>>,
 }
 
-/// Cached MCP server configuration
+/// Cached MCP server configuration (wraps the canonical `McpServerConfig` with session-specific metadata)
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct McpServerConfig {
-    /// Server name
+pub struct CachedMcpServerConfig {
+    /// Server name (session-cache-specific identifier)
     pub name: String,
-    /// Command to start the server
-    pub command: String,
-    /// Command arguments
-    pub args: Vec<String>,
-    /// Environment variables
-    pub env: HashMap<String, String>,
-    /// Whether this server is enabled
-    pub enabled: bool,
+    /// The underlying MCP server configuration
+    #[serde(flatten)]
+    pub server_config: McpServerConfig,
     /// When this config was last used
     pub last_used: Option<DateTime<Utc>>,
 }

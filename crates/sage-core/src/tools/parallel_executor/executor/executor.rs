@@ -10,7 +10,7 @@ use tokio::sync::{Mutex, RwLock, Semaphore};
 use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
 
-use super::super::config::{ExecutionResult, ExecutorStats, ParallelExecutorConfig};
+use super::super::config::{ToolExecutionResult, ExecutorStats, ParallelExecutorConfig};
 
 /// Enhanced parallel tool executor
 pub struct ParallelToolExecutor {
@@ -110,13 +110,13 @@ impl ParallelToolExecutor {
     }
 
     /// Execute a single tool call
-    pub async fn execute_tool(&self, call: &ToolCall) -> ExecutionResult {
+    pub async fn execute_tool(&self, call: &ToolCall) -> ToolExecutionResult {
         let mut wait_time = Duration::ZERO;
         let mut permission_checked = false;
 
         // Check for cancellation
         if self.cancellation_token.is_cancelled() {
-            return ExecutionResult {
+            return ToolExecutionResult {
                 result: ToolResult::error(&call.id, &call.name, "Execution cancelled"),
                 wait_time,
                 execution_time: Duration::ZERO,
@@ -128,7 +128,7 @@ impl ParallelToolExecutor {
         let tool = match self.tools.get(&call.name) {
             Some(tool) => tool.clone(),
             None => {
-                return ExecutionResult {
+                return ToolExecutionResult {
                     result: ToolResult::error(
                         &call.id,
                         &call.name,
@@ -157,7 +157,7 @@ impl ParallelToolExecutor {
                 permits
             }
             Err(e) => {
-                return ExecutionResult {
+                return ToolExecutionResult {
                     result: ToolResult::error(&call.id, &call.name, e.to_string()),
                     wait_time: wait_start.elapsed(),
                     execution_time: Duration::ZERO,
@@ -169,7 +169,7 @@ impl ParallelToolExecutor {
         // Check cancellation again after waiting
         if self.cancellation_token.is_cancelled() {
             self.stats.write().await.cancellations += 1;
-            return ExecutionResult {
+            return ToolExecutionResult {
                 result: ToolResult::error(&call.id, &call.name, "Execution cancelled"),
                 wait_time,
                 execution_time: Duration::ZERO,
@@ -218,7 +218,7 @@ impl ParallelToolExecutor {
             stats.total_wait_time += wait_time;
         }
 
-        ExecutionResult {
+        ToolExecutionResult {
             result,
             wait_time,
             execution_time,
@@ -227,7 +227,7 @@ impl ParallelToolExecutor {
     }
 
     /// Execute multiple tool calls with appropriate concurrency
-    pub async fn execute_tools(&self, calls: &[ToolCall]) -> Vec<ExecutionResult> {
+    pub async fn execute_tools(&self, calls: &[ToolCall]) -> Vec<ToolExecutionResult> {
         if calls.is_empty() {
             return Vec::new();
         }

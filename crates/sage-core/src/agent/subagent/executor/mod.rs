@@ -9,4 +9,4 @@ mod tests;
 
 // Re-export public types
 pub use executor::SubAgentExecutor;
-pub use types::{AgentProgress, ExecutorMessage, SubAgentConfig};
+pub use types::{ExecutorProgress, ExecutorMessage};

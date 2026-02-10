@@ -9,6 +9,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 use super::types::MessageRole;
+use super::types::unified::UnifiedToolResult;
 
 /// A tool call made during the session
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,18 +41,14 @@ impl SessionToolCall {
 }
 
 /// Result of a tool execution
+///
+/// Composes `UnifiedToolResult` (the canonical wire-format tool result)
+/// with a session-specific `timestamp` field.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionToolResult {
-    /// ID of the tool call this result is for
-    pub tool_call_id: String,
-    /// Tool name
-    pub tool_name: String,
-    /// Result content
-    pub content: String,
-    /// Whether the tool execution succeeded
-    pub success: bool,
-    /// Error message if failed
-    pub error: Option<String>,
+    /// Core tool result data (tool_call_id, tool_name, content, success, error)
+    #[serde(flatten)]
+    pub result: UnifiedToolResult,
     /// Timestamp
     pub timestamp: DateTime<Utc>,
 }
@@ -64,11 +61,7 @@ impl SessionToolResult {
         content: impl Into<String>,
     ) -> Self {
         Self {
-            tool_call_id: tool_call_id.into(),
-            tool_name: tool_name.into(),
-            content: content.into(),
-            success: true,
-            error: None,
+            result: UnifiedToolResult::success(tool_call_id, tool_name, content),
             timestamp: Utc::now(),
         }
     }
@@ -80,13 +73,34 @@ impl SessionToolResult {
         error: impl Into<String>,
     ) -> Self {
         Self {
-            tool_call_id: tool_call_id.into(),
-            tool_name: tool_name.into(),
-            content: String::new(),
-            success: false,
-            error: Some(error.into()),
+            result: UnifiedToolResult::failure(tool_call_id, tool_name, error),
             timestamp: Utc::now(),
         }
+    }
+
+    /// Access the tool_call_id field
+    pub fn tool_call_id(&self) -> &str {
+        &self.result.tool_call_id
+    }
+
+    /// Access the tool_name field
+    pub fn tool_name(&self) -> &str {
+        &self.result.tool_name
+    }
+
+    /// Access the content field
+    pub fn content(&self) -> &str {
+        &self.result.content
+    }
+
+    /// Access the success field
+    pub fn success_status(&self) -> bool {
+        self.result.success
+    }
+
+    /// Access the error field
+    pub fn error(&self) -> Option<&str> {
+        self.result.error.as_deref()
     }
 }
 
@@ -215,11 +229,11 @@ mod tests {
     #[test]
     fn test_session_tool_result() {
         let result = SessionToolResult::success("call-1", "bash", "output");
-        assert!(result.success);
-        assert_eq!(result.content, "output");
+        assert!(result.result.success);
+        assert_eq!(result.result.content, "output");
 
         let result = SessionToolResult::failure("call-2", "bash", "error");
-        assert!(!result.success);
-        assert_eq!(result.error, Some("error".to_string()));
+        assert!(!result.result.success);
+        assert_eq!(result.result.error, Some("error".to_string()));
     }
 }

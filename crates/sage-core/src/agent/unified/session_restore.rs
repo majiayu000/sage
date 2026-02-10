@@ -2,7 +2,7 @@
 
 use crate::error::{SageError, SageResult};
 use crate::llm::messages::LlmMessage;
-use crate::session::{EnhancedMessage, EnhancedMessageType, SessionMetadata};
+use crate::session::{SessionMessage, SessionMessageType, SessionMetadata};
 use crate::tools::ToolCall;
 use std::collections::HashMap;
 use tracing::instrument;
@@ -47,7 +47,7 @@ impl UnifiedExecutor {
             enhanced_messages.len()
         );
 
-        // Convert EnhancedMessages to LlmMessages for the execution loop
+        // Convert SessionMessages to LlmMessages for the execution loop
         let llm_messages = Self::convert_messages_for_resume(&enhanced_messages);
 
         // Update executor state
@@ -101,10 +101,10 @@ impl UnifiedExecutor {
         Ok(session)
     }
 
-    /// Convert EnhancedMessages to LlmMessages for continuing execution
+    /// Convert SessionMessages to LlmMessages for continuing execution
     ///
     /// This preserves the conversation history including tool calls and results.
-    fn convert_messages_for_resume(messages: &[EnhancedMessage]) -> Vec<LlmMessage> {
+    fn convert_messages_for_resume(messages: &[SessionMessage]) -> Vec<LlmMessage> {
         let mut llm_messages = Vec::new();
 
         for msg in messages {
@@ -114,10 +114,10 @@ impl UnifiedExecutor {
             }
 
             match msg.message_type {
-                EnhancedMessageType::User => {
+                SessionMessageType::User => {
                     llm_messages.push(LlmMessage::user(&msg.message.content));
                 }
-                EnhancedMessageType::Assistant => {
+                SessionMessageType::Assistant => {
                     if let Some(ref tool_calls) = msg.message.tool_calls {
                         // Convert enhanced tool calls to ToolCall
                         let calls: Vec<ToolCall> = tool_calls
@@ -140,7 +140,7 @@ impl UnifiedExecutor {
                         llm_messages.push(LlmMessage::assistant(&msg.message.content));
                     }
                 }
-                EnhancedMessageType::ToolResult => {
+                SessionMessageType::ToolResult => {
                     // Handle tool results
                     if let Some(ref tool_results) = msg.message.tool_results {
                         for result in tool_results {
@@ -152,7 +152,7 @@ impl UnifiedExecutor {
                         }
                     }
                 }
-                EnhancedMessageType::System => {
+                SessionMessageType::System => {
                     llm_messages.push(LlmMessage::system(&msg.message.content));
                 }
                 // Metadata types are skipped above

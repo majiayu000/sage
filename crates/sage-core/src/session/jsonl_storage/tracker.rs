@@ -1,6 +1,7 @@
 //! Message chain tracker for building parent-child relationships
 
-use super::super::types::{EnhancedMessage, SessionContext, ThinkingMetadata, TodoItem};
+use super::super::types::{SessionContext, ThinkingMetadata, TodoItem};
+use crate::session::types::unified::SessionMessage;
 
 /// Message chain tracker for building parent-child relationships
 #[derive(Debug, Default)]
@@ -72,7 +73,7 @@ impl MessageChainTracker {
     }
 
     /// Create a user message
-    pub fn create_user_message(&mut self, content: impl Into<String>) -> EnhancedMessage {
+    pub fn create_user_message(&mut self, content: impl Into<String>) -> SessionMessage {
         let session_id = self
             .session_id
             .clone()
@@ -83,7 +84,7 @@ impl MessageChainTracker {
             .unwrap_or_else(|| SessionContext::new(std::env::current_dir().unwrap_or_default()));
 
         let mut msg =
-            EnhancedMessage::user(content, &session_id, context).with_todos(self.todos.clone());
+            SessionMessage::user(content, &session_id, context).with_todos(self.todos.clone());
 
         if let Some(parent) = &self.last_uuid {
             msg = msg.with_parent(parent);
@@ -98,7 +99,7 @@ impl MessageChainTracker {
     }
 
     /// Create an assistant message
-    pub fn create_assistant_message(&mut self, content: impl Into<String>) -> EnhancedMessage {
+    pub fn create_assistant_message(&mut self, content: impl Into<String>) -> SessionMessage {
         let session_id = self
             .session_id
             .clone()
@@ -109,7 +110,7 @@ impl MessageChainTracker {
             .unwrap_or_else(|| SessionContext::new(std::env::current_dir().unwrap_or_default()));
 
         let mut msg =
-            EnhancedMessage::assistant(content, &session_id, context, self.last_uuid.clone())
+            SessionMessage::assistant(content, &session_id, context, self.last_uuid.clone())
                 .with_todos(self.todos.clone());
 
         if let Some(thinking) = &self.thinking {

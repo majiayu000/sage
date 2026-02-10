@@ -3,7 +3,8 @@
 use std::path::PathBuf;
 use tempfile::TempDir;
 
-use super::super::types::{EnhancedMessage, SessionContext};
+use super::super::types::{SessionContext};
+use crate::session::types::unified::SessionMessage;
 use super::storage::JsonlSessionStorage;
 use super::tracker::MessageChainTracker;
 
@@ -33,8 +34,8 @@ async fn test_append_and_load_messages() {
         .unwrap();
 
     let context = SessionContext::new(PathBuf::from("/tmp"));
-    let msg1 = EnhancedMessage::user("Hello", &session_id, context.clone());
-    let msg2 = EnhancedMessage::assistant("Hi!", &session_id, context, Some(msg1.uuid.clone()));
+    let msg1 = SessionMessage::user("Hello", &session_id, context.clone());
+    let msg2 = SessionMessage::assistant("Hi!", &session_id, context, Some(msg1.uuid.clone()));
 
     storage.append_message(&session_id, &msg1).await.unwrap();
     storage.append_message(&session_id, &msg2).await.unwrap();
@@ -57,14 +58,14 @@ async fn test_message_chain() {
         .unwrap();
 
     let context = SessionContext::new(PathBuf::from("/tmp"));
-    let msg1 = EnhancedMessage::user("First", &session_id, context.clone());
-    let msg2 = EnhancedMessage::assistant(
+    let msg1 = SessionMessage::user("First", &session_id, context.clone());
+    let msg2 = SessionMessage::assistant(
         "Second",
         &session_id,
         context.clone(),
         Some(msg1.uuid.clone()),
     );
-    let msg3 = EnhancedMessage::user("Third", &session_id, context).with_parent(&msg2.uuid);
+    let msg3 = SessionMessage::user("Third", &session_id, context).with_parent(&msg2.uuid);
 
     storage.append_message(&session_id, &msg1).await.unwrap();
     storage.append_message(&session_id, &msg2).await.unwrap();

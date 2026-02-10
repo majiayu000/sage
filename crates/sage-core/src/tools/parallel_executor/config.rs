@@ -41,7 +41,7 @@ pub struct ExecutorStats {
 
 /// Execution result with metadata
 #[derive(Debug)]
-pub struct ExecutionResult {
+pub struct ToolExecutionResult {
     /// The tool result
     pub result: crate::tools::types::ToolResult,
     /// Time spent waiting for semaphore

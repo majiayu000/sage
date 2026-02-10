@@ -3,7 +3,6 @@
 pub mod background_registry;
 pub mod background_task;
 pub mod base;
-pub mod batch_executor;
 pub mod executor;
 pub mod names;
 pub mod parallel_executor;
@@ -23,15 +22,14 @@ pub use base::{
     ConcurrencyMode, FullTool, Tool, ToolConcurrency, ToolError, ToolMetadata, ToolPermission,
     ToolRenderer, ToolTiming, ToolValidator,
 };
-pub use batch_executor::{BatchExecutionStats, BatchStrategy, BatchToolExecutor};
 pub use executor::ToolExecutor;
 pub use parallel_executor::{
-    ExecutionResult, ExecutorStats, ParallelExecutorBuilder, ParallelExecutorConfig,
+    ToolExecutionResult, ExecutorStats, ParallelExecutorBuilder, ParallelExecutorConfig,
     ParallelToolExecutor,
 };
 pub use permission::{
     PermissionCache, PermissionDecision, PermissionHandler, PermissionPolicy, PermissionRequest,
-    PermissionResult, PolicyHandler, RiskLevel, SharedPermissionHandler, ToolContext,
+    ToolPermissionResult, PolicyHandler, RiskLevel, SharedPermissionHandler, ToolContext,
 };
 pub use registry::ToolRegistry;
 pub use tool_cache::{

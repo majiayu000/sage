@@ -5,7 +5,7 @@ use tokio::sync::mpsc;
 
 use crate::error::{SageError, SageResult};
 
-use super::auto_response::{AutoResponder, AutoResponse};
+use super::auto_response::{AutoResponder, InputAutoResponse};
 use super::request::InputRequest;
 use super::response::InputResponse;
 
@@ -59,7 +59,7 @@ impl InputChannel {
     /// Create a non-interactive channel that auto-responds
     ///
     /// This is used for batch/CI mode where no user input is available.
-    pub fn non_interactive(auto_response: AutoResponse) -> Self {
+    pub fn non_interactive(auto_response: InputAutoResponse) -> Self {
         // Create dummy channels (won't be used)
         let (request_tx, _) = mpsc::channel(1);
         let (_, response_rx) = mpsc::channel(1);

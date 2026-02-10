@@ -5,7 +5,7 @@
 //! - Variables in critical positions
 //! - Unquoted variable expansion
 
-use super::types::{CheckType, ValidationResult, ValidationWarning, WarningSeverity};
+use super::types::{CheckType, CommandValidationResult, ValidationWarning, WarningSeverity};
 use regex::Regex;
 use std::sync::LazyLock;
 
@@ -41,12 +41,12 @@ static PERM_VARIABLE: LazyLock<Regex> = LazyLock::new(|| {
 /// Warns about:
 /// - Unquoted variable expansion
 /// - Variables in permission commands
-pub fn check_dangerous_variables(command: &str) -> ValidationResult {
+pub fn check_dangerous_variables(command: &str) -> CommandValidationResult {
     let mut warnings = Vec::new();
 
     // Block: Variable in redirect target
     if REDIRECT_VARIABLE.is_match(command) {
-        return ValidationResult::block_with_warnings(
+        return CommandValidationResult::block_with_warnings(
             CheckType::DangerousVariable,
             "Variable in redirect target is dangerous - could overwrite arbitrary files",
             vec![ValidationWarning::with_suggestion(
@@ -59,7 +59,7 @@ pub fn check_dangerous_variables(command: &str) -> ValidationResult {
 
     // Block: Variable as rm target (high risk)
     if RM_VARIABLE.is_match(command) {
-        return ValidationResult::block(
+        return CommandValidationResult::block(
             CheckType::DangerousVariable,
             "Variable as rm target is dangerous - could delete arbitrary files",
         );
@@ -85,9 +85,9 @@ pub fn check_dangerous_variables(command: &str) -> ValidationResult {
     }
 
     if warnings.is_empty() {
-        ValidationResult::pass(CheckType::DangerousVariable)
+        CommandValidationResult::pass(CheckType::DangerousVariable)
     } else {
-        ValidationResult::pass_with_warnings(CheckType::DangerousVariable, warnings)
+        CommandValidationResult::pass_with_warnings(CheckType::DangerousVariable, warnings)
     }
 }
 

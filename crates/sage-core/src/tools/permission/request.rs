@@ -8,7 +8,7 @@ use crate::tools::types::ToolCall;
 
 /// Permission check result from a tool
 #[derive(Debug, Clone)]
-pub enum PermissionResult {
+pub enum ToolPermissionResult {
     /// Allow execution to proceed
     Allow,
 
@@ -34,7 +34,7 @@ pub enum PermissionResult {
     },
 }
 
-impl PermissionResult {
+impl ToolPermissionResult {
     /// Create an allow result
     pub fn allow() -> Self {
         Self::Allow

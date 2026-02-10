@@ -5,7 +5,7 @@
 //! - Removal of critical system paths
 //! - Recursive removal of home directories
 
-use super::types::{CheckType, ValidationResult, ValidationWarning};
+use super::types::{CheckType, CommandValidationResult, ValidationWarning};
 use regex::Regex;
 use std::sync::LazyLock;
 
@@ -71,7 +71,7 @@ static WILDCARD_PATH: LazyLock<Regex> =
 /// Warns about:
 /// - Any recursive removal
 /// - Wildcard in removal path
-pub fn check_dangerous_removal(command: &str) -> ValidationResult {
+pub fn check_dangerous_removal(command: &str) -> CommandValidationResult {
     let mut warnings = Vec::new();
 
     // Find rm command target
@@ -82,7 +82,7 @@ pub fn check_dangerous_removal(command: &str) -> ValidationResult {
         // Check if targeting critical path
         for critical in CRITICAL_PATHS {
             if is_path_match(&target_normalized, critical) {
-                return ValidationResult::block(
+                return CommandValidationResult::block(
                     CheckType::DangerousRemoval,
                     format!(
                         "Removal of critical path '{}' is blocked for safety",
@@ -94,7 +94,7 @@ pub fn check_dangerous_removal(command: &str) -> ValidationResult {
 
         // Check for rm -rf with wildcards at root level
         if RM_RF.is_match(command) && WILDCARD_PATH.is_match(target) {
-            return ValidationResult::block(
+            return CommandValidationResult::block(
                 CheckType::DangerousRemoval,
                 format!(
                     "Recursive removal with wildcard '{}' is too dangerous",
@@ -123,9 +123,9 @@ pub fn check_dangerous_removal(command: &str) -> ValidationResult {
     }
 
     if warnings.is_empty() {
-        ValidationResult::pass(CheckType::DangerousRemoval)
+        CommandValidationResult::pass(CheckType::DangerousRemoval)
     } else {
-        ValidationResult::pass_with_warnings(CheckType::DangerousRemoval, warnings)
+        CommandValidationResult::pass_with_warnings(CheckType::DangerousRemoval, warnings)
     }
 }
 

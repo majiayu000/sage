@@ -11,7 +11,7 @@ pub type AutoResponder = Box<dyn Fn(&InputRequest) -> InputResponse + Send + Syn
 
 /// Auto-response strategies for non-interactive mode
 #[derive(Clone)]
-pub enum AutoResponse {
+pub enum InputAutoResponse {
     /// Use default responses (empty answers, deny permissions)
     Default,
     /// Always allow permissions, use first option for questions
@@ -22,22 +22,22 @@ pub enum AutoResponse {
     Custom(Arc<dyn Fn(&InputRequest) -> InputResponse + Send + Sync>),
 }
 
-impl std::fmt::Debug for AutoResponse {
+impl std::fmt::Debug for InputAutoResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AutoResponse::Default => write!(f, "AutoResponse::Default"),
-            AutoResponse::AlwaysAllow => write!(f, "AutoResponse::AlwaysAllow"),
-            AutoResponse::AlwaysDeny => write!(f, "AutoResponse::AlwaysDeny"),
-            AutoResponse::Custom(_) => write!(f, "AutoResponse::Custom(...)"),
+            InputAutoResponse::Default => write!(f, "InputAutoResponse::Default"),
+            InputAutoResponse::AlwaysAllow => write!(f, "InputAutoResponse::AlwaysAllow"),
+            InputAutoResponse::AlwaysDeny => write!(f, "InputAutoResponse::AlwaysDeny"),
+            InputAutoResponse::Custom(_) => write!(f, "InputAutoResponse::Custom(...)"),
         }
     }
 }
 
-impl AutoResponse {
+impl InputAutoResponse {
     /// Convert to a responder function
     pub fn into_responder(self) -> AutoResponder {
         match self {
-            AutoResponse::Default => Box::new(|req: &InputRequest| match &req.kind {
+            InputAutoResponse::Default => Box::new(|req: &InputRequest| match &req.kind {
                 InputRequestKind::Questions { .. } => {
                     InputResponse::question_answers(req.id, HashMap::new())
                 }
@@ -54,7 +54,7 @@ impl AutoResponse {
                     }
                 }
             }),
-            AutoResponse::AlwaysAllow => Box::new(|req: &InputRequest| match &req.kind {
+            InputAutoResponse::AlwaysAllow => Box::new(|req: &InputRequest| match &req.kind {
                 InputRequestKind::Questions { questions } => {
                     // Select first option for each question
                     let answers: HashMap<String, String> = questions
@@ -82,10 +82,10 @@ impl AutoResponse {
                     }
                 }
             }),
-            AutoResponse::AlwaysDeny => {
+            InputAutoResponse::AlwaysDeny => {
                 Box::new(|req: &InputRequest| InputResponse::cancelled(req.id))
             }
-            AutoResponse::Custom(f) => Box::new(move |req: &InputRequest| f(req)),
+            InputAutoResponse::Custom(f) => Box::new(move |req: &InputRequest| f(req)),
         }
     }
 }

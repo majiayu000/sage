@@ -1,6 +1,6 @@
 //! Subagent data types for tracking child agent execution
 
-use super::message::EnhancedTokenUsage;
+use crate::session::types::unified::UnifiedTokenUsage;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -53,7 +53,7 @@ pub struct SubagentData {
     /// Token usage for this subagent
     #[serde(rename = "tokenUsage")]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub token_usage: Option<EnhancedTokenUsage>,
+    pub token_usage: Option<UnifiedTokenUsage>,
 
     /// Total duration in milliseconds
     #[serde(rename = "durationMs")]
@@ -119,7 +119,7 @@ impl SubagentData {
     }
 
     /// Set token usage
-    pub fn with_token_usage(mut self, usage: EnhancedTokenUsage) -> Self {
+    pub fn with_token_usage(mut self, usage: UnifiedTokenUsage) -> Self {
         self.token_usage = Some(usage);
         self
     }

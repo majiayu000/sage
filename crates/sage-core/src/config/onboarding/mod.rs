@@ -33,4 +33,4 @@ mod validation;
 pub use manager::OnboardingManager;
 pub use provider_option::{ProviderOption, default_provider_options};
 pub use state::{OnboardingState, OnboardingStep};
-pub use validation::ValidationResult;
+pub use validation::ApiKeyValidationResult;

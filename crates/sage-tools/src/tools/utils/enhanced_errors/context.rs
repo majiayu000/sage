@@ -1,6 +1,6 @@
 //! Error categorization and context analysis
 
-use super::types::ErrorCategory;
+use sage_core::error::ErrorCategory;
 use sage_core::tools::base::ToolError;
 
 /// Get error type as string

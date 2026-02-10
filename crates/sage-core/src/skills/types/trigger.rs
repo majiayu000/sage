@@ -25,7 +25,7 @@ pub enum SkillTrigger {
     Always,
 
     /// Trigger on task type
-    TaskType(TaskType),
+    SkillTaskType(SkillTaskType),
 }
 
 impl SkillTrigger {
@@ -47,14 +47,14 @@ impl SkillTrigger {
             Self::ToolUsage(tool) => context.recent_tools.contains(tool),
             Self::Explicit => context.explicit_skill.as_ref() == Some(&context.user_message),
             Self::Always => true,
-            Self::TaskType(task_type) => context.detected_task_type.as_ref() == Some(task_type),
+            Self::SkillTaskType(task_type) => context.detected_task_type.as_ref() == Some(task_type),
         }
     }
 }
 
 /// Task types that can trigger skills
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum TaskType {
+pub enum SkillTaskType {
     /// Writing new code
     CodeWriting,
     /// Fixing bugs

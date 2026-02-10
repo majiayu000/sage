@@ -41,7 +41,7 @@ impl Default for CacheControl {
 }
 
 /// Role of a message in the conversation
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum MessageRole {
     /// System message (instructions)
@@ -52,6 +52,12 @@ pub enum MessageRole {
     Assistant,
     /// Tool message (tool execution result)
     Tool,
+}
+
+impl Default for MessageRole {
+    fn default() -> Self {
+        MessageRole::User
+    }
 }
 
 impl std::fmt::Display for MessageRole {

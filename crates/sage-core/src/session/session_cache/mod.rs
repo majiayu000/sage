@@ -29,6 +29,6 @@ mod tests;
 // Re-export public types
 pub use manager::SessionCache;
 pub use types::{
-    McpServerCache, McpServerConfig, RecentSession, SessionCacheConfig, SessionCacheData,
+    CachedMcpServerConfig, McpServerCache, RecentSession, SessionCacheConfig, SessionCacheData,
     SessionCacheStats, ToolTrustSettings, UserPreferences,
 };

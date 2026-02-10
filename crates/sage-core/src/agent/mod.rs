@@ -13,7 +13,7 @@ pub mod traits;
 pub mod unified;
 
 pub use completion::{
-    CompletionChecker, CompletionStatus, FileOperationTracker, LimitType, TaskType,
+    CompletionChecker, CompletionStatus, FileOperationTracker, LimitType, CompletionTaskType,
 };
 pub use execution::AgentExecution;
 pub use lifecycle::{
@@ -21,7 +21,7 @@ pub use lifecycle::{
     LifecycleHookRegistry, LifecycleManager, LifecyclePhase, LifecycleResult, LoggingHook,
     MetricsHook,
 };
-pub use options::{AutoResponse, ExecutionMode, ExecutionOptions};
+pub use options::{AutoResponseConfig, ExecutionMode, ExecutionOptions};
 pub use outcome::{ExecutionError, ExecutionErrorKind, ExecutionOutcome};
 pub use state::AgentState;
 pub use step::AgentStep;

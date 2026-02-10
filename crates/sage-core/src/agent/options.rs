@@ -29,7 +29,7 @@ use std::time::Duration;
 
 /// Auto-response strategy for non-interactive mode
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum AutoResponse {
+pub enum AutoResponseConfig {
     /// Always respond with a fixed string
     Fixed(String),
     /// Always select the first option (if options available)
@@ -47,7 +47,7 @@ pub enum AutoResponse {
     },
 }
 
-impl Default for AutoResponse {
+impl Default for AutoResponseConfig {
     fn default() -> Self {
         Self::ContextBased {
             default_text: "yes".to_string(),
@@ -56,7 +56,7 @@ impl Default for AutoResponse {
     }
 }
 
-impl AutoResponse {
+impl AutoResponseConfig {
     /// Create a fixed auto-response
     pub fn fixed(response: impl Into<String>) -> Self {
         Self::Fixed(response.into())
@@ -121,7 +121,7 @@ pub enum ExecutionMode {
     /// auto_response strategy.
     NonInteractive {
         /// Strategy for auto-responding to questions
-        auto_response: AutoResponse,
+        auto_response: AutoResponseConfig,
     },
 
     /// Batch mode: fail on any input request
@@ -147,12 +147,12 @@ impl ExecutionMode {
     /// Create non-interactive mode with default auto-response
     pub fn non_interactive() -> Self {
         Self::NonInteractive {
-            auto_response: AutoResponse::default(),
+            auto_response: AutoResponseConfig::default(),
         }
     }
 
     /// Create non-interactive mode with custom auto-response
-    pub fn non_interactive_with(auto_response: AutoResponse) -> Self {
+    pub fn non_interactive_with(auto_response: AutoResponseConfig) -> Self {
         Self::NonInteractive { auto_response }
     }
 
@@ -177,7 +177,7 @@ impl ExecutionMode {
     }
 
     /// Get the auto-response strategy if in non-interactive mode
-    pub fn auto_response(&self) -> Option<&AutoResponse> {
+    pub fn auto_response(&self) -> Option<&AutoResponseConfig> {
         match self {
             Self::NonInteractive { auto_response } => Some(auto_response),
             _ => None,
@@ -249,7 +249,7 @@ impl ExecutionOptions {
     pub fn non_interactive(auto_response: impl Into<String>) -> Self {
         Self {
             mode: ExecutionMode::NonInteractive {
-                auto_response: AutoResponse::fixed(auto_response),
+                auto_response: AutoResponseConfig::fixed(auto_response),
             },
             ..Default::default()
         }
@@ -359,13 +359,13 @@ mod tests {
 
     #[test]
     fn test_auto_response() {
-        let fixed = AutoResponse::fixed("yes please");
+        let fixed = AutoResponseConfig::fixed("yes please");
         assert_eq!(fixed.get_text_response(), "yes please");
 
-        let first = AutoResponse::first_option();
+        let first = AutoResponseConfig::first_option();
         assert!(first.should_select_first());
 
-        let cancel = AutoResponse::cancel();
+        let cancel = AutoResponseConfig::cancel();
         assert!(cancel.is_cancel());
     }
 

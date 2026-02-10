@@ -15,7 +15,7 @@ use tokio::sync::RwLock;
 
 use super::event_manager::EventManager;
 use super::llm_orchestrator::LlmOrchestrator;
-use super::session_manager::SessionManager;
+use super::session_manager::AgentSessionManager;
 use super::tool_orchestrator::ToolOrchestrator;
 use super::{UnifiedExecutor, input_channel};
 
@@ -66,7 +66,7 @@ impl UnifiedExecutor {
         let mut skill_registry = SkillRegistry::new(&working_dir);
 
         // Create session manager with working directory
-        let session_manager = SessionManager::new(working_dir);
+        let session_manager = AgentSessionManager::new(working_dir);
 
         // Create auto-compact manager with model-specific context window
         let model_capability = get_model_capability(&default_params.model);

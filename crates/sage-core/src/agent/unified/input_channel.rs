@@ -1,14 +1,14 @@
 //! Input channel creation and auto-response conversion
 
 use crate::agent::{ExecutionMode, ExecutionOptions};
-use crate::input::{AutoResponse, InputChannel, InputRequest, InputRequestKind, InputResponse};
+use crate::input::{InputAutoResponse, InputChannel, InputRequest, InputRequestKind, InputResponse};
 
 /// Create input channel based on execution mode
 pub(super) fn create_input_channel(options: &ExecutionOptions) -> Option<InputChannel> {
     match &options.mode {
         ExecutionMode::Interactive => None, // Will be set externally
         ExecutionMode::NonInteractive { auto_response } => {
-            // Convert from agent::AutoResponse to input::AutoResponse
+            // Convert from agent::AutoResponseConfig to input::AutoResponse
             let input_auto_response = convert_auto_response(auto_response);
             Some(InputChannel::non_interactive(input_auto_response))
         }
@@ -16,25 +16,25 @@ pub(super) fn create_input_channel(options: &ExecutionOptions) -> Option<InputCh
     }
 }
 
-/// Convert agent::AutoResponse to input::AutoResponse
-fn convert_auto_response(auto_response: &crate::agent::AutoResponse) -> AutoResponse {
+/// Convert agent::AutoResponseConfig to input::InputAutoResponse
+fn convert_auto_response(auto_response: &crate::agent::AutoResponseConfig) -> InputAutoResponse {
     match auto_response {
-        crate::agent::AutoResponse::Fixed(text) => {
+        crate::agent::AutoResponseConfig::Fixed(text) => {
             let text = text.clone();
-            AutoResponse::Custom(std::sync::Arc::new(move |req: &InputRequest| {
+            InputAutoResponse::Custom(std::sync::Arc::new(move |req: &InputRequest| {
                 InputResponse::text(req.id, text.clone())
             }))
         }
-        crate::agent::AutoResponse::FirstOption => AutoResponse::AlwaysAllow,
-        crate::agent::AutoResponse::LastOption => AutoResponse::AlwaysAllow,
-        crate::agent::AutoResponse::Cancel => AutoResponse::AlwaysDeny,
-        crate::agent::AutoResponse::ContextBased {
+        crate::agent::AutoResponseConfig::FirstOption => InputAutoResponse::AlwaysAllow,
+        crate::agent::AutoResponseConfig::LastOption => InputAutoResponse::AlwaysAllow,
+        crate::agent::AutoResponseConfig::Cancel => InputAutoResponse::AlwaysDeny,
+        crate::agent::AutoResponseConfig::ContextBased {
             default_text,
             prefer_first_option,
         } => {
             let text = default_text.clone();
             let prefer_first = *prefer_first_option;
-            AutoResponse::Custom(std::sync::Arc::new(move |req: &InputRequest| {
+            InputAutoResponse::Custom(std::sync::Arc::new(move |req: &InputRequest| {
                 match &req.kind {
                     InputRequestKind::Questions { questions } if prefer_first => {
                         // Select first option for each question

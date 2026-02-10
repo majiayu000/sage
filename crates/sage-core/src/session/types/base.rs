@@ -51,39 +51,10 @@ impl Default for SessionState {
 }
 
 // =============================================================================
-// Message Role
+// Message Role (re-exported from llm::messages)
 // =============================================================================
 
-/// Message role in a conversation
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum MessageRole {
-    /// System message (instructions)
-    System,
-    /// User message
-    User,
-    /// Assistant message
-    Assistant,
-    /// Tool use message
-    Tool,
-}
-
-impl fmt::Display for MessageRole {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            MessageRole::System => write!(f, "system"),
-            MessageRole::User => write!(f, "user"),
-            MessageRole::Assistant => write!(f, "assistant"),
-            MessageRole::Tool => write!(f, "tool"),
-        }
-    }
-}
-
-impl Default for MessageRole {
-    fn default() -> Self {
-        MessageRole::User
-    }
-}
+pub use crate::llm::messages::MessageRole;
 
 // =============================================================================
 // Token Usage
@@ -164,13 +135,5 @@ mod tests {
         assert_eq!(format!("{}", SessionState::Completed), "completed");
         assert_eq!(format!("{}", SessionState::Failed), "failed");
         assert_eq!(format!("{}", SessionState::Cancelled), "cancelled");
-    }
-
-    #[test]
-    fn test_message_role_display() {
-        assert_eq!(format!("{}", MessageRole::System), "system");
-        assert_eq!(format!("{}", MessageRole::User), "user");
-        assert_eq!(format!("{}", MessageRole::Assistant), "assistant");
-        assert_eq!(format!("{}", MessageRole::Tool), "tool");
     }
 }

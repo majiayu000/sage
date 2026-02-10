@@ -3,7 +3,7 @@
 //! Following Claude Code's pattern of auto-generating conversation summaries.
 //! Summaries help users quickly identify sessions without reading full history.
 
-use super::enhanced::{EnhancedMessage, EnhancedMessageType};
+use crate::session::types::unified::{SessionMessage, SessionMessageType};
 use crate::utils::{truncate_str, truncate_with_ellipsis};
 
 /// Maximum length for auto-generated summary
@@ -24,7 +24,7 @@ impl SummaryGenerator {
     /// 3. Combine into a brief summary
     ///
     /// For more sophisticated summaries, use LLM-based generation.
-    pub fn generate_simple(messages: &[EnhancedMessage]) -> Option<String> {
+    pub fn generate_simple(messages: &[SessionMessage]) -> Option<String> {
         // Need at least some messages
         if messages.len() < MIN_MESSAGES_FOR_SUMMARY {
             return None;
@@ -33,14 +33,14 @@ impl SummaryGenerator {
         // Find first user message
         let first_user_msg = messages
             .iter()
-            .find(|m| m.message_type == EnhancedMessageType::User)?;
+            .find(|m| m.message_type == SessionMessageType::User)?;
 
         let user_content = &first_user_msg.message.content;
 
         // Extract tools used
         let tools_used: Vec<&str> = messages
             .iter()
-            .filter(|m| m.message_type == EnhancedMessageType::Assistant)
+            .filter(|m| m.message_type == SessionMessageType::Assistant)
             .filter_map(|m| m.message.tool_calls.as_ref())
             .flatten()
             .map(|tc| tc.name.as_str())
@@ -81,7 +81,7 @@ impl SummaryGenerator {
     /// - There are enough new messages since last summary
     /// - Significant tool activity has occurred
     pub fn should_update_summary(
-        messages: &[EnhancedMessage],
+        messages: &[SessionMessage],
         last_summary_msg_count: usize,
     ) -> bool {
         let current_count = messages.len();
@@ -96,7 +96,7 @@ impl SummaryGenerator {
         let tool_calls_in_new: usize = messages
             .iter()
             .skip(last_summary_msg_count)
-            .filter(|m| m.message_type == EnhancedMessageType::Assistant)
+            .filter(|m| m.message_type == SessionMessageType::Assistant)
             .filter_map(|m| m.message.tool_calls.as_ref())
             .map(|tc| tc.len())
             .sum();
@@ -111,33 +111,36 @@ impl SummaryGenerator {
 #[async_trait::async_trait]
 pub trait LlmSummaryGenerator: Send + Sync {
     /// Generate a summary using an LLM
-    async fn generate(&self, messages: &[EnhancedMessage]) -> Option<String>;
+    async fn generate(&self, messages: &[SessionMessage]) -> Option<String>;
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::session::enhanced::{
-        EnhancedMessage, EnhancedMessageType, MessageContent, SessionContext,
+        MessageContent, SessionContext,
     };
+    use crate::session::types::unified::{SessionMessage, SessionMessageType, UnifiedMessageRole};
     use chrono::Utc;
     use std::collections::HashMap;
     use std::path::PathBuf;
 
-    fn create_test_message(msg_type: EnhancedMessageType, content: &str) -> EnhancedMessage {
-        EnhancedMessage {
+    fn create_test_message(msg_type: SessionMessageType, content: &str) -> SessionMessage {
+        SessionMessage {
             message_type: msg_type,
             uuid: uuid::Uuid::new_v4().to_string(),
             parent_uuid: None,
+            branch_id: None,
+            branch_parent_uuid: None,
             timestamp: Utc::now(),
             session_id: "test-session".to_string(),
             version: "0.1.0".to_string(),
             context: SessionContext::new(PathBuf::from("/tmp")),
             message: MessageContent {
                 role: match msg_type {
-                    EnhancedMessageType::User => "user".to_string(),
-                    EnhancedMessageType::Assistant => "assistant".to_string(),
-                    _ => "system".to_string(),
+                    SessionMessageType::User => UnifiedMessageRole::User,
+                    SessionMessageType::Assistant => UnifiedMessageRole::Assistant,
+                    _ => UnifiedMessageRole::System,
                 },
                 content: content.to_string(),
                 tool_calls: None,
@@ -154,9 +157,9 @@ mod tests {
     #[test]
     fn test_generate_simple_summary() {
         let messages = vec![
-            create_test_message(EnhancedMessageType::User, "Help me fix the login bug"),
+            create_test_message(SessionMessageType::User, "Help me fix the login bug"),
             create_test_message(
-                EnhancedMessageType::Assistant,
+                SessionMessageType::Assistant,
                 "I'll help you fix that bug.",
             ),
         ];
@@ -181,13 +184,13 @@ mod tests {
 
     #[test]
     fn test_should_update_summary() {
-        let messages: Vec<EnhancedMessage> = (0..15)
+        let messages: Vec<SessionMessage> = (0..15)
             .map(|i| {
                 create_test_message(
                     if i % 2 == 0 {
-                        EnhancedMessageType::User
+                        SessionMessageType::User
                     } else {
-                        EnhancedMessageType::Assistant
+                        SessionMessageType::Assistant
                     },
                     &format!("Message {}", i),
                 )

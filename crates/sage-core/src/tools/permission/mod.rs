@@ -22,7 +22,7 @@ pub use cache::PermissionCache;
 pub use context::ToolContext;
 pub use handler::{PermissionHandler, SharedPermissionHandler};
 pub use handlers::{AutoAllowHandler, AutoDenyHandler, PermissionPolicy, PolicyHandler};
-pub use request::{PermissionDecision, PermissionRequest, PermissionResult};
+pub use request::{PermissionDecision, PermissionRequest, ToolPermissionResult};
 pub use rules::{
     PermissionEvaluation, PermissionRule, PermissionRuleEngine, PermissionRulesConfig,
     RuleBasedHandler,

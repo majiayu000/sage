@@ -141,16 +141,6 @@ mod tests {
         assert_eq!(executor.get_tool_schemas().len(), 1);
     }
 
-    #[test]
-    fn test_builder_build_batch_executor() {
-        let tool = Arc::new(TestTool {
-            name: "test".to_string(),
-        });
-        let builder = SageBuilder::new().with_tool(tool);
-        let executor = builder.build_batch_executor().unwrap();
-        assert_eq!(executor.get_tool_schemas().len(), 1);
-    }
-
     #[tokio::test]
     async fn test_builder_build_lifecycle_manager() {
         let hook = Arc::new(TestHook {

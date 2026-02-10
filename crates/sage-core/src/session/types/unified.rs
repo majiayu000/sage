@@ -13,6 +13,20 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+// Import SessionState from base module (canonical definition)
+pub use super::base::SessionState;
+
+// Import canonical context types from enhanced module to avoid duplication
+pub use super::super::enhanced::context::{
+    SessionContext, ThinkingLevel, ThinkingMetadata, TodoItem, TodoStatus,
+};
+
+/// Type alias: `UnifiedTodoItem` is the same as `TodoItem` from the enhanced context module.
+pub type UnifiedTodoItem = TodoItem;
+
+/// Type alias: `UnifiedTodoStatus` is the same as `TodoStatus` from the enhanced context module.
+pub type UnifiedTodoStatus = TodoStatus;
+
 // ============================================================================
 // Type Aliases
 // ============================================================================
@@ -93,7 +107,7 @@ pub struct SessionHeader {
     /// Token usage statistics
     #[serde(rename = "tokenUsage")]
     #[serde(default)]
-    pub token_usage: TokenUsage,
+    pub token_usage: UnifiedTokenUsage,
 
     /// Whether this is a sidechain (branched session)
     #[serde(rename = "isSidechain")]
@@ -134,7 +148,7 @@ impl SessionHeader {
             version: env!("CARGO_PKG_VERSION").to_string(),
             message_count: 0,
             state: SessionState::Active,
-            token_usage: TokenUsage::default(),
+            token_usage: UnifiedTokenUsage::default(),
             is_sidechain: false,
             parent_session_id: None,
             sidechain_root_message_id: None,
@@ -165,23 +179,6 @@ impl SessionHeader {
         self.sidechain_root_message_id = Some(root_message_id.into());
         self
     }
-}
-
-/// Session state
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum SessionState {
-    /// Session is actively being used
-    #[default]
-    Active,
-    /// Session is paused/suspended
-    Paused,
-    /// Session completed successfully
-    Completed,
-    /// Session failed with an error
-    Failed,
-    /// Session was cancelled by user
-    Cancelled,
 }
 
 // ============================================================================
@@ -290,7 +287,7 @@ pub struct SessionMetadataPatch {
     /// Updated token usage
     #[serde(rename = "tokenUsage")]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub token_usage: Option<TokenUsage>,
+    pub token_usage: Option<UnifiedTokenUsage>,
 }
 
 // ============================================================================
@@ -340,7 +337,7 @@ pub struct SessionMessage {
 
     /// Token usage (for assistant messages)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub usage: Option<TokenUsage>,
+    pub usage: Option<UnifiedTokenUsage>,
 
     /// Thinking metadata
     #[serde(rename = "thinkingMetadata")]
@@ -349,7 +346,7 @@ pub struct SessionMessage {
 
     /// Todo list snapshot
     #[serde(default)]
-    pub todos: Vec<TodoItem>,
+    pub todos: Vec<UnifiedTodoItem>,
 
     /// Whether this is a sidechain message
     #[serde(rename = "isSidechain")]
@@ -379,7 +376,7 @@ impl SessionMessage {
             version: env!("CARGO_PKG_VERSION").to_string(),
             context,
             message: MessageContent {
-                role: MessageRole::User,
+                role: UnifiedMessageRole::User,
                 content: content.into(),
                 tool_calls: None,
                 tool_results: None,
@@ -410,7 +407,7 @@ impl SessionMessage {
             version: env!("CARGO_PKG_VERSION").to_string(),
             context,
             message: MessageContent {
-                role: MessageRole::Assistant,
+                role: UnifiedMessageRole::Assistant,
                 content: content.into(),
                 tool_calls: None,
                 tool_results: None,
@@ -425,7 +422,7 @@ impl SessionMessage {
 
     /// Create a tool result message
     pub fn tool_result(
-        results: Vec<ToolResult>,
+        results: Vec<UnifiedToolResult>,
         session_id: impl Into<String>,
         context: SessionContext,
         parent_uuid: Option<String>,
@@ -441,7 +438,7 @@ impl SessionMessage {
             version: env!("CARGO_PKG_VERSION").to_string(),
             context,
             message: MessageContent {
-                role: MessageRole::Tool,
+                role: UnifiedMessageRole::Tool,
                 content: String::new(),
                 tool_calls: None,
                 tool_results: Some(results),
@@ -461,13 +458,13 @@ impl SessionMessage {
     }
 
     /// Set tool calls
-    pub fn with_tool_calls(mut self, tool_calls: Vec<ToolCall>) -> Self {
+    pub fn with_tool_calls(mut self, tool_calls: Vec<UnifiedToolCall>) -> Self {
         self.message.tool_calls = Some(tool_calls);
         self
     }
 
     /// Set token usage
-    pub fn with_usage(mut self, usage: TokenUsage) -> Self {
+    pub fn with_usage(mut self, usage: UnifiedTokenUsage) -> Self {
         self.usage = Some(usage);
         self
     }
@@ -483,6 +480,81 @@ impl SessionMessage {
         self.is_sidechain = true;
         self.branch_id = Some(branch_id.into());
         self
+    }
+
+    /// Set todos
+    pub fn with_todos(mut self, todos: Vec<UnifiedTodoItem>) -> Self {
+        self.todos = todos;
+        self
+    }
+
+    /// Add metadata
+    pub fn with_metadata(mut self, key: impl Into<String>, value: Value) -> Self {
+        self.metadata.insert(key.into(), value);
+        self
+    }
+
+    /// Get UUID
+    pub fn uuid(&self) -> &str {
+        &self.uuid
+    }
+
+    /// Check if this is a user message
+    pub fn is_user(&self) -> bool {
+        self.message_type == SessionMessageType::User
+    }
+
+    /// Check if this is an assistant message
+    pub fn is_assistant(&self) -> bool {
+        self.message_type == SessionMessageType::Assistant
+    }
+
+    /// Check if this is an error message
+    pub fn is_error(&self) -> bool {
+        self.message_type == SessionMessageType::Error
+    }
+
+    /// Create a new error message
+    ///
+    /// Records execution errors, API failures, etc. for debugging and session review.
+    pub fn error(
+        error_type: impl Into<String>,
+        error_message: impl Into<String>,
+        session_id: impl Into<String>,
+        context: SessionContext,
+        parent_uuid: Option<String>,
+    ) -> Self {
+        let error_type_str = error_type.into();
+        let error_message_str = error_message.into();
+
+        let mut metadata = HashMap::new();
+        metadata.insert(
+            "error_type".to_string(),
+            Value::String(error_type_str.clone()),
+        );
+
+        Self {
+            message_type: SessionMessageType::Error,
+            uuid: uuid::Uuid::new_v4().to_string(),
+            parent_uuid,
+            branch_id: None,
+            branch_parent_uuid: None,
+            timestamp: Utc::now(),
+            session_id: session_id.into(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            context,
+            message: MessageContent {
+                role: UnifiedMessageRole::Error,
+                content: format!("[{}] {}", error_type_str, error_message_str),
+                tool_calls: None,
+                tool_results: None,
+            },
+            usage: None,
+            thinking_metadata: None,
+            todos: Vec::new(),
+            is_sidechain: false,
+            metadata,
+        }
     }
 }
 
@@ -508,11 +580,44 @@ pub enum SessionMessageType {
     FileHistorySnapshot,
 }
 
+impl std::fmt::Display for SessionMessageType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::User => write!(f, "user"),
+            Self::Assistant => write!(f, "assistant"),
+            Self::ToolResult => write!(f, "tool_result"),
+            Self::System => write!(f, "system"),
+            Self::Error => write!(f, "error"),
+            Self::Summary => write!(f, "summary"),
+            Self::CustomTitle => write!(f, "custom_title"),
+            Self::FileHistorySnapshot => write!(f, "file_history_snapshot"),
+        }
+    }
+}
+
+impl SessionMessageType {
+    /// Check if this is a metadata message type (not part of conversation)
+    pub fn is_metadata(&self) -> bool {
+        matches!(
+            self,
+            Self::Summary | Self::CustomTitle | Self::FileHistorySnapshot
+        )
+    }
+
+    /// Check if this is a conversation message type
+    pub fn is_conversation(&self) -> bool {
+        matches!(
+            self,
+            Self::User | Self::Assistant | Self::ToolResult | Self::System
+        )
+    }
+}
+
 /// Message content
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MessageContent {
     /// Message role
-    pub role: MessageRole,
+    pub role: UnifiedMessageRole,
 
     /// Text content
     pub content: String,
@@ -520,18 +625,18 @@ pub struct MessageContent {
     /// Tool calls (for assistant messages)
     #[serde(rename = "toolCalls")]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_calls: Option<Vec<ToolCall>>,
+    pub tool_calls: Option<Vec<UnifiedToolCall>>,
 
     /// Tool results (for tool_result messages)
     #[serde(rename = "toolResults")]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_results: Option<Vec<ToolResult>>,
+    pub tool_results: Option<Vec<UnifiedToolResult>>,
 }
 
-/// Message role
+/// Message role (wire format with camelCase serde)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum MessageRole {
+pub enum UnifiedMessageRole {
     /// System message
     System,
     /// User message
@@ -548,9 +653,9 @@ pub enum MessageRole {
 // Tool Types
 // ============================================================================
 
-/// Tool call
+/// Tool call (wire format)
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ToolCall {
+pub struct UnifiedToolCall {
     /// Tool call ID
     pub id: String,
 
@@ -561,9 +666,9 @@ pub struct ToolCall {
     pub arguments: Value,
 }
 
-/// Tool result
+/// Tool result (wire format)
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ToolResult {
+pub struct UnifiedToolResult {
     /// Tool call ID this result is for
     #[serde(rename = "toolCallId")]
     pub tool_call_id: String,
@@ -583,7 +688,7 @@ pub struct ToolResult {
     pub error: Option<String>,
 }
 
-impl ToolResult {
+impl UnifiedToolResult {
     /// Create a successful tool result
     pub fn success(
         tool_call_id: impl Into<String>,
@@ -615,13 +720,39 @@ impl ToolResult {
     }
 }
 
+/// Convert from the canonical `ToolResult` to the wire-format `UnifiedToolResult`.
+impl From<crate::tools::types::ToolResult> for UnifiedToolResult {
+    fn from(result: crate::tools::types::ToolResult) -> Self {
+        Self {
+            tool_call_id: result.call_id,
+            tool_name: result.tool_name,
+            content: result.output.unwrap_or_default(),
+            success: result.success,
+            error: result.error,
+        }
+    }
+}
+
+/// Convert from a reference to the canonical `ToolResult`.
+impl From<&crate::tools::types::ToolResult> for UnifiedToolResult {
+    fn from(result: &crate::tools::types::ToolResult) -> Self {
+        Self {
+            tool_call_id: result.call_id.clone(),
+            tool_name: result.tool_name.clone(),
+            content: result.output.clone().unwrap_or_default(),
+            success: result.success,
+            error: result.error.clone(),
+        }
+    }
+}
+
 // ============================================================================
 // Token Usage
 // ============================================================================
 
-/// Token usage statistics
+/// Token usage statistics (wire format with camelCase serde)
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct TokenUsage {
+pub struct UnifiedTokenUsage {
     /// Input tokens used
     #[serde(rename = "inputTokens")]
     pub input_tokens: u64,
@@ -646,9 +777,9 @@ pub struct TokenUsage {
     pub cost_estimate: Option<f64>,
 }
 
-impl TokenUsage {
-    /// Add usage from another TokenUsage
-    pub fn add(&mut self, other: &TokenUsage) {
+impl UnifiedTokenUsage {
+    /// Add usage from another UnifiedTokenUsage
+    pub fn add(&mut self, other: &UnifiedTokenUsage) {
         self.input_tokens += other.input_tokens;
         self.output_tokens += other.output_tokens;
         self.cache_read_tokens += other.cache_read_tokens;
@@ -665,198 +796,12 @@ impl TokenUsage {
 }
 
 // ============================================================================
-// Session Context
+// File History Snapshot (re-exported from file_tracking module)
 // ============================================================================
 
-/// Session context embedded in each message
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SessionContext {
-    /// Current working directory
-    pub cwd: PathBuf,
-
-    /// Git branch (if in git repo)
-    #[serde(rename = "gitBranch")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub git_branch: Option<String>,
-
-    /// Platform (macos, linux, windows)
-    pub platform: String,
-
-    /// User type
-    #[serde(rename = "userType")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub user_type: Option<String>,
-}
-
-impl SessionContext {
-    /// Create a new session context
-    pub fn new(cwd: PathBuf) -> Self {
-        Self {
-            cwd,
-            git_branch: None,
-            platform: std::env::consts::OS.to_string(),
-            user_type: Some("external".to_string()),
-        }
-    }
-
-    /// Set git branch
-    pub fn with_git_branch(mut self, branch: impl Into<String>) -> Self {
-        self.git_branch = Some(branch.into());
-        self
-    }
-
-    /// Detect git branch from cwd
-    pub fn detect_git_branch(&mut self) {
-        if let Ok(output) = std::process::Command::new("git")
-            .args(["rev-parse", "--abbrev-ref", "HEAD"])
-            .current_dir(&self.cwd)
-            .output()
-        {
-            if output.status.success() {
-                let branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                if !branch.is_empty() {
-                    self.git_branch = Some(branch);
-                }
-            }
-        }
-    }
-}
-
-// ============================================================================
-// Thinking Metadata
-// ============================================================================
-
-/// Thinking metadata for extended thinking
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct ThinkingMetadata {
-    /// Thinking level
-    pub level: ThinkingLevel,
-
-    /// Whether thinking is disabled
-    pub disabled: bool,
-
-    /// Triggers that activated thinking
-    #[serde(default)]
-    pub triggers: Vec<String>,
-}
-
-/// Thinking level
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "lowercase")]
-pub enum ThinkingLevel {
-    /// No extended thinking
-    None,
-    /// Low level thinking
-    Low,
-    /// Medium level thinking
-    #[default]
-    Medium,
-    /// High level thinking
-    High,
-}
-
-// ============================================================================
-// Todo Items
-// ============================================================================
-
-/// Todo item for task tracking
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TodoItem {
-    /// Task content (imperative form)
-    pub content: String,
-
-    /// Task status
-    pub status: TodoStatus,
-
-    /// Active form (present continuous)
-    #[serde(rename = "activeForm")]
-    pub active_form: String,
-}
-
-/// Todo status
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum TodoStatus {
-    /// Task not yet started
-    Pending,
-    /// Task in progress
-    InProgress,
-    /// Task completed
-    Completed,
-}
-
-// ============================================================================
-// File History Snapshot
-// ============================================================================
-
-/// File history snapshot for restoration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FileHistorySnapshot {
-    /// Snapshot type
-    #[serde(rename = "type")]
-    pub snapshot_type: String,
-
-    /// Associated message ID
-    #[serde(rename = "messageId")]
-    pub message_id: MessageId,
-
-    /// Snapshot timestamp
-    pub timestamp: DateTime<Utc>,
-
-    /// Whether this is a snapshot update
-    #[serde(rename = "isSnapshotUpdate")]
-    pub is_snapshot_update: bool,
-
-    /// Tracked files snapshot
-    pub snapshot: TrackedFilesSnapshot,
-}
-
-/// Tracked files snapshot
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct TrackedFilesSnapshot {
-    /// Tracked files state
-    #[serde(rename = "trackedFiles")]
-    #[serde(default)]
-    pub tracked_files: HashMap<String, TrackedFileState>,
-
-    /// File backups
-    #[serde(rename = "fileBackups")]
-    #[serde(default)]
-    pub file_backups: HashMap<String, FileBackupInfo>,
-}
-
-/// Tracked file state
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TrackedFileState {
-    /// Original content
-    #[serde(rename = "originalContent")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub original_content: Option<String>,
-
-    /// Content hash
-    #[serde(rename = "contentHash")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub content_hash: Option<String>,
-
-    /// File size
-    pub size: u64,
-
-    /// File state
-    pub state: String,
-}
-
-/// File backup info
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FileBackupInfo {
-    /// Backup path
-    #[serde(rename = "backupPath")]
-    pub backup_path: String,
-
-    /// Original hash
-    #[serde(rename = "originalHash")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub original_hash: Option<String>,
-}
+pub use super::super::file_tracking::{
+    FileBackupInfo, FileHistorySnapshot, TrackedFileState, TrackedFilesSnapshot,
+};
 
 // ============================================================================
 // Tests
@@ -879,7 +824,7 @@ mod tests {
         let ctx = SessionContext::new(PathBuf::from("/tmp"));
         let msg = SessionMessage::user("Hello", "session-1", ctx);
         assert_eq!(msg.message_type, SessionMessageType::User);
-        assert_eq!(msg.message.role, MessageRole::User);
+        assert_eq!(msg.message.role, UnifiedMessageRole::User);
         assert_eq!(msg.message.content, "Hello");
     }
 
@@ -896,12 +841,12 @@ mod tests {
 
     #[test]
     fn test_token_usage_add() {
-        let mut usage1 = TokenUsage {
+        let mut usage1 = UnifiedTokenUsage {
             input_tokens: 100,
             output_tokens: 50,
             ..Default::default()
         };
-        let usage2 = TokenUsage {
+        let usage2 = UnifiedTokenUsage {
             input_tokens: 200,
             output_tokens: 100,
             ..Default::default()

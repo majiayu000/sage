@@ -17,7 +17,7 @@ use tokio::sync::Mutex;
 use super::recording;
 
 /// Manages session state including recording, file tracking, and message chains
-pub struct SessionManager {
+pub struct AgentSessionManager {
     pub(super) session_recorder: Option<Arc<Mutex<SessionRecorder>>>,
     pub(super) jsonl_storage: Option<Arc<JsonlSessionStorage>>,
     pub(super) message_tracker: MessageChainTracker,
@@ -26,7 +26,7 @@ pub struct SessionManager {
     pub(super) last_summary_msg_count: usize,
 }
 
-impl SessionManager {
+impl AgentSessionManager {
     /// Create a new session manager with the given working directory
     pub fn new(working_dir: PathBuf) -> Self {
         let jsonl_storage = JsonlSessionStorage::default_path().ok().map(Arc::new);
@@ -168,7 +168,7 @@ impl SessionManager {
     }
 }
 
-impl Default for SessionManager {
+impl Default for AgentSessionManager {
     fn default() -> Self {
         Self::new(std::env::current_dir().unwrap_or_default())
     }

@@ -2,19 +2,19 @@
 //!
 //! Displays session info, current status, and step count.
 
-use crate::ui::bridge::state::{ExecutionPhase, SessionState};
+use crate::ui::bridge::state::{ExecutionPhase, UiSessionInfo};
 use crate::ui::theme::{Colors, Icons};
 use rnk::prelude::*;
 
 /// Status bar component
 pub struct StatusBar {
-    session: SessionState,
+    session: UiSessionInfo,
     phase: ExecutionPhase,
 }
 
 impl StatusBar {
     /// Create a new status bar
-    pub fn new(session: SessionState, phase: ExecutionPhase) -> Self {
+    pub fn new(session: UiSessionInfo, phase: ExecutionPhase) -> Self {
         Self { session, phase }
     }
 

@@ -52,7 +52,7 @@ pub use types::{InputContext, InputOption, Question, QuestionOption};
 
 // Permission types
 pub use permission::{
-    PermissionBehavior, PermissionResult, PermissionSuggestion, RuleDestination, SuggestionType,
+    PermissionBehavior, InputPermissionResult, PermissionSuggestion, RuleDestination, SuggestionType,
 };
 
 // Request types
@@ -62,7 +62,7 @@ pub use request::{InputRequest, InputRequestKind, LegacyInputRequest};
 pub use response::{InputResponse, InputResponseKind, LegacyInputResponse};
 
 // Auto-response types
-pub use auto_response::{AutoResponder, AutoResponse};
+pub use auto_response::{AutoResponder, InputAutoResponse};
 
 // Channel types
 pub use channel::{InputChannel, InputChannelHandle};
@@ -98,9 +98,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_non_interactive_channel() {
-        let mut channel = InputChannel::non_interactive(AutoResponse::AlwaysAllow);
-
-        let request = InputRequest::permission("bash", "Run command", serde_json::json!({}));
+        let mut channel = InputChannel::non_interactive(InputAutoResponse::AlwaysAllow);
         let response = channel.request_input(request).await.unwrap();
 
         assert!(response.is_permission_granted());
@@ -108,7 +106,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_non_interactive_deny() {
-        let mut channel = InputChannel::non_interactive(AutoResponse::AlwaysDeny);
+        let mut channel = InputChannel::non_interactive(InputAutoResponse::AlwaysDeny);
 
         let request = InputRequest::simple("Question?");
         let response = channel.request_input(request).await.unwrap();
@@ -128,7 +126,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_questions_request() {
-        let mut channel = InputChannel::non_interactive(AutoResponse::AlwaysAllow);
+        let mut channel = InputChannel::non_interactive(InputAutoResponse::AlwaysAllow);
 
         let questions = vec![Question::new(
             "Which framework?",
@@ -187,18 +185,18 @@ mod tests {
 
     #[test]
     fn test_permission_result() {
-        let allow = PermissionResult::Allow;
+        let allow = InputPermissionResult::Allow;
         assert!(allow.is_allowed());
         assert!(!allow.is_denied());
         assert!(!allow.needs_user_input());
 
-        let deny = PermissionResult::Deny {
+        let deny = InputPermissionResult::Deny {
             message: "Not allowed".to_string(),
         };
         assert!(!deny.is_allowed());
         assert!(deny.is_denied());
 
-        let ask = PermissionResult::Ask {
+        let ask = InputPermissionResult::Ask {
             message: "Confirm?".to_string(),
             suggestions: vec![],
         };

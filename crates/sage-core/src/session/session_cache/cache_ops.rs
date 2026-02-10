@@ -5,7 +5,7 @@ use chrono::Utc;
 
 use super::manager::SessionCache;
 use super::types::{
-    McpServerCache, McpServerConfig, RecentSession, SessionCacheStats, ToolTrustSettings,
+    CachedMcpServerConfig, McpServerCache, RecentSession, SessionCacheStats, ToolTrustSettings,
     UserPreferences,
 };
 
@@ -62,7 +62,7 @@ impl SessionCache {
     }
 
     /// Add or update MCP server configuration
-    pub async fn set_mcp_server(&self, config: McpServerConfig) -> SageResult<()> {
+    pub async fn set_mcp_server(&self, config: CachedMcpServerConfig) -> SageResult<()> {
         let mut cache = self.global_cache.write().await;
         cache
             .mcp_servers

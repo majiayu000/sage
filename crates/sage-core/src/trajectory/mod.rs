@@ -14,7 +14,7 @@ pub mod replayer;
 pub mod session;
 
 pub use entry::{SessionEntry, TokenUsage};
-pub use replayer::{SessionReplayer, SessionSummary};
+pub use replayer::{SessionReplayer, TrajectorySessionSummary};
 pub use session::{SessionInfo, SessionRecorder};
 
 use std::path::Path;

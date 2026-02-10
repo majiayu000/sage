@@ -1,42 +1,36 @@
-//! Token bucket implementation for rate limiting
+//! LLM-specific rate limiter wrapper
 //!
-//! Implements the "leaky bucket as a meter" algorithm with concurrent request limiting.
+//! This module provides an LLM-friendly API on top of the shared token bucket
+//! rate limiter from `crate::recovery::rate_limiter`. Instead of duplicating
+//! the token bucket algorithm, it delegates to the recovery `RateLimiter` and
+//! adapts the return types for LLM client usage.
 
-use super::types::{RateLimitConfig, RateLimiterState};
+use super::types::RateLimitConfig;
+use crate::recovery::rate_limiter::RateLimiter as CoreRateLimiter;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{Mutex, Semaphore};
 use tracing::{debug, warn};
 
-/// Token bucket rate limiter
+/// Rate limiter for LLM API calls
 ///
-/// Allows a configurable sustained rate with bursts up to the bucket capacity.
-/// Uses the "leaky bucket as a meter" algorithm with concurrent request limiting.
-#[derive(Debug)]
+/// Wraps the shared `recovery::rate_limiter::RateLimiter` (token bucket + semaphore)
+/// and provides an LLM-friendly API that returns wait durations and booleans
+/// instead of guards and results.
+///
+/// Cloning this struct shares the underlying state (token bucket and semaphore),
+/// so multiple clones coordinate rate limiting together.
+#[derive(Debug, Clone)]
 pub struct RateLimiter {
-    config: RateLimitConfig,
-    state: Arc<Mutex<RateLimiterState>>,
-    /// Semaphore for concurrent request limiting
-    concurrent_semaphore: Arc<Semaphore>,
+    /// The underlying shared rate limiter implementation, wrapped in Arc
+    /// so that clones share the same token bucket and concurrency state.
+    inner: Arc<CoreRateLimiter>,
 }
 
 impl RateLimiter {
     /// Create a new rate limiter with the given configuration
     pub fn new(config: RateLimitConfig) -> Self {
-        let state = RateLimiterState::new(config.burst_size as f64);
-        // Use max_concurrent from config, or a very large value if set to 0 (unlimited)
-        // tokio Semaphore has a max limit, so we use a reasonable large number
-        let max_concurrent = if config.max_concurrent == 0 {
-            // Use a large but safe value (tokio's MAX_PERMITS is around 2^61)
-            1_000_000
-        } else {
-            config.max_concurrent as usize
-        };
-
         Self {
-            concurrent_semaphore: Arc::new(Semaphore::new(max_concurrent)),
-            config,
-            state: Arc::new(Mutex::new(state)),
+            inner: Arc::new(CoreRateLimiter::with_config(config)),
         }
     }
 
@@ -47,72 +41,52 @@ impl RateLimiter {
 
     /// Check if rate limiting is enabled
     pub fn is_enabled(&self) -> bool {
-        self.config.enabled && !self.config.is_disabled()
+        self.inner.config().enabled && !self.inner.config().is_disabled()
     }
 
     /// Get the current configuration
     pub fn config(&self) -> &RateLimitConfig {
-        &self.config
+        self.inner.config()
     }
 
     /// Try to acquire a token, waiting if necessary
     ///
     /// Returns the wait duration if the caller had to wait.
-    /// This also acquires a concurrent request permit that is automatically
-    /// released when the returned guard is dropped.
+    /// Returns `None` if a token was immediately available or rate limiting is disabled.
     pub async fn acquire(&self) -> Option<Duration> {
-        if !self.config.enabled {
+        if !self.inner.config().enabled {
             return None;
         }
 
-        // First acquire concurrent permit (waits if at max concurrency)
-        let permit = self.concurrent_semaphore.clone().acquire_owned().await.ok();
+        let start = Instant::now();
 
-        if permit.is_none() {
-            warn!("Rate limiter: concurrent semaphore closed");
-            return None;
-        }
-
-        // Forget the permit so it lives until the request completes
-        // Note: In a production system, you'd want to return a guard that holds the permit
-        // For now, we release immediately after the token bucket check
-        let _permit = permit.unwrap();
-
-        let mut state = self.state.lock().await;
-        self.refill_tokens(&mut state);
-
-        if state.tokens >= 1.0 {
-            state.tokens -= 1.0;
-            debug!(
-                "Rate limiter: acquired token, {} remaining, {} concurrent",
-                state.tokens as u32,
-                self.concurrent_requests()
-            );
-            None
-        } else {
-            // Calculate wait time until a token is available
-            let tokens_needed = 1.0 - state.tokens;
-            let tokens_per_second = self.config.requests_per_second();
-            let wait_seconds = tokens_needed / tokens_per_second;
-            let wait_duration = Duration::from_secs_f64(wait_seconds);
-
-            warn!(
-                "Rate limiter: no tokens available, waiting {:.2}s",
-                wait_seconds
-            );
-
-            // Release the lock before sleeping
-            drop(state);
-
-            // Wait for the required duration
-            tokio::time::sleep(wait_duration).await;
-
-            // Re-acquire lock and consume token
-            let mut state = self.state.lock().await;
-            self.refill_tokens(&mut state);
-            state.tokens = (state.tokens - 1.0).max(0.0);
-
-            Some(wait_duration)
+        // Delegate to the core rate limiter's blocking acquire.
+        // The core limiter returns Result<RateLimitGuard, RateLimitError>.
+        // We adapt this to Option<Duration> for the LLM API.
+        match self.inner.acquire().await {
+            Ok(_guard) => {
+                // Guard is dropped immediately -- the LLM rate limiter does not
+                // hold the concurrency permit for the duration of the request.
+                // This matches the original behavior.
+                let elapsed = start.elapsed();
+                if elapsed > Duration::from_millis(5) {
+                    warn!(
+                        "Rate limiter: waited {:.2}s for token",
+                        elapsed.as_secs_f64()
+                    );
+                    Some(elapsed)
+                } else {
+                    debug!(
+                        "Rate limiter: acquired token, {} concurrent",
+                        self.concurrent_requests()
+                    );
+                    None
+                }
+            }
+            Err(e) => {
+                warn!("Rate limiter: acquire failed: {}", e);
+                None
+            }
         }
     }
 
@@ -120,80 +94,36 @@ impl RateLimiter {
     ///
     /// Returns true if a token was acquired, false if rate limited or at max concurrency.
     pub async fn try_acquire(&self) -> bool {
-        if !self.config.enabled {
+        if !self.inner.config().enabled {
             return true;
         }
 
-        // Check concurrency limit first
-        let permit = match self.concurrent_semaphore.clone().try_acquire_owned() {
-            Ok(permit) => permit,
-            Err(_) => {
-                debug!("Rate limiter: at max concurrency, try_acquire failed");
-                return false;
-            }
-        };
-
-        let mut state = self.state.lock().await;
-        self.refill_tokens(&mut state);
-
-        if state.tokens >= 1.0 {
-            state.tokens -= 1.0;
-            // Permit is dropped here, releasing the concurrent slot
-            drop(permit);
-            true
-        } else {
-            // Return permit if we can't get a token
-            drop(permit);
-            false
-        }
+        // Delegate to the core rate limiter's non-blocking try_acquire.
+        // The guard is dropped immediately, releasing the concurrency permit.
+        self.inner.try_acquire().await.is_some()
     }
 
     /// Check current token count without consuming
     pub async fn available_tokens(&self) -> u32 {
-        let mut state = self.state.lock().await;
-        self.refill_tokens(&mut state);
-        state.tokens as u32
+        let tokens = self.inner.available_tokens().await;
+        // Safely convert f64 to u32: clamp to valid range, default to 0 for invalid values
+        if tokens.is_finite() && tokens >= 0.0 {
+            let clamped = tokens.min(u32::MAX as f64);
+            clamped as u32
+        } else {
+            0
+        }
     }
 
     /// Get current number of concurrent requests
     ///
     /// Returns the number of requests currently in progress.
     pub fn concurrent_requests(&self) -> usize {
-        let max = if self.config.max_concurrent == 0 {
-            1_000_000 // Same value as used in new()
-        } else {
-            self.config.max_concurrent as usize
-        };
-        max.saturating_sub(self.concurrent_semaphore.available_permits())
+        self.inner.concurrent_requests()
     }
 
     /// Get the maximum allowed concurrent requests
     pub fn max_concurrent(&self) -> u32 {
-        self.config.max_concurrent
-    }
-
-    /// Refill tokens based on elapsed time
-    fn refill_tokens(&self, state: &mut RateLimiterState) {
-        let now = Instant::now();
-        let elapsed = now.duration_since(state.last_refill);
-        let elapsed_seconds = elapsed.as_secs_f64();
-
-        // Calculate tokens to add
-        let tokens_per_second = self.config.requests_per_second();
-        let tokens_to_add = elapsed_seconds * tokens_per_second;
-
-        // Add tokens, capped at burst size
-        state.tokens = (state.tokens + tokens_to_add).min(self.config.burst_size as f64);
-        state.last_refill = now;
-    }
-}
-
-impl Clone for RateLimiter {
-    fn clone(&self) -> Self {
-        Self {
-            config: self.config.clone(),
-            state: Arc::clone(&self.state),
-            concurrent_semaphore: Arc::clone(&self.concurrent_semaphore),
-        }
+        self.inner.config().max_concurrent
     }
 }

@@ -1,6 +1,7 @@
 //! Helper functions for common error scenarios
 
-use super::types::{EnhancedToolError, ErrorCategory};
+use super::types::EnhancedToolError;
+use sage_core::error::ErrorCategory;
 use sage_core::tools::base::ToolError;
 
 /// Create an enhanced file not found error

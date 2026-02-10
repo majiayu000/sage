@@ -52,6 +52,15 @@ pub struct SubAgentConfig {
     /// Defaults to `Inherited` which uses the parent agent's tools.
     #[serde(default = "default_tool_access")]
     pub tool_access: ToolAccessControl,
+    /// Additional context for the task
+    #[serde(default)]
+    pub context: Option<String>,
+    /// Override maximum execution steps
+    #[serde(default)]
+    pub max_steps: Option<usize>,
+    /// Override temperature for LLM calls
+    #[serde(default)]
+    pub temperature: Option<f64>,
     /// Parent's working directory (set at runtime)
     ///
     /// This is populated by the parent agent when spawning the sub-agent.
@@ -100,6 +109,9 @@ impl SubAgentConfig {
             thoroughness: Thoroughness::default(),
             working_directory: WorkingDirectoryConfig::default(),
             tool_access: default_tool_access(),
+            context: None,
+            max_steps: None,
+            temperature: None,
             parent_cwd: None,
             parent_tools: None,
         }
@@ -139,6 +151,29 @@ impl SubAgentConfig {
     pub fn with_tool_access(mut self, access: ToolAccessControl) -> Self {
         self.tool_access = access;
         self
+    }
+
+    /// Set additional context for the task
+    pub fn with_context(mut self, context: impl Into<String>) -> Self {
+        self.context = Some(context.into());
+        self
+    }
+
+    /// Set maximum execution steps
+    pub fn with_max_steps(mut self, max_steps: usize) -> Self {
+        self.max_steps = Some(max_steps);
+        self
+    }
+
+    /// Set temperature for LLM calls
+    pub fn with_temperature(mut self, temperature: f64) -> Self {
+        self.temperature = Some(temperature);
+        self
+    }
+
+    /// Get the task description (alias for `prompt`)
+    pub fn task(&self) -> &str {
+        &self.prompt
     }
 
     /// Set parent context for inheritance resolution

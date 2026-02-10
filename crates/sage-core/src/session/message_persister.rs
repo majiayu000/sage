@@ -8,9 +8,9 @@ use crate::error::{SageError, SageResult};
 use crate::session::MessageChainTracker;
 use crate::session::UnifiedSessionStorage;
 use crate::session::types::unified::{
-    FileHistorySnapshot, MessageRole, SessionContext, SessionHeader, SessionMessage,
-    SessionMessageType, SessionMetadataPatch, SessionState, ThinkingMetadata, TodoItem,
-    TokenUsage, ToolCall, ToolResult,
+    FileHistorySnapshot, UnifiedMessageRole, SessionContext, SessionHeader, SessionMessage,
+    SessionMessageType, SessionMetadataPatch, SessionState, ThinkingMetadata, UnifiedTodoItem,
+    UnifiedTokenUsage, UnifiedToolCall, UnifiedToolResult,
 };
 use chrono::Utc;
 use std::collections::HashMap;
@@ -29,7 +29,7 @@ pub struct MessagePersister {
 struct PersisterState {
     session_id: String,
     tracker: MessageChainTracker,
-    token_usage: TokenUsage,
+    token_usage: UnifiedTokenUsage,
     message_count: usize,
     session_state: SessionState,
     first_prompt_set: bool,
@@ -134,7 +134,7 @@ impl MessagePersister {
     }
 
     /// Update todos on the tracker.
-    pub async fn set_todos(&self, todos: Vec<TodoItem>) {
+    pub async fn set_todos(&self, todos: Vec<UnifiedTodoItem>) {
         self.state.write().await.tracker.set_todos(todos);
     }
 
@@ -190,8 +190,8 @@ impl MessagePersister {
     pub async fn record_assistant_message(
         &self,
         content: &str,
-        tool_calls: Option<Vec<ToolCall>>,
-        usage: Option<TokenUsage>,
+        tool_calls: Option<Vec<UnifiedToolCall>>,
+        usage: Option<UnifiedTokenUsage>,
     ) -> SageResult<SessionMessage> {
         let (session_id, message, message_count, token_usage) = {
             let mut state = self.state.write().await;
@@ -234,7 +234,7 @@ impl MessagePersister {
     /// Record a tool result message and persist it.
     pub async fn record_tool_result_message(
         &self,
-        results: Vec<ToolResult>,
+        results: Vec<UnifiedToolResult>,
     ) -> SageResult<SessionMessage> {
         let (session_id, message, message_count) = {
             let mut state = self.state.write().await;
@@ -292,7 +292,7 @@ impl MessagePersister {
                 version: env!("CARGO_PKG_VERSION").to_string(),
                 context,
                 message: crate::session::types::unified::MessageContent {
-                    role: MessageRole::Error,
+                    role: UnifiedMessageRole::Error,
                     content: format!("[{}] {}", error_type, error_message),
                     tool_calls: None,
                     tool_results: None,
@@ -356,7 +356,7 @@ impl MessagePersister {
     }
 
     /// Update cached token usage (without adding a message).
-    pub async fn add_token_usage(&self, usage: &TokenUsage) -> SageResult<()> {
+    pub async fn add_token_usage(&self, usage: &UnifiedTokenUsage) -> SageResult<()> {
         let (session_id, token_usage) = {
             let mut state = self.state.write().await;
             state.token_usage.add(usage);

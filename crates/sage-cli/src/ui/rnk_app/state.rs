@@ -1,7 +1,7 @@
 //! UI state management for rnk app
 
 use parking_lot::RwLock;
-use sage_core::ui::bridge::state::SessionState;
+use sage_core::ui::bridge::state::UiSessionInfo;
 use std::sync::Arc;
 
 /// Permission mode for the UI
@@ -39,7 +39,7 @@ pub struct UiState {
     /// Error already displayed (to avoid duplicate error messages)
     pub error_displayed: bool,
     /// Session info
-    pub session: SessionState,
+    pub session: UiSessionInfo,
     /// Selected command suggestion index (0-based, default 0 for first match)
     pub suggestion_index: usize,
     /// Currently printed tool (to avoid duplicate tool start messages)
@@ -66,7 +66,7 @@ impl Default for UiState {
             should_quit: false,
             printed_count: 0,
             error_displayed: false,
-            session: SessionState {
+            session: UiSessionInfo {
                 session_id: None,
                 model: "unknown".to_string(),
                 provider: "unknown".to_string(),

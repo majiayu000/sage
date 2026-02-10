@@ -25,8 +25,8 @@ mod tests {
 
     #[test]
     fn test_permission_result() {
-        assert!(PermissionResult::allow().is_allowed());
-        assert!(!PermissionResult::deny("test").is_allowed());
+        assert!(ToolPermissionResult::allow().is_allowed());
+        assert!(!ToolPermissionResult::deny("test").is_allowed());
     }
 
     #[test]
@@ -263,7 +263,7 @@ mod tests {
             reason: None,
         };
         let result = eval.to_result(RiskLevel::Low);
-        assert!(matches!(result, PermissionResult::Allow));
+        assert!(matches!(result, ToolPermissionResult::Allow));
 
         let eval = PermissionEvaluation {
             behavior: PermissionBehavior::Deny,
@@ -271,7 +271,7 @@ mod tests {
             reason: Some("Test reason".to_string()),
         };
         let result = eval.to_result(RiskLevel::High);
-        assert!(matches!(result, PermissionResult::Deny { reason } if reason == "Test reason"));
+        assert!(matches!(result, ToolPermissionResult::Deny { reason } if reason == "Test reason"));
     }
 
     #[tokio::test]

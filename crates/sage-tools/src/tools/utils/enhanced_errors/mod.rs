@@ -12,4 +12,5 @@ mod types;
 mod tests;
 
 // Re-export public types and functions
-pub use types::{EnhancedToolError, ErrorCategory};
+pub use sage_core::error::ErrorCategory;
+pub use types::EnhancedToolError;

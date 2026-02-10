@@ -413,6 +413,9 @@ mod tests {
             thoroughness: Thoroughness::VeryThorough,
             working_directory: WorkingDirectoryConfig::Inherited,
             tool_access: ToolAccessControl::All,
+            context: None,
+            max_steps: None,
+            temperature: None,
             parent_cwd: None,
             parent_tools: None,
         };
