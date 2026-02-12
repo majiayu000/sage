@@ -1,6 +1,6 @@
 [package]
 name = "sage"
-version = "0.13.4"
+version = "0.13.5"
 edition = "2024"
 authors = ["Sage Agent Team"]
 license = "MIT"
@@ -33,7 +33,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.13.4"
+version = "0.13.5"
 edition = "2024"
 authors = ["Sage Agent Team"]
 license = "MIT"
@@ -107,9 +107,6 @@ once_cell = "1.19"
 
 # Synchronization primitives (faster, no-poison alternative to std::sync::Mutex)
 parking_lot = "0.12"
-
-# LRU Cache
-lru = "0.16"
 
 # Terminal UI (rnk - React-like declarative UI)
 rnk = "0.6"

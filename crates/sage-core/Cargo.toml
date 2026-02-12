@@ -35,11 +35,6 @@ tracing = { workspace = true }
 # CLI and formatting
 colored = { workspace = true }
 
-# Markdown rendering
-pulldown-cmark = "0.9"
-syntect = "5.0"
-textwrap = "0.16"
-
 # Random number generation (for retry jitter)
 rand = "0.8"
 
@@ -48,7 +43,6 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 dirs = { workspace = true }
 shellexpand = { workspace = true }
-lru = { workspace = true }
 flate2 = "1.0"
 dashmap = "6.0"
 once_cell = { workspace = true }

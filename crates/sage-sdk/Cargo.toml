@@ -18,7 +18,6 @@ sage-tools = { path = "../sage-tools", version = "0.13.0" }
 tokio = { workspace = true }
 
 # Serialization
-serde = { workspace = true }
 serde_json = { workspace = true }
 
 # Error handling
@@ -28,5 +27,3 @@ thiserror = { workspace = true }
 # Logging
 tracing = { workspace = true }
 
-# Utilities
-chrono = { workspace = true }
