@@ -17,7 +17,7 @@ fn get_client() -> &'static reqwest::Client {
             .timeout(Duration::from_secs(30))
             .user_agent("Sage-Agent-WebFetch/1.0")
             .build()
-            .expect("Failed to create HTTP client")
+            .unwrap_or_else(|_| reqwest::Client::new())
     })
 }
 

@@ -65,10 +65,11 @@ impl McpToolRegistry {
                     warn!("Failed to connect to MCP server {}: {}", name, e);
                     // Record the failure but continue with other servers
                     let mut status = registry.server_status.write().await;
+                    let name_owned = name.clone();
                     status.insert(
-                        name.clone(),
+                        name_owned.clone(),
                         ServerConnectionStatus {
-                            name: name.clone(),
+                            name: name_owned,
                             connected: false,
                             error: Some(e),
                             tool_count: 0,
