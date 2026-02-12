@@ -3,7 +3,6 @@
 //! This module provides tools for interacting with version control systems,
 //! particularly Git.
 
-pub mod git;
 pub mod git_simple;
 
 pub use git_simple::GitTool;
