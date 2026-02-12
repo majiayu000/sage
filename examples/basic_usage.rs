@@ -30,7 +30,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let stats = result.statistics();
         println!("📊 Execution Stats:");
         println!("   Steps: {}", stats.total_steps);
-        println!("   Tokens: {}", result.execution().total_usage.total_tokens);
+        println!("   Tokens: {}", result.execution().total_usage.total_tokens());
 
         if let Some(duration) = result.execution().duration() {
             println!(

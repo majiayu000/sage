@@ -10,24 +10,23 @@ use sage_core::agent::{
     AgentDefinition, AgentRegistry, AgentType, ToolAccessControl, register_builtin_agents,
 };
 
-#[tokio::main]
-async fn main() {
+fn main() {
     println!("=== Sage Built-in Agents Demo ===\n");
 
     // Create a new registry
     let registry = AgentRegistry::new();
     println!("Created empty agent registry");
-    println!("Registry size: {}\n", registry.len().await);
+    println!("Registry size: {}\n", registry.len());
 
     // Register all built-in agents
-    register_builtin_agents(&registry).await;
+    register_builtin_agents(&registry);
     println!("Registered built-in agents");
-    println!("Registry size: {}\n", registry.len().await);
+    println!("Registry size: {}\n", registry.len());
 
     // List all available agents
     println!("Available Agents:");
     println!("{}", "=".repeat(60));
-    for agent in registry.list_definitions().await {
+    for agent in registry.list_definitions() {
         print_agent_info(&agent);
         println!("{}", "-".repeat(60));
     }
@@ -36,14 +35,14 @@ async fn main() {
     println!("\n=== Querying Agents ===\n");
 
     // Query by type
-    if let Some(explore) = registry.get(&AgentType::Explore).await {
+    if let Some(explore) = registry.get(&AgentType::Explore) {
         println!("Found Explore agent by type:");
         println!("  Name: {}", explore.name);
         println!("  Model: {:?}", explore.model);
     }
 
     // Query by name (case-insensitive)
-    if let Some(plan) = registry.get_by_name("plan").await {
+    if let Some(plan) = registry.get_by_name("plan") {
         println!("\nFound Plan agent by name (case-insensitive):");
         println!("  Type: {}", plan.agent_type);
         println!("  Description: {}", plan.description);
@@ -52,17 +51,17 @@ async fn main() {
     // Demonstrate tool access control
     println!("\n=== Tool Access Control ===\n");
 
-    let general = registry.get(&AgentType::GeneralPurpose).await.unwrap();
+    let general = registry.get(&AgentType::GeneralPurpose).unwrap();
     println!("General Purpose Agent - Tool Access:");
     check_tool_access(&general, &["glob", "grep", "read", "write", "bash", "edit"]);
 
-    let explore = registry.get(&AgentType::Explore).await.unwrap();
+    let explore = registry.get(&AgentType::Explore).unwrap();
     println!("\nExplore Agent - Tool Access:");
     check_tool_access(&explore, &["glob", "grep", "read", "write", "bash", "edit"]);
 
     // Show system prompts
     println!("\n=== System Prompts ===\n");
-    for agent in registry.list_definitions().await {
+    for agent in registry.list_definitions() {
         println!("{}:", agent.name);
         println!("{}", "-".repeat(60));
         println!("{}", truncate_prompt(&agent.system_prompt, 200));
