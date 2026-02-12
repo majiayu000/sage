@@ -10,7 +10,9 @@ use tokio::process::Command;
 use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 
-use crate::tools::utils::{check_command_efficiency, maybe_truncate, suggest_efficient_alternative};
+use crate::tools::utils::{
+    check_command_efficiency, maybe_truncate, suggest_efficient_alternative,
+};
 
 use super::types::BashTool;
 

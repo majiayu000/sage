@@ -68,49 +68,108 @@ pub mod tools;
 
 // Re-export commonly used tools and functions
 pub use tools::{
-    // File operations
-    CodebaseRetrievalTool, EditTool, GlobTool, GrepTool, NotebookEditTool, ReadTool, WriteTool,
-    // Process
-    BashTool, KillShellTool, TaskOutputTool, TaskRequest, TaskStatus, TaskTool,
-    get_pending_tasks, get_task, update_task_status,
     // Task management
-    AddTasksTool, ReorganizeTasklistTool, TaskDoneTool, TodoItem, TodoReadTool, TodoStatus,
-    TodoWriteTool, UpdateTasksTool, ViewTasklistTool,
-    get_current_task, get_current_todos, get_todo_display,
-    // Planning
-    EnterPlanModeTool, ExitPlanModeTool,
+    AddTasksTool,
     // Interaction
     AskUserQuestionTool,
-    // Extensions
-    DeferredToolInfo, DeferredToolRegistry, PlatformToolProxy, SkillTool, SlashCommandTool,
-    ToolSearchResult, ToolSearchTool,
+    // Process
+    BashTool,
     // Network
-    BrowserTool, HttpClientTool, WebFetchTool, WebSearchTool,
-    // Diagnostics
-    DiagnosticsTool, LearnTool, LearningPatternsTool, RememberTool, RenderMermaidTool,
-    SearchUntruncatedTool, SessionNotesTool, ViewRangeUntruncatedTool,
-    get_global_learning_engine, get_global_memory_manager, get_learning_patterns_for_context,
-    get_memories_for_context, init_global_learning_engine, init_global_memory_manager,
+    BrowserTool,
     // Infrastructure
-    CloudTool, KubernetesTool, TerraformTool,
-    // Monitoring
-    LogAnalyzerTool, TestGeneratorTool,
-    // Code intelligence
-    LspTool,
+    CloudTool,
+    // File operations
+    CodebaseRetrievalTool,
+    // Extensions
+    DeferredToolInfo,
+    DeferredToolRegistry,
+    // Diagnostics
+    DiagnosticsTool,
+    EditTool,
+    // Planning
+    EnterPlanModeTool,
+    ExitPlanModeTool,
     // VCS
     GitTool,
+    GlobTool,
+    GrepTool,
+    HttpClientTool,
+    KillShellTool,
+    KubernetesTool,
+    LearnTool,
+    LearningPatternsTool,
+    // Monitoring
+    LogAnalyzerTool,
+    // Code intelligence
+    LspTool,
+    NotebookEditTool,
+    PlatformToolProxy,
+    ReadTool,
+    RememberTool,
+    RenderMermaidTool,
+    ReorganizeTasklistTool,
+    SearchUntruncatedTool,
     // Team
-    SendMessageTool, TeamConfig, TeamManager, TeamMember, TeammateTool,
+    SendMessageTool,
     // Utilities
-    SequentialThinkingTool, TelemetryStatsTool,
+    SequentialThinkingTool,
+    SessionNotesTool,
+    SkillTool,
+    SlashCommandTool,
+    TaskDoneTool,
+    TaskOutputTool,
+    TaskRequest,
+    TaskStatus,
+    TaskTool,
+    TeamConfig,
+    TeamManager,
+    TeamMember,
+    TeammateTool,
+    TelemetryStatsTool,
+    TerraformTool,
+    TestGeneratorTool,
+    TodoItem,
+    TodoReadTool,
+    TodoStatus,
+    TodoWriteTool,
+    ToolSearchResult,
+    ToolSearchTool,
+    UpdateTasksTool,
+    ViewRangeUntruncatedTool,
+    ViewTasklistTool,
+    WebFetchTool,
+    WebSearchTool,
+    WriteTool,
+    get_code_intelligence_tools,
+    get_current_task,
+    get_current_todos,
     // Factory functions
-    get_default_tools, get_file_ops_tools, get_process_tools, get_task_mgmt_tools,
-    get_planning_tools, get_interaction_tools, get_extension_tools, get_network_tools,
-    get_diagnostics_tools, get_vcs_tools, get_monitoring_tools, get_infrastructure_tools,
-    get_code_intelligence_tools, get_team_tools,
+    get_default_tools,
+    get_diagnostics_tools,
+    get_extension_tools,
+    get_file_ops_tools,
+    get_global_learning_engine,
+    get_global_memory_manager,
+    get_infrastructure_tools,
+    get_interaction_tools,
+    get_learning_patterns_for_context,
+    get_memories_for_context,
+    get_monitoring_tools,
+    get_network_tools,
+    get_pending_tasks,
+    get_planning_tools,
+    get_process_tools,
+    get_task,
+    get_task_mgmt_tools,
+    get_team_tools,
+    get_todo_display,
+    get_vcs_tools,
+    init_global_learning_engine,
+    init_global_memory_manager,
+    update_task_status,
 };
 // Re-export MCP tools
 pub use tools::{
-    McpServersTool, McpToolAdapter, McpToolRegistry, SharedMcpToolRegistry,
-    create_mcp_registry, get_global_mcp_registry, get_mcp_tools, init_global_mcp_registry,
+    McpServersTool, McpToolAdapter, McpToolRegistry, SharedMcpToolRegistry, create_mcp_registry,
+    get_global_mcp_registry, get_mcp_tools, init_global_mcp_registry,
 };
