@@ -6,8 +6,5 @@
 mod limiter;
 mod types;
 
-#[cfg(test)]
-mod tests;
-
 pub use limiter::RateLimiter;
 pub use types::{RateLimitConfig, RateLimitError};

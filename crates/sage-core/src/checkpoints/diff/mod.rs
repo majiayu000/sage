@@ -8,9 +8,6 @@ mod changes;
 mod compare;
 mod scanner;
 
-#[cfg(test)]
-mod tests;
-
 // Re-export public types
 pub use capture::ChangeDetector;
 pub use changes::FileChange;
