@@ -32,7 +32,7 @@ async fn test_bash_simple_commands() {
         "test-1",
         "bash",
         json!({
-            "argv": ["echo", "Hello, World!"]
+            "command": "echo 'Hello, World!'"
         }),
     );
 
@@ -46,7 +46,7 @@ async fn test_bash_simple_commands() {
         "test-2",
         "bash",
         json!({
-            "argv": ["pwd"]
+            "command": "pwd"
         }),
     );
 
@@ -60,7 +60,7 @@ async fn test_bash_simple_commands() {
         "test-3",
         "bash",
         json!({
-            "argv": ["date", "+%Y"]
+            "command": "date '+%Y'"
         }),
     );
 
@@ -83,7 +83,7 @@ async fn test_bash_file_operations() {
         "test-4",
         "bash",
         json!({
-            "argv": ["sh", "-c", "echo 'Test content' > test.txt"]
+            "command": "echo 'Test content' > test.txt"
         }),
     );
 
@@ -102,7 +102,7 @@ async fn test_bash_file_operations() {
         "test-5",
         "bash",
         json!({
-            "argv": ["cat", "test.txt"]
+            "command": "cat test.txt"
         }),
     );
 
@@ -116,7 +116,7 @@ async fn test_bash_file_operations() {
         "test-6",
         "bash",
         json!({
-            "argv": ["ls", "-la"]
+            "command": "ls -la"
         }),
     );
 
@@ -142,7 +142,7 @@ async fn test_bash_pipe_operations() {
         "test-7",
         "bash",
         json!({
-            "argv": ["sh", "-c", "cat numbers.txt | head -n 3"]
+            "command": "cat numbers.txt | head -n 3"
         }),
     );
 
@@ -161,7 +161,7 @@ async fn test_bash_pipe_operations() {
         "test-8",
         "bash",
         json!({
-            "argv": ["sh", "-c", "cat numbers.txt | tail -n 2"]
+            "command": "cat numbers.txt | tail -n 2"
         }),
     );
 
@@ -179,7 +179,7 @@ async fn test_bash_pipe_operations() {
         "test-9",
         "bash",
         json!({
-            "argv": ["sh", "-c", "cat numbers.txt | wc -l"]
+            "command": "cat numbers.txt | wc -l"
         }),
     );
 
@@ -209,7 +209,7 @@ async fn test_bash_grep_operations() {
         "test-10",
         "bash",
         json!({
-            "argv": ["grep", "^a", "data.txt"]
+            "command": "grep '^a' data.txt"
         }),
     );
 
@@ -229,7 +229,7 @@ async fn test_bash_grep_operations() {
         "test-11",
         "bash",
         json!({
-            "argv": ["grep", "-c", "^a", "data.txt"]
+            "command": "grep -c '^a' data.txt"
         }),
     );
 
@@ -262,7 +262,7 @@ async fn test_bash_find_operations() {
         "test-12",
         "bash",
         json!({
-            "argv": ["sh", "-c", "find . -name '*.txt' | head -5"]
+            "command": "find . -name '*.txt' | head -5"
         }),
     );
 
@@ -289,7 +289,7 @@ async fn test_bash_working_directory() {
         "test-13",
         "bash",
         json!({
-            "argv": ["pwd"]
+            "command": "pwd"
         }),
     );
 
@@ -311,7 +311,7 @@ async fn test_bash_error_handling() {
         "test-14",
         "bash",
         json!({
-            "argv": ["nonexistent_command_xyz123"]
+            "command": "nonexistent_command_xyz123"
         }),
     );
 
@@ -325,7 +325,7 @@ async fn test_bash_error_handling() {
         "test-15",
         "bash",
         json!({
-            "argv": ["ls", "/nonexistent_directory_xyz"]
+            "command": "ls /nonexistent_directory_xyz"
         }),
     );
 
@@ -344,7 +344,7 @@ async fn test_bash_empty_command() {
         "test-16",
         "bash",
         json!({
-            "argv": []
+            "command": ""
         }),
     );
 
@@ -357,7 +357,7 @@ async fn test_bash_empty_command() {
         "test-17",
         "bash",
         json!({
-            "argv": [""]
+            "command": "   "
         }),
     );
 
@@ -376,7 +376,7 @@ async fn test_bash_missing_command() {
     let result = tool.execute(&call).await;
     assert!(result.is_err());
     let err = result.unwrap_err();
-    assert!(err.to_string().contains("Missing") || err.to_string().contains("argv"));
+    assert!(err.to_string().contains("Missing") || err.to_string().contains("command"));
     println!("✓ Missing command parameter detected");
 }
 
@@ -389,7 +389,7 @@ async fn test_bash_metadata() {
         "test-19",
         "bash",
         json!({
-            "argv": ["echo", "test"]
+            "command": "echo test"
         }),
     );
 
@@ -397,7 +397,7 @@ async fn test_bash_metadata() {
     assert!(result.success);
 
     // Check metadata
-    assert!(result.metadata.contains_key("argv"));
+    assert!(result.metadata.contains_key("command"));
     assert!(result.metadata.contains_key("working_directory"));
     assert!(result.execution_time_ms.is_some());
     println!("✓ Metadata populated correctly");
@@ -419,7 +419,7 @@ async fn test_bash_text_processing() {
         "test-20",
         "bash",
         json!({
-            "argv": ["awk", "{print $2}", "text.txt"]
+            "command": "awk '{print $2}' text.txt"
         }),
     );
 
@@ -437,7 +437,7 @@ async fn test_bash_text_processing() {
         "test-21",
         "bash",
         json!({
-            "argv": ["sed", "s/two/TWO/", "text.txt"]
+            "command": "sed 's/two/TWO/' text.txt"
         }),
     );
 
@@ -458,7 +458,7 @@ async fn test_bash_environment_variables() {
         "test-22",
         "bash",
         json!({
-            "argv": ["sh", "-c", "echo $PATH | head -c 20"]
+            "command": "echo $PATH | head -c 20"
         }),
     );
 
@@ -472,7 +472,7 @@ async fn test_bash_environment_variables() {
         "test-23",
         "bash",
         json!({
-            "argv": ["sh", "-c", "echo $HOME | head -c 50"]
+            "command": "echo $HOME | head -c 50"
         }),
     );
 
@@ -501,7 +501,7 @@ async fn test_bash_multiple_commands_piped() {
         "test-24",
         "bash",
         json!({
-            "argv": ["sh", "-c", "cat data.txt | grep '^a' | wc -l"]
+            "command": "cat data.txt | grep '^a' | wc -l"
         }),
     );
 
@@ -523,7 +523,7 @@ async fn test_bash_redirection() {
         "test-25",
         "bash",
         json!({
-            "argv": ["sh", "-c", "echo 'redirected output' > output.txt"]
+            "command": "echo 'redirected output' > output.txt"
         }),
     );
 
@@ -542,7 +542,7 @@ async fn test_bash_redirection() {
         "test-26",
         "bash",
         json!({
-            "argv": ["sh", "-c", "echo 'appended line' >> output.txt"]
+            "command": "echo 'appended line' >> output.txt"
         }),
     );
 
@@ -566,7 +566,7 @@ async fn test_bash_allowed_commands() {
         "test-27",
         "bash",
         json!({
-            "argv": ["echo", "allowed"]
+            "command": "echo allowed"
         }),
     );
 
@@ -579,7 +579,7 @@ async fn test_bash_allowed_commands() {
         "test-28",
         "bash",
         json!({
-            "argv": ["ls"]
+            "command": "ls"
         }),
     );
 
@@ -597,7 +597,7 @@ async fn test_bash_stdout_stderr() {
         "test-29",
         "bash",
         json!({
-            "argv": ["sh", "-c", "ls /nonexistent 2>&1"]
+            "command": "ls /nonexistent 2>&1"
         }),
     );
 
@@ -617,7 +617,7 @@ async fn test_bash_execution_time() {
         "test-30",
         "bash",
         json!({
-            "argv": ["echo", "test"]
+            "command": "echo test"
         }),
     );
 
@@ -641,7 +641,7 @@ async fn test_destructive_command_requires_confirmation() {
         "test-31a",
         "bash",
         json!({
-            "argv": ["rm", "test_file.txt"]
+            "command": "rm test_file.txt"
         }),
     );
 
@@ -656,7 +656,7 @@ async fn test_destructive_command_requires_confirmation() {
         "test-31b",
         "bash",
         json!({
-            "argv": ["rmdir", "empty_dir"]
+            "command": "rmdir empty_dir"
         }),
     );
 
@@ -669,7 +669,7 @@ async fn test_destructive_command_requires_confirmation() {
         "test-31c",
         "bash",
         json!({
-            "argv": ["git", "push", "--force", "origin", "main"]
+            "command": "git push --force origin main"
         }),
     );
 
@@ -695,7 +695,7 @@ async fn test_destructive_command_with_confirmation() {
         "test-32",
         "bash",
         json!({
-            "argv": ["rm", test_file.to_string_lossy()],
+            "command": format!("rm {}", test_file.to_string_lossy()),
             "user_confirmed": true
         }),
     );
@@ -713,25 +713,25 @@ async fn test_safe_commands_no_confirmation_needed() {
     println!("\n=== Test 33: Safe commands need no confirmation ===");
 
     // These commands should execute without user_confirmed
-    let safe_commands: Vec<Vec<String>> = vec![
-        vec!["ls".to_string(), "-la".to_string()],
-        vec!["pwd".to_string()],
-        vec!["echo".to_string(), "hello".to_string()],
-        vec!["git".to_string(), "status".to_string()],
-        vec!["cargo".to_string(), "--version".to_string()],
+    let safe_commands: Vec<&str> = vec![
+        "ls -la",
+        "pwd",
+        "echo hello",
+        "git status",
+        "cargo --version",
     ];
 
-    for (i, argv) in safe_commands.iter().enumerate() {
+    for (i, cmd) in safe_commands.iter().enumerate() {
         let call = create_tool_call(
             &format!("test-33-{}", i),
             "bash",
             json!({
-                "argv": argv
+                "command": cmd
             }),
         );
 
         let result = tool.execute(&call).await.unwrap();
-        assert!(result.success, "Command '{:?}' should succeed", argv);
-        println!("✓ '{:?}' executed without confirmation", argv);
+        assert!(result.success, "Command '{}' should succeed", cmd);
+        println!("✓ '{}' executed without confirmation", cmd);
     }
 }
