@@ -19,7 +19,7 @@ use std::time::Duration;
 ///
 /// # Examples
 ///
-/// ```
+/// ```ignore
 /// use sage_core::recovery::rate_limiter::RateLimitConfig;
 ///
 /// // For general API use

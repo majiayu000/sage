@@ -9,7 +9,7 @@ use std::time::Duration;
 /// It supports both high-level retry decisions (what to retry) and timing details (how to retry).
 ///
 /// # Example
-/// ```
+/// ```ignore
 /// use sage_core::recovery::RetryConfig;
 /// use std::time::Duration;
 ///

@@ -37,7 +37,7 @@ use std::path::Path;
 ///     }
 ///
 ///     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
-///         let argv = call.require_string_array("argv")?;
+///         let argv: Vec<String> = call.require_argument("argv")?;
 ///
 ///         if !self.is_command_allowed(&argv) {
 ///             return Err(ToolError::PermissionDenied("Command not allowed".into()));

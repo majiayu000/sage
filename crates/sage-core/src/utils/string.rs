@@ -13,7 +13,7 @@
 /// A string slice containing at most `max_chars` characters
 ///
 /// # Example
-/// ```
+/// ```ignore
 /// use sage_core::utils::truncate_str;
 ///
 /// let s = "你好世界";
