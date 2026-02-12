@@ -8,18 +8,21 @@
 //! - Notification handling
 //! - Background message receiver
 
+mod notification;
+mod operations;
+mod receiver;
+
+pub use notification::{LoggingNotificationHandler, SyncNotificationHandler};
+
 use super::error::McpError;
-use super::protocol::{
-    MCP_PROTOCOL_VERSION, McpMessage, McpNotification, McpRequest, McpResponse, McpRpcError,
-    RequestId, methods,
-};
+use super::protocol::{McpMessage, McpRequest, RequestId, methods};
 use super::transport::McpTransport;
 use super::types::{
-    ClientCapabilities, ClientInfo, InitializeParams, InitializeResult, McpCapabilities, McpPrompt,
-    McpPromptMessage, McpResource, McpResourceContent, McpServerInfo, McpTool, McpToolResult,
+    ClientCapabilities, ClientInfo, InitializeParams, InitializeResult, McpCapabilities,
+    McpPrompt, McpResource, McpServerInfo, McpTool,
 };
+use receiver::ReceiverCommand;
 use serde_json::{Value, json};
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -27,21 +30,10 @@ use std::time::Duration;
 use tokio::sync::{Mutex, RwLock, mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
-use tracing::{debug, error, instrument, warn};
+use tracing::instrument;
 
 /// Default request timeout in seconds
 const DEFAULT_REQUEST_TIMEOUT_SECS: u64 = 300; // 5 minutes
-
-/// Message sender command for the background receiver
-enum ReceiverCommand {
-    /// Register a pending request
-    RegisterRequest {
-        id: String,
-        sender: oneshot::Sender<McpResponse>,
-    },
-    /// Shutdown the receiver
-    Shutdown,
-}
 
 /// MCP client for communicating with MCP servers
 pub struct McpClient {
@@ -73,25 +65,6 @@ pub struct McpClient {
     receiver_handle: StdMutex<Option<JoinHandle<()>>>,
 }
 
-/// Sync trait for handling MCP notifications in the client message loop.
-///
-/// This is a lightweight synchronous handler used internally by `McpClient`.
-/// For the full async notification handling system with filtering and dispatching,
-/// see [`super::notifications::NotificationHandler`].
-pub trait SyncNotificationHandler: Send + Sync {
-    /// Handle a notification
-    fn handle(&self, method: &str, params: Option<Value>);
-}
-
-/// Default notification handler that logs notifications
-pub struct LoggingNotificationHandler;
-
-impl SyncNotificationHandler for LoggingNotificationHandler {
-    fn handle(&self, method: &str, params: Option<Value>) {
-        debug!("MCP notification: {} {:?}", method, params);
-    }
-}
-
 impl McpClient {
     /// Create a new MCP client with the given transport
     pub fn new(transport: Box<dyn McpTransport>) -> Self {
@@ -107,7 +80,7 @@ impl McpClient {
         // Start background message receiver
         let transport_clone = Arc::clone(&transport);
         let running_clone = Arc::clone(&running);
-        let receiver_handle = tokio::spawn(Self::message_receiver(
+        let receiver_handle = tokio::spawn(receiver::message_receiver(
             transport_clone,
             command_receiver,
             running_clone,
@@ -130,76 +103,6 @@ impl McpClient {
         }
     }
 
-    /// Background task that receives messages and routes them
-    async fn message_receiver(
-        transport: Arc<Mutex<Box<dyn McpTransport>>>,
-        mut command_receiver: mpsc::Receiver<ReceiverCommand>,
-        running: Arc<AtomicBool>,
-    ) {
-        let mut pending_requests: HashMap<String, oneshot::Sender<McpResponse>> = HashMap::new();
-
-        while running.load(Ordering::SeqCst) {
-            tokio::select! {
-                // Handle commands from the client
-                cmd = command_receiver.recv() => {
-                    match cmd {
-                        Some(ReceiverCommand::RegisterRequest { id, sender }) => {
-                            pending_requests.insert(id, sender);
-                        }
-                        Some(ReceiverCommand::Shutdown) | None => {
-                            debug!("MCP message receiver shutting down");
-                            break;
-                        }
-                    }
-                }
-                // Receive messages from transport
-                result = async {
-                    let mut transport = transport.lock().await;
-                    transport.receive().await
-                } => {
-                    match result {
-                        Ok(message) => {
-                            match message {
-                                McpMessage::Response(response) => {
-                                    let id = response.id.to_string();
-                                    if let Some(sender) = pending_requests.remove(&id) {
-                                        if sender.send(response).is_err() {
-                                            warn!("Failed to send response to waiting request {}", id);
-                                        }
-                                    } else {
-                                        warn!("Received response for unknown request: {}", id);
-                                    }
-                                }
-                                McpMessage::Notification(notification) => {
-                                    debug!("Received notification: {}", notification.method);
-                                    // Notifications are logged; custom handlers can be added
-                                }
-                                McpMessage::Request(request) => {
-                                    // Server-initiated requests (rare in current MCP usage)
-                                    warn!("Received server request: {}", request.method);
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            if running.load(Ordering::SeqCst) {
-                                error!("Error receiving MCP message: {}", e);
-                            }
-                            // On connection error, notify all pending requests
-                            for (id, sender) in pending_requests.drain() {
-                                warn!("Cancelling pending request {} due to connection error", id);
-                                let _ = sender.send(McpResponse::error(
-                                    RequestId::String(id),
-                                    McpRpcError::new(-32000, e.to_string()),
-                                ));
-                            }
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     /// Set a custom notification handler
     pub async fn set_notification_handler(&self, handler: Box<dyn SyncNotificationHandler>) {
         *self.notification_handler.write().await = Some(handler);
@@ -218,7 +121,7 @@ impl McpClient {
         }
 
         let params = InitializeParams {
-            protocol_version: MCP_PROTOCOL_VERSION.to_string(),
+            protocol_version: super::protocol::MCP_PROTOCOL_VERSION.to_string(),
             capabilities: ClientCapabilities::default(),
             client_info: ClientInfo::default(),
         };
@@ -251,107 +154,6 @@ impl McpClient {
         self.capabilities.read().await.clone()
     }
 
-    /// List available tools
-    #[instrument(skip(self), level = "debug")]
-    pub async fn list_tools(&self) -> Result<Vec<McpTool>, McpError> {
-        self.ensure_initialized().await?;
-
-        let result: Value = self.call(methods::TOOLS_LIST, None).await?;
-
-        let tools: Vec<McpTool> =
-            serde_json::from_value(result["tools"].clone()).unwrap_or_default();
-
-        *self.tools.write().await = tools.clone();
-        Ok(tools)
-    }
-
-    /// Call a tool with timeout
-    #[instrument(skip(self, arguments), fields(tool_name = %name))]
-    pub async fn call_tool(&self, name: &str, arguments: Value) -> Result<McpToolResult, McpError> {
-        self.ensure_initialized().await?;
-
-        let params = json!({
-            "name": name,
-            "arguments": arguments
-        });
-
-        let result: McpToolResult = self.call(methods::TOOLS_CALL, Some(params)).await?;
-        Ok(result)
-    }
-
-    /// List available resources
-    pub async fn list_resources(&self) -> Result<Vec<McpResource>, McpError> {
-        self.ensure_initialized().await?;
-
-        let result: Value = self.call(methods::RESOURCES_LIST, None).await?;
-
-        let resources: Vec<McpResource> =
-            serde_json::from_value(result["resources"].clone()).unwrap_or_default();
-
-        *self.resources.write().await = resources.clone();
-        Ok(resources)
-    }
-
-    /// Read a resource
-    pub async fn read_resource(&self, uri: &str) -> Result<McpResourceContent, McpError> {
-        self.ensure_initialized().await?;
-
-        let params = json!({
-            "uri": uri
-        });
-
-        let result: Value = self.call(methods::RESOURCES_READ, Some(params)).await?;
-
-        // The result should contain "contents" array
-        let contents: Vec<McpResourceContent> =
-            serde_json::from_value(result["contents"].clone()).unwrap_or_default();
-
-        contents
-            .into_iter()
-            .next()
-            .ok_or_else(|| McpError::resource_not_found(uri.to_string()))
-    }
-
-    /// List available prompts
-    pub async fn list_prompts(&self) -> Result<Vec<McpPrompt>, McpError> {
-        self.ensure_initialized().await?;
-
-        let result: Value = self.call(methods::PROMPTS_LIST, None).await?;
-
-        let prompts: Vec<McpPrompt> =
-            serde_json::from_value(result["prompts"].clone()).unwrap_or_default();
-
-        *self.prompts.write().await = prompts.clone();
-        Ok(prompts)
-    }
-
-    /// Get a prompt with optional arguments
-    pub async fn get_prompt(
-        &self,
-        name: &str,
-        arguments: Option<HashMap<String, String>>,
-    ) -> Result<Vec<McpPromptMessage>, McpError> {
-        self.ensure_initialized().await?;
-
-        let params = json!({
-            "name": name,
-            "arguments": arguments.unwrap_or_default()
-        });
-
-        let result: Value = self.call(methods::PROMPTS_GET, Some(params)).await?;
-
-        let messages: Vec<McpPromptMessage> =
-            serde_json::from_value(result["messages"].clone()).unwrap_or_default();
-
-        Ok(messages)
-    }
-
-    /// Ping the server
-    pub async fn ping(&self) -> Result<(), McpError> {
-        let _: Value = self.call(methods::PING, None).await?;
-        Ok(())
-    }
-
     /// Close the client connection
     pub async fn close(&self) -> Result<(), McpError> {
         // Signal the receiver to stop
@@ -379,7 +181,7 @@ impl McpClient {
     }
 
     /// Make a request and wait for response with timeout
-    async fn call<T>(&self, method: &str, params: Option<Value>) -> Result<T, McpError>
+    pub(crate) async fn call<T>(&self, method: &str, params: Option<Value>) -> Result<T, McpError>
     where
         T: serde::de::DeserializeOwned,
     {
@@ -426,7 +228,7 @@ impl McpClient {
 
     /// Send a notification (no response expected)
     async fn notify(&self, method: &str, params: Option<Value>) -> Result<(), McpError> {
-        let notification = McpNotification::new(method);
+        let notification = super::protocol::McpNotification::new(method);
         let notification = if let Some(p) = params {
             notification.with_params(p)
         } else {
@@ -447,7 +249,7 @@ impl McpClient {
     }
 
     /// Ensure the client is initialized
-    async fn ensure_initialized(&self) -> Result<(), McpError> {
+    pub(crate) async fn ensure_initialized(&self) -> Result<(), McpError> {
         if !*self.initialized.read().await {
             return Err(McpError::NotInitialized);
         }
@@ -469,17 +271,21 @@ impl McpClient {
         self.prompts.read().await.clone()
     }
 
-    /// Refresh all caches (tools, resources, prompts)
-    pub async fn refresh_caches(&self) -> Result<(), McpError> {
-        self.list_tools().await?;
-        self.list_resources().await?;
-        self.list_prompts().await?;
-        Ok(())
-    }
-
     /// Check if the client is connected
     pub fn is_connected(&self) -> bool {
         self.running.load(Ordering::SeqCst)
+    }
+
+    pub(crate) fn tools(&self) -> &RwLock<Vec<McpTool>> {
+        &self.tools
+    }
+
+    pub(crate) fn resources(&self) -> &RwLock<Vec<McpResource>> {
+        &self.resources
+    }
+
+    pub(crate) fn prompts(&self) -> &RwLock<Vec<McpPrompt>> {
+        &self.prompts
     }
 }
 
@@ -498,9 +304,6 @@ impl Drop for McpClient {
 mod tests {
     use super::*;
 
-    // Note: Most tests require a real MCP server
-    // These are basic unit tests
-
     #[test]
     fn test_client_info_default() {
         let info = ClientInfo::default();
@@ -510,7 +313,7 @@ mod tests {
     #[test]
     fn test_initialize_params() {
         let params = InitializeParams {
-            protocol_version: MCP_PROTOCOL_VERSION.to_string(),
+            protocol_version: super::super::protocol::MCP_PROTOCOL_VERSION.to_string(),
             capabilities: ClientCapabilities::default(),
             client_info: ClientInfo::default(),
         };
