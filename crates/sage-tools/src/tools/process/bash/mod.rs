@@ -308,7 +308,7 @@ mod tests {
     fn test_bash_tool_schema() {
         let tool = BashTool::new();
         let schema = tool.schema();
-        assert_eq!(schema.name, "bash");
+        assert_eq!(schema.name, "Bash");
         assert!(!schema.description.is_empty());
     }
 

@@ -305,14 +305,11 @@ mod tests {
 
         // Verify state is Error
         let state = adapter.get_state();
-        match &state.phase {
-            ExecutionPhase::Error { message } => {
-                assert_eq!(message, "Test error message");
-            }
-            other => {
-                panic!("Expected Error phase, got {:?}", other);
-            }
-        }
+        assert!(
+            matches!(&state.phase, ExecutionPhase::Error { message } if message == "Test error message"),
+            "Expected Error phase with 'Test error message', got {:?}",
+            state.phase
+        );
     }
 
     #[test]

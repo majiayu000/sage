@@ -409,11 +409,11 @@ mod tests {
 
         state.finish_streaming();
 
-        if let UiMessageContent::Text(text) = &state.messages.last().unwrap().content {
-            assert_eq!(text, "Hello World");
-        } else {
-            panic!("Expected Text content");
-        }
+        assert!(
+            matches!(&state.messages.last().unwrap().content, UiMessageContent::Text(text) if text == "Hello World"),
+            "Expected Text content 'Hello World', got {:?}",
+            state.messages.last().unwrap().content
+        );
     }
 
     #[test]

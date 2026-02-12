@@ -241,6 +241,7 @@ mod tests {
                     output_tokens: 50,
                     cache_read_tokens: None,
                     cache_write_tokens: None,
+                    cost_estimate: None,
                 }),
                 tool_calls: None,
                 timestamp: "2024-01-01T00:00:02Z".to_string(),

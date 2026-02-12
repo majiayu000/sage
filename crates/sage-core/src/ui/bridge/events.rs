@@ -148,34 +148,28 @@ mod tests {
     fn test_event_creation() {
         let event =
             AgentEvent::session_started("sess-123", "claude-sonnet-4-20250514", "anthropic");
-        if let AgentEvent::SessionStarted {
-            session_id,
-            model,
-            provider,
-        } = event
-        {
-            assert_eq!(session_id, "sess-123");
-            assert_eq!(model, "claude-sonnet-4-20250514");
-            assert_eq!(provider, "anthropic");
-        } else {
-            panic!("Expected SessionStarted event");
-        }
+        assert!(
+            matches!(
+                &event,
+                AgentEvent::SessionStarted { session_id, model, provider }
+                if session_id == "sess-123" && model == "claude-sonnet-4-20250514" && provider == "anthropic"
+            ),
+            "Expected SessionStarted event, got {:?}",
+            event
+        );
     }
 
     #[test]
     fn test_tool_event() {
         let event = AgentEvent::tool_started("bash", "tool-123", "ls -la");
-        if let AgentEvent::ToolExecutionStarted {
-            tool_name,
-            tool_id,
-            description,
-        } = event
-        {
-            assert_eq!(tool_name, "bash");
-            assert_eq!(tool_id, "tool-123");
-            assert_eq!(description, "ls -la");
-        } else {
-            panic!("Expected ToolExecutionStarted event");
-        }
+        assert!(
+            matches!(
+                &event,
+                AgentEvent::ToolExecutionStarted { tool_name, tool_id, description }
+                if tool_name == "bash" && tool_id == "tool-123" && description == "ls -la"
+            ),
+            "Expected ToolExecutionStarted event, got {:?}",
+            event
+        );
     }
 }

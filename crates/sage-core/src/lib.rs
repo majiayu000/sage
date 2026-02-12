@@ -209,7 +209,10 @@ pub use tools::{
 };
 pub use trajectory::TrajectorySessionSummary;
 pub use trajectory::{SessionEntry, SessionInfo, SessionRecorder, SessionReplayer};
-pub use types::*;
+pub use types::{
+    Id, TaskMetadata, TimeoutConfig, TodoItem, TodoStatus, TokenUsage, ToolError, ToolParameter,
+    ToolSchema,
+};
 // New modular prompt system (Claude Code style)
 pub use learning::{
     Confidence, CorrectionRecord, CorrectionStats, LearningConfig, LearningEngine, LearningError,
