@@ -138,8 +138,8 @@ All operations require filePath, line (1-based), and character (1-based)."#
             ToolError::InvalidArguments("Missing required parameter: filePath".to_string())
         })?;
 
-        let line = call.get_number("line").unwrap_or(1.0) as u32;
-        let character = call.get_number("character").unwrap_or(1.0) as u32;
+        let line = call.get_u32("line", 1);
+        let character = call.get_u32("character", 1);
 
         let result = match operation.as_str() {
             "goToDefinition" => self.go_to_definition(&file_path, line, character).await?,

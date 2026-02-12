@@ -70,9 +70,9 @@ Parameters:
         let show_line_numbers = call.get_bool("-n").unwrap_or(true);
 
         // Handle context parameters
-        let lines_before = call.get_number("-B").unwrap_or(0.0) as usize;
-        let lines_after = call.get_number("-A").unwrap_or(0.0) as usize;
-        let context = call.get_number("-C").unwrap_or(0.0) as usize;
+        let lines_before = call.get_usize("-B", 0);
+        let lines_after = call.get_usize("-A", 0);
+        let context = call.get_usize("-C", 0);
 
         // If -C is specified, it overrides -A and -B
         let (lines_before, lines_after) = if context > 0 {
@@ -82,8 +82,8 @@ Parameters:
         };
 
         let multiline = call.get_bool("multiline").unwrap_or(false);
-        let head_limit = call.get_number("head_limit").unwrap_or(0.0) as usize;
-        let offset = call.get_number("offset").unwrap_or(0.0) as usize;
+        let head_limit = call.get_usize("head_limit", 0);
+        let offset = call.get_usize("offset", 0);
 
         let mut result = self
             .search(

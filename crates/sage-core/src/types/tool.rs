@@ -95,6 +95,29 @@ impl ToolCall {
         self.get_argument::<i64>(key)
     }
 
+    /// Get a number argument as usize, safely handling NaN/Infinity/negative values.
+    /// Returns `default` if the value is not finite or negative.
+    pub fn get_usize(&self, key: &str, default: usize) -> usize {
+        match self.get_number(key) {
+            Some(n) if n.is_finite() && n >= 0.0 => (n as u64) as usize,
+            Some(_) => default,
+            None => default,
+        }
+    }
+
+    /// Get a number argument as u32, safely handling NaN/Infinity/negative values.
+    /// Returns `default` if the value is not finite, negative, or exceeds u32::MAX.
+    pub fn get_u32(&self, key: &str, default: u32) -> u32 {
+        match self.get_number(key) {
+            Some(n) if n.is_finite() && n >= 0.0 => {
+                let clamped = n.min(u32::MAX as f64);
+                clamped as u32
+            }
+            Some(_) => default,
+            None => default,
+        }
+    }
+
     /// Require a string argument, returning error if missing
     ///
     /// Use this instead of `get_string().ok_or_else(...)` to reduce boilerplate.
@@ -447,5 +470,37 @@ mod tests {
         let call = ToolCall::new("1", "Write", args);
 
         assert_eq!(call.get_string("filePath"), Some("/test/path".to_string()));
+    }
+
+    #[test]
+    fn test_get_usize_safe_conversion() {
+        let mut args = HashMap::new();
+        args.insert("normal".to_string(), serde_json::json!(42.0));
+        args.insert("negative".to_string(), serde_json::json!(-5.0));
+        args.insert("zero".to_string(), serde_json::json!(0.0));
+        args.insert("fractional".to_string(), serde_json::json!(3.7));
+
+        let call = ToolCall::new("1", "test", args);
+
+        assert_eq!(call.get_usize("normal", 0), 42);
+        assert_eq!(call.get_usize("negative", 99), 99);
+        assert_eq!(call.get_usize("zero", 99), 0);
+        assert_eq!(call.get_usize("fractional", 0), 3);
+        assert_eq!(call.get_usize("missing", 7), 7);
+    }
+
+    #[test]
+    fn test_get_u32_safe_conversion() {
+        let mut args = HashMap::new();
+        args.insert("normal".to_string(), serde_json::json!(100.0));
+        args.insert("large".to_string(), serde_json::json!(5_000_000_000.0));
+        args.insert("negative".to_string(), serde_json::json!(-1.0));
+
+        let call = ToolCall::new("1", "test", args);
+
+        assert_eq!(call.get_u32("normal", 0), 100);
+        assert_eq!(call.get_u32("large", 0), u32::MAX);
+        assert_eq!(call.get_u32("negative", 5), 5);
+        assert_eq!(call.get_u32("missing", 1), 1);
     }
 }

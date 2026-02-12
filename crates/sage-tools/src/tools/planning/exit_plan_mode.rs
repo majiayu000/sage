@@ -54,7 +54,7 @@ impl Tool for ExitPlanModeTool {
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
         let launch_swarm = call.get_bool("launchSwarm").unwrap_or(false);
-        let teammate_count = call.get_number("teammateCount").unwrap_or(3.0) as u32;
+        let teammate_count = call.get_u32("teammateCount", 3);
 
         // Validate teammate count if swarm is being launched
         if launch_swarm && !(1..=10).contains(&teammate_count) {

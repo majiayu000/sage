@@ -295,13 +295,15 @@ impl Tool for LogAnalyzerTool {
         let result = match command.as_str() {
             "analyze" => {
                 let pattern = call.get_string("pattern");
-                let lines = call.get_number("lines").map(|n| n as usize);
+                let lines = call.get_number("lines").map(|n| {
+                    if n.is_finite() && n >= 0.0 { n as usize } else { 50 }
+                });
                 self.analyze_logs(&file_path, pattern.as_deref(), lines)
                     .await?
             }
             "metrics" => self.extract_metrics(&file_path).await?,
             "tail" => {
-                let lines = call.get_number("lines").unwrap_or(50.0) as usize;
+                let lines = call.get_usize("lines", 50);
                 self.tail_logs(&file_path, lines).await?
             }
             _ => {

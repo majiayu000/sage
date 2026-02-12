@@ -52,8 +52,12 @@ impl Tool for ReadTool {
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
         let file_path = call.require_string("file_path")?;
 
-        let offset = call.get_number("offset").map(|n| n as usize);
-        let limit = call.get_number("limit").map(|n| n as usize);
+        let offset = call.get_number("offset").map(|n| {
+            if n.is_finite() && n >= 0.0 { n as usize } else { 0 }
+        });
+        let limit = call.get_number("limit").map(|n| {
+            if n.is_finite() && n >= 0.0 { n as usize } else { 0 }
+        });
 
         let mut result = reader::read_file(self, self.name(), &file_path, offset, limit).await?;
         result.call_id = call.id.clone();
