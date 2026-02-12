@@ -42,9 +42,6 @@ pub mod filesystem_tool;
 pub mod tool_macro;
 pub mod tool_trait;
 
-#[cfg(test)]
-mod tests;
-
 // Re-exports
 pub use command_tool::CommandTool;
 pub use concurrency::ConcurrencyMode;
