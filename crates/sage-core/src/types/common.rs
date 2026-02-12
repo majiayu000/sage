@@ -73,8 +73,6 @@ impl TokenUsage {
     }
 }
 
-// AgentState is now defined in agent::state module
-
 /// Task execution metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskMetadata {
