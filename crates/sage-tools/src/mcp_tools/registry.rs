@@ -2,9 +2,8 @@
 //!
 //! Manages MCP server connections and provides tools to the Sage agent.
 
-use super::adapter::{McpToolAdapter, create_adapters_from_client};
 use sage_core::config::{McpConfig, McpServerConfig};
-use sage_core::mcp::{HttpTransport, HttpTransportConfig, McpClient, StdioTransport};
+use sage_core::mcp::{HttpTransport, HttpTransportConfig, McpClient, McpToolAdapter, StdioTransport};
 use sage_core::tools::Tool;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -14,7 +13,7 @@ use tracing::{debug, info, warn};
 /// Registry for MCP tools
 pub struct McpToolRegistry {
     /// Connected clients by server name
-    clients: RwLock<HashMap<String, Arc<RwLock<McpClient>>>>,
+    clients: RwLock<HashMap<String, Arc<McpClient>>>,
     /// All available tools (server_name::tool_name -> adapter)
     tools: RwLock<Vec<McpToolAdapter>>,
     /// Server status tracking
@@ -94,10 +93,17 @@ impl McpToolRegistry {
             _ => return Err(format!("Unsupported transport: {}", config.transport)),
         };
 
-        let client = Arc::new(RwLock::new(client));
+        let client = Arc::new(client);
 
         // Get tools from the server
-        let adapters = create_adapters_from_client(Arc::clone(&client), name).await?;
+        let tools_list = client
+            .list_tools()
+            .await
+            .map_err(|e| format!("Failed to list MCP tools: {}", e))?;
+        let adapters: Vec<McpToolAdapter> = tools_list
+            .into_iter()
+            .map(|tool| McpToolAdapter::new(tool, Arc::clone(&client), name.to_string()))
+            .collect();
         let tool_count = adapters.len();
 
         // Store the client

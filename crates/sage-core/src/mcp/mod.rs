@@ -55,7 +55,7 @@ pub use notifications::{
     NotificationDispatcher, NotificationDispatcherBuilder, NotificationEvent, NotificationHandler,
 };
 pub use protocol::{McpMessage, McpNotification, McpRequest, McpResponse};
-pub use registry::McpRegistry;
+pub use registry::{McpRegistry, McpToolAdapter};
 pub use schema_translator::SchemaTranslator;
 pub use transport::{
     HttpTransport, HttpTransportConfig, McpTransport, StdioTransport, TransportConfig,

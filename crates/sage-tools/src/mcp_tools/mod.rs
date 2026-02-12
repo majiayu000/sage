@@ -31,11 +31,10 @@
 //! let server_tools = registry.tools_from_server("my-server").await;
 //! ```
 
-pub mod adapter;
 pub mod registry;
 pub mod servers_tool;
 
-pub use adapter::{McpToolAdapter, create_adapters_from_client};
+pub use sage_core::mcp::McpToolAdapter;
 pub use registry::{
     McpToolRegistry, ServerConnectionStatus, SharedMcpToolRegistry, create_mcp_registry,
 };

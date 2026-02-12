@@ -240,10 +240,11 @@ impl McpRegistry {
                     .into_iter()
                     .find(|t| t.name == tool_name)
                 {
-                    let adapter = McpToolBridge {
-                        client: client.clone(),
-                        tool: mcp_tool,
-                    };
+                    let adapter = McpToolAdapter::new(
+                        mcp_tool,
+                        client.clone(),
+                        server_name.clone(),
+                    );
                     tools.push(Arc::new(adapter) as Arc<dyn Tool>);
                 }
             }
@@ -271,60 +272,162 @@ impl Default for McpRegistry {
     }
 }
 
-/// Internal bridge to use MCP tools as Sage tools (minimal version).
-/// The full-featured adapter is in sage-tools::mcp_tools::McpToolAdapter.
-struct McpToolBridge {
+/// Adapter that wraps an MCP tool as a Sage Tool.
+/// Canonical definition — sage-tools re-exports this.
+pub struct McpToolAdapter {
+    mcp_tool: McpTool,
     client: Arc<McpClient>,
-    tool: McpTool,
+    server_name: String,
+}
+
+impl McpToolAdapter {
+    pub fn new(mcp_tool: McpTool, client: Arc<McpClient>, server_name: String) -> Self {
+        Self {
+            mcp_tool,
+            client,
+            server_name,
+        }
+    }
+
+    pub fn server_name(&self) -> &str {
+        &self.server_name
+    }
+
+    pub fn mcp_tool(&self) -> &McpTool {
+        &self.mcp_tool
+    }
+
+    fn convert_schema(&self) -> Vec<ToolParameter> {
+        let mut params = Vec::new();
+        let input_schema = &self.mcp_tool.input_schema;
+
+        if input_schema.is_null() {
+            return params;
+        }
+
+        if let Some(properties) = input_schema.get("properties").and_then(|p| p.as_object()) {
+            let required_fields: Vec<String> = input_schema
+                .get("required")
+                .and_then(|r| r.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            for (name, schema) in properties {
+                let description = schema
+                    .get("description")
+                    .and_then(|d| d.as_str())
+                    .unwrap_or("")
+                    .to_string();
+
+                let is_required = required_fields.contains(name);
+                let param_type = schema
+                    .get("type")
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("string");
+
+                let param = match (is_required, param_type) {
+                    (true, "string") => ToolParameter::string(name, &description),
+                    (true, "integer") | (true, "number") => {
+                        ToolParameter::number(name, &description)
+                    }
+                    (true, "boolean") => ToolParameter::boolean(name, &description),
+                    (true, _) => ToolParameter::string(name, &description),
+                    (false, "string") => ToolParameter::optional_string(name, &description),
+                    (false, _) => ToolParameter::optional_string(name, &description),
+                };
+
+                params.push(param);
+            }
+        }
+
+        params
+    }
+
+    fn convert_result(
+        &self,
+        call: &ToolCall,
+        mcp_result: super::types::McpToolResult,
+    ) -> ToolResult {
+        let output = mcp_result
+            .content
+            .iter()
+            .map(|c| match c {
+                super::types::McpContent::Text { text } => text.clone(),
+                super::types::McpContent::Image { .. } => "[Image content]".to_string(),
+                super::types::McpContent::Resource { .. } => "[Resource reference]".to_string(),
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        if mcp_result.is_error {
+            ToolResult::error(
+                &call.id,
+                self.name(),
+                format!("MCP tool execution failed: {}", output),
+            )
+        } else {
+            ToolResult::success(&call.id, self.name(), output)
+        }
+    }
+}
+
+impl std::fmt::Debug for McpToolAdapter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("McpToolAdapter")
+            .field("name", &self.mcp_tool.name)
+            .field("server", &self.server_name)
+            .finish()
+    }
+}
+
+impl Clone for McpToolAdapter {
+    fn clone(&self) -> Self {
+        Self {
+            mcp_tool: self.mcp_tool.clone(),
+            client: Arc::clone(&self.client),
+            server_name: self.server_name.clone(),
+        }
+    }
 }
 
 #[async_trait]
-impl Tool for McpToolBridge {
+impl Tool for McpToolAdapter {
     fn name(&self) -> &str {
-        &self.tool.name
+        &self.mcp_tool.name
     }
 
     fn description(&self) -> &str {
-        self.tool.description.as_deref().unwrap_or("")
+        self.mcp_tool.description.as_deref().unwrap_or("MCP tool")
     }
 
     fn schema(&self) -> ToolSchema {
-        ToolSchema {
-            name: self.tool.name.clone(),
-            description: self.tool.description.clone().unwrap_or_default(),
-            parameters: self.tool.input_schema.clone(),
-        }
+        ToolSchema::new(self.name(), self.description(), self.convert_schema())
     }
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, crate::tools::base::ToolError> {
-        let arguments: Value = call
-            .arguments
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect();
+        let arguments: Value = serde_json::to_value(&call.arguments).map_err(|e| {
+            crate::tools::base::ToolError::InvalidArguments(format!(
+                "Failed to serialize arguments: {}",
+                e
+            ))
+        })?;
 
-        match self.client.call_tool(&self.tool.name, arguments).await {
-            Ok(result) => {
-                let text = result
-                    .content
-                    .iter()
-                    .filter_map(|c| match c {
-                        super::types::McpContent::Text { text } => Some(text.clone()),
-                        _ => None,
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n");
+        let result = self
+            .client
+            .call_tool(&self.mcp_tool.name, arguments)
+            .await
+            .map_err(|e| {
+                crate::tools::base::ToolError::ExecutionFailed(format!(
+                    "MCP tool call failed: {}",
+                    e
+                ))
+            })?;
 
-                if result.is_error {
-                    Ok(ToolResult::error(&call.id, &self.tool.name, text))
-                } else {
-                    Ok(ToolResult::success(&call.id, &self.tool.name, text))
-                }
-            }
-            Err(e) => Err(crate::tools::base::ToolError::ExecutionFailed(
-                e.to_string(),
-            )),
-        }
+        Ok(self.convert_result(call, result))
     }
 }
 
