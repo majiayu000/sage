@@ -3,7 +3,8 @@
 //! User input area with prompt and cursor.
 
 use crate::ui::bridge::state::InputState;
-use crate::ui::theme::{Colors, Icons};
+use crate::ui::Icons;
+use crate::ui::theme::Colors;
 use rnk::prelude::*;
 
 /// Input box component

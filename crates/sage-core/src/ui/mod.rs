@@ -33,4 +33,4 @@ pub use components::{
     InputBox, MessageList, MessageView, Spinner, StatusBar, ThinkingIndicator, ToolExecutionView,
 };
 pub use icons::{Icons, init_from_env as init_icons, is_nerd_fonts_enabled, set_nerd_fonts};
-pub use theme::{Colors, Icons as ThemeIcons, Styles};
+pub use theme::{Colors, Styles};

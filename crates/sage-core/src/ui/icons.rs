@@ -260,6 +260,20 @@ impl Icons {
         }
     }
 
+    /// Get git branch icon based on current mode
+    pub fn git_branch() -> &'static str {
+        if is_nerd_fonts_enabled() {
+            "\u{e725}" // nf-oct-git_branch
+        } else {
+            "⎇"
+        }
+    }
+
+    /// Get spinner frames for animation
+    pub fn spinner_frames() -> &'static [&'static str] {
+        &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    }
+
     /// Get icon for a specific tool by name
     pub fn for_tool(tool_name: &str) -> &'static str {
         match tool_name.to_lowercase().as_str() {
