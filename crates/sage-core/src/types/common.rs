@@ -15,10 +15,13 @@ pub struct TokenUsage {
     pub input_tokens: u64,
     /// Number of output tokens
     pub output_tokens: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
     /// Tokens read from cache (Anthropic prompt caching)
     pub cache_read_tokens: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     /// Tokens written to cache (Anthropic prompt caching)
     pub cache_write_tokens: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     /// Cost estimate in USD (if available)
     pub cost_estimate: Option<f64>,
 }

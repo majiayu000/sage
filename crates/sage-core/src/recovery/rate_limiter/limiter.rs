@@ -29,7 +29,7 @@ impl RateLimiter {
     pub fn with_config(config: RateLimitConfig) -> Self {
         let tokens = config.burst_size as f64;
         Self {
-            concurrent_semaphore: Arc::new(Semaphore::new(config.max_concurrent as usize)),
+            concurrent_semaphore: Arc::new(Semaphore::new(if config.max_concurrent == 0 { Semaphore::MAX_PERMITS } else { config.max_concurrent as usize })),
             config,
             tokens: Arc::new(Mutex::new(tokens)),
             last_refill: Arc::new(Mutex::new(Instant::now())),
@@ -141,7 +141,7 @@ impl RateLimiter {
 
     /// Get current concurrency usage
     pub fn concurrent_requests(&self) -> usize {
-        self.config.max_concurrent as usize - self.concurrent_semaphore.available_permits()
+        { let total = if self.config.max_concurrent == 0 { Semaphore::MAX_PERMITS } else { self.config.max_concurrent as usize }; total - self.concurrent_semaphore.available_permits() }
     }
 
     /// Check if rate limited (would need to wait)

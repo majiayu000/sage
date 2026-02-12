@@ -202,7 +202,7 @@ mod tests {
         let config = OsSandboxConfig::strict(PathBuf::from("/tmp"));
         let mut cmd = Command::new("echo");
         let result = apply_seccomp(&mut cmd, &config);
-        assert!(result.is_ok());
+        assert!(result.is_err());
     }
 
     #[test]

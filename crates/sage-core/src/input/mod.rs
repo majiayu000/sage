@@ -100,7 +100,7 @@ mod tests {
     #[tokio::test]
     async fn test_non_interactive_channel() {
         let mut channel = InputChannel::non_interactive(InputAutoResponse::AlwaysAllow);
-        let request = InputRequest::simple("Question?");
+        let request = InputRequest::permission("test_tool", "Test action", serde_json::Value::Null);
         let response = channel.request_input(request).await.unwrap();
 
         assert!(response.is_permission_granted());
