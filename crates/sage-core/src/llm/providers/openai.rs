@@ -20,7 +20,11 @@ pub struct OpenAiProvider {
 
 impl OpenAiProvider {
     /// Create a new OpenAI provider
-    pub fn new(config: ProviderConfig, model_params: LlmRequestParams, http_client: Client) -> Self {
+    pub fn new(
+        config: ProviderConfig,
+        model_params: LlmRequestParams,
+        http_client: Client,
+    ) -> Self {
         Self {
             config,
             model_params,

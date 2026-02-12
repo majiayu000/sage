@@ -34,10 +34,10 @@
 pub mod registry;
 pub mod servers_tool;
 
-pub use sage_core::mcp::McpToolAdapter;
 pub use registry::{
     McpToolRegistry, ServerConnectionStatus, SharedMcpToolRegistry, create_mcp_registry,
 };
+pub use sage_core::mcp::McpToolAdapter;
 pub use servers_tool::{
     McpServersTool, get_global_mcp_registry, get_mcp_tools, init_global_mcp_registry,
 };

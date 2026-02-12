@@ -20,7 +20,11 @@ pub struct OpenRouterProvider {
 
 impl OpenRouterProvider {
     /// Create a new OpenRouter provider
-    pub fn new(config: ProviderConfig, model_params: LlmRequestParams, http_client: Client) -> Self {
+    pub fn new(
+        config: ProviderConfig,
+        model_params: LlmRequestParams,
+        http_client: Client,
+    ) -> Self {
         Self {
             config,
             model_params,

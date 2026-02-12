@@ -8,6 +8,7 @@ use super::transport::{HttpTransport, HttpTransportConfig, StdioTransport, Trans
 use super::types::{McpPrompt, McpResource, McpServerInfo, McpTool};
 use crate::tools::base::Tool;
 use crate::tools::types::{ToolCall, ToolResult, ToolSchema};
+use crate::types::tool::ToolParameter;
 use async_trait::async_trait;
 use dashmap::DashMap;
 use serde_json::Value;
@@ -240,11 +241,8 @@ impl McpRegistry {
                     .into_iter()
                     .find(|t| t.name == tool_name)
                 {
-                    let adapter = McpToolAdapter::new(
-                        mcp_tool,
-                        client.clone(),
-                        server_name.clone(),
-                    );
+                    let adapter =
+                        McpToolAdapter::new(mcp_tool, client.clone(), server_name.clone());
                     tools.push(Arc::new(adapter) as Arc<dyn Tool>);
                 }
             }

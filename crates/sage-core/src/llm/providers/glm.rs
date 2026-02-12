@@ -21,7 +21,11 @@ pub struct GlmProvider {
 
 impl GlmProvider {
     /// Create a new GLM provider
-    pub fn new(config: ProviderConfig, model_params: LlmRequestParams, http_client: Client) -> Self {
+    pub fn new(
+        config: ProviderConfig,
+        model_params: LlmRequestParams,
+        http_client: Client,
+    ) -> Self {
         Self {
             config,
             model_params,

@@ -1,6 +1,6 @@
 # Sage Agent Makefile
 
-.PHONY: help build test clean install dev check fmt clippy docs examples doc-check doc-status guard guard-strict
+.PHONY: help build test clean install dev check fmt clippy docs examples doc-check doc-status guard guard-strict arch-guard
 
 # Default target
 help:
@@ -33,6 +33,7 @@ help:
 	@echo "Guards:"
 	@echo "  guard        - Run VibeGuard checks (report only)"
 	@echo "  guard-strict - Run VibeGuard checks (fail on violations)"
+	@echo "  arch-guard   - Run architecture guard tests"
 	@echo ""
 	@echo "Usage:"
 	@echo "  run        - Run sage with arguments (e.g., make run ARGS='--help')"
@@ -102,6 +103,10 @@ guard-strict:
 	@echo "Running VibeGuard Rust guards (strict)..."
 	bash $(VIBEGUARD_DIR)/guards/rust/check_duplicate_types.sh --strict .
 	bash $(VIBEGUARD_DIR)/guards/rust/check_nested_locks.sh --strict .
+
+arch-guard:
+	@echo "Running architecture guard tests..."
+	cargo test --package sage-core --test architecture_guards -- --nocapture
 
 # Quick development cycle
 quick: fmt clippy test

@@ -7,7 +7,7 @@ use sage_core::{
     config::provider::ProviderConfig,
     llm::{
         LlmProvider, TimeoutConfig, client::LlmClient, messages::LlmMessage,
-        provider_types::ModelParameters,
+        provider_types::LlmRequestParams,
     },
 };
 use tracing_subscriber::fmt::init;
@@ -24,9 +24,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_max_retries(3);
 
     // Create model parameters
-    let model_params = ModelParameters::new("gemini-2.5-pro")
-        .with_max_tokens(1000)
-        .with_temperature(0.7);
+    let model_params = LlmRequestParams {
+        model: "gemini-2.5-pro".to_string(),
+        max_tokens: Some(1000),
+        temperature: Some(0.7),
+        ..Default::default()
+    };
 
     // Create LLM client
     let client = LlmClient::new(LlmProvider::Google, provider_config, model_params)?;

@@ -151,6 +151,21 @@ make guard-strict   # Same but exit 1 on violations (CI mode)
 
 To suppress false positives for duplicate types, add type names to `.vibeguard-duplicate-types-allowlist`.
 
+### Architecture Guards (Automated)
+
+Enforced by `crates/sage-core/tests/architecture_guards.rs`, run via `cargo test`.
+
+| Guard | ID | Rule |
+|-------|----|------|
+| test_error_types_use_thiserror | RS-ERR-01 | Error 枚举用 thiserror，禁手写 Display |
+| test_no_result_string_in_core | RS-ERR-02 | sage-core 禁 Result<_, String> |
+| test_provider_pattern_consistency | RS-LLM-01 | Provider 必须有 struct + chat + chat_stream |
+| test_no_rwlock_on_mcp_client | RS-MCP-01 | McpClient 禁 RwLock 包装 |
+| test_file_size_limits | RS-SIZE-01 | 非测试文件 ≤500 行 |
+| test_no_bare_generic_type_names | RS-NAME-01 | pub 类型禁裸泛型名 |
+
+Run: `cargo test --package sage-core --test architecture_guards -- --nocapture`
+
 ## Code Style Rules
 
 ### No Backward Compatibility

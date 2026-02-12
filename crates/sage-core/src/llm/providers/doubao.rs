@@ -19,7 +19,11 @@ pub struct DoubaoProvider {
 
 impl DoubaoProvider {
     /// Create a new Doubao provider
-    pub fn new(config: ProviderConfig, model_params: LlmRequestParams, http_client: Client) -> Self {
+    pub fn new(
+        config: ProviderConfig,
+        model_params: LlmRequestParams,
+        http_client: Client,
+    ) -> Self {
         Self {
             config,
             model_params,

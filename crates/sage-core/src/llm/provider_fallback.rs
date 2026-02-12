@@ -16,7 +16,9 @@ pub struct ProviderFallbackClient {
 
 impl ProviderFallbackClient {
     /// Create a new provider fallback client
-    pub fn new(providers: Vec<(LlmProvider, ProviderConfig, LlmRequestParams)>) -> SageResult<Self> {
+    pub fn new(
+        providers: Vec<(LlmProvider, ProviderConfig, LlmRequestParams)>,
+    ) -> SageResult<Self> {
         let mut clients = Vec::new();
         for (provider, config, params) in providers {
             clients.push(LlmClient::new(provider, config, params)?);

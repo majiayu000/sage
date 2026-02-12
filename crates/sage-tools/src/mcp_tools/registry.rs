@@ -3,7 +3,9 @@
 //! Manages MCP server connections and provides tools to the Sage agent.
 
 use sage_core::config::{McpConfig, McpServerConfig};
-use sage_core::mcp::{HttpTransport, HttpTransportConfig, McpClient, McpToolAdapter, StdioTransport};
+use sage_core::mcp::{
+    HttpTransport, HttpTransportConfig, McpClient, McpToolAdapter, StdioTransport,
+};
 use sage_core::tools::Tool;
 use std::collections::HashMap;
 use std::sync::Arc;
