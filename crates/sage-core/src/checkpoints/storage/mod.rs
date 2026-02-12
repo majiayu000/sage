@@ -18,6 +18,9 @@ mod tests;
 
 pub use file_storage::FileCheckpointStorage;
 
+#[cfg(test)]
+pub use memory_storage::MemoryCheckpointStorage;
+
 /// Trait for checkpoint storage backends
 #[async_trait]
 pub trait CheckpointStorage: Send + Sync {

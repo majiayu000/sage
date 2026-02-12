@@ -96,13 +96,13 @@ mod tests {
 
         // Mock LLM client (won't be used in this test)
         use crate::config::provider::ProviderConfig;
-        use crate::llm::provider_types::{LlmProvider, ModelParameters};
+        use crate::llm::provider_types::{LlmProvider, LlmRequestParams};
 
         let llm_config = ProviderConfig::new("openai")
             .with_base_url("http://localhost")
             .with_api_key("test-api-key");
 
-        let model_params = ModelParameters {
+        let model_params = LlmRequestParams {
             model: "test-model".to_string(),
             ..Default::default()
         };

@@ -405,14 +405,14 @@ impl LlmOrchestrator {
 mod tests {
     use super::*;
     use crate::config::provider::ProviderConfig;
-    use crate::llm::provider_types::{LlmProvider, ModelParameters};
+    use crate::llm::provider_types::{LlmProvider, LlmRequestParams};
 
     #[test]
     fn test_orchestrator_with_client() {
         // Create a minimal LLM client for testing
         let provider = LlmProvider::OpenAI;
         let provider_config = ProviderConfig::new("openai").with_api_key("test-key");
-        let model_params = ModelParameters {
+        let model_params = LlmRequestParams {
             model: "gpt-4".to_string(),
             ..Default::default()
         };
