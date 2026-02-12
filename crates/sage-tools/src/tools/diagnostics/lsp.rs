@@ -136,7 +136,9 @@ Note: LSP servers must be configured for the file type. If no server is availabl
         let line = if line_f64.is_finite() && line_f64 >= 0.0 {
             line_f64 as usize
         } else {
-            return Err(ToolError::InvalidArguments("'line' must be a non-negative number".to_string()));
+            return Err(ToolError::InvalidArguments(
+                "'line' must be a non-negative number".to_string(),
+            ));
         };
 
         let char_f64 = call.get_number("character").ok_or_else(|| {
@@ -145,7 +147,9 @@ Note: LSP servers must be configured for the file type. If no server is availabl
         let character = if char_f64.is_finite() && char_f64 >= 0.0 {
             char_f64 as usize
         } else {
-            return Err(ToolError::InvalidArguments("'character' must be a non-negative number".to_string()));
+            return Err(ToolError::InvalidArguments(
+                "'character' must be a non-negative number".to_string(),
+            ));
         };
 
         let _op = LspOperation::from_str(&operation).ok_or_else(|| {

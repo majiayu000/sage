@@ -7,9 +7,7 @@ use super::filters;
 use super::output::GrepOutputMode;
 use crate::tools::file_ops::grep::GrepTool;
 use grep_regex::RegexMatcherBuilder;
-use grep_searcher::{
-    BinaryDetection, SearcherBuilder, Sink, SinkContext, SinkMatch,
-};
+use grep_searcher::{BinaryDetection, SearcherBuilder, Sink, SinkContext, SinkMatch};
 use ignore::WalkBuilder;
 use sage_core::tools::base::{FileSystemTool, ToolError};
 use sage_core::tools::types::ToolResult;

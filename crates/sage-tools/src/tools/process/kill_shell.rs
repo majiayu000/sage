@@ -204,7 +204,8 @@ Example: kill_shell(shell_id=\"shell_1\")"
         let mut result = self.kill_shell(&shell_id).await?;
 
         result.call_id = call.id.clone();
-        result.execution_time_ms = Some(u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX));
+        result.execution_time_ms =
+            Some(u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX));
 
         Ok(result)
     }

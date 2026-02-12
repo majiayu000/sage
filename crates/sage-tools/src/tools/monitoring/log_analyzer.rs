@@ -296,7 +296,11 @@ impl Tool for LogAnalyzerTool {
             "analyze" => {
                 let pattern = call.get_string("pattern");
                 let lines = call.get_number("lines").map(|n| {
-                    if n.is_finite() && n >= 0.0 { n as usize } else { 50 }
+                    if n.is_finite() && n >= 0.0 {
+                        n as usize
+                    } else {
+                        50
+                    }
                 });
                 self.analyze_logs(&file_path, pattern.as_deref(), lines)
                     .await?

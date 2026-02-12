@@ -76,7 +76,9 @@ impl AgentExecution {
 
     /// Get the current step number
     pub fn current_step_number(&self) -> u32 {
-        u32::try_from(self.steps.len()).unwrap_or(u32::MAX).saturating_add(1)
+        u32::try_from(self.steps.len())
+            .unwrap_or(u32::MAX)
+            .saturating_add(1)
     }
 
     /// Get the last step

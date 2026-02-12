@@ -53,10 +53,18 @@ impl Tool for ReadTool {
         let file_path = call.require_string("file_path")?;
 
         let offset = call.get_number("offset").map(|n| {
-            if n.is_finite() && n >= 0.0 { n as usize } else { 0 }
+            if n.is_finite() && n >= 0.0 {
+                n as usize
+            } else {
+                0
+            }
         });
         let limit = call.get_number("limit").map(|n| {
-            if n.is_finite() && n >= 0.0 { n as usize } else { 0 }
+            if n.is_finite() && n >= 0.0 {
+                n as usize
+            } else {
+                0
+            }
         });
 
         let mut result = reader::read_file(self, self.name(), &file_path, offset, limit).await?;

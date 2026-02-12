@@ -63,9 +63,7 @@ pub use extensions::{
     DeferredToolInfo, DeferredToolRegistry, PlatformToolProxy, SkillTool, SlashCommandTool,
     ToolSearchResult, ToolSearchTool,
 };
-pub use file_ops::{
-    EditTool, GlobTool, GrepTool, NotebookEditTool, ReadTool, WriteTool,
-};
+pub use file_ops::{EditTool, GlobTool, GrepTool, NotebookEditTool, ReadTool, WriteTool};
 pub use infrastructure::{CloudTool, KubernetesTool, TerraformTool};
 pub use interaction::AskUserQuestionTool;
 pub use monitoring::{LogAnalyzerTool, TestGeneratorTool};
