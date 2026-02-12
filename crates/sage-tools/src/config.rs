@@ -111,64 +111,6 @@ impl Default for EditToolConfig {
     }
 }
 
-/// Configuration for CodebaseRetrievalTool
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CodebaseRetrievalConfig {
-    /// Maximum number of results to return
-    pub max_results: usize,
-    /// Maximum file size to index (in bytes)
-    pub max_file_size_bytes: usize,
-    /// File extensions to include in search
-    pub supported_extensions: Vec<String>,
-    /// Directories to exclude from search
-    pub excluded_directories: Vec<String>,
-    /// Whether to use caching
-    pub enable_caching: bool,
-    /// Cache expiration time (in seconds)
-    pub cache_expiration_seconds: u64,
-}
-
-impl Default for CodebaseRetrievalConfig {
-    fn default() -> Self {
-        Self {
-            max_results: 50,
-            max_file_size_bytes: 1024 * 1024, // 1MB
-            supported_extensions: vec![
-                "rs".to_string(),
-                "py".to_string(),
-                "js".to_string(),
-                "ts".to_string(),
-                "java".to_string(),
-                "cpp".to_string(),
-                "c".to_string(),
-                "h".to_string(),
-                "go".to_string(),
-                "rb".to_string(),
-                "php".to_string(),
-                "cs".to_string(),
-                "json".to_string(),
-                "toml".to_string(),
-                "yaml".to_string(),
-                "yml".to_string(),
-                "md".to_string(),
-                "txt".to_string(),
-            ],
-            excluded_directories: vec![
-                "target".to_string(),
-                "node_modules".to_string(),
-                ".git".to_string(),
-                "build".to_string(),
-                "dist".to_string(),
-                ".vscode".to_string(),
-                ".idea".to_string(),
-                "__pycache__".to_string(),
-            ],
-            enable_caching: true,
-            cache_expiration_seconds: 3600, // 1 hour
-        }
-    }
-}
-
 /// Configuration for TaskManagementTools
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskManagementConfig {

@@ -12,7 +12,6 @@
 //! - **Edit** - Precise text replacement in files
 //! - **Glob** - Pattern-based file discovery
 //! - **Grep** - Content search with regex support
-//! - **MultiEdit** - Batch file editing operations
 //! - **JsonEdit** - JSON file manipulation with JSONPath
 //!
 //! ## Process Execution ([`tools::process`])
@@ -23,7 +22,6 @@
 //! ## Code Intelligence
 //! - **LSP** - Language Server Protocol integration (in [`tools::file_ops`])
 //! - **TestGenerator** - Automated test generation (in [`tools::file_ops`])
-//! - **CodebaseRetrieval** - Semantic code search (in [`tools::file_ops`])
 //!
 //! ## Network Operations ([`tools::network`])
 //! - **WebFetch** - HTTP content fetching
@@ -79,7 +77,6 @@ pub use tools::{
     // Infrastructure
     CloudTool,
     // File operations
-    CodebaseRetrievalTool,
     // Extensions
     DeferredToolInfo,
     DeferredToolRegistry,

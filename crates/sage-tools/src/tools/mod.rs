@@ -2,7 +2,7 @@
 //!
 //! This module contains all the tools available to the Sage Agent, organized by category:
 //!
-//! - `file_ops`: File and code operations (edit, codebase_retrieval, notebook_edit)
+//! - `file_ops`: File and code operations (edit, notebook_edit)
 //! - `process`: Process and terminal tools (bash, kill_shell)
 //! - `task_mgmt`: Task management tools (task_management, reorganize_tasklist, task_done)
 //! - `planning`: Planning mode tools (enter_plan_mode, exit_plan_mode)
@@ -64,7 +64,7 @@ pub use extensions::{
     ToolSearchResult, ToolSearchTool,
 };
 pub use file_ops::{
-    CodebaseRetrievalTool, EditTool, GlobTool, GrepTool, NotebookEditTool, ReadTool, WriteTool,
+    EditTool, GlobTool, GrepTool, NotebookEditTool, ReadTool, WriteTool,
 };
 pub use infrastructure::{CloudTool, KubernetesTool, TerraformTool};
 pub use interaction::AskUserQuestionTool;
@@ -103,7 +103,6 @@ pub fn get_default_tools() -> Vec<Arc<dyn Tool>> {
         Arc::new(GlobTool::new()),
         Arc::new(GrepTool::new()),
         Arc::new(NotebookEditTool::new()),
-        Arc::new(CodebaseRetrievalTool::new()), // Smart codebase search
         // Process tools
         Arc::new(BashTool::new()),
         Arc::new(KillShellTool::new()),
@@ -174,7 +173,6 @@ pub fn get_file_ops_tools() -> Vec<Arc<dyn Tool>> {
         Arc::new(GlobTool::new()),
         Arc::new(GrepTool::new()),
         Arc::new(NotebookEditTool::new()),
-        Arc::new(CodebaseRetrievalTool::new()),
     ]
 }
 
