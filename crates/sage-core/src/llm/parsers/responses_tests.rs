@@ -35,9 +35,9 @@ mod tests {
         assert!(llm_response.tool_calls.is_empty());
 
         let usage = llm_response.usage.unwrap();
-        assert_eq!(usage.prompt_tokens, 10);
-        assert_eq!(usage.completion_tokens, 5);
-        assert_eq!(usage.total_tokens, 15);
+        assert_eq!(usage.input_tokens, 10);
+        assert_eq!(usage.output_tokens, 5);
+        assert_eq!(usage.total_tokens(), 15);
     }
 
     #[test]
@@ -191,9 +191,9 @@ mod tests {
         assert!(llm_response.tool_calls.is_empty());
 
         let usage = llm_response.usage.unwrap();
-        assert_eq!(usage.prompt_tokens, 12);
-        assert_eq!(usage.completion_tokens, 8);
-        assert_eq!(usage.total_tokens, 20);
+        assert_eq!(usage.input_tokens, 12);
+        assert_eq!(usage.output_tokens, 8);
+        assert_eq!(usage.total_tokens(), 20);
     }
 
     #[test]
@@ -303,12 +303,12 @@ mod tests {
         let llm_response = result.unwrap();
         let usage = llm_response.usage.unwrap();
 
-        assert_eq!(usage.cache_creation_input_tokens, Some(80));
-        assert_eq!(usage.cache_read_input_tokens, Some(20));
-        // Total should include base input + cache tokens
-        assert_eq!(usage.prompt_tokens, 200); // 100 + 80 + 20
-        assert_eq!(usage.completion_tokens, 50);
-        assert_eq!(usage.total_tokens, 250); // 200 + 50
+        assert_eq!(usage.cache_write_tokens, Some(80));
+        assert_eq!(usage.cache_read_tokens, Some(20));
+        // input_tokens is the raw value from the API (cache tokens stored separately)
+        assert_eq!(usage.input_tokens, 100);
+        assert_eq!(usage.output_tokens, 50);
+        assert_eq!(usage.total_tokens(), 150); // 100 + 50
     }
 
     #[test]
@@ -368,9 +368,9 @@ mod tests {
         assert!(llm_response.tool_calls.is_empty());
 
         let usage = llm_response.usage.unwrap();
-        assert_eq!(usage.prompt_tokens, 15);
-        assert_eq!(usage.completion_tokens, 10);
-        assert_eq!(usage.total_tokens, 25);
+        assert_eq!(usage.input_tokens, 15);
+        assert_eq!(usage.output_tokens, 10);
+        assert_eq!(usage.total_tokens(), 25);
     }
 
     #[test]
@@ -647,10 +647,10 @@ mod tests {
         let llm_response = result.unwrap();
         let usage = llm_response.usage.unwrap();
 
-        assert_eq!(usage.cache_read_input_tokens, Some(100));
-        assert_eq!(usage.cache_creation_input_tokens, None);
-        assert_eq!(usage.prompt_tokens, 150); // 50 + 100
-        assert_eq!(usage.total_tokens, 175); // 150 + 25
+        assert_eq!(usage.cache_read_tokens, Some(100));
+        assert_eq!(usage.cache_write_tokens, None);
+        assert_eq!(usage.input_tokens, 50);
+        assert_eq!(usage.total_tokens(), 75); // 50 + 25
     }
 
     #[test]
@@ -673,9 +673,9 @@ mod tests {
         let llm_response = result.unwrap();
         let usage = llm_response.usage.unwrap();
 
-        assert_eq!(usage.cache_creation_input_tokens, Some(150));
-        assert_eq!(usage.cache_read_input_tokens, None);
-        assert_eq!(usage.prompt_tokens, 210); // 60 + 150
-        assert_eq!(usage.total_tokens, 240); // 210 + 30
+        assert_eq!(usage.cache_write_tokens, Some(150));
+        assert_eq!(usage.cache_read_tokens, None);
+        assert_eq!(usage.input_tokens, 60);
+        assert_eq!(usage.total_tokens(), 90); // 60 + 30
     }
 }

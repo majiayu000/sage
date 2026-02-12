@@ -40,7 +40,7 @@ mod suite {
         clear_global_task_list();
 
         let tool = ViewTasklistTool::new();
-        let call = create_tool_call("test-1", "view_tasklist", json!({}));
+        let call = create_tool_call("test-1", "ViewTasklist", json!({}));
 
         let result = tool.execute(&call).await.unwrap();
         let output = result.output.as_ref().unwrap();
@@ -55,7 +55,7 @@ mod suite {
         let tool = AddTasksTool::new();
         let call = create_tool_call(
             "test-2",
-            "add_tasks",
+            "AddTasks",
             json!({
                 "tasks": [{
                     "name": "Test Task",
@@ -76,7 +76,7 @@ mod suite {
 
         // Verify task was added
         let view_tool = ViewTasklistTool::new();
-        let view_call = create_tool_call("test-view", "view_tasklist", json!({}));
+        let view_call = create_tool_call("test-view", "ViewTasklist", json!({}));
         let view_result = view_tool.execute(&view_call).await.unwrap();
         assert!(view_result.output.as_ref().unwrap().contains("Test Task"));
         assert!(
@@ -96,7 +96,7 @@ mod suite {
         let tool = AddTasksTool::new();
         let call = create_tool_call(
             "test-3",
-            "add_tasks",
+            "AddTasks",
             json!({
                 "tasks": [
                     {
@@ -124,7 +124,7 @@ mod suite {
 
         // Verify both tasks were added
         let view_tool = ViewTasklistTool::new();
-        let view_call = create_tool_call("test-view", "view_tasklist", json!({}));
+        let view_call = create_tool_call("test-view", "ViewTasklist", json!({}));
         let view_result = view_tool.execute(&view_call).await.unwrap();
         assert!(view_result.output.as_ref().unwrap().contains("Task 1"));
         assert!(view_result.output.as_ref().unwrap().contains("Task 2"));
@@ -141,7 +141,7 @@ mod suite {
         let add_tool = AddTasksTool::new();
         let add_call = create_tool_call(
             "test-add",
-            "add_tasks",
+            "AddTasks",
             json!({
                 "tasks": [{
                     "name": "Update Test Task",
@@ -166,7 +166,7 @@ mod suite {
         let update_tool = UpdateTasksTool::new();
         let update_call = create_tool_call(
             "test-update",
-            "update_tasks",
+            "UpdateTasks",
             json!({
                 "tasks": [{
                     "task_id": task_id,
@@ -180,7 +180,7 @@ mod suite {
 
         // Verify the update
         let view_tool = ViewTasklistTool::new();
-        let view_call = create_tool_call("test-view", "view_tasklist", json!({}));
+        let view_call = create_tool_call("test-view", "ViewTasklist", json!({}));
         let view_result = view_tool.execute(&view_call).await.unwrap();
         assert!(view_result.output.as_ref().unwrap().contains("[x]")); // COMPLETE
     }
@@ -194,7 +194,7 @@ mod suite {
         let add_tool = AddTasksTool::new();
         let add_call = create_tool_call(
             "test-add",
-            "add_tasks",
+            "AddTasks",
             json!({
                 "tasks": [
                     {
@@ -222,7 +222,7 @@ mod suite {
         let update_tool = UpdateTasksTool::new();
         let update_call = create_tool_call(
             "test-update",
-            "update_tasks",
+            "UpdateTasks",
             json!({
                 "tasks": [
                     {
@@ -242,7 +242,7 @@ mod suite {
 
         // Verify the updates
         let view_tool = ViewTasklistTool::new();
-        let view_call = create_tool_call("test-view", "view_tasklist", json!({}));
+        let view_call = create_tool_call("test-view", "ViewTasklist", json!({}));
         let view_result = view_tool.execute(&view_call).await.unwrap();
         assert!(view_result.output.as_ref().unwrap().contains("[x]")); // COMPLETE
         assert!(view_result.output.as_ref().unwrap().contains("[/]")); // IN_PROGRESS
@@ -254,7 +254,7 @@ mod suite {
         let update_tool = UpdateTasksTool::new();
         let update_call = create_tool_call(
             "test-update",
-            "update_tasks",
+            "UpdateTasks",
             json!({
                 "tasks": [{
                     "task_id": "nonexistent-id",
@@ -284,7 +284,7 @@ mod suite {
 
         // Step 1: View empty task list
         let view_tool = ViewTasklistTool::new();
-        let view_call = create_tool_call("view-1", "view_tasklist", json!({}));
+        let view_call = create_tool_call("view-1", "ViewTasklist", json!({}));
         let result = view_tool.execute(&view_call).await.unwrap();
         assert!(
             result
@@ -298,7 +298,7 @@ mod suite {
         let add_tool = AddTasksTool::new();
         let add_call = create_tool_call(
             "add-1",
-            "add_tasks",
+            "AddTasks",
             json!({
                 "tasks": [
                     {
@@ -329,7 +329,7 @@ mod suite {
         );
 
         // Step 3: View the task list with tasks
-        let view_call = create_tool_call("view-2", "view_tasklist", json!({}));
+        let view_call = create_tool_call("view-2", "ViewTasklist", json!({}));
         let result = view_tool.execute(&view_call).await.unwrap();
         let output = result.output.as_ref().unwrap();
         assert!(output.contains("Setup Project"));
@@ -346,7 +346,7 @@ mod suite {
         let update_tool = UpdateTasksTool::new();
         let update_call = create_tool_call(
             "update-1",
-            "update_tasks",
+            "UpdateTasks",
             json!({
                 "tasks": [{
                     "task_id": task_ids[0],
@@ -360,7 +360,7 @@ mod suite {
         // Step 5: Complete first task and start second
         let update_call = create_tool_call(
             "update-2",
-            "update_tasks",
+            "UpdateTasks",
             json!({
                 "tasks": [
                     {
@@ -378,7 +378,7 @@ mod suite {
         assert!(result.output.as_ref().unwrap().contains("Updated: 2"));
 
         // Step 6: View final state
-        let view_call = create_tool_call("view-3", "view_tasklist", json!({}));
+        let view_call = create_tool_call("view-3", "ViewTasklist", json!({}));
         let result = view_tool.execute(&view_call).await.unwrap();
         let output = result.output.as_ref().unwrap();
         assert!(output.contains("[x]")); // COMPLETE

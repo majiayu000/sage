@@ -71,8 +71,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     println!("\n🔧 Running with custom options...");
     let run_options = RunOptions::new()
         .with_max_steps(5)
-        .with_trajectory(true)
-        .with_trajectory_path("./examples/sage_example.json")
         .with_metadata("example_type", "basic_usage");
 
     let result2 = sdk
@@ -83,11 +81,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .await?;
 
     if result2.is_success() {
-        println!("✅ Second task completed!");
-
-        if let Some(trajectory_path) = result2.trajectory_path() {
-            println!("📁 Trajectory saved to: {}", trajectory_path.display());
-        }
+        println!("Second task completed!");
     }
 
     println!("\n🎉 Example completed!");

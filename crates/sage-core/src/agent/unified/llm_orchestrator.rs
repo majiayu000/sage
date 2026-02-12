@@ -17,7 +17,7 @@ use crate::llm::provider_types::{LlmProvider, TimeoutConfig};
 use crate::llm::streaming::{StreamingLlmClient, stream_utils};
 use crate::output::OutputStrategy;
 use crate::tools::types::ToolSchema;
-use crate::types::LlmUsage;
+use crate::types::TokenUsage;
 use anyhow::Context;
 use std::collections::HashMap;
 use std::io::{self, Write};
@@ -195,7 +195,7 @@ impl LlmOrchestrator {
 
         let mut content = String::new();
         let mut tool_calls = Vec::new();
-        let mut usage: Option<LlmUsage> = None;
+        let mut usage: Option<TokenUsage> = None;
         let mut finish_reason: Option<String> = None;
         let mut metadata: HashMap<String, serde_json::Value> = HashMap::new();
         let mut has_printed_content = false;
@@ -312,7 +312,7 @@ impl LlmOrchestrator {
 
         let mut content = String::new();
         let mut tool_calls = Vec::new();
-        let mut usage: Option<LlmUsage> = None;
+        let mut usage: Option<TokenUsage> = None;
         let mut finish_reason: Option<String> = None;
         let mut metadata: HashMap<String, serde_json::Value> = HashMap::new();
         let mut has_content = false;

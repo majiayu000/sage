@@ -136,6 +136,7 @@ Provide a structured summary:"#,
                     MessageRole::Assistant => "ASSISTANT",
                     MessageRole::Tool => "TOOL",
                     MessageRole::System => "SYSTEM",
+                    MessageRole::Error => "ERROR",
                 };
 
                 let content = self.truncate_content(&m.content, 500);

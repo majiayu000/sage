@@ -23,10 +23,6 @@ pub struct UnifiedRunOptions {
     pub working_directory: Option<PathBuf>,
     /// Maximum number of steps
     pub max_steps: Option<u32>,
-    /// Enable trajectory recording
-    pub enable_trajectory: bool,
-    /// Custom trajectory file path
-    pub trajectory_path: Option<PathBuf>,
     /// Non-interactive mode (auto-respond to user questions)
     pub non_interactive: bool,
     /// Additional metadata
@@ -74,39 +70,6 @@ impl UnifiedRunOptions {
     /// ```
     pub fn with_max_steps(mut self, max_steps: u32) -> Self {
         self.max_steps = Some(max_steps);
-        self
-    }
-
-    /// Enable or disable trajectory recording.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use sage_sdk::UnifiedRunOptions;
-    ///
-    /// let options = UnifiedRunOptions::new()
-    ///     .with_trajectory(true);
-    /// ```
-    pub fn with_trajectory(mut self, enabled: bool) -> Self {
-        self.enable_trajectory = enabled;
-        self
-    }
-
-    /// Set custom trajectory file path.
-    ///
-    /// Automatically enables trajectory recording.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use sage_sdk::UnifiedRunOptions;
-    ///
-    /// let options = UnifiedRunOptions::new()
-    ///     .with_trajectory_path("logs/execution.json");
-    /// ```
-    pub fn with_trajectory_path<P: Into<PathBuf>>(mut self, path: P) -> Self {
-        self.trajectory_path = Some(path.into());
-        self.enable_trajectory = true;
         self
     }
 

@@ -9,7 +9,7 @@ use sage_core::{
     error::SageResult,
     llm::streaming::stream_utils,
     llm::{LlmMessage, LlmResponse, MessageRole, StreamChunk},
-    types::LlmUsage,
+    types::TokenUsage,
 };
 use std::collections::HashMap;
 use std::time::Duration;
@@ -77,13 +77,12 @@ async fn test_cache_streaming_integration() -> SageResult<()> {
         StreamChunk::content(" It was originally developed by Mozilla"),
         StreamChunk::content(" and has gained widespread adoption."),
         StreamChunk::final_chunk(
-            Some(LlmUsage {
-                prompt_tokens: 25,
-                completion_tokens: 20,
-                total_tokens: 45,
-                cost_usd: Some(0.002),
-                cache_creation_input_tokens: None,
-                cache_read_input_tokens: None,
+            Some(TokenUsage {
+                input_tokens: 25,
+                output_tokens: 20,
+                cache_read_tokens: None,
+                cache_write_tokens: None,
+                cost_estimate: Some(0.002),
             }),
             Some("stop".to_string()),
         ),
@@ -224,13 +223,12 @@ async fn test_stream_utilities() -> SageResult<()> {
         Ok(StreamChunk::content("Part 2 ")),
         Ok(StreamChunk::content("Part 3")),
         Ok(StreamChunk::final_chunk(
-            Some(LlmUsage {
-                prompt_tokens: 10,
-                completion_tokens: 15,
-                total_tokens: 25,
-                cost_usd: Some(0.001),
-                cache_creation_input_tokens: None,
-                cache_read_input_tokens: None,
+            Some(TokenUsage {
+                input_tokens: 10,
+                output_tokens: 15,
+                cache_read_tokens: None,
+                cache_write_tokens: None,
+                cost_estimate: Some(0.001),
             }),
             Some("stop".to_string()),
         )),
@@ -278,13 +276,12 @@ async fn test_cache_performance() -> SageResult<()> {
         let response = LlmResponse {
             content: format!("Response to test message {}", i),
             tool_calls: vec![],
-            usage: Some(LlmUsage {
-                prompt_tokens: 10,
-                completion_tokens: 15,
-                total_tokens: 25,
-                cost_usd: Some(0.001),
-                cache_creation_input_tokens: None,
-                cache_read_input_tokens: None,
+            usage: Some(TokenUsage {
+                input_tokens: 10,
+                output_tokens: 15,
+                cache_read_tokens: None,
+                cache_write_tokens: None,
+                cost_estimate: Some(0.001),
             }),
             model: Some("test-model".to_string()),
             finish_reason: Some("stop".to_string()),

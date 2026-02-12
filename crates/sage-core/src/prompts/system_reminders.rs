@@ -192,7 +192,7 @@ NOTE: At any point, feel free to ask user questions. Don't make large assumption
                 )
             }
             SystemReminder::TaskCompletionReminder => "<system-reminder>\n\
-                REMINDER: Do not call task_done unless you have:\n\
+                REMINDER: Do not call TaskDone unless you have:\n\
                 - Created or modified actual code files\n\
                 - Verified the implementation works\n\
                 - Completed ALL requested functionality\n\
@@ -327,7 +327,7 @@ mod tests {
     fn test_task_completion_reminder() {
         let reminder = SystemReminder::TaskCompletionReminder;
         let text = reminder.to_prompt_string();
-        assert!(text.contains("task_done"));
+        assert!(text.contains("TaskDone"));
         assert!(text.contains("code files"));
     }
 

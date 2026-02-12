@@ -23,7 +23,7 @@ impl Default for EnterPlanModeTool {
 #[async_trait]
 impl Tool for EnterPlanModeTool {
     fn name(&self) -> &str {
-        "enter_plan_mode"
+        "EnterPlanMode"
     }
 
     fn description(&self) -> &str {
@@ -76,8 +76,8 @@ In plan mode, you'll:
 2. Understand existing patterns and architecture
 3. Design an implementation approach
 4. Present your plan to the user for approval
-5. Use ask_user_question if you need to clarify approaches
-6. Exit plan mode with exit_plan_mode when ready to implement
+5. Use AskUserQuestion if you need to clarify approaches
+6. Exit plan mode with ExitPlanMode when ready to implement
 
 ## Examples
 
@@ -136,7 +136,7 @@ User: "What files handle routing?"
 REMEMBER: Plans without code are WORTHLESS.
 Your job is to WRITE CODE, not documentation.
 
-Use exit_plan_mode NOW and begin implementation.
+Use ExitPlanMode NOW and begin implementation.
 "#;
 
         Ok(ToolResult::success(
@@ -184,20 +184,20 @@ mod tests {
     #[tokio::test]
     async fn test_enter_plan_mode_basic() {
         let tool = EnterPlanModeTool::new();
-        let call = create_tool_call("test-1", "enter_plan_mode", json!({}));
+        let call = create_tool_call("test-1", "EnterPlanMode", json!({}));
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
         let output = result.output.as_ref().unwrap();
         assert!(output.contains("QUICK PLAN MODE"));
         assert!(output.contains("WRITE CODE"));
-        assert!(output.contains("exit_plan_mode"));
+        assert!(output.contains("ExitPlanMode"));
     }
 
     #[tokio::test]
     async fn test_enter_plan_mode_validation() {
         let tool = EnterPlanModeTool::new();
-        let call = create_tool_call("test-2", "enter_plan_mode", json!({}));
+        let call = create_tool_call("test-2", "EnterPlanMode", json!({}));
 
         // Should always validate successfully
         let validation_result = tool.validate(&call);
@@ -210,7 +210,7 @@ mod tests {
         // Extra parameters should be ignored
         let call = create_tool_call(
             "test-3",
-            "enter_plan_mode",
+            "EnterPlanMode",
             json!({
                 "extra_param": "should be ignored"
             }),
@@ -226,7 +226,7 @@ mod tests {
     fn test_enter_plan_mode_schema() {
         let tool = EnterPlanModeTool::new();
         let schema = tool.schema();
-        assert_eq!(schema.name, "enter_plan_mode");
+        assert_eq!(schema.name, "EnterPlanMode");
         assert!(!schema.description.is_empty());
     }
 
@@ -246,7 +246,7 @@ mod tests {
     #[test]
     fn test_enter_plan_mode_name() {
         let tool = EnterPlanModeTool::new();
-        assert_eq!(tool.name(), "enter_plan_mode");
+        assert_eq!(tool.name(), "EnterPlanMode");
     }
 
     #[test]

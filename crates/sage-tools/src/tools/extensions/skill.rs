@@ -34,7 +34,7 @@ pub struct SkillTool {
     /// Skill registry (shared)
     registry: Arc<RwLock<SkillRegistry>>,
     /// Current working directory
-    working_dir: PathBuf,
+    working_directory: PathBuf,
 }
 
 impl Default for SkillTool {
@@ -46,34 +46,34 @@ impl Default for SkillTool {
 impl SkillTool {
     /// Create a new SkillTool instance with default registry
     pub fn new() -> Self {
-        let working_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        let mut registry = SkillRegistry::new(&working_dir);
+        let working_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let mut registry = SkillRegistry::new(&working_directory);
         registry.register_builtins();
 
         Self {
             registry: Arc::new(RwLock::new(registry)),
-            working_dir,
+            working_directory,
         }
     }
 
     /// Create with a specific working directory
-    pub fn with_working_dir(working_dir: impl Into<PathBuf>) -> Self {
-        let working_dir = working_dir.into();
-        let mut registry = SkillRegistry::new(&working_dir);
+    pub fn with_working_directory(working_directory: impl Into<PathBuf>) -> Self {
+        let working_directory = working_directory.into();
+        let mut registry = SkillRegistry::new(&working_directory);
         registry.register_builtins();
 
         Self {
             registry: Arc::new(RwLock::new(registry)),
-            working_dir,
+            working_directory,
         }
     }
 
     /// Create with an existing registry
     pub fn with_registry(registry: Arc<RwLock<SkillRegistry>>) -> Self {
-        let working_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let working_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         Self {
             registry,
-            working_dir,
+            working_directory,
         }
     }
 
@@ -97,7 +97,7 @@ impl SkillTool {
         let registry = self.registry.read().await;
         let skill = registry.get(skill_name)?;
 
-        let context = SkillContext::new("").with_working_dir(&self.working_dir);
+        let context = SkillContext::new("").with_working_dir(&self.working_directory);
 
         Some(skill.get_prompt_with_args(&context, args))
     }
@@ -121,7 +121,7 @@ impl SkillTool {
         let registry = self.registry.read().await;
 
         if let Some(skill) = registry.get(skill_name) {
-            let context = SkillContext::new("").with_working_dir(&self.working_dir);
+            let context = SkillContext::new("").with_working_dir(&self.working_directory);
 
             let prompt = skill.get_prompt_with_args(&context, args);
 

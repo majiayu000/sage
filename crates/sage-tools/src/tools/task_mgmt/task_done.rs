@@ -23,7 +23,7 @@ impl Default for TaskDoneTool {
 #[async_trait]
 impl Tool for TaskDoneTool {
     fn name(&self) -> &str {
-        "task_done"
+        "TaskDone"
     }
 
     fn description(&self) -> &str {
@@ -131,7 +131,7 @@ mod tests {
         let tool = TaskDoneTool::new();
         let call = create_tool_call(
             "test-1",
-            "task_done",
+            "TaskDone",
             json!({
                 "summary": "Successfully implemented the user authentication system"
             }),
@@ -150,7 +150,7 @@ mod tests {
         let tool = TaskDoneTool::new();
         let call = create_tool_call(
             "test-2",
-            "task_done",
+            "TaskDone",
             json!({
                 "summary": "Fixed the database connection issue",
                 "details": "Updated the connection string and added proper error handling. All tests are now passing."
@@ -172,7 +172,7 @@ mod tests {
         let tool = TaskDoneTool::new();
         let call = create_tool_call(
             "test-3",
-            "task_done",
+            "TaskDone",
             json!({
                 "summary": ""
             }),
@@ -190,7 +190,7 @@ mod tests {
         let tool = TaskDoneTool::new();
         let call = create_tool_call(
             "test-4",
-            "task_done",
+            "TaskDone",
             json!({
                 "summary": "   \n\t  \n   "
             }),
@@ -206,7 +206,7 @@ mod tests {
     #[tokio::test]
     async fn test_task_done_missing_summary() {
         let tool = TaskDoneTool::new();
-        let call = create_tool_call("test-5", "task_done", json!({}));
+        let call = create_tool_call("test-5", "TaskDone", json!({}));
 
         // Implementation returns Err for missing summary
         let result = tool.execute(&call).await;
@@ -220,7 +220,7 @@ mod tests {
         let tool = TaskDoneTool::new();
         let call = create_tool_call(
             "test-6",
-            "task_done",
+            "TaskDone",
             json!({
                 "summary": "Task completed",
                 "details": ""
@@ -240,7 +240,7 @@ mod tests {
         let tool = TaskDoneTool::new();
         let call = create_tool_call(
             "test-7",
-            "task_done",
+            "TaskDone",
             json!({
                 "summary": "Task completed",
                 "details": "   \n\t  \n   "
@@ -262,7 +262,7 @@ mod tests {
         // Test validation with empty summary
         let call = create_tool_call(
             "test-8",
-            "task_done",
+            "TaskDone",
             json!({
                 "summary": ""
             }),
@@ -281,7 +281,7 @@ mod tests {
     fn test_task_done_schema() {
         let tool = TaskDoneTool::new();
         let schema = tool.schema();
-        assert_eq!(schema.name, "task_done");
+        assert_eq!(schema.name, "TaskDone");
         assert!(!schema.description.is_empty());
     }
 

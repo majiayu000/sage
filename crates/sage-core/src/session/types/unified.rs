@@ -13,6 +13,8 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use crate::types::MessageRole;
+
 // Import SessionState from base module (canonical definition)
 pub use super::base::SessionState;
 
@@ -101,7 +103,7 @@ pub struct SessionHeader {
     /// Token usage statistics
     #[serde(rename = "tokenUsage")]
     #[serde(default)]
-    pub token_usage: UnifiedTokenUsage,
+    pub token_usage: WireTokenUsage,
 
     /// Whether this is a sidechain (branched session)
     #[serde(rename = "isSidechain")]
@@ -142,7 +144,7 @@ impl SessionHeader {
             version: env!("CARGO_PKG_VERSION").to_string(),
             message_count: 0,
             state: SessionState::Active,
-            token_usage: UnifiedTokenUsage::default(),
+            token_usage: WireTokenUsage::default(),
             is_sidechain: false,
             parent_session_id: None,
             sidechain_root_message_id: None,
@@ -281,7 +283,7 @@ pub struct SessionMetadataPatch {
     /// Updated token usage
     #[serde(rename = "tokenUsage")]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub token_usage: Option<UnifiedTokenUsage>,
+    pub token_usage: Option<WireTokenUsage>,
 }
 
 // ============================================================================
@@ -331,7 +333,7 @@ pub struct SessionMessage {
 
     /// Token usage (for assistant messages)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub usage: Option<UnifiedTokenUsage>,
+    pub usage: Option<WireTokenUsage>,
 
     /// Thinking metadata
     #[serde(rename = "thinkingMetadata")]
@@ -370,7 +372,7 @@ impl SessionMessage {
             version: env!("CARGO_PKG_VERSION").to_string(),
             context,
             message: MessageContent {
-                role: UnifiedMessageRole::User,
+                role: MessageRole::User,
                 content: content.into(),
                 tool_calls: None,
                 tool_results: None,
@@ -401,7 +403,7 @@ impl SessionMessage {
             version: env!("CARGO_PKG_VERSION").to_string(),
             context,
             message: MessageContent {
-                role: UnifiedMessageRole::Assistant,
+                role: MessageRole::Assistant,
                 content: content.into(),
                 tool_calls: None,
                 tool_results: None,
@@ -432,7 +434,7 @@ impl SessionMessage {
             version: env!("CARGO_PKG_VERSION").to_string(),
             context,
             message: MessageContent {
-                role: UnifiedMessageRole::Tool,
+                role: MessageRole::Tool,
                 content: String::new(),
                 tool_calls: None,
                 tool_results: Some(results),
@@ -458,7 +460,7 @@ impl SessionMessage {
     }
 
     /// Set token usage
-    pub fn with_usage(mut self, usage: UnifiedTokenUsage) -> Self {
+    pub fn with_usage(mut self, usage: WireTokenUsage) -> Self {
         self.usage = Some(usage);
         self
     }
@@ -538,7 +540,7 @@ impl SessionMessage {
             version: env!("CARGO_PKG_VERSION").to_string(),
             context,
             message: MessageContent {
-                role: UnifiedMessageRole::Error,
+                role: MessageRole::Error,
                 content: format!("[{}] {}", error_type_str, error_message_str),
                 tool_calls: None,
                 tool_results: None,
@@ -611,7 +613,7 @@ impl SessionMessageType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MessageContent {
     /// Message role
-    pub role: UnifiedMessageRole,
+    pub role: MessageRole,
 
     /// Text content
     pub content: String,
@@ -627,21 +629,7 @@ pub struct MessageContent {
     pub tool_results: Option<Vec<UnifiedToolResult>>,
 }
 
-/// Message role (wire format with camelCase serde)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum UnifiedMessageRole {
-    /// System message
-    System,
-    /// User message
-    User,
-    /// Assistant message
-    Assistant,
-    /// Tool message
-    Tool,
-    /// Error message
-    Error,
-}
+// MessageRole is imported from crate::types and used directly
 
 // ============================================================================
 // Tool Types
@@ -658,6 +646,17 @@ pub struct UnifiedToolCall {
 
     /// Tool arguments
     pub arguments: Value,
+}
+
+/// Convert from the canonical `ToolCall` to the wire-format `UnifiedToolCall`.
+impl From<&crate::types::ToolCall> for UnifiedToolCall {
+    fn from(call: &crate::types::ToolCall) -> Self {
+        Self {
+            id: call.id.clone(),
+            name: call.name.clone(),
+            arguments: serde_json::to_value(&call.arguments).unwrap_or_default(),
+        }
+    }
 }
 
 /// Tool result (wire format)
@@ -744,9 +743,9 @@ impl From<&crate::tools::types::ToolResult> for UnifiedToolResult {
 // Token Usage
 // ============================================================================
 
-/// Token usage statistics (wire format with camelCase serde)
+/// Token usage statistics (wire format with camelCase serde for JSONL persistence)
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct UnifiedTokenUsage {
+pub struct WireTokenUsage {
     /// Input tokens used
     #[serde(rename = "inputTokens")]
     pub input_tokens: u64,
@@ -771,9 +770,9 @@ pub struct UnifiedTokenUsage {
     pub cost_estimate: Option<f64>,
 }
 
-impl UnifiedTokenUsage {
-    /// Add usage from another UnifiedTokenUsage
-    pub fn add(&mut self, other: &UnifiedTokenUsage) {
+impl WireTokenUsage {
+    /// Add usage from another WireTokenUsage
+    pub fn add(&mut self, other: &WireTokenUsage) {
         self.input_tokens += other.input_tokens;
         self.output_tokens += other.output_tokens;
         self.cache_read_tokens += other.cache_read_tokens;
@@ -786,6 +785,38 @@ impl UnifiedTokenUsage {
     /// Get total tokens
     pub fn total_tokens(&self) -> u64 {
         self.input_tokens + self.output_tokens
+    }
+}
+
+impl From<&crate::types::TokenUsage> for WireTokenUsage {
+    fn from(usage: &crate::types::TokenUsage) -> Self {
+        Self {
+            input_tokens: usage.input_tokens,
+            output_tokens: usage.output_tokens,
+            cache_read_tokens: usage.cache_read_tokens.unwrap_or(0),
+            cache_write_tokens: usage.cache_write_tokens.unwrap_or(0),
+            cost_estimate: usage.cost_estimate,
+        }
+    }
+}
+
+impl From<&WireTokenUsage> for crate::types::TokenUsage {
+    fn from(wire: &WireTokenUsage) -> Self {
+        Self {
+            input_tokens: wire.input_tokens,
+            output_tokens: wire.output_tokens,
+            cache_read_tokens: if wire.cache_read_tokens > 0 {
+                Some(wire.cache_read_tokens)
+            } else {
+                None
+            },
+            cache_write_tokens: if wire.cache_write_tokens > 0 {
+                Some(wire.cache_write_tokens)
+            } else {
+                None
+            },
+            cost_estimate: wire.cost_estimate,
+        }
     }
 }
 
@@ -818,7 +849,7 @@ mod tests {
         let ctx = SessionContext::new(PathBuf::from("/tmp"));
         let msg = SessionMessage::user("Hello", "session-1", ctx);
         assert_eq!(msg.message_type, SessionMessageType::User);
-        assert_eq!(msg.message.role, UnifiedMessageRole::User);
+        assert_eq!(msg.message.role, MessageRole::User);
         assert_eq!(msg.message.content, "Hello");
     }
 
@@ -835,12 +866,12 @@ mod tests {
 
     #[test]
     fn test_token_usage_add() {
-        let mut usage1 = UnifiedTokenUsage {
+        let mut usage1 = WireTokenUsage {
             input_tokens: 100,
             output_tokens: 50,
             ..Default::default()
         };
-        let usage2 = UnifiedTokenUsage {
+        let usage2 = WireTokenUsage {
             input_tokens: 200,
             output_tokens: 100,
             ..Default::default()

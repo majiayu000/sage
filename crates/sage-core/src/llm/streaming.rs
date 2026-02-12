@@ -3,7 +3,7 @@
 use crate::error::SageResult;
 use crate::llm::messages::{LlmMessage, LlmResponse};
 use crate::tools::types::ToolSchema;
-use crate::types::LlmUsage;
+use crate::types::TokenUsage;
 use async_trait::async_trait;
 use futures::Stream;
 use serde::{Deserialize, Serialize};
@@ -19,7 +19,7 @@ pub struct StreamChunk {
     /// Tool calls (if any)
     pub tool_calls: Option<Vec<crate::tools::ToolCall>>,
     /// Usage information (usually only in the last chunk)
-    pub usage: Option<LlmUsage>,
+    pub usage: Option<TokenUsage>,
     /// Whether this is the final chunk
     pub is_final: bool,
     /// Finish reason (if final)
@@ -42,7 +42,7 @@ impl StreamChunk {
     }
 
     /// Create a final chunk with usage information
-    pub fn final_chunk(usage: Option<LlmUsage>, finish_reason: Option<String>) -> Self {
+    pub fn final_chunk(usage: Option<TokenUsage>, finish_reason: Option<String>) -> Self {
         Self {
             content: None,
             tool_calls: None,

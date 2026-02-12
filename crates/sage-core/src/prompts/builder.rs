@@ -405,7 +405,7 @@ mod tests {
             .build();
 
         assert!(prompt.contains("system-reminder"));
-        assert!(prompt.contains("task_done"));
+        assert!(prompt.contains("TaskDone"));
     }
 
     #[test]

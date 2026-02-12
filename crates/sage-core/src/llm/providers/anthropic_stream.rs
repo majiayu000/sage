@@ -6,14 +6,10 @@ use crate::error::{SageError, SageResult};
 use crate::llm::sse_decoder::SseDecoder;
 use crate::llm::streaming::{LlmStream, StreamChunk};
 use crate::tools::types::ToolCall;
-use crate::types::LlmUsage;
+use crate::types::TokenUsage;
 use futures::StreamExt;
 use serde_json::Value;
 use std::collections::HashMap;
-
-fn u64_to_u32_saturating(value: u64) -> u32 {
-    u32::try_from(value).unwrap_or(u32::MAX)
-}
 
 struct StreamState {
     decoder: SseDecoder,
@@ -23,8 +19,8 @@ struct StreamState {
     tool_input_buffer: String,
     pending_tool_calls: Vec<ToolCall>,
     stop_reason: Option<String>,
-    usage: Option<LlmUsage>,
-    input_tokens: u32,
+    usage: Option<TokenUsage>,
+    input_tokens: u64,
     provider_name: String,
 }
 
@@ -89,7 +85,7 @@ fn process_events(
             Some("message_start") => {
                 if let Some(usage_data) = data["message"]["usage"].as_object() {
                     if let Some(input) = usage_data.get("input_tokens").and_then(|v| v.as_u64()) {
-                        state.input_tokens = u64_to_u32_saturating(input);
+                        state.input_tokens = input;
                     }
                 }
             }
@@ -188,26 +184,21 @@ fn handle_message_delta(state: &mut StreamState, data: &Value) {
         let input_tokens = usage_data
             .get("input_tokens")
             .and_then(|v| v.as_u64())
-            .map(u64_to_u32_saturating)
             .unwrap_or(state.input_tokens);
 
-        let cache_creation_input_tokens = usage_data
+        let cache_write_tokens = usage_data
             .get("cache_creation_input_tokens")
-            .and_then(|v| v.as_u64())
-            .map(u64_to_u32_saturating);
-        let cache_read_input_tokens = usage_data
+            .and_then(|v| v.as_u64());
+        let cache_read_tokens = usage_data
             .get("cache_read_input_tokens")
-            .and_then(|v| v.as_u64())
-            .map(u64_to_u32_saturating);
+            .and_then(|v| v.as_u64());
 
-        let completion_tokens = u64_to_u32_saturating(output_tokens);
-        state.usage = Some(LlmUsage {
-            prompt_tokens: input_tokens,
-            completion_tokens,
-            total_tokens: input_tokens.saturating_add(completion_tokens),
-            cost_usd: None,
-            cache_creation_input_tokens,
-            cache_read_input_tokens,
+        state.usage = Some(TokenUsage {
+            input_tokens,
+            output_tokens,
+            cache_write_tokens,
+            cache_read_tokens,
+            cost_estimate: None,
         });
     }
 }

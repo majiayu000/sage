@@ -107,7 +107,7 @@ pub struct LspTool {
     /// Configuration
     config: LspConfig,
     /// Working directory
-    working_dir: PathBuf,
+    working_directory: PathBuf,
 }
 
 impl Default for LspTool {
@@ -119,7 +119,7 @@ impl Default for LspTool {
 impl LspTool {
     /// Create a new LSP tool with default configuration
     pub fn new() -> Self {
-        let working_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let working_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         let mut config = LspConfig::default();
 
         // Register common LSP servers
@@ -171,14 +171,14 @@ impl LspTool {
         Self {
             clients: Arc::new(RwLock::new(HashMap::new())),
             config,
-            working_dir,
+            working_directory,
         }
     }
 
     /// Create with a specific working directory
-    pub fn with_working_dir(working_dir: impl Into<PathBuf>) -> Self {
+    pub fn with_working_directory(working_directory: impl Into<PathBuf>) -> Self {
         let mut tool = Self::new();
-        tool.working_dir = working_dir.into();
+        tool.working_directory = working_directory.into();
         tool
     }
 

@@ -163,7 +163,7 @@ impl Default for KillShellTool {
 #[async_trait]
 impl Tool for KillShellTool {
     fn name(&self) -> &str {
-        "kill_shell"
+        "KillShell"
     }
 
     fn description(&self) -> &str {
@@ -293,7 +293,7 @@ mod tests {
 
         let call = create_tool_call(
             "test-1",
-            "kill_shell",
+            "KillShell",
             json!({
                 "shell_id": "nonexistent_shell"
             }),
@@ -314,7 +314,7 @@ mod tests {
     #[tokio::test]
     async fn test_kill_shell_missing_parameter() {
         let tool = KillShellTool::new();
-        let call = create_tool_call("test-2", "kill_shell", json!({}));
+        let call = create_tool_call("test-2", "KillShell", json!({}));
 
         let result = tool.execute(&call).await;
         assert!(result.is_err());
@@ -332,7 +332,7 @@ mod tests {
         let tool = KillShellTool::new();
         let call = create_tool_call(
             "test-3",
-            "kill_shell",
+            "KillShell",
             json!({
                 "shell_id": ""
             }),
@@ -354,7 +354,7 @@ mod tests {
         let tool = KillShellTool::new();
         let call = create_tool_call(
             "test-4",
-            "kill_shell",
+            "KillShell",
             json!({
                 "shell_id": "invalid shell!"
             }),
@@ -381,7 +381,7 @@ mod tests {
         for id in valid_ids {
             let call = create_tool_call(
                 "test-5",
-                "kill_shell",
+                "KillShell",
                 json!({
                     "shell_id": id
                 }),
@@ -397,7 +397,7 @@ mod tests {
         let tool = KillShellTool::new();
         let schema = tool.schema();
 
-        assert_eq!(schema.name, "kill_shell");
+        assert_eq!(schema.name, "KillShell");
         assert!(!schema.description.is_empty());
 
         // Check that shell_id parameter exists
@@ -410,7 +410,7 @@ mod tests {
     fn test_kill_shell_tool_properties() {
         let tool = KillShellTool::new();
 
-        assert_eq!(tool.name(), "kill_shell");
+        assert_eq!(tool.name(), "KillShell");
         assert!(!tool.description().is_empty());
         assert_eq!(
             tool.max_execution_duration(),
@@ -444,7 +444,7 @@ mod tests {
 
         let call = create_tool_call(
             "test-6",
-            "kill_shell",
+            "KillShell",
             json!({
                 "shell_id": "test_shell"
             }),

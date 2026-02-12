@@ -127,7 +127,6 @@ impl SageAgentSdk {
             let outcome = executor.execute(task).await?;
             Ok(ExecutionResult::new(
                 outcome,
-                None, // No longer returning trajectory path
                 config_used,
             ))
         };

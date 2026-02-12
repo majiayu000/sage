@@ -11,7 +11,7 @@ use sage_core::{
     error::SageResult,
     llm::streaming::{sse, stream_utils},
     llm::{LlmMessage, LlmResponse, MessageRole, StreamChunk},
-    types::LlmUsage,
+    types::TokenUsage,
 };
 use std::collections::HashMap;
 use std::io::{self, Write};
@@ -101,13 +101,12 @@ async fn test_caching_performance() -> SageResult<()> {
             let response = LlmResponse {
                 content: format!("Detailed answer about: {}", query),
                 tool_calls: vec![],
-                usage: Some(LlmUsage {
-                    prompt_tokens: 20 + (i * 5) as u32,
-                    completion_tokens: 100 + (i * 10) as u32,
-                    total_tokens: 120 + (i * 15) as u32,
-                    cost_usd: Some(0.002 + (i as f64 * 0.001)),
-                    cache_creation_input_tokens: None,
-                    cache_read_input_tokens: None,
+                usage: Some(TokenUsage {
+                    input_tokens: 20 + (i * 5) as u64,
+                    output_tokens: 100 + (i * 10) as u64,
+                    cache_read_tokens: None,
+                    cache_write_tokens: None,
+                    cost_estimate: Some(0.002 + (i as f64 * 0.001)),
                 }),
                 model: Some("gpt-4".to_string()),
                 finish_reason: Some("stop".to_string()),
@@ -115,8 +114,8 @@ async fn test_caching_performance() -> SageResult<()> {
                 metadata: HashMap::new(),
             };
 
-            total_tokens += response.usage.as_ref().unwrap().total_tokens;
-            total_cost += response.usage.as_ref().unwrap().cost_usd.unwrap();
+            total_tokens += response.usage.as_ref().unwrap().total_tokens();
+            total_cost += response.usage.as_ref().unwrap().cost_estimate.unwrap();
 
             // Cache the response
             llm_cache
@@ -228,13 +227,12 @@ async fn test_streaming_experience() -> SageResult<()> {
         stream_chunks.push(Ok(StreamChunk::content(*chunk_text)));
     }
     stream_chunks.push(Ok(StreamChunk::final_chunk(
-        Some(LlmUsage {
-            prompt_tokens: 15,
-            completion_tokens: 85,
-            total_tokens: 100,
-            cost_usd: Some(0.003),
-            cache_creation_input_tokens: None,
-            cache_read_input_tokens: None,
+        Some(TokenUsage {
+            input_tokens: 15,
+            output_tokens: 85,
+            cache_read_tokens: None,
+            cache_write_tokens: None,
+            cost_estimate: Some(0.003),
         }),
         Some("stop".to_string()),
     )));
@@ -257,8 +255,8 @@ async fn test_streaming_experience() -> SageResult<()> {
                     if let Some(usage) = chunk.usage {
                         println!(
                             "📊 Usage: {} tokens (${:.4})",
-                            usage.total_tokens,
-                            usage.cost_usd.unwrap_or(0.0)
+                            usage.total_tokens(),
+                            usage.cost_estimate.unwrap_or(0.0)
                         );
                     }
                     break;
@@ -320,13 +318,12 @@ async fn test_cache_streaming_combo() -> SageResult<()> {
         StreamChunk::content(" that harnesses quantum mechanics"),
         StreamChunk::content(" to process information in fundamentally new ways."),
         StreamChunk::final_chunk(
-            Some(LlmUsage {
-                prompt_tokens: 12,
-                completion_tokens: 25,
-                total_tokens: 37,
-                cost_usd: Some(0.002),
-                cache_creation_input_tokens: None,
-                cache_read_input_tokens: None,
+            Some(TokenUsage {
+                input_tokens: 12,
+                output_tokens: 25,
+                cache_read_tokens: None,
+                cache_write_tokens: None,
+                cost_estimate: Some(0.002),
             }),
             Some("stop".to_string()),
         ),
@@ -354,7 +351,7 @@ async fn test_cache_streaming_combo() -> SageResult<()> {
         println!("⏱️  Retrieved from cache in: {:?}", cache_duration);
         println!(
             "💰 Cost saved: ${:.4}",
-            cached.usage.as_ref().unwrap().cost_usd.unwrap_or(0.0)
+            cached.usage.as_ref().unwrap().cost_estimate.unwrap_or(0.0)
         );
     }
 
@@ -416,13 +413,12 @@ async fn test_memory_efficiency() -> SageResult<()> {
         let response = LlmResponse {
             content: format!("Response {}", i),
             tool_calls: vec![],
-            usage: Some(LlmUsage {
-                prompt_tokens: 10,
-                completion_tokens: 20,
-                total_tokens: 30,
-                cost_usd: Some(0.001),
-                cache_creation_input_tokens: None,
-                cache_read_input_tokens: None,
+            usage: Some(TokenUsage {
+                input_tokens: 10,
+                output_tokens: 20,
+                cache_read_tokens: None,
+                cache_write_tokens: None,
+                cost_estimate: Some(0.001),
             }),
             model: Some("test".to_string()),
             finish_reason: Some("stop".to_string()),

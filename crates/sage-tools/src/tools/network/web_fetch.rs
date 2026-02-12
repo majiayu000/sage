@@ -215,7 +215,7 @@ impl WebFetchTool {
 #[async_trait]
 impl Tool for WebFetchTool {
     fn name(&self) -> &str {
-        "web-fetch"
+        "WebFetch"
     }
 
     fn description(&self) -> &str {

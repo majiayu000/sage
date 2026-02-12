@@ -50,13 +50,12 @@ async fn demonstrate_streaming_concepts() -> SageResult<()> {
         StreamChunk::content(" real-time"),
         StreamChunk::content(" feedback!"),
         StreamChunk::final_chunk(
-            Some(sage_core::types::LlmUsage {
-                prompt_tokens: 20,
-                completion_tokens: 15,
-                total_tokens: 35,
-                cost_usd: Some(0.001),
-                cache_creation_input_tokens: None,
-                cache_read_input_tokens: None,
+            Some(sage_core::types::TokenUsage {
+                input_tokens: 20,
+                output_tokens: 15,
+                cache_read_tokens: None,
+                cache_write_tokens: None,
+                cost_estimate: Some(0.001),
             }),
             Some("stop".to_string()),
         ),
@@ -81,8 +80,8 @@ async fn demonstrate_streaming_concepts() -> SageResult<()> {
             if let Some(usage) = chunk.usage {
                 println!(
                     "📊 Final usage: {} tokens (${:.4})",
-                    usage.total_tokens,
-                    usage.cost_usd.unwrap_or(0.0)
+                    usage.total_tokens(),
+                    usage.cost_estimate.unwrap_or(0.0)
                 );
             }
             if let Some(reason) = chunk.finish_reason {

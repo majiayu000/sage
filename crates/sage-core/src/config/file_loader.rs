@@ -67,7 +67,7 @@ mod tests {
                 }
             },
             "tools": {
-                "enabled_tools": ["task_done"],
+                "enabled_tools": ["TaskDone"],
                 "max_execution_time": 300,
                 "allow_parallel_execution": true,
                 "tool_settings": {}
@@ -112,7 +112,7 @@ model = "claude-3"
 api_key = "test_key"
 
 [tools]
-enabled_tools = ["task_done"]
+enabled_tools = ["TaskDone"]
 max_execution_time = 300
 allow_parallel_execution = true
 tool_settings = {}

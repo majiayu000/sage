@@ -24,7 +24,7 @@ impl ViewTasklistTool {
 #[async_trait]
 impl Tool for ViewTasklistTool {
     fn name(&self) -> &str {
-        "view_tasklist"
+        "ViewTasklist"
     }
 
     fn description(&self) -> &str {

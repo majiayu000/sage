@@ -79,9 +79,9 @@ impl LlmClient {
                     }
                     if let Some(usage) = &response.usage {
                         tracing::info!(
-                            prompt_tokens = usage.prompt_tokens,
-                            completion_tokens = usage.completion_tokens,
-                            total_tokens = usage.total_tokens,
+                            input_tokens = usage.input_tokens,
+                            output_tokens = usage.output_tokens,
+                            total_tokens = usage.total_tokens(),
                             "llm request completed"
                         );
                     }

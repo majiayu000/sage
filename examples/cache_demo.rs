@@ -91,13 +91,12 @@ async fn main() -> SageResult<()> {
         let simulated_response = sage_core::llm::LlmResponse {
             content: "The capital of France is Paris.".to_string(),
             tool_calls: Vec::new(),
-            usage: Some(sage_core::types::LlmUsage {
-                prompt_tokens: 25,
-                completion_tokens: 8,
-                total_tokens: 33,
-                cost_usd: Some(0.001),
-                cache_creation_input_tokens: None,
-                cache_read_input_tokens: None,
+            usage: Some(sage_core::types::TokenUsage {
+                input_tokens: 25,
+                output_tokens: 8,
+                cache_read_tokens: None,
+                cache_write_tokens: None,
+                cost_estimate: Some(0.001),
             }),
             model: Some(model.to_string()),
             finish_reason: Some("stop".to_string()),
@@ -129,7 +128,7 @@ async fn main() -> SageResult<()> {
     if let Some(response) = cached_response {
         println!("✅ Cache hit! Response: {}", response.content);
         if let Some(usage) = &response.usage {
-            println!("📊 Tokens used: {}", usage.total_tokens);
+            println!("📊 Tokens used: {}", usage.total_tokens());
         }
     } else {
         println!("❌ Unexpected cache miss");

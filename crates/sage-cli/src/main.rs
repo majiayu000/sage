@@ -47,13 +47,13 @@ use sage_core::config::{load_config, load_config_from_file};
 use sage_core::error::SageResult;
 
 // Re-export for external use
-pub use args::{Cli, Commands, ConfigAction};
+pub use args::{Cli, Commands, ConfigAction, DEFAULT_CONFIG_FILE};
 
 #[tokio::main]
 async fn main() -> SageResult<()> {
     let cli = Cli::parse();
 
-    let config = if cli.config_file == "sage_config.json" {
+    let config = if cli.config_file == args::DEFAULT_CONFIG_FILE {
         load_config().ok()
     } else {
         load_config_from_file(&cli.config_file).ok()

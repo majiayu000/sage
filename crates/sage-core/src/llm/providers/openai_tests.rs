@@ -100,8 +100,8 @@ mod tests {
 
         // Check usage if present
         if let Some(usage) = response.usage {
-            assert_eq!(usage.prompt_tokens, 10);
-            assert_eq!(usage.completion_tokens, 20);
+            assert_eq!(usage.input_tokens, 10);
+            assert_eq!(usage.output_tokens, 20);
         }
     }
 

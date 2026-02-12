@@ -161,7 +161,7 @@ struct ParsedTask {
 #[async_trait]
 impl Tool for ReorganizeTasklistTool {
     fn name(&self) -> &str {
-        "reorganize_tasklist"
+        "ReorganizeTasklist"
     }
 
     fn description(&self) -> &str {
@@ -272,7 +272,7 @@ mod tests {
         let tool = ReorganizeTasklistTool::new();
         let call = create_tool_call(
             "test-1",
-            "reorganize_tasklist",
+            "ReorganizeTasklist",
             json!({
                 "markdown": markdown
             }),

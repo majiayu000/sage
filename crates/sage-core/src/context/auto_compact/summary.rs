@@ -67,6 +67,7 @@ pub fn format_messages_for_summary(messages: &[LlmMessage]) -> String {
                 MessageRole::Assistant => "ASSISTANT",
                 MessageRole::Tool => "TOOL",
                 MessageRole::System => "SYSTEM",
+                MessageRole::Error => "ERROR",
             };
 
             let content = truncate_content(&m.content, 1000);

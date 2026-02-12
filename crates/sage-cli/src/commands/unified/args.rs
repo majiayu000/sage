@@ -3,6 +3,8 @@
 use clap::ValueEnum;
 use std::path::PathBuf;
 
+use crate::args::DEFAULT_CONFIG_FILE;
+
 /// Output mode for display
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ValueEnum)]
 pub enum OutputModeArg {
@@ -47,7 +49,7 @@ mod tests {
     fn test_unified_args_defaults() {
         let args = UnifiedArgs {
             task: None,
-            config_file: "sage_config.json".to_string(),
+            config_file: DEFAULT_CONFIG_FILE.to_string(),
             working_dir: None,
             max_steps: None,
             verbose: false,

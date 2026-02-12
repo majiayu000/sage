@@ -73,10 +73,10 @@ pub async fn record_llm_response(
     model: &str,
 ) {
     let usage = llm_response.usage.as_ref().map(|u| TokenUsage {
-        input_tokens: u.prompt_tokens as u64,
-        output_tokens: u.completion_tokens as u64,
-        cache_read_tokens: u.cache_read_input_tokens.map(|v| v as u64),
-        cache_write_tokens: u.cache_creation_input_tokens.map(|v| v as u64),
+        input_tokens: u.input_tokens,
+        output_tokens: u.output_tokens,
+        cache_read_tokens: u.cache_read_tokens,
+        cache_write_tokens: u.cache_write_tokens,
     });
     let tool_calls = if llm_response.tool_calls.is_empty() {
         None

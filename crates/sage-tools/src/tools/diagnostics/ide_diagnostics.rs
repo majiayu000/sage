@@ -35,7 +35,7 @@ impl DiagnosticsTool {
 #[async_trait]
 impl Tool for DiagnosticsTool {
     fn name(&self) -> &str {
-        "diagnostics"
+        "Diagnostics"
     }
 
     fn description(&self) -> &str {

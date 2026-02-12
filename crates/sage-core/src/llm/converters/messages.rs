@@ -296,6 +296,13 @@ impl MessageConverter {
                         "parts": [{"text": message.content}]
                     }));
                 }
+                MessageRole::Error => {
+                    // Treat error messages like user messages for Google
+                    converted.push(json!({
+                        "role": "user",
+                        "parts": [{"text": message.content}]
+                    }));
+                }
             }
         }
 

@@ -25,7 +25,7 @@ impl UpdateTasksTool {
 #[async_trait]
 impl Tool for UpdateTasksTool {
     fn name(&self) -> &str {
-        "update_tasks"
+        "UpdateTasks"
     }
 
     fn description(&self) -> &str {

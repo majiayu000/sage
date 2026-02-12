@@ -23,7 +23,7 @@ impl Default for ExitPlanModeTool {
 #[async_trait]
 impl Tool for ExitPlanModeTool {
     fn name(&self) -> &str {
-        "exit_plan_mode"
+        "ExitPlanMode"
     }
 
     fn description(&self) -> &str {
@@ -175,7 +175,7 @@ mod tests {
     #[tokio::test]
     async fn test_exit_plan_mode_basic() {
         let tool = ExitPlanModeTool::new();
-        let call = create_tool_call("test-1", "exit_plan_mode", json!({}));
+        let call = create_tool_call("test-1", "ExitPlanMode", json!({}));
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -190,7 +190,7 @@ mod tests {
         let tool = ExitPlanModeTool::new();
         let call = create_tool_call(
             "test-2",
-            "exit_plan_mode",
+            "ExitPlanMode",
             json!({
                 "launchSwarm": true,
                 "teammateCount": 5
@@ -211,7 +211,7 @@ mod tests {
         let tool = ExitPlanModeTool::new();
         let call = create_tool_call(
             "test-3",
-            "exit_plan_mode",
+            "ExitPlanMode",
             json!({
                 "launchSwarm": true
             }),
@@ -229,7 +229,7 @@ mod tests {
         let tool = ExitPlanModeTool::new();
         let call = create_tool_call(
             "test-4",
-            "exit_plan_mode",
+            "ExitPlanMode",
             json!({
                 "launchSwarm": true,
                 "teammateCount": 0
@@ -250,7 +250,7 @@ mod tests {
         let tool = ExitPlanModeTool::new();
         let call = create_tool_call(
             "test-5",
-            "exit_plan_mode",
+            "ExitPlanMode",
             json!({
                 "launchSwarm": true,
                 "teammateCount": 11
@@ -272,7 +272,7 @@ mod tests {
         // When launchSwarm is false, teammateCount should be ignored
         let call = create_tool_call(
             "test-6",
-            "exit_plan_mode",
+            "ExitPlanMode",
             json!({
                 "launchSwarm": false,
                 "teammateCount": 100 // Invalid count, but should be ignored
@@ -291,7 +291,7 @@ mod tests {
         let tool = ExitPlanModeTool::new();
         let call = create_tool_call(
             "test-7",
-            "exit_plan_mode",
+            "ExitPlanMode",
             json!({
                 "launchSwarm": true,
                 "teammateCount": 5
@@ -307,7 +307,7 @@ mod tests {
         let tool = ExitPlanModeTool::new();
         let call = create_tool_call(
             "test-8",
-            "exit_plan_mode",
+            "ExitPlanMode",
             json!({
                 "launchSwarm": true,
                 "teammateCount": 15
@@ -321,7 +321,7 @@ mod tests {
     #[tokio::test]
     async fn test_exit_plan_mode_timestamp() {
         let tool = ExitPlanModeTool::new();
-        let call = create_tool_call("test-9", "exit_plan_mode", json!({}));
+        let call = create_tool_call("test-9", "ExitPlanMode", json!({}));
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -333,7 +333,7 @@ mod tests {
     fn test_exit_plan_mode_schema() {
         let tool = ExitPlanModeTool::new();
         let schema = tool.schema();
-        assert_eq!(schema.name, "exit_plan_mode");
+        assert_eq!(schema.name, "ExitPlanMode");
         assert!(!schema.description.is_empty());
     }
 
@@ -353,7 +353,7 @@ mod tests {
     #[test]
     fn test_exit_plan_mode_name() {
         let tool = ExitPlanModeTool::new();
-        assert_eq!(tool.name(), "exit_plan_mode");
+        assert_eq!(tool.name(), "ExitPlanMode");
     }
 
     #[test]
@@ -369,7 +369,7 @@ mod tests {
         let tool = ExitPlanModeTool::new();
         let call = create_tool_call(
             "test-10",
-            "exit_plan_mode",
+            "ExitPlanMode",
             json!({
                 "launchSwarm": true,
                 "teammateCount": 1
@@ -387,7 +387,7 @@ mod tests {
         let tool = ExitPlanModeTool::new();
         let call = create_tool_call(
             "test-11",
-            "exit_plan_mode",
+            "ExitPlanMode",
             json!({
                 "launchSwarm": true,
                 "teammateCount": 10

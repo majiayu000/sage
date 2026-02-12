@@ -74,7 +74,7 @@ pub use types::{
     // Canonical session message types
     SessionMessage,
     SessionMessageType,
-    UnifiedTokenUsage,
+    WireTokenUsage,
     UnifiedToolResult,
     FileBackupInfo,
     FileHistorySnapshot,

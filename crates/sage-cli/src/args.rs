@@ -12,6 +12,9 @@ use crate::commands::unified::OutputModeArg;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
+/// Default configuration file name used across all CLI commands.
+pub const DEFAULT_CONFIG_FILE: &str = "sage_config.json";
+
 #[derive(Parser)]
 #[command(name = "sage")]
 #[command(about = "Sage Agent - LLM-based agent for software engineering tasks")]
@@ -54,7 +57,7 @@ pub struct Cli {
     pub max_steps: Option<u32>,
 
     /// Path to configuration file
-    #[arg(long, default_value = "sage_config.json")]
+    #[arg(long, default_value = DEFAULT_CONFIG_FILE)]
     pub config_file: String,
 
     /// Working directory for the agent
@@ -94,7 +97,7 @@ pub enum Commands {
     #[command(verbatim_doc_comment)]
     Doctor {
         /// Path to configuration file
-        #[arg(long, default_value = "sage_config.json")]
+        #[arg(long, default_value = DEFAULT_CONFIG_FILE)]
         config_file: String,
     },
 
@@ -102,7 +105,7 @@ pub enum Commands {
     #[command(verbatim_doc_comment)]
     Status {
         /// Path to configuration file
-        #[arg(long, default_value = "sage_config.json")]
+        #[arg(long, default_value = DEFAULT_CONFIG_FILE)]
         config_file: String,
     },
 
@@ -124,21 +127,21 @@ pub enum ConfigAction {
     /// Display current configuration settings
     Show {
         /// Path to configuration file
-        #[arg(long, default_value = "sage_config.json")]
+        #[arg(long, default_value = DEFAULT_CONFIG_FILE)]
         config_file: String,
     },
 
     /// Validate configuration file for errors
     Validate {
         /// Path to configuration file
-        #[arg(long, default_value = "sage_config.json")]
+        #[arg(long, default_value = DEFAULT_CONFIG_FILE)]
         config_file: String,
     },
 
     /// Create a new configuration file with defaults
     Init {
         /// Path for the new configuration file
-        #[arg(long, default_value = "sage_config.json")]
+        #[arg(long, default_value = DEFAULT_CONFIG_FILE)]
         config_file: String,
 
         /// Overwrite existing file without prompting

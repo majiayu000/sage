@@ -2,13 +2,9 @@
 
 use crate::error::{SageError, SageResult};
 use crate::llm::messages::LlmResponse;
-use crate::types::LlmUsage;
+use crate::types::TokenUsage;
 use serde_json::Value;
 use std::collections::HashMap;
-
-fn u64_to_u32_saturating(value: u64) -> u32 {
-    u32::try_from(value).unwrap_or(u32::MAX)
-}
 
 /// Response parser for various providers
 pub struct ResponseParser;
@@ -46,25 +42,22 @@ impl ResponseParser {
             }
         }
 
-        let usage = response["usage"].as_object().map(|usage_data| LlmUsage {
-            prompt_tokens: usage_data
+        let usage = response["usage"].as_object().map(|usage_data| {
+            let input_tokens = usage_data
                 .get("prompt_tokens")
                 .and_then(|v| v.as_u64())
-                .map(u64_to_u32_saturating)
-                .unwrap_or(0),
-            completion_tokens: usage_data
+                .unwrap_or(0);
+            let output_tokens = usage_data
                 .get("completion_tokens")
                 .and_then(|v| v.as_u64())
-                .map(u64_to_u32_saturating)
-                .unwrap_or(0),
-            total_tokens: usage_data
-                .get("total_tokens")
-                .and_then(|v| v.as_u64())
-                .map(u64_to_u32_saturating)
-                .unwrap_or(0),
-            cost_usd: None,
-            cache_creation_input_tokens: None,
-            cache_read_input_tokens: None,
+                .unwrap_or(0);
+            TokenUsage {
+                input_tokens,
+                output_tokens,
+                cache_read_tokens: None,
+                cache_write_tokens: None,
+                cost_estimate: None,
+            }
         });
 
         Ok(LlmResponse {
@@ -145,39 +138,28 @@ impl ResponseParser {
                 .unwrap_or(0);
 
             // Parse cache-related tokens (Anthropic prompt caching)
-            let cache_creation_input_tokens = usage_data
+            let cache_write_tokens = usage_data
                 .get("cache_creation_input_tokens")
-                .and_then(|v| v.as_u64())
-                .map(u64_to_u32_saturating);
-            let cache_read_input_tokens = usage_data
+                .and_then(|v| v.as_u64());
+            let cache_read_tokens = usage_data
                 .get("cache_read_input_tokens")
-                .and_then(|v| v.as_u64())
-                .map(u64_to_u32_saturating);
+                .and_then(|v| v.as_u64());
 
             // Log cache metrics if present
-            if cache_creation_input_tokens.is_some() || cache_read_input_tokens.is_some() {
+            if cache_write_tokens.is_some() || cache_read_tokens.is_some() {
                 tracing::debug!(
                     "Anthropic cache metrics - created: {:?}, read: {:?}",
-                    cache_creation_input_tokens,
-                    cache_read_input_tokens
+                    cache_write_tokens,
+                    cache_read_tokens
                 );
             }
 
-            // Total tokens should include ALL cache-related tokens for accurate reporting:
-            // - cache_creation_input_tokens: tokens written to cache (first request)
-            // - cache_read_input_tokens: tokens read from cache (subsequent requests)
-            // Both represent actual tokens processed by the model
-            let cache_tokens = cache_creation_input_tokens.unwrap_or(0) as u64
-                + cache_read_input_tokens.unwrap_or(0) as u64;
-            let total_input = input_tokens + cache_tokens;
-
-            Some(LlmUsage {
-                prompt_tokens: u64_to_u32_saturating(total_input), // Include all cache tokens
-                completion_tokens: u64_to_u32_saturating(output_tokens),
-                total_tokens: u64_to_u32_saturating(total_input.saturating_add(output_tokens)),
-                cost_usd: None,
-                cache_creation_input_tokens,
-                cache_read_input_tokens,
+            Some(TokenUsage {
+                input_tokens,
+                output_tokens,
+                cache_write_tokens,
+                cache_read_tokens,
+                cost_estimate: None,
             })
         } else {
             None
@@ -247,26 +229,21 @@ impl ResponseParser {
         }
 
         let usage = if let Some(usage_metadata) = response["usageMetadata"].as_object() {
-            let prompt_tokens_u64 = usage_metadata
+            let input_tokens = usage_metadata
                 .get("promptTokenCount")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(0);
-            let completion_tokens_u64 = usage_metadata
+            let output_tokens = usage_metadata
                 .get("candidatesTokenCount")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(0);
-            let total_tokens_u64 = usage_metadata
-                .get("totalTokenCount")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(prompt_tokens_u64.saturating_add(completion_tokens_u64));
 
-            Some(LlmUsage {
-                prompt_tokens: u64_to_u32_saturating(prompt_tokens_u64),
-                completion_tokens: u64_to_u32_saturating(completion_tokens_u64),
-                total_tokens: u64_to_u32_saturating(total_tokens_u64),
-                cost_usd: None,
-                cache_creation_input_tokens: None,
-                cache_read_input_tokens: None,
+            Some(TokenUsage {
+                input_tokens,
+                output_tokens,
+                cache_read_tokens: None,
+                cache_write_tokens: None,
+                cost_estimate: None,
             })
         } else {
             None

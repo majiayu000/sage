@@ -1,7 +1,7 @@
 //! Agent execution representation
 
 use crate::agent::AgentStep;
-use crate::types::{Id, LlmUsage, TaskMetadata};
+use crate::types::{Id, TokenUsage, TaskMetadata};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -31,7 +31,7 @@ pub struct AgentExecution {
     /// Whether the execution was successful
     pub success: bool,
     /// Total token usage across all steps
-    pub total_usage: LlmUsage,
+    pub total_usage: TokenUsage,
     /// Execution start time
     pub started_at: DateTime<Utc>,
     /// Execution end time
@@ -49,7 +49,7 @@ impl AgentExecution {
             steps: Vec::new(),
             final_result: None,
             success: false,
-            total_usage: LlmUsage::default(),
+            total_usage: TokenUsage::default(),
             started_at: Utc::now(),
             completed_at: None,
             metadata: HashMap::new(),
@@ -113,12 +113,12 @@ impl AgentExecution {
             let mut parts = Vec::new();
             if let Some(created) = self
                 .total_usage
-                .cache_creation_input_tokens
+                .cache_write_tokens
                 .filter(|&c| c > 0)
             {
                 parts.push(format!("{} cache created", created));
             }
-            if let Some(read) = self.total_usage.cache_read_input_tokens.filter(|&r| r > 0) {
+            if let Some(read) = self.total_usage.cache_read_tokens.filter(|&r| r > 0) {
                 parts.push(format!("{} cache read", read));
             }
             if !parts.is_empty() {
@@ -135,7 +135,7 @@ impl AgentExecution {
             status,
             self.task.description,
             self.steps.len(),
-            self.total_usage.total_tokens,
+            self.total_usage.total_tokens(),
             cache_info,
             duration
         )
@@ -184,9 +184,9 @@ impl AgentExecution {
         stats.successful_steps = self.steps.iter().filter(|s| s.error.is_none()).count();
         stats.failed_steps = self.steps.iter().filter(|s| s.error.is_some()).count();
         stats.tool_calls = self.all_tool_calls().count();
-        stats.total_tokens = self.total_usage.total_tokens;
-        stats.cache_creation_tokens = self.total_usage.cache_creation_input_tokens;
-        stats.cache_read_tokens = self.total_usage.cache_read_input_tokens;
+        stats.total_tokens = self.total_usage.total_tokens();
+        stats.cache_creation_tokens = self.total_usage.cache_write_tokens;
+        stats.cache_read_tokens = self.total_usage.cache_read_tokens;
         stats.execution_time = self.duration();
 
         // Count tool usage
@@ -212,11 +212,11 @@ pub struct ExecutionStatistics {
     /// Total number of tool calls
     pub tool_calls: usize,
     /// Total tokens used
-    pub total_tokens: u32,
+    pub total_tokens: u64,
     /// Tokens written to cache (Anthropic prompt caching)
-    pub cache_creation_tokens: Option<u32>,
+    pub cache_creation_tokens: Option<u64>,
     /// Tokens read from cache (Anthropic prompt caching)
-    pub cache_read_tokens: Option<u32>,
+    pub cache_read_tokens: Option<u64>,
     /// Execution time
     pub execution_time: Option<chrono::Duration>,
     /// Tool usage count by tool name
@@ -227,7 +227,7 @@ pub struct ExecutionStatistics {
 mod tests {
     use super::*;
     use crate::agent::AgentState;
-    use crate::types::LlmUsage;
+    use crate::types::TokenUsage;
 
     fn create_test_task() -> TaskMetadata {
         TaskMetadata::new("Test task", ".")
@@ -243,7 +243,7 @@ mod tests {
         assert!(!execution.success);
         assert!(execution.final_result.is_none());
         assert!(execution.completed_at.is_none());
-        assert_eq!(execution.total_usage.total_tokens, 0);
+        assert_eq!(execution.total_usage.total_tokens(), 0);
     }
 
     #[test]
@@ -264,20 +264,19 @@ mod tests {
         let mut execution = AgentExecution::new(task);
 
         let mut step = AgentStep::new(1, AgentState::Thinking);
-        step.llm_usage = Some(LlmUsage {
-            prompt_tokens: 100,
-            completion_tokens: 50,
-            total_tokens: 150,
-            cache_creation_input_tokens: None,
-            cache_read_input_tokens: None,
-            cost_usd: None,
+        step.llm_usage = Some(TokenUsage {
+            input_tokens: 100,
+            output_tokens: 50,
+            cache_write_tokens: None,
+            cache_read_tokens: None,
+            cost_estimate: None,
         });
 
         execution.add_step(step);
 
-        assert_eq!(execution.total_usage.total_tokens, 150);
-        assert_eq!(execution.total_usage.prompt_tokens, 100);
-        assert_eq!(execution.total_usage.completion_tokens, 50);
+        assert_eq!(execution.total_usage.total_tokens(), 150);
+        assert_eq!(execution.total_usage.input_tokens, 100);
+        assert_eq!(execution.total_usage.output_tokens, 50);
     }
 
     #[test]
@@ -336,13 +335,12 @@ mod tests {
         let mut execution = AgentExecution::new(task);
 
         let mut step = AgentStep::new(1, AgentState::Thinking);
-        step.llm_usage = Some(LlmUsage {
-            prompt_tokens: 100,
-            completion_tokens: 50,
-            total_tokens: 150,
-            cache_creation_input_tokens: None,
-            cache_read_input_tokens: None,
-            cost_usd: None,
+        step.llm_usage = Some(TokenUsage {
+            input_tokens: 100,
+            output_tokens: 50,
+            cache_write_tokens: None,
+            cache_read_tokens: None,
+            cost_estimate: None,
         });
         execution.add_step(step);
 
@@ -379,13 +377,12 @@ mod tests {
         let mut execution = AgentExecution::new(task);
 
         let mut step1 = AgentStep::new(1, AgentState::Thinking);
-        step1.llm_usage = Some(LlmUsage {
-            prompt_tokens: 100,
-            completion_tokens: 50,
-            total_tokens: 150,
-            cache_creation_input_tokens: Some(50),
-            cache_read_input_tokens: Some(25),
-            cost_usd: None,
+        step1.llm_usage = Some(TokenUsage {
+            input_tokens: 100,
+            output_tokens: 50,
+            cache_write_tokens: Some(50),
+            cache_read_tokens: Some(25),
+            cost_estimate: None,
         });
         execution.add_step(step1);
 

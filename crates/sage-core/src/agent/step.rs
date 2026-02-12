@@ -3,7 +3,7 @@
 use crate::agent::state::AgentState;
 use crate::llm::LlmResponse;
 use crate::tools::{ToolCall, ToolResult};
-use crate::types::{Id, LlmUsage};
+use crate::types::{Id, TokenUsage};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -36,7 +36,7 @@ pub struct AgentStep {
     /// Error message if the step failed
     pub error: Option<String>,
     /// Token usage for this step
-    pub llm_usage: Option<LlmUsage>,
+    pub llm_usage: Option<TokenUsage>,
     /// Additional metadata
     pub metadata: HashMap<String, serde_json::Value>,
 }
@@ -151,7 +151,7 @@ impl AgentStep {
 
     /// Check if this step indicates task completion
     pub fn indicates_completion(&self) -> bool {
-        self.tool_calls.iter().any(|call| call.name == "task_done")
+        self.tool_calls.iter().any(|call| call.name == "TaskDone")
             || self.state == AgentState::Completed
     }
 

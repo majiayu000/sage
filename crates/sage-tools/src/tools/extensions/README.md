@@ -81,7 +81,7 @@ args.insert("command".to_string(), serde_json::Value::String("/review-pr 123".to
 
 let call = ToolCall {
     id: "call-1".to_string(),
-    name: "slash_command".to_string(),
+    name: "SlashCommand".to_string(),
     arguments: args,
     call_id: None,
 };

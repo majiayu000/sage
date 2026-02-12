@@ -26,7 +26,7 @@ impl BrowserTool {
 #[async_trait]
 impl Tool for BrowserTool {
     fn name(&self) -> &str {
-        "open-browser"
+        "OpenBrowser"
     }
 
     fn description(&self) -> &str {

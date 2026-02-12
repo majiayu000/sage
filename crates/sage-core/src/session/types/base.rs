@@ -54,47 +54,13 @@ impl Default for SessionState {
 // Message Role (re-exported from llm::messages)
 // =============================================================================
 
-pub use crate::llm::messages::MessageRole;
+pub use crate::types::MessageRole;
 
 // =============================================================================
-// Token Usage
+// Token Usage (re-exported from crate::types)
 // =============================================================================
 
-/// Token usage statistics
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct TokenUsage {
-    /// Input tokens used
-    pub input_tokens: u64,
-    /// Output tokens used
-    pub output_tokens: u64,
-    /// Cache read tokens
-    pub cache_read_tokens: u64,
-    /// Cache write tokens
-    pub cache_write_tokens: u64,
-    /// Total cost estimate (in USD)
-    pub cost_estimate: f64,
-}
-
-impl TokenUsage {
-    /// Create new token usage
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Add usage from another TokenUsage
-    pub fn add(&mut self, other: &TokenUsage) {
-        self.input_tokens += other.input_tokens;
-        self.output_tokens += other.output_tokens;
-        self.cache_read_tokens += other.cache_read_tokens;
-        self.cache_write_tokens += other.cache_write_tokens;
-        self.cost_estimate += other.cost_estimate;
-    }
-
-    /// Get total tokens
-    pub fn total_tokens(&self) -> u64 {
-        self.input_tokens + self.output_tokens
-    }
-}
+pub use crate::types::TokenUsage;
 
 // =============================================================================
 // Tests
@@ -109,17 +75,17 @@ mod tests {
         let mut usage1 = TokenUsage {
             input_tokens: 100,
             output_tokens: 50,
-            cache_read_tokens: 10,
-            cache_write_tokens: 5,
-            cost_estimate: 0.01,
+            cache_read_tokens: Some(10),
+            cache_write_tokens: Some(5),
+            cost_estimate: Some(0.01),
         };
 
         let usage2 = TokenUsage {
             input_tokens: 200,
             output_tokens: 100,
-            cache_read_tokens: 20,
-            cache_write_tokens: 10,
-            cost_estimate: 0.02,
+            cache_read_tokens: Some(20),
+            cache_write_tokens: Some(10),
+            cost_estimate: Some(0.02),
         };
 
         usage1.add(&usage2);

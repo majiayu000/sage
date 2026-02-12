@@ -240,7 +240,7 @@ impl UnifiedExecutor {
             .tool_orchestrator
             .requires_user_interaction(&tool_call.name);
 
-        if requires_interaction && tool_call.name == "ask_user_question" {
+        if requires_interaction && tool_call.name == "AskUserQuestion" {
             self.handle_ask_user_question(tool_call).await
         } else if requires_interaction {
             Ok(self

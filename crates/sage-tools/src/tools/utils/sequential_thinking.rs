@@ -23,7 +23,7 @@ impl Default for SequentialThinkingTool {
 #[async_trait]
 impl Tool for SequentialThinkingTool {
     fn name(&self) -> &str {
-        "sequentialthinking"
+        "SequentialThinking"
     }
 
     fn description(&self) -> &str {
@@ -152,7 +152,7 @@ mod tests {
         let tool = SequentialThinkingTool::new();
         let call = create_tool_call(
             "test-1",
-            "sequentialthinking",
+            "SequentialThinking",
             json!({
                 "thinking": "Let me think about this problem step by step:\n1. First, I need to understand the requirements\n2. Then, I'll analyze the constraints\n3. Finally, I'll propose a solution"
             }),
@@ -172,7 +172,7 @@ mod tests {
         let tool = SequentialThinkingTool::new();
         let call = create_tool_call(
             "test-2",
-            "sequentialthinking",
+            "SequentialThinking",
             json!({
                 "thinking": "1. Analyze the problem\n2. Consider alternatives\n3. Choose the best approach"
             }),
@@ -192,7 +192,7 @@ mod tests {
         let tool = SequentialThinkingTool::new();
         let call = create_tool_call(
             "test-3",
-            "sequentialthinking",
+            "SequentialThinking",
             json!({
                 "thinking": "* First consideration\n* Second point\n* Third aspect"
             }),
@@ -212,7 +212,7 @@ mod tests {
         let tool = SequentialThinkingTool::new();
         let call = create_tool_call(
             "test-4",
-            "sequentialthinking",
+            "SequentialThinking",
             json!({
                 "thinking": "- Problem identification\n- Solution brainstorming\n- Implementation planning"
             }),
@@ -232,7 +232,7 @@ mod tests {
         let tool = SequentialThinkingTool::new();
         let call = create_tool_call(
             "test-5",
-            "sequentialthinking",
+            "SequentialThinking",
             json!({
                 "thinking": ""
             }),
@@ -249,7 +249,7 @@ mod tests {
         let tool = SequentialThinkingTool::new();
         let call = create_tool_call(
             "test-6",
-            "sequentialthinking",
+            "SequentialThinking",
             json!({
                 "thinking": "   \n\t  \n   "
             }),
@@ -264,7 +264,7 @@ mod tests {
     #[tokio::test]
     async fn test_sequential_thinking_missing_parameter() {
         let tool = SequentialThinkingTool::new();
-        let call = create_tool_call("test-7", "sequentialthinking", json!({}));
+        let call = create_tool_call("test-7", "SequentialThinking", json!({}));
 
         let result = tool.execute(&call).await;
         assert!(result.is_err());
@@ -277,7 +277,7 @@ mod tests {
         let tool = SequentialThinkingTool::new();
         let call = create_tool_call(
             "test-8",
-            "sequentialthinking",
+            "SequentialThinking",
             json!({
                 "thinking": "Let me analyze this:\n1. First step\n* Important point\n- Another consideration\nRegular text here"
             }),
@@ -296,7 +296,7 @@ mod tests {
     fn test_sequential_thinking_schema() {
         let tool = SequentialThinkingTool::new();
         let schema = tool.schema();
-        assert_eq!(schema.name, "sequentialthinking");
+        assert_eq!(schema.name, "SequentialThinking");
         assert!(!schema.description.is_empty());
     }
 }

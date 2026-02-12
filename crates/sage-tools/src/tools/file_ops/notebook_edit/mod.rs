@@ -44,7 +44,7 @@ impl Default for NotebookEditTool {
 #[async_trait]
 impl Tool for NotebookEditTool {
     fn name(&self) -> &str {
-        "notebook_edit"
+        "NotebookEdit"
     }
 
     fn description(&self) -> &str {

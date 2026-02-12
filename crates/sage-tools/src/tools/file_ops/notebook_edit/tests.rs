@@ -64,7 +64,7 @@ async fn test_notebook_edit_replace_cell() {
     let tool = NotebookEditTool::with_working_directory(temp_dir.path());
     let call = create_tool_call(
         "test-1",
-        "notebook_edit",
+        "NotebookEdit",
         json!({
             "notebook_path": notebook_path.to_str().unwrap(),
             "cell_id": "cell-1",
@@ -97,7 +97,7 @@ async fn test_notebook_edit_insert_cell() {
     let tool = NotebookEditTool::with_working_directory(temp_dir.path());
     let call = create_tool_call(
         "test-2",
-        "notebook_edit",
+        "NotebookEdit",
         json!({
             "notebook_path": notebook_path.to_str().unwrap(),
             "cell_id": "cell-1",
@@ -131,7 +131,7 @@ async fn test_notebook_edit_delete_cell() {
     let tool = NotebookEditTool::with_working_directory(temp_dir.path());
     let call = create_tool_call(
         "test-3",
-        "notebook_edit",
+        "NotebookEdit",
         json!({
             "notebook_path": notebook_path.to_str().unwrap(),
             "cell_id": "cell-1",
@@ -162,7 +162,7 @@ async fn test_notebook_edit_cell_not_found() {
     let tool = NotebookEditTool::with_working_directory(temp_dir.path());
     let call = create_tool_call(
         "test-4",
-        "notebook_edit",
+        "NotebookEdit",
         json!({
             "notebook_path": notebook_path.to_str().unwrap(),
             "cell_id": "nonexistent",
@@ -184,7 +184,7 @@ async fn test_notebook_edit_missing_parameters() {
     // Missing notebook_path
     let call = create_tool_call(
         "test-5a",
-        "notebook_edit",
+        "NotebookEdit",
         json!({
             "cell_id": "cell-1",
             "new_source": "test"
@@ -196,7 +196,7 @@ async fn test_notebook_edit_missing_parameters() {
     // Missing new_source for replace
     let call = create_tool_call(
         "test-5b",
-        "notebook_edit",
+        "NotebookEdit",
         json!({
             "notebook_path": "/tmp/test.ipynb",
             "cell_id": "cell-1",
@@ -209,7 +209,7 @@ async fn test_notebook_edit_missing_parameters() {
     // Missing cell_type for insert
     let call = create_tool_call(
         "test-5c",
-        "notebook_edit",
+        "NotebookEdit",
         json!({
             "notebook_path": "/tmp/test.ipynb",
             "new_source": "test",
@@ -233,7 +233,7 @@ async fn test_notebook_edit_insert_at_beginning() {
     let tool = NotebookEditTool::with_working_directory(temp_dir.path());
     let call = create_tool_call(
         "test-6",
-        "notebook_edit",
+        "NotebookEdit",
         json!({
             "notebook_path": notebook_path.to_str().unwrap(),
             "cell_type": "markdown",
@@ -257,7 +257,7 @@ async fn test_notebook_edit_insert_at_beginning() {
 fn test_notebook_edit_schema() {
     let tool = NotebookEditTool::new();
     let schema = tool.schema();
-    assert_eq!(schema.name, "notebook_edit");
+    assert_eq!(schema.name, "NotebookEdit");
     assert!(!schema.description.is_empty());
 }
 

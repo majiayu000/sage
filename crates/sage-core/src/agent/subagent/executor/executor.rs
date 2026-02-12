@@ -12,7 +12,7 @@ use crate::error::{SageError, SageResult};
 use crate::llm::client::LlmClient;
 use crate::llm::messages::LlmMessage;
 use crate::tools::base::Tool;
-use crate::types::LlmUsage;
+use crate::types::TokenUsage;
 
 /// Sub-agent executor
 pub struct SubAgentExecutor {
@@ -68,7 +68,7 @@ impl SubAgentExecutor {
         // Track execution
         let mut steps_taken = 0;
         let tool_calls_count = 0;
-        let mut total_usage = LlmUsage::default();
+        let mut total_usage = TokenUsage::default();
 
         // Create step executor
         let step_executor = StepExecutor::new(Arc::clone(&self.llm_client));
@@ -103,7 +103,7 @@ impl SubAgentExecutor {
             if let Some(usage) = messages
                 .last()
                 .and_then(|m| m.metadata.get("usage"))
-                .and_then(|v| serde_json::from_value::<LlmUsage>(v.clone()).ok())
+                .and_then(|v| serde_json::from_value::<TokenUsage>(v.clone()).ok())
             {
                 total_usage.add(&usage);
             }
@@ -171,12 +171,12 @@ impl SubAgentExecutor {
 
     /// Create execution metadata from current state
     fn create_metadata(
-        total_usage: &LlmUsage,
+        total_usage: &TokenUsage,
         tool_calls_count: usize,
         duration_secs: f64,
     ) -> ExecutionMetadata {
         ExecutionMetadata {
-            total_tokens: total_usage.total_tokens as u64,
+            total_tokens: total_usage.total_tokens(),
             total_tool_uses: tool_calls_count as u32,
             execution_time_ms: (duration_secs * 1000.0) as u64,
             tools_used: Vec::new(),

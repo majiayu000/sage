@@ -5,7 +5,7 @@ use sage_core::tools::types::{ToolParameter, ToolSchema};
 /// Create the tool schema for notebook editing
 pub fn create_schema() -> ToolSchema {
     ToolSchema::new(
-        "notebook_edit",
+        "NotebookEdit",
         "Edit Jupyter notebook (.ipynb) cells. Supports three operations:
 - replace: Replace the content of an existing cell (requires cell_id)
 - insert: Insert a new cell at a position (requires cell_type; inserts after cell_id if provided, or at beginning)

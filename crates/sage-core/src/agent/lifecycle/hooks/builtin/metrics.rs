@@ -69,7 +69,7 @@ impl LifecycleHook for MetricsHook {
                     tracing::info!(
                         success = execution.success,
                         steps = execution.steps.len(),
-                        total_tokens = execution.total_usage.total_tokens,
+                        total_tokens = execution.total_usage.total_tokens(),
                         "Task completed"
                     );
                 }

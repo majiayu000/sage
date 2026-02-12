@@ -120,7 +120,8 @@ mod tests {
     use crate::session::enhanced::{
         MessageContent, SessionContext,
     };
-    use crate::session::types::unified::{SessionMessage, SessionMessageType, UnifiedMessageRole};
+    use crate::session::types::unified::{SessionMessage, SessionMessageType};
+    use crate::types::MessageRole;
     use chrono::Utc;
     use std::collections::HashMap;
     use std::path::PathBuf;
@@ -138,9 +139,9 @@ mod tests {
             context: SessionContext::new(PathBuf::from("/tmp")),
             message: MessageContent {
                 role: match msg_type {
-                    SessionMessageType::User => UnifiedMessageRole::User,
-                    SessionMessageType::Assistant => UnifiedMessageRole::Assistant,
-                    _ => UnifiedMessageRole::System,
+                    SessionMessageType::User => MessageRole::User,
+                    SessionMessageType::Assistant => MessageRole::Assistant,
+                    _ => MessageRole::System,
                 },
                 content: content.to_string(),
                 tool_calls: None,

@@ -129,7 +129,7 @@ impl SlashCommandTool {
 #[async_trait]
 impl Tool for SlashCommandTool {
     fn name(&self) -> &str {
-        "slash_command"
+        "SlashCommand"
     }
 
     fn description(&self) -> &str {
@@ -198,7 +198,7 @@ mod tests {
     #[tokio::test]
     async fn test_slash_command_execution() {
         let tool = SlashCommandTool::new();
-        let call = create_tool_call("test-1", "slash_command", "/review-pr 123");
+        let call = create_tool_call("test-1", "SlashCommand", "/review-pr 123");
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
@@ -231,15 +231,15 @@ mod tests {
         let tool = SlashCommandTool::new();
 
         // Missing slash
-        let call = create_tool_call("test-2", "slash_command", "test");
+        let call = create_tool_call("test-2", "SlashCommand", "test");
         assert!(tool.validate(&call).is_err());
 
         // Empty command
-        let call = create_tool_call("test-3", "slash_command", "");
+        let call = create_tool_call("test-3", "SlashCommand", "");
         assert!(tool.validate(&call).is_err());
 
         // Just slash
-        let call = create_tool_call("test-4", "slash_command", "/");
+        let call = create_tool_call("test-4", "SlashCommand", "/");
         assert!(tool.validate(&call).is_err());
     }
 
@@ -256,7 +256,7 @@ mod tests {
         ];
 
         for cmd in valid_commands {
-            let call = create_tool_call(&format!("test-{}", cmd), "slash_command", cmd);
+            let call = create_tool_call(&format!("test-{}", cmd), "SlashCommand", cmd);
             assert!(
                 tool.validate(&call).is_ok(),
                 "Command should be valid: {}",
@@ -270,7 +270,7 @@ mod tests {
         let tool = SlashCommandTool::new();
         let call = ToolCall {
             id: "test-5".to_string(),
-            name: "slash_command".to_string(),
+            name: "SlashCommand".to_string(),
             arguments: HashMap::new(),
             call_id: None,
         };
@@ -298,7 +298,7 @@ mod tests {
         let tool = SlashCommandTool::new();
         let schema = tool.schema();
 
-        assert_eq!(schema.name, "slash_command");
+        assert_eq!(schema.name, "SlashCommand");
         assert!(!schema.description.is_empty());
 
         // Check that the schema has the command parameter
@@ -314,12 +314,12 @@ mod tests {
         let tool = SlashCommandTool::new();
 
         // Command with dashes
-        let call = create_tool_call("test-6", "slash_command", "/git-commit-smart");
+        let call = create_tool_call("test-6", "SlashCommand", "/git-commit-smart");
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
 
         // Command with underscores
-        let call = create_tool_call("test-7", "slash_command", "/run_tests");
+        let call = create_tool_call("test-7", "SlashCommand", "/run_tests");
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
     }
@@ -327,7 +327,7 @@ mod tests {
     #[tokio::test]
     async fn test_command_execution_output() {
         let tool = SlashCommandTool::new();
-        let call = create_tool_call("test-8", "slash_command", "/review-pr 123");
+        let call = create_tool_call("test-8", "SlashCommand", "/review-pr 123");
 
         let result = tool.execute(&call).await.unwrap();
         let output = result.output.unwrap();

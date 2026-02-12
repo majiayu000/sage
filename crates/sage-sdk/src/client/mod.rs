@@ -1,7 +1,6 @@
 //! SDK client implementation
 
 use sage_core::{config::model::Config, error::SageResult};
-use std::path::PathBuf;
 
 // Module declarations - now using subdirectories
 mod builder;
@@ -20,8 +19,7 @@ pub use sage_core::input::InputRequest;
 /// High-level SDK client for interacting with Sage Agent.
 ///
 /// `SageAgentSdk` provides a fluent API for configuring and executing agent tasks.
-/// It handles configuration loading, tool registration, trajectory recording,
-/// and execution management.
+/// It handles configuration loading, tool registration, and execution management.
 ///
 /// # Examples
 ///
@@ -49,8 +47,7 @@ pub use sage_core::input::InputRequest;
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// let sdk = SageAgentSdk::new()?
 ///     .with_working_directory("/path/to/project")
-///     .with_max_steps(Some(50))
-///     .with_trajectory_path("output/trajectory.json");
+///     .with_max_steps(Some(50));
 ///
 /// let result = sdk.run("Implement new feature").await?;
 /// # Ok(())
@@ -58,7 +55,6 @@ pub use sage_core::input::InputRequest;
 /// ```
 pub struct SageAgentSdk {
     pub(crate) config: Config,
-    pub(crate) trajectory_path: Option<PathBuf>,
 }
 
 impl SageAgentSdk {

@@ -30,10 +30,7 @@ impl SageAgentSdk {
     /// ```
     pub fn new() -> SageResult<Self> {
         let config = load_config_with_overrides(None, HashMap::new())?;
-        Ok(Self {
-            config,
-            trajectory_path: None,
-        })
+        Ok(Self { config })
     }
 
     /// Create SDK instance with custom configuration.
@@ -49,10 +46,7 @@ impl SageAgentSdk {
     /// let sdk = SageAgentSdk::with_config(config);
     /// ```
     pub fn with_config(config: Config) -> Self {
-        Self {
-            config,
-            trajectory_path: None,
-        }
+        Self { config }
     }
 
     /// Create SDK instance with configuration file.
@@ -79,10 +73,11 @@ impl SageAgentSdk {
         let config_path = config_file.as_ref();
         tracing::info!("Loading SDK config from: {}", config_path.display());
 
-        let config = load_config_with_overrides(
-            Some(config_file.as_ref().to_str().unwrap()),
-            HashMap::new(),
-        )?;
+        let path_str = config_file
+            .as_ref()
+            .to_str()
+            .ok_or_else(|| sage_core::error::SageError::config("Config file path contains invalid UTF-8"))?;
+        let config = load_config_with_overrides(Some(path_str), HashMap::new())?;
 
         tracing::info!(
             "SDK config loaded - provider: {}, model: {}",
@@ -93,18 +88,18 @@ impl SageAgentSdk {
                 .unwrap_or_else(|_| "unknown".to_string())
         );
 
-        Ok(Self {
-            config,
-            trajectory_path: None,
-        })
+        Ok(Self { config })
     }
 }
 
 impl Default for SageAgentSdk {
+    /// Creates SDK with default configuration.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the default configuration cannot be loaded. Use `SageAgentSdk::new()`
+    /// for fallible construction.
     fn default() -> Self {
-        Self::new().unwrap_or_else(|_| Self {
-            config: Config::default(),
-            trajectory_path: None,
-        })
+        Self::new().expect("Failed to load default SDK configuration")
     }
 }

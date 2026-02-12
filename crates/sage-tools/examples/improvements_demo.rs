@@ -127,7 +127,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let add_tool = AddTasksTool::new();
     let call = create_tool_call(
         "demo-add",
-        "add_tasks",
+        "AddTasks",
         json!({
             "tasks": [
                 {
@@ -159,7 +159,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // View the task list
     let view_tool = ViewTasklistTool::new();
-    let view_call = create_tool_call("demo-view", "view_tasklist", json!({}));
+    let view_call = create_tool_call("demo-view", "ViewTasklist", json!({}));
     let view_result = view_tool.execute(&view_call).await?;
     println!(
         "\nCurrent Task List:\n{}",

@@ -1,7 +1,7 @@
 //! Session recording functionality for user and assistant messages.
 
 use crate::error::SageResult;
-use crate::session::{SessionMessage, UnifiedTokenUsage, UnifiedToolCall};
+use crate::session::{SessionMessage, WireTokenUsage, UnifiedToolCall};
 use anyhow::Context;
 use tracing::instrument;
 
@@ -119,7 +119,7 @@ impl UnifiedExecutor {
         &mut self,
         content: &str,
         tool_calls: Option<Vec<UnifiedToolCall>>,
-        usage: Option<UnifiedTokenUsage>,
+        usage: Option<WireTokenUsage>,
     ) -> SageResult<Option<SessionMessage>> {
         if !self.session_manager.is_recording_active() {
             return Ok(None);

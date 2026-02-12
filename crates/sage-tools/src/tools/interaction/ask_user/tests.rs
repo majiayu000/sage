@@ -27,7 +27,7 @@ async fn test_single_question() {
     let tool = AskUserQuestionTool::new();
     let call = create_tool_call(
         "test-1",
-        "ask_user_question",
+        "AskUserQuestion",
         json!({
             "questions": [{
                 "question": "Which authentication method should we use?",
@@ -61,7 +61,7 @@ async fn test_multiple_questions() {
     let tool = AskUserQuestionTool::new();
     let call = create_tool_call(
         "test-2",
-        "ask_user_question",
+        "AskUserQuestion",
         json!({
             "questions": [
                 {
@@ -108,7 +108,7 @@ async fn test_multi_select_question() {
     let tool = AskUserQuestionTool::new();
     let call = create_tool_call(
         "test-3",
-        "ask_user_question",
+        "AskUserQuestion",
         json!({
             "questions": [{
                 "question": "Which features should we implement?",
@@ -143,7 +143,7 @@ async fn test_header_too_long() {
     let tool = AskUserQuestionTool::new();
     let call = create_tool_call(
         "test-4",
-        "ask_user_question",
+        "AskUserQuestion",
         json!({
             "questions": [{
                 "question": "Test question",
@@ -173,7 +173,7 @@ async fn test_too_few_options() {
     let tool = AskUserQuestionTool::new();
     let call = create_tool_call(
         "test-5",
-        "ask_user_question",
+        "AskUserQuestion",
         json!({
             "questions": [{
                 "question": "Test question",
@@ -199,7 +199,7 @@ async fn test_too_many_options() {
     let tool = AskUserQuestionTool::new();
     let call = create_tool_call(
         "test-6",
-        "ask_user_question",
+        "AskUserQuestion",
         json!({
             "questions": [{
                 "question": "Test question",
@@ -269,7 +269,7 @@ async fn test_too_many_questions() {
 
     let call = create_tool_call(
         "test-7",
-        "ask_user_question",
+        "AskUserQuestion",
         json!({
             "questions": questions
         }),
@@ -286,7 +286,7 @@ async fn test_empty_question_text() {
     let tool = AskUserQuestionTool::new();
     let call = create_tool_call(
         "test-8",
-        "ask_user_question",
+        "AskUserQuestion",
         json!({
             "questions": [{
                 "question": "   ",
@@ -310,7 +310,7 @@ async fn test_with_answers() {
     let tool = AskUserQuestionTool::new();
     let call = create_tool_call(
         "test-9",
-        "ask_user_question",
+        "AskUserQuestion",
         json!({
             "questions": [{
                 "question": "Which framework?",

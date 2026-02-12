@@ -6,7 +6,7 @@ use std::path::PathBuf;
 /// Options for running tasks.
 ///
 /// Provides fine-grained control over task execution behavior including
-/// working directory, step limits, trajectory recording, and metadata.
+/// working directory, step limits, and metadata.
 ///
 /// # Examples
 ///
@@ -15,8 +15,7 @@ use std::path::PathBuf;
 ///
 /// let options = RunOptions::new()
 ///     .with_working_directory("/path/to/project")
-///     .with_max_steps(50)
-///     .with_trajectory(true);
+///     .with_max_steps(50);
 /// ```
 #[derive(Debug, Clone, Default)]
 pub struct RunOptions {
@@ -24,10 +23,6 @@ pub struct RunOptions {
     pub working_directory: Option<PathBuf>,
     /// Maximum number of steps
     pub max_steps: Option<u32>,
-    /// Enable trajectory recording (kept for compatibility; recording is always on)
-    pub enable_trajectory: bool,
-    /// Custom trajectory file path
-    pub trajectory_path: Option<PathBuf>,
     /// Additional metadata
     pub metadata: HashMap<String, serde_json::Value>,
 }
@@ -73,41 +68,6 @@ impl RunOptions {
     /// ```
     pub fn with_max_steps(mut self, max_steps: u32) -> Self {
         self.max_steps = Some(max_steps);
-        self
-    }
-
-    /// Enable or disable trajectory recording.
-    ///
-    /// Note: trajectory recording is always enabled in the runtime.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use sage_sdk::RunOptions;
-    ///
-    /// let options = RunOptions::new()
-    ///     .with_trajectory(true);
-    /// ```
-    pub fn with_trajectory(mut self, enabled: bool) -> Self {
-        self.enable_trajectory = enabled;
-        self
-    }
-
-    /// Set custom trajectory file path.
-    ///
-    /// Automatically enables trajectory recording.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use sage_sdk::RunOptions;
-    ///
-    /// let options = RunOptions::new()
-    ///     .with_trajectory_path("logs/execution.json");
-    /// ```
-    pub fn with_trajectory_path<P: Into<PathBuf>>(mut self, path: P) -> Self {
-        self.trajectory_path = Some(path.into());
-        self.enable_trajectory = true;
         self
     }
 

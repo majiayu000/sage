@@ -10,70 +10,65 @@ pub type Id = Uuid;
 
 /// Token usage statistics for LLM calls
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct LlmUsage {
-    /// Number of tokens in the prompt
-    pub prompt_tokens: u32,
-    /// Number of tokens in the completion
-    pub completion_tokens: u32,
-    /// Total number of tokens used
-    pub total_tokens: u32,
-    /// Cost in USD (if available)
-    pub cost_usd: Option<f64>,
-    /// Number of tokens written to cache (Anthropic prompt caching)
-    /// Cache writes cost 25% more than base input tokens
-    pub cache_creation_input_tokens: Option<u32>,
-    /// Number of tokens read from cache (Anthropic prompt caching)
-    /// Cache reads cost only 10% of base input tokens
-    pub cache_read_input_tokens: Option<u32>,
+pub struct TokenUsage {
+    /// Number of input tokens
+    pub input_tokens: u64,
+    /// Number of output tokens
+    pub output_tokens: u64,
+    /// Tokens read from cache (Anthropic prompt caching)
+    pub cache_read_tokens: Option<u64>,
+    /// Tokens written to cache (Anthropic prompt caching)
+    pub cache_write_tokens: Option<u64>,
+    /// Cost estimate in USD (if available)
+    pub cost_estimate: Option<f64>,
 }
 
-impl LlmUsage {
-    /// Create a new LlmUsage instance
-    pub fn new(prompt_tokens: u32, completion_tokens: u32) -> Self {
+impl TokenUsage {
+    /// Create a new TokenUsage instance
+    pub fn new(input_tokens: u64, output_tokens: u64) -> Self {
         Self {
-            prompt_tokens,
-            completion_tokens,
-            total_tokens: prompt_tokens + completion_tokens,
-            cost_usd: None,
-            cache_creation_input_tokens: None,
-            cache_read_input_tokens: None,
+            input_tokens,
+            output_tokens,
+            cache_read_tokens: None,
+            cache_write_tokens: None,
+            cost_estimate: None,
         }
     }
 
-    /// Add usage from another LlmUsage instance
-    pub fn add(&mut self, other: &LlmUsage) {
-        self.prompt_tokens += other.prompt_tokens;
-        self.completion_tokens += other.completion_tokens;
-        self.total_tokens += other.total_tokens;
-        if let (Some(cost1), Some(cost2)) = (self.cost_usd, other.cost_usd) {
-            self.cost_usd = Some(cost1 + cost2);
-        }
-        // Add cache tokens
-        match (
-            self.cache_creation_input_tokens,
-            other.cache_creation_input_tokens,
-        ) {
-            (Some(t1), Some(t2)) => self.cache_creation_input_tokens = Some(t1 + t2),
-            (None, Some(t)) => self.cache_creation_input_tokens = Some(t),
+    /// Get total tokens (input + output)
+    pub fn total_tokens(&self) -> u64 {
+        self.input_tokens + self.output_tokens
+    }
+
+    /// Add usage from another TokenUsage instance
+    pub fn add(&mut self, other: &TokenUsage) {
+        self.input_tokens += other.input_tokens;
+        self.output_tokens += other.output_tokens;
+        match (self.cache_read_tokens, other.cache_read_tokens) {
+            (Some(t1), Some(t2)) => self.cache_read_tokens = Some(t1 + t2),
+            (None, Some(t)) => self.cache_read_tokens = Some(t),
             _ => {}
         }
-        match (self.cache_read_input_tokens, other.cache_read_input_tokens) {
-            (Some(t1), Some(t2)) => self.cache_read_input_tokens = Some(t1 + t2),
-            (None, Some(t)) => self.cache_read_input_tokens = Some(t),
+        match (self.cache_write_tokens, other.cache_write_tokens) {
+            (Some(t1), Some(t2)) => self.cache_write_tokens = Some(t1 + t2),
+            (None, Some(t)) => self.cache_write_tokens = Some(t),
             _ => {}
+        }
+        if let Some(cost) = other.cost_estimate {
+            *self.cost_estimate.get_or_insert(0.0) += cost;
         }
     }
 
     /// Check if this usage contains cache metrics
     pub fn has_cache_metrics(&self) -> bool {
-        self.cache_creation_input_tokens.is_some() || self.cache_read_input_tokens.is_some()
+        self.cache_read_tokens.is_some() || self.cache_write_tokens.is_some()
     }
 
     /// Get the effective input tokens (accounting for cache)
     /// Returns (regular_tokens, cached_tokens)
-    pub fn get_cache_breakdown(&self) -> (u32, u32) {
-        let cached = self.cache_read_input_tokens.unwrap_or(0);
-        let regular = self.prompt_tokens.saturating_sub(cached);
+    pub fn get_cache_breakdown(&self) -> (u64, u64) {
+        let cached = self.cache_read_tokens.unwrap_or(0);
+        let regular = self.input_tokens.saturating_sub(cached);
         (regular, cached)
     }
 }

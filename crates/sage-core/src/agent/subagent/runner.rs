@@ -303,7 +303,7 @@ impl SubAgentRunner {
 
         // Update token usage
         if let Some(usage) = &response.usage {
-            let tokens = (usage.prompt_tokens + usage.completion_tokens) as u64;
+            let tokens = usage.total_tokens();
             progress.add_tokens(tokens);
             metadata.total_tokens += tokens;
         }

@@ -1,7 +1,7 @@
 //! LLM message types and structures
 
 use crate::tools::ToolCall;
-use crate::types::LlmUsage;
+use crate::types::TokenUsage;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -40,36 +40,8 @@ impl Default for CacheControl {
     }
 }
 
-/// Role of a message in the conversation
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum MessageRole {
-    /// System message (instructions)
-    System,
-    /// User message (human input)
-    User,
-    /// Assistant message (AI response)
-    Assistant,
-    /// Tool message (tool execution result)
-    Tool,
-}
-
-impl Default for MessageRole {
-    fn default() -> Self {
-        MessageRole::User
-    }
-}
-
-impl std::fmt::Display for MessageRole {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MessageRole::System => write!(f, "system"),
-            MessageRole::User => write!(f, "user"),
-            MessageRole::Assistant => write!(f, "assistant"),
-            MessageRole::Tool => write!(f, "tool"),
-        }
-    }
-}
+/// Role of a message in the conversation (canonical definition in `crate::types::message`)
+pub use crate::types::MessageRole;
 
 /// A message in the LLM conversation
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -202,7 +174,7 @@ pub struct LlmResponse {
     /// Tool calls requested by the LLM
     pub tool_calls: Vec<ToolCall>,
     /// Token usage information
-    pub usage: Option<LlmUsage>,
+    pub usage: Option<TokenUsage>,
     /// Model used for the response
     pub model: Option<String>,
     /// Finish reason
@@ -241,7 +213,7 @@ impl LlmResponse {
     }
 
     /// Add usage information
-    pub fn with_usage(mut self, usage: LlmUsage) -> Self {
+    pub fn with_usage(mut self, usage: TokenUsage) -> Self {
         self.usage = Some(usage);
         self
     }
@@ -259,7 +231,7 @@ impl LlmResponse {
 
     /// Check if the response indicates task completion
     pub fn indicates_completion(&self) -> bool {
-        self.tool_calls.iter().any(|call| call.name == "task_done")
+        self.tool_calls.iter().any(|call| call.name == "TaskDone")
     }
 
     /// Check if the response indicates the model is waiting for user input

@@ -27,7 +27,7 @@ impl Default for TaskOutputTool {
 #[async_trait]
 impl Tool for TaskOutputTool {
     fn name(&self) -> &str {
-        "task_output"
+        "TaskOutput"
     }
 
     fn description(&self) -> &str {
@@ -226,7 +226,7 @@ mod tests {
         let tool = TaskOutputTool::new();
         let schema = tool.schema();
 
-        assert_eq!(schema.name, "task_output");
+        assert_eq!(schema.name, "TaskOutput");
         assert!(!schema.description.is_empty());
     }
 
@@ -234,7 +234,7 @@ mod tests {
     fn test_task_output_tool_properties() {
         let tool = TaskOutputTool::new();
 
-        assert_eq!(tool.name(), "task_output");
+        assert_eq!(tool.name(), "TaskOutput");
         assert!(tool.description().contains("background"));
         assert_eq!(
             tool.max_execution_duration(),
@@ -247,7 +247,7 @@ mod tests {
     #[tokio::test]
     async fn test_task_output_missing_shell_id() {
         let tool = TaskOutputTool::new();
-        let call = create_tool_call("test-1", "task_output", json!({}));
+        let call = create_tool_call("test-1", "TaskOutput", json!({}));
 
         let result = tool.execute(&call).await;
         assert!(result.is_err());
@@ -265,7 +265,7 @@ mod tests {
         let tool = TaskOutputTool::new();
         let call = create_tool_call(
             "test-2",
-            "task_output",
+            "TaskOutput",
             json!({
                 "shell_id": ""
             }),
@@ -287,7 +287,7 @@ mod tests {
         let tool = TaskOutputTool::new();
         let call = create_tool_call(
             "test-3",
-            "task_output",
+            "TaskOutput",
             json!({
                 "shell_id": "invalid shell!"
             }),
@@ -309,7 +309,7 @@ mod tests {
         let tool = TaskOutputTool::new();
         let call = create_tool_call(
             "test-4",
-            "task_output",
+            "TaskOutput",
             json!({
                 "shell_id": "nonexistent_shell_xyz"
             }),
@@ -333,7 +333,7 @@ mod tests {
         // Negative timeout
         let call = create_tool_call(
             "test-5",
-            "task_output",
+            "TaskOutput",
             json!({
                 "shell_id": "test_shell",
                 "timeout": -1000.0
@@ -344,7 +344,7 @@ mod tests {
         // Excessive timeout
         let call = create_tool_call(
             "test-6",
-            "task_output",
+            "TaskOutput",
             json!({
                 "shell_id": "test_shell",
                 "timeout": 700000.0
@@ -355,7 +355,7 @@ mod tests {
         // Valid timeout
         let call = create_tool_call(
             "test-7",
-            "task_output",
+            "TaskOutput",
             json!({
                 "shell_id": "test_shell",
                 "timeout": 5000.0
@@ -385,7 +385,7 @@ mod tests {
         let tool = TaskOutputTool::new();
         let call = create_tool_call(
             "test-8",
-            "task_output",
+            "TaskOutput",
             json!({
                 "shell_id": "test_task_output_1",
                 "incremental": false
@@ -425,7 +425,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(50)).await;
         let call1 = create_tool_call(
             "test-9a",
-            "task_output",
+            "TaskOutput",
             json!({
                 "shell_id": "test_task_output_2",
                 "incremental": true
@@ -438,7 +438,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(150)).await;
         let call2 = create_tool_call(
             "test-9b",
-            "task_output",
+            "TaskOutput",
             json!({
                 "shell_id": "test_task_output_2",
                 "incremental": true

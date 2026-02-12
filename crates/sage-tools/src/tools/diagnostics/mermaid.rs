@@ -31,7 +31,7 @@ impl RenderMermaidTool {
 #[async_trait]
 impl Tool for RenderMermaidTool {
     fn name(&self) -> &str {
-        "render-mermaid"
+        "RenderMermaid"
     }
 
     fn description(&self) -> &str {

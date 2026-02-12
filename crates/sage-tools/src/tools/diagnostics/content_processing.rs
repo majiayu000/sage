@@ -27,7 +27,7 @@ impl ViewRangeUntruncatedTool {
 #[async_trait]
 impl Tool for ViewRangeUntruncatedTool {
     fn name(&self) -> &str {
-        "view-range-untruncated"
+        "ViewRangeUntruncated"
     }
 
     fn description(&self) -> &str {
@@ -108,7 +108,7 @@ impl SearchUntruncatedTool {
 #[async_trait]
 impl Tool for SearchUntruncatedTool {
     fn name(&self) -> &str {
-        "search-untruncated"
+        "SearchUntruncated"
     }
 
     fn description(&self) -> &str {

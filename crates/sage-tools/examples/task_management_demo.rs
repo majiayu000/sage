@@ -39,7 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Step 1: View empty task list
     println!("📋 Step 1: Viewing empty task list");
-    let call = create_tool_call("demo-1", "view_tasklist", json!({}));
+    let call = create_tool_call("demo-1", "ViewTasklist", json!({}));
     let result = view_tool.execute(&call).await?;
     println!("Result: {}\n", result.output.as_ref().unwrap());
 
@@ -47,7 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("➕ Step 2: Adding tasks");
     let call = create_tool_call(
         "demo-2",
-        "add_tasks",
+        "AddTasks",
         json!({
             "tasks": [
                 {
@@ -78,7 +78,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Step 3: View the populated task list
     println!("📋 Step 3: Viewing populated task list");
-    let call = create_tool_call("demo-3", "view_tasklist", json!({}));
+    let call = create_tool_call("demo-3", "ViewTasklist", json!({}));
     let result = view_tool.execute(&call).await?;
     println!("Result:\n{}\n", result.output.as_ref().unwrap());
 
@@ -94,7 +94,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if !task_ids.is_empty() {
         let call = create_tool_call(
             "demo-4",
-            "update_tasks",
+            "UpdateTasks",
             json!({
                 "tasks": [{
                     "task_id": task_ids[0],
@@ -111,7 +111,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if task_ids.len() >= 2 {
         let call = create_tool_call(
             "demo-5",
-            "update_tasks",
+            "UpdateTasks",
             json!({
                 "tasks": [
                     {
@@ -131,7 +131,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Step 6: View final state
     println!("📋 Step 6: Viewing final task list state");
-    let call = create_tool_call("demo-6", "view_tasklist", json!({}));
+    let call = create_tool_call("demo-6", "ViewTasklist", json!({}));
     let result = view_tool.execute(&call).await?;
     println!("Final Result:\n{}", result.output.as_ref().unwrap());
 

@@ -20,7 +20,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     println!("\n📝 Running task with trajectory recording...");
     let run_options = RunOptions::new()
         .with_max_steps(3)
-        .with_trajectory(true) // Enable trajectory recording
         .with_metadata("demo_type", "trajectory_test");
 
     let result = sdk
@@ -28,13 +27,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .await?;
 
     if result.is_success() {
-        println!("✅ Task completed successfully!");
-
-        // Show trajectory path
-        if let Some(trajectory_path) = result.trajectory_path() {
-            println!("📊 Trajectory saved to: {}", trajectory_path.display());
-            println!("   You can find this file in the trajectories/ directory");
-        }
+        println!("Task completed successfully!");
 
         // Print execution statistics
         let stats = result.statistics();

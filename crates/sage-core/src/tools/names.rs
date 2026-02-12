@@ -18,27 +18,27 @@ pub mod file_ops {
     /// Search file contents
     pub const GREP: &str = "Grep";
     /// Edit JSON files
-    pub const JSON_EDIT: &str = "json_edit_tool";
+    pub const JSON_EDIT: &str = "JsonEdit";
     /// Edit Jupyter notebooks
-    pub const NOTEBOOK_EDIT: &str = "notebook_edit";
+    pub const NOTEBOOK_EDIT: &str = "NotebookEdit";
 }
 
 /// Process/execution tools
 pub mod process {
     /// Execute bash commands
-    pub const BASH: &str = "bash";
+    pub const BASH: &str = "Bash";
     /// Spawn background tasks
     pub const TASK: &str = "Task";
     /// Get task output
-    pub const TASK_OUTPUT: &str = "task_output";
+    pub const TASK_OUTPUT: &str = "TaskOutput";
     /// Kill background shell
-    pub const KILL_SHELL: &str = "kill_shell";
+    pub const KILL_SHELL: &str = "KillShell";
 }
 
 /// Task management tools
 pub mod task_mgmt {
     /// Mark task as done
-    pub const TASK_DONE: &str = "task_done";
+    pub const TASK_DONE: &str = "TaskDone";
     /// Write todo items
     pub const TODO_WRITE: &str = "TodoWrite";
     /// Read todo items
@@ -48,25 +48,25 @@ pub mod task_mgmt {
 /// User interaction tools
 pub mod interaction {
     /// Ask user a question
-    pub const ASK_USER: &str = "ask_user_question";
+    pub const ASK_USER: &str = "AskUserQuestion";
 }
 
 /// Planning tools
 pub mod planning {
     /// Enter plan mode
-    pub const ENTER_PLAN_MODE: &str = "enter_plan_mode";
+    pub const ENTER_PLAN_MODE: &str = "EnterPlanMode";
     /// Exit plan mode
-    pub const EXIT_PLAN_MODE: &str = "exit_plan_mode";
+    pub const EXIT_PLAN_MODE: &str = "ExitPlanMode";
 }
 
 /// Network tools
 pub mod network {
     /// Fetch web content
-    pub const WEB_FETCH: &str = "web-fetch";
+    pub const WEB_FETCH: &str = "WebFetch";
     /// Search the web
-    pub const WEB_SEARCH: &str = "web-search";
+    pub const WEB_SEARCH: &str = "WebSearch";
     /// Open browser
-    pub const OPEN_BROWSER: &str = "open-browser";
+    pub const OPEN_BROWSER: &str = "OpenBrowser";
 }
 
 /// Check if a tool name is a file-modifying tool
@@ -100,12 +100,12 @@ mod tests {
         assert!(is_file_modifying_tool("Edit"));
         assert!(is_file_modifying_tool("MultiEdit"));
         assert!(!is_file_modifying_tool("Read"));
-        assert!(!is_file_modifying_tool("bash"));
+        assert!(!is_file_modifying_tool("Bash"));
     }
 
     #[test]
     fn test_completion_tool() {
-        assert!(is_completion_tool("task_done"));
+        assert!(is_completion_tool("TaskDone"));
         assert!(!is_completion_tool("Write"));
     }
 }

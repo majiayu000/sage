@@ -118,16 +118,16 @@
 #![allow(clippy::module_inception)]
 
 pub mod agent;
-pub mod builder;
-pub mod cache;
-pub mod checkpoints;
+pub(crate) mod builder;
+pub(crate) mod cache;
+pub(crate) mod checkpoints;
 pub mod commands;
-pub mod concurrency;
+pub(crate) mod concurrency;
 pub mod config;
 pub mod context;
-pub mod cost;
+pub(crate) mod cost;
 pub mod error;
-pub mod events;
+pub(crate) mod events;
 pub mod hooks;
 pub mod input;
 pub mod interrupt;
@@ -135,14 +135,14 @@ pub mod learning;
 pub mod llm;
 pub mod mcp;
 pub mod memory;
-pub mod modes;
+pub(crate) mod modes;
 pub mod output;
 pub mod plugins;
 pub mod prompts;
-pub mod recovery;
+pub(crate) mod recovery;
 pub mod sandbox;
 pub mod session;
-pub mod settings;
+pub(crate) mod settings;
 pub mod skills;
 pub mod storage;
 pub mod telemetry;
@@ -150,8 +150,8 @@ pub mod tools;
 pub mod trajectory;
 pub mod types;
 pub mod ui;
-pub mod utils;
-pub mod validation;
+pub(crate) mod utils;
+pub(crate) mod validation;
 pub mod workspace;
 
 // Plugin system is implemented in plugins module
@@ -164,11 +164,6 @@ pub use agent::{
     LifecycleHookRegistry, LifecycleManager, LifecyclePhase, LifecycleResult, LoggingHook,
     MetricsHook, UnifiedExecutor, UnifiedExecutorBuilder,
 };
-pub use builder::{BuilderError, ConfigBuilderExt, SageBuilder, SageComponents};
-pub use cache::{CacheConfig, CacheEntry, CacheKey, CacheManager, LlmCache};
-pub use concurrency::{
-    AgentId, CancellationHierarchy, SessionId, SharedCancellationHierarchy, ToolCallId,
-};
 pub use config::{Config, LakeviewConfig, ModelParameters};
 pub use context::{
     AggregatedStats, ContextConfig, ContextManager, ContextUsageStats, ConversationSummarizer,
@@ -176,7 +171,6 @@ pub use context::{
     StreamingMetrics, StreamingStats, StreamingTokenCounter, TokenEstimator,
 };
 pub use error::{OptionExt, ResultExt, SageError, SageResult};
-pub use events::{Event, EventBus, SharedEventBus};
 pub use hooks::{
     CallbackHook, CommandHook, HookConfig, HookEvent, HookExecutionResult, HookExecutor,
     HookImplementation, HookInput, HookMatcher, HookOutput, HookRegistry, HookType, HookVariant,
@@ -192,13 +186,6 @@ pub use plugins::{
     Plugin, PluginCapability, PluginContext, PluginEntry, PluginError, PluginInfo, PluginLifecycle,
     PluginManifest, PluginPermission, PluginRegistry, PluginResult, PluginState,
 };
-pub use recovery::{
-    BackoffConfig, BackoffStrategy, CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError,
-    CircuitBreakerRegistry, CircuitBreakerStats, CircuitState, ErrorClass, RateLimitConfig,
-    RateLimitError, RateLimitGuard, RateLimiter, RateLimiterConfig, RecoverableError,
-    RecoveryError, RetryConfig, RetryPolicy, RetryResult, SlidingWindowRateLimiter,
-    SupervisionPolicy, SupervisionResult, Supervisor, TaskSupervisor,
-};
 pub use sandbox::{
     DefaultSandbox, ResourceLimits, ResourceUsage, Sandbox, SandboxBuilder, SandboxConfig,
     SandboxError, SandboxMode, SandboxPolicy, SandboxResult, SandboxedExecution,
@@ -206,35 +193,18 @@ pub use sandbox::{
 pub use session::{
     ConversationMessage, FileSessionStorage, MemorySessionStorage, MessageRole, Session,
     SessionConfig, SessionManager, SessionState, SessionStorage, SessionSummary, SessionToolCall,
-    SessionToolResult, TokenUsage,
+    SessionToolResult,
 };
 pub use tools::{
     BACKGROUND_REGISTRY, BackgroundShellTask, BackgroundTaskRegistry, BackgroundTaskStatus,
     BackgroundTaskSummary, Tool, ToolCall, ToolExecutor, ToolResult,
 };
 pub use trajectory::TrajectorySessionSummary;
-pub use trajectory::TokenUsage as TrajectoryTokenUsage;
 pub use trajectory::{SessionEntry, SessionInfo, SessionRecorder, SessionReplayer};
 pub use types::*;
-// Note: SessionId is re-exported from concurrency module
-pub use checkpoints::{
-    ChangeDetector, Checkpoint, CheckpointId, CheckpointManager, CheckpointManagerConfig,
-    CheckpointStorage, CheckpointSummary, CheckpointType, ConversationSnapshot, DiffHunk, DiffLine,
-    FileChange, FileCheckpointStorage, FileSnapshot, FileState, MemoryCheckpointStorage,
-    RestoreOptions, RestorePreview, RestoreResult, TextDiff, TokenUsageSnapshot,
-    ToolExecutionRecord,
-};
 pub use commands::{
     CommandArgument, CommandExecutor, CommandInvocation, CommandRegistry, CommandResult,
     CommandSource, SlashCommand,
-};
-pub use cost::{
-    CostStatus, CostTracker, ModelPricing, ModelStats, PricingRegistry, ProviderStats, TokenPrice,
-    TrackResult, UsageRecord, UsageStats,
-};
-pub use modes::{
-    AgentMode, ModeExitResult, ModeManager, ModeState, ModeTransition, PlanModeConfig,
-    PlanModeContext, ToolFilter,
 };
 pub use output::{
     AssistantEvent, CostInfo, ErrorEvent, JsonFormatter, JsonOutput, OutputEvent, OutputFormat,
@@ -242,19 +212,9 @@ pub use output::{
     ToolCallResultEvent, ToolCallStartEvent, ToolCallSummary, UserPromptEvent, create_formatter,
 };
 pub use prompts::{BuiltinPrompts, PromptRegistry, PromptTemplate, PromptVariable, RenderError};
-pub use settings::{
-    HookDefinition as SettingsHookDefinition, HookDefinitionType as SettingsHookDefinitionType,
-    HooksSettings, ModelSettings, ParsedPattern, SettingsPermissionBehavior, PermissionSettings, Settings,
-    SettingsLoadInfo, SettingsLoader, SettingsLocations, SettingsSource, SettingsValidator,
-    ToolSettings, UiSettings, SettingsValidationResult, WorkspaceSettings,
-};
 pub use skills::{
     Skill, SkillActivation, SkillContext, SkillInvocationConfig, SkillMetadata, SkillRegistry,
     SkillSource, SkillSourceInfo, SkillSourceType, SkillTrigger, SkillTaskType, ToolAccess,
-};
-pub use validation::{
-    CommonRules, FieldError, FieldSchema, FieldType, InputSanitizer, RuleSet, SanitizeOptions,
-    SchemaBuilder, ValidationError, ValidationResult, ValidationRule, ValidationSchema, Validator,
 };
 // New modular prompt system (Claude Code style)
 pub use learning::{

@@ -89,7 +89,7 @@ impl AskUserQuestionTool {
 #[async_trait]
 impl Tool for AskUserQuestionTool {
     fn name(&self) -> &str {
-        "ask_user_question"
+        "AskUserQuestion"
     }
 
     fn description(&self) -> &str {

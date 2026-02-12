@@ -4,7 +4,7 @@
 mod tests {
     use super::super::*;
     use crate::llm::{LlmMessage, LlmResponse, MessageRole};
-    use crate::types::LlmUsage;
+    use crate::types::TokenUsage;
     use std::time::Duration;
     use tokio::fs;
 
@@ -54,13 +54,12 @@ mod tests {
         let response = LlmResponse {
             content: "Test response".to_string(),
             tool_calls: Vec::new(),
-            usage: Some(LlmUsage {
-                prompt_tokens: 10,
-                completion_tokens: 5,
-                total_tokens: 15,
-                cost_usd: Some(0.001),
-                cache_creation_input_tokens: None,
-                cache_read_input_tokens: None,
+            usage: Some(TokenUsage {
+                input_tokens: 10,
+                output_tokens: 5,
+                cache_read_tokens: None,
+                cache_write_tokens: None,
+                cost_estimate: Some(0.001),
             }),
             model: Some("test-model".to_string()),
             finish_reason: Some("stop".to_string()),

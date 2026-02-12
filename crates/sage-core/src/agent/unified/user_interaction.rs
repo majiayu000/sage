@@ -106,7 +106,7 @@ impl UnifiedExecutor {
 
         Ok(ToolResult::success(
             &tool_call.id,
-            "ask_user_question",
+            "AskUserQuestion",
             result_text,
         ))
     }

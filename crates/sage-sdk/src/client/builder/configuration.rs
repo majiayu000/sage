@@ -5,26 +5,6 @@ use sage_core::error::SageResult;
 use std::path::PathBuf;
 
 impl SageAgentSdk {
-    /// Set trajectory recording path.
-    ///
-    /// When set, execution trajectories will be saved to the specified file.
-    /// Trajectories contain complete execution history including all LLM interactions,
-    /// tool calls, and results.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// use sage_sdk::SageAgentSdk;
-    ///
-    /// let sdk = SageAgentSdk::new()?
-    ///     .with_trajectory_path("logs/execution.json");
-    /// # Ok::<(), sage_sdk::SageError>(())
-    /// ```
-    pub fn with_trajectory_path<P: Into<PathBuf>>(mut self, path: P) -> Self {
-        self.trajectory_path = Some(path.into());
-        self
-    }
-
     /// Set provider and model.
     ///
     /// Configures the LLM provider and model to use for task execution.

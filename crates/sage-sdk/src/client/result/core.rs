@@ -4,13 +4,11 @@ use sage_core::{
     agent::{AgentExecution, ExecutionError, ExecutionOutcome},
     config::model::Config,
 };
-use std::path::PathBuf;
 
 /// Result of task execution.
 ///
-/// Contains the execution outcome, trajectory path (if recorded), and the
-/// configuration used for execution. Provides convenient methods for checking
-/// execution status and extracting details.
+/// Contains the execution outcome and the configuration used for execution.
+/// Provides convenient methods for checking execution status and extracting details.
 ///
 /// # Examples
 ///
@@ -34,8 +32,6 @@ use std::path::PathBuf;
 pub struct ExecutionResult {
     /// The execution outcome (success, failure, interrupted, or max steps)
     pub outcome: ExecutionOutcome,
-    /// Path to trajectory file (if recorded)
-    pub trajectory_path: Option<PathBuf>,
     /// Configuration used for execution
     pub config_used: Config,
 }
@@ -44,12 +40,10 @@ impl ExecutionResult {
     /// Create a new execution result.
     pub fn new(
         outcome: ExecutionOutcome,
-        trajectory_path: Option<PathBuf>,
         config_used: Config,
     ) -> Self {
         Self {
             outcome,
-            trajectory_path,
             config_used,
         }
     }
@@ -153,27 +147,6 @@ impl ExecutionResult {
     /// Returns `None` if no final result was produced.
     pub fn final_result(&self) -> Option<&str> {
         self.outcome.execution().final_result.as_deref()
-    }
-
-    /// Get the trajectory file path if available.
-    ///
-    /// Returns `None` if trajectory recording was not enabled.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// # use sage_sdk::SageAgentSdk;
-    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let sdk = SageAgentSdk::new()?;
-    /// let result = sdk.run("task").await?;
-    /// if let Some(path) = result.trajectory_path() {
-    ///     println!("Trajectory saved to: {}", path.display());
-    /// }
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub fn trajectory_path(&self) -> Option<&PathBuf> {
-        self.trajectory_path.as_ref()
     }
 
     /// Get a user-friendly status message.

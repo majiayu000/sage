@@ -192,7 +192,6 @@ impl SageAgentSdk {
 
         Ok(ExecutionResult::new(
             outcome,
-            None, // No longer returning trajectory path
             self.config.clone(),
         ))
     }

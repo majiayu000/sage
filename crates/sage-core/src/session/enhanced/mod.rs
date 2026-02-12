@@ -5,10 +5,9 @@
 //! `crate::session::types::unified`.
 
 pub mod context;
-pub mod message;
 
 // Re-export context types (canonical definitions)
 pub use context::{SessionContext, ThinkingLevel, ThinkingMetadata, TodoItem, TodoStatus};
 
-// Re-export MessageContent (same name in unified module)
-pub use message::MessageContent;
+// Re-export MessageContent from unified module directly
+pub use super::types::unified::MessageContent;

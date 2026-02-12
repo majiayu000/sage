@@ -25,7 +25,7 @@ impl AddTasksTool {
 #[async_trait]
 impl Tool for AddTasksTool {
     fn name(&self) -> &str {
-        "add_tasks"
+        "AddTasks"
     }
 
     fn description(&self) -> &str {

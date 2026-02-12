@@ -8,10 +8,11 @@ use crate::error::{SageError, SageResult};
 use crate::session::MessageChainTracker;
 use crate::session::UnifiedSessionStorage;
 use crate::session::types::unified::{
-    FileHistorySnapshot, UnifiedMessageRole, SessionContext, SessionHeader, SessionMessage,
+    FileHistorySnapshot, SessionContext, SessionHeader, SessionMessage,
     SessionMessageType, SessionMetadataPatch, SessionState, ThinkingMetadata, TodoItem,
-    UnifiedTokenUsage, UnifiedToolCall, UnifiedToolResult,
+    WireTokenUsage, UnifiedToolCall, UnifiedToolResult,
 };
+use crate::types::MessageRole;
 use chrono::Utc;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -29,7 +30,7 @@ pub struct MessagePersister {
 struct PersisterState {
     session_id: String,
     tracker: MessageChainTracker,
-    token_usage: UnifiedTokenUsage,
+    token_usage: WireTokenUsage,
     message_count: usize,
     session_state: SessionState,
     first_prompt_set: bool,
@@ -191,7 +192,7 @@ impl MessagePersister {
         &self,
         content: &str,
         tool_calls: Option<Vec<UnifiedToolCall>>,
-        usage: Option<UnifiedTokenUsage>,
+        usage: Option<WireTokenUsage>,
     ) -> SageResult<SessionMessage> {
         let (session_id, message, message_count, token_usage) = {
             let mut state = self.state.write().await;
@@ -292,7 +293,7 @@ impl MessagePersister {
                 version: env!("CARGO_PKG_VERSION").to_string(),
                 context,
                 message: crate::session::types::unified::MessageContent {
-                    role: UnifiedMessageRole::Error,
+                    role: MessageRole::Error,
                     content: format!("[{}] {}", error_type, error_message),
                     tool_calls: None,
                     tool_results: None,
@@ -356,7 +357,7 @@ impl MessagePersister {
     }
 
     /// Update cached token usage (without adding a message).
-    pub async fn add_token_usage(&self, usage: &UnifiedTokenUsage) -> SageResult<()> {
+    pub async fn add_token_usage(&self, usage: &WireTokenUsage) -> SageResult<()> {
         let (session_id, token_usage) = {
             let mut state = self.state.write().await;
             state.token_usage.add(usage);

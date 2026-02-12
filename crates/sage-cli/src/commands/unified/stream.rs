@@ -95,14 +95,14 @@ pub async fn execute_stream_json(
         Ok(ref execution_outcome) => {
             let execution = execution_outcome.execution();
             let mut cost = CostInfo::new(
-                execution.total_usage.prompt_tokens as usize,
-                execution.total_usage.completion_tokens as usize,
+                execution.total_usage.input_tokens as usize,
+                execution.total_usage.output_tokens as usize,
             );
-            if let Some(cache_read) = execution.total_usage.cache_read_input_tokens {
+            if let Some(cache_read) = execution.total_usage.cache_read_tokens {
                 cost = cost.with_cache_read(cache_read as usize);
             }
-            if let Some(cache_creation) = execution.total_usage.cache_creation_input_tokens {
-                cost = cost.with_cache_creation(cache_creation as usize);
+            if let Some(cache_write) = execution.total_usage.cache_write_tokens {
+                cost = cost.with_cache_creation(cache_write as usize);
             }
 
             let result_content = match execution_outcome {
@@ -125,14 +125,14 @@ pub async fn execute_stream_json(
 
             let result_event = match OutputEvent::result(&result_content) {
                 OutputEvent::Result(mut e) => {
-                    e.duration_ms = duration.as_millis() as u64;
+                    e.duration_ms = u64::try_from(duration.as_millis()).unwrap_or(u64::MAX);
                     e.cost = Some(cost);
                     if let Some(id) = session_id {
                         e.session_id = Some(id);
                     }
                     OutputEvent::Result(e)
                 }
-                _ => unreachable!(),
+                other => other,
             };
 
             writer.write_event(&result_event).ok();

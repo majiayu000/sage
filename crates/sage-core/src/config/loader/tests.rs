@@ -24,7 +24,7 @@ mod tests {
                 }
             },
             "tools": {
-                "enabled_tools": ["task_done", "bash"],
+                "enabled_tools": ["TaskDone", "bash"],
                 "max_execution_time": 300,
                 "allow_parallel_execution": true,
                 "tool_settings": {}
@@ -67,7 +67,7 @@ max_tokens = 8192
 temperature = 0.5
 
 [tools]
-enabled_tools = ["task_done", "bash"]
+enabled_tools = ["TaskDone", "bash"]
 max_execution_time = 600
 allow_parallel_execution = true
 tool_settings = {}

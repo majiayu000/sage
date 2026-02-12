@@ -171,3 +171,10 @@ These rules are derived from real bugs found in this codebase. **Every rule corr
 
 ### Resource Management
 - **NEVER use `std::mem::forget` to extend lifetimes.** It leaks the resource. Use `Arc`, struct fields, or explicit ownership transfer instead
+
+### Shared Types (Layer 0)
+- **Cross-module shared types MUST be defined in `crate::types/`** (e.g., `MessageRole`, `ToolCall`, `LlmProvider`, `TodoItem`). Original modules re-export via `pub use crate::types::TypeName;`
+- **`types/` has zero dependencies on other sage-core modules** — only external crates (serde, chrono, thiserror, etc.)
+- **NEVER duplicate a type definition across modules.** If two modules need the same type, move it to `types/` and re-export
+- **Generic type names MUST have a domain prefix** when shared: `ToolError` not `Error`, `TodoStatus` not `Status`
+- **NEVER create identity type aliases** (e.g., `type Foo = Foo;`) — use re-exports instead

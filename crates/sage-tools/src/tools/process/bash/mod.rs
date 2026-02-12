@@ -18,7 +18,7 @@ use tracing::instrument;
 #[async_trait]
 impl Tool for BashTool {
     fn name(&self) -> &str {
-        "bash"
+        "Bash"
     }
 
     fn description(&self) -> &str {
