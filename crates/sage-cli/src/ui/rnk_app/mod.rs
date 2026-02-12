@@ -365,7 +365,7 @@ pub async fn run_rnk_app(cli: &Cli) -> io::Result<()> {
     let (input_channel, input_handle) = InputChannel::new(16);
 
     // Spawn input handler for tool/user interaction requests
-    tokio::spawn(async move {
+    let input_handle_task = tokio::spawn(async move {
         crate::commands::unified::handle_user_input(input_handle, false).await;
     });
 
@@ -375,7 +375,7 @@ pub async fn run_rnk_app(cli: &Cli) -> io::Result<()> {
     let config_file = cli.config_file.clone();
     let working_dir = cli.working_dir.clone();
     let max_steps = cli.max_steps;
-    tokio::spawn(async move {
+    let executor_task = tokio::spawn(async move {
         executor_loop(
             executor_state,
             cmd_rx,
@@ -391,7 +391,7 @@ pub async fn run_rnk_app(cli: &Cli) -> io::Result<()> {
     // Background task for printing messages and updating spinner
     let bg_state = Arc::clone(&state);
     let bg_adapter = (*adapter).clone();
-    tokio::spawn(async move {
+    let background_task = tokio::spawn(async move {
         background_loop(bg_state, bg_adapter).await;
     });
 
@@ -399,7 +399,14 @@ pub async fn run_rnk_app(cli: &Cli) -> io::Result<()> {
     sleep(Duration::from_millis(100)).await;
 
     // Run rnk app in inline mode (preserves terminal history)
-    render(app).run()
+    let result = render(app).run();
+
+    // Clean up spawned tasks when the UI exits
+    input_handle_task.abort();
+    executor_task.abort();
+    background_task.abort();
+
+    result
 }
 
 #[cfg(test)]

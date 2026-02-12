@@ -2,10 +2,6 @@
 //!
 //! This module provides an interactive terminal experience for configuring
 //! API keys and providers when starting sage for the first time.
-//!
-//! Note: Some functions in this module are for legacy mode compatibility.
-
-#![allow(dead_code)]
 
 use crate::console::CliConsole;
 use colored::*;
@@ -89,6 +85,7 @@ impl CliOnboarding {
     }
 
     /// Check if onboarding is needed
+    #[allow(dead_code)] // Used in tests; production uses check_config_status() instead
     pub fn is_needed(&self) -> bool {
         self.manager.is_needed()
     }
@@ -396,27 +393,6 @@ pub fn check_config_status() -> (ConfigStatus, Option<StatusBarHint>) {
     let loaded = load_config_unified(None);
     let hint = hint_from_status(&loaded.status);
     (loaded.status.status, hint)
-}
-
-/// Print status bar hint to console
-pub fn print_status_hint(console: &CliConsole, hint: &StatusBarHint) {
-    // Use the plain format and color it ourselves
-    let message = hint.format_plain();
-
-    match hint.hint_type {
-        sage_core::config::credential::HintType::Info => {
-            console.info(&message);
-        }
-        sage_core::config::credential::HintType::Warning => {
-            console.warn(&message);
-        }
-        sage_core::config::credential::HintType::Error => {
-            console.error(&message);
-        }
-        sage_core::config::credential::HintType::Success => {
-            console.success(&message);
-        }
-    }
 }
 
 #[cfg(test)]

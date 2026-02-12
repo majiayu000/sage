@@ -34,7 +34,6 @@
 #![allow(clippy::field_reassign_with_default)]
 #![allow(clippy::filter_map_identity)]
 
-mod api_types;
 mod args;
 mod commands;
 mod console;

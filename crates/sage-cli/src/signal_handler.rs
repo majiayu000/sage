@@ -1,7 +1,7 @@
 //! Signal Handler for CLI
 //!
 //! Manages Ctrl+C interrupts and application state transitions.
-//! Note: Some items in this module are for legacy mode compatibility.
+//! API is tested but not all methods are used in production yet (binary crate).
 
 #![allow(dead_code)]
 
@@ -134,7 +134,6 @@ impl SignalHandler {
     }
 
     /// Stop signal handling
-    #[allow(dead_code)]
     pub async fn stop(&mut self) {
         self.is_active.store(false, Ordering::Relaxed);
 
@@ -146,19 +145,16 @@ impl SignalHandler {
     }
 
     /// Check if signal handling is active
-    #[allow(dead_code)]
     pub fn is_active(&self) -> bool {
         self.is_active.load(Ordering::Relaxed)
     }
 
     /// Enable signal handling (allows interrupts to be processed)
-    #[allow(dead_code)]
     pub fn enable(&self) {
         self.is_active.store(true, Ordering::Relaxed);
     }
 
     /// Disable signal handling (ignores interrupts)
-    #[allow(dead_code)]
     pub fn disable(&self) {
         self.is_active.store(false, Ordering::Relaxed);
     }
@@ -170,7 +166,6 @@ impl SignalHandler {
     }
 
     /// Get the current application state
-    #[allow(dead_code)]
     pub fn get_app_state(&self) -> AppState {
         // parking_lot::Mutex - lock() returns guard directly
         *self.app_state.lock()
@@ -220,26 +215,22 @@ pub async fn start_global_signal_handling() -> Result<(), Box<dyn std::error::Er
 /// The lock is held across await but this is safe because:
 /// 1. parking_lot::Mutex is fast and non-blocking
 /// 2. stop() only aborts a task and returns quickly
-#[allow(dead_code)]
 #[allow(clippy::await_holding_lock)]
 pub async fn stop_global_signal_handling() {
     global_signal_handler().lock().stop().await;
 }
 
 /// Enable global signal handling
-#[allow(dead_code)]
 pub fn enable_global_signal_handling() {
     global_signal_handler().lock().enable();
 }
 
 /// Disable global signal handling
-#[allow(dead_code)]
 pub fn disable_global_signal_handling() {
     global_signal_handler().lock().disable();
 }
 
 /// Check if global signal handling is active
-#[allow(dead_code)]
 pub fn is_global_signal_handling_active() -> bool {
     global_signal_handler().lock().is_active()
 }
@@ -250,7 +241,6 @@ pub fn set_global_app_state(state: AppState) {
 }
 
 /// Get the global application state
-#[allow(dead_code)]
 pub fn get_global_app_state() -> AppState {
     global_signal_handler().lock().get_app_state()
 }

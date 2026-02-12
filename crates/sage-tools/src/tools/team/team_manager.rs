@@ -3,7 +3,6 @@
 //! Provides the core infrastructure for team-based collaboration.
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -102,9 +101,6 @@ pub struct TeamManager {
     current_team: RwLock<Option<String>>,
     /// Current agent info
     current_agent: RwLock<Option<TeamMember>>,
-    #[allow(dead_code)]
-    /// Pending join requests (for team leaders)
-    pending_requests: RwLock<HashMap<String, JoinRequest>>,
     /// Message inbox
     inbox: RwLock<Vec<TeamMessage>>,
 }
@@ -130,7 +126,6 @@ impl TeamManager {
             tasks_dir,
             current_team: RwLock::new(None),
             current_agent: RwLock::new(None),
-            pending_requests: RwLock::new(HashMap::new()),
             inbox: RwLock::new(Vec::new()),
         }
     }
@@ -460,7 +455,6 @@ mod tests {
             tasks_dir,
             current_team: RwLock::new(None),
             current_agent: RwLock::new(None),
-            pending_requests: RwLock::new(HashMap::new()),
             inbox: RwLock::new(Vec::new()),
         };
 
