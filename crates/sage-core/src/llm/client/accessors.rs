@@ -14,13 +14,13 @@ impl LlmClient {
     /// use sage_core::llm::client::LlmClient;
     /// use sage_core::llm::provider_types::LlmProvider;
     /// # use sage_core::config::provider::ProviderConfig;
-    /// # use sage_core::llm::provider_types::ModelParameters;
+    /// # use sage_core::llm::provider_types::LlmRequestParams;
     ///
     /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = LlmClient::new(
     ///     LlmProvider::Anthropic,
     ///     ProviderConfig::default(),
-    ///     ModelParameters::default()
+    ///     LlmRequestParams::default()
     /// )?;
     ///
     /// assert!(matches!(client.provider(), LlmProvider::Anthropic));
@@ -39,10 +39,10 @@ impl LlmClient {
     /// use sage_core::llm::client::LlmClient;
     /// use sage_core::llm::provider_types::LlmProvider;
     /// # use sage_core::config::provider::ProviderConfig;
-    /// # use sage_core::llm::provider_types::ModelParameters;
+    /// # use sage_core::llm::provider_types::LlmRequestParams;
     ///
     /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let params = ModelParameters {
+    /// let params = LlmRequestParams {
     ///     model: "claude-3-5-sonnet-20241022".to_string(),
     ///     ..Default::default()
     /// };
@@ -72,13 +72,13 @@ impl LlmClient {
     /// use sage_core::llm::client::LlmClient;
     /// use sage_core::llm::provider_types::LlmProvider;
     /// # use sage_core::config::provider::ProviderConfig;
-    /// # use sage_core::llm::provider_types::ModelParameters;
+    /// # use sage_core::llm::provider_types::LlmRequestParams;
     ///
     /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = LlmClient::new(
     ///     LlmProvider::Anthropic,
     ///     ProviderConfig::default(),
-    ///     ModelParameters::default()
+    ///     LlmRequestParams::default()
     /// )?;
     ///
     /// let config = client.config();
@@ -101,13 +101,13 @@ impl LlmClient {
     /// use sage_core::llm::client::LlmClient;
     /// use sage_core::llm::provider_types::LlmProvider;
     /// # use sage_core::config::provider::ProviderConfig;
-    /// # use sage_core::llm::provider_types::ModelParameters;
+    /// # use sage_core::llm::provider_types::LlmRequestParams;
     ///
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = LlmClient::new(
     ///     LlmProvider::Anthropic,
     ///     ProviderConfig::default(),
-    ///     ModelParameters::default()
+    ///     LlmRequestParams::default()
     /// )?;
     ///
     /// let stats = client.circuit_breaker_stats().await;
@@ -131,13 +131,13 @@ impl LlmClient {
     /// use sage_core::llm::client::LlmClient;
     /// use sage_core::llm::provider_types::LlmProvider;
     /// # use sage_core::config::provider::ProviderConfig;
-    /// # use sage_core::llm::provider_types::ModelParameters;
+    /// # use sage_core::llm::provider_types::LlmRequestParams;
     ///
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = LlmClient::new(
     ///     LlmProvider::Anthropic,
     ///     ProviderConfig::default(),
-    ///     ModelParameters::default()
+    ///     LlmRequestParams::default()
     /// )?;
     ///
     /// if client.is_circuit_open().await {
@@ -161,13 +161,13 @@ impl LlmClient {
     /// use sage_core::llm::client::LlmClient;
     /// use sage_core::llm::provider_types::LlmProvider;
     /// # use sage_core::config::provider::ProviderConfig;
-    /// # use sage_core::llm::provider_types::ModelParameters;
+    /// # use sage_core::llm::provider_types::LlmRequestParams;
     ///
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = LlmClient::new(
     ///     LlmProvider::Anthropic,
     ///     ProviderConfig::default(),
-    ///     ModelParameters::default()
+    ///     LlmRequestParams::default()
     /// )?;
     ///
     /// // Reset after fixing an issue

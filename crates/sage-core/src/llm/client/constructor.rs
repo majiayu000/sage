@@ -3,7 +3,7 @@
 use super::types::LlmClient;
 use crate::config::provider::ProviderConfig;
 use crate::error::{SageError, SageResult};
-use crate::llm::provider_types::{LlmProvider, ModelParameters};
+use crate::llm::provider_types::{LlmProvider, LlmRequestParams};
 use crate::llm::providers::{
     AnthropicProvider, AzureProvider, DoubaoProvider, GlmProvider, GoogleProvider, OllamaProvider,
     OpenAiProvider, OpenRouterProvider, ProviderInstance,
@@ -37,7 +37,7 @@ impl LlmClient {
     ///
     /// ```no_run
     /// use sage_core::llm::client::LlmClient;
-    /// use sage_core::llm::provider_types::{LlmProvider, ModelParameters};
+    /// use sage_core::llm::provider_types::{LlmProvider, LlmRequestParams};
     /// use sage_core::config::provider::ProviderConfig;
     ///
     /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
@@ -45,7 +45,7 @@ impl LlmClient {
     /// let config = ProviderConfig::new("openai")
     ///     .with_api_key("your-api-key");
     ///
-    /// let params = ModelParameters {
+    /// let params = LlmRequestParams {
     ///     model: "gpt-4".to_string(),
     ///     temperature: Some(0.7),
     ///     max_tokens: Some(2000),
@@ -59,7 +59,7 @@ impl LlmClient {
     pub fn new(
         provider: LlmProvider,
         config: ProviderConfig,
-        model_params: ModelParameters,
+        model_params: LlmRequestParams,
     ) -> SageResult<Self> {
         // Validate configuration
         config.validate().map_err(|e| {

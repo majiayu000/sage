@@ -12,7 +12,7 @@ pub use crate::types::LlmProvider;
 
 /// Model-specific parameters
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ModelParameters {
+pub struct LlmRequestParams {
     /// Model name/ID
     pub model: String,
     /// Maximum tokens to generate
@@ -48,7 +48,7 @@ pub struct ModelParameters {
     pub enable_prompt_caching: Option<bool>,
 }
 
-impl Default for ModelParameters {
+impl Default for LlmRequestParams {
     fn default() -> Self {
         Self {
             model: "gpt-4".to_string(),
@@ -66,7 +66,7 @@ impl Default for ModelParameters {
     }
 }
 
-impl ModelParameters {
+impl LlmRequestParams {
     /// Create new model parameters with just the model name
     pub fn new<S: Into<String>>(model: S) -> Self {
         Self {

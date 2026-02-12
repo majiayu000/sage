@@ -46,13 +46,13 @@ impl LlmClient {
     /// use sage_core::error::SageError;
     /// # use sage_core::llm::provider_types::LlmProvider;
     /// # use sage_core::config::provider::ProviderConfig;
-    /// # use sage_core::llm::provider_types::ModelParameters;
+    /// # use sage_core::llm::provider_types::LlmRequestParams;
     ///
     /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = LlmClient::new(
     ///     LlmProvider::Anthropic,
     ///     ProviderConfig::default(),
-    ///     ModelParameters::default()
+    ///     LlmRequestParams::default()
     /// )?;
     ///
     /// let error = SageError::llm("503 Service Unavailable");
@@ -167,13 +167,13 @@ impl LlmClient {
     /// use sage_core::error::SageError;
     /// # use sage_core::llm::provider_types::LlmProvider;
     /// # use sage_core::config::provider::ProviderConfig;
-    /// # use sage_core::llm::provider_types::ModelParameters;
+    /// # use sage_core::llm::provider_types::LlmRequestParams;
     ///
     /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = LlmClient::new(
     ///     LlmProvider::Anthropic,
     ///     ProviderConfig::default(),
-    ///     ModelParameters::default()
+    ///     LlmRequestParams::default()
     /// )?;
     ///
     /// let error = SageError::llm("429 Rate limit exceeded");

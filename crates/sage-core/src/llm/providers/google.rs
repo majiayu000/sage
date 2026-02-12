@@ -5,7 +5,7 @@ use crate::error::{SageError, SageResult};
 use crate::llm::converters::{MessageConverter, ToolConverter};
 use crate::llm::messages::{LlmMessage, LlmResponse};
 use crate::llm::parsers::ResponseParser;
-use crate::llm::provider_types::ModelParameters;
+use crate::llm::provider_types::LlmRequestParams;
 use crate::llm::streaming::LlmStream;
 use crate::tools::types::ToolSchema;
 use reqwest::Client;
@@ -15,13 +15,13 @@ use tracing::instrument;
 /// Google (Gemini) provider handler
 pub struct GoogleProvider {
     config: ProviderConfig,
-    model_params: ModelParameters,
+    model_params: LlmRequestParams,
     http_client: Client,
 }
 
 impl GoogleProvider {
     /// Create a new Google provider
-    pub fn new(config: ProviderConfig, model_params: ModelParameters, http_client: Client) -> Self {
+    pub fn new(config: ProviderConfig, model_params: LlmRequestParams, http_client: Client) -> Self {
         Self {
             config,
             model_params,

@@ -1,7 +1,7 @@
 //! LLM client type definitions
 
 use crate::config::provider::ProviderConfig;
-use crate::llm::provider_types::{LlmProvider, ModelParameters};
+use crate::llm::provider_types::{LlmProvider, LlmRequestParams};
 use crate::llm::providers::ProviderInstance;
 use crate::recovery::circuit_breaker::CircuitBreaker;
 use std::sync::Arc;
@@ -25,7 +25,7 @@ use std::sync::Arc;
 ///
 /// ```no_run
 /// use sage_core::llm::client::LlmClient;
-/// use sage_core::llm::provider_types::{LlmProvider, ModelParameters};
+/// use sage_core::llm::provider_types::{LlmProvider, LlmRequestParams};
 /// use sage_core::config::provider::ProviderConfig;
 /// use sage_core::llm::messages::LlmMessage;
 ///
@@ -33,7 +33,7 @@ use std::sync::Arc;
 /// // Create client for Anthropic
 /// let provider = LlmProvider::Anthropic;
 /// let config = ProviderConfig::default();
-/// let params = ModelParameters {
+/// let params = LlmRequestParams {
 ///     model: "claude-3-5-sonnet-20241022".to_string(),
 ///     ..Default::default()
 /// };
@@ -50,7 +50,7 @@ use std::sync::Arc;
 pub struct LlmClient {
     pub(super) provider: LlmProvider,
     pub(super) config: ProviderConfig,
-    pub(super) model_params: ModelParameters,
+    pub(super) model_params: LlmRequestParams,
     pub(super) provider_instance: ProviderInstance,
     /// Circuit breaker for protecting against cascading failures
     pub(super) circuit_breaker: Arc<CircuitBreaker>,

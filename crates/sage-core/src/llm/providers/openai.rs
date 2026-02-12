@@ -4,7 +4,7 @@ use crate::config::provider::ProviderConfig;
 use crate::error::{SageError, SageResult};
 use crate::llm::messages::LlmMessage;
 use crate::llm::parsers::ResponseParser;
-use crate::llm::provider_types::ModelParameters;
+use crate::llm::provider_types::LlmRequestParams;
 use crate::llm::streaming::LlmStream;
 use crate::tools::types::ToolSchema;
 use reqwest::Client;
@@ -14,13 +14,13 @@ use tracing::instrument;
 /// OpenAI provider handler
 pub struct OpenAiProvider {
     config: ProviderConfig,
-    model_params: ModelParameters,
+    model_params: LlmRequestParams,
     http_client: Client,
 }
 
 impl OpenAiProvider {
     /// Create a new OpenAI provider
-    pub fn new(config: ProviderConfig, model_params: ModelParameters, http_client: Client) -> Self {
+    pub fn new(config: ProviderConfig, model_params: LlmRequestParams, http_client: Client) -> Self {
         Self {
             config,
             model_params,

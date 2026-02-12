@@ -4,7 +4,7 @@ use crate::config::provider::ProviderConfig;
 use crate::error::{SageError, SageResult};
 use crate::llm::client::LlmClient;
 use crate::llm::messages::{LlmMessage, LlmResponse};
-use crate::llm::provider_types::{LlmProvider, ModelParameters};
+use crate::llm::provider_types::{LlmProvider, LlmRequestParams};
 use crate::tools::types::ToolSchema;
 use tracing::{info, warn};
 
@@ -16,7 +16,7 @@ pub struct ProviderFallbackClient {
 
 impl ProviderFallbackClient {
     /// Create a new provider fallback client
-    pub fn new(providers: Vec<(LlmProvider, ProviderConfig, ModelParameters)>) -> SageResult<Self> {
+    pub fn new(providers: Vec<(LlmProvider, ProviderConfig, LlmRequestParams)>) -> SageResult<Self> {
         let mut clients = Vec::new();
         for (provider, config, params) in providers {
             clients.push(LlmClient::new(provider, config, params)?);

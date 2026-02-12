@@ -3,7 +3,7 @@
 use crate::error::SageResult;
 use crate::llm::converters::{MessageConverter, ToolConverter};
 use crate::llm::messages::LlmMessage;
-use crate::llm::provider_types::ModelParameters;
+use crate::llm::provider_types::LlmRequestParams;
 use crate::tools::types::ToolSchema;
 use serde_json::{Value, json};
 
@@ -19,7 +19,7 @@ pub fn build_openai_request_body(
     model: &str,
     messages: &[LlmMessage],
     tools: Option<&[ToolSchema]>,
-    params: &ModelParameters,
+    params: &LlmRequestParams,
     include_model: bool,
     stream: bool,
 ) -> SageResult<Value> {

@@ -209,8 +209,8 @@ impl ModelParameters {
     }
 
     /// Convert to LLM model parameters
-    pub fn to_llm_parameters(&self) -> crate::llm::provider_types::ModelParameters {
-        crate::llm::provider_types::ModelParameters {
+    pub fn to_llm_parameters(&self) -> crate::llm::provider_types::LlmRequestParams {
+        crate::llm::provider_types::LlmRequestParams {
             model: self.model.clone(),
             max_tokens: self.max_tokens,
             temperature: self.temperature,

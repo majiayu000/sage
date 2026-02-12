@@ -4,7 +4,7 @@
 mod tests {
     use crate::config::provider::ProviderConfig;
     use crate::llm::provider_fallback::ProviderFallbackClient;
-    use crate::llm::provider_types::{LlmProvider, ModelParameters};
+    use crate::llm::provider_types::{LlmProvider, LlmRequestParams};
 
     #[test]
     fn test_provider_fallback_creation() {
@@ -12,7 +12,7 @@ mod tests {
             (
                 LlmProvider::Google,
                 ProviderConfig::new("google").with_api_key("test_key"),
-                ModelParameters {
+                LlmRequestParams {
                     model: "gemini-pro".to_string(),
                     temperature: Some(0.7),
                     max_tokens: Some(4096),
@@ -29,7 +29,7 @@ mod tests {
             (
                 LlmProvider::Anthropic,
                 ProviderConfig::new("anthropic").with_api_key("test_key"),
-                ModelParameters {
+                LlmRequestParams {
                     model: "claude-3-5-sonnet-20241022".to_string(),
                     temperature: Some(0.7),
                     max_tokens: Some(4096),

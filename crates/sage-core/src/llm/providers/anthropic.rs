@@ -5,7 +5,7 @@ use crate::error::{SageError, SageResult};
 use crate::llm::converters::{MessageConverter, ToolConverter};
 use crate::llm::messages::LlmMessage;
 use crate::llm::parsers::ResponseParser;
-use crate::llm::provider_types::ModelParameters;
+use crate::llm::provider_types::LlmRequestParams;
 use crate::llm::streaming::LlmStream;
 use crate::tools::types::ToolSchema;
 use reqwest::Client;
@@ -15,13 +15,13 @@ use tracing::instrument;
 /// Anthropic provider handler
 pub struct AnthropicProvider {
     config: ProviderConfig,
-    model_params: ModelParameters,
+    model_params: LlmRequestParams,
     http_client: Client,
 }
 
 impl AnthropicProvider {
     /// Create a new Anthropic provider
-    pub fn new(config: ProviderConfig, model_params: ModelParameters, http_client: Client) -> Self {
+    pub fn new(config: ProviderConfig, model_params: LlmRequestParams, http_client: Client) -> Self {
         Self {
             config,
             model_params,
@@ -31,7 +31,7 @@ impl AnthropicProvider {
 
     /// Anthropic chat completion
     ///
-    /// Supports prompt caching when `enable_prompt_caching` is set in ModelParameters.
+    /// Supports prompt caching when `enable_prompt_caching` is set in LlmRequestParams.
     /// When enabled, system prompts and tools are cached for faster subsequent requests.
     #[instrument(skip(self, messages, tools), level = "debug")]
     pub async fn chat(
@@ -137,7 +137,7 @@ impl AnthropicProvider {
     /// - message_delta: Final message metadata (stop_reason, usage)
     /// - message_stop: Stream end marker
     ///
-    /// Supports prompt caching when `enable_prompt_caching` is set in ModelParameters.
+    /// Supports prompt caching when `enable_prompt_caching` is set in LlmRequestParams.
     pub async fn chat_stream(
         &self,
         messages: &[LlmMessage],

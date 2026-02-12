@@ -44,13 +44,13 @@ impl LlmClient {
     /// use sage_core::llm::messages::LlmMessage;
     /// # use sage_core::llm::provider_types::LlmProvider;
     /// # use sage_core::config::provider::ProviderConfig;
-    /// # use sage_core::llm::provider_types::ModelParameters;
+    /// # use sage_core::llm::provider_types::LlmRequestParams;
     ///
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = LlmClient::new(
     ///     LlmProvider::Anthropic,
     ///     ProviderConfig::default(),
-    ///     ModelParameters::default()
+    ///     LlmRequestParams::default()
     /// )?;
     ///
     /// let messages = vec![

@@ -4,7 +4,7 @@
 mod tests {
     use crate::config::provider::ProviderConfig;
     use crate::llm::client::LlmClient;
-    use crate::llm::provider_types::{LlmProvider, ModelParameters};
+    use crate::llm::provider_types::{LlmProvider, LlmRequestParams};
     use crate::recovery::circuit_breaker::CircuitState;
 
     #[test]
@@ -12,7 +12,7 @@ mod tests {
         let client = LlmClient::new(
             LlmProvider::OpenAI,
             ProviderConfig::new("openai").with_api_key("test-key"),
-            ModelParameters::default(),
+            LlmRequestParams::default(),
         )
         .expect("Client should be created");
 
@@ -24,7 +24,7 @@ mod tests {
         let client = LlmClient::new(
             LlmProvider::OpenAI,
             ProviderConfig::new("openai").with_api_key("test-key"),
-            ModelParameters::default(),
+            LlmRequestParams::default(),
         )
         .expect("Client should be created");
 
@@ -40,7 +40,7 @@ mod tests {
         let client = LlmClient::new(
             LlmProvider::OpenAI,
             ProviderConfig::new("openai").with_api_key("test-key"),
-            ModelParameters::default(),
+            LlmRequestParams::default(),
         )
         .expect("Client should be created");
 
@@ -52,7 +52,7 @@ mod tests {
         let client = LlmClient::new(
             LlmProvider::OpenAI,
             ProviderConfig::new("openai").with_api_key("test-key"),
-            ModelParameters::default(),
+            LlmRequestParams::default(),
         )
         .expect("Client should be created");
 
@@ -75,7 +75,7 @@ mod tests {
 
         for provider in providers {
             let config = ProviderConfig::new(provider.name()).with_api_key("test-key");
-            let client = LlmClient::new(provider.clone(), config, ModelParameters::default());
+            let client = LlmClient::new(provider.clone(), config, LlmRequestParams::default());
             assert!(
                 client.is_ok(),
                 "Failed to create client for provider: {:?}",

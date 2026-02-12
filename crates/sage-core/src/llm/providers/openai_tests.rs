@@ -4,7 +4,7 @@
 mod tests {
     use crate::config::provider::ProviderConfig;
     use crate::llm::messages::LlmMessage;
-    use crate::llm::provider_types::ModelParameters;
+    use crate::llm::provider_types::LlmRequestParams;
     use crate::llm::providers::OpenAiProvider;
     use reqwest::Client;
     use serde_json::json;
@@ -15,7 +15,7 @@ mod tests {
         let config = ProviderConfig::new("openai")
             .with_api_key("test-api-key")
             .with_base_url(base_url);
-        let model_params = ModelParameters::new("gpt-4");
+        let model_params = LlmRequestParams::new("gpt-4");
         let http_client = Client::builder()
             .no_proxy()
             .build()
@@ -255,7 +255,7 @@ mod tests {
         let config = ProviderConfig::new("openai")
             .with_api_key("test-key")
             .with_base_url(mock_server.uri());
-        let model_params = ModelParameters::new("gpt-4").with_temperature(0.9);
+        let model_params = LlmRequestParams::new("gpt-4").with_temperature(0.9);
         let http_client = Client::builder()
             .no_proxy()
             .build()
