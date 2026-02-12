@@ -2,9 +2,9 @@
 
 use std::collections::HashMap;
 use tracing::info;
-use crate::tools::database::sql::types::QueryResult;
+use crate::tools::database::sql::types::SqlQueryResult;
 
-pub fn execute_describe_table(table: String, start_time: std::time::Instant) -> QueryResult {
+pub fn execute_describe_table(table: String, start_time: std::time::Instant) -> SqlQueryResult {
     info!("Describing table: {}", table);
     let schema_data = vec![
         HashMap::from([
@@ -21,7 +21,7 @@ pub fn execute_describe_table(table: String, start_time: std::time::Instant) -> 
         ]),
     ];
 
-    QueryResult {
+    SqlQueryResult {
         rows_affected: Some(schema_data.len() as u64),
         data: Some(schema_data),
         execution_time: u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX),
@@ -34,7 +34,7 @@ pub fn execute_describe_table(table: String, start_time: std::time::Instant) -> 
     }
 }
 
-pub fn execute_list_tables(start_time: std::time::Instant) -> QueryResult {
+pub fn execute_list_tables(start_time: std::time::Instant) -> SqlQueryResult {
     info!("Listing tables");
     let tables_data = vec![
         HashMap::from([("table_name".to_string(), serde_json::json!("users"))]),
@@ -42,7 +42,7 @@ pub fn execute_list_tables(start_time: std::time::Instant) -> QueryResult {
         HashMap::from([("table_name".to_string(), serde_json::json!("products"))]),
     ];
 
-    QueryResult {
+    SqlQueryResult {
         rows_affected: Some(tables_data.len() as u64),
         data: Some(tables_data),
         execution_time: u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX),
@@ -50,7 +50,7 @@ pub fn execute_list_tables(start_time: std::time::Instant) -> QueryResult {
     }
 }
 
-pub fn execute_stats(start_time: std::time::Instant) -> QueryResult {
+pub fn execute_stats(start_time: std::time::Instant) -> SqlQueryResult {
     info!("Getting database statistics");
     let stats_data = vec![
         HashMap::from([
@@ -67,7 +67,7 @@ pub fn execute_stats(start_time: std::time::Instant) -> QueryResult {
         ]),
     ];
 
-    QueryResult {
+    SqlQueryResult {
         rows_affected: Some(stats_data.len() as u64),
         data: Some(stats_data),
         execution_time: u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX),

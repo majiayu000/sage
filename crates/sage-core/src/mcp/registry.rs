@@ -240,7 +240,7 @@ impl McpRegistry {
                     .into_iter()
                     .find(|t| t.name == tool_name)
                 {
-                    let adapter = McpToolAdapter {
+                    let adapter = McpToolBridge {
                         client: client.clone(),
                         tool: mcp_tool,
                     };
@@ -271,14 +271,15 @@ impl Default for McpRegistry {
     }
 }
 
-/// Adapter to use MCP tools as Sage tools
-pub struct McpToolAdapter {
+/// Internal bridge to use MCP tools as Sage tools (minimal version).
+/// The full-featured adapter is in sage-tools::mcp_tools::McpToolAdapter.
+struct McpToolBridge {
     client: Arc<McpClient>,
     tool: McpTool,
 }
 
 #[async_trait]
-impl Tool for McpToolAdapter {
+impl Tool for McpToolBridge {
     fn name(&self) -> &str {
         &self.tool.name
     }

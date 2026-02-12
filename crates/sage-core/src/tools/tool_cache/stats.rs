@@ -2,7 +2,7 @@
 
 /// Cache statistics
 #[derive(Debug, Clone, Default)]
-pub struct CacheStats {
+pub struct ToolCacheStats {
     /// Cache hits
     pub hits: u64,
     /// Cache misses
@@ -15,7 +15,7 @@ pub struct CacheStats {
     pub clears: u64,
 }
 
-impl CacheStats {
+impl ToolCacheStats {
     /// Calculate hit rate
     pub fn hit_rate(&self) -> f64 {
         let total = self.hits + self.misses;

@@ -4,8 +4,9 @@ use async_trait::async_trait;
 use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolResult, ToolSchema};
 
+use sage_core::input::Question;
+
 use super::schema::create_schema;
-use super::types::Question;
 use super::validation::validate_questions;
 
 /// Tool for asking the user questions during execution

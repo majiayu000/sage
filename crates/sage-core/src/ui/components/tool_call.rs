@@ -2,9 +2,9 @@
 //!
 //! Displays the current tool execution state.
 
+use crate::ui::Icons;
 use crate::ui::bridge::state::{ToolExecution, ToolStatus};
 use crate::ui::components::Spinner;
-use crate::ui::Icons;
 use crate::ui::theme::Colors;
 use rnk::prelude::*;
 

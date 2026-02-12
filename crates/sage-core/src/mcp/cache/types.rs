@@ -100,7 +100,7 @@ impl McpCacheConfig {
 
 /// Cache statistics
 #[derive(Debug, Default)]
-pub struct CacheStats {
+pub struct McpCacheStats {
     /// Total cache hits
     pub hits: AtomicU64,
     /// Total cache misses
@@ -109,7 +109,7 @@ pub struct CacheStats {
     pub evictions: AtomicU64,
 }
 
-impl CacheStats {
+impl McpCacheStats {
     /// Get total hits
     pub fn hits(&self) -> u64 {
         self.hits.load(Ordering::Relaxed)

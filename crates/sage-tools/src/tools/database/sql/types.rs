@@ -110,7 +110,7 @@ pub struct DatabaseParams {
 
 /// Database query result
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct QueryResult {
+pub struct SqlQueryResult {
     /// Number of rows affected
     pub rows_affected: Option<u64>,
     /// Result data

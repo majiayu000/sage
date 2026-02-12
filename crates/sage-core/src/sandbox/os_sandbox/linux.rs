@@ -4,7 +4,7 @@
 //! Note: Full seccomp implementation requires the `libseccomp` library.
 //! This module provides a placeholder implementation.
 
-use super::types::OsSandboxConfig;
+use super::types::{OsSandboxConfig, OsSandboxMode};
 use crate::sandbox::SandboxError;
 use tokio::process::Command;
 

@@ -2,11 +2,11 @@
 
 use std::collections::HashMap;
 use tracing::info;
-use crate::tools::database::sql::types::QueryResult;
+use crate::tools::database::sql::types::SqlQueryResult;
 
-pub fn execute_query(sql: String, start_time: std::time::Instant) -> QueryResult {
+pub fn execute_query(sql: String, start_time: std::time::Instant) -> SqlQueryResult {
     info!("Executing query: {}", sql);
-    QueryResult {
+    SqlQueryResult {
         rows_affected: Some(0),
         data: None,
         execution_time: u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX),
@@ -18,7 +18,7 @@ pub fn execute_select(
     sql: String,
     limit: Option<usize>,
     start_time: std::time::Instant,
-) -> QueryResult {
+) -> SqlQueryResult {
     info!("Executing select: {}", sql);
     // Mock data
     let mut data = vec![
@@ -36,7 +36,7 @@ pub fn execute_select(
         data.truncate(limit);
     }
 
-    QueryResult {
+    SqlQueryResult {
         rows_affected: Some(data.len() as u64),
         data: Some(data),
         execution_time: u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX),

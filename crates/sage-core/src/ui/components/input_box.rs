@@ -2,8 +2,8 @@
 //!
 //! User input area with prompt and cursor.
 
-use crate::ui::bridge::state::InputState;
 use crate::ui::Icons;
+use crate::ui::bridge::state::InputState;
 use crate::ui::theme::Colors;
 use rnk::prelude::*;
 

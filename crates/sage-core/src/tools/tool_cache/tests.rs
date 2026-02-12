@@ -282,7 +282,7 @@ fn test_config_builder() {
 
 #[test]
 fn test_cache_stats_summary() {
-    let stats = CacheStats {
+    let stats = ToolCacheStats {
         hits: 80,
         misses: 20,
         inserts: 100,

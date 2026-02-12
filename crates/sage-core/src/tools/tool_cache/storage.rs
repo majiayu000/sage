@@ -5,7 +5,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use super::config::ToolCacheConfig;
-use super::stats::CacheStats;
+use super::stats::ToolCacheStats;
 use super::types::{CachedResult, ToolCacheKey};
 
 /// Tool result cache
@@ -16,7 +16,7 @@ pub struct ToolCache {
     /// Cache entries
     entries: Arc<RwLock<HashMap<ToolCacheKey, CachedResult>>>,
     /// Statistics
-    stats: Arc<RwLock<CacheStats>>,
+    stats: Arc<RwLock<ToolCacheStats>>,
 }
 
 impl ToolCache {
@@ -25,7 +25,7 @@ impl ToolCache {
         Self {
             config,
             entries: Arc::new(RwLock::new(HashMap::new())),
-            stats: Arc::new(RwLock::new(CacheStats::default())),
+            stats: Arc::new(RwLock::new(ToolCacheStats::default())),
         }
     }
 
@@ -130,7 +130,7 @@ impl ToolCache {
     }
 
     /// Get cache statistics
-    pub async fn stats(&self) -> CacheStats {
+    pub async fn stats(&self) -> ToolCacheStats {
         self.stats.read().await.clone()
     }
 

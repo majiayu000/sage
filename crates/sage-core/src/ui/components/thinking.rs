@@ -2,9 +2,9 @@
 //!
 //! Shows the current thinking state with elapsed time.
 
+use crate::ui::Icons;
 use crate::ui::bridge::state::ThinkingState;
 use crate::ui::components::Spinner;
-use crate::ui::Icons;
 use crate::ui::theme::Colors;
 use rnk::prelude::*;
 

@@ -1,6 +1,6 @@
 //! MCP resource cache implementation
 
-use super::types::{CacheEntry, CacheSizeBreakdown, CacheStats, McpCacheConfig};
+use super::types::{CacheEntry, CacheSizeBreakdown, McpCacheConfig, McpCacheStats};
 use crate::mcp::types::{McpPrompt, McpResource, McpResourceContent, McpTool};
 use dashmap::DashMap;
 use std::sync::atomic::Ordering;
@@ -19,7 +19,7 @@ pub struct McpCache {
     /// Cache configuration
     config: McpCacheConfig,
     /// Cache statistics
-    stats: CacheStats,
+    stats: McpCacheStats,
 }
 
 impl McpCache {
@@ -36,7 +36,7 @@ impl McpCache {
             prompts: DashMap::new(),
             resource_content: DashMap::new(),
             config,
-            stats: CacheStats::default(),
+            stats: McpCacheStats::default(),
         }
     }
 
@@ -215,7 +215,7 @@ impl McpCache {
     }
 
     /// Get cache statistics
-    pub fn stats(&self) -> &CacheStats {
+    pub fn stats(&self) -> &McpCacheStats {
         &self.stats
     }
 
@@ -251,7 +251,7 @@ impl McpCache {
         &self.resource_content
     }
 
-    pub(super) fn stats_mut(&self) -> &CacheStats {
+    pub(super) fn stats_mut(&self) -> &McpCacheStats {
         &self.stats
     }
 }

@@ -2,8 +2,8 @@
 //!
 //! Displays session info, current status, and step count.
 
-use crate::ui::bridge::state::{ExecutionPhase, UiSessionInfo};
 use crate::ui::Icons;
+use crate::ui::bridge::state::{ExecutionPhase, UiSessionInfo};
 use crate::ui::theme::Colors;
 use rnk::prelude::*;
 

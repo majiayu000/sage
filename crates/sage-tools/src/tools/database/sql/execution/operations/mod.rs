@@ -6,13 +6,13 @@ mod ddl_ops;
 mod utility_ops;
 
 use anyhow::Result;
-use crate::tools::database::sql::types::{DatabaseOperation, QueryResult};
+use crate::tools::database::sql::types::{DatabaseOperation, SqlQueryResult};
 
 /// Execute individual database operations
 pub async fn execute_operation_internal(
     operation: DatabaseOperation,
     start_time: std::time::Instant,
-) -> Result<QueryResult> {
+) -> Result<SqlQueryResult> {
     let result = match operation {
         DatabaseOperation::Query { sql, params: _ } => {
             query_ops::execute_query(sql, start_time)

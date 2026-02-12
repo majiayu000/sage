@@ -6,7 +6,9 @@ use crate::commands::unified::slash_commands::{SlashCommandAction, process_slash
 use crate::console::CliConsole;
 use rnk::prelude::*;
 use sage_core::input::InputChannel;
-use sage_core::interrupt::{InterruptReason, interrupt_current_task, reset_global_interrupt_manager};
+use sage_core::interrupt::{
+    InterruptReason, interrupt_current_task, reset_global_interrupt_manager,
+};
 use sage_core::types::TaskMetadata;
 use sage_core::ui::bridge::AgentEvent;
 use sage_core::ui::traits::UiContext;
@@ -219,7 +221,11 @@ async fn handle_resume(
 
     match resume_result {
         Ok(msg) => {
-            rnk::println(Text::new(format!("✓ {}", msg)).color(Color::Green).into_element());
+            rnk::println(
+                Text::new(format!("✓ {}", msg))
+                    .color(Color::Green)
+                    .into_element(),
+            );
         }
         Err(e) => {
             rnk::println(

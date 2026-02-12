@@ -1,8 +1,7 @@
 //! Validation logic for questions and options
 
+use sage_core::input::Question;
 use sage_core::tools::base::ToolError;
-
-use super::types::Question;
 
 /// Validate that questions are well-formed
 pub fn validate_questions(questions: &[Question]) -> Result<(), ToolError> {

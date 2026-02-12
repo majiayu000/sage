@@ -5,12 +5,11 @@
 
 mod schema;
 mod tool;
-mod types;
 mod validation;
 
 #[cfg(test)]
 mod tests;
 
 // Re-export public items
+pub use sage_core::input::{Question, QuestionOption};
 pub use tool::AskUserQuestionTool;
-pub use types::{Question, QuestionOption};

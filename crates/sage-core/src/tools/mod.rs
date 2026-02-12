@@ -33,7 +33,7 @@ pub use permission::{
 };
 pub use registry::ToolRegistry;
 pub use tool_cache::{
-    CacheStats, CachedResult, SharedToolCache, ToolCache, ToolCacheConfig, ToolCacheKey,
+    CachedResult, SharedToolCache, ToolCache, ToolCacheConfig, ToolCacheKey, ToolCacheStats,
     create_shared_cache,
 };
 pub use types::{ToolCall, ToolParameter, ToolResult, ToolSchema};

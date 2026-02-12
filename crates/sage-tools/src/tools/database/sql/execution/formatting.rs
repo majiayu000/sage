@@ -1,9 +1,9 @@
 //! Result formatting for display
 
-use crate::tools::database::sql::types::QueryResult;
+use crate::tools::database::sql::types::SqlQueryResult;
 
 /// Format query result for display
-pub fn format_result(result: &QueryResult) -> String {
+pub fn format_result(result: &SqlQueryResult) -> String {
     let mut output = String::new();
 
     output.push_str(&format!("Execution time: {}ms\n", result.execution_time));

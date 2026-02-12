@@ -12,7 +12,7 @@ mod types;
 mod tests;
 
 pub use config::ToolCacheConfig;
-pub use stats::CacheStats;
+pub use stats::ToolCacheStats;
 pub use storage::ToolCache;
 pub use types::{CachedResult, SharedToolCache, ToolCacheKey};
 

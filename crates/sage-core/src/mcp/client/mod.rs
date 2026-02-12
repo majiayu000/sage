@@ -18,8 +18,8 @@ use super::error::McpError;
 use super::protocol::{McpMessage, McpRequest, RequestId, methods};
 use super::transport::McpTransport;
 use super::types::{
-    ClientCapabilities, ClientInfo, InitializeParams, InitializeResult, McpCapabilities,
-    McpPrompt, McpResource, McpServerInfo, McpTool,
+    ClientCapabilities, ClientInfo, InitializeParams, InitializeResult, McpCapabilities, McpPrompt,
+    McpResource, McpServerInfo, McpTool,
 };
 use receiver::ReceiverCommand;
 use serde_json::{Value, json};

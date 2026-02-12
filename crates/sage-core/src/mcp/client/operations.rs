@@ -1,11 +1,11 @@
 //! MCP protocol operations (tools, resources, prompts)
 
-use super::McpClient;
 use super::super::error::McpError;
 use super::super::protocol::methods;
 use super::super::types::{
     McpPrompt, McpPromptMessage, McpResource, McpResourceContent, McpTool, McpToolResult,
 };
+use super::McpClient;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use tracing::instrument;

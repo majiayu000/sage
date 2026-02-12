@@ -26,7 +26,7 @@ pub use types::{
     DatabaseOperation,
     ColumnDefinition,
     DatabaseParams,
-    QueryResult,
+    SqlQueryResult,
 };
 
 // Re-export the main tool

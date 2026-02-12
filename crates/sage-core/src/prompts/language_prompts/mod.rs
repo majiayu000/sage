@@ -25,7 +25,7 @@ mod guidance;
 mod language;
 
 pub use guidance::LanguagePrompts;
-pub use language::{detect_primary_language, Language};
+pub use language::{Language, detect_primary_language};
 
 #[cfg(test)]
 mod tests {
