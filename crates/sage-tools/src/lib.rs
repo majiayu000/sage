@@ -66,5 +66,51 @@ pub mod config;
 pub mod mcp_tools;
 pub mod tools;
 
-// Re-export tools from the organized structure
-pub use tools::*;
+// Re-export commonly used tools and functions
+pub use tools::{
+    // File operations
+    CodebaseRetrievalTool, EditTool, GlobTool, GrepTool, NotebookEditTool, ReadTool, WriteTool,
+    // Process
+    BashTool, KillShellTool, TaskOutputTool, TaskRequest, TaskStatus, TaskTool,
+    get_pending_tasks, get_task, update_task_status,
+    // Task management
+    AddTasksTool, ReorganizeTasklistTool, TaskDoneTool, TodoItem, TodoReadTool, TodoStatus,
+    TodoWriteTool, UpdateTasksTool, ViewTasklistTool,
+    get_current_task, get_current_todos, get_todo_display,
+    // Planning
+    EnterPlanModeTool, ExitPlanModeTool,
+    // Interaction
+    AskUserQuestionTool,
+    // Extensions
+    DeferredToolInfo, DeferredToolRegistry, PlatformToolProxy, SkillTool, SlashCommandTool,
+    ToolSearchResult, ToolSearchTool,
+    // Network
+    BrowserTool, HttpClientTool, WebFetchTool, WebSearchTool,
+    // Diagnostics
+    DiagnosticsTool, LearnTool, LearningPatternsTool, RememberTool, RenderMermaidTool,
+    SearchUntruncatedTool, SessionNotesTool, ViewRangeUntruncatedTool,
+    get_global_learning_engine, get_global_memory_manager, get_learning_patterns_for_context,
+    get_memories_for_context, init_global_learning_engine, init_global_memory_manager,
+    // Infrastructure
+    CloudTool, KubernetesTool, TerraformTool,
+    // Monitoring
+    LogAnalyzerTool, TestGeneratorTool,
+    // Code intelligence
+    LspTool,
+    // VCS
+    GitTool,
+    // Team
+    SendMessageTool, TeamConfig, TeamManager, TeamMember, TeammateTool,
+    // Utilities
+    SequentialThinkingTool, TelemetryStatsTool,
+    // Factory functions
+    get_default_tools, get_file_ops_tools, get_process_tools, get_task_mgmt_tools,
+    get_planning_tools, get_interaction_tools, get_extension_tools, get_network_tools,
+    get_diagnostics_tools, get_vcs_tools, get_monitoring_tools, get_infrastructure_tools,
+    get_code_intelligence_tools, get_team_tools,
+};
+// Re-export MCP tools
+pub use tools::{
+    McpServersTool, McpToolAdapter, McpToolRegistry, SharedMcpToolRegistry,
+    create_mcp_registry, get_global_mcp_registry, get_mcp_tools, init_global_mcp_registry,
+};
