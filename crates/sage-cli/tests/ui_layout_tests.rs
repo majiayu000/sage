@@ -14,7 +14,7 @@ use rnk::layout::LayoutEngine;
 use rnk::prelude::Box as RnkBox;
 use rnk::prelude::*;
 use sage_core::ui::bridge::state::{
-    AppState, ExecutionPhase, Message, MessageMetadata, Role, UiSessionInfo, UiMessageContent,
+    AppState, ExecutionPhase, Message, MessageMetadata, Role, UiMessageContent, UiSessionInfo,
     UiToolResult,
 };
 use std::time::Duration;
