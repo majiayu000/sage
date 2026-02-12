@@ -18,7 +18,7 @@ pub struct EventAdapter {
 impl EventAdapter {
     /// Create a new event adapter with the given state
     pub fn new(state: Arc<RwLock<AppState>>) -> Self {
-        let initial_state = state.read().unwrap().clone();
+        let initial_state = state.read().unwrap_or_else(|e| e.into_inner()).clone();
         let (state_tx, _) = watch::channel(initial_state);
         Self { state, state_tx }
     }
@@ -49,7 +49,7 @@ impl EventAdapter {
     /// Handle an agent event, updating the state accordingly
     pub fn handle_event(&self, event: AgentEvent) {
         let state_snapshot = {
-            let mut state = self.state.write().unwrap();
+            let mut state = self.state.write().unwrap_or_else(|e| e.into_inner());
             self.apply_event(&mut state, event);
             state.clone()
         };
@@ -151,7 +151,7 @@ impl EventAdapter {
 
     /// Get a snapshot of the current state
     pub fn get_state(&self) -> AppState {
-        self.state.read().unwrap().clone()
+        self.state.read().unwrap_or_else(|e| e.into_inner()).clone()
     }
 
     /// Update state with a closure and notify subscribers
@@ -160,7 +160,7 @@ impl EventAdapter {
         F: FnOnce(&mut AppState),
     {
         let state_snapshot = {
-            let mut state = self.state.write().unwrap();
+            let mut state = self.state.write().unwrap_or_else(|e| e.into_inner());
             f(&mut state);
             state.clone()
         };

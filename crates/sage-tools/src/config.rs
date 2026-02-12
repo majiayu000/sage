@@ -250,7 +250,10 @@ pub static GLOBAL_CONFIG: Lazy<std::sync::RwLock<ToolsConfig>> =
 
 /// Helper function to get global configuration
 pub fn get_global_config() -> ToolsConfig {
-    GLOBAL_CONFIG.read().unwrap().clone()
+    GLOBAL_CONFIG
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone()
 }
 
 /// Helper function to update global configuration
@@ -258,6 +261,6 @@ pub fn update_global_config<F>(updater: F)
 where
     F: FnOnce(&mut ToolsConfig),
 {
-    let mut config = GLOBAL_CONFIG.write().unwrap();
+    let mut config = GLOBAL_CONFIG.write().unwrap_or_else(|e| e.into_inner());
     updater(&mut config);
 }

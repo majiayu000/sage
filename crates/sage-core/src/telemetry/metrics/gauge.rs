@@ -4,6 +4,15 @@ use std::sync::atomic::{AtomicI64, Ordering};
 
 use super::types::{Metric, MetricType, MetricValue};
 
+/// Safely convert f64 to i64, returning 0 for NaN/Infinity/out-of-range values.
+fn safe_f64_to_i64(value: f64) -> i64 {
+    if !value.is_finite() {
+        return 0;
+    }
+    // Clamp to i64 range before casting
+    value.clamp(i64::MIN as f64, i64::MAX as f64) as i64
+}
+
 /// Gauge metric (can increase or decrease)
 #[derive(Debug)]
 pub struct Gauge {
@@ -26,7 +35,7 @@ impl Gauge {
 
     /// Set the gauge value
     pub fn set(&self, value: f64) {
-        let scaled = (value * self.scale) as i64;
+        let scaled = safe_f64_to_i64(value * self.scale);
         self.value.store(scaled, Ordering::Relaxed);
     }
 
@@ -37,7 +46,7 @@ impl Gauge {
 
     /// Increment by a specific amount
     pub fn inc_by(&self, n: f64) {
-        let scaled = (n * self.scale) as i64;
+        let scaled = safe_f64_to_i64(n * self.scale);
         self.value.fetch_add(scaled, Ordering::Relaxed);
     }
 
@@ -48,7 +57,7 @@ impl Gauge {
 
     /// Decrement by a specific amount
     pub fn dec_by(&self, n: f64) {
-        let scaled = (n * self.scale) as i64;
+        let scaled = safe_f64_to_i64(n * self.scale);
         self.value.fetch_sub(scaled, Ordering::Relaxed);
     }
 
