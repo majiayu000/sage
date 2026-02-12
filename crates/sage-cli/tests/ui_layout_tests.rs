@@ -14,7 +14,7 @@ use rnk::layout::LayoutEngine;
 use rnk::prelude::Box as RnkBox;
 use rnk::prelude::*;
 use sage_core::ui::bridge::state::{
-    AppState, ExecutionPhase, Message, MessageMetadata, Role, SessionState, UiMessageContent,
+    AppState, ExecutionPhase, Message, MessageMetadata, Role, UiSessionInfo, UiMessageContent,
     UiToolResult,
 };
 use std::time::Duration;
@@ -252,8 +252,8 @@ fn print_layout_tree(element: &Element, engine: &LayoutEngine, indent: usize) {
 // Test Data Factories
 // ============================================================================
 
-fn create_default_session() -> SessionState {
-    SessionState {
+fn create_default_session() -> UiSessionInfo {
+    UiSessionInfo {
         session_id: Some("test-session".to_string()),
         model: "claude-3-opus".to_string(),
         provider: "anthropic".to_string(),
@@ -312,7 +312,7 @@ fn create_tool_call_message(
 // Component Builders (matching rnk_app.rs)
 // ============================================================================
 
-fn build_header(session: &SessionState, width: u16) -> Element {
+fn build_header(session: &UiSessionInfo, width: u16) -> Element {
     let version = env!("CARGO_PKG_VERSION");
     let title = truncate_to_width(&format!("▐▛███▜▌   Sage Code v{}", version), width as usize);
     let model_info = format!("{} · {}", session.model, session.provider);
@@ -397,7 +397,7 @@ fn build_bottom_area(width: u16, mode: &str, scroll_percent: Option<u8>) -> Elem
         .into_element()
 }
 
-fn build_full_ui(session: &SessionState, width: u16, height: u16) -> Element {
+fn build_full_ui(session: &UiSessionInfo, width: u16, height: u16) -> Element {
     let header = build_header(session, width);
     let content = RnkBox::new()
         .flex_direction(FlexDirection::Column)
@@ -1611,7 +1611,7 @@ mod edge_cases {
 
     #[test]
     fn test_empty_session_info() {
-        let session = SessionState {
+        let session = UiSessionInfo {
             session_id: None,
             model: String::new(),
             provider: String::new(),
@@ -1627,7 +1627,7 @@ mod edge_cases {
 
     #[test]
     fn test_very_long_model_name() {
-        let session = SessionState {
+        let session = UiSessionInfo {
             session_id: None,
             model: "very-long-model-name-that-exceeds-normal-width-limits".to_string(),
             provider: "provider".to_string(),
@@ -1643,7 +1643,7 @@ mod edge_cases {
 
     #[test]
     fn test_very_long_working_directory() {
-        let session = SessionState {
+        let session = UiSessionInfo {
             session_id: None,
             model: "model".to_string(),
             provider: "provider".to_string(),

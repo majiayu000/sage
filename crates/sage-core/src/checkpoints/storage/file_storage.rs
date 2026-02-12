@@ -37,6 +37,7 @@ impl FileCheckpointStorage {
     }
 
     /// Set the maximum content size (in bytes) to store inline
+    #[cfg(test)]
     pub fn with_max_inline_size(mut self, size: usize) -> Self {
         self.max_inline_size = size;
         self
