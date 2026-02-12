@@ -211,27 +211,33 @@ impl BackgroundShellTask {
     }
 
     /// Get incremental output since last read
+    ///
+    /// Locks are acquired per-stream (stdout then stderr) to avoid holding
+    /// all four locks simultaneously, which would risk ABBA deadlocks.
     pub async fn get_incremental_output(&self) -> (String, String) {
-        let mut stdout_pos = self.last_stdout_pos.write().await;
-        let mut stderr_pos = self.last_stderr_pos.write().await;
-
-        let stdout_full = self.stdout.read().await;
-        let stderr_full = self.stderr.read().await;
-
-        let stdout_new = if *stdout_pos < stdout_full.len() {
-            stdout_full[*stdout_pos..].to_string()
-        } else {
-            String::new()
+        let stdout_new = {
+            let stdout_full = self.stdout.read().await;
+            let mut pos = self.last_stdout_pos.write().await;
+            let new = if *pos < stdout_full.len() {
+                stdout_full[*pos..].to_string()
+            } else {
+                String::new()
+            };
+            *pos = stdout_full.len();
+            new
         };
 
-        let stderr_new = if *stderr_pos < stderr_full.len() {
-            stderr_full[*stderr_pos..].to_string()
-        } else {
-            String::new()
+        let stderr_new = {
+            let stderr_full = self.stderr.read().await;
+            let mut pos = self.last_stderr_pos.write().await;
+            let new = if *pos < stderr_full.len() {
+                stderr_full[*pos..].to_string()
+            } else {
+                String::new()
+            };
+            *pos = stderr_full.len();
+            new
         };
-
-        *stdout_pos = stdout_full.len();
-        *stderr_pos = stderr_full.len();
 
         (stdout_new, stderr_new)
     }
