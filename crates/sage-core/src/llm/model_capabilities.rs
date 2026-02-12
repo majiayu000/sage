@@ -258,7 +258,12 @@ pub fn get_model_capability(model: &str) -> ModelCapability {
 pub fn get_recommended_max_tokens(model: &str) -> u32 {
     let cap = get_model_capability(model);
     // Use 75% of max_output_tokens as the recommended default
-    (cap.max_output_tokens as f32 * 0.75) as u32
+    let tokens_f64 = cap.max_output_tokens as f64 * 0.75;
+    if tokens_f64.is_finite() && tokens_f64 >= 0.0 {
+        (tokens_f64 as u32).min(cap.max_output_tokens)
+    } else {
+        cap.max_output_tokens
+    }
 }
 
 /// Get the maximum allowed max_tokens for a model

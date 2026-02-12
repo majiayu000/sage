@@ -214,8 +214,8 @@ impl SubAgentRunner {
             }
 
             // Check step limit
-            if progress.current_step >= effective_max_steps as u32 {
-                let elapsed_ms = start_time.elapsed().as_millis() as u64;
+            if progress.current_step >= u32::try_from(effective_max_steps).unwrap_or(u32::MAX) {
+                let elapsed_ms = u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX);
                 metadata.execution_time_ms = elapsed_ms;
 
                 return Ok(SubAgentResult {
@@ -237,7 +237,7 @@ impl SubAgentRunner {
             {
                 StepResult::Continue => continue,
                 StepResult::Completed(output) => {
-                    let elapsed_ms = start_time.elapsed().as_millis() as u64;
+                    let elapsed_ms = u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX);
                     metadata.execution_time_ms = elapsed_ms;
 
                     return Ok(SubAgentResult {

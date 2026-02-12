@@ -13,7 +13,7 @@ pub fn execute_insert(
     QueryResult {
         rows_affected: Some(1),
         data: None,
-        execution_time: start_time.elapsed().as_millis() as u64,
+        execution_time: u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX),
         columns: None,
     }
 }
@@ -28,7 +28,7 @@ pub fn execute_update(
     QueryResult {
         rows_affected: Some(1),
         data: None,
-        execution_time: start_time.elapsed().as_millis() as u64,
+        execution_time: u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX),
         columns: None,
     }
 }
@@ -42,7 +42,7 @@ pub fn execute_delete(
     QueryResult {
         rows_affected: Some(1),
         data: None,
-        execution_time: start_time.elapsed().as_millis() as u64,
+        execution_time: u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX),
         columns: None,
     }
 }
@@ -52,7 +52,7 @@ pub fn execute_transaction(statements: Vec<String>, start_time: std::time::Insta
     QueryResult {
         rows_affected: Some(statements.len() as u64),
         data: None,
-        execution_time: start_time.elapsed().as_millis() as u64,
+        execution_time: u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX),
         columns: None,
     }
 }

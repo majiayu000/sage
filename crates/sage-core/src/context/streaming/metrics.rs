@@ -44,7 +44,7 @@ impl StreamingMetrics {
             .fetch_add(counter.estimated_tokens(), Ordering::SeqCst);
 
         if let Some(ttft) = counter.time_to_first_token().await {
-            let ttft_ms = ttft.as_millis() as usize;
+            let ttft_ms = u64::try_from(ttft.as_millis()).unwrap_or(u64::MAX) as usize;
             self.total_ttft_ms.fetch_add(ttft_ms, Ordering::SeqCst);
             self.ttft_count.fetch_add(1, Ordering::SeqCst);
 

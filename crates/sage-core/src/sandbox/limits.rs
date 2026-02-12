@@ -202,7 +202,7 @@ impl ResourceUsage {
     /// Finalize usage tracking
     pub fn finalize(&mut self) {
         if let Some(started) = self.started_at {
-            self.execution_time_ms = started.elapsed().as_millis() as u64;
+            self.execution_time_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
         }
     }
 

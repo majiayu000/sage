@@ -37,11 +37,13 @@ impl ContextManager {
         }
 
         // Log warning about approaching limit
+        let pct = total_tokens as f64 / self.config.max_context_tokens as f64 * 100.0;
+        let pct_display = if pct.is_finite() && pct >= 0.0 { (pct as u32).min(100) } else { 0 };
         tracing::warn!(
             "Context approaching limit: {}/{} tokens ({}%)",
             total_tokens,
             self.config.max_context_tokens,
-            (total_tokens as f32 / self.config.max_context_tokens as f32 * 100.0) as u32
+            pct_display
         );
 
         // Apply overflow strategy

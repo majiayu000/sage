@@ -149,11 +149,12 @@ impl TaskSupervisor {
         let delay_ms = base.as_millis() as f64 * multiplier.powi(exponent);
 
         // Clamp to max and safely convert to u64
-        let clamped = delay_ms.min(max.as_millis() as f64);
+        let max_ms = u64::try_from(max.as_millis()).unwrap_or(u64::MAX);
+        let clamped = delay_ms.min(max_ms as f64);
         let millis = if clamped.is_finite() && clamped >= 0.0 {
             clamped as u64
         } else {
-            max.as_millis() as u64
+            max_ms
         };
         Duration::from_millis(millis)
     }

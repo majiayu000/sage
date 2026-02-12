@@ -24,7 +24,7 @@ pub fn execute_describe_table(table: String, start_time: std::time::Instant) -> 
     QueryResult {
         rows_affected: Some(schema_data.len() as u64),
         data: Some(schema_data),
-        execution_time: start_time.elapsed().as_millis() as u64,
+        execution_time: u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX),
         columns: Some(vec![
             "column_name".to_string(),
             "data_type".to_string(),
@@ -45,7 +45,7 @@ pub fn execute_list_tables(start_time: std::time::Instant) -> QueryResult {
     QueryResult {
         rows_affected: Some(tables_data.len() as u64),
         data: Some(tables_data),
-        execution_time: start_time.elapsed().as_millis() as u64,
+        execution_time: u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX),
         columns: Some(vec!["table_name".to_string()]),
     }
 }
@@ -70,7 +70,7 @@ pub fn execute_stats(start_time: std::time::Instant) -> QueryResult {
     QueryResult {
         rows_affected: Some(stats_data.len() as u64),
         data: Some(stats_data),
-        execution_time: start_time.elapsed().as_millis() as u64,
+        execution_time: u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX),
         columns: Some(vec!["metric".to_string(), "value".to_string()]),
     }
 }

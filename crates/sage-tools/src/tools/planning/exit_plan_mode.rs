@@ -130,6 +130,11 @@ NO MORE PLANNING - EXECUTE!
 
         if launch_swarm {
             if let Some(count) = call.get_number("teammateCount") {
+                if !count.is_finite() || count < 0.0 || count > u32::MAX as f64 {
+                    return Err(ToolError::InvalidArguments(
+                        "teammateCount must be a positive integer".to_string(),
+                    ));
+                }
                 let teammate_count = count as u32;
                 if !(1..=10).contains(&teammate_count) {
                     return Err(ToolError::InvalidArguments(

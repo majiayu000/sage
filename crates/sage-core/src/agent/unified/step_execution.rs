@@ -215,7 +215,7 @@ impl UnifiedExecutor {
             .await?;
 
         // Record and display result
-        let duration_ms = tool_start_time.elapsed().as_millis() as u64;
+        let duration_ms = u64::try_from(tool_start_time.elapsed().as_millis()).unwrap_or(u64::MAX);
         self.session_manager
             .record_tool_result(
                 &tool_call.name,

@@ -49,7 +49,7 @@ impl ToolMetrics {
     pub fn record_success(&mut self, execution_time: Duration) {
         self.execution_count += 1;
         self.success_count += 1;
-        let execution_time_ms = execution_time.as_millis() as u64;
+        let execution_time_ms = u64::try_from(execution_time.as_millis()).unwrap_or(u64::MAX);
         self.total_execution_time_ms += execution_time_ms;
         self.average_execution_time_ms =
             self.total_execution_time_ms as f64 / self.execution_count as f64;
@@ -61,7 +61,7 @@ impl ToolMetrics {
     pub fn record_error(&mut self, execution_time: Duration, error_type: String) {
         self.execution_count += 1;
         self.error_count += 1;
-        let execution_time_ms = execution_time.as_millis() as u64;
+        let execution_time_ms = u64::try_from(execution_time.as_millis()).unwrap_or(u64::MAX);
         self.total_execution_time_ms += execution_time_ms;
         self.average_execution_time_ms =
             self.total_execution_time_ms as f64 / self.execution_count as f64;

@@ -12,7 +12,7 @@ pub fn execute_create_table(
     QueryResult {
         rows_affected: Some(1),
         data: None,
-        execution_time: start_time.elapsed().as_millis() as u64,
+        execution_time: u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX),
         columns: None,
     }
 }
@@ -22,7 +22,7 @@ pub fn execute_drop_table(table: String, start_time: std::time::Instant) -> Quer
     QueryResult {
         rows_affected: Some(1),
         data: None,
-        execution_time: start_time.elapsed().as_millis() as u64,
+        execution_time: u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX),
         columns: None,
     }
 }
@@ -44,7 +44,7 @@ pub fn execute_create_index(
     QueryResult {
         rows_affected: Some(1),
         data: None,
-        execution_time: start_time.elapsed().as_millis() as u64,
+        execution_time: u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX),
         columns: None,
     }
 }

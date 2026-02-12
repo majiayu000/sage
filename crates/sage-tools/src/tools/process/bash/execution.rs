@@ -124,7 +124,7 @@ impl BashTool {
             ))
         })?;
 
-        let execution_time = start_time.elapsed().as_millis() as u64;
+        let execution_time = u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX);
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);

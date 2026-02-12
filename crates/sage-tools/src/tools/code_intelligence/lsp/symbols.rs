@@ -51,7 +51,7 @@ pub fn extract_symbols_simple(content: &str, language: &str) -> Vec<SymbolInfo> 
                             kind: kind.to_string(),
                             location: Location {
                                 file_path: String::new(),
-                                line: (line_num + 1) as u32,
+                                line: u32::try_from(line_num + 1).unwrap_or(u32::MAX),
                                 character: 1,
                                 end_line: None,
                                 end_character: None,

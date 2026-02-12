@@ -95,7 +95,7 @@ impl WorkspaceAnalyzer {
             dependencies,
             structure,
             git_info,
-            analysis_duration_ms: start.elapsed().as_millis() as u64,
+            analysis_duration_ms: u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
         })
     }
 

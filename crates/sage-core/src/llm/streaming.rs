@@ -288,7 +288,7 @@ pub mod stream_utils {
                 let elapsed = start_time.elapsed();
                 chunk.metadata.insert(
                     "elapsed_ms".to_string(),
-                    serde_json::Value::Number(serde_json::Number::from(elapsed.as_millis() as u64)),
+                    serde_json::Value::Number(serde_json::Number::from(u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX))),
                 );
                 chunk
             })

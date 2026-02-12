@@ -124,7 +124,7 @@ pub async fn execute_request(
         .context("Request timeout")?
         .context("HTTP request failed")?;
 
-    let response_time = start_time.elapsed().as_millis() as u64;
+    let response_time = u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX);
     let status = response.status().as_u16();
 
     let mut headers = HashMap::new();

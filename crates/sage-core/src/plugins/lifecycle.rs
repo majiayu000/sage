@@ -334,7 +334,7 @@ pub async fn check_plugin_health(plugin: &dyn Plugin, lifecycle: &PluginLifecycl
         );
     }
 
-    let response_time_ms = start.elapsed().as_millis() as u64;
+    let response_time_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
     HealthCheck::ok(plugin.name(), response_time_ms)
 }
 

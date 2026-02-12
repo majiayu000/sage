@@ -192,17 +192,17 @@ pub trait Tool: Send + Sync {
         // Validate arguments first
         if let Err(err) = self.validate(call) {
             return ToolResult::error(&call.id, self.name(), err.to_string())
-                .with_execution_time(start_time.elapsed().as_millis() as u64);
+                .with_execution_time(u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX));
         }
 
         // Execute the tool
         match self.execute(call).await {
             Ok(mut result) => {
-                result.execution_time_ms = Some(start_time.elapsed().as_millis() as u64);
+                result.execution_time_ms = Some(u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX));
                 result
             }
             Err(err) => ToolResult::error(&call.id, self.name(), err.to_string())
-                .with_execution_time(start_time.elapsed().as_millis() as u64),
+                .with_execution_time(u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX)),
         }
     }
 }

@@ -138,7 +138,7 @@ Example: task_output(shell_id="shell_1", incremental=false)"#
         );
 
         let mut result = ToolResult::success(&call.id, self.name(), output);
-        result.execution_time_ms = Some(start_time.elapsed().as_millis() as u64);
+        result.execution_time_ms = Some(u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX));
 
         Ok(result)
     }

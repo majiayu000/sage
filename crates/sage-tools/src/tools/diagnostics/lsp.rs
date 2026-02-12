@@ -130,14 +130,23 @@ Note: LSP servers must be configured for the file type. If no server is availabl
             ToolError::InvalidArguments("Missing 'filePath' parameter".to_string())
         })?;
 
-        let line = call
+        let line_f64 = call
             .get_number("line")
-            .ok_or_else(|| ToolError::InvalidArguments("Missing 'line' parameter".to_string()))?
-            as usize;
+            .ok_or_else(|| ToolError::InvalidArguments("Missing 'line' parameter".to_string()))?;
+        let line = if line_f64.is_finite() && line_f64 >= 0.0 {
+            line_f64 as usize
+        } else {
+            return Err(ToolError::InvalidArguments("'line' must be a non-negative number".to_string()));
+        };
 
-        let character = call.get_number("character").ok_or_else(|| {
+        let char_f64 = call.get_number("character").ok_or_else(|| {
             ToolError::InvalidArguments("Missing 'character' parameter".to_string())
-        })? as usize;
+        })?;
+        let character = if char_f64.is_finite() && char_f64 >= 0.0 {
+            char_f64 as usize
+        } else {
+            return Err(ToolError::InvalidArguments("'character' must be a non-negative number".to_string()));
+        };
 
         let _op = LspOperation::from_str(&operation).ok_or_else(|| {
             ToolError::InvalidArguments(format!("Unknown operation: {}", operation))

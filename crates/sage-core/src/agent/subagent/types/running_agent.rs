@@ -48,7 +48,7 @@ impl RunningAgent {
 
     /// Get elapsed time in milliseconds
     pub fn elapsed_ms(&self) -> u64 {
-        self.start_time.elapsed().as_millis() as u64
+        u64::try_from(self.start_time.elapsed().as_millis()).unwrap_or(u64::MAX)
     }
 
     /// Check if agent is still active

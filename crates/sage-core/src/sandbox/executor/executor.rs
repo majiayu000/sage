@@ -118,7 +118,7 @@ impl SandboxExecutor {
             resource_usage: ExecutionResourceUsage {
                 peak_memory_bytes: 0, // Would need platform-specific tracking
                 output_bytes,
-                cpu_time_ms: duration.as_millis() as u64, // Approximation
+                cpu_time_ms: u64::try_from(duration.as_millis()).unwrap_or(u64::MAX), // Approximation
             },
         })
     }

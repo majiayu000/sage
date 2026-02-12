@@ -9,7 +9,7 @@ pub fn execute_query(sql: String, start_time: std::time::Instant) -> QueryResult
     QueryResult {
         rows_affected: Some(0),
         data: None,
-        execution_time: start_time.elapsed().as_millis() as u64,
+        execution_time: u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX),
         columns: None,
     }
 }
@@ -39,7 +39,7 @@ pub fn execute_select(
     QueryResult {
         rows_affected: Some(data.len() as u64),
         data: Some(data),
-        execution_time: start_time.elapsed().as_millis() as u64,
+        execution_time: u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX),
         columns: Some(vec!["id".to_string(), "name".to_string()]),
     }
 }
