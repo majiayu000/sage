@@ -3,274 +3,17 @@
 //! This module provides the ResolvedCredential type which wraps a credential value
 //! with metadata about where it came from, enabling transparency and debugging.
 
-use super::source::{CredentialPriority, CredentialSource};
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use std::fmt;
+mod collection;
+mod credential;
 
-/// A resolved credential with its source information
-///
-/// This struct wraps the actual credential value with metadata about:
-/// - Where the credential came from (source)
-/// - When it was resolved
-/// - Whether it's been validated
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ResolvedCredential {
-    /// The credential value (API key, token, etc.)
-    /// Stored as a string but should be treated as sensitive
-    #[serde(skip_serializing_if = "Option::is_none")]
-    value: Option<String>,
-
-    /// The provider this credential is for (e.g., "anthropic", "openai")
-    pub provider: String,
-
-    /// Where this credential came from
-    pub source: CredentialSource,
-
-    /// When this credential was resolved
-    pub resolved_at: DateTime<Utc>,
-
-    /// Whether this credential has been validated (e.g., by making a test API call)
-    #[serde(default)]
-    pub validated: bool,
-
-    /// Optional expiration time for tokens
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub expires_at: Option<DateTime<Utc>>,
-}
-
-impl ResolvedCredential {
-    /// Create a new resolved credential
-    pub fn new(
-        value: impl Into<String>,
-        provider: impl Into<String>,
-        source: CredentialSource,
-    ) -> Self {
-        Self {
-            value: Some(value.into()),
-            provider: provider.into(),
-            source,
-            resolved_at: Utc::now(),
-            validated: false,
-            expires_at: None,
-        }
-    }
-
-    /// Create an empty/missing credential for a provider
-    pub fn missing(provider: impl Into<String>) -> Self {
-        Self {
-            value: None,
-            provider: provider.into(),
-            source: CredentialSource::Default,
-            resolved_at: Utc::now(),
-            validated: false,
-            expires_at: None,
-        }
-    }
-
-    /// Get the credential value
-    ///
-    /// Returns None if the credential is missing or expired
-    pub fn value(&self) -> Option<&str> {
-        if self.is_expired() {
-            return None;
-        }
-        self.value.as_deref()
-    }
-
-    /// Get the credential value, consuming self
-    pub fn into_value(self) -> Option<String> {
-        if self.is_expired() {
-            return None;
-        }
-        self.value
-    }
-
-    /// Check if this credential has a value
-    pub fn has_value(&self) -> bool {
-        self.value.is_some() && !self.is_expired()
-    }
-
-    /// Check if this credential is missing
-    pub fn is_missing(&self) -> bool {
-        self.value.is_none()
-    }
-
-    /// Check if this credential is expired
-    pub fn is_expired(&self) -> bool {
-        self.expires_at.map(|exp| Utc::now() > exp).unwrap_or(false)
-    }
-
-    /// Check if this credential is valid (has value, not expired, validated)
-    pub fn is_valid(&self) -> bool {
-        self.has_value() && self.validated
-    }
-
-    /// Get the priority of this credential's source
-    pub fn priority(&self) -> CredentialPriority {
-        self.source.priority()
-    }
-
-    /// Mark this credential as validated
-    pub fn mark_validated(mut self) -> Self {
-        self.validated = true;
-        self
-    }
-
-    /// Set an expiration time
-    pub fn with_expiration(mut self, expires_at: DateTime<Utc>) -> Self {
-        self.expires_at = Some(expires_at);
-        self
-    }
-
-    /// Create a masked version for display (e.g., "sk-...abc123")
-    pub fn masked_value(&self) -> String {
-        match &self.value {
-            Some(v) if v.len() > 8 => {
-                let prefix = &v[..3.min(v.len())];
-                let suffix = &v[v.len().saturating_sub(6)..];
-                format!("{}...{}", prefix, suffix)
-            }
-            Some(v) => "*".repeat(v.len()),
-            None => "(missing)".to_string(),
-        }
-    }
-
-    /// Get a summary of where this credential came from
-    pub fn source_summary(&self) -> String {
-        format!(
-            "{} from {}",
-            if self.has_value() {
-                "Loaded"
-            } else {
-                "Missing"
-            },
-            self.source
-        )
-    }
-}
-
-impl fmt::Display for ResolvedCredential {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}: {} ({})",
-            self.provider,
-            self.masked_value(),
-            self.source.priority().name()
-        )
-    }
-}
-
-impl PartialEq for ResolvedCredential {
-    fn eq(&self, other: &Self) -> bool {
-        self.provider == other.provider
-            && self.value == other.value
-            && self.source == other.source
-            && self.validated == other.validated
-    }
-}
-
-impl Eq for ResolvedCredential {}
-
-/// A collection of resolved credentials for multiple providers
-#[derive(Debug, Clone, Default)]
-pub struct ResolvedCredentials {
-    credentials: Vec<ResolvedCredential>,
-}
-
-impl ResolvedCredentials {
-    /// Create a new empty collection
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Add a resolved credential
-    pub fn add(&mut self, credential: ResolvedCredential) {
-        // Replace existing credential for same provider if new one has higher priority
-        if let Some(existing) = self
-            .credentials
-            .iter_mut()
-            .find(|c| c.provider == credential.provider)
-        {
-            if credential.priority() < existing.priority() {
-                *existing = credential;
-            }
-        } else {
-            self.credentials.push(credential);
-        }
-    }
-
-    /// Get a credential for a specific provider
-    pub fn get(&self, provider: &str) -> Option<&ResolvedCredential> {
-        self.credentials.iter().find(|c| c.provider == provider)
-    }
-
-    /// Get the API key for a provider
-    pub fn get_api_key(&self, provider: &str) -> Option<&str> {
-        self.get(provider).and_then(|c| c.value())
-    }
-
-    /// Check if any credentials are configured
-    pub fn has_any(&self) -> bool {
-        self.credentials.iter().any(|c| c.has_value())
-    }
-
-    /// Get all configured providers
-    pub fn configured_providers(&self) -> Vec<&str> {
-        self.credentials
-            .iter()
-            .filter(|c| c.has_value())
-            .map(|c| c.provider.as_str())
-            .collect()
-    }
-
-    /// Get all missing providers
-    pub fn missing_providers(&self) -> Vec<&str> {
-        self.credentials
-            .iter()
-            .filter(|c| c.is_missing())
-            .map(|c| c.provider.as_str())
-            .collect()
-    }
-
-    /// Iterate over all credentials
-    pub fn iter(&self) -> impl Iterator<Item = &ResolvedCredential> {
-        self.credentials.iter()
-    }
-
-    /// Get the number of credentials
-    pub fn len(&self) -> usize {
-        self.credentials.len()
-    }
-
-    /// Check if the collection is empty
-    pub fn is_empty(&self) -> bool {
-        self.credentials.is_empty()
-    }
-}
-
-impl IntoIterator for ResolvedCredentials {
-    type Item = ResolvedCredential;
-    type IntoIter = std::vec::IntoIter<ResolvedCredential>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.credentials.into_iter()
-    }
-}
-
-impl<'a> IntoIterator for &'a ResolvedCredentials {
-    type Item = &'a ResolvedCredential;
-    type IntoIter = std::slice::Iter<'a, ResolvedCredential>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.credentials.iter()
-    }
-}
+pub use collection::ResolvedCredentials;
+pub use credential::ResolvedCredential;
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::credential::source::{CredentialPriority, CredentialSource};
+    use chrono::Utc;
 
     #[test]
     fn test_resolved_credential_new() {
@@ -314,7 +57,7 @@ mod tests {
         let expired = ResolvedCredential::new("test-key", "test", CredentialSource::Default)
             .with_expiration(Utc::now() - chrono::Duration::hours(1));
         assert!(expired.is_expired());
-        assert!(!expired.has_value()); // Expired credential should not have value
+        assert!(!expired.has_value());
         assert!(expired.value().is_none());
     }
 
@@ -414,7 +157,6 @@ mod tests {
         ));
         assert_eq!(creds.len(), 1);
 
-        // Adding for different provider
         creds.add(ResolvedCredential::new(
             "key2",
             "anthropic",
@@ -427,7 +169,6 @@ mod tests {
     fn test_resolved_credentials_priority_replacement() {
         let mut creds = ResolvedCredentials::new();
 
-        // Add with lower priority first
         creds.add(ResolvedCredential::new(
             "default-key",
             "openai",
@@ -435,16 +176,16 @@ mod tests {
         ));
         assert_eq!(creds.get_api_key("openai"), Some("default-key"));
 
-        // Add with higher priority - should replace
+        // Higher priority should replace
         creds.add(ResolvedCredential::new(
             "env-key",
             "openai",
             CredentialSource::env("OPENAI_API_KEY"),
         ));
         assert_eq!(creds.get_api_key("openai"), Some("env-key"));
-        assert_eq!(creds.len(), 1); // Should still be 1, not 2
+        assert_eq!(creds.len(), 1);
 
-        // Add with lower priority - should NOT replace
+        // Lower priority should NOT replace
         creds.add(ResolvedCredential::new(
             "global-key",
             "openai",
