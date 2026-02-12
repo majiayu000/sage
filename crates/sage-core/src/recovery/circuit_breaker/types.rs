@@ -22,8 +22,6 @@ pub struct CircuitBreakerConfig {
     pub success_threshold: u32,
     /// Time to wait before transitioning from open to half-open
     pub reset_timeout: Duration,
-    /// Sliding window size for failure counting
-    pub window_size: Duration,
     /// Maximum concurrent requests in half-open state
     pub half_open_max_requests: u32,
 }
@@ -34,32 +32,7 @@ impl Default for CircuitBreakerConfig {
             failure_threshold: 5,
             success_threshold: 3,
             reset_timeout: Duration::from_secs(30),
-            window_size: Duration::from_secs(60),
             half_open_max_requests: 3,
-        }
-    }
-}
-
-impl CircuitBreakerConfig {
-    /// Create a config for aggressive circuit breaking
-    pub fn aggressive() -> Self {
-        Self {
-            failure_threshold: 3,
-            success_threshold: 2,
-            reset_timeout: Duration::from_secs(15),
-            window_size: Duration::from_secs(30),
-            half_open_max_requests: 1,
-        }
-    }
-
-    /// Create a config for lenient circuit breaking
-    pub fn lenient() -> Self {
-        Self {
-            failure_threshold: 10,
-            success_threshold: 5,
-            reset_timeout: Duration::from_secs(60),
-            window_size: Duration::from_secs(120),
-            half_open_max_requests: 5,
         }
     }
 }

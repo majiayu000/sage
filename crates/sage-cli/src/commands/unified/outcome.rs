@@ -72,7 +72,10 @@ pub fn display_outcome(
     // Always show key execution stats
     println!("ℹ Execution time: {:.2}s", duration.as_secs_f64());
     println!("ℹ Steps: {}", outcome.execution().steps.len());
-    println!("ℹ Tokens: {}", outcome.execution().total_usage.total_tokens());
+    println!(
+        "ℹ Tokens: {}",
+        outcome.execution().total_usage.total_tokens()
+    );
 
     // Show session file path if available
     if let Some(path) = session_path {

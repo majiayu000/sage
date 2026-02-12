@@ -117,9 +117,7 @@ pub trait LlmSummaryGenerator: Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::session::enhanced::{
-        MessageContent, SessionContext,
-    };
+    use crate::session::enhanced::{MessageContent, SessionContext};
     use crate::session::types::unified::{SessionMessage, SessionMessageType};
     use crate::types::MessageRole;
     use chrono::Utc;
@@ -159,10 +157,7 @@ mod tests {
     fn test_generate_simple_summary() {
         let messages = vec![
             create_test_message(SessionMessageType::User, "Help me fix the login bug"),
-            create_test_message(
-                SessionMessageType::Assistant,
-                "I'll help you fix that bug.",
-            ),
+            create_test_message(SessionMessageType::Assistant, "I'll help you fix that bug."),
         ];
 
         let summary = SummaryGenerator::generate_simple(&messages);

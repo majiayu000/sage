@@ -1,6 +1,6 @@
 //! Single task supervisor for managing task lifecycle
 
-use super::super::{RecoverableError, RecoveryError};
+use super::super::RecoverableError;
 use super::types::{SupervisionAction, SupervisionPolicy, SupervisionResult};
 use crate::error::SageError;
 use std::future::Future;
@@ -48,24 +48,7 @@ impl TaskSupervisor {
         self
     }
 
-    /// Set an error handler callback
-    pub fn on_error<F>(mut self, handler: F) -> Self
-    where
-        F: Fn(&RecoverableError) + Send + Sync + 'static,
-    {
-        self.error_handler = Some(Box::new(handler));
-        self
-    }
-
-    /// Get a child cancellation token
-    pub fn child_token(&self) -> CancellationToken {
-        self.cancel_token.child_token()
-    }
-
     /// Run a task with supervision (single attempt)
-    ///
-    /// This executes the task once and returns the supervision result.
-    /// Use `run()` to execute with automatic restart handling.
     pub async fn supervise<T, F, Fut>(&mut self, task_factory: F) -> SupervisionResult
     where
         F: Fn() -> Fut + Send + Sync,
@@ -122,46 +105,6 @@ impl TaskSupervisor {
                     SupervisionAction::Escalate => {
                         SupervisionResult::Escalated { error: recoverable }
                     }
-                }
-            }
-        }
-    }
-
-    /// Run task continuously with supervision until completion or max restarts
-    pub async fn run<T, F, Fut>(&mut self, task_factory: F) -> Result<T, RecoveryError>
-    where
-        F: Fn() -> Fut + Send + Sync + Clone,
-        Fut: Future<Output = Result<T, SageError>> + Send,
-        T: Send,
-    {
-        loop {
-            let result = self.supervise(task_factory.clone()).await;
-            match result {
-                SupervisionResult::Completed => {
-                    // Need to actually get the result
-                    // This is a simplified implementation
-                    return Err(RecoveryError::PermanentFailure {
-                        message: "Task completed but result not captured".into(),
-                    });
-                }
-                SupervisionResult::Restarted { .. } => {
-                    // Continue loop to restart
-                    continue;
-                }
-                SupervisionResult::Resumed { error } => {
-                    return Err(RecoveryError::PermanentFailure {
-                        message: error.message,
-                    });
-                }
-                SupervisionResult::Stopped { error } => {
-                    return Err(RecoveryError::PermanentFailure {
-                        message: error.message,
-                    });
-                }
-                SupervisionResult::Escalated { error } => {
-                    return Err(RecoveryError::PermanentFailure {
-                        message: format!("Escalated: {}", error.message),
-                    });
                 }
             }
         }

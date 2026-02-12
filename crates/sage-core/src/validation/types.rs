@@ -2,9 +2,6 @@
 
 use std::collections::HashMap;
 
-/// Validation result
-pub type ValidationResult = Result<(), ValidationError>;
-
 /// Validation error containing all field errors
 #[derive(Debug, Clone)]
 pub struct ValidationError {

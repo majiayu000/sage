@@ -25,9 +25,7 @@ pub use super::enhanced::{
 };
 
 // Re-export canonical session message types from unified module
-pub use unified::{
-    SessionMessage, SessionMessageType, WireTokenUsage, UnifiedToolResult,
-};
+pub use unified::{SessionMessage, SessionMessageType, UnifiedToolResult, WireTokenUsage};
 
 // Re-export file tracking types
 pub use super::file_tracking::{

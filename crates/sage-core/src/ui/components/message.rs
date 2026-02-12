@@ -2,7 +2,7 @@
 //!
 //! Renders user/assistant messages with appropriate styling.
 
-use crate::ui::bridge::state::{Message, UiMessageContent, Role, UiToolResult};
+use crate::ui::bridge::state::{Message, Role, UiMessageContent, UiToolResult};
 use crate::ui::theme::{Colors, Icons};
 use rnk::prelude::*;
 

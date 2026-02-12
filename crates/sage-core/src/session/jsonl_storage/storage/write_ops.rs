@@ -6,16 +6,12 @@ use tokio::io::AsyncWriteExt;
 use tracing::debug;
 
 use super::super::super::types::{FileHistorySnapshot, SessionId};
-use crate::session::types::unified::SessionMessage;
 use super::core::JsonlSessionStorage;
+use crate::session::types::unified::SessionMessage;
 
 impl JsonlSessionStorage {
     /// Append a message to the session
-    pub async fn append_message(
-        &self,
-        id: &SessionId,
-        message: &SessionMessage,
-    ) -> SageResult<()> {
+    pub async fn append_message(&self, id: &SessionId, message: &SessionMessage) -> SageResult<()> {
         self.ensure_session_dir(id).await?;
 
         let path = self.messages_path(id);

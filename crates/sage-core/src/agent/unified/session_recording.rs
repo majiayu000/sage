@@ -1,7 +1,7 @@
 //! Session recording functionality for user and assistant messages.
 
 use crate::error::SageResult;
-use crate::session::{SessionMessage, WireTokenUsage, UnifiedToolCall};
+use crate::session::{SessionMessage, UnifiedToolCall, WireTokenUsage};
 use anyhow::Context;
 use tracing::instrument;
 

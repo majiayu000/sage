@@ -45,25 +45,6 @@ pub enum SupervisionResult {
     Escalated { error: RecoverableError },
 }
 
-/// Events emitted by the supervisor
-#[derive(Debug, Clone)]
-pub enum SupervisionEvent {
-    /// Task started
-    TaskStarted { task_name: String },
-    /// Task completed successfully
-    TaskCompleted { task_name: String },
-    /// Task failed
-    TaskFailed {
-        task_name: String,
-        error: String,
-        will_restart: bool,
-    },
-    /// Task restarted
-    TaskRestarted { task_name: String, attempt: u32 },
-    /// Supervisor shutting down
-    ShuttingDown,
-}
-
 /// Internal supervision action
 #[derive(Debug)]
 pub(super) enum SupervisionAction {

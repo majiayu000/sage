@@ -3,10 +3,10 @@
 use std::path::PathBuf;
 use tempfile::TempDir;
 
-use super::super::types::{SessionContext};
-use crate::session::types::unified::SessionMessage;
+use super::super::types::SessionContext;
 use super::storage::JsonlSessionStorage;
 use super::tracker::MessageChainTracker;
+use crate::session::types::unified::SessionMessage;
 
 #[tokio::test]
 async fn test_create_session() {

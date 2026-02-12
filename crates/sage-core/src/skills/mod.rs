@@ -88,5 +88,5 @@ pub use registry::{
 };
 pub use types::{
     Skill, SkillActivation, SkillContext, SkillInvocationConfig, SkillMetadata, SkillSource,
-    SkillSourceInfo, SkillSourceType, SkillTrigger, SkillTaskType, ToolAccess,
+    SkillSourceInfo, SkillSourceType, SkillTaskType, SkillTrigger, ToolAccess,
 };

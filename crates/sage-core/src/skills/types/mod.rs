@@ -30,7 +30,7 @@ pub use metadata::SkillMetadata;
 pub use skill::Skill;
 pub use source::{SkillSource, SkillSourceInfo, SkillSourceType};
 pub use tool_access::ToolAccess;
-pub use trigger::{SkillTrigger, SkillTaskType};
+pub use trigger::{SkillTaskType, SkillTrigger};
 
 #[cfg(test)]
 mod tests {

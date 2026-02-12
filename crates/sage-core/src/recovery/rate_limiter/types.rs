@@ -307,11 +307,6 @@ impl RateLimitConfig {
     }
 }
 
-// ========== Backward compatibility type alias ==========
-
-/// Alias for backward compatibility with code using RateLimiterConfig
-pub type RateLimiterConfig = RateLimitConfig;
-
 /// Guard returned when a rate limit token is acquired
 #[derive(Debug)]
 pub struct RateLimitGuard {

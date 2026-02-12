@@ -13,9 +13,12 @@ pub mod entry;
 pub mod replayer;
 pub mod session;
 
-pub use entry::{SessionEntry, TokenUsage};
+pub use entry::SessionEntry;
 pub use replayer::{SessionReplayer, TrajectorySessionSummary};
 pub use session::{SessionInfo, SessionRecorder};
+
+// Re-export TokenUsage from canonical location
+pub use crate::types::TokenUsage;
 
 use std::path::Path;
 use std::sync::Arc;

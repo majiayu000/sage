@@ -1,7 +1,7 @@
 //! Message display component
 
 use rnk::prelude::*;
-use sage_core::ui::bridge::state::{Message, UiMessageContent, Role};
+use sage_core::ui::bridge::state::{Message, Role, UiMessageContent};
 
 use crate::ui::rnk_app::formatting::{truncate_to_width, wrap_text_with_prefix};
 use crate::ui::rnk_app::theme::Theme;

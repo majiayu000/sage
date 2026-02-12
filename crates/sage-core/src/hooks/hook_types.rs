@@ -162,7 +162,10 @@ mod tests {
 
     #[test]
     fn test_permission_decision_default() {
-        assert_eq!(HookPermissionDecision::default(), HookPermissionDecision::Ask);
+        assert_eq!(
+            HookPermissionDecision::default(),
+            HookPermissionDecision::Ask
+        );
     }
 
     #[test]

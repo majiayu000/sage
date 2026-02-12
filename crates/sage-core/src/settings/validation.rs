@@ -38,20 +38,6 @@ impl SettingsValidator {
         }
     }
 
-    /// Create a strict validator that rejects unknown tools
-    pub fn strict() -> Self {
-        Self {
-            allow_unknown_tools: false,
-            ..Self::new()
-        }
-    }
-
-    /// Add known tool names
-    pub fn with_tools(mut self, tools: impl IntoIterator<Item = String>) -> Self {
-        self.known_tools.extend(tools);
-        self
-    }
-
     /// Validate settings
     pub fn validate(&self, settings: &Settings) -> SageResult<()> {
         let mut errors = Vec::new();
@@ -191,50 +177,6 @@ impl SettingsValidator {
     }
 }
 
-/// Validation result with details
-#[derive(Debug, Clone)]
-pub struct SettingsValidationResult {
-    /// Whether validation passed
-    pub valid: bool,
-    /// Warning messages (non-fatal)
-    pub warnings: Vec<String>,
-    /// Error messages (fatal)
-    pub errors: Vec<String>,
-}
-
-impl SettingsValidationResult {
-    /// Create a successful validation result
-    pub fn success() -> Self {
-        Self {
-            valid: true,
-            warnings: Vec::new(),
-            errors: Vec::new(),
-        }
-    }
-
-    /// Create a failed validation result
-    pub fn failure(errors: Vec<String>) -> Self {
-        Self {
-            valid: false,
-            warnings: Vec::new(),
-            errors,
-        }
-    }
-
-    /// Add a warning
-    pub fn with_warning(mut self, warning: impl Into<String>) -> Self {
-        self.warnings.push(warning.into());
-        self
-    }
-
-    /// Add an error
-    pub fn with_error(mut self, error: impl Into<String>) -> Self {
-        self.errors.push(error.into());
-        self.valid = false;
-        self
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -268,25 +210,6 @@ mod tests {
         settings.permissions.deny = vec!["Read(src/*)".to_string()];
 
         assert!(validator.validate(&settings).is_err());
-    }
-
-    #[test]
-    fn test_validate_unknown_tool_strict() {
-        let validator = SettingsValidator::strict();
-        let mut settings = Settings::default();
-        settings.permissions.allow = vec!["UnknownTool(*)".to_string()];
-
-        assert!(validator.validate(&settings).is_err());
-    }
-
-    #[test]
-    fn test_validate_unknown_tool_lenient() {
-        let validator = SettingsValidator::new();
-        let mut settings = Settings::default();
-        settings.permissions.allow = vec!["UnknownTool(*)".to_string()];
-
-        // Should pass with default (lenient) validation
-        assert!(validator.validate(&settings).is_ok());
     }
 
     #[test]
@@ -363,16 +286,5 @@ mod tests {
         settings.permissions.allow = vec!["Read(../../../etc/passwd)".to_string()];
 
         assert!(validator.validate(&settings).is_err());
-    }
-
-    #[test]
-    fn test_validation_result() {
-        let result = SettingsValidationResult::success()
-            .with_warning("This is a warning")
-            .with_error("This is an error");
-
-        assert!(!result.valid);
-        assert_eq!(result.warnings.len(), 1);
-        assert_eq!(result.errors.len(), 1);
     }
 }

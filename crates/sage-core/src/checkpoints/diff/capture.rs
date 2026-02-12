@@ -61,27 +61,6 @@ impl ChangeDetector {
         .collect()
     }
 
-    /// Track only specific file extensions
-    pub fn with_extensions(
-        mut self,
-        extensions: impl IntoIterator<Item = impl Into<String>>,
-    ) -> Self {
-        self.tracked_extensions = extensions.into_iter().map(Into::into).collect();
-        self
-    }
-
-    /// Add excluded directory
-    pub fn exclude_dir(mut self, dir: impl Into<PathBuf>) -> Self {
-        self.excluded_dirs.insert(dir.into());
-        self
-    }
-
-    /// Set maximum inline file size
-    pub fn with_max_inline_size(mut self, size: u64) -> Self {
-        self.max_inline_size = size;
-        self
-    }
-
     /// Check if a path should be tracked
     fn should_track(&self, path: &Path) -> bool {
         // Check excluded directories

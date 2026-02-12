@@ -10,7 +10,8 @@
 //! Each entry is appended immediately for crash safety.
 
 use crate::error::{SageError, SageResult};
-use crate::trajectory::entry::{SessionEntry, TokenUsage};
+use crate::trajectory::entry::SessionEntry;
+use crate::types::TokenUsage;
 use chrono::Utc;
 use std::path::{Path, PathBuf};
 use std::time::Instant;

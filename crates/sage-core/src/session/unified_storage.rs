@@ -462,7 +462,7 @@ impl UnifiedSessionStorage {
         message: &SessionMessage,
     ) -> SageResult<MessageId> {
         let uuid = message.uuid.clone();
-        self.append_record(id, SessionRecordPayload::Message(message.clone()))
+        self.append_record(id, SessionRecordPayload::Message(Box::new(message.clone())))
             .await?;
         self.update_header_from_message(id, message).await?;
         Ok(uuid)
@@ -526,7 +526,7 @@ impl UnifiedSessionStorage {
         let messages = records
             .into_iter()
             .filter_map(|r| match r.payload {
-                SessionRecordPayload::Message(msg) => Some(msg),
+                SessionRecordPayload::Message(msg) => Some(*msg),
                 _ => None,
             })
             .collect();
@@ -543,7 +543,7 @@ impl UnifiedSessionStorage {
         for record in records {
             if let SessionRecordPayload::Message(msg) = record.payload {
                 if msg.uuid == message_uuid {
-                    return Ok(Some(msg));
+                    return Ok(Some(*msg));
                 }
             }
         }
@@ -561,7 +561,7 @@ impl UnifiedSessionStorage {
         for record in records {
             if let SessionRecordPayload::Message(msg) = record.payload {
                 let is_target = msg.uuid == message_uuid;
-                result.push(msg);
+                result.push(*msg);
                 if is_target {
                     break;
                 }
@@ -623,7 +623,7 @@ impl UnifiedSessionStorage {
 
         for record in records {
             match record.payload {
-                SessionRecordPayload::Message(msg) => messages.push(msg),
+                SessionRecordPayload::Message(msg) => messages.push(*msg),
                 SessionRecordPayload::Snapshot(snap) => snapshots.push(snap),
                 SessionRecordPayload::MetadataPatch(_) => {} // Already applied to header
             }
@@ -657,7 +657,7 @@ impl UnifiedSessionStorage {
                 seq,
                 timestamp: msg.timestamp,
                 session_id: id.clone(),
-                payload: SessionRecordPayload::Message(msg.clone()),
+                payload: SessionRecordPayload::Message(Box::new(msg.clone())),
             };
             let json = serde_json::to_string(&record)
                 .map_err(|e| SageError::json(format!("Failed to serialize record: {}", e)))?;

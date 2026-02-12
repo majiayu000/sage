@@ -4,12 +4,10 @@
 //! and avoid hitting provider rate limits.
 
 mod limiter;
-mod strategies;
 mod types;
 
 #[cfg(test)]
 mod tests;
 
 pub use limiter::RateLimiter;
-pub use strategies::SlidingWindowRateLimiter;
-pub use types::{RateLimitConfig, RateLimitError, RateLimitGuard, RateLimiterConfig};
+pub use types::{RateLimitConfig, RateLimitError};

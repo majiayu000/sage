@@ -38,10 +38,7 @@ pub struct ExecutionResult {
 
 impl ExecutionResult {
     /// Create a new execution result.
-    pub fn new(
-        outcome: ExecutionOutcome,
-        config_used: Config,
-    ) -> Self {
+    pub fn new(outcome: ExecutionOutcome, config_used: Config) -> Self {
         Self {
             outcome,
             config_used,

@@ -11,6 +11,6 @@ mod tools;
 
 pub use base::Settings;
 pub use config::{ModelSettings, UiSettings, WorkspaceSettings};
-pub use hooks::{HookDefinition, HookDefinitionType, HooksSettings};
-pub use permissions::{ParsedPattern, SettingsPermissionBehavior, PermissionSettings};
+pub use hooks::HooksSettings;
+pub use permissions::PermissionSettings;
 pub use tools::ToolSettings;

@@ -14,7 +14,7 @@ use rnk::layout::LayoutEngine;
 use rnk::prelude::Box as RnkBox;
 use rnk::prelude::*;
 use sage_core::ui::bridge::state::{
-    AppState, ExecutionPhase, Message, UiMessageContent, MessageMetadata, Role, SessionState,
+    AppState, ExecutionPhase, Message, MessageMetadata, Role, SessionState, UiMessageContent,
     UiToolResult,
 };
 use std::time::Duration;
@@ -291,7 +291,11 @@ fn create_thinking_message(content: &str) -> Message {
     }
 }
 
-fn create_tool_call_message(tool_name: &str, params: &str, result: Option<UiToolResult>) -> Message {
+fn create_tool_call_message(
+    tool_name: &str,
+    params: &str,
+    result: Option<UiToolResult>,
+) -> Message {
     Message {
         role: Role::Assistant,
         content: UiMessageContent::ToolCall {

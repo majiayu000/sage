@@ -125,10 +125,7 @@ impl SageAgentSdk {
             }
 
             let outcome = executor.execute(task).await?;
-            Ok(ExecutionResult::new(
-                outcome,
-                config_used,
-            ))
+            Ok(ExecutionResult::new(outcome, config_used))
         };
 
         Ok((execution_future, input_handle))

@@ -13,7 +13,7 @@ pub mod traits;
 pub mod unified;
 
 pub use completion::{
-    CompletionChecker, CompletionStatus, FileOperationTracker, LimitType, CompletionTaskType,
+    CompletionChecker, CompletionStatus, CompletionTaskType, FileOperationTracker, LimitType,
 };
 pub use execution::AgentExecution;
 pub use lifecycle::{

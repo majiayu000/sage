@@ -118,16 +118,11 @@
 #![allow(clippy::module_inception)]
 
 pub mod agent;
-pub(crate) mod builder;
-pub(crate) mod cache;
 pub(crate) mod checkpoints;
 pub mod commands;
-pub(crate) mod concurrency;
 pub mod config;
 pub mod context;
-pub(crate) mod cost;
 pub mod error;
-pub(crate) mod events;
 pub mod hooks;
 pub mod input;
 pub mod interrupt;
@@ -135,7 +130,6 @@ pub mod learning;
 pub mod llm;
 pub mod mcp;
 pub mod memory;
-pub(crate) mod modes;
 pub mod output;
 pub mod plugins;
 pub mod prompts;
@@ -164,6 +158,10 @@ pub use agent::{
     LifecycleHookRegistry, LifecycleManager, LifecyclePhase, LifecycleResult, LoggingHook,
     MetricsHook, UnifiedExecutor, UnifiedExecutorBuilder,
 };
+pub use commands::{
+    CommandArgument, CommandExecutor, CommandInvocation, CommandRegistry, CommandResult,
+    CommandSource, SlashCommand,
+};
 pub use config::{Config, LakeviewConfig, ModelParameters};
 pub use context::{
     AggregatedStats, ContextConfig, ContextManager, ContextUsageStats, ConversationSummarizer,
@@ -173,8 +171,8 @@ pub use context::{
 pub use error::{OptionExt, ResultExt, SageError, SageResult};
 pub use hooks::{
     CallbackHook, CommandHook, HookConfig, HookEvent, HookExecutionResult, HookExecutor,
-    HookImplementation, HookInput, HookMatcher, HookOutput, HookRegistry, HookType, HookVariant,
-    HooksConfig, HookPermissionDecision, PromptHook,
+    HookImplementation, HookInput, HookMatcher, HookOutput, HookPermissionDecision, HookRegistry,
+    HookType, HookVariant, HooksConfig, PromptHook,
 };
 pub use input::{
     InputChannel, InputChannelHandle, InputContext, InputOption, InputRequest, InputResponse,
@@ -182,10 +180,16 @@ pub use input::{
 pub use interrupt::{InterruptManager, InterruptReason, TaskScope};
 pub use llm::{LlmClient, LlmMessage, LlmProvider, LlmResponse};
 pub use mcp::{McpClient, McpError, McpRegistry, McpResource, McpTool, StdioTransport};
+pub use output::{
+    AssistantEvent, CostInfo, ErrorEvent, JsonFormatter, JsonOutput, OutputEvent, OutputFormat,
+    OutputFormatter, OutputWriter, ResultEvent, StreamJsonFormatter, SystemEvent, TextFormatter,
+    ToolCallResultEvent, ToolCallStartEvent, ToolCallSummary, UserPromptEvent, create_formatter,
+};
 pub use plugins::{
     Plugin, PluginCapability, PluginContext, PluginEntry, PluginError, PluginInfo, PluginLifecycle,
     PluginManifest, PluginPermission, PluginRegistry, PluginResult, PluginState,
 };
+pub use prompts::{BuiltinPrompts, PromptRegistry, PromptTemplate, PromptVariable, RenderError};
 pub use sandbox::{
     DefaultSandbox, ResourceLimits, ResourceUsage, Sandbox, SandboxBuilder, SandboxConfig,
     SandboxError, SandboxMode, SandboxPolicy, SandboxResult, SandboxedExecution,
@@ -195,6 +199,10 @@ pub use session::{
     SessionConfig, SessionManager, SessionState, SessionStorage, SessionSummary, SessionToolCall,
     SessionToolResult,
 };
+pub use skills::{
+    Skill, SkillActivation, SkillContext, SkillInvocationConfig, SkillMetadata, SkillRegistry,
+    SkillSource, SkillSourceInfo, SkillSourceType, SkillTaskType, SkillTrigger, ToolAccess,
+};
 pub use tools::{
     BACKGROUND_REGISTRY, BackgroundShellTask, BackgroundTaskRegistry, BackgroundTaskStatus,
     BackgroundTaskSummary, Tool, ToolCall, ToolExecutor, ToolResult,
@@ -202,20 +210,6 @@ pub use tools::{
 pub use trajectory::TrajectorySessionSummary;
 pub use trajectory::{SessionEntry, SessionInfo, SessionRecorder, SessionReplayer};
 pub use types::*;
-pub use commands::{
-    CommandArgument, CommandExecutor, CommandInvocation, CommandRegistry, CommandResult,
-    CommandSource, SlashCommand,
-};
-pub use output::{
-    AssistantEvent, CostInfo, ErrorEvent, JsonFormatter, JsonOutput, OutputEvent, OutputFormat,
-    OutputFormatter, OutputWriter, ResultEvent, StreamJsonFormatter, SystemEvent, TextFormatter,
-    ToolCallResultEvent, ToolCallStartEvent, ToolCallSummary, UserPromptEvent, create_formatter,
-};
-pub use prompts::{BuiltinPrompts, PromptRegistry, PromptTemplate, PromptVariable, RenderError};
-pub use skills::{
-    Skill, SkillActivation, SkillContext, SkillInvocationConfig, SkillMetadata, SkillRegistry,
-    SkillSource, SkillSourceInfo, SkillSourceType, SkillTrigger, SkillTaskType, ToolAccess,
-};
 // New modular prompt system (Claude Code style)
 pub use learning::{
     Confidence, CorrectionRecord, CorrectionStats, LearningConfig, LearningEngine, LearningError,

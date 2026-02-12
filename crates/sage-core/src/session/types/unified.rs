@@ -27,8 +27,8 @@ pub use super::super::enhanced::context::{
 // Type Aliases
 // ============================================================================
 
-/// Unique session identifier
-pub type SessionId = String;
+// Import SessionId from base module (canonical definition)
+pub use super::base::SessionId;
 
 /// Unique message identifier (UUID)
 pub type MessageId = String;
@@ -243,7 +243,7 @@ pub struct SessionRecord {
 #[serde(tag = "recordType", rename_all = "snake_case")]
 pub enum SessionRecordPayload {
     /// Message record
-    Message(SessionMessage),
+    Message(Box<SessionMessage>),
     /// File snapshot record
     Snapshot(FileHistorySnapshot),
     /// Metadata update record
@@ -889,7 +889,7 @@ mod tests {
             seq: 1,
             timestamp: Utc::now(),
             session_id: "session-1".to_string(),
-            payload: SessionRecordPayload::Message(msg),
+            payload: SessionRecordPayload::Message(Box::new(msg)),
         };
 
         let json = serde_json::to_string(&record).unwrap();

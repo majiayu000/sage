@@ -87,7 +87,10 @@ impl CompletionTaskType {
 
     /// Check if this task type requires code files to be created/modified
     pub fn requires_code(&self) -> bool {
-        matches!(self, CompletionTaskType::CodeImplementation | CompletionTaskType::BugFix)
+        matches!(
+            self,
+            CompletionTaskType::CodeImplementation | CompletionTaskType::BugFix
+        )
     }
 }
 
@@ -337,7 +340,10 @@ mod tests {
             CompletionTaskType::from_description("Fix the bug in login"),
             CompletionTaskType::BugFix
         );
-        assert_eq!(CompletionTaskType::from_description("修复登录问题"), CompletionTaskType::BugFix);
+        assert_eq!(
+            CompletionTaskType::from_description("修复登录问题"),
+            CompletionTaskType::BugFix
+        );
         assert_eq!(
             CompletionTaskType::from_description("分析这个代码的性能"),
             CompletionTaskType::Research

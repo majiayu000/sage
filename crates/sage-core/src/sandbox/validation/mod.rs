@@ -19,7 +19,7 @@ pub use metacharacter_check::check_shell_metacharacters;
 pub use pattern_check::check_dangerous_patterns;
 pub use removal_check::check_dangerous_removal;
 pub use types::{
-    CheckType, ValidationContext, CommandValidationResult, ValidationWarning, WarningSeverity,
+    CheckType, CommandValidationResult, ValidationContext, ValidationWarning, WarningSeverity,
 };
 pub use variable_check::check_dangerous_variables;
 

@@ -19,7 +19,8 @@ pub struct SettingsLocations {
     /// Local-level settings (.sage/settings.local.json)
     pub local: Option<PathBuf>,
 
-    /// Project root directory
+    /// Project root directory (used in tests and for project settings init)
+    #[allow(dead_code)]
     pub project_root: Option<PathBuf>,
 }
 
@@ -65,12 +66,6 @@ impl SettingsLocations {
         home.join(".config").join("sage").join("settings.json")
     }
 
-    /// Get the user config directory
-    pub fn get_user_config_dir() -> PathBuf {
-        let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-        home.join(".config").join("sage")
-    }
-
     /// Find the project root by looking for .sage directory or .git
     fn find_project_root(start_dir: impl AsRef<Path>) -> Option<PathBuf> {
         let start = start_dir.as_ref().to_path_buf();
@@ -103,63 +98,33 @@ impl SettingsLocations {
 
         None
     }
+}
 
-    /// Get the project settings directory (.sage)
-    pub fn get_project_settings_dir(&self) -> Option<PathBuf> {
-        self.project_root.as_ref().map(|root| root.join(".sage"))
-    }
-
-    /// Check if user settings exist
-    pub fn has_user_settings(&self) -> bool {
-        self.user.exists()
-    }
-
-    /// Check if project settings exist
+#[cfg(test)]
+impl SettingsLocations {
     pub fn has_project_settings(&self) -> bool {
         self.project.as_ref().map(|p| p.exists()).unwrap_or(false)
     }
 
-    /// Check if local settings exist
     pub fn has_local_settings(&self) -> bool {
         self.local.as_ref().map(|p| p.exists()).unwrap_or(false)
     }
 
-    /// Get all existing settings files in priority order (low to high)
-    ///
-    /// Returns an iterator to avoid heap allocation when caller only iterates once.
     pub fn get_existing_files(&self) -> impl Iterator<Item = &PathBuf> {
         let user = self.user.exists().then_some(&self.user);
         let project = self.project.as_ref().filter(|p| p.exists());
         let local = self.local.as_ref().filter(|p| p.exists());
-
         user.into_iter().chain(project).chain(local)
     }
 
-    /// Initialize a new .sage directory in the project root
     pub fn init_project_settings(&self) -> std::io::Result<PathBuf> {
         let root = self
             .project_root
             .as_ref()
             .cloned()
             .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
-
         let sage_dir = root.join(".sage");
         std::fs::create_dir_all(&sage_dir)?;
-
-        Ok(sage_dir)
-    }
-
-    /// Initialize a new .sage directory in the project root (async version)
-    pub async fn init_project_settings_async(&self) -> std::io::Result<PathBuf> {
-        let root = self
-            .project_root
-            .as_ref()
-            .cloned()
-            .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
-
-        let sage_dir = root.join(".sage");
-        tokio::fs::create_dir_all(&sage_dir).await?;
-
         Ok(sage_dir)
     }
 }

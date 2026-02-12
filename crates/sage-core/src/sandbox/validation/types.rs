@@ -230,7 +230,8 @@ mod tests {
 
     #[test]
     fn test_validation_result_block() {
-        let result = CommandValidationResult::block(CheckType::DangerousRemoval, "dangerous command");
+        let result =
+            CommandValidationResult::block(CheckType::DangerousRemoval, "dangerous command");
         assert!(!result.allowed);
         assert_eq!(result.reason, Some("dangerous command".to_string()));
     }

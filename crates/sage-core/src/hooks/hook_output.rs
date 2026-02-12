@@ -143,7 +143,10 @@ mod tests {
             .with_reason("Test reason");
 
         assert!(output.should_continue);
-        assert_eq!(output.permission_decision, Some(HookPermissionDecision::Allow));
+        assert_eq!(
+            output.permission_decision,
+            Some(HookPermissionDecision::Allow)
+        );
         assert_eq!(output.additional_context.len(), 1);
         assert_eq!(output.system_message, Some("System msg".to_string()));
         assert_eq!(output.reason, Some("Test reason".to_string()));

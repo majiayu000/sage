@@ -10,7 +10,7 @@ use tokio::sync::{Mutex, RwLock, Semaphore};
 use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
 
-use super::super::config::{ToolExecutionResult, ExecutorStats, ParallelExecutorConfig};
+use super::super::config::{ExecutorStats, ParallelExecutorConfig, ToolExecutionResult};
 
 /// Enhanced parallel tool executor
 pub struct ParallelToolExecutor {

@@ -1,6 +1,6 @@
 //! Built-in skill registration
 
-use super::super::types::{Skill, SkillSourceType, SkillTrigger, SkillTaskType};
+use super::super::types::{Skill, SkillSourceType, SkillTaskType, SkillTrigger};
 use super::types::SkillRegistry;
 
 impl SkillRegistry {

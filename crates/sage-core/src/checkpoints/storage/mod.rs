@@ -9,13 +9,14 @@ use super::types::{Checkpoint, CheckpointId};
 
 mod compression;
 mod file_storage;
+
+#[cfg(test)]
 mod memory_storage;
 
 #[cfg(test)]
 mod tests;
 
 pub use file_storage::FileCheckpointStorage;
-pub use memory_storage::MemoryCheckpointStorage;
 
 /// Trait for checkpoint storage backends
 #[async_trait]

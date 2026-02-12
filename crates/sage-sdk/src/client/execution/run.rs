@@ -190,9 +190,6 @@ impl SageAgentSdk {
         // Clean up input task
         input_task.abort();
 
-        Ok(ExecutionResult::new(
-            outcome,
-            self.config.clone(),
-        ))
+        Ok(ExecutionResult::new(outcome, self.config.clone()))
     }
 }

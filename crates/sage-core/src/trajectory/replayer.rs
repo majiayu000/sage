@@ -1,9 +1,10 @@
 //! Session replayer for JSONL trajectory files
 
 use crate::error::SageResult;
-use crate::trajectory::entry::{SessionEntry, TokenUsage};
-use crate::utils::truncate_with_ellipsis;
+use crate::trajectory::entry::SessionEntry;
 use crate::trajectory::session::{SessionInfo, SessionRecorder};
+use crate::types::TokenUsage;
+use crate::utils::truncate_with_ellipsis;
 use std::path::Path;
 
 /// Session summary statistics
@@ -164,6 +165,7 @@ impl SessionReplayer {
             output_tokens: 0,
             cache_read_tokens: None,
             cache_write_tokens: None,
+            cost_estimate: None,
         };
 
         for entry in entries {

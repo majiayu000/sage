@@ -148,14 +148,16 @@ impl PermissionEvaluation {
                     .clone()
                     .unwrap_or_else(|| "Denied by rule".to_string()),
             },
-            PermissionBehavior::Ask | PermissionBehavior::Passthrough => ToolPermissionResult::Ask {
-                question: self
-                    .reason
-                    .clone()
-                    .unwrap_or_else(|| "Permission required".to_string()),
-                default: false,
-                risk_level,
-            },
+            PermissionBehavior::Ask | PermissionBehavior::Passthrough => {
+                ToolPermissionResult::Ask {
+                    question: self
+                        .reason
+                        .clone()
+                        .unwrap_or_else(|| "Permission required".to_string()),
+                    default: false,
+                    risk_level,
+                }
+            }
         }
     }
 

@@ -31,7 +31,8 @@ pub struct CircuitBreaker {
 }
 
 impl CircuitBreaker {
-    /// Create a new circuit breaker with default config
+    /// Create a new circuit breaker with default config (used in tests)
+    #[cfg(test)]
     pub fn new(name: impl Into<String>) -> Self {
         Self::with_config(name, CircuitBreakerConfig::default())
     }
@@ -50,11 +51,6 @@ impl CircuitBreaker {
             total_failures: AtomicU64::new(0),
             last_failure: RwLock::new(None),
         }
-    }
-
-    /// Get the component name
-    pub fn name(&self) -> &str {
-        &self.name
     }
 
     /// Get the current state
@@ -183,11 +179,6 @@ impl CircuitBreaker {
     /// Manually reset the circuit breaker to closed state
     pub async fn reset(&self) {
         self.transition_to_closed().await;
-    }
-
-    /// Manually open the circuit breaker
-    pub async fn trip(&self) {
-        self.transition_to_open().await;
     }
 
     async fn transition_to_open(&self) {

@@ -47,7 +47,9 @@ impl SkillTrigger {
             Self::ToolUsage(tool) => context.recent_tools.contains(tool),
             Self::Explicit => context.explicit_skill.as_ref() == Some(&context.user_message),
             Self::Always => true,
-            Self::SkillTaskType(task_type) => context.detected_task_type.as_ref() == Some(task_type),
+            Self::SkillTaskType(task_type) => {
+                context.detected_task_type.as_ref() == Some(task_type)
+            }
         }
     }
 }

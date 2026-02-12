@@ -52,7 +52,8 @@ pub use types::{InputContext, InputOption, Question, QuestionOption};
 
 // Permission types
 pub use permission::{
-    PermissionBehavior, InputPermissionResult, PermissionSuggestion, RuleDestination, SuggestionType,
+    InputPermissionResult, PermissionBehavior, PermissionSuggestion, RuleDestination,
+    SuggestionType,
 };
 
 // Request types

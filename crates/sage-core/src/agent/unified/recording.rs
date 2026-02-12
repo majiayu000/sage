@@ -77,6 +77,7 @@ pub async fn record_llm_response(
         output_tokens: u.output_tokens,
         cache_read_tokens: u.cache_read_tokens,
         cache_write_tokens: u.cache_write_tokens,
+        cost_estimate: None,
     });
     let tool_calls = if llm_response.tool_calls.is_empty() {
         None

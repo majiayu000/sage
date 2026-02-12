@@ -73,10 +73,9 @@ impl SageAgentSdk {
         let config_path = config_file.as_ref();
         tracing::info!("Loading SDK config from: {}", config_path.display());
 
-        let path_str = config_file
-            .as_ref()
-            .to_str()
-            .ok_or_else(|| sage_core::error::SageError::config("Config file path contains invalid UTF-8"))?;
+        let path_str = config_file.as_ref().to_str().ok_or_else(|| {
+            sage_core::error::SageError::config("Config file path contains invalid UTF-8")
+        })?;
         let config = load_config_with_overrides(Some(path_str), HashMap::new())?;
 
         tracing::info!(

@@ -1,7 +1,9 @@
 //! Input channel creation and auto-response conversion
 
 use crate::agent::{ExecutionMode, ExecutionOptions};
-use crate::input::{InputAutoResponse, InputChannel, InputRequest, InputRequestKind, InputResponse};
+use crate::input::{
+    InputAutoResponse, InputChannel, InputRequest, InputRequestKind, InputResponse,
+};
 
 /// Create input channel based on execution mode
 pub(super) fn create_input_channel(options: &ExecutionOptions) -> Option<InputChannel> {

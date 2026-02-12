@@ -110,6 +110,9 @@ mod tests {
 
     #[test]
     fn test_permission_behavior_default() {
-        assert_eq!(SettingsPermissionBehavior::default(), SettingsPermissionBehavior::Ask);
+        assert_eq!(
+            SettingsPermissionBehavior::default(),
+            SettingsPermissionBehavior::Ask
+        );
     }
 }

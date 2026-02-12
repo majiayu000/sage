@@ -40,11 +40,6 @@ pub struct Settings {
 }
 
 impl Settings {
-    /// Create new default settings
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     /// Merge another settings instance into this one
     /// The other settings take precedence (override this)
     pub fn merge(&mut self, other: Settings) {
@@ -111,7 +106,10 @@ mod tests {
 
         assert_eq!(base.permissions.allow.len(), 2);
         assert_eq!(base.permissions.deny.len(), 1);
-        assert_eq!(base.permissions.default_behavior, SettingsPermissionBehavior::Allow);
+        assert_eq!(
+            base.permissions.default_behavior,
+            SettingsPermissionBehavior::Allow
+        );
     }
 
     #[test]

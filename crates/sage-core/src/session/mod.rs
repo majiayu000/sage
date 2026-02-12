@@ -71,11 +71,6 @@ pub use storage::{BoxedSessionStorage, FileSessionStorage, MemorySessionStorage,
 pub use summary::SummaryGenerator;
 pub use types::{
     ConversationMessage,
-    // Canonical session message types
-    SessionMessage,
-    SessionMessageType,
-    WireTokenUsage,
-    UnifiedToolResult,
     FileBackupInfo,
     FileHistorySnapshot,
     MessageContent,
@@ -83,6 +78,9 @@ pub use types::{
     Session,
     SessionConfig,
     SessionContext,
+    // Canonical session message types
+    SessionMessage,
+    SessionMessageType,
     SessionState,
     SessionSummary,
     SessionToolCall,
@@ -94,6 +92,8 @@ pub use types::{
     TokenUsage,
     TrackedFileState,
     TrackedFilesSnapshot,
+    UnifiedToolResult,
+    WireTokenUsage,
 };
 // Re-export UnifiedToolCall as the canonical session-level tool call type
 pub use types::unified::UnifiedToolCall;

@@ -43,7 +43,9 @@ pub async fn validate_api_key_format(provider: &str, api_key: &str) -> ApiKeyVal
         }
         "openai" => {
             if !api_key.starts_with("sk-") {
-                return ApiKeyValidationResult::failure("OpenAI API keys typically start with 'sk-'");
+                return ApiKeyValidationResult::failure(
+                    "OpenAI API keys typically start with 'sk-'",
+                );
             }
         }
         "google" => {

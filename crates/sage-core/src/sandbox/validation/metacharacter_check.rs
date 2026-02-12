@@ -7,7 +7,7 @@
 //! - Subshells: () $()
 
 use super::types::{
-    CheckType, ValidationContext, CommandValidationResult, ValidationWarning, WarningSeverity,
+    CheckType, CommandValidationResult, ValidationContext, ValidationWarning, WarningSeverity,
 };
 
 /// Pattern to detect subshell execution
@@ -153,7 +153,10 @@ fn has_command_separator(command: &str) -> bool {
 /// - Piping (|)
 /// - Background execution (&)
 /// - Subshell execution
-pub fn check_shell_metacharacters(command: &str, context: &ValidationContext) -> CommandValidationResult {
+pub fn check_shell_metacharacters(
+    command: &str,
+    context: &ValidationContext,
+) -> CommandValidationResult {
     let mut warnings = Vec::new();
 
     // Check for command separators

@@ -11,14 +11,14 @@ mod config;
 mod executor;
 
 pub use builder::ParallelExecutorBuilder;
-pub use config::{ToolExecutionResult, ExecutorStats, ParallelExecutorConfig};
+pub use config::{ExecutorStats, ParallelExecutorConfig, ToolExecutionResult};
 pub use executor::ParallelToolExecutor;
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::tools::base::{ConcurrencyMode, Tool, ToolError};
-    use crate::tools::permission::{ToolPermissionResult, ToolContext};
+    use crate::tools::permission::{ToolContext, ToolPermissionResult};
     use crate::tools::types::{ToolCall, ToolResult, ToolSchema};
     use async_trait::async_trait;
     use std::collections::HashMap;

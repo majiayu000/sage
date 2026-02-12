@@ -1,7 +1,7 @@
 //! Agent execution representation
 
 use crate::agent::AgentStep;
-use crate::types::{Id, TokenUsage, TaskMetadata};
+use crate::types::{Id, TaskMetadata, TokenUsage};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -111,11 +111,7 @@ impl AgentExecution {
         // Build cache info if available
         let cache_info = if self.total_usage.has_cache_metrics() {
             let mut parts = Vec::new();
-            if let Some(created) = self
-                .total_usage
-                .cache_write_tokens
-                .filter(|&c| c > 0)
-            {
+            if let Some(created) = self.total_usage.cache_write_tokens.filter(|&c| c > 0) {
                 parts.push(format!("{} cache created", created));
             }
             if let Some(read) = self.total_usage.cache_read_tokens.filter(|&r| r > 0) {

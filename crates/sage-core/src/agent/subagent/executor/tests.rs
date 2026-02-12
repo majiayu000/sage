@@ -5,8 +5,8 @@ mod tests {
     use async_trait::async_trait;
     use std::sync::Arc;
 
-    use super::super::executor::SubAgentExecutor;
     use super::super::super::types::SubAgentConfig;
+    use super::super::executor::SubAgentExecutor;
     use super::super::types::ExecutorProgress;
     use crate::agent::subagent::registry::AgentRegistry;
     use crate::agent::subagent::types::{AgentDefinition, AgentType, ToolAccessControl};

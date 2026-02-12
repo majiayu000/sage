@@ -16,7 +16,7 @@
 
 use super::concurrency::ConcurrencyMode;
 use super::error::ToolError;
-use crate::tools::permission::{ToolPermissionResult, RiskLevel, ToolContext};
+use crate::tools::permission::{RiskLevel, ToolContext, ToolPermissionResult};
 use crate::tools::types::{ToolCall, ToolResult, ToolSchema};
 use async_trait::async_trait;
 use std::time::{Duration, Instant};
@@ -95,7 +95,11 @@ pub trait Tool: Send + Sync {
     /// Check if the tool call is permitted in the current context
     ///
     /// Default: allow all operations
-    async fn check_permission(&self, _call: &ToolCall, _context: &ToolContext) -> ToolPermissionResult {
+    async fn check_permission(
+        &self,
+        _call: &ToolCall,
+        _context: &ToolContext,
+    ) -> ToolPermissionResult {
         ToolPermissionResult::Allow
     }
 

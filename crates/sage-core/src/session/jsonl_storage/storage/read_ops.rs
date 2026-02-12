@@ -7,8 +7,8 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tracing::{debug, warn};
 
 use super::super::super::types::{FileHistorySnapshot, SessionId};
-use crate::session::types::unified::SessionMessage;
 use super::core::JsonlSessionStorage;
+use crate::session::types::unified::SessionMessage;
 
 impl JsonlSessionStorage {
     /// Load all messages from a session

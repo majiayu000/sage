@@ -3,16 +3,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Token usage statistics
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TokenUsage {
-    pub input_tokens: u64,
-    pub output_tokens: u64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cache_read_tokens: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cache_write_tokens: Option<u64>,
-}
+use crate::types::TokenUsage;
 
 /// A single entry in the session JSONL file
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -209,6 +200,7 @@ mod tests {
             output_tokens: 50,
             cache_read_tokens: Some(10),
             cache_write_tokens: None,
+            cost_estimate: None,
         };
 
         let json = serde_json::to_string(&usage).unwrap();

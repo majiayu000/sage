@@ -2,7 +2,7 @@
 
 use crate::agent::{AgentExecution, AgentState, AgentStep, ExecutionError, ExecutionOutcome};
 use crate::error::{SageError, SageResult, UnifiedError};
-use crate::session::{WireTokenUsage, UnifiedToolCall};
+use crate::session::{UnifiedToolCall, WireTokenUsage};
 #[allow(deprecated)]
 use crate::ui::bridge::{AgentEvent, emit_event};
 
