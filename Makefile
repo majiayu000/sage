@@ -1,6 +1,6 @@
 # Sage Agent Makefile
 
-.PHONY: help build test clean install dev check fmt clippy docs examples doc-check doc-status
+.PHONY: help build test clean install dev check fmt clippy docs examples doc-check doc-status guard guard-strict
 
 # Default target
 help:
@@ -29,6 +29,10 @@ help:
 	@echo "  examples   - Run all examples"
 	@echo "  doc-check  - Check documentation consistency"
 	@echo "  doc-status - Show documentation status"
+	@echo ""
+	@echo "Guards:"
+	@echo "  guard        - Run VibeGuard checks (report only)"
+	@echo "  guard-strict - Run VibeGuard checks (fail on violations)"
 	@echo ""
 	@echo "Usage:"
 	@echo "  run        - Run sage with arguments (e.g., make run ARGS='--help')"
@@ -85,11 +89,25 @@ examples:
 run:
 	cargo run --bin sage -- $(ARGS)
 
+# VibeGuard checks
+VIBEGUARD_DIR ?= $(HOME)/Desktop/code/AI/tools/vibeguard
+
+guard:
+	@echo "Running VibeGuard Rust guards..."
+	@bash $(VIBEGUARD_DIR)/guards/rust/check_duplicate_types.sh .
+	@bash $(VIBEGUARD_DIR)/guards/rust/check_nested_locks.sh .
+	@bash $(VIBEGUARD_DIR)/guards/rust/check_unwrap_in_prod.sh .
+
+guard-strict:
+	@echo "Running VibeGuard Rust guards (strict)..."
+	bash $(VIBEGUARD_DIR)/guards/rust/check_duplicate_types.sh --strict .
+	bash $(VIBEGUARD_DIR)/guards/rust/check_nested_locks.sh --strict .
+
 # Quick development cycle
 quick: fmt clippy test
 
 # Full CI check
-ci: fmt clippy test build
+ci: fmt clippy test build guard
 
 # Documentation consistency
 doc-check:

@@ -134,6 +134,23 @@ Tests are organized as:
 - Logging with `tracing`
 - CLI built with `clap`
 
+## VibeGuard Guards
+
+Automated checks via [VibeGuard](~/Desktop/code/AI/tools/vibeguard/):
+
+```bash
+make guard          # Report duplicate types, nested locks, unwrap usage
+make guard-strict   # Same but exit 1 on violations (CI mode)
+```
+
+| Guard | Rule | What it detects |
+|-------|------|-----------------|
+| `check_duplicate_types.sh` | RS-05 | Same-named `pub struct/enum` across files |
+| `check_nested_locks.sh` | RS-01 | Multiple `.lock()/.read()/.write()` in one function |
+| `check_unwrap_in_prod.sh` | RS-03 | `.unwrap()`/`.expect()` in non-test code |
+
+To suppress false positives for duplicate types, add type names to `.vibeguard-duplicate-types-allowlist`.
+
 ## Code Style Rules
 
 ### No Backward Compatibility
