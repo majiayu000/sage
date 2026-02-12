@@ -12,5 +12,8 @@ mod tools;
 pub use base::Settings;
 pub use config::{ModelSettings, UiSettings, WorkspaceSettings};
 pub use hooks::HooksSettings;
-pub use permissions::{PermissionSettings, SettingsPermissionBehavior};
+pub use permissions::PermissionSettings;
+
+#[cfg(test)]
+pub use permissions::SettingsPermissionBehavior;
 pub use tools::ToolSettings;

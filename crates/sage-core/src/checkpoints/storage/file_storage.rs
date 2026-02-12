@@ -36,6 +36,12 @@ impl FileCheckpointStorage {
         }
     }
 
+    /// Set the maximum content size (in bytes) to store inline
+    pub fn with_max_inline_size(mut self, size: usize) -> Self {
+        self.max_inline_size = size;
+        self
+    }
+
     /// Get the checkpoints directory
     fn checkpoints_dir(&self) -> PathBuf {
         self.base_path.join("checkpoints")
