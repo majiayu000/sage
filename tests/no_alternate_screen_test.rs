@@ -6,6 +6,7 @@
 use std::process::Command;
 
 #[test]
+#[ignore] // Requires release build: cargo test -- --ignored
 fn test_sage_no_alternate_screen_escape_sequences() {
     // Build Sage first
     let build_output = Command::new("cargo")
@@ -63,6 +64,7 @@ fn test_sage_no_alternate_screen_escape_sequences() {
 }
 
 #[test]
+#[ignore] // Requires release build: cargo test -- --ignored
 fn test_sage_uses_raw_mode() {
     // Verify that Sage can still capture input (requires raw mode or similar)
     // This is a sanity check that we didn't accidentally disable input handling
