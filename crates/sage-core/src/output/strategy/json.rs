@@ -11,11 +11,11 @@ use std::sync::Mutex;
 /// - Piping to other tools
 /// - Machine-readable output
 #[derive(Debug, Default)]
-pub struct JsonOutput {
+pub struct JsonOutputStrategy {
     content_buffer: Mutex<String>,
 }
 
-impl JsonOutput {
+impl JsonOutputStrategy {
     pub fn new() -> Self {
         Self {
             content_buffer: Mutex::new(String::new()),
@@ -32,7 +32,7 @@ impl JsonOutput {
     }
 }
 
-impl OutputStrategy for JsonOutput {
+impl OutputStrategy for JsonOutputStrategy {
     fn on_content_start(&self) {
         if let Ok(mut buffer) = self.content_buffer.lock() {
             buffer.clear();

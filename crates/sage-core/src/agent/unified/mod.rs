@@ -39,7 +39,7 @@ mod user_interaction;
 mod tests;
 
 pub use builder::UnifiedExecutorBuilder;
-pub use context_builder::{ContextBuilder, GitInfo, ProjectContext};
+pub use context_builder::{ContextBuilder, ContextGitInfo, ProjectContext};
 pub use event_manager::{EventManager, ExecutionEvent};
 pub use llm_orchestrator::LlmOrchestrator;
 pub use session_manager::AgentSessionManager;

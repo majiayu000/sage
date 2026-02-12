@@ -10,7 +10,7 @@ mod silent;
 mod streaming;
 
 pub use batch::BatchOutput;
-pub use json::JsonOutput;
+pub use json::JsonOutputStrategy;
 pub use rnk::RnkOutput;
 pub use silent::SilentOutput;
 pub use streaming::StreamingOutput;
@@ -69,7 +69,7 @@ impl OutputMode {
         match self {
             OutputMode::Streaming => Box::new(StreamingOutput::new()),
             OutputMode::Batch => Box::new(BatchOutput::new()),
-            OutputMode::Json => Box::new(JsonOutput::new()),
+            OutputMode::Json => Box::new(JsonOutputStrategy::new()),
             OutputMode::Silent => Box::new(SilentOutput::new()),
             OutputMode::Rnk => Box::new(RnkOutput::new()),
         }
@@ -115,7 +115,7 @@ mod tests {
 
     #[test]
     fn test_json_output() {
-        let output = JsonOutput::new();
+        let output = JsonOutputStrategy::new();
         output.on_content_start();
         output.on_content_chunk("Hello ");
         output.on_content_chunk("World!");

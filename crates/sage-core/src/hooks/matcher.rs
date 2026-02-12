@@ -80,12 +80,12 @@ pub fn matches(pattern: Option<&str>, value: &str) -> bool {
 
 /// A pattern matcher with a name for debugging
 #[derive(Debug, Clone)]
-pub struct PatternMatcher {
+pub struct HookPatternMatcher {
     pattern: Option<String>,
     name: String,
 }
 
-impl PatternMatcher {
+impl HookPatternMatcher {
     /// Create a new pattern matcher
     pub fn new(name: impl Into<String>, pattern: Option<String>) -> Self {
         Self {
@@ -215,14 +215,14 @@ mod tests {
 
     #[test]
     fn test_pattern_matcher_new() {
-        let matcher = PatternMatcher::new("test_matcher", Some("bash".to_string()));
+        let matcher = HookPatternMatcher::new("test_matcher", Some("bash".to_string()));
         assert_eq!(matcher.name(), "test_matcher");
         assert_eq!(matcher.pattern(), Some("bash"));
     }
 
     #[test]
     fn test_pattern_matcher_matches() {
-        let matcher = PatternMatcher::new("test", Some("bash|python".to_string()));
+        let matcher = HookPatternMatcher::new("test", Some("bash|python".to_string()));
         assert!(matcher.matches("bash"));
         assert!(matcher.matches("python"));
         assert!(!matcher.matches("ruby"));
@@ -230,15 +230,15 @@ mod tests {
 
     #[test]
     fn test_pattern_matcher_wildcard() {
-        let matcher1 = PatternMatcher::new("wildcard1", None);
+        let matcher1 = HookPatternMatcher::new("wildcard1", None);
         assert!(matcher1.is_wildcard());
         assert!(matcher1.matches("anything"));
 
-        let matcher2 = PatternMatcher::new("wildcard2", Some("*".to_string()));
+        let matcher2 = HookPatternMatcher::new("wildcard2", Some("*".to_string()));
         assert!(matcher2.is_wildcard());
         assert!(matcher2.matches("anything"));
 
-        let matcher3 = PatternMatcher::new("specific", Some("bash".to_string()));
+        let matcher3 = HookPatternMatcher::new("specific", Some("bash".to_string()));
         assert!(!matcher3.is_wildcard());
     }
 
@@ -322,7 +322,7 @@ mod tests {
 
     #[test]
     fn test_pattern_matcher_debug() {
-        let matcher = PatternMatcher::new("debug_test", Some("pattern".to_string()));
+        let matcher = HookPatternMatcher::new("debug_test", Some("pattern".to_string()));
         let debug_str = format!("{:?}", matcher);
         assert!(debug_str.contains("pattern"));
         assert!(debug_str.contains("debug_test"));

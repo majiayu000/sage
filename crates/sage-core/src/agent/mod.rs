@@ -30,7 +30,7 @@ pub use subagent::{
     register_builtin_agents,
 };
 pub use unified::{
-    ContextBuilder, GitInfo, ProjectContext, UnifiedExecutor, UnifiedExecutorBuilder,
+    ContextBuilder, ContextGitInfo, ProjectContext, UnifiedExecutor, UnifiedExecutorBuilder,
 };
 
 // Core trait abstractions for dependency injection and testability

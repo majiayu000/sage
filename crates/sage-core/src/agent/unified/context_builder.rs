@@ -8,7 +8,7 @@ use tracing::{debug, info, warn};
 
 /// Git repository information for context
 #[derive(Debug, Clone, Default)]
-pub struct GitInfo {
+pub struct ContextGitInfo {
     /// Whether this is a git repository
     pub is_repo: bool,
     /// Current branch name
@@ -19,7 +19,7 @@ pub struct GitInfo {
     pub status: Option<String>,
 }
 
-impl GitInfo {
+impl ContextGitInfo {
     /// Detect git info from the working directory
     pub fn detect(working_dir: &Path) -> Self {
         let mut info = Self::default();
@@ -104,7 +104,7 @@ pub struct ProjectContext {
     /// Contents of .sage/instructions.md (if exists)
     pub project_instructions: Option<String>,
     /// Git repository information
-    pub git_info: Option<GitInfo>,
+    pub git_info: Option<ContextGitInfo>,
 }
 
 /// Builder for loading project context
@@ -134,8 +134,8 @@ impl ContextBuilder {
     }
 
     /// Load git information
-    pub fn load_git_info(&self) -> Option<GitInfo> {
-        let info = GitInfo::detect(&self.working_dir);
+    pub fn load_git_info(&self) -> Option<ContextGitInfo> {
+        let info = ContextGitInfo::detect(&self.working_dir);
         if info.is_repo { Some(info) } else { None }
     }
 

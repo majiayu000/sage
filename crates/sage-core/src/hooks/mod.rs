@@ -90,6 +90,6 @@ pub use hook_config::{HookConfig, HookMatcher};
 pub use hook_input::HookInput;
 pub use hook_output::HookOutput;
 pub use hook_types::{HookImplementation, HookPermissionDecision, HookType, HookVariant};
-pub use matcher::{PatternMatcher, matches};
+pub use matcher::{HookPatternMatcher, matches};
 pub use prompt_hook::PromptHook;
 pub use registry::{HookRegistry, HooksConfig};

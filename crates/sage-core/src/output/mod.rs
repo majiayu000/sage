@@ -68,7 +68,7 @@ pub use formatter::{
     create_formatter,
 };
 pub use strategy::{
-    BatchOutput, JsonOutput as JsonOutputStrategy, OutputMode, OutputStrategy, SilentOutput,
+    BatchOutput, JsonOutputStrategy, OutputMode, OutputStrategy, SilentOutput,
     StreamingOutput,
 };
 pub use types::{
