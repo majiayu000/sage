@@ -69,9 +69,6 @@ pub struct HttpTransport {
     client: Client,
     /// Base URL
     base_url: String,
-    /// Headers
-    #[allow(dead_code)]
-    headers: HashMap<String, String>,
     /// Whether connected
     connected: Arc<AtomicBool>,
     /// Message receiver channel
@@ -119,7 +116,6 @@ impl HttpTransport {
         Ok(Self {
             client,
             base_url: config.base_url,
-            headers: config.headers,
             connected: Arc::new(AtomicBool::new(true)),
             message_rx: Some(message_rx),
             message_tx,

@@ -259,13 +259,6 @@ pub async fn unregister_shell(shell_id: &str) -> Option<u32> {
     shells.remove(shell_id)
 }
 
-/// Helper function to list all registered shells (for debugging)
-#[allow(dead_code)]
-pub async fn list_shells() -> Vec<(String, u32)> {
-    let shells = SHELL_REGISTRY.lock().await;
-    shells.iter().map(|(k, v)| (k.clone(), *v)).collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

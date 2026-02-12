@@ -17,9 +17,6 @@ use super::handlers::QueryHandler;
 pub struct SqliteBackend {
     path: String,
     handler: QueryHandler,
-    // Store table column definitions
-    #[allow(dead_code)]
-    schemas: Arc<RwLock<HashMap<String, Vec<String>>>>,
     connected: Arc<RwLock<bool>>,
 }
 
@@ -44,7 +41,6 @@ impl SqliteBackend {
             handler: QueryHandler {
                 data: Arc::clone(&data),
             },
-            schemas: Arc::new(RwLock::new(HashMap::new())),
             connected: Arc::new(RwLock::new(true)),
         })
     }

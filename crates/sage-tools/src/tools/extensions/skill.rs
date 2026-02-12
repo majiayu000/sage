@@ -91,17 +91,6 @@ impl SkillTool {
         Arc::clone(&self.registry)
     }
 
-    /// Get the skill prompt with arguments substituted
-    #[allow(dead_code)]
-    async fn get_skill_prompt(&self, skill_name: &str, args: Option<&str>) -> Option<String> {
-        let registry = self.registry.read().await;
-        let skill = registry.get(skill_name)?;
-
-        let context = SkillContext::new("").with_working_dir(&self.working_directory);
-
-        Some(skill.get_prompt_with_args(&context, args))
-    }
-
     /// Validate skill name
     fn validate_skill_name(&self, skill: &str) -> Result<(), ToolError> {
         if skill.is_empty() {

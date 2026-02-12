@@ -1,19 +1,6 @@
 //! Schema definitions for memory tools
 
 use sage_core::tools::{ToolParameter, ToolSchema};
-use serde::{Deserialize, Serialize};
-
-/// Input structure for Remember tool
-/// Reserved for future typed input deserialization
-#[allow(dead_code)]
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RememberInput {
-    pub memory: String,
-    #[serde(default)]
-    pub memory_type: Option<String>,
-    #[serde(default)]
-    pub tags: Vec<String>,
-}
 
 /// Create schema for Remember tool
 pub fn remember_schema() -> ToolSchema {

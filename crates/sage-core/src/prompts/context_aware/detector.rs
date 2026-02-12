@@ -9,9 +9,6 @@ pub struct PhaseDetector {
     exploration_tools: Vec<String>,
     /// Tool names that indicate implementation
     implementation_tools: Vec<String>,
-    #[allow(dead_code)]
-    /// Tool names that indicate testing
-    testing_tools: Vec<String>,
     /// Keywords that suggest debugging
     debug_keywords: Vec<String>,
     /// Keywords that suggest completion
@@ -39,7 +36,6 @@ impl PhaseDetector {
                 "Write".to_string(),
                 "NotebookEdit".to_string(),
             ],
-            testing_tools: vec!["Bash".to_string()],
             debug_keywords: vec![
                 "error".to_string(),
                 "bug".to_string(),

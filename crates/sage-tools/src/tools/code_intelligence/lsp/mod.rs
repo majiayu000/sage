@@ -20,16 +20,10 @@ pub use types::{CallHierarchyItem, HoverInfo, Location, Position, SymbolInfo};
 use async_trait::async_trait;
 use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use tokio::sync::RwLock;
 
 /// LSP tool for code intelligence
 pub struct LspTool {
-    #[allow(dead_code)]
-    /// LSP clients by language
-    clients: Arc<RwLock<HashMap<String, LspClient>>>,
     /// Configuration
     config: LspConfig,
     /// Working directory
@@ -48,7 +42,6 @@ impl LspTool {
         let working_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
 
         Self {
-            clients: Arc::new(RwLock::new(HashMap::new())),
             config: LspConfig::with_defaults(),
             working_directory,
         }

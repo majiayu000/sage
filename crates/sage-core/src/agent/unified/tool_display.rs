@@ -1,7 +1,7 @@
 //! Tool display utilities for formatting tool execution output
 //!
 //! This module contains helper functions for displaying tool information
-//! in the terminal, including icons, parameter formatting, and activity descriptions.
+//! in the terminal, including parameter formatting.
 
 use crate::tools::types::{ToolCall, ToolResult};
 use crate::ui::Icons;
@@ -11,12 +11,6 @@ use colored::Colorize;
 use std::collections::HashMap;
 
 use super::event_manager::{EventManager, ExecutionEvent};
-
-/// Get icon for specific tool type (delegates to Icons::for_tool)
-#[allow(dead_code)]
-pub fn get_tool_icon(tool_name: &str) -> &'static str {
-    Icons::for_tool(tool_name)
-}
 
 /// Format tool parameters for display
 pub fn format_tool_params(arguments: &HashMap<String, serde_json::Value>) -> String {
@@ -62,71 +56,6 @@ pub fn format_tool_params(arguments: &HashMap<String, serde_json::Value>) -> Str
     } else {
         parts.join(" ")
     }
-}
-
-/// Build activity description for progress tracking
-///
-/// This function builds a human-readable description of tool activity.
-/// Currently unused but kept for potential future use.
-#[allow(dead_code)]
-pub fn build_activity_description(
-    tool_name: &str,
-    arguments: &HashMap<String, serde_json::Value>,
-) -> String {
-    let verb = match tool_name.to_lowercase().as_str() {
-        "read" => "reading",
-        "write" => "writing",
-        "edit" => "editing",
-        "bash" => "running",
-        "glob" => "searching",
-        "grep" => "searching",
-        "web_fetch" => "fetching",
-        "web_search" => "searching web",
-        "task" => "running subagent",
-        "lsp" => "analyzing",
-        _ => "executing",
-    };
-
-    // Extract key info
-    if let Some(path) = arguments.get("file_path").or(arguments.get("path")) {
-        if let Some(s) = path.as_str() {
-            let filename = std::path::Path::new(s)
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or(s);
-            return format!("{} {}", verb, filename);
-        }
-    }
-
-    if let Some(cmd) = arguments.get("command") {
-        if let Some(s) = cmd.as_str() {
-            let short = crate::utils::truncate_str(s, 30);
-            return format!("{} '{}'", verb, short);
-        }
-    }
-
-    if let Some(pattern) = arguments.get("pattern") {
-        if let Some(s) = pattern.as_str() {
-            return format!("{} for '{}'", verb, s);
-        }
-    }
-
-    // Task tool: show description or prompt preview
-    if tool_name.to_lowercase() == "task" {
-        if let Some(desc) = arguments.get("description") {
-            if let Some(s) = desc.as_str() {
-                return format!("{}: {}", verb, crate::utils::truncate_str(s, 40));
-            }
-        }
-        if let Some(prompt) = arguments.get("prompt") {
-            if let Some(s) = prompt.as_str() {
-                let preview = crate::utils::truncate_str(s, 40);
-                return format!("{}: {}", verb, preview);
-            }
-        }
-    }
-
-    format!("{} {}", verb, tool_name)
 }
 
 /// Display tool execution start information

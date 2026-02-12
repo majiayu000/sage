@@ -11,10 +11,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing::{debug, error, info, warn};
 
-/// Callback type for reload notifications
-#[allow(dead_code)]
-pub type ReloadCallback = Box<dyn Fn(&[PathBuf]) + Send + Sync>;
-
 /// Prompt file watcher for hot reload
 pub struct PromptWatcher {
     /// Debounced watcher

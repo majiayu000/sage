@@ -8,7 +8,7 @@ use super::output::GrepOutputMode;
 use crate::tools::file_ops::grep::GrepTool;
 use grep_regex::RegexMatcherBuilder;
 use grep_searcher::{
-    BinaryDetection, SearcherBuilder, Sink, SinkContext, SinkContextKind, SinkMatch,
+    BinaryDetection, SearcherBuilder, Sink, SinkContext, SinkMatch,
 };
 use ignore::WalkBuilder;
 use sage_core::tools::base::{FileSystemTool, ToolError};
@@ -29,9 +29,6 @@ struct FileSearchResult {
 struct MatchLine {
     line_number: Option<u64>,
     content: String,
-    // Reserved for future use - distinguishing match vs context lines
-    #[allow(dead_code)]
-    is_context: bool,
 }
 
 /// Custom sink to collect matches with context lines
@@ -72,7 +69,6 @@ impl Sink for MatchCollector {
                     None
                 },
                 content,
-                is_context: false,
             });
         }
 
@@ -86,7 +82,6 @@ impl Sink for MatchCollector {
     ) -> Result<bool, Self::Error> {
         if self.collect_content {
             let content = String::from_utf8_lossy(ctx.bytes()).trim_end().to_string();
-            let is_context = !matches!(ctx.kind(), SinkContextKind::Other);
             self.matches.push(MatchLine {
                 line_number: if self.show_line_numbers {
                     ctx.line_number()
@@ -94,7 +89,6 @@ impl Sink for MatchCollector {
                     None
                 },
                 content,
-                is_context,
             });
         }
 
@@ -107,7 +101,6 @@ impl Sink for MatchCollector {
             self.matches.push(MatchLine {
                 line_number: None,
                 content: "--".to_string(),
-                is_context: true,
             });
         }
         Ok(true)
