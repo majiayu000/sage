@@ -56,11 +56,11 @@ impl Tool for TaskTool {
 
         if run_in_background {
             execute_task_background(call, self.registry.clone())
-                .map_err(|e| ToolError::InvalidArguments(e))
+                .map_err(|e| ToolError::InvalidArguments(e.to_string()))
         } else {
             execute_task_sync(call, self.registry.clone())
                 .await
-                .map_err(|e| ToolError::InvalidArguments(e))
+                .map_err(|e| ToolError::InvalidArguments(e.to_string()))
         }
     }
 }

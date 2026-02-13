@@ -66,7 +66,7 @@ impl SendMessageTool {
         self.manager
             .send_message(message)
             .await
-            .map_err(|e| ToolError::ExecutionFailed(e))?;
+            .map_err(|e| ToolError::ExecutionFailed(e.to_string()))?;
 
         Ok(format!("Message sent to '{}'.", recipient))
     }
@@ -91,7 +91,7 @@ impl SendMessageTool {
         self.manager
             .send_message(message)
             .await
-            .map_err(|e| ToolError::ExecutionFailed(e))?;
+            .map_err(|e| ToolError::ExecutionFailed(e.to_string()))?;
 
         Ok("Message broadcast to all teammates.\n\n\
             WARNING: Broadcasting is expensive. Each broadcast sends a separate message \
@@ -134,7 +134,7 @@ impl SendMessageTool {
         self.manager
             .send_message(message)
             .await
-            .map_err(|e| ToolError::ExecutionFailed(e))?;
+            .map_err(|e| ToolError::ExecutionFailed(e.to_string()))?;
 
         Ok(format!(
             "{} request sent to '{}'.\n\
@@ -182,7 +182,7 @@ impl SendMessageTool {
         self.manager
             .send_message(message)
             .await
-            .map_err(|e| ToolError::ExecutionFailed(e))?;
+            .map_err(|e| ToolError::ExecutionFailed(e.to_string()))?;
 
         let status = if approve { "approved" } else { "rejected" };
 

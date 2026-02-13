@@ -2,6 +2,7 @@
 //!
 //! Provides a tool for viewing and managing MCP server connections within the agent.
 
+use anyhow::anyhow;
 use async_trait::async_trait;
 use sage_core::tools::{Tool, ToolCall, ToolError, ToolParameter, ToolResult, ToolSchema};
 use std::sync::Arc;
@@ -13,10 +14,10 @@ use super::registry::SharedMcpToolRegistry;
 static GLOBAL_MCP_REGISTRY: OnceCell<SharedMcpToolRegistry> = OnceCell::const_new();
 
 /// Initialize the global MCP tool registry
-pub async fn init_global_mcp_registry(registry: SharedMcpToolRegistry) -> Result<(), String> {
+pub async fn init_global_mcp_registry(registry: SharedMcpToolRegistry) -> anyhow::Result<()> {
     GLOBAL_MCP_REGISTRY
         .set(registry)
-        .map_err(|_| "MCP registry already initialized".to_string())
+        .map_err(|_| anyhow!("MCP registry already initialized"))
 }
 
 /// Get the global MCP tool registry

@@ -59,7 +59,7 @@ impl TeammateTool {
             .manager
             .spawn_team(&team_name, description.as_deref(), &lead_agent_id)
             .await
-            .map_err(|e| ToolError::ExecutionFailed(e))?;
+            .map_err(|e| ToolError::ExecutionFailed(e.to_string()))?;
 
         Ok(format!(
             "Team '{}' created successfully.\n\n\
@@ -77,7 +77,7 @@ impl TeammateTool {
             .manager
             .discover_teams()
             .await
-            .map_err(|e| ToolError::ExecutionFailed(e))?;
+            .map_err(|e| ToolError::ExecutionFailed(e.to_string()))?;
 
         if teams.is_empty() {
             return Ok("No teams found. Use `spawnTeam` to create a new team.".to_string());
@@ -115,7 +115,7 @@ impl TeammateTool {
                 capabilities.as_deref(),
             )
             .await
-            .map_err(|e| ToolError::ExecutionFailed(e))?;
+            .map_err(|e| ToolError::ExecutionFailed(e.to_string()))?;
 
         Ok(format!(
             "Join request sent to team '{}'.\n\n\
@@ -144,7 +144,7 @@ impl TeammateTool {
             .manager
             .approve_join(&team_name, &request_id, &target_agent_id)
             .await
-            .map_err(|e| ToolError::ExecutionFailed(e))?;
+            .map_err(|e| ToolError::ExecutionFailed(e.to_string()))?;
 
         Ok(format!(
             "Join request approved.\n\n\
@@ -178,7 +178,7 @@ impl TeammateTool {
         self.manager
             .reject_join(&team_name, &request_id, reason.as_deref())
             .await
-            .map_err(|e| ToolError::ExecutionFailed(e))?;
+            .map_err(|e| ToolError::ExecutionFailed(e.to_string()))?;
 
         Ok(format!(
             "Join request from '{}' rejected.\n\
@@ -197,7 +197,7 @@ impl TeammateTool {
         self.manager
             .cleanup(&team_name)
             .await
-            .map_err(|e| ToolError::ExecutionFailed(e))?;
+            .map_err(|e| ToolError::ExecutionFailed(e.to_string()))?;
 
         Ok(format!(
             "Team '{}' cleaned up successfully.\n\n\

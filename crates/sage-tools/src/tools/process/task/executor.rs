@@ -1,5 +1,6 @@
 //! Task execution logic for running subagents
 
+use anyhow::anyhow;
 use sage_core::agent::subagent::{AgentType, SubAgentConfig, Thoroughness, execute_subagent};
 use sage_core::tools::types::{ToolCall, ToolResult};
 use serde_json::json;
@@ -12,7 +13,7 @@ use super::types::{TaskRegistry, TaskRequest, TaskStatus};
 pub async fn execute_task_sync(
     call: &ToolCall,
     registry: Arc<TaskRegistry>,
-) -> Result<ToolResult, String> {
+) -> anyhow::Result<ToolResult> {
     let (task_params, agent_type, thoroughness) = parse_task_parameters(call)?;
 
     // Generate task ID
@@ -102,7 +103,7 @@ pub async fn execute_task_sync(
 pub fn execute_task_background(
     call: &ToolCall,
     registry: Arc<TaskRegistry>,
-) -> Result<ToolResult, String> {
+) -> anyhow::Result<ToolResult> {
     let (task_params, _agent_type, _thoroughness) = parse_task_parameters(call)?;
 
     // Generate task ID
@@ -152,26 +153,26 @@ struct TaskParameters {
 /// Parse task parameters from tool call
 fn parse_task_parameters(
     call: &ToolCall,
-) -> Result<(TaskParameters, AgentType, Thoroughness), String> {
+) -> anyhow::Result<(TaskParameters, AgentType, Thoroughness)> {
     let description = call
         .arguments
         .get("description")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| "Missing 'description' parameter".to_string())?
+        .ok_or_else(|| anyhow!("Missing 'description' parameter"))?
         .to_string();
 
     let prompt = call
         .arguments
         .get("prompt")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| "Missing 'prompt' parameter".to_string())?
+        .ok_or_else(|| anyhow!("Missing 'prompt' parameter"))?
         .to_string();
 
     let subagent_type = call
         .arguments
         .get("subagent_type")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| "Missing 'subagent_type' parameter".to_string())?
+        .ok_or_else(|| anyhow!("Missing 'subagent_type' parameter"))?
         .to_string();
 
     let model = call

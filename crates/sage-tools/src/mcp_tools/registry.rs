@@ -2,6 +2,7 @@
 //!
 //! Manages MCP server connections and provides tools to the Sage agent.
 
+use anyhow::{Context, anyhow};
 use sage_core::config::{McpConfig, McpServerConfig};
 use sage_core::mcp::{
     HttpTransport, HttpTransportConfig, McpClient, McpToolAdapter, StdioTransport,
@@ -46,7 +47,7 @@ impl McpToolRegistry {
     }
 
     /// Initialize from MCP configuration
-    pub async fn from_config(config: &McpConfig) -> Result<Self, String> {
+    pub async fn from_config(config: &McpConfig) -> anyhow::Result<Self> {
         let registry = Self::new();
 
         if !config.enabled {
@@ -72,7 +73,7 @@ impl McpToolRegistry {
                         ServerConnectionStatus {
                             name: name_owned,
                             connected: false,
-                            error: Some(e),
+                            error: Some(e.to_string()),
                             tool_count: 0,
                         },
                     );
@@ -88,11 +89,11 @@ impl McpToolRegistry {
         &self,
         name: &str,
         config: &McpServerConfig,
-    ) -> Result<usize, String> {
+    ) -> anyhow::Result<usize> {
         let client = match config.transport.as_str() {
             "stdio" => self.connect_stdio(config).await?,
             "http" => self.connect_http(config).await?,
-            _ => return Err(format!("Unsupported transport: {}", config.transport)),
+            _ => return Err(anyhow!("Unsupported transport: {}", config.transport)),
         };
 
         let client = Arc::new(client);
@@ -101,7 +102,7 @@ impl McpToolRegistry {
         let tools_list = client
             .list_tools()
             .await
-            .map_err(|e| format!("Failed to list MCP tools: {}", e))?;
+            .context("Failed to list MCP tools")?;
         let adapters: Vec<McpToolAdapter> = tools_list
             .into_iter()
             .map(|tool| McpToolAdapter::new(tool, Arc::clone(&client), name.to_string()))
@@ -132,32 +133,32 @@ impl McpToolRegistry {
     }
 
     /// Connect using stdio transport
-    async fn connect_stdio(&self, config: &McpServerConfig) -> Result<McpClient, String> {
+    async fn connect_stdio(&self, config: &McpServerConfig) -> anyhow::Result<McpClient> {
         let command = config
             .command
             .as_ref()
-            .ok_or_else(|| "stdio transport requires 'command' field".to_string())?;
+            .ok_or_else(|| anyhow!("stdio transport requires 'command' field"))?;
 
         let transport = StdioTransport::spawn(command, &config.args)
             .await
-            .map_err(|e| format!("Failed to spawn stdio transport: {}", e))?;
+            .context("Failed to spawn stdio transport")?;
 
         let client = McpClient::new(Box::new(transport));
 
         client
             .initialize()
             .await
-            .map_err(|e| format!("Failed to initialize MCP client: {}", e))?;
+            .context("Failed to initialize MCP client")?;
 
         Ok(client)
     }
 
     /// Connect using HTTP transport
-    async fn connect_http(&self, config: &McpServerConfig) -> Result<McpClient, String> {
+    async fn connect_http(&self, config: &McpServerConfig) -> anyhow::Result<McpClient> {
         let url = config
             .url
             .as_ref()
-            .ok_or_else(|| "http transport requires 'url' field".to_string())?;
+            .ok_or_else(|| anyhow!("http transport requires 'url' field"))?;
 
         let mut http_config =
             HttpTransportConfig::new(url).with_timeout(config.timeout_secs.unwrap_or(300));
@@ -168,24 +169,24 @@ impl McpToolRegistry {
         }
 
         let transport = HttpTransport::new(http_config)
-            .map_err(|e| format!("Failed to create HTTP transport: {}", e))?;
+            .context("Failed to create HTTP transport")?;
 
         let client = McpClient::new(Box::new(transport));
 
         client
             .initialize()
             .await
-            .map_err(|e| format!("Failed to initialize MCP client: {}", e))?;
+            .context("Failed to initialize MCP client")?;
 
         Ok(client)
     }
 
     /// Disconnect from an MCP server
-    pub async fn disconnect_server(&self, name: &str) -> Result<(), String> {
+    pub async fn disconnect_server(&self, name: &str) -> anyhow::Result<()> {
         let mut clients = self.clients.write().await;
 
         if clients.remove(name).is_none() {
-            return Err(format!("Server '{}' not connected", name));
+            return Err(anyhow!("Server '{}' not connected", name));
         }
 
         // Remove tools from this server
@@ -283,7 +284,7 @@ impl Default for McpToolRegistry {
 pub type SharedMcpToolRegistry = Arc<McpToolRegistry>;
 
 /// Create a shared MCP tool registry from config
-pub async fn create_mcp_registry(config: &McpConfig) -> Result<SharedMcpToolRegistry, String> {
+pub async fn create_mcp_registry(config: &McpConfig) -> anyhow::Result<SharedMcpToolRegistry> {
     let registry = McpToolRegistry::from_config(config).await?;
     Ok(Arc::new(registry))
 }

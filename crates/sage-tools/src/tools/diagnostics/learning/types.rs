@@ -1,5 +1,6 @@
 //! Type definitions and global state for learning functionality
 
+use anyhow::anyhow;
 use sage_core::learning::{LearningConfig, SharedLearningEngine, create_learning_engine};
 use tokio::sync::OnceCell;
 
@@ -7,13 +8,13 @@ use tokio::sync::OnceCell;
 static GLOBAL_LEARNING_ENGINE: OnceCell<SharedLearningEngine> = OnceCell::const_new();
 
 /// Initialize the global learning engine
-pub async fn init_global_learning_engine(config: Option<LearningConfig>) -> Result<(), String> {
+pub async fn init_global_learning_engine(config: Option<LearningConfig>) -> anyhow::Result<()> {
     let config = config.unwrap_or_default();
     let engine = create_learning_engine(config);
 
     GLOBAL_LEARNING_ENGINE
         .set(engine)
-        .map_err(|_| "Learning engine already initialized".to_string())
+        .map_err(|_| anyhow!("Learning engine already initialized"))
 }
 
 /// Get the global learning engine

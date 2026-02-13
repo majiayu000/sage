@@ -2,6 +2,7 @@
 //!
 //! Provides the core infrastructure for team-based collaboration.
 
+use anyhow::{Context, anyhow};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -53,22 +54,22 @@ impl TeamManager {
         team_name: &str,
         description: Option<&str>,
         lead_agent_id: &str,
-    ) -> Result<TeamConfig, String> {
+    ) -> anyhow::Result<TeamConfig> {
         let team_dir = self.teams_dir.join(team_name);
         let task_dir = self.tasks_dir.join(team_name);
 
         // Check if team already exists
         if team_dir.exists() {
-            return Err(format!("Team '{}' already exists", team_name));
+            return Err(anyhow!("Team '{}' already exists", team_name));
         }
 
         // Create directories
         tokio::fs::create_dir_all(&team_dir)
             .await
-            .map_err(|e| format!("Failed to create team directory: {}", e))?;
+            .context("Failed to create team directory")?;
         tokio::fs::create_dir_all(&task_dir)
             .await
-            .map_err(|e| format!("Failed to create task directory: {}", e))?;
+            .context("Failed to create task directory")?;
 
         let now = chrono::Utc::now();
         let config = TeamConfig {
@@ -91,10 +92,10 @@ impl TeamManager {
         // Save config
         let config_path = team_dir.join("config.json");
         let config_json = serde_json::to_string_pretty(&config)
-            .map_err(|e| format!("Failed to serialize config: {}", e))?;
+            .context("Failed to serialize config")?;
         tokio::fs::write(&config_path, config_json)
             .await
-            .map_err(|e| format!("Failed to write config: {}", e))?;
+            .context("Failed to write config")?;
 
         // Set current team
         *self.current_team.write().await = Some(team_name.to_string());
@@ -104,7 +105,7 @@ impl TeamManager {
     }
 
     /// Discover available teams
-    pub async fn discover_teams(&self) -> Result<Vec<TeamConfig>, String> {
+    pub async fn discover_teams(&self) -> anyhow::Result<Vec<TeamConfig>> {
         let mut teams = Vec::new();
 
         if !self.teams_dir.exists() {
@@ -113,12 +114,12 @@ impl TeamManager {
 
         let mut entries = tokio::fs::read_dir(&self.teams_dir)
             .await
-            .map_err(|e| format!("Failed to read teams directory: {}", e))?;
+            .context("Failed to read teams directory")?;
 
         while let Some(entry) = entries
             .next_entry()
             .await
-            .map_err(|e| format!("Failed to read entry: {}", e))?
+            .context("Failed to read entry")?
         {
             let path = entry.path();
             if path.is_dir() {
@@ -142,10 +143,10 @@ impl TeamManager {
         team_name: &str,
         proposed_name: Option<&str>,
         capabilities: Option<&str>,
-    ) -> Result<JoinRequest, String> {
+    ) -> anyhow::Result<JoinRequest> {
         let team_dir = self.teams_dir.join(team_name);
         if !team_dir.exists() {
-            return Err(format!("Team '{}' not found", team_name));
+            return Err(anyhow!("Team '{}' not found", team_name));
         }
 
         let request = JoinRequest {
@@ -172,10 +173,10 @@ impl TeamManager {
         requests.push(request.clone());
 
         let requests_json = serde_json::to_string_pretty(&requests)
-            .map_err(|e| format!("Failed to serialize requests: {}", e))?;
+            .context("Failed to serialize requests")?;
         tokio::fs::write(&requests_path, requests_json)
             .await
-            .map_err(|e| format!("Failed to write requests: {}", e))?;
+            .context("Failed to write requests")?;
 
         Ok(request)
     }
@@ -186,16 +187,16 @@ impl TeamManager {
         team_name: &str,
         request_id: &str,
         target_agent_id: &str,
-    ) -> Result<TeamMember, String> {
+    ) -> anyhow::Result<TeamMember> {
         let team_dir = self.teams_dir.join(team_name);
         let config_path = team_dir.join("config.json");
 
         // Load config
         let content = tokio::fs::read_to_string(&config_path)
             .await
-            .map_err(|e| format!("Failed to read config: {}", e))?;
+            .context("Failed to read config")?;
         let mut config: TeamConfig =
-            serde_json::from_str(&content).map_err(|e| format!("Failed to parse config: {}", e))?;
+            serde_json::from_str(&content).context("Failed to parse config")?;
 
         // Load and find request
         let requests_path = team_dir.join("pending_requests.json");
@@ -208,7 +209,7 @@ impl TeamManager {
         let request_idx = requests
             .iter()
             .position(|r| r.request_id == request_id)
-            .ok_or_else(|| format!("Request '{}' not found", request_id))?;
+            .ok_or_else(|| anyhow!("Request '{}' not found", request_id))?;
 
         let request = requests.remove(request_idx);
 
@@ -228,17 +229,17 @@ impl TeamManager {
 
         // Save updated config
         let config_json = serde_json::to_string_pretty(&config)
-            .map_err(|e| format!("Failed to serialize config: {}", e))?;
+            .context("Failed to serialize config")?;
         tokio::fs::write(&config_path, config_json)
             .await
-            .map_err(|e| format!("Failed to write config: {}", e))?;
+            .context("Failed to write config")?;
 
         // Save updated requests
         let requests_json = serde_json::to_string_pretty(&requests)
-            .map_err(|e| format!("Failed to serialize requests: {}", e))?;
+            .context("Failed to serialize requests")?;
         tokio::fs::write(&requests_path, requests_json)
             .await
-            .map_err(|e| format!("Failed to write requests: {}", e))?;
+            .context("Failed to write requests")?;
 
         Ok(member)
     }
@@ -249,7 +250,7 @@ impl TeamManager {
         team_name: &str,
         request_id: &str,
         _reason: Option<&str>,
-    ) -> Result<(), String> {
+    ) -> anyhow::Result<()> {
         let team_dir = self.teams_dir.join(team_name);
         let requests_path = team_dir.join("pending_requests.json");
 
@@ -262,21 +263,21 @@ impl TeamManager {
         let request_idx = requests
             .iter()
             .position(|r| r.request_id == request_id)
-            .ok_or_else(|| format!("Request '{}' not found", request_id))?;
+            .ok_or_else(|| anyhow!("Request '{}' not found", request_id))?;
 
         requests.remove(request_idx);
 
         let requests_json = serde_json::to_string_pretty(&requests)
-            .map_err(|e| format!("Failed to serialize requests: {}", e))?;
+            .context("Failed to serialize requests")?;
         tokio::fs::write(&requests_path, requests_json)
             .await
-            .map_err(|e| format!("Failed to write requests: {}", e))?;
+            .context("Failed to write requests")?;
 
         Ok(())
     }
 
     /// Clean up team resources
-    pub async fn cleanup(&self, team_name: &str) -> Result<(), String> {
+    pub async fn cleanup(&self, team_name: &str) -> anyhow::Result<()> {
         let team_dir = self.teams_dir.join(team_name);
         let task_dir = self.tasks_dir.join(team_name);
 
@@ -285,13 +286,13 @@ impl TeamManager {
         if config_path.exists() {
             let content = tokio::fs::read_to_string(&config_path)
                 .await
-                .map_err(|e| format!("Failed to read config: {}", e))?;
+                .context("Failed to read config")?;
             let config: TeamConfig = serde_json::from_str(&content)
-                .map_err(|e| format!("Failed to parse config: {}", e))?;
+                .context("Failed to parse config")?;
 
             let active_count = config.members.iter().filter(|m| m.active).count();
             if active_count > 1 {
-                return Err(format!(
+                return Err(anyhow!(
                     "Cannot cleanup: {} active members remaining. Terminate teammates first.",
                     active_count
                 ));
@@ -302,13 +303,13 @@ impl TeamManager {
         if team_dir.exists() {
             tokio::fs::remove_dir_all(&team_dir)
                 .await
-                .map_err(|e| format!("Failed to remove team directory: {}", e))?;
+                .context("Failed to remove team directory")?;
         }
 
         if task_dir.exists() {
             tokio::fs::remove_dir_all(&task_dir)
                 .await
-                .map_err(|e| format!("Failed to remove task directory: {}", e))?;
+                .context("Failed to remove task directory")?;
         }
 
         // Clear current team
@@ -319,16 +320,16 @@ impl TeamManager {
     }
 
     /// Get team config
-    pub async fn get_team(&self, team_name: &str) -> Result<TeamConfig, String> {
+    pub async fn get_team(&self, team_name: &str) -> anyhow::Result<TeamConfig> {
         let config_path = self.teams_dir.join(team_name).join("config.json");
         let content = tokio::fs::read_to_string(&config_path)
             .await
-            .map_err(|e| format!("Failed to read config: {}", e))?;
-        serde_json::from_str(&content).map_err(|e| format!("Failed to parse config: {}", e))
+            .context("Failed to read config")?;
+        serde_json::from_str(&content).context("Failed to parse config")
     }
 
     /// Send a message
-    pub async fn send_message(&self, message: TeamMessage) -> Result<(), String> {
+    pub async fn send_message(&self, message: TeamMessage) -> anyhow::Result<()> {
         // In a real implementation, this would use a message bus or file-based queue
         // For now, we just store it in the inbox
         self.inbox.write().await.push(message);
