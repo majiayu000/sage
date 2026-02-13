@@ -85,7 +85,6 @@ fn truncate_to_width(text: &str, max_width: usize) -> String {
 struct LayoutAssertion {
     output: String,
     width: u16,
-    #[allow(dead_code)]
     height: u16,
 }
 
@@ -126,19 +125,6 @@ impl LayoutAssertion {
             actual, expected,
             "Expected {} lines, got {}\nActual output:\n{}",
             expected, actual, self.output
-        );
-        self
-    }
-
-    #[allow(dead_code)]
-    fn assert_line_count_at_least(&self, min: usize) -> &Self {
-        let actual = self.output.lines().count();
-        assert!(
-            actual >= min,
-            "Expected at least {} lines, got {}\nActual output:\n{}",
-            min,
-            actual,
-            self.output
         );
         self
     }
@@ -217,34 +203,6 @@ impl LayoutAssertion {
 
     fn get_line(&self, idx: usize) -> Option<String> {
         self.output.lines().nth(idx).map(strip_ansi)
-    }
-}
-
-/// Debug helper to print Taffy layout tree
-#[allow(dead_code)]
-fn print_layout_tree(element: &Element, engine: &LayoutEngine, indent: usize) {
-    let layout = engine.get_layout(element.id);
-    let prefix = "  ".repeat(indent);
-
-    let name = if let Some(text) = &element.text_content {
-        let t: String = text.chars().take(20).collect();
-        format!("Text(\"{}\")", t)
-    } else {
-        format!("Box({:?})", element.style.flex_direction)
-    };
-
-    if let Some(l) = layout {
-        let marker = if l.x > 0.1 { " <-- X != 0" } else { "" };
-        println!(
-            "{}{}: x={:.1}, y={:.1}, w={:.1}, h={:.1}{}",
-            prefix, name, l.x, l.y, l.width, l.height, marker
-        );
-    } else {
-        println!("{}{}: NO LAYOUT", prefix, name);
-    }
-
-    for child in &element.children {
-        print_layout_tree(child, engine, indent + 1);
     }
 }
 
