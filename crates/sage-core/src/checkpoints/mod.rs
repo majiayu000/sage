@@ -63,5 +63,8 @@ pub mod restore;
 pub mod storage;
 pub mod types;
 
+#[cfg(test)]
+mod types_tests;
+
 pub use manager::CheckpointManager;
 pub use types::{CheckpointId, RestoreOptions};
