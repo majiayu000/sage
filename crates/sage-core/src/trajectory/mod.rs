@@ -13,6 +13,9 @@ pub mod entry;
 pub mod replayer;
 pub mod session;
 
+#[cfg(test)]
+mod session_tests;
+
 pub use entry::SessionEntry;
 pub use replayer::{SessionReplayer, TrajectorySessionSummary};
 pub use session::{SessionInfo, SessionRecorder};

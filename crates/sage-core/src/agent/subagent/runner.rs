@@ -374,7 +374,7 @@ impl SubAgentRunner {
 }
 
 /// Result of a single step execution
-enum StepResult {
+pub(crate) enum StepResult {
     /// Continue to next step
     Continue,
     /// Task completed with final output
@@ -465,25 +465,4 @@ pub async fn execute_subagent(config: SubAgentConfig) -> SageResult<SubAgentResu
 
     let cancel = CancellationToken::new();
     runner.execute(config, cancel).await
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_step_result() {
-        let continue_result = StepResult::Continue;
-        let completed_result = StepResult::Completed("Done".to_string());
-
-        match continue_result {
-            StepResult::Continue => {}
-            _ => panic!("Expected Continue"),
-        }
-
-        match completed_result {
-            StepResult::Completed(output) => assert_eq!(output, "Done"),
-            _ => panic!("Expected Completed"),
-        }
-    }
 }

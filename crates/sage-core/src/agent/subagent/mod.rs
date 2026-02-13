@@ -30,6 +30,9 @@ pub mod registry;
 pub mod runner;
 pub mod types;
 
+#[cfg(test)]
+mod runner_tests;
+
 pub use builtin::{
     explore_agent, general_purpose_agent, get_builtin_agents, plan_agent, register_builtin_agents,
 };
