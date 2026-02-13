@@ -11,7 +11,7 @@ mod manifest;
 mod registry;
 
 pub use lifecycle::{PluginLifecycle, PluginState};
-pub use manifest::{PluginDependency, PluginManifest, PluginPermission};
+pub use manifest::{ManifestValidationError, PluginDependency, PluginManifest, PluginPermission};
 pub use registry::{PluginEntry, PluginRegistry};
 
 use crate::error::SageError;

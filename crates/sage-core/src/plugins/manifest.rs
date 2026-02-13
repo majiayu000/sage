@@ -3,6 +3,11 @@
 use super::PluginCapability;
 use serde::{Deserialize, Serialize};
 
+/// Error returned when a plugin manifest fails validation
+#[derive(Debug, thiserror::Error)]
+#[error("Invalid plugin manifest: {0}")]
+pub struct ManifestValidationError(String);
+
 /// Plugin manifest describing metadata and requirements
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginManifest {
@@ -107,7 +112,7 @@ impl PluginManifest {
     }
 
     /// Validate the manifest
-    pub fn validate(&self) -> Result<(), Vec<String>> {
+    pub fn validate(&self) -> Result<(), ManifestValidationError> {
         let mut errors = Vec::new();
 
         // Name validation
@@ -133,7 +138,7 @@ impl PluginManifest {
         if errors.is_empty() {
             Ok(())
         } else {
-            Err(errors)
+            Err(ManifestValidationError(errors.join("; ")))
         }
     }
 }

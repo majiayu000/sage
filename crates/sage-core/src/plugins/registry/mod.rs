@@ -63,8 +63,8 @@ impl PluginRegistry {
 
         // Validate manifest
         let manifest = plugin.manifest();
-        if let Err(errors) = manifest.validate() {
-            return Err(PluginError::InvalidManifest(errors.join("; ")));
+        if let Err(e) = manifest.validate() {
+            return Err(PluginError::InvalidManifest(e.to_string()));
         }
 
         // Check dependencies
