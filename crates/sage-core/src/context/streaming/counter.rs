@@ -68,7 +68,11 @@ impl StreamingTokenCounter {
 
         // Update estimated tokens
         let total_chars = self.char_count.load(Ordering::SeqCst);
-        let estimated = (total_chars as f32 / self.chars_per_token).ceil() as usize;
+        let estimated = if self.chars_per_token.is_finite() && self.chars_per_token > 0.0 {
+            (total_chars as f32 / self.chars_per_token).ceil() as usize
+        } else {
+            0
+        };
         self.estimated_tokens.store(estimated, Ordering::SeqCst);
 
         // Track chunk count

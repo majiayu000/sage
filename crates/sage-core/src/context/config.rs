@@ -187,7 +187,12 @@ impl ContextConfig {
 
     /// Get the target size in tokens
     pub fn target_tokens(&self) -> usize {
-        (self.max_context_tokens as f32 * self.target_size_after_summary) as usize
+        let result = self.max_context_tokens as f32 * self.target_size_after_summary;
+        if result.is_finite() && result >= 0.0 {
+            result as usize
+        } else {
+            0
+        }
     }
 }
 

@@ -32,6 +32,18 @@ impl TokenEstimator {
         }
     }
 
+    /// Safely divide char count by chars_per_token and ceil to usize.
+    /// Returns 0 if chars_per_token is zero, NaN, or negative.
+    fn chars_to_tokens(&self, char_count: usize) -> usize {
+        if self.chars_per_token.is_finite() && self.chars_per_token > 0.0 {
+            let result = (char_count as f32 / self.chars_per_token).ceil();
+            // result is guaranteed finite and non-negative here
+            result as usize
+        } else {
+            0
+        }
+    }
+
     /// Create an estimator optimized for a specific provider
     pub fn for_provider(provider: &str) -> Self {
         match provider.to_lowercase().as_str() {
@@ -54,7 +66,7 @@ impl TokenEstimator {
     /// Estimate tokens for a single message
     pub fn estimate_message(&self, message: &LlmMessage) -> usize {
         let content_chars = message.content.len();
-        let content_tokens = (content_chars as f32 / self.chars_per_token).ceil() as usize;
+        let content_tokens = self.chars_to_tokens(content_chars);
 
         // Add tool call tokens if present
         let tool_tokens = if let Some(ref tool_calls) = message.tool_calls {
@@ -71,10 +83,10 @@ impl TokenEstimator {
 
     /// Estimate tokens for a tool call
     fn estimate_tool_call(&self, tool_call: &ToolCall) -> usize {
-        let name_tokens = (tool_call.name.len() as f32 / self.chars_per_token).ceil() as usize;
+        let name_tokens = self.chars_to_tokens(tool_call.name.len());
         // Serialize arguments to estimate token count
         let args_str = serde_json::to_string(&tool_call.arguments).unwrap_or_default();
-        let args_tokens = (args_str.len() as f32 / self.chars_per_token).ceil() as usize;
+        let args_tokens = self.chars_to_tokens(args_str.len());
         name_tokens + args_tokens + 10 // Overhead for tool call structure
     }
 
@@ -90,12 +102,12 @@ impl TokenEstimator {
 
     /// Estimate tokens for a single tool schema
     fn estimate_tool_schema(&self, schema: &ToolSchema) -> usize {
-        let name_tokens = (schema.name.len() as f32 / self.chars_per_token).ceil() as usize;
-        let desc_tokens = (schema.description.len() as f32 / self.chars_per_token).ceil() as usize;
+        let name_tokens = self.chars_to_tokens(schema.name.len());
+        let desc_tokens = self.chars_to_tokens(schema.description.len());
 
         // Estimate parameter schema tokens
         let params_str = serde_json::to_string(&schema.parameters).unwrap_or_default();
-        let params_tokens = (params_str.len() as f32 / self.chars_per_token).ceil() as usize;
+        let params_tokens = self.chars_to_tokens(params_str.len());
 
         name_tokens + desc_tokens + params_tokens + 20 // Schema overhead
     }
@@ -109,7 +121,7 @@ impl TokenEstimator {
 
     /// Estimate tokens for a string
     pub fn estimate_string(&self, text: &str) -> usize {
-        (text.len() as f32 / self.chars_per_token).ceil() as usize
+        self.chars_to_tokens(text.len())
     }
 }
 

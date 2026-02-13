@@ -93,7 +93,12 @@ impl AutoCompactConfig {
         if let Ok(pct_str) = std::env::var(AUTOCOMPACT_PCT_OVERRIDE_ENV) {
             if let Ok(pct) = pct_str.parse::<f32>() {
                 let clamped = pct.clamp(0.1, 1.0);
-                return (self.max_context_tokens as f32 * clamped) as usize;
+                let result = self.max_context_tokens as f32 * clamped;
+                return if result.is_finite() && result >= 0.0 {
+                    result as usize
+                } else {
+                    0
+                };
             }
         }
 
@@ -112,7 +117,12 @@ impl AutoCompactConfig {
 
     /// Get the target token count after compaction
     pub fn target_tokens(&self) -> usize {
-        (self.max_context_tokens as f32 * self.target_after_compact) as usize
+        let result = self.max_context_tokens as f32 * self.target_after_compact;
+        if result.is_finite() && result >= 0.0 {
+            result as usize
+        } else {
+            0
+        }
     }
 
     /// Set the reserved tokens for response
