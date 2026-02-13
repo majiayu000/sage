@@ -350,11 +350,7 @@ fn test_file_size_limits() {
     const MAX_LINES: usize = 500;
 
     // Files allowed to exceed the limit (legacy, to be split).
-    let allowlist: HashSet<&str> = [
-        "crates/sage-core/src/config/onboarding/state.rs",
-    ]
-    .into_iter()
-    .collect();
+    let allowlist: HashSet<&str> = HashSet::new();
 
     let files = collect_rs_files(&crates_dir, &|p| !is_test_file(p) && !is_example_file(p));
     let mut violations: Vec<(String, usize)> = Vec::new();
