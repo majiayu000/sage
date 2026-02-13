@@ -1,5 +1,6 @@
 //! Extension tools for skill execution, slash commands, and tool discovery
 
+pub mod deferred_registry;
 pub mod platform_tool_proxy;
 pub mod skill;
 pub mod slash_command;

@@ -32,8 +32,11 @@
 // Core prompt modules (Claude Code style)
 pub mod agent_prompts;
 pub mod builder;
+mod builder_sections;
 pub mod context_aware;
+pub mod git_prompts;
 pub mod language_prompts;
+pub mod security_policy;
 pub mod system_prompt;
 pub mod system_reminders;
 pub mod tool_descriptions;

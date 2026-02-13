@@ -3,9 +3,8 @@
 //! Provides a fluent API for constructing system prompts dynamically,
 //! following Claude Code's design pattern with template variables.
 
-use super::system_prompt::{GitPrompts, SecurityPolicy, SystemPrompt};
+use super::system_prompt::SystemPrompt;
 use super::system_reminders::SystemReminder;
-use super::tool_descriptions::ToolDescriptions;
 use super::variables::{PromptVariables, TemplateRenderer};
 use crate::tools::types::ToolSchema;
 
@@ -193,84 +192,33 @@ impl SystemPromptBuilder {
 
     /// Build the tools description string with detailed descriptions
     fn build_tools_description(&self) -> String {
-        if self.tools.is_empty() {
-            return "No tools available.".to_string();
-        }
-
-        self.tools
-            .iter()
-            .map(|schema| {
-                // Try to get detailed description from ToolDescriptions
-                let description = ToolDescriptions::for_tool(&schema.name)
-                    .map(|d| TemplateRenderer::render(d, &self.variables))
-                    .unwrap_or_else(|| schema.description.clone());
-
-                format!("## {}\n{}", schema.name, description)
-            })
-            .collect::<Vec<_>>()
-            .join("\n\n")
+        super::builder_sections::build_tools_description(&self.tools, &self.variables)
     }
 
     /// Build the reminders section
     fn build_reminders(&self) -> String {
-        let mut reminders = self.reminders.clone();
-
-        // Add plan mode reminder if in plan mode
-        if self.in_plan_mode {
-            if let Some(plan_path) = &self.plan_file_path {
-                reminders.insert(
-                    0,
-                    SystemReminder::plan_mode_active(plan_path, self.plan_exists),
-                );
-            }
-        }
-
-        if reminders.is_empty() {
-            return String::new();
-        }
-
-        reminders
-            .iter()
-            .map(|r| TemplateRenderer::render(&r.to_prompt_string(), &self.variables))
-            .collect::<Vec<_>>()
-            .join("\n\n")
+        super::builder_sections::build_reminders(
+            &self.reminders,
+            self.in_plan_mode,
+            self.plan_file_path.as_deref(),
+            self.plan_exists,
+            &self.variables,
+        )
     }
 
     /// Build custom sections
     fn build_custom_sections(&self) -> String {
-        if self.custom_sections.is_empty() {
-            return String::new();
-        }
-
-        self.custom_sections
-            .iter()
-            .map(|(title, content)| format!("# {}\n{}", title, content))
-            .collect::<Vec<_>>()
-            .join("\n\n")
+        super::builder_sections::build_custom_sections(&self.custom_sections)
     }
 
     /// Build the security and Git sections
     fn build_additional_sections(&self) -> String {
-        let mut sections = Vec::new();
-
-        if self.include_security_policy {
-            sections.push(SecurityPolicy::MAIN.to_string());
-        }
-
-        if self.include_git_instructions && self.variables.is_git_repo {
-            sections.push(GitPrompts::SAFETY_PROTOCOL.to_string());
-            sections.push(GitPrompts::PR_CREATION.to_string());
-        }
-
-        if sections.is_empty() {
-            return String::new();
-        }
-
-        sections
-            .iter()
-            .map(|s| TemplateRenderer::render(s, &self.variables))
-            .collect::<Vec<_>>()
-            .join("\n\n")
+        super::builder_sections::build_additional_sections(
+            self.include_security_policy,
+            self.include_git_instructions,
+            self.variables.is_git_repo,
+            &self.variables,
+        )
     }
 
     /// Build the complete system prompt

@@ -236,7 +236,7 @@ impl McpTransport for HttpTransport {
             status => {
                 let body = response.text().await.unwrap_or_default();
                 Err(McpError::server(
-                    status.as_u16() as i32,
+                    i32::from(status.as_u16()),
                     format!("HTTP error {}: {}", status, body),
                 ))
             }

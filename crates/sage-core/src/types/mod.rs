@@ -4,9 +4,11 @@
 //! **Layer 0 principle**: `types/` has zero dependencies on other sage-core modules,
 //! only depending on external crates (serde, chrono, thiserror, etc.).
 
+mod case_conversion;
 mod common;
 pub mod message;
 pub mod provider;
+pub mod schema;
 pub mod todo;
 pub mod tool;
 pub mod tool_error;

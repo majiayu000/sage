@@ -3,9 +3,7 @@
 use super::partition;
 use super::result::CompactResult;
 use super::stats::AutoCompactStats;
-use crate::context::compact::{
-    CompactOperationResult, create_compact_boundary, create_compact_summary,
-};
+use crate::context::compact::{create_compact_boundary, create_compact_summary};
 use crate::llm::LlmMessage;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
@@ -20,7 +18,7 @@ pub fn execute_compaction(
     tokens_before: usize,
     compact_id: Uuid,
     timestamp: DateTime<Utc>,
-) -> (CompactOperationResult, String) {
+) -> (CompactResult, String) {
     let summary_preview = summary_content.chars().take(200).collect::<String>();
 
     // Create boundary and summary messages
@@ -33,28 +31,34 @@ pub fn execute_compaction(
         partition::estimate_tokens(&to_keep),
     );
 
-    // Build operation result
-    let operation_result = CompactOperationResult {
-        compact_id,
-        timestamp,
+    let tokens_after = partition::estimate_tokens(&to_keep)
+        + partition::estimate_tokens(std::slice::from_ref(&boundary_message))
+        + partition::estimate_tokens(std::slice::from_ref(&summary_message));
+    let messages_after = to_keep.len() + 2; // +2 for boundary and summary
+    let messages_compacted = messages_before - to_keep.len();
+
+    let result = CompactResult {
+        was_compacted: true,
         messages_before,
-        messages_after: to_keep.len() + 2, // +2 for boundary and summary
+        messages_after,
         tokens_before,
-        tokens_after: partition::estimate_tokens(&to_keep)
-            + partition::estimate_tokens(std::slice::from_ref(&boundary_message))
-            + partition::estimate_tokens(std::slice::from_ref(&summary_message)),
-        boundary_message: boundary_message.clone(),
-        summary_message: summary_message.clone(),
-        messages_to_keep: to_keep.clone(),
+        tokens_after,
+        messages_compacted,
+        compacted_at: Some(timestamp),
+        summary_preview: Some(summary_preview.clone()),
+        compact_id: Some(compact_id),
+        boundary_message: Some(boundary_message),
+        summary_message: Some(summary_message),
+        messages_to_keep: Some(to_keep),
     };
 
-    (operation_result, summary_preview)
+    (result, summary_preview)
 }
 
 /// Build new message list after compaction
 pub fn build_new_messages(
     original_messages: &[LlmMessage],
-    operation_result: &CompactOperationResult,
+    compact_result: &CompactResult,
 ) -> Vec<LlmMessage> {
     // Build new message list: keep messages before active + new compacted messages
     let boundary_index =
@@ -67,7 +71,9 @@ pub fn build_new_messages(
     };
 
     // Add new compacted messages
-    new_messages.extend(operation_result.build_compacted_messages());
+    if let Some(compacted) = compact_result.build_compacted_messages() {
+        new_messages.extend(compacted);
+    }
 
     new_messages
 }
@@ -86,28 +92,4 @@ pub fn update_stats(
     stats.total_messages_compacted += messages_compacted as u64;
     stats.last_compaction = Some(timestamp);
     stats.last_compact_id = Some(compact_id);
-}
-
-/// Build the final compact result
-pub fn build_compact_result(
-    messages_before: usize,
-    messages_after: usize,
-    tokens_before: usize,
-    tokens_after: usize,
-    messages_compacted: usize,
-    timestamp: DateTime<Utc>,
-    summary_preview: String,
-    compact_id: Uuid,
-) -> CompactResult {
-    CompactResult {
-        was_compacted: true,
-        messages_before,
-        messages_after,
-        tokens_before,
-        tokens_after,
-        messages_compacted,
-        compacted_at: Some(timestamp),
-        summary_preview: Some(summary_preview),
-        compact_id: Some(compact_id),
-    }
 }

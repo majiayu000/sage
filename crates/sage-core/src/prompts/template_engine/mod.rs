@@ -24,6 +24,8 @@
 //! let result = renderer.render("${custom_key}", &vars);
 //! ```
 
+mod arguments;
+mod expressions;
 mod functions;
 mod parser;
 mod renderer;
@@ -32,4 +34,7 @@ mod types;
 pub use functions::BuiltinFunctions;
 pub use parser::TemplateParser;
 pub use renderer::{render, EnhancedRenderer};
-pub use types::*;
+pub use types::{
+    ConditionType, ConditionalExpr, FunctionArg, FunctionCall, LambdaExpr, MethodChain, Template,
+    TemplateNode, Value, VariableRef,
+};

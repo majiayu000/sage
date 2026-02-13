@@ -263,52 +263,6 @@ Please provide your summary based on the conversation so far, following this str
     )
 }
 
-/// Result of a compact operation
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CompactOperationResult {
-    /// Unique ID for this compaction
-    pub compact_id: Uuid,
-    /// When compaction occurred
-    pub timestamp: DateTime<Utc>,
-    /// Number of messages before compaction
-    pub messages_before: usize,
-    /// Number of messages after compaction
-    pub messages_after: usize,
-    /// Tokens before compaction
-    pub tokens_before: usize,
-    /// Tokens after compaction
-    pub tokens_after: usize,
-    /// The boundary marker message
-    pub boundary_message: LlmMessage,
-    /// The summary message
-    pub summary_message: LlmMessage,
-    /// Messages to keep after boundary
-    pub messages_to_keep: Vec<LlmMessage>,
-}
-
-impl CompactOperationResult {
-    /// Get the number of tokens saved
-    pub fn tokens_saved(&self) -> usize {
-        self.tokens_before.saturating_sub(self.tokens_after)
-    }
-
-    /// Get the compression ratio (0.0 = full compression, 1.0 = no compression)
-    pub fn compression_ratio(&self) -> f32 {
-        if self.tokens_before == 0 {
-            1.0
-        } else {
-            self.tokens_after as f32 / self.tokens_before as f32
-        }
-    }
-
-    /// Build the final message list after compaction
-    pub fn build_compacted_messages(&self) -> Vec<LlmMessage> {
-        let mut result = vec![self.boundary_message.clone(), self.summary_message.clone()];
-        result.extend(self.messages_to_keep.clone());
-        result
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -428,32 +382,37 @@ mod tests {
     }
 
     #[test]
-    fn test_compact_operation_result() {
+    fn test_compact_result_with_messages() {
+        use crate::context::auto_compact::CompactResult;
+
         let compact_id = Uuid::new_v4();
         let timestamp = Utc::now();
 
-        let result = CompactOperationResult {
-            compact_id,
-            timestamp,
+        let result = CompactResult {
+            was_compacted: true,
             messages_before: 100,
             messages_after: 10,
             tokens_before: 50000,
             tokens_after: 5000,
-            boundary_message: create_compact_boundary(compact_id, timestamp),
-            summary_message: create_compact_summary(
+            messages_compacted: 90,
+            compacted_at: Some(timestamp),
+            summary_preview: Some("Summary preview...".to_string()),
+            compact_id: Some(compact_id),
+            boundary_message: Some(create_compact_boundary(compact_id, timestamp)),
+            summary_message: Some(create_compact_summary(
                 "Summary".to_string(),
                 compact_id,
                 90,
                 50000,
                 5000,
-            ),
-            messages_to_keep: vec![create_test_message(MessageRole::User, "Recent msg")],
+            )),
+            messages_to_keep: Some(vec![create_test_message(MessageRole::User, "Recent msg")]),
         };
 
         assert_eq!(result.tokens_saved(), 45000);
         assert!((result.compression_ratio() - 0.1).abs() < 0.01);
 
-        let compacted = result.build_compacted_messages();
+        let compacted = result.build_compacted_messages().unwrap();
         assert_eq!(compacted.len(), 3); // boundary + summary + 1 kept message
     }
 }

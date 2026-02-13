@@ -159,7 +159,7 @@ impl AutoCompact {
             .await?;
 
         // Execute compaction operation
-        let (operation_result, summary_preview) = operations::execute_compaction(
+        let (result, _summary_preview) = operations::execute_compaction(
             to_keep,
             to_compact,
             summary_content,
@@ -169,33 +169,17 @@ impl AutoCompact {
             timestamp,
         );
 
-        let tokens_after = operation_result.tokens_after;
-        let messages_compacted =
-            operation_result.messages_before - operation_result.messages_to_keep.len();
-
         // Build new message list
-        let new_messages = operations::build_new_messages(messages, &operation_result);
+        let new_messages = operations::build_new_messages(messages, &result);
         *messages = new_messages;
 
         // Update stats
         operations::update_stats(
             &mut self.stats,
-            tokens_before,
-            tokens_after,
-            messages_compacted,
+            result.tokens_before,
+            result.tokens_after,
+            result.messages_compacted,
             timestamp,
-            compact_id,
-        );
-
-        // Build result
-        let result = operations::build_compact_result(
-            messages_before,
-            messages.len(),
-            tokens_before,
-            tokens_after,
-            messages_compacted,
-            timestamp,
-            summary_preview,
             compact_id,
         );
 

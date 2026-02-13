@@ -7,6 +7,7 @@
 pub mod send_message;
 pub mod team_manager;
 pub mod teammate;
+pub mod types;
 
 pub use send_message::SendMessageTool;
 pub use team_manager::{TeamConfig, TeamManager, TeamMember};

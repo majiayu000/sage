@@ -7,6 +7,7 @@
 //! - context: Optional additional context about where/why the error occurred
 //! - source: Optional underlying error that caused this error
 
+mod classifiers;
 mod constructors;
 mod conversions;
 mod types;
