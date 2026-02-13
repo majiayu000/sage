@@ -351,15 +351,7 @@ fn test_file_size_limits() {
 
     // Files allowed to exceed the limit (legacy, to be split).
     let allowlist: HashSet<&str> = [
-        "crates/sage-tools/src/tools/extensions/tool_search.rs",
-        "crates/sage-core/src/prompts/system_prompt.rs",
-        "crates/sage-tools/src/tools/team/team_manager.rs",
-        "crates/sage-core/src/error/user_messages.rs",
-        "crates/sage-core/src/prompts/template_engine/parser.rs",
         "crates/sage-core/src/config/onboarding/state.rs",
-        "crates/sage-core/src/types/tool.rs",
-        "crates/sage-core/src/prompts/builder.rs",
-        "crates/sage-core/src/config/provider_registry.rs",
     ]
     .into_iter()
     .collect();
