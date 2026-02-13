@@ -44,12 +44,12 @@ impl SettingsValidator {
 
         // Validate permission patterns
         if let Err(e) = self.validate_permissions(&settings.permissions) {
-            errors.push(e);
+            errors.push(e.to_string());
         }
 
         // Validate tool settings
         if let Err(e) = self.validate_tools(&settings.tools) {
-            errors.push(e);
+            errors.push(e.to_string());
         }
 
         // Validate model settings
@@ -87,7 +87,7 @@ impl SettingsValidator {
     }
 
     /// Validate permission settings
-    fn validate_permissions(&self, permissions: &PermissionSettings) -> Result<(), String> {
+    fn validate_permissions(&self, permissions: &PermissionSettings) -> SageResult<()> {
         // Validate allow patterns
         for pattern in &permissions.allow {
             self.validate_permission_pattern(pattern, "allow")?;
@@ -102,10 +102,10 @@ impl SettingsValidator {
         for allow_pattern in &permissions.allow {
             for deny_pattern in &permissions.deny {
                 if allow_pattern == deny_pattern {
-                    return Err(format!(
+                    return Err(SageError::config(format!(
                         "Pattern '{}' appears in both allow and deny lists",
                         allow_pattern
-                    ));
+                    )));
                 }
             }
         }
@@ -114,9 +114,9 @@ impl SettingsValidator {
     }
 
     /// Validate a single permission pattern
-    fn validate_permission_pattern(&self, pattern: &str, list_name: &str) -> Result<(), String> {
+    fn validate_permission_pattern(&self, pattern: &str, list_name: &str) -> SageResult<()> {
         let parsed = PermissionSettings::parse_pattern(pattern)
-            .ok_or_else(|| format!("Invalid {} pattern: '{}'", list_name, pattern))?;
+            .ok_or_else(|| SageError::config(format!("Invalid {} pattern: '{}'", list_name, pattern)))?;
 
         // Check if tool is known
         if !self.allow_unknown_tools {
@@ -127,20 +127,20 @@ impl SettingsValidator {
                 .any(|t| t.to_lowercase() == tool_lower);
 
             if !known {
-                return Err(format!(
+                return Err(SageError::config(format!(
                     "Unknown tool '{}' in {} pattern. Known tools: {:?}",
                     parsed.tool_name, list_name, self.known_tools
-                ));
+                )));
             }
         }
 
         // Validate path patterns don't contain dangerous sequences
         if let Some(ref arg_pattern) = parsed.arg_pattern {
             if arg_pattern.contains("..") {
-                return Err(format!(
+                return Err(SageError::config(format!(
                     "Pattern '{}' contains potentially dangerous '..' sequence",
                     pattern
-                ));
+                )));
             }
         }
 
@@ -148,28 +148,31 @@ impl SettingsValidator {
     }
 
     /// Validate tool settings
-    fn validate_tools(&self, tools: &ToolSettings) -> Result<(), String> {
+    fn validate_tools(&self, tools: &ToolSettings) -> SageResult<()> {
         // Check for tools in both enabled and disabled lists
         for tool in &tools.enabled {
             if tools.disabled.contains(tool) {
-                return Err(format!(
+                return Err(SageError::config(format!(
                     "Tool '{}' appears in both enabled and disabled lists",
                     tool
-                ));
+                )));
             }
         }
 
         // Validate timeout values
         for (tool, timeout) in &tools.timeouts {
             if *timeout == 0 {
-                return Err(format!("Timeout for tool '{}' cannot be 0", tool));
+                return Err(SageError::config(format!(
+                    "Timeout for tool '{}' cannot be 0",
+                    tool
+                )));
             }
             // Maximum timeout: 10 minutes
             if *timeout > 600_000 {
-                return Err(format!(
+                return Err(SageError::config(format!(
                     "Timeout for tool '{}' exceeds maximum (600000ms / 10 minutes)",
                     tool
-                ));
+                )));
             }
         }
 

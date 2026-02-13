@@ -2,6 +2,7 @@
 
 use super::config::ProviderConfig;
 use super::resilience::RateLimitConfig;
+use crate::error::{SageError, SageResult};
 use crate::llm::provider_types::TimeoutConfig;
 use std::collections::HashMap;
 
@@ -12,24 +13,26 @@ impl ProviderConfig {
     }
 
     /// Validate the provider configuration
-    pub fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> SageResult<()> {
         if self.name.is_empty() {
-            return Err("Provider name cannot be empty".to_string());
+            return Err(SageError::config("Provider name cannot be empty"));
         }
 
         if self.requires_api_key() && self.get_api_key().is_none() {
-            return Err(format!(
+            return Err(SageError::config(format!(
                 "API key is required for provider '{}'. Set it in config or environment variables",
                 self.name
-            ));
+            )));
         }
 
         let effective_timeouts = self.get_effective_timeouts();
-        effective_timeouts.validate()?;
+        effective_timeouts
+            .validate()
+            .map_err(|e| SageError::config(e))?;
 
         if let Some(max_retries) = self.resilience.max_retries {
             if max_retries > 10 {
-                return Err("Max retries should not exceed 10".to_string());
+                return Err(SageError::config("Max retries should not exceed 10"));
             }
         }
 

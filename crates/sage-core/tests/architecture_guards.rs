@@ -149,15 +149,8 @@ fn test_no_result_string_in_core() {
 
     // Files allowed to use Result<_, String> (legacy, to be migrated).
     let allowlist: HashSet<&str> = [
-        "crates/sage-core/src/settings/validation.rs",
+        // Layer 0 types module cannot depend on error module
         "crates/sage-core/src/types/provider.rs",
-        "crates/sage-core/src/config/credential/unified_loader.rs",
-        "crates/sage-core/src/config/provider/accessors.rs",
-        "crates/sage-core/src/config/provider/config.rs",
-        "crates/sage-core/src/config/model_params/mod.rs",
-        "crates/sage-core/src/input/types.rs",
-        "crates/sage-core/src/hooks/registry.rs",
-        "crates/sage-core/src/session/branching/manager/serialization.rs",
     ]
     .into_iter()
     .collect();

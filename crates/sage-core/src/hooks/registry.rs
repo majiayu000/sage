@@ -5,6 +5,7 @@ use std::sync::{Arc, RwLock};
 
 use super::events::HookEvent;
 use super::types::{HookConfig, HookMatcher};
+use crate::error::{SageError, SageResult};
 
 /// Registry for managing hooks with event-based organization
 #[derive(Debug, Clone)]
@@ -24,8 +25,11 @@ impl HookRegistry {
     // ===== Event-based hook methods =====
 
     /// Register a hook matcher for an event
-    pub fn register(&self, event: HookEvent, matcher: HookMatcher) -> Result<(), String> {
-        let mut event_hooks = self.event_hooks.write().map_err(|e| e.to_string())?;
+    pub fn register(&self, event: HookEvent, matcher: HookMatcher) -> SageResult<()> {
+        let mut event_hooks = self
+            .event_hooks
+            .write()
+            .map_err(|e| SageError::other(format!("Hook registry lock poisoned: {}", e)))?;
         let hook_list = event_hooks.entry(event).or_insert_with(Vec::new);
         hook_list.push(matcher);
         Ok(())
@@ -76,8 +80,11 @@ impl HookRegistry {
     }
 
     /// Clear all event hooks
-    pub fn clear(&self) -> Result<(), String> {
-        let mut event_hooks = self.event_hooks.write().map_err(|e| e.to_string())?;
+    pub fn clear(&self) -> SageResult<()> {
+        let mut event_hooks = self
+            .event_hooks
+            .write()
+            .map_err(|e| SageError::other(format!("Hook registry lock poisoned: {}", e)))?;
         event_hooks.clear();
         Ok(())
     }

@@ -62,15 +62,7 @@ impl LlmClient {
         model_params: LlmRequestParams,
     ) -> SageResult<Self> {
         // Validate configuration
-        config.validate().map_err(|e| {
-            SageError::config_with_context(
-                format!("Invalid provider config: {}", e),
-                format!(
-                    "Validating configuration for provider '{}'",
-                    provider.name()
-                ),
-            )
-        })?;
+        config.validate()?;
 
         // Get effective timeout configuration (handles legacy timeout field)
         let timeouts = config.get_effective_timeouts();

@@ -2,6 +2,7 @@
 
 use super::super::types::{BranchId, BranchSnapshot};
 use super::core::BranchManager;
+use crate::error::{SageError, SageResult};
 
 impl BranchManager {
     /// Export branches to JSON
@@ -11,9 +12,9 @@ impl BranchManager {
     }
 
     /// Import branches from JSON
-    pub async fn import(&self, data: &serde_json::Value) -> Result<usize, String> {
+    pub async fn import(&self, data: &serde_json::Value) -> SageResult<usize> {
         let imported: Vec<BranchSnapshot> = serde_json::from_value(data.clone())
-            .map_err(|e| format!("Failed to parse branches: {}", e))?;
+            .map_err(|e| SageError::json(format!("Failed to parse branches: {}", e)))?;
 
         let count = imported.len();
         let mut branches = self.branches.write().await;

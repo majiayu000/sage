@@ -131,7 +131,7 @@ impl ModelParameters {
     }
 
     /// Validate the API key format for a specific provider
-    pub fn validate_api_key_format_for_provider(&self, provider: &str) -> Result<(), String> {
+    pub fn validate_api_key_format_for_provider(&self, provider: &str) -> SageResult<()> {
         // Ollama doesn't need an API key
         if provider == "ollama" {
             return Ok(());
@@ -141,14 +141,14 @@ impl ModelParameters {
         let key = match &key_info.key {
             Some(k) => k,
             None => {
-                return Err(format!(
+                return Err(SageError::config(format!(
                     "API key required for '{}'. Set via {} or config file",
                     provider,
                     get_standard_env_vars_for_provider(provider)
                         .first()
                         .cloned()
                         .unwrap_or_default()
-                ));
+                )));
             }
         };
 
@@ -156,27 +156,31 @@ impl ModelParameters {
         match provider {
             "anthropic" => {
                 if !key.starts_with("sk-ant-") {
-                    return Err("Anthropic API key should start with 'sk-ant-'".to_string());
+                    return Err(SageError::config(
+                        "Anthropic API key should start with 'sk-ant-'",
+                    ));
                 }
             }
             "openai" => {
                 if !key.starts_with("sk-") {
-                    return Err("OpenAI API key should start with 'sk-'".to_string());
+                    return Err(SageError::config(
+                        "OpenAI API key should start with 'sk-'",
+                    ));
                 }
             }
             "google" => {
                 if key.len() < 20 {
-                    return Err("Google API key appears too short".to_string());
+                    return Err(SageError::config("Google API key appears too short"));
                 }
             }
             "glm" => {
                 if key.len() < 10 {
-                    return Err("GLM API key appears too short".to_string());
+                    return Err(SageError::config("GLM API key appears too short"));
                 }
             }
             _ => {
                 if key.is_empty() || key.contains("your-") || key.contains("xxx") {
-                    return Err("API key appears to be a placeholder".to_string());
+                    return Err(SageError::config("API key appears to be a placeholder"));
                 }
             }
         }

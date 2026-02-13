@@ -1,5 +1,6 @@
 //! Core input types for structured questions and options
 
+use crate::error::{SageError, SageResult};
 use serde::{Deserialize, Serialize};
 
 // ============================================================================
@@ -42,26 +43,33 @@ impl Question {
     }
 
     /// Validate the question structure
-    pub fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> SageResult<()> {
         if self.header.len() > 12 {
-            return Err(format!(
+            return Err(SageError::invalid_input(format!(
                 "Header '{}' exceeds 12 characters (length: {})",
                 self.header,
                 self.header.len()
-            ));
+            )));
         }
         if self.question.trim().is_empty() {
-            return Err("Question text cannot be empty".to_string());
+            return Err(SageError::invalid_input("Question text cannot be empty"));
         }
         if self.options.len() < 2 {
-            return Err("Question must have at least 2 options".to_string());
+            return Err(SageError::invalid_input(
+                "Question must have at least 2 options",
+            ));
         }
         if self.options.len() > 4 {
-            return Err("Question cannot have more than 4 options".to_string());
+            return Err(SageError::invalid_input(
+                "Question cannot have more than 4 options",
+            ));
         }
         for (i, opt) in self.options.iter().enumerate() {
             if opt.label.trim().is_empty() {
-                return Err(format!("Option {} has empty label", i + 1));
+                return Err(SageError::invalid_input(format!(
+                    "Option {} has empty label",
+                    i + 1
+                )));
             }
         }
         Ok(())
