@@ -37,9 +37,13 @@ impl HookRegistry {
 
     /// Get all matching hooks for an event and query value
     pub fn get_matching(&self, event: HookEvent, query: &str) -> Vec<HookConfig> {
-        let event_hooks = self.event_hooks.read().ok();
+        let event_hooks = self.event_hooks.read().unwrap_or_else(|e| {
+            tracing::warn!("hooks registry lock poisoned, recovering");
+            e.into_inner()
+        });
         event_hooks
-            .and_then(|hooks| hooks.get(&event).cloned())
+            .get(&event)
+            .cloned()
             .unwrap_or_default()
             .into_iter()
             .filter_map(|matcher| {
@@ -59,8 +63,12 @@ impl HookRegistry {
     pub fn has_hooks(&self, event: &HookEvent) -> bool {
         self.event_hooks
             .read()
-            .ok()
-            .and_then(|hooks| hooks.get(event).map(|list| !list.is_empty()))
+            .unwrap_or_else(|e| {
+                tracing::warn!("hooks registry lock poisoned, recovering");
+                e.into_inner()
+            })
+            .get(event)
+            .map(|list| !list.is_empty())
             .unwrap_or(false)
     }
 
@@ -68,15 +76,14 @@ impl HookRegistry {
     pub fn list_events(&self) -> Vec<HookEvent> {
         self.event_hooks
             .read()
-            .ok()
-            .map(|hooks| {
-                hooks
-                    .iter()
-                    .filter(|(_, list)| !list.is_empty())
-                    .map(|(event, _)| *event)
-                    .collect()
+            .unwrap_or_else(|e| {
+                tracing::warn!("hooks registry lock poisoned, recovering");
+                e.into_inner()
             })
-            .unwrap_or_default()
+            .iter()
+            .filter(|(_, list)| !list.is_empty())
+            .map(|(event, _)| *event)
+            .collect()
     }
 
     /// Clear all event hooks
@@ -93,9 +100,13 @@ impl HookRegistry {
     pub fn count(&self) -> usize {
         self.event_hooks
             .read()
-            .ok()
-            .map(|h| h.values().map(|v| v.len()).sum())
-            .unwrap_or(0)
+            .unwrap_or_else(|e| {
+                tracing::warn!("hooks registry lock poisoned, recovering");
+                e.into_inner()
+            })
+            .values()
+            .map(|v| v.len())
+            .sum()
     }
 
     /// Load from configuration

@@ -37,29 +37,31 @@ pub async fn set(
     let now = Utc::now().to_rfc3339();
 
     // Try INSERT OR REPLACE for SQLite, or upsert for PostgreSQL
-    let backend_lock = backend.read().await;
-    let backend_ref = backend_lock
-        .as_ref()
-        .ok_or_else(|| DatabaseError::Connection("Not connected".to_string()))?;
+    let sql = {
+        let backend_lock = backend.read().await;
+        let backend_ref = backend_lock
+            .as_ref()
+            .ok_or_else(|| DatabaseError::Connection("Not connected".to_string()))?;
 
-    let sql = match backend_ref.backend_type() {
-        BackendType::PostgreSQL => {
-            "INSERT INTO kv_store (key, value, created_at, updated_at) \
-             VALUES (?, ?, ?, ?) \
-             ON CONFLICT (key) DO UPDATE SET value = ?, updated_at = ?"
-        }
-        _ => {
-            "INSERT OR REPLACE INTO kv_store (key, value, created_at, updated_at) \
-             VALUES (?, ?, ?, ?)"
-        }
-    };
+        let sql = match backend_ref.backend_type() {
+            BackendType::PostgreSQL => {
+                "INSERT INTO kv_store (key, value, created_at, updated_at) \
+                 VALUES (?, ?, ?, ?) \
+                 ON CONFLICT (key) DO UPDATE SET value = ?, updated_at = ?"
+            }
+            _ => {
+                "INSERT OR REPLACE INTO kv_store (key, value, created_at, updated_at) \
+                 VALUES (?, ?, ?, ?)"
+            }
+        };
 
-    let _ = backend_ref; // Release read lock before execute
+        sql.to_string()
+    }; // backend_lock dropped here
 
     execute(
         backend,
         stats,
-        sql,
+        &sql,
         &[
             DatabaseValue::Text(key.to_string()),
             DatabaseValue::Text(value.to_string()),

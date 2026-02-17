@@ -9,11 +9,20 @@
 use async_trait::async_trait;
 use regex::Regex;
 use std::collections::HashMap;
+use std::sync::LazyLock;
 use tokio::fs;
 use tracing::info;
 
 use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
+
+static APACHE_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(\d+\.\d+\.\d+\.\d+).*?\[([^\]]+)\].*?"([^"]*)".*?(\d{3})\s+(\d+)"#)
+        .expect("valid apache log regex")
+});
+
+static RESPONSE_TIME_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(\d+(?:\.\d+)?)\s*ms").expect("valid response time regex"));
 
 /// Log analyzer tool
 #[derive(Debug, Clone)]
@@ -165,22 +174,16 @@ impl LogAnalyzerTool {
         let mut response_times: Vec<f64> = Vec::new();
         let mut status_codes = HashMap::new();
 
-        // Common patterns for different log formats
-        let apache_pattern =
-            Regex::new(r#"(\d+\.\d+\.\d+\.\d+).*?\[([^\]]+)\].*?"([^"]*)".*?(\d{3})\s+(\d+)"#)
-                .unwrap();
-        let response_time_pattern = Regex::new(r"(\d+(?:\.\d+)?)\s*ms").unwrap();
-
         for line in lines {
             // Extract status codes (HTTP logs)
-            if let Some(caps) = apache_pattern.captures(line) {
+            if let Some(caps) = APACHE_PATTERN.captures(line) {
                 if let Some(status) = caps.get(4) {
                     *status_codes.entry(status.as_str().to_string()).or_insert(0) += 1;
                 }
             }
 
             // Extract response times
-            if let Some(caps) = response_time_pattern.captures(line) {
+            if let Some(caps) = RESPONSE_TIME_PATTERN.captures(line) {
                 if let Ok(time) = caps[1].parse::<f64>() {
                     response_times.push(time);
                 }

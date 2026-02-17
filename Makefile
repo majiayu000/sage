@@ -91,7 +91,7 @@ run:
 	cargo run --bin sage -- $(ARGS)
 
 # VibeGuard checks
-VIBEGUARD_DIR ?= $(HOME)/Desktop/code/AI/tools/vibeguard
+VIBEGUARD_DIR ?= $(HOME)/Desktop/code/AI/tool/vibeguard
 
 guard:
 	@echo "Running VibeGuard Rust guards..."

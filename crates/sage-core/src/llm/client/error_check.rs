@@ -128,6 +128,35 @@ impl LlmClient {
         }
     }
 
+    /// Check if an error indicates context length exceeded.
+    ///
+    /// Detects when the request exceeds the model's maximum context window.
+    /// This is used to trigger automatic compaction and retry.
+    ///
+    /// # Known patterns by provider
+    /// - OpenAI: "context_length_exceeded", "maximum context length"
+    /// - Anthropic: "prompt is too long", "max tokens"
+    /// - Google: "exceeds the maximum", "token limit"
+    /// - General: "too many tokens", "context too long"
+    pub fn is_context_overflow_error(error: &SageError) -> bool {
+        let msg_lower = match error {
+            SageError::Llm { message: msg, .. } => msg.to_lowercase(),
+            SageError::Http { message: msg, .. } => msg.to_lowercase(),
+            _ => return false,
+        };
+
+        msg_lower.contains("context_length_exceeded")
+            || msg_lower.contains("maximum context length")
+            || msg_lower.contains("prompt is too long")
+            || msg_lower.contains("too many tokens")
+            || msg_lower.contains("context too long")
+            || msg_lower.contains("exceeds the maximum")
+            || msg_lower.contains("token limit")
+            || msg_lower.contains("request too large")
+            || msg_lower.contains("max_tokens")
+                && msg_lower.contains("exceed")
+    }
+
     /// Check if this is a throttling error (429 or 503).
     ///
     /// Throttling errors may include Retry-After header hints.

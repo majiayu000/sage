@@ -5,7 +5,11 @@
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::LazyLock;
 use thiserror::Error;
+
+static VARIABLE_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\{\{(\w+)\}\}").expect("valid variable pattern regex"));
 
 /// A prompt template with variable substitution
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -76,11 +80,10 @@ impl PromptTemplate {
 
     /// Extract variables from template content
     fn extract_variables(content: &str) -> Vec<PromptVariable> {
-        let re = Regex::new(r"\{\{(\w+)\}\}").unwrap();
         let mut seen = std::collections::HashSet::new();
         let mut variables = Vec::new();
 
-        for cap in re.captures_iter(content) {
+        for cap in VARIABLE_PATTERN.captures_iter(content) {
             let name = cap[1].to_string();
             if seen.insert(name.clone()) {
                 variables.push(PromptVariable {

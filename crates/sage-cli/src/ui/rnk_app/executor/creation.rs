@@ -76,14 +76,18 @@ pub async fn create_executor(
     }
 
     executor.register_tools(all_tools);
-    let _ = executor.init_subagent_support();
+    if let Err(e) = executor.init_subagent_support() {
+        tracing::warn!("Failed to initialize subagent support: {}", e);
+    }
 
     // Set up JSONL storage for session management
     let jsonl_storage = sage_core::session::JsonlSessionStorage::default_path()?;
     executor.set_jsonl_storage(std::sync::Arc::new(jsonl_storage));
 
     // Enable JSONL session recording
-    let _ = executor.enable_session_recording().await;
+    if let Err(e) = executor.enable_session_recording().await {
+        tracing::warn!("Failed to enable session recording: {}", e);
+    }
 
     Ok(executor)
 }

@@ -197,27 +197,45 @@ pub fn global_signal_handler() -> &'static Mutex<SignalHandler> {
 }
 
 /// Start global signal handling
-///
-/// # Safety Note
-/// The lock is held across await but this is safe because:
-/// 1. parking_lot::Mutex is fast and non-blocking
-/// 2. start() only spawns a task and returns quickly
-/// 3. No other async code contends for this lock during startup
-#[allow(clippy::await_holding_lock)]
 pub async fn start_global_signal_handling() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
 {
-    global_signal_handler().lock().start().await
+    let mut handler = {
+        let guard = global_signal_handler().lock();
+        // Clone the handler to avoid holding lock across await
+        SignalHandler {
+            is_active: guard.is_active.clone(),
+            task_handle: None,
+            app_state: guard.app_state.clone(),
+            ctrl_c_count: guard.ctrl_c_count.clone(),
+            last_ctrl_c_time: guard.last_ctrl_c_time.clone(),
+        }
+    };
+
+    let result = handler.start().await;
+
+    // Update the global handler with the new task handle
+    if result.is_ok() {
+        global_signal_handler().lock().task_handle = handler.task_handle.take();
+    }
+
+    result
 }
 
 /// Stop global signal handling
-///
-/// # Safety Note
-/// The lock is held across await but this is safe because:
-/// 1. parking_lot::Mutex is fast and non-blocking
-/// 2. stop() only aborts a task and returns quickly
-#[allow(clippy::await_holding_lock)]
 pub async fn stop_global_signal_handling() {
-    global_signal_handler().lock().stop().await;
+    let mut handler = {
+        let mut guard = global_signal_handler().lock();
+        // Extract the handler to avoid holding lock across await
+        SignalHandler {
+            is_active: guard.is_active.clone(),
+            task_handle: guard.task_handle.take(),
+            app_state: guard.app_state.clone(),
+            ctrl_c_count: guard.ctrl_c_count.clone(),
+            last_ctrl_c_time: guard.last_ctrl_c_time.clone(),
+        }
+    };
+
+    handler.stop().await;
 }
 
 /// Enable global signal handling

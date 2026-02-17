@@ -1,14 +1,16 @@
 //! LLM client constructor and initialization logic
 
 use super::types::LlmClient;
+use crate::config::model::Config;
 use crate::config::provider::ProviderConfig;
 use crate::error::{SageError, SageResult};
-use crate::llm::provider_types::{LlmProvider, LlmRequestParams};
+use crate::llm::provider_types::{LlmProvider, LlmRequestParams, TimeoutConfig};
 use crate::llm::providers::{
     AnthropicProvider, AzureProvider, DoubaoProvider, GlmProvider, GoogleProvider, OllamaProvider,
     OpenAiProvider, OpenRouterProvider, ProviderInstance,
 };
 use crate::recovery::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig};
+use anyhow::Context;
 use reqwest::Client;
 use std::sync::Arc;
 use std::time::Duration;
@@ -170,5 +172,43 @@ impl LlmClient {
             provider_instance,
             circuit_breaker,
         })
+    }
+
+    /// Create an LLM client from the application Config.
+    ///
+    /// This is a convenience factory that extracts provider, API key, base_url,
+    /// and model parameters from the unified Config, avoiding duplicate
+    /// construction logic across LlmOrchestrator and SubAgentRunner.
+    ///
+    /// Returns `(LlmClient, provider_name, model_name)`.
+    pub fn from_config(config: &Config) -> SageResult<(Self, String, String)> {
+        let default_params = config
+            .default_model_parameters()
+            .context("Failed to retrieve default model parameters")?;
+        let provider_name = config.get_default_provider().to_string();
+
+        let provider: LlmProvider = provider_name
+            .parse()
+            .map_err(|_| SageError::config(format!("Invalid provider: {}", provider_name)))?;
+
+        let api_key_info = default_params.get_api_key_info_for_provider(&provider_name);
+        let mut provider_config = ProviderConfig::new(&provider_name)
+            .with_api_key(api_key_info.key.unwrap_or_default())
+            .with_timeouts(TimeoutConfig::default())
+            .with_max_retries(3);
+
+        if let Some(base_url) = &default_params.base_url {
+            provider_config = provider_config.with_base_url(base_url.clone());
+        }
+
+        let model_params = default_params.to_llm_parameters();
+        let model_name = model_params.model.clone();
+
+        let client = Self::new(provider, provider_config, model_params).context(format!(
+            "Failed to create LLM client for: {}",
+            provider_name
+        ))?;
+
+        Ok((client, provider_name, model_name))
     }
 }

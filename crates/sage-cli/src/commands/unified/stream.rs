@@ -95,14 +95,14 @@ pub async fn execute_stream_json(
         Ok(ref execution_outcome) => {
             let execution = execution_outcome.execution();
             let mut cost = CostInfo::new(
-                execution.total_usage.input_tokens as usize,
-                execution.total_usage.output_tokens as usize,
+                usize::try_from(execution.total_usage.input_tokens).unwrap_or(usize::MAX),
+                usize::try_from(execution.total_usage.output_tokens).unwrap_or(usize::MAX),
             );
             if let Some(cache_read) = execution.total_usage.cache_read_tokens {
-                cost = cost.with_cache_read(cache_read as usize);
+                cost = cost.with_cache_read(usize::try_from(cache_read).unwrap_or(usize::MAX));
             }
             if let Some(cache_write) = execution.total_usage.cache_write_tokens {
-                cost = cost.with_cache_creation(cache_write as usize);
+                cost = cost.with_cache_creation(usize::try_from(cache_write).unwrap_or(usize::MAX));
             }
 
             let result_content = match execution_outcome {

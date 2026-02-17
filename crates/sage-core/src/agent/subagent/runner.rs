@@ -15,14 +15,11 @@ use super::types::{
     AgentDefinition, AgentProgress, AgentType, ExecutionMetadata, SubAgentConfig, SubAgentResult,
 };
 use crate::config::model::Config;
-use crate::config::provider::ProviderConfig;
 use crate::error::{SageError, SageResult};
 use crate::llm::client::LlmClient;
 use crate::llm::messages::{LlmMessage, MessageRole};
-use crate::llm::provider_types::{LlmProvider, TimeoutConfig};
 use crate::tools::base::Tool;
 use crate::tools::types::{ToolCall, ToolResult, ToolSchema};
-use anyhow::Context;
 
 /// Sub-agent runner that executes agents with filtered tools
 pub struct SubAgentRunner {
@@ -48,43 +45,7 @@ impl SubAgentRunner {
         tools: Vec<Arc<dyn Tool>>,
         working_directory: Option<PathBuf>,
     ) -> SageResult<Self> {
-        // Get default provider configuration
-        let default_params = config
-            .default_model_parameters()
-            .context("Failed to retrieve default model parameters from configuration")?;
-        let provider_name = config.get_default_provider();
-
-        // Parse provider
-        let provider: LlmProvider = provider_name
-            .parse()
-            .map_err(|_| SageError::config(format!("Invalid provider: {}", provider_name)))
-            .context(format!(
-                "Failed to parse provider name '{}' into a valid LLM provider for sub-agent",
-                provider_name
-            ))?;
-
-        // Create provider config with generous timeout (5 min default)
-        // Use provider-specific API key lookup to get the correct key from env/config
-        let api_key_info = default_params.get_api_key_info_for_provider(provider_name);
-        let mut provider_config = ProviderConfig::new(provider_name)
-            .with_api_key(api_key_info.key.unwrap_or_default())
-            .with_timeouts(TimeoutConfig::default())
-            .with_max_retries(3);
-
-        // Apply custom base_url if configured
-        if let Some(base_url) = &default_params.base_url {
-            provider_config = provider_config.with_base_url(base_url.clone());
-        }
-
-        // Create model parameters
-        let model_params = default_params.to_llm_parameters();
-
-        // Create LLM client
-        let llm_client =
-            LlmClient::new(provider, provider_config, model_params).context(format!(
-                "Failed to create LLM client for sub-agent runner with provider: {}",
-                provider_name
-            ))?;
+        let (llm_client, _provider_name, _model_name) = LlmClient::from_config(config)?;
 
         // Resolve working directory
         let cwd = working_directory

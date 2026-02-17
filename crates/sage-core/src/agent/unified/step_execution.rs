@@ -3,6 +3,7 @@
 use crate::agent::{AgentState, AgentStep};
 use crate::error::{SageError, SageResult};
 use crate::interrupt::global_interrupt_manager;
+use crate::llm::client::LlmClient;
 use crate::llm::messages::LlmMessage;
 use crate::tools::types::{ToolCall, ToolSchema};
 use tracing::instrument;
@@ -54,19 +55,49 @@ impl UnifiedExecutor {
             .record_llm_request(&working_messages, tool_schemas)
             .await;
 
-        let cancellation_token = global_interrupt_manager().lock().cancellation_token();
-
         // Use output strategy for streaming display
         let output_strategy = self.output_strategy.clone();
-        let llm_response = self
-            .llm_orchestrator
-            .stream_chat_with_strategy(
-                &working_messages,
-                Some(tool_schemas),
-                cancellation_token,
-                output_strategy,
-            )
-            .await?;
+        let llm_response = {
+            let cancellation_token = global_interrupt_manager().lock().cancellation_token();
+            let result = self
+                .llm_orchestrator
+                .stream_chat_with_strategy(
+                    &working_messages,
+                    Some(tool_schemas),
+                    cancellation_token,
+                    output_strategy.clone(),
+                )
+                .await;
+
+            match result {
+                Ok(resp) => resp,
+                Err(ref e) if LlmClient::is_context_overflow_error(e) => {
+                    // Context overflow: force compact and retry once
+                    tracing::warn!("Context overflow detected, forcing compaction and retrying");
+                    let compact_result = self
+                        .auto_compact
+                        .force_compact(&mut working_messages)
+                        .await?;
+                    tracing::info!(
+                        "Emergency compaction: {} -> {} msgs, saved {} tokens",
+                        compact_result.messages_before,
+                        compact_result.messages_after,
+                        compact_result.tokens_saved()
+                    );
+
+                    let retry_token = global_interrupt_manager().lock().cancellation_token();
+                    self.llm_orchestrator
+                        .stream_chat_with_strategy(
+                            &working_messages,
+                            Some(tool_schemas),
+                            retry_token,
+                            output_strategy,
+                        )
+                        .await?
+                }
+                Err(e) => return Err(e),
+            }
+        };
 
         // Record response
         let model = self.llm_orchestrator.model_name();
