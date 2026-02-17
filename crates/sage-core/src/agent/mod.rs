@@ -8,7 +8,6 @@ pub mod outcome;
 pub mod state;
 pub mod step;
 pub mod subagent;
-pub mod trait_impls;
 pub mod traits;
 pub mod unified;
 
@@ -31,10 +30,4 @@ pub use subagent::{
 };
 pub use unified::{
     ContextBuilder, ContextGitInfo, ProjectContext, UnifiedExecutor, UnifiedExecutorBuilder,
-};
-
-// Core trait abstractions for dependency injection and testability
-pub use traits::{
-    LlmService, NoopProgressReporter, NoopSessionRecorder, ProgressReporter,
-    SessionRecorderService, ToolService, UserInteractionService,
 };

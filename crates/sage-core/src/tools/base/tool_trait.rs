@@ -1,18 +1,8 @@
-//! Core Tool trait definitions
+//! Core Tool trait definition
 //!
-//! This module provides a modular trait hierarchy for building tools:
-//!
-//! - [`Tool`] - Core trait with name, description, schema, and execute (required)
-//! - [`ToolValidator`] - Optional validation before execution
-//! - [`ToolPermission`] - Optional permission checking and risk levels
-//! - [`ToolConcurrency`] - Optional concurrency configuration
-//! - [`ToolTiming`] - Optional execution timing limits
-//! - [`ToolRenderer`] - Optional rendering for display
-//! - [`ToolMetadata`] - Optional metadata flags
-//!
-//! Tools implement the core `Tool` trait and optionally implement additional
-//! traits for extended functionality. Default implementations are provided
-//! where sensible.
+//! This module provides the core [`Tool`] trait that all tools must implement.
+//! The trait includes methods for validation, permission checking, concurrency,
+//! timing, rendering, and metadata, all with sensible default implementations.
 
 use super::concurrency::ConcurrencyMode;
 use super::error::ToolError;
@@ -72,7 +62,7 @@ pub trait Tool: Send + Sync {
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError>;
 
     // ========================================================================
-    // Validation (from ToolValidator)
+    // Validation
     // ========================================================================
 
     /// Validate the tool call arguments
@@ -84,7 +74,7 @@ pub trait Tool: Send + Sync {
     }
 
     // ========================================================================
-    // Permission (from ToolPermission)
+    // Permission
     // ========================================================================
 
     /// Get the risk level for this tool (used for permission checking)
@@ -104,7 +94,7 @@ pub trait Tool: Send + Sync {
     }
 
     // ========================================================================
-    // Concurrency (from ToolConcurrency)
+    // Concurrency
     // ========================================================================
 
     /// Get the concurrency mode (determines parallel execution)
@@ -121,7 +111,7 @@ pub trait Tool: Send + Sync {
     }
 
     // ========================================================================
-    // Timing (from ToolTiming)
+    // Timing
     // ========================================================================
 
     /// Get the maximum execution time as Duration (default: 5 minutes)
@@ -130,7 +120,7 @@ pub trait Tool: Send + Sync {
     }
 
     // ========================================================================
-    // Rendering (from ToolRenderer)
+    // Rendering
     // ========================================================================
 
     /// Render the tool call for display to the user
@@ -156,7 +146,7 @@ pub trait Tool: Send + Sync {
     }
 
     // ========================================================================
-    // Metadata (from ToolMetadata)
+    // Metadata
     // ========================================================================
 
     /// Whether this tool only reads data without side effects
@@ -173,7 +163,7 @@ pub trait Tool: Send + Sync {
     }
 
     // ========================================================================
-    // Execution Helper (from ToolExt)
+    // Execution Helper
     // ========================================================================
 
     /// Execute the tool with timing and error handling
@@ -211,146 +201,3 @@ pub trait Tool: Send + Sync {
     }
 }
 
-// ============================================================================
-// Focused Extension Traits (for specialized implementations)
-// ============================================================================
-
-/// Optional trait for tool input validation
-///
-/// This trait exists for documentation and future specialization purposes.
-/// The default implementation is provided in the `Tool` trait itself.
-/// Implement this trait alongside `Tool` if you want to clearly separate
-/// validation logic in your code organization.
-pub trait ToolValidator: Tool {
-    /// Validate the tool call arguments (mirrors Tool::validate)
-    fn validate_call(&self, call: &ToolCall) -> Result<(), ToolError> {
-        self.validate(call)
-    }
-}
-
-/// Blanket implementation for all tools
-impl<T: Tool + ?Sized> ToolValidator for T {}
-
-/// Optional trait for permission checking
-///
-/// This trait exists for documentation and future specialization purposes.
-/// The default implementation is provided in the `Tool` trait itself.
-#[async_trait]
-pub trait ToolPermission: Tool {
-    /// Get the risk level for this tool (mirrors Tool::risk_level)
-    fn get_risk_level(&self) -> RiskLevel {
-        self.risk_level()
-    }
-
-    /// Check if the tool call is permitted (mirrors Tool::check_permission)
-    async fn check_tool_permission(
-        &self,
-        call: &ToolCall,
-        context: &ToolContext,
-    ) -> ToolPermissionResult {
-        self.check_permission(call, context).await
-    }
-}
-
-/// Blanket implementation for all tools
-#[async_trait]
-impl<T: Tool + ?Sized> ToolPermission for T {}
-
-/// Optional trait for concurrency configuration
-///
-/// This trait exists for documentation and future specialization purposes.
-/// The default implementation is provided in the `Tool` trait itself.
-pub trait ToolConcurrency: Tool {
-    /// Get the concurrency mode (mirrors Tool::concurrency_mode)
-    fn get_concurrency_mode(&self) -> ConcurrencyMode {
-        self.concurrency_mode()
-    }
-
-    /// Check if tool supports parallel execution (mirrors Tool::supports_parallel_execution)
-    fn can_run_parallel(&self) -> bool {
-        self.supports_parallel_execution()
-    }
-}
-
-/// Blanket implementation for all tools
-impl<T: Tool + ?Sized> ToolConcurrency for T {}
-
-/// Optional trait for execution timing
-///
-/// This trait exists for documentation and future specialization purposes.
-/// The default implementation is provided in the `Tool` trait itself.
-pub trait ToolTiming: Tool {
-    /// Get the maximum execution duration (mirrors Tool::max_execution_duration)
-    fn get_max_duration(&self) -> Option<Duration> {
-        self.max_execution_duration()
-    }
-}
-
-/// Blanket implementation for all tools
-impl<T: Tool + ?Sized> ToolTiming for T {}
-
-/// Optional trait for rendering tool calls and results
-///
-/// This trait exists for documentation and future specialization purposes.
-/// The default implementation is provided in the `Tool` trait itself.
-pub trait ToolRenderer: Tool {
-    /// Render the tool call for display (mirrors Tool::render_call)
-    fn render_tool_call(&self, call: &ToolCall) -> String {
-        self.render_call(call)
-    }
-
-    /// Render the tool result for display (mirrors Tool::render_result)
-    fn render_tool_result(&self, result: &ToolResult) -> String {
-        self.render_result(result)
-    }
-}
-
-/// Blanket implementation for all tools
-impl<T: Tool + ?Sized> ToolRenderer for T {}
-
-/// Optional trait for tool metadata
-///
-/// This trait exists for documentation and future specialization purposes.
-/// The default implementation is provided in the `Tool` trait itself.
-pub trait ToolMetadata: Tool {
-    /// Check if tool is read-only (mirrors Tool::is_read_only)
-    fn is_tool_read_only(&self) -> bool {
-        self.is_read_only()
-    }
-
-    /// Check if tool requires user interaction (mirrors Tool::requires_user_interaction)
-    fn needs_user_interaction(&self) -> bool {
-        self.requires_user_interaction()
-    }
-}
-
-/// Blanket implementation for all tools
-impl<T: Tool + ?Sized> ToolMetadata for T {}
-
-// ============================================================================
-// FullTool Trait - Convenience Trait Combining All Traits
-// ============================================================================
-
-/// Convenience trait that combines all tool traits
-///
-/// This trait is automatically implemented for any type that implements
-/// the core `Tool` trait. It provides access to all functionality
-/// from both the core trait and extension traits.
-///
-/// Use this as a trait bound when you need access to all tool functionality.
-pub trait FullTool:
-    Tool + ToolValidator + ToolPermission + ToolConcurrency + ToolTiming + ToolRenderer + ToolMetadata
-{
-}
-
-/// Blanket implementation for FullTool
-impl<T> FullTool for T where
-    T: Tool
-        + ToolValidator
-        + ToolPermission
-        + ToolConcurrency
-        + ToolTiming
-        + ToolRenderer
-        + ToolMetadata
-{
-}
