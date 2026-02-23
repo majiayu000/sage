@@ -59,13 +59,13 @@ async fn main() -> SageResult<()> {
     };
 
     if let Some(config) = config {
-        // Only use config level if RUST_LOG is explicitly set; otherwise default to
-        // "error" to keep TUI clean. stderr output mixes with the terminal UI, so
-        // suppress warn-level noise (e.g. retry logs). Use RUST_LOG=warn to opt in.
+        // Only use config level if RUST_LOG is explicitly set; otherwise disable
+        // tracing entirely. Any stderr output corrupts the TUI layout since stderr
+        // shares the terminal. Use RUST_LOG=warn (or debug/info) to opt in.
         let env_filter = if std::env::var_os("RUST_LOG").is_some() {
             tracing_subscriber::EnvFilter::from_default_env()
         } else {
-            tracing_subscriber::EnvFilter::new("error")
+            tracing_subscriber::EnvFilter::new("off")
         };
 
         match config.logging.format.as_str() {
@@ -92,11 +92,11 @@ async fn main() -> SageResult<()> {
             }
         }
     } else {
-        // No config loaded — default to error, respect RUST_LOG if set
+        // No config loaded — disable tracing by default, respect RUST_LOG if set
         let env_filter = if std::env::var_os("RUST_LOG").is_some() {
             tracing_subscriber::EnvFilter::from_default_env()
         } else {
-            tracing_subscriber::EnvFilter::new("error")
+            tracing_subscriber::EnvFilter::new("off")
         };
         tracing_subscriber::fmt()
             .with_env_filter(env_filter)
