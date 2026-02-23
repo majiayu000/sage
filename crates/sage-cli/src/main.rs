@@ -59,10 +59,12 @@ async fn main() -> SageResult<()> {
     };
 
     if let Some(config) = config {
+        // Only use config level if RUST_LOG is explicitly set; otherwise default to
+        // "warn" to keep TUI clean. Users can still opt in via RUST_LOG=info/debug.
         let env_filter = if std::env::var_os("RUST_LOG").is_some() {
             tracing_subscriber::EnvFilter::from_default_env()
         } else {
-            tracing_subscriber::EnvFilter::new(config.logging.level)
+            tracing_subscriber::EnvFilter::new("warn")
         };
 
         match config.logging.format.as_str() {
@@ -70,24 +72,34 @@ async fn main() -> SageResult<()> {
                 tracing_subscriber::fmt()
                     .json()
                     .with_env_filter(env_filter)
+                    .with_writer(std::io::stderr)
                     .init();
             }
             "pretty" => {
                 tracing_subscriber::fmt()
                     .pretty()
                     .with_env_filter(env_filter)
+                    .with_writer(std::io::stderr)
                     .init();
             }
             _ => {
                 tracing_subscriber::fmt()
                     .compact()
                     .with_env_filter(env_filter)
+                    .with_writer(std::io::stderr)
                     .init();
             }
         }
     } else {
+        // No config loaded — default to warn, respect RUST_LOG if set
+        let env_filter = if std::env::var_os("RUST_LOG").is_some() {
+            tracing_subscriber::EnvFilter::from_default_env()
+        } else {
+            tracing_subscriber::EnvFilter::new("warn")
+        };
         tracing_subscriber::fmt()
-            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .with_env_filter(env_filter)
+            .with_writer(std::io::stderr)
             .init();
     }
 
