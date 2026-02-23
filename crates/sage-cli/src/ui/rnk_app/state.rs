@@ -48,6 +48,8 @@ pub struct UiState {
     pub pending_tool: Option<(String, String)>,
     /// Animation frame counter for spinner
     pub animation_frame: usize,
+    /// Pending tool result to print (tool_name, success, duration)
+    pub pending_tool_result: Option<(String, bool, std::time::Duration)>,
     /// Model selection mode
     pub model_select_mode: bool,
     /// Available models for selection
@@ -82,6 +84,7 @@ impl Default for UiState {
             current_tool_printed: None,
             pending_tool: None,
             animation_frame: 0,
+            pending_tool_result: None,
             model_select_mode: false,
             available_models: Vec::new(),
             model_select_index: 0,

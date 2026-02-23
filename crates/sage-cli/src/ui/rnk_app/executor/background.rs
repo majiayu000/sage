@@ -126,7 +126,28 @@ pub async fn background_loop(state: SharedState, adapter: sage_core::ui::bridge:
                     ui_state.current_tool_printed = Some(tool_key);
                 }
             } else {
-                // Tool finished, clear the tracking
+                // Tool finished — extract result if we printed a start card
+                if ui_state.current_tool_printed.is_some() {
+                    if let Some(msg) = messages.iter().rev().find(|m| {
+                        matches!(
+                            m.content,
+                            sage_core::ui::bridge::state::UiMessageContent::ToolCall {
+                                result: Some(_),
+                                ..
+                            }
+                        )
+                    }) {
+                        if let sage_core::ui::bridge::state::UiMessageContent::ToolCall {
+                            tool_name,
+                            result: Some(r),
+                            ..
+                        } = &msg.content
+                        {
+                            ui_state.pending_tool_result =
+                                Some((tool_name.clone(), r.success, r.duration));
+                        }
+                    }
+                }
                 ui_state.current_tool_printed = None;
             }
 
@@ -170,11 +191,13 @@ pub async fn background_loop(state: SharedState, adapter: sage_core::ui::bridge:
                 (Vec::new(), None)
             };
 
-            (error_work, new_messages, pending_tool_to_print)
+            let pending_tool_result = ui_state.pending_tool_result.take();
+
+            (error_work, new_messages, pending_tool_to_print, pending_tool_result)
         }; // Lock released here
 
         // Process all I/O outside the lock
-        let (error_work, new_messages, pending_tool_to_print) = pending_work;
+        let (error_work, new_messages, pending_tool_to_print, pending_tool_result) = pending_work;
 
         // Print new messages first (Assistant response comes before tool call)
         for msg_element in new_messages {
@@ -187,6 +210,21 @@ pub async fn background_loop(state: SharedState, adapter: sage_core::ui::bridge:
             rnk::println(format_tool_start(&tool_name, &description, theme));
         }
 
+        // Print tool completion with duration
+        if let Some((_tool_name, success, duration)) = pending_tool_result {
+            let (icon, color) = if success {
+                ("✓", theme.ok)
+            } else {
+                ("✗", theme.err)
+            };
+            let duration_text = format_tool_duration(duration);
+            rnk::println(
+                Text::new(format!("  {} {}", icon, duration_text))
+                    .color(color)
+                    .into_element(),
+            );
+        }
+
         if let Some(error) = error_work {
             rnk::println(error);
             rnk::println(""); // Empty line
@@ -194,5 +232,15 @@ pub async fn background_loop(state: SharedState, adapter: sage_core::ui::bridge:
 
         // Request render to update spinner animation
         rnk::request_render();
+    }
+}
+
+/// Format a duration for display (e.g. "12ms", "1.2s")
+fn format_tool_duration(d: std::time::Duration) -> String {
+    let ms = d.as_millis();
+    if ms < 1000 {
+        format!("{}ms", ms)
+    } else {
+        format!("{:.1}s", d.as_secs_f64())
     }
 }
