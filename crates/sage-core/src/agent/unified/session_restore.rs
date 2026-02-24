@@ -50,6 +50,13 @@ impl UnifiedExecutor {
         // Convert SessionMessages to LlmMessages for the execution loop
         let llm_messages = Self::convert_messages_for_resume(&enhanced_messages);
 
+        // Populate conversation history so the next execute() includes prior context
+        self.conversation_history = llm_messages
+            .iter()
+            .filter(|m| m.role != crate::types::MessageRole::System)
+            .cloned()
+            .collect();
+
         // Update executor state
         self.session_manager
             .set_current_session_id(Some(session_id.to_string()));

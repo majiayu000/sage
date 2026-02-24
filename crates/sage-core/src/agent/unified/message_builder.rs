@@ -1,7 +1,6 @@
 //! Message building utilities for the unified executor
 
 use crate::error::SageResult;
-use crate::llm::messages::LlmMessage;
 use crate::prompts::SystemPromptBuilder;
 use std::path::PathBuf;
 use tracing::instrument;
@@ -69,17 +68,5 @@ impl UnifiedExecutor {
 
         let prompt = builder.build();
         Ok(prompt)
-    }
-
-    /// Build initial messages with system prompt and task
-    pub(super) fn build_initial_messages(
-        &self,
-        system_prompt: &str,
-        task_description: &str,
-    ) -> Vec<LlmMessage> {
-        vec![
-            LlmMessage::system(system_prompt),
-            LlmMessage::user(task_description),
-        ]
     }
 }

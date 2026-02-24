@@ -10,6 +10,8 @@ use super::UnifiedExecutor;
 
 impl UnifiedExecutor {
     /// Run the main execution loop
+    ///
+    /// Returns the execution outcome and the final message list (for conversation history).
     pub(super) async fn run_execution_loop(
         &mut self,
         mut execution: AgentExecution,
@@ -18,7 +20,7 @@ impl UnifiedExecutor {
         task_scope: crate::interrupt::TaskScope,
         provider_name: String,
         max_steps: Option<u32>,
-    ) -> SageResult<ExecutionOutcome> {
+    ) -> SageResult<(ExecutionOutcome, Vec<crate::llm::messages::LlmMessage>)> {
         // Repetition detection: track recent outputs to detect loops
         const MAX_RECENT_OUTPUTS: usize = 3;
         const REPETITION_THRESHOLD: usize = 2; // Force completion after N similar outputs
@@ -186,7 +188,7 @@ impl UnifiedExecutor {
             }
         };
 
-        Ok(outcome)
+        Ok((outcome, messages))
     }
 
     /// Record step in JSONL session

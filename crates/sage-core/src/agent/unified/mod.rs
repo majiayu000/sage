@@ -89,12 +89,19 @@ pub struct UnifiedExecutor {
     skill_registry: Arc<RwLock<SkillRegistry>>,
     /// Output strategy for flexible display modes (streaming, batch, json, silent)
     output_strategy: Arc<dyn OutputStrategy>,
+    /// Accumulated conversation history (excludes system prompt) for multi-turn interactive mode
+    conversation_history: Vec<crate::llm::messages::LlmMessage>,
 }
 
 impl UnifiedExecutor {
     /// Set the input channel for interactive mode
     pub fn set_input_channel(&mut self, channel: InputChannel) {
         self.input_channel = Some(channel);
+    }
+
+    /// Clear accumulated conversation history (e.g. for a fresh start)
+    pub fn clear_conversation_history(&mut self) {
+        self.conversation_history.clear();
     }
 
     /// Set session recorder

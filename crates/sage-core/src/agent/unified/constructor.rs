@@ -96,6 +96,7 @@ impl UnifiedExecutor {
             auto_compact,
             skill_registry: Arc::new(RwLock::new(skill_registry)),
             output_strategy: Arc::new(StreamingOutput::new()),
+            conversation_history: Vec::new(),
         })
     }
 }

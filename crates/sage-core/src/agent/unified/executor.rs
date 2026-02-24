@@ -3,7 +3,8 @@
 use crate::agent::{AgentExecution, ExecutionOutcome};
 use crate::error::SageResult;
 use crate::interrupt::{global_interrupt_manager, reset_global_interrupt_manager};
-use crate::types::TaskMetadata;
+use crate::llm::messages::LlmMessage;
+use crate::types::{MessageRole, TaskMetadata};
 use anyhow::Context;
 use tracing::instrument;
 
@@ -61,8 +62,10 @@ impl UnifiedExecutor {
         // Get tool schemas
         let tool_schemas = self.tool_orchestrator.tool_executor().get_tool_schemas();
 
-        // Initialize conversation with system prompt and task
-        let messages = self.build_initial_messages(&system_prompt, &task.description);
+        // Initialize conversation with system prompt, prior history, and new task
+        let mut messages = vec![LlmMessage::system(&system_prompt)];
+        messages.extend(self.conversation_history.clone());
+        messages.push(LlmMessage::user(&task.description));
 
         // Record initial user message if session recording is enabled
         if self.session_manager.current_session_id().is_some() {
@@ -75,7 +78,7 @@ impl UnifiedExecutor {
         let provider_name = self.config.get_default_provider().to_string();
         let max_steps = self.options.max_steps;
 
-        let outcome = self
+        let (outcome, final_messages) = self
             .run_execution_loop(
                 execution,
                 messages,
@@ -85,6 +88,12 @@ impl UnifiedExecutor {
                 max_steps,
             )
             .await?;
+
+        // Save conversation history for multi-turn interactive mode
+        self.conversation_history = final_messages
+            .into_iter()
+            .filter(|m| m.role != MessageRole::System)
+            .collect();
 
         // Stop any running animations
         self.event_manager.stop_animation().await;
