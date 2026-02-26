@@ -46,6 +46,21 @@ impl TodoList {
             .cloned()
     }
 
+    /// Complete the current in-progress task and promote the next pending one.
+    pub fn complete_current_task(&self) -> Option<TodoItem> {
+        let mut list = self.todos.write();
+        let current_idx = list.iter().position(|t| t.status == TodoStatus::InProgress)?;
+
+        list[current_idx].status = TodoStatus::Completed;
+        let completed = list[current_idx].clone();
+
+        if let Some(next_idx) = list.iter().position(|t| t.status == TodoStatus::Pending) {
+            list[next_idx].status = TodoStatus::InProgress;
+        }
+
+        Some(completed)
+    }
+
     /// Format todos for display
     pub fn format_display(&self) -> String {
         let list = self.todos.read();

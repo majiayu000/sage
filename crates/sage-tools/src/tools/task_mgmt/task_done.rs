@@ -3,14 +3,27 @@
 use async_trait::async_trait;
 use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
+use serde_json::json;
+use std::sync::Arc;
+
+use super::todo_write::{GLOBAL_TODO_LIST, TodoList};
 
 /// Tool for marking tasks as completed
-pub struct TaskDoneTool;
+pub struct TaskDoneTool {
+    todo_list: Arc<TodoList>,
+}
 
 impl TaskDoneTool {
     /// Create a new task done tool
     pub fn new() -> Self {
-        Self
+        Self {
+            todo_list: GLOBAL_TODO_LIST.clone(),
+        }
+    }
+
+    /// Create a task done tool with a custom todo list (for tests)
+    pub fn with_list(todo_list: Arc<TodoList>) -> Self {
+        Self { todo_list }
     }
 }
 
@@ -71,15 +84,26 @@ impl Tool for TaskDoneTool {
             completion_message.push_str(&format!("\n\nDetails:\n{}", details));
         }
 
+        // Keep completion signal aligned with todo state transitions.
+        let completed_task = self.todo_list.complete_current_task();
+        if let Some(task) = &completed_task {
+            completion_message.push_str(&format!("\n\nMarked todo as completed: {}", task.content));
+        }
+
+        if let Some(next_task) = self.todo_list.get_current_task() {
+            completion_message.push_str(&format!("\nNext task in progress: {}", next_task.active_form));
+        }
+
         // Add timestamp
         let timestamp = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC");
         completion_message.push_str(&format!("\n\nCompleted at: {}", timestamp));
 
-        Ok(ToolResult::success(
-            &call.id,
-            self.name(),
-            completion_message,
-        ))
+        let mut result = ToolResult::success(&call.id, self.name(), completion_message);
+        result = result
+            .with_metadata("todo_state_updated", json!(completed_task.is_some()))
+            .with_metadata("completed_todo", json!(completed_task.as_ref().map(|t| &t.content)));
+
+        Ok(result)
     }
 
     fn validate(&self, call: &ToolCall) -> Result<(), ToolError> {
@@ -108,6 +132,7 @@ impl Tool for TaskDoneTool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tools::task_mgmt::todo_write::{TodoItem, TodoStatus};
     use serde_json::json;
     use std::collections::HashMap;
 
@@ -178,7 +203,6 @@ mod tests {
             }),
         );
 
-        // Implementation returns Err for empty summary
         let result = tool.execute(&call).await;
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -196,7 +220,6 @@ mod tests {
             }),
         );
 
-        // Implementation returns Err for whitespace-only summary
         let result = tool.execute(&call).await;
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -208,7 +231,6 @@ mod tests {
         let tool = TaskDoneTool::new();
         let call = create_tool_call("test-5", "TaskDone", json!({}));
 
-        // Implementation returns Err for missing summary
         let result = tool.execute(&call).await;
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -231,7 +253,6 @@ mod tests {
         assert!(result.success);
         let output = result.output.as_ref().unwrap();
         assert!(output.contains("Task completed"));
-        // Empty details should not appear in output
         assert!(!output.contains("Details:"));
     }
 
@@ -251,7 +272,6 @@ mod tests {
         assert!(result.success);
         let output = result.output.as_ref().unwrap();
         assert!(output.contains("Task completed"));
-        // Whitespace-only details should not appear in output
         assert!(!output.contains("Details:"));
     }
 
@@ -259,7 +279,6 @@ mod tests {
     async fn test_task_done_validation() {
         let tool = TaskDoneTool::new();
 
-        // Test validation with empty summary
         let call = create_tool_call(
             "test-8",
             "TaskDone",
@@ -296,5 +315,38 @@ mod tests {
     fn test_task_done_supports_parallel_execution() {
         let tool = TaskDoneTool::new();
         assert!(tool.supports_parallel_execution());
+    }
+
+    #[tokio::test]
+    async fn test_task_done_marks_current_todo_completed() {
+        let list = Arc::new(TodoList::new());
+        list.set_todos(vec![
+            TodoItem {
+                content: "Step 1".to_string(),
+                status: TodoStatus::InProgress,
+                active_form: "Working on step 1".to_string(),
+            },
+            TodoItem {
+                content: "Step 2".to_string(),
+                status: TodoStatus::Pending,
+                active_form: "Working on step 2".to_string(),
+            },
+        ]);
+
+        let tool = TaskDoneTool::with_list(Arc::clone(&list));
+        let call = create_tool_call(
+            "test-state",
+            "TaskDone",
+            json!({
+                "summary": "Completed step 1"
+            }),
+        );
+
+        let result = tool.execute(&call).await.unwrap();
+        assert!(result.success);
+
+        let todos = list.get_todos();
+        assert_eq!(todos[0].status, TodoStatus::Completed);
+        assert_eq!(todos[1].status, TodoStatus::InProgress);
     }
 }

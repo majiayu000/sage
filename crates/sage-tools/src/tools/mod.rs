@@ -4,7 +4,7 @@
 //!
 //! - `file_ops`: File and code operations (edit, notebook_edit)
 //! - `process`: Process and terminal tools (bash, kill_shell)
-//! - `task_mgmt`: Task management tools (task_management, reorganize_tasklist, task_done)
+//! - `task_mgmt`: Task management tools (TodoWrite, TodoRead, TaskDone)
 //! - `planning`: Planning mode tools (enter_plan_mode, exit_plan_mode)
 //! - `interaction`: User interaction tools (ask_user_question)
 //! - `extensions`: Extension tools (skill, slash_command, tool_search)
@@ -109,10 +109,6 @@ pub fn get_default_tools() -> Vec<Arc<dyn Tool>> {
         // Task management
         Arc::new(TodoWriteTool::new()), // Claude Code compatible
         Arc::new(TodoReadTool::new()),  // Read current todo list status
-        Arc::new(ViewTasklistTool::new()),
-        Arc::new(AddTasksTool::new()),
-        Arc::new(UpdateTasksTool::new()),
-        Arc::new(ReorganizeTasklistTool::new()),
         Arc::new(TaskDoneTool::new()),
         // Planning mode
         Arc::new(EnterPlanModeTool::new()),
@@ -184,10 +180,8 @@ pub fn get_process_tools() -> Vec<Arc<dyn Tool>> {
 
 pub fn get_task_mgmt_tools() -> Vec<Arc<dyn Tool>> {
     vec![
-        Arc::new(ViewTasklistTool::new()),
-        Arc::new(AddTasksTool::new()),
-        Arc::new(UpdateTasksTool::new()),
-        Arc::new(ReorganizeTasklistTool::new()),
+        Arc::new(TodoWriteTool::new()),
+        Arc::new(TodoReadTool::new()),
         Arc::new(TaskDoneTool::new()),
     ]
 }
