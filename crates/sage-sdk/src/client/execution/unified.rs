@@ -1,5 +1,6 @@
 //! Unified executor methods
 
+use super::default_tools;
 use crate::client::{ExecutionResult, SageAgentSdk, UnifiedRunOptions};
 use sage_core::{
     agent::{ExecutionMode, ExecutionOptions, UnifiedExecutor},
@@ -8,7 +9,6 @@ use sage_core::{
     mcp::build_mcp_registry_from_config,
     types::TaskMetadata,
 };
-use sage_tools::get_default_tools;
 use std::path::PathBuf;
 
 impl SageAgentSdk {
@@ -68,7 +68,7 @@ impl SageAgentSdk {
         let mut executor = UnifiedExecutor::with_options(self.config.clone(), exec_options)?;
 
         // Register default tools
-        executor.register_tools(get_default_tools());
+        executor.register_tools(default_tools());
 
         // Initialize sub-agent support
         if let Err(e) = executor.init_subagent_support() {

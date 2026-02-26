@@ -1,5 +1,6 @@
 //! Basic run execution methods
 
+use super::default_tools;
 use crate::client::{ExecutionResult, RunOptions, SageAgentSdk};
 use sage_core::{
     agent::{ExecutionMode, ExecutionOptions, UnifiedExecutor},
@@ -7,7 +8,6 @@ use sage_core::{
     input::{InputChannel, InputResponse},
     types::TaskMetadata,
 };
-use sage_tools::get_default_tools;
 use std::path::PathBuf;
 
 impl SageAgentSdk {
@@ -99,7 +99,7 @@ impl SageAgentSdk {
         let mut executor = UnifiedExecutor::with_options(self.config.clone(), exec_options)?;
 
         // Register default tools
-        let mut all_tools = get_default_tools();
+        let mut all_tools = default_tools();
 
         // Load MCP tools if MCP is enabled
         if self.config.mcp.enabled {

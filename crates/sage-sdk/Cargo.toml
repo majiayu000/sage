@@ -9,10 +9,14 @@ description = "SDK for Sage Agent"
 keywords.workspace = true
 categories.workspace = true
 
+[features]
+default = ["default-tools"]
+default-tools = ["dep:sage-tools"]
+
 [dependencies]
 # Core library
 sage-core = { path = "../sage-core" }
-sage-tools = { path = "../sage-tools" }
+sage-tools = { path = "../sage-tools", optional = true }
 
 # Async runtime
 tokio = { workspace = true }
