@@ -14,12 +14,18 @@ use dashmap::DashMap;
 use serde_json::Value;
 use std::sync::Arc;
 
+#[derive(Debug, Clone)]
+struct ToolRoute {
+    server_name: String,
+    remote_name: String,
+}
+
 /// Registry for managing MCP servers and their capabilities
 pub struct McpRegistry {
     /// Connected MCP clients by name
     clients: DashMap<String, Arc<McpClient>>,
-    /// Tool to client mapping
-    tool_mapping: DashMap<String, String>,
+    /// Namespaced tool to route mapping
+    tool_mapping: DashMap<String, ToolRoute>,
     /// Resource to client mapping
     resource_mapping: DashMap<String, String>,
     /// Prompt to client mapping
@@ -89,8 +95,14 @@ impl McpRegistry {
         // Get tools
         if let Ok(tools) = client.list_tools().await {
             for tool in tools {
-                self.tool_mapping
-                    .insert(tool.name.clone(), name.to_string());
+                let namespaced_name = McpToolAdapter::namespaced_tool_name(name, &tool.name);
+                self.tool_mapping.insert(
+                    namespaced_name,
+                    ToolRoute {
+                        server_name: name.to_string(),
+                        remote_name: tool.name,
+                    },
+                );
             }
         }
 
@@ -117,7 +129,8 @@ impl McpRegistry {
     pub async fn unregister_server(&self, name: &str) -> Result<(), McpError> {
         if let Some((_, client)) = self.clients.remove(name) {
             // Remove mappings for this server
-            self.tool_mapping.retain(|_, v| v != name);
+            self.tool_mapping
+                .retain(|_, route| route.server_name != name);
             self.resource_mapping.retain(|_, v| v != name);
             self.prompt_mapping.retain(|_, v| v != name);
 
@@ -172,19 +185,21 @@ impl McpRegistry {
 
     /// Call a tool by name
     pub async fn call_tool(&self, name: &str, arguments: Value) -> Result<String, McpError> {
-        let server_name = self
+        let route = self
             .tool_mapping
             .get(name)
-            .map(|e| e.value().clone())
+            .map(|entry| entry.value().clone())
             .ok_or_else(|| McpError::tool_not_found(name.to_string()))?;
 
         let client = self
             .clients
-            .get(&server_name)
+            .get(&route.server_name)
             .map(|e| e.clone())
-            .ok_or_else(|| McpError::connection(format!("Server {} not found", server_name)))?;
+            .ok_or_else(|| {
+                McpError::connection(format!("Server {} not found", route.server_name))
+            })?;
 
-        let result = client.call_tool(name, arguments).await?;
+        let result = client.call_tool(&route.remote_name, arguments).await?;
 
         // Convert result to string
         let text = result
@@ -229,22 +244,12 @@ impl McpRegistry {
     pub async fn as_tools(&self) -> Vec<Arc<dyn Tool>> {
         let mut tools = Vec::new();
 
-        for entry in self.tool_mapping.iter() {
-            let tool_name = entry.key().clone();
-            let server_name = entry.value().clone();
-
-            if let Some(client) = self.clients.get(&server_name) {
-                // Find the tool definition
-                if let Some(mcp_tool) = client
-                    .cached_tools()
-                    .await
-                    .into_iter()
-                    .find(|t| t.name == tool_name)
-                {
-                    let adapter =
-                        McpToolAdapter::new(mcp_tool, client.clone(), server_name.clone());
-                    tools.push(Arc::new(adapter) as Arc<dyn Tool>);
-                }
+        for client_entry in self.clients.iter() {
+            let server_name = client_entry.key().clone();
+            let client = client_entry.value().clone();
+            for mcp_tool in client.cached_tools().await {
+                let adapter = McpToolAdapter::new(mcp_tool, client.clone(), server_name.clone());
+                tools.push(Arc::new(adapter) as Arc<dyn Tool>);
             }
         }
 
@@ -273,6 +278,7 @@ impl Default for McpRegistry {
 /// Adapter that wraps an MCP tool as a Sage Tool.
 /// Canonical definition — sage-tools re-exports this.
 pub struct McpToolAdapter {
+    exposed_name: String,
     mcp_tool: McpTool,
     client: Arc<McpClient>,
     server_name: String,
@@ -280,10 +286,49 @@ pub struct McpToolAdapter {
 
 impl McpToolAdapter {
     pub fn new(mcp_tool: McpTool, client: Arc<McpClient>, server_name: String) -> Self {
+        let exposed_name = Self::namespaced_tool_name(&server_name, &mcp_tool.name);
         Self {
+            exposed_name,
             mcp_tool,
             client,
             server_name,
+        }
+    }
+
+    pub fn namespaced_tool_name(server_name: &str, remote_tool_name: &str) -> String {
+        let server = Self::normalize_component(server_name);
+        let tool = Self::normalize_component(remote_tool_name);
+        format!("mcp__{server}__{tool}")
+    }
+
+    fn normalize_component(input: &str) -> String {
+        let mut normalized = String::new();
+        let mut previous_was_underscore = false;
+
+        for ch in input.chars() {
+            let mapped = if ch.is_ascii_alphanumeric() {
+                ch.to_ascii_lowercase()
+            } else {
+                '_'
+            };
+
+            if mapped == '_' {
+                if previous_was_underscore {
+                    continue;
+                }
+                previous_was_underscore = true;
+            } else {
+                previous_was_underscore = false;
+            }
+
+            normalized.push(mapped);
+        }
+
+        let normalized = normalized.trim_matches('_');
+        if normalized.is_empty() {
+            "unnamed".to_string()
+        } else {
+            normalized.to_string()
         }
     }
 
@@ -376,7 +421,8 @@ impl McpToolAdapter {
 impl std::fmt::Debug for McpToolAdapter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("McpToolAdapter")
-            .field("name", &self.mcp_tool.name)
+            .field("name", &self.exposed_name)
+            .field("remote_name", &self.mcp_tool.name)
             .field("server", &self.server_name)
             .finish()
     }
@@ -385,6 +431,7 @@ impl std::fmt::Debug for McpToolAdapter {
 impl Clone for McpToolAdapter {
     fn clone(&self) -> Self {
         Self {
+            exposed_name: self.exposed_name.clone(),
             mcp_tool: self.mcp_tool.clone(),
             client: Arc::clone(&self.client),
             server_name: self.server_name.clone(),
@@ -395,7 +442,7 @@ impl Clone for McpToolAdapter {
 #[async_trait]
 impl Tool for McpToolAdapter {
     fn name(&self) -> &str {
-        &self.mcp_tool.name
+        &self.exposed_name
     }
 
     fn description(&self) -> &str {
@@ -437,6 +484,12 @@ mod tests {
     fn test_registry_creation() {
         let registry = McpRegistry::new();
         assert!(registry.server_names().is_empty());
+    }
+
+    #[test]
+    fn test_namespaced_tool_name() {
+        let namespaced = McpToolAdapter::namespaced_tool_name("filesystem-server", "Read File");
+        assert_eq!(namespaced, "mcp__filesystem_server__read_file");
     }
 
     #[test]
