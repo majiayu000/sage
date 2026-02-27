@@ -82,23 +82,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Example 4: Demonstrate with a real process (Unix only)
     #[cfg(unix)]
     {
-        use std::process::Command;
+        use sage_core::tools::{BACKGROUND_REGISTRY, BackgroundShellTask};
+        use std::path::PathBuf;
+        use std::sync::Arc;
+        use tokio_util::sync::CancellationToken;
 
         println!("Example 4: Kill a real background process (Unix only)");
         println!("-----------------------------------------------------");
 
-        // Start a background sleep process
-        let mut child = Command::new("sleep")
-            .arg("60")
-            .spawn()
-            .expect("Failed to spawn sleep process");
+        let task = BackgroundShellTask::spawn(
+            "demo_shell".to_string(),
+            "sleep 60",
+            &PathBuf::from("/tmp"),
+            CancellationToken::new(),
+        )
+        .await?;
+        println!("Started background process with PID: {:?}", task.pid);
 
-        let pid = child.id();
-        println!("Started background process with PID: {}", pid);
-
-        // Register the shell
-        sage_tools::tools::process::kill_shell::register_shell("demo_shell".to_string(), pid).await;
-
+        BACKGROUND_REGISTRY.register(Arc::new(task));
         println!("Registered shell as 'demo_shell'");
 
         // Now kill it
@@ -125,10 +126,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("Error: {}", e);
             }
         }
-
-        // Clean up: ensure child is killed
-        let _ = child.kill();
-        let _ = child.wait();
     }
 
     println!("\n=== Demo Complete ===");
