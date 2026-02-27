@@ -44,7 +44,7 @@ Steps:
      - Refactor `McpServersTool` to read from canonical core registry.
    - Done condition:
      - `McpServersTool` reflects the same MCP registry used by execution.
-   - Status: in_progress
+   - Status: completed
 
 3. Remove duplicated MCP registry implementation from `sage-tools`.
    - Scope:
@@ -52,7 +52,7 @@ Steps:
      - Remove dead initialization APIs that are no longer needed.
    - Done condition:
      - Only one MCP registry implementation remains (in `sage-core`).
-   - Status: pending
+   - Status: in_progress
 
 4. Namespace MCP tool names to eliminate collisions.
    - Scope:
@@ -81,4 +81,5 @@ Steps:
 
 Execution log:
 - 2026-02-28: Plan created.
-- 2026-02-28 Step 1: `cargo test --workspace` passed.
+- 2026-02-28 Step 1: executor init/fallback cleanup committed (`3d6ab8d`) and `cargo test --workspace` passed.
+- 2026-02-28 Step 2: core active MCP registry + entrypoint wiring committed (`85be23f`) and `cargo test --workspace` passed.
