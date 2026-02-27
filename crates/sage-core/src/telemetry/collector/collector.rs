@@ -310,6 +310,27 @@ impl MetricsCollector {
         self.llm_tokens_input.get() + self.llm_tokens_output.get()
     }
 
+    async fn reset_custom_counters(&self) {
+        let counters = self.custom_counters.read().await;
+        for counter in counters.values() {
+            counter.reset();
+        }
+    }
+
+    async fn reset_custom_gauges(&self) {
+        let gauges = self.custom_gauges.read().await;
+        for gauge in gauges.values() {
+            gauge.reset();
+        }
+    }
+
+    async fn reset_custom_histograms(&self) {
+        let histograms = self.custom_histograms.read().await;
+        for histogram in histograms.values() {
+            histogram.reset();
+        }
+    }
+
     /// Reset all metrics
     pub async fn reset(&self) {
         self.llm_requests.reset();
@@ -331,15 +352,9 @@ impl MetricsCollector {
         self.context_tokens.reset();
 
         // Reset custom metrics
-        for counter in self.custom_counters.read().await.values() {
-            counter.reset();
-        }
-        for gauge in self.custom_gauges.read().await.values() {
-            gauge.reset();
-        }
-        for histogram in self.custom_histograms.read().await.values() {
-            histogram.reset();
-        }
+        self.reset_custom_counters().await;
+        self.reset_custom_gauges().await;
+        self.reset_custom_histograms().await;
     }
 
     /// Format metrics as human-readable summary

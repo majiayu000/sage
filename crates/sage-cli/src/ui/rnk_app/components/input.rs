@@ -2,7 +2,7 @@
 
 use rnk::prelude::*;
 
-use crate::ui::rnk_app::theme::Theme;
+use crate::ui::rnk_app::theme::TerminalTheme;
 
 // Alias rnk's Box to avoid conflict with std::boxed::Box
 use rnk::prelude::Box as RnkBox;
@@ -17,7 +17,7 @@ const HINTS: &[&str] = &[
 ];
 
 /// Render input line with cursor animation
-pub fn render_input(input_text: &str, theme: &Theme, animation_frame: usize) -> Element {
+pub fn render_input(input_text: &str, theme: &TerminalTheme, animation_frame: usize) -> Element {
     let hint_idx = (std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()

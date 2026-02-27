@@ -1,6 +1,6 @@
 [package]
 name = "sage"
-version = "0.13.44"
+version = "0.13.45"
 edition = "2024"
 authors = ["Sage Agent Team"]
 license = "MIT"
@@ -12,6 +12,7 @@ sage-sdk = { path = "crates/sage-sdk" }
 sage-core = { path = "crates/sage-core" }
 sage-tools = { path = "crates/sage-tools" }
 tokio = { workspace = true }
+tokio-util = { workspace = true }
 tracing-subscriber = { workspace = true }
 async-trait = { workspace = true }
 serde_json = { workspace = true }
@@ -33,7 +34,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.13.44"
+version = "0.13.45"
 edition = "2024"
 authors = ["Sage Agent Team"]
 license = "MIT"

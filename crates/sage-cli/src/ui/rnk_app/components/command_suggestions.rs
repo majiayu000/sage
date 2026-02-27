@@ -2,7 +2,7 @@
 
 use rnk::prelude::*;
 
-use crate::ui::rnk_app::theme::Theme;
+use crate::ui::rnk_app::theme::TerminalTheme;
 
 // Alias rnk's Box to avoid conflict with std::boxed::Box
 use rnk::prelude::Box as RnkBox;
@@ -32,7 +32,7 @@ const BUILTIN_COMMANDS: &[(&str, &str)] = &[
 pub fn render_command_suggestions(
     input: &str,
     selected_index: usize,
-    theme: &Theme,
+    theme: &TerminalTheme,
 ) -> Option<(Element, usize)> {
     if !input.starts_with('/') {
         return None;

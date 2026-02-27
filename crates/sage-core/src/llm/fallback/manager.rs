@@ -122,12 +122,11 @@ impl FallbackChain {
     /// Force fallback to next model
     pub async fn force_fallback(&self, reason: FallbackReason) -> Option<String> {
         let current = self.current_model().await?;
-
-        let current_index = self.current_index.write().await;
+        let current_index = *self.current_index.read().await;
         let models = self.models.read().await;
 
         // Find next available model after current
-        for i in (*current_index + 1)..models.len() {
+        for i in (current_index + 1)..models.len() {
             if models[i].is_available() {
                 let new_model = models[i].config.model_id.clone();
 
@@ -139,16 +138,17 @@ impl FallbackChain {
                     timestamp: Instant::now(),
                 };
                 drop(models);
-                drop(current_index);
                 self.add_history_event(event).await;
-
-                let mut current_index = self.current_index.write().await;
-                *current_index = i;
+                self.set_current_index(i).await;
                 return Some(new_model);
             }
         }
 
         None
+    }
+    async fn set_current_index(&self, index: usize) {
+        let mut current = self.current_index.write().await;
+        *current = index;
     }
 }
 

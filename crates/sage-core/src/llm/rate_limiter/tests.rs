@@ -1,13 +1,13 @@
 //! Tests for rate limiter
 
-use super::bucket::RateLimiter;
+use super::bucket::LlmRateLimiter;
 use super::limiter;
 use super::types::RateLimitConfig;
 use std::time::{Duration, Instant};
 
 #[tokio::test]
 async fn test_rate_limiter_allows_burst() {
-    let limiter = RateLimiter::new(RateLimitConfig {
+    let limiter = LlmRateLimiter::new(RateLimitConfig {
         requests_per_minute: Some(60),
         burst_size: 5,
         max_concurrent: 0, // unlimited
@@ -28,7 +28,7 @@ async fn test_rate_limiter_allows_burst() {
 
 #[tokio::test]
 async fn test_rate_limiter_disabled() {
-    let limiter = RateLimiter::new(RateLimitConfig::disabled());
+    let limiter = LlmRateLimiter::new(RateLimitConfig::disabled());
 
     // Should always succeed when disabled
     for _ in 0..100 {
@@ -38,7 +38,7 @@ async fn test_rate_limiter_disabled() {
 
 #[tokio::test]
 async fn test_rate_limiter_refills() {
-    let limiter = RateLimiter::new(RateLimitConfig {
+    let limiter = LlmRateLimiter::new(RateLimitConfig {
         requests_per_minute: Some(600), // 10 per second for faster test
         burst_size: 2,
         max_concurrent: 0, // unlimited
@@ -62,7 +62,7 @@ async fn test_rate_limiter_refills() {
 
 #[tokio::test]
 async fn test_available_tokens() {
-    let limiter = RateLimiter::new(RateLimitConfig {
+    let limiter = LlmRateLimiter::new(RateLimitConfig {
         requests_per_minute: Some(60),
         burst_size: 5,
         max_concurrent: 0, // unlimited
@@ -96,7 +96,7 @@ async fn test_provider_configs() {
 
 #[tokio::test]
 async fn test_acquire_waits() {
-    let limiter = RateLimiter::new(RateLimitConfig {
+    let limiter = LlmRateLimiter::new(RateLimitConfig {
         requests_per_minute: Some(600), // 10 per second for faster test
         burst_size: 1,
         max_concurrent: 0, // unlimited
@@ -177,7 +177,7 @@ async fn test_disable_rate_limit() {
 
 #[tokio::test]
 async fn test_rate_limiter_clone_shares_state() {
-    let limiter1 = RateLimiter::new(RateLimitConfig::new(60, 5));
+    let limiter1 = LlmRateLimiter::new(RateLimitConfig::new(60, 5));
     let limiter2 = limiter1.clone();
 
     // Consume tokens from limiter1
@@ -192,7 +192,7 @@ async fn test_rate_limiter_clone_shares_state() {
 
 #[tokio::test]
 async fn test_rate_limiter_burst_size_limit() {
-    let limiter = RateLimiter::new(RateLimitConfig {
+    let limiter = LlmRateLimiter::new(RateLimitConfig {
         requests_per_minute: Some(600), // 10 per second
         burst_size: 3,
         max_concurrent: 0, // unlimited
@@ -262,7 +262,7 @@ fn test_rate_limit_config_new() {
 #[tokio::test]
 async fn test_rate_limiter_precise_timing() {
     // Test that refill happens correctly over time
-    let limiter = RateLimiter::new(RateLimitConfig {
+    let limiter = LlmRateLimiter::new(RateLimitConfig {
         requests_per_minute: Some(600), // 10 tokens per second
         burst_size: 5,
         max_concurrent: 0, // unlimited
@@ -288,7 +288,7 @@ async fn test_rate_limiter_precise_timing() {
 
 #[tokio::test]
 async fn test_acquire_returns_none_when_token_available() {
-    let limiter = RateLimiter::new(RateLimitConfig::new(60, 10));
+    let limiter = LlmRateLimiter::new(RateLimitConfig::new(60, 10));
 
     // First acquire should not wait
     let wait_duration = limiter.acquire().await;
@@ -297,7 +297,7 @@ async fn test_acquire_returns_none_when_token_available() {
 
 #[tokio::test]
 async fn test_available_tokens_after_partial_refill() {
-    let limiter = RateLimiter::new(RateLimitConfig {
+    let limiter = LlmRateLimiter::new(RateLimitConfig {
         requests_per_minute: Some(600), // 10 per second
         burst_size: 10,
         max_concurrent: 0, // unlimited
@@ -323,7 +323,7 @@ async fn test_available_tokens_after_partial_refill() {
 
 #[tokio::test]
 async fn test_concurrent_requests_tracking() {
-    let limiter = RateLimiter::new(RateLimitConfig {
+    let limiter = LlmRateLimiter::new(RateLimitConfig {
         requests_per_minute: Some(60),
         burst_size: 10,
         max_concurrent: 5,
@@ -351,7 +351,7 @@ async fn test_with_concurrent_constructor() {
 
 #[tokio::test]
 async fn test_rate_limiter_clone_shares_concurrent_state() {
-    let limiter1 = RateLimiter::new(RateLimitConfig::with_concurrent(60, 5, 10));
+    let limiter1 = LlmRateLimiter::new(RateLimitConfig::with_concurrent(60, 5, 10));
     let limiter2 = limiter1.clone();
 
     // Both should share the same concurrent semaphore

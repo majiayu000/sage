@@ -23,6 +23,29 @@ pub struct McpToolRegistry {
     server_status: RwLock<HashMap<String, ServerConnectionStatus>>,
 }
 
+struct ConnectedServerData {
+    client_name: String,
+    client: Arc<McpClient>,
+    adapters: Vec<McpToolAdapter>,
+    status: ServerConnectionStatus,
+}
+
+impl ConnectedServerData {
+    fn new(name: &str, client: Arc<McpClient>, adapters: Vec<McpToolAdapter>, tool_count: usize) -> Self {
+        Self {
+            client_name: name.to_string(),
+            client,
+            adapters,
+            status: ServerConnectionStatus {
+                name: name.to_string(),
+                connected: true,
+                error: None,
+                tool_count,
+            },
+        }
+    }
+}
+
 /// Connection status for an MCP server
 #[derive(Debug, Clone)]
 pub struct ServerConnectionStatus {
@@ -84,6 +107,48 @@ impl McpToolRegistry {
         Ok(registry)
     }
 
+    async fn insert_client(&self, client_name: String, client: Arc<McpClient>) {
+        let mut clients = self.clients.write().await;
+        clients.insert(client_name, client);
+    }
+
+    async fn extend_tools(&self, adapters: Vec<McpToolAdapter>) {
+        let mut tools = self.tools.write().await;
+        tools.extend(adapters);
+    }
+
+    async fn upsert_server_status(&self, status: ServerConnectionStatus) {
+        let mut status_map = self.server_status.write().await;
+        status_map.insert(status.name.clone(), status);
+    }
+
+    async fn store_connected_server(&self, data: ConnectedServerData) {
+        let ConnectedServerData {
+            client_name,
+            client,
+            adapters,
+            status,
+        } = data;
+
+        self.insert_client(client_name, Arc::clone(&client)).await;
+        self.extend_tools(adapters).await;
+        self.upsert_server_status(status).await;
+    }
+
+    async fn mark_disconnected(&self, name: &str) {
+        {
+            let mut tools = self.tools.write().await;
+            tools.retain(|t| t.server_name() != name);
+        }
+        {
+            let mut status = self.server_status.write().await;
+            if let Some(s) = status.get_mut(name) {
+                s.connected = false;
+                s.tool_count = 0;
+            }
+        }
+    }
+
     /// Connect to an MCP server
     pub async fn connect_server(
         &self,
@@ -109,25 +174,13 @@ impl McpToolRegistry {
             .collect();
         let tool_count = adapters.len();
 
-        // Store the client
-        let mut clients = self.clients.write().await;
-        clients.insert(name.to_string(), Arc::clone(&client));
-
-        // Store the tools
-        let mut tools = self.tools.write().await;
-        tools.extend(adapters);
-
-        // Update status
-        let mut status = self.server_status.write().await;
-        status.insert(
-            name.to_string(),
-            ServerConnectionStatus {
-                name: name.to_string(),
-                connected: true,
-                error: None,
-                tool_count,
-            },
-        );
+        self.store_connected_server(ConnectedServerData::new(
+            name,
+            Arc::clone(&client),
+            adapters,
+            tool_count,
+        ))
+        .await;
 
         Ok(tool_count)
     }
@@ -183,22 +236,14 @@ impl McpToolRegistry {
 
     /// Disconnect from an MCP server
     pub async fn disconnect_server(&self, name: &str) -> anyhow::Result<()> {
-        let mut clients = self.clients.write().await;
-
-        if clients.remove(name).is_none() {
-            return Err(anyhow!("Server '{}' not connected", name));
+        {
+            let mut clients = self.clients.write().await;
+            if clients.remove(name).is_none() {
+                return Err(anyhow!("Server '{}' not connected", name));
+            }
         }
 
-        // Remove tools from this server
-        let mut tools = self.tools.write().await;
-        tools.retain(|t| t.server_name() != name);
-
-        // Update status
-        let mut status = self.server_status.write().await;
-        if let Some(s) = status.get_mut(name) {
-            s.connected = false;
-            s.tool_count = 0;
-        }
+        self.mark_disconnected(name).await;
 
         Ok(())
     }

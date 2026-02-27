@@ -14,7 +14,7 @@ pub use learning::{
     LearnTool, LearningPatternsTool, get_global_learning_engine, get_learning_patterns_for_context,
     init_global_learning_engine,
 };
-pub use lsp::LspTool;
+pub use lsp::DiagnosticsLspTool;
 pub use memory::{
     RememberTool, SessionNotesTool, get_global_memory_manager, get_memories_for_context,
     init_global_memory_manager,

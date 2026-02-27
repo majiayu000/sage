@@ -10,6 +10,21 @@ use sage_core::interrupt::{
 use std::time::Duration;
 use tokio::time::sleep;
 
+fn create_task_scope() -> sage_core::interrupt::TaskScope {
+    let manager = global_interrupt_manager().lock();
+    manager.create_task_scope()
+}
+
+fn create_cancellation_token() -> tokio_util::sync::CancellationToken {
+    let manager = global_interrupt_manager().lock();
+    manager.cancellation_token()
+}
+
+fn create_interrupt_receiver() -> tokio::sync::broadcast::Receiver<InterruptReason> {
+    let manager = global_interrupt_manager().lock();
+    manager.subscribe()
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Sage Agent Interrupt Demo");
@@ -22,7 +37,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n📋 Demo 1: Basic Interrupt Functionality");
     println!("Creating a task scope...");
 
-    let task_scope = global_interrupt_manager().lock().create_task_scope();
+    let task_scope = create_task_scope();
 
     println!(
         "Task scope created. Checking if cancelled: {}",
@@ -42,8 +57,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n📋 Demo 2: Select! with Cancellation");
     reset_global_interrupt_manager();
 
-    let manager = global_interrupt_manager().lock().clone();
-    let token = manager.cancellation_token();
+    let token = create_cancellation_token();
 
     println!("Starting a long-running task...");
 
@@ -69,14 +83,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n📋 Demo 3: Multiple Task Scopes");
     reset_global_interrupt_manager();
 
-    let (scope1, scope2, scope3) = {
-        let manager = global_interrupt_manager().lock();
-        (
-            manager.create_task_scope(),
-            manager.create_task_scope(),
-            manager.create_task_scope(),
-        )
-    };
+    let (scope1, scope2, scope3) = (create_task_scope(), create_task_scope(), create_task_scope());
 
     println!("Created 3 task scopes");
     println!("Scope 1 cancelled: {}", scope1.is_cancelled());
@@ -98,10 +105,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n📋 Demo 4: Different Interrupt Reasons");
     reset_global_interrupt_manager();
 
-    let _receiver = {
-        let manager = global_interrupt_manager().lock();
-        manager.subscribe()
-    };
+    let _receiver = create_interrupt_receiver();
 
     // Test different interrupt reasons
     let reasons = vec![
@@ -113,9 +117,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for reason in reasons {
         reset_global_interrupt_manager();
-        let manager = global_interrupt_manager().lock();
-        let mut receiver = manager.subscribe();
-        drop(manager);
+        let mut receiver = create_interrupt_receiver();
 
         println!("Testing interrupt reason: {:?}", reason);
         interrupt_current_task(reason.clone());

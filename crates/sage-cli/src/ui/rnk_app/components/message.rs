@@ -4,14 +4,14 @@ use rnk::prelude::*;
 use sage_core::ui::bridge::state::{Message, Role, UiMessageContent};
 
 use crate::ui::rnk_app::formatting::{truncate_to_width, wrap_text_with_prefix};
-use crate::ui::rnk_app::theme::Theme;
+use crate::ui::rnk_app::theme::TerminalTheme;
 
 use super::tool_call::render_tool_call;
 
 // Alias rnk's Box to avoid conflict with std::boxed::Box
 use rnk::prelude::Box as RnkBox;
 
-fn role_color(role: &Role, theme: &Theme) -> Color {
+fn role_color(role: &Role, theme: &TerminalTheme) -> Color {
     match role {
         Role::User => theme.accent_user,
         Role::Assistant => theme.accent_assistant,
@@ -32,7 +32,7 @@ fn content_line(color: Color, text: String, text_color: Color, is_first: bool) -
 }
 
 /// Format a message for printing via rnk::println
-pub fn format_message(msg: &Message, theme: &Theme) -> Element {
+pub fn format_message(msg: &Message, theme: &TerminalTheme) -> Element {
     let term_width = crossterm::terminal::size()
         .map(|(w, _)| w as usize)
         .unwrap_or(80);

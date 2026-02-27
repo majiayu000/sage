@@ -4,6 +4,13 @@ use super::super::types::{BranchId, BranchSnapshot, SerializedMessage, Serialize
 use super::core::BranchManager;
 
 impl BranchManager {
+    async fn next_branch_name(&self, name: Option<&str>) -> String {
+        let mut counter = self.branch_counter.write().await;
+        *counter += 1;
+        name.map(|s| s.to_string())
+            .unwrap_or_else(|| format!("branch-{}", *counter))
+    }
+
     /// Create a new branch at current state
     pub async fn create_branch(
         &self,
@@ -11,20 +18,15 @@ impl BranchManager {
         messages: Vec<SerializedMessage>,
         tool_history: Vec<SerializedToolCall>,
     ) -> BranchId {
-        let mut counter = self.branch_counter.write().await;
-        *counter += 1;
+        let branch_name = self.next_branch_name(name).await;
 
-        let branch_name = name
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| format!("branch-{}", *counter));
-
-        let current = self.current_branch.read().await.clone();
+        let mut current_branch = self.current_branch.write().await;
 
         let mut snapshot = BranchSnapshot::new(&branch_name, messages.len());
         snapshot.messages = messages;
         snapshot.tool_history = tool_history;
 
-        if let Some(parent) = current {
+        if let Some(parent) = current_branch.clone() {
             snapshot = snapshot.with_parent(parent);
         }
 
@@ -44,7 +46,7 @@ impl BranchManager {
         branches.insert(branch_id.clone(), snapshot);
 
         // Update current branch
-        *self.current_branch.write().await = Some(branch_id.clone());
+        *current_branch = Some(branch_id.clone());
 
         branch_id
     }
@@ -69,15 +71,10 @@ impl BranchManager {
             branches.remove(branch_id)
         };
 
-        // Then, check and update current_branch (separate lock acquisition)
-        // Clone the current value to avoid holding the read lock while acquiring write lock
-        let should_clear = {
-            let current = self.current_branch.read().await;
-            current.as_ref() == Some(branch_id)
-        };
-
-        if should_clear {
-            *self.current_branch.write().await = None;
+        // Then, update current branch with a single lock acquisition
+        let mut current = self.current_branch.write().await;
+        if current.as_ref() == Some(branch_id) {
+            *current = None;
         }
 
         removed
@@ -107,10 +104,23 @@ impl BranchManager {
         }
     }
 
+    async fn clear_current_branch(&self) {
+        let mut current_branch = self.current_branch.write().await;
+        *current_branch = None;
+    }
+
+    async fn reset_branch_counter(&self) {
+        let mut counter = self.branch_counter.write().await;
+        *counter = 0;
+    }
+
     /// Clear all branches
     pub async fn clear(&self) {
-        self.branches.write().await.clear();
-        *self.current_branch.write().await = None;
-        *self.branch_counter.write().await = 0;
+        {
+            let mut branches = self.branches.write().await;
+            branches.clear();
+        }
+        self.clear_current_branch().await;
+        self.reset_branch_counter().await;
     }
 }

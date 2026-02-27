@@ -50,12 +50,23 @@ impl PluginEntry {
         }
     }
 
+    async fn lifecycle_state_and_enabled(&self) -> (PluginState, bool) {
+        let lifecycle_state = {
+            let lifecycle = self.lifecycle.read().await;
+            lifecycle.state()
+        };
+        let enabled = {
+            let enabled = self.enabled.read().await;
+            *enabled
+        };
+        (lifecycle_state, enabled)
+    }
+
     /// Get plugin info
     pub async fn info(&self) -> PluginInfo {
         let plugin = self.plugin.read().await;
-        let lifecycle = self.lifecycle.read().await;
-        let enabled = *self.enabled.read().await;
-        PluginInfo::from_plugin(plugin.as_ref(), lifecycle.state(), enabled)
+        let (lifecycle_state, enabled) = self.lifecycle_state_and_enabled().await;
+        PluginInfo::from_plugin(plugin.as_ref(), lifecycle_state, enabled)
     }
 
     /// Get the current lifecycle state

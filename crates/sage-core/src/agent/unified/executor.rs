@@ -12,6 +12,39 @@ use super::UnifiedExecutor;
 use super::event_manager::ExecutionEvent;
 
 impl UnifiedExecutor {
+    async fn record_session_start_if_enabled(
+        &self,
+        description: &str,
+        provider: &str,
+        model: &str,
+    ) -> SageResult<()> {
+        if let Some(recorder) = self.session_manager.session_recorder() {
+            recorder
+                .lock()
+                .await
+                .record_session_start(description, provider, model)
+                .await
+                .context("Failed to start session recording")?;
+        }
+        Ok(())
+    }
+
+    async fn record_session_end_if_enabled(&self, outcome: &ExecutionOutcome) {
+        if let Some(recorder) = self.session_manager.session_recorder() {
+            if let Err(e) = recorder
+                .lock()
+                .await
+                .record_session_end(
+                    outcome.is_success(),
+                    outcome.execution().final_result.clone(),
+                )
+                .await
+            {
+                tracing::warn!(error = %e, "Failed to record session end (non-fatal)");
+            }
+        }
+    }
+
     /// Execute a task with the unified execution loop
     ///
     /// This is the main execution method that implements the Claude Code style loop:
@@ -33,14 +66,8 @@ impl UnifiedExecutor {
         let provider = self.config.get_default_provider().to_string();
         let model = self.config.default_model_parameters()?.model.clone();
 
-        if let Some(recorder) = self.session_manager.session_recorder() {
-            recorder
-                .lock()
-                .await
-                .record_session_start(&task.description, &provider, &model)
-                .await
-                .context("Failed to start session recording")?;
-        }
+        self.record_session_start_if_enabled(&task.description, &provider, &model)
+            .await?;
 
         // Emit session started event to UI
         let session_id = self
@@ -99,19 +126,7 @@ impl UnifiedExecutor {
         self.event_manager.stop_animation().await;
 
         // Finalize session recording
-        if let Some(recorder) = self.session_manager.session_recorder() {
-            if let Err(e) = recorder
-                .lock()
-                .await
-                .record_session_end(
-                    outcome.is_success(),
-                    outcome.execution().final_result.clone(),
-                )
-                .await
-            {
-                tracing::warn!(error = %e, "Failed to record session end (non-fatal)");
-            }
-        }
+        self.record_session_end_if_enabled(&outcome).await;
 
         Ok(outcome)
     }

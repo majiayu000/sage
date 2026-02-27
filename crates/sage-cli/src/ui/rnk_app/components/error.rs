@@ -3,13 +3,13 @@
 use rnk::prelude::*;
 
 use crate::ui::rnk_app::formatting::wrap_text_with_prefix;
-use crate::ui::rnk_app::theme::Theme;
+use crate::ui::rnk_app::theme::TerminalTheme;
 
 // Alias rnk's Box to avoid conflict with std::boxed::Box
 use rnk::prelude::Box as RnkBox;
 
 /// Render error message
-pub fn render_error(message: &str, theme: &Theme) -> Element {
+pub fn render_error(message: &str, theme: &TerminalTheme) -> Element {
     let term_width = crossterm::terminal::size()
         .map(|(w, _)| w as usize)
         .unwrap_or(80);

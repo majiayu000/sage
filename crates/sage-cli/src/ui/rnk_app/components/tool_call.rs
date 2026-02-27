@@ -4,7 +4,7 @@ use rnk::prelude::*;
 use sage_core::ui::bridge::state::UiToolResult;
 
 use crate::ui::rnk_app::formatting::truncate_to_width;
-use crate::ui::rnk_app::theme::Theme;
+use crate::ui::rnk_app::theme::TerminalTheme;
 
 // Alias rnk's Box to avoid conflict with std::boxed::Box
 use rnk::prelude::Box as RnkBox;
@@ -29,7 +29,7 @@ pub fn render_tool_call(
     tool_name: &str,
     params: &str,
     result: Option<&UiToolResult>,
-    theme: &Theme,
+    theme: &TerminalTheme,
 ) -> Element {
     let term_width = crossterm::terminal::size()
         .map(|(w, _)| w as usize)
@@ -119,6 +119,6 @@ pub fn render_tool_call(
 }
 
 /// Format tool execution start for printing
-pub fn format_tool_start(tool_name: &str, description: &str, theme: &Theme) -> Element {
+pub fn format_tool_start(tool_name: &str, description: &str, theme: &TerminalTheme) -> Element {
     render_tool_call(tool_name, description, None, theme)
 }

@@ -7,7 +7,7 @@
 use rnk::prelude::Color;
 use std::sync::OnceLock;
 
-enum ThemeKind {
+enum TerminalThemeKind {
     Dark,
     Light,
     NoColor,
@@ -15,7 +15,7 @@ enum ThemeKind {
 
 #[derive(Clone, Copy, Debug)]
 #[allow(dead_code)]
-pub struct Theme {
+pub struct TerminalTheme {
     pub text_primary: Color,
     pub text_muted: Color,
     pub text_subtle: Color,
@@ -43,26 +43,26 @@ pub struct Theme {
     pub status_plan: Color,
 }
 
-static THEME: OnceLock<Theme> = OnceLock::new();
+static THEME: OnceLock<TerminalTheme> = OnceLock::new();
 
-pub fn current_theme() -> &'static Theme {
+pub fn current_theme() -> &'static TerminalTheme {
     THEME.get_or_init(|| match detect_theme_kind() {
-        ThemeKind::Light => light_theme(),
-        ThemeKind::NoColor => no_color_theme(),
-        ThemeKind::Dark => dark_theme(),
+        TerminalThemeKind::Light => light_theme(),
+        TerminalThemeKind::NoColor => no_color_theme(),
+        TerminalThemeKind::Dark => dark_theme(),
     })
 }
 
-fn detect_theme_kind() -> ThemeKind {
+fn detect_theme_kind() -> TerminalThemeKind {
     if std::env::var_os("NO_COLOR").is_some() {
-        return ThemeKind::NoColor;
+        return TerminalThemeKind::NoColor;
     }
 
     if let Ok(v) = std::env::var("SAGE_THEME") {
         match v.to_ascii_lowercase().as_str() {
-            "light" => return ThemeKind::Light,
-            "dark" => return ThemeKind::Dark,
-            "none" | "no" | "off" => return ThemeKind::NoColor,
+            "light" => return TerminalThemeKind::Light,
+            "dark" => return TerminalThemeKind::Dark,
+            "none" | "no" | "off" => return TerminalThemeKind::NoColor,
             _ => {}
         }
     }
@@ -71,17 +71,17 @@ fn detect_theme_kind() -> ThemeKind {
     if let Ok(cfgbg) = std::env::var("COLORFGBG") {
         if let Some(bg) = cfgbg.rsplit(';').next().and_then(|s| s.parse::<u8>().ok()) {
             if bg >= 7 {
-                return ThemeKind::Light;
+                return TerminalThemeKind::Light;
             }
         }
     }
 
-    ThemeKind::Light
+    TerminalThemeKind::Light
 }
 
-fn dark_theme() -> Theme {
+fn dark_theme() -> TerminalTheme {
     // Catppuccin Mocha palette
-    Theme {
+    TerminalTheme {
         text_primary: Color::Rgb(205, 214, 244), // #cdd6f4
         text_muted: Color::Rgb(108, 112, 134),   // #6c7086
         text_subtle: Color::Rgb(88, 91, 112),    // #585b70
@@ -110,9 +110,9 @@ fn dark_theme() -> Theme {
     }
 }
 
-fn light_theme() -> Theme {
+fn light_theme() -> TerminalTheme {
     // Black text on light backgrounds, with colored accents for role distinction
-    Theme {
+    TerminalTheme {
         text_primary: Color::Black,
         text_muted: Color::Black,
         text_subtle: Color::Black,
@@ -141,8 +141,8 @@ fn light_theme() -> Theme {
     }
 }
 
-fn no_color_theme() -> Theme {
-    Theme {
+fn no_color_theme() -> TerminalTheme {
+    TerminalTheme {
         text_primary: Color::White,
         text_muted: Color::White,
         text_subtle: Color::White,

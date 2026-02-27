@@ -27,6 +27,6 @@ pub use fallback::{
 pub use messages::{CacheControl, LlmMessage, LlmResponse, MessageRole};
 pub use provider_fallback::ProviderFallbackClient;
 pub use provider_types::{LlmProvider, TimeoutConfig};
-pub use rate_limiter::{RateLimitConfig, RateLimiter};
+pub use rate_limiter::{LlmRateLimiter, RateLimitConfig};
 pub use sse_decoder::{SseDecoder, SseEvent};
 pub use streaming::{LlmStream, StreamChunk, StreamingLlmClient};

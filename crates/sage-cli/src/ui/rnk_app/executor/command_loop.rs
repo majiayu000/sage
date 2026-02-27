@@ -14,6 +14,22 @@ use sage_core::ui::bridge::AgentEvent;
 use sage_core::ui::traits::UiContext;
 use tokio::sync::mpsc;
 
+fn set_should_quit(state: &SharedState) {
+    state.write().should_quit = true;
+}
+
+fn set_busy_state(state: &SharedState, is_busy: bool, status_text: &str) {
+    let mut s = state.write();
+    s.is_busy = is_busy;
+    s.status_text = status_text.to_string();
+}
+
+fn clear_busy_state(state: &SharedState) {
+    let mut s = state.write();
+    s.is_busy = false;
+    s.status_text.clear();
+}
+
 /// Executor loop in background - processes commands and runs tasks
 pub async fn executor_loop(
     state: SharedState,
@@ -43,7 +59,7 @@ pub async fn executor_loop(
                     .color(Color::Red)
                     .into_element(),
             );
-            state.write().should_quit = true;
+            set_should_quit(&state);
             rnk::request_render();
             return;
         }
@@ -106,7 +122,7 @@ pub async fn executor_loop(
                         continue;
                     }
                     Ok(SlashCommandAction::Exit) => {
-                        state.write().should_quit = true;
+                        set_should_quit(&state);
                         rnk::request_render();
                         break;
                     }
@@ -121,11 +137,7 @@ pub async fn executor_loop(
                     }
                 };
 
-                {
-                    let mut s = state.write();
-                    s.is_busy = true;
-                    s.status_text = "Thinking...".to_string();
-                }
+                set_busy_state(&state, true, "Thinking...");
                 rnk::request_render();
 
                 // Reset interrupt manager for new task
@@ -146,11 +158,7 @@ pub async fn executor_loop(
                     }
                 }
 
-                {
-                    let mut s = state.write();
-                    s.is_busy = false;
-                    s.status_text.clear();
-                }
+                clear_busy_state(&state);
                 rnk::request_render();
             }
             UiCommand::Cancel => {
@@ -164,15 +172,11 @@ pub async fn executor_loop(
                         .dim()
                         .into_element(),
                 );
-                {
-                    let mut s = state.write();
-                    s.is_busy = false;
-                    s.status_text.clear();
-                }
+                clear_busy_state(&state);
                 rnk::request_render();
             }
             UiCommand::Quit => {
-                state.write().should_quit = true;
+                set_should_quit(&state);
                 rnk::request_render();
                 break;
             }
@@ -185,11 +189,7 @@ async fn handle_resume(
     executor: &mut sage_core::agent::UnifiedExecutor,
     session_id: Option<String>,
 ) {
-    {
-        let mut s = state.write();
-        s.is_busy = true;
-        s.status_text = "Resuming session...".to_string();
-    }
+    set_busy_state(state, true, "Resuming session...");
     rnk::request_render();
 
     let resume_result = if let Some(id) = session_id {
@@ -213,11 +213,7 @@ async fn handle_resume(
         }
     };
 
-    {
-        let mut s = state.write();
-        s.is_busy = false;
-        s.status_text.clear();
-    }
+    clear_busy_state(state);
 
     match resume_result {
         Ok(msg) => {
@@ -277,20 +273,12 @@ fn handle_model_select(state: &SharedState, models: Vec<String>) {
 }
 
 async fn handle_doctor(state: &SharedState, config_file: &str) {
-    {
-        let mut s = state.write();
-        s.is_busy = true;
-        s.status_text = "Running diagnostics...".to_string();
-    }
+    set_busy_state(state, true, "Running diagnostics...");
     rnk::request_render();
 
     let result = crate::commands::diagnostics::doctor(config_file).await;
 
-    {
-        let mut s = state.write();
-        s.is_busy = false;
-        s.status_text.clear();
-    }
+    clear_busy_state(state);
 
     if let Err(e) = result {
         rnk::println(

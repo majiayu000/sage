@@ -1,19 +1,19 @@
 //! Global rate limiter registry for per-provider rate limiting
 
-use super::bucket::RateLimiter;
+use super::bucket::LlmRateLimiter;
 use super::types::RateLimitConfig;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 use tokio::sync::RwLock;
 
-static RATE_LIMITERS: OnceLock<RwLock<HashMap<String, RateLimiter>>> = OnceLock::new();
+static RATE_LIMITERS: OnceLock<RwLock<HashMap<String, LlmRateLimiter>>> = OnceLock::new();
 
-fn get_registry() -> &'static RwLock<HashMap<String, RateLimiter>> {
+fn get_registry() -> &'static RwLock<HashMap<String, LlmRateLimiter>> {
     RATE_LIMITERS.get_or_init(|| RwLock::new(HashMap::new()))
 }
 
 /// Get or create a rate limiter for the given provider
-pub async fn get_rate_limiter(provider: &str) -> RateLimiter {
+pub async fn get_rate_limiter(provider: &str) -> LlmRateLimiter {
     let provider_key = provider.to_lowercase();
 
     // Try to read first
@@ -31,7 +31,7 @@ pub async fn get_rate_limiter(provider: &str) -> RateLimiter {
         return limiter.clone();
     }
 
-    let limiter = RateLimiter::for_provider(&provider_key);
+    let limiter = LlmRateLimiter::for_provider(&provider_key);
     registry.insert(provider_key, limiter.clone());
     limiter
 }
@@ -40,12 +40,12 @@ pub async fn get_rate_limiter(provider: &str) -> RateLimiter {
 pub async fn set_rate_limit(provider: &str, config: RateLimitConfig) {
     let provider_key = provider.to_lowercase();
     let mut registry = get_registry().write().await;
-    registry.insert(provider_key, RateLimiter::new(config));
+    registry.insert(provider_key, LlmRateLimiter::new(config));
 }
 
 /// Disable rate limiting for a provider
 pub async fn disable_rate_limit(provider: &str) {
     let provider_key = provider.to_lowercase();
     let mut registry = get_registry().write().await;
-    registry.insert(provider_key, RateLimiter::new(RateLimitConfig::disabled()));
+    registry.insert(provider_key, LlmRateLimiter::new(RateLimitConfig::disabled()));
 }

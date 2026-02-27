@@ -6,7 +6,7 @@
 //! adapts the return types for LLM client usage.
 
 use super::types::RateLimitConfig;
-use crate::recovery::rate_limiter::RateLimiter as CoreRateLimiter;
+use crate::recovery::rate_limiter::RecoveryRateLimiter as CoreRateLimiter;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tracing::{debug, warn};
@@ -20,13 +20,13 @@ use tracing::{debug, warn};
 /// Cloning this struct shares the underlying state (token bucket and semaphore),
 /// so multiple clones coordinate rate limiting together.
 #[derive(Debug, Clone)]
-pub struct RateLimiter {
+pub struct LlmRateLimiter {
     /// The underlying shared rate limiter implementation, wrapped in Arc
     /// so that clones share the same token bucket and concurrency state.
     inner: Arc<CoreRateLimiter>,
 }
 
-impl RateLimiter {
+impl LlmRateLimiter {
     /// Create a new rate limiter with the given configuration
     pub fn new(config: RateLimitConfig) -> Self {
         Self {

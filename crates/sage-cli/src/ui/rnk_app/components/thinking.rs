@@ -2,7 +2,7 @@
 
 use rnk::prelude::*;
 
-use crate::ui::rnk_app::theme::Theme;
+use crate::ui::rnk_app::theme::TerminalTheme;
 
 // Alias rnk's Box to avoid conflict with std::boxed::Box
 use rnk::prelude::Box as RnkBox;
@@ -14,7 +14,7 @@ const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦
 pub fn render_thinking_indicator(
     status_text: &str,
     animation_frame: usize,
-    theme: &Theme,
+    theme: &TerminalTheme,
 ) -> Element {
     let spinner = SPINNER_FRAMES[animation_frame % SPINNER_FRAMES.len()];
 

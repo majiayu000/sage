@@ -77,11 +77,6 @@ pub async fn background_loop(state: SharedState, adapter: sage_core::ui::bridge:
     loop {
         sleep(Duration::from_millis(80)).await;
 
-        // Check if should quit
-        if state.read().should_quit {
-            break;
-        }
-
         // Collect data under lock, then process I/O outside lock
         let pending_work = {
             let app_state = adapter.get_state();
@@ -92,112 +87,125 @@ pub async fn background_loop(state: SharedState, adapter: sage_core::ui::bridge:
 
             let mut ui_state = state.write();
 
-            // Update session info from adapter if changed
-            if app_state.session.model != "unknown" && ui_state.session.model == "unknown" {
-                ui_state.session.model = app_state.session.model.clone();
-                ui_state.session.provider = app_state.session.provider.clone();
-                if let Some(ref sid) = app_state.session.session_id {
-                    ui_state.session.session_id = Some(sid.clone());
-                }
-            }
-
-            // Header printing removed - now done in run_rnk_app() before rnk starts
-
-            // Update busy state from adapter - Error state is not busy
-            ui_state.is_busy = !matches!(
-                app_state.phase,
-                ExecutionPhase::Idle | ExecutionPhase::Error { .. }
-            );
-            if ui_state.is_busy {
-                ui_state.status_text = app_state.status_text();
-                // Increment animation frame for spinner
-                ui_state.animation_frame = ui_state.animation_frame.wrapping_add(1);
+            if ui_state.should_quit {
+                None
             } else {
-                ui_state.status_text.clear();
-            }
-
-            // Check for tool execution start - cache tool info to print after messages
-            if let Some(ref tool_exec) = app_state.tool_execution {
-                let tool_key = format!("{}:{}", tool_exec.tool_name, tool_exec.description);
-                if ui_state.current_tool_printed.as_ref() != Some(&tool_key) {
-                    // New tool detected, cache it
-                    ui_state.pending_tool =
-                        Some((tool_exec.tool_name.clone(), tool_exec.description.clone()));
-                    ui_state.current_tool_printed = Some(tool_key);
-                }
-            } else {
-                // Tool finished — extract result if we printed a start card
-                if ui_state.current_tool_printed.is_some() {
-                    if let Some(msg) = messages.iter().rev().find(|m| {
-                        matches!(
-                            m.content,
-                            sage_core::ui::bridge::state::UiMessageContent::ToolCall {
-                                result: Some(_),
-                                ..
-                            }
-                        )
-                    }) {
-                        if let sage_core::ui::bridge::state::UiMessageContent::ToolCall {
-                            tool_name,
-                            result: Some(r),
-                            ..
-                        } = &msg.content
-                        {
-                            ui_state.pending_tool_result =
-                                Some((tool_name.clone(), r.success, r.duration));
-                        }
+                // Update session info from adapter if changed
+                if app_state.session.model != "unknown" && ui_state.session.model == "unknown" {
+                    ui_state.session.model = app_state.session.model.clone();
+                    ui_state.session.provider = app_state.session.provider.clone();
+                    if let Some(ref sid) = app_state.session.session_id {
+                        ui_state.session.session_id = Some(sid.clone());
                     }
                 }
-                ui_state.current_tool_printed = None;
-            }
 
-            // Collect error work
-            let error_work = if let ExecutionPhase::Error { ref message } = app_state.phase {
-                if !ui_state.error_displayed {
-                    ui_state.error_displayed = true;
-                    Some(render_error(message, theme))
+                // Header printing removed - now done in run_rnk_app() before rnk starts
+
+                // Update busy state from adapter - Error state is not busy
+                ui_state.is_busy = !matches!(
+                    app_state.phase,
+                    ExecutionPhase::Idle | ExecutionPhase::Error { .. }
+                );
+                if ui_state.is_busy {
+                    ui_state.status_text = app_state.status_text();
+                    // Increment animation frame for spinner
+                    ui_state.animation_frame = ui_state.animation_frame.wrapping_add(1);
                 } else {
-                    None
+                    ui_state.status_text.clear();
                 }
-            } else {
-                ui_state.error_displayed = false;
-                None
-            };
 
-            // Collect new messages - format them while holding lock
-            // Skip ToolCall messages - they are printed via pending_tool mechanism
-            let (new_messages, pending_tool_to_print) = if new_count > ui_state.printed_count {
-                let msgs: Vec<_> = messages
-                    .iter()
-                    .skip(ui_state.printed_count)
-                    .filter(|msg| {
-                        !matches!(
-                            msg.content,
-                            sage_core::ui::bridge::state::UiMessageContent::ToolCall { .. }
-                        )
-                    })
-                    .map(|msg| format_message(msg, theme))
-                    .collect();
-                ui_state.printed_count = new_count;
-                // Only take pending tool if there are new text messages
-                // This ensures text messages are printed before tool calls
-                let pending = if !msgs.is_empty() {
-                    ui_state.pending_tool.take()
+                // Check for tool execution start - cache tool info to print after messages
+                if let Some(ref tool_exec) = app_state.tool_execution {
+                    let tool_key = format!("{}:{}", tool_exec.tool_name, tool_exec.description);
+                    if ui_state.current_tool_printed.as_ref() != Some(&tool_key) {
+                        // New tool detected, cache it
+                        ui_state.pending_tool =
+                            Some((tool_exec.tool_name.clone(), tool_exec.description.clone()));
+                        ui_state.current_tool_printed = Some(tool_key);
+                    }
                 } else {
+                    // Tool finished — extract result if we printed a start card
+                    if ui_state.current_tool_printed.is_some() {
+                        if let Some(msg) = messages.iter().rev().find(|m| {
+                            matches!(
+                                m.content,
+                                sage_core::ui::bridge::state::UiMessageContent::ToolCall {
+                                    result: Some(_),
+                                    ..
+                                }
+                            )
+                        }) {
+                            if let sage_core::ui::bridge::state::UiMessageContent::ToolCall {
+                                tool_name,
+                                result: Some(r),
+                                ..
+                            } = &msg.content
+                            {
+                                ui_state.pending_tool_result =
+                                    Some((tool_name.clone(), r.success, r.duration));
+                            }
+                        }
+                    }
+                    ui_state.current_tool_printed = None;
+                }
+
+                // Collect error work
+                let error_work = if let ExecutionPhase::Error { ref message } = app_state.phase {
+                    if !ui_state.error_displayed {
+                        ui_state.error_displayed = true;
+                        Some(render_error(message, theme))
+                    } else {
+                        None
+                    }
+                } else {
+                    ui_state.error_displayed = false;
                     None
                 };
-                (msgs, pending)
-            } else {
-                (Vec::new(), None)
-            };
 
-            let pending_tool_result = ui_state.pending_tool_result.take();
+                // Collect new messages - format them while holding lock
+                // Skip ToolCall messages - they are printed via pending_tool mechanism
+                let (new_messages, pending_tool_to_print) = if new_count > ui_state.printed_count {
+                    let msgs: Vec<_> = messages
+                        .iter()
+                        .skip(ui_state.printed_count)
+                        .filter(|msg| {
+                            !matches!(
+                                msg.content,
+                                sage_core::ui::bridge::state::UiMessageContent::ToolCall { .. }
+                            )
+                        })
+                        .map(|msg| format_message(msg, theme))
+                        .collect();
+                    ui_state.printed_count = new_count;
+                    // Only take pending tool if there are new text messages
+                    // This ensures text messages are printed before tool calls
+                    let pending = if !msgs.is_empty() {
+                        ui_state.pending_tool.take()
+                    } else {
+                        None
+                    };
+                    (msgs, pending)
+                } else {
+                    (Vec::new(), None)
+                };
 
-            (error_work, new_messages, pending_tool_to_print, pending_tool_result)
+                let pending_tool_result = ui_state.pending_tool_result.take();
+
+                Some((
+                    error_work,
+                    new_messages,
+                    pending_tool_to_print,
+                    pending_tool_result,
+                ))
+            }
         }; // Lock released here
 
         // Process all I/O outside the lock
-        let (error_work, new_messages, pending_tool_to_print, pending_tool_result) = pending_work;
+        let Some((error_work, new_messages, pending_tool_to_print, pending_tool_result)) =
+            pending_work
+        else {
+            break;
+        };
 
         // Print new messages first (Assistant response comes before tool call)
         for msg_element in new_messages {

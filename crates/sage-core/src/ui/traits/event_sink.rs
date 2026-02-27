@@ -56,40 +56,7 @@ impl EventSink for NoopEventSink {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{Arc, Mutex};
-
-    /// Mock event sink that captures events for testing
-    pub struct MockEventSink {
-        events: Arc<Mutex<Vec<AgentEvent>>>,
-        refresh_count: Arc<Mutex<u32>>,
-    }
-
-    impl MockEventSink {
-        pub fn new() -> Self {
-            Self {
-                events: Arc::new(Mutex::new(Vec::new())),
-                refresh_count: Arc::new(Mutex::new(0)),
-            }
-        }
-
-        pub fn events(&self) -> Vec<AgentEvent> {
-            self.events.lock().unwrap().clone()
-        }
-
-        pub fn refresh_count(&self) -> u32 {
-            *self.refresh_count.lock().unwrap()
-        }
-    }
-
-    impl EventSink for MockEventSink {
-        fn handle_event(&self, event: AgentEvent) {
-            self.events.lock().unwrap().push(event);
-        }
-
-        fn request_refresh(&self) {
-            *self.refresh_count.lock().unwrap() += 1;
-        }
-    }
+    use crate::ui::traits::testing::MockEventSink;
 
     #[test]
     fn test_noop_event_sink() {

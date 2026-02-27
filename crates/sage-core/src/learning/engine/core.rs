@@ -66,29 +66,23 @@ impl LearningEngine {
         events.iter().rev().take(limit).cloned().collect()
     }
 
-    /// Clear all patterns (use with caution)
-    pub async fn clear(&self) {
+    async fn clear_patterns(&self) {
         let mut patterns = self.patterns.write().await;
         patterns.clear();
+    }
 
+    async fn clear_events(&self) {
         let mut events = self.events.write().await;
         events.clear();
+    }
 
+    async fn reset_stats(&self) {
         let mut stats = self.stats.write().await;
         *stats = LearningStats::default();
     }
 
-    /// Remove a specific pattern
-    pub async fn remove_pattern(&self, pattern_id: &PatternId) -> Result<(), LearningError> {
-        let mut patterns = self.patterns.write().await;
-        patterns
-            .remove(pattern_id)
-            .ok_or_else(|| LearningError::PatternNotFound(pattern_id.to_string()))?;
-        Ok(())
-    }
 
-    /// Record a learning event
-    pub(super) async fn record_event(&self, event: LearningEvent) {
+    async fn record_event_inner(&self, event: LearningEvent) {
         let mut events = self.events.write().await;
         events.push(event);
 
@@ -101,8 +95,7 @@ impl LearningEngine {
         stats.events_count += 1;
     }
 
-    /// Update statistics based on current patterns
-    pub(super) async fn update_stats(&self) {
+    async fn update_stats_inner(&self) {
         let patterns = self.patterns.read().await;
         let mut stats = self.stats.write().await;
 
@@ -130,6 +123,36 @@ impl LearningEngine {
             0.0
         };
         stats.high_confidence_count = high_confidence;
+    }
+
+    /// Record a learning event
+    pub(super) async fn record_event(&self, event: LearningEvent) {
+        self.record_event_inner(event).await;
+    }
+
+    /// Update statistics based on current patterns
+    pub(super) async fn update_stats(&self) {
+        self.update_stats_inner().await;
+    }
+
+    async fn delete_pattern_from_store(&self, pattern_id: &PatternId) -> Result<(), LearningError> {
+        let mut patterns = self.patterns.write().await;
+        patterns
+            .remove(pattern_id)
+            .ok_or_else(|| LearningError::PatternNotFound(pattern_id.to_string()))?;
+        Ok(())
+    }
+
+    /// Remove a specific pattern
+    pub async fn remove_pattern(&self, pattern_id: &PatternId) -> Result<(), LearningError> {
+        self.delete_pattern_from_store(pattern_id).await
+    }
+
+    /// Clear all patterns (use with caution)
+    pub async fn clear(&self) {
+        self.clear_patterns().await;
+        self.clear_events().await;
+        self.reset_stats().await;
     }
 }
 

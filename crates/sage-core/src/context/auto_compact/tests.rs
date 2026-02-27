@@ -154,6 +154,9 @@ mod tests {
             compacted_at: Some(Utc::now()),
             summary_preview: Some("Test summary...".to_string()),
             compact_id: Some(Uuid::new_v4()),
+            boundary_message: None,
+            summary_message: None,
+            messages_to_keep: None,
         };
 
         assert_eq!(result.tokens_saved(), 40000);

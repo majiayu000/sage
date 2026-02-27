@@ -15,7 +15,7 @@ mod tool_types;
 mod wire_token;
 
 // Re-export all public types so external imports remain unchanged
-pub use header::{BranchId, MessageId, Session, SessionHeader, SessionId};
+pub use header::{BranchId, MessageId, SessionHeader, SessionId, UnifiedSession};
 pub use message::SessionMessage;
 pub use message_types::{MessageContent, SessionMessageType};
 pub use record::{SessionMetadataPatch, SessionRecord, SessionRecordPayload};

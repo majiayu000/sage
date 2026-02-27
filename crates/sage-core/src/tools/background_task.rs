@@ -160,6 +160,29 @@ impl BackgroundShellTask {
         })
     }
 
+    async fn set_status(
+        status: &Arc<RwLock<BackgroundTaskStatus>>,
+        new_status: BackgroundTaskStatus,
+    ) {
+        let mut guard = status.write().await;
+        *guard = new_status;
+    }
+
+    async fn get_incremental_stream_output(
+        stream: &Arc<RwLock<String>>,
+        position: &Arc<RwLock<usize>>,
+    ) -> String {
+        let full_output = stream.read().await;
+        let mut pos = position.write().await;
+        let new_output = if *pos < full_output.len() {
+            full_output[*pos..].to_string()
+        } else {
+            String::new()
+        };
+        *pos = full_output.len();
+        new_output
+    }
+
     /// Monitor process and update status
     async fn monitor_process(
         mut child: Child,
@@ -173,25 +196,32 @@ impl BackgroundShellTask {
                 if let Err(e) = child.kill().await {
                     error!("Failed to kill process for shell '{}': {}", shell_id, e);
                 }
-                *status.write().await = BackgroundTaskStatus::Killed;
+                Self::set_status(&status, BackgroundTaskStatus::Killed).await;
                 info!("Background shell '{}' was killed", shell_id);
             }
             result = child.wait() => {
                 match result {
                     Ok(exit_status) => {
                         let exit_code = exit_status.code().unwrap_or(-1);
-                        *status.write().await = BackgroundTaskStatus::Completed { exit_code };
+                        Self::set_status(&status, BackgroundTaskStatus::Completed { exit_code }).await;
                         debug!("Background shell '{}' completed with exit code {}", shell_id, exit_code);
                     }
                     Err(e) => {
                         let error_msg = e.to_string();
-                        *status.write().await = BackgroundTaskStatus::Failed { error: error_msg.clone() };
+                        Self::set_status(
+                            &status,
+                            BackgroundTaskStatus::Failed {
+                                error: error_msg.clone(),
+                            },
+                        )
+                        .await;
                         error!("Background shell '{}' failed: {}", shell_id, error_msg);
                     }
                 }
             }
         }
     }
+
 
     /// Get current status
     pub async fn status(&self) -> BackgroundTaskStatus {
@@ -215,29 +245,10 @@ impl BackgroundShellTask {
     /// Locks are acquired per-stream (stdout then stderr) to avoid holding
     /// all four locks simultaneously, which would risk ABBA deadlocks.
     pub async fn get_incremental_output(&self) -> (String, String) {
-        let stdout_new = {
-            let stdout_full = self.stdout.read().await;
-            let mut pos = self.last_stdout_pos.write().await;
-            let new = if *pos < stdout_full.len() {
-                stdout_full[*pos..].to_string()
-            } else {
-                String::new()
-            };
-            *pos = stdout_full.len();
-            new
-        };
-
-        let stderr_new = {
-            let stderr_full = self.stderr.read().await;
-            let mut pos = self.last_stderr_pos.write().await;
-            let new = if *pos < stderr_full.len() {
-                stderr_full[*pos..].to_string()
-            } else {
-                String::new()
-            };
-            *pos = stderr_full.len();
-            new
-        };
+        let stdout_new =
+            Self::get_incremental_stream_output(&self.stdout, &self.last_stdout_pos).await;
+        let stderr_new =
+            Self::get_incremental_stream_output(&self.stderr, &self.last_stderr_pos).await;
 
         (stdout_new, stderr_new)
     }

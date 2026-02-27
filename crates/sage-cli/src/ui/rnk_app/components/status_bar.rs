@@ -3,7 +3,7 @@
 use rnk::prelude::*;
 
 use crate::ui::rnk_app::state::PermissionMode;
-use crate::ui::rnk_app::theme::Theme;
+use crate::ui::rnk_app::theme::TerminalTheme;
 
 // Alias rnk's Box to avoid conflict with std::boxed::Box
 use rnk::prelude::Box as RnkBox;
@@ -12,7 +12,7 @@ use rnk::prelude::Box as RnkBox;
 pub fn render_status_bar(
     permission_mode: PermissionMode,
     model: Option<&str>,
-    theme: &Theme,
+    theme: &TerminalTheme,
 ) -> Element {
     let (mode_color, mode_label, mode_icon) = match permission_mode {
         PermissionMode::Normal => (theme.status_normal, "permissions required", "⏵"),

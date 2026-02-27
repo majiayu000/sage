@@ -6,5 +6,5 @@
 mod limiter;
 mod types;
 
-pub use limiter::RateLimiter;
+pub use limiter::RecoveryRateLimiter;
 pub use types::{RateLimitConfig, RateLimitError};

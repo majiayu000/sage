@@ -36,23 +36,23 @@ impl LspOperation {
     }
 }
 
-/// LSP tool for interacting with Language Server Protocol servers
-pub struct LspTool;
+/// LSP diagnostics tool for interacting with Language Server Protocol servers
+pub struct DiagnosticsLspTool;
 
-impl LspTool {
+impl DiagnosticsLspTool {
     pub fn new() -> Self {
         Self
     }
 }
 
-impl Default for LspTool {
+impl Default for DiagnosticsLspTool {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[async_trait]
-impl Tool for LspTool {
+impl Tool for DiagnosticsLspTool {
     fn name(&self) -> &str {
         "LSP"
     }
@@ -259,7 +259,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_lsp_tool_go_to_definition() {
-        let tool = LspTool::new();
+        let tool = DiagnosticsLspTool::new();
         let call = create_tool_call(
             "test-1",
             "LSP",
@@ -280,7 +280,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_lsp_tool_invalid_operation() {
-        let tool = LspTool::new();
+        let tool = DiagnosticsLspTool::new();
         let call = create_tool_call(
             "test-2",
             "LSP",
@@ -312,7 +312,7 @@ mod tests {
 
     #[test]
     fn test_lsp_tool_schema() {
-        let tool = LspTool::new();
+        let tool = DiagnosticsLspTool::new();
         let schema = tool.schema();
         assert_eq!(schema.name, "LSP");
         assert!(!schema.description.is_empty());

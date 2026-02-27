@@ -168,7 +168,7 @@ impl ParallelToolExecutor {
 
         // Check cancellation again after waiting
         if self.cancellation_token.is_cancelled() {
-            self.stats.write().await.cancellations += 1;
+            self.increment_cancellations().await;
             return ToolExecutionResult {
                 result: ToolResult::error(&call.id, &call.name, "Execution cancelled"),
                 wait_time,
@@ -185,14 +185,14 @@ impl ParallelToolExecutor {
 
         let result = tokio::select! {
             _ = self.cancellation_token.cancelled() => {
-                self.stats.write().await.cancellations += 1;
+                self.increment_cancellations().await;
                 ToolResult::error(&call.id, &call.name, "Execution cancelled")
             }
             result = timeout(execution_timeout, tool.execute_with_timing(call)) => {
                 match result {
                     Ok(r) => r,
                     Err(_) => {
-                        self.stats.write().await.timeouts += 1;
+                        self.increment_timeouts().await;
                         ToolResult::error(
                             &call.id,
                             &call.name,
@@ -224,6 +224,16 @@ impl ParallelToolExecutor {
             execution_time,
             permission_checked,
         }
+    }
+
+    async fn increment_cancellations(&self) {
+        let mut stats = self.stats.write().await;
+        stats.cancellations += 1;
+    }
+
+    async fn increment_timeouts(&self) {
+        let mut stats = self.stats.write().await;
+        stats.timeouts += 1;
     }
 
     /// Execute multiple tool calls with appropriate concurrency

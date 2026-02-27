@@ -28,6 +28,11 @@ impl SessionCache {
         trust
     }
 
+    async fn mark_dirty(&self) {
+        let mut dirty = self.dirty.write().await;
+        *dirty = true;
+    }
+
     /// Update tool trust (saves to project cache if available, otherwise global)
     pub async fn update_tool_trust<F>(&self, updater: F) -> SageResult<()>
     where
@@ -42,7 +47,7 @@ impl SessionCache {
             updater(&mut cache.tool_trust);
         }
 
-        *self.dirty.write().await = true;
+        self.mark_dirty().await;
         Ok(())
     }
 
@@ -70,7 +75,7 @@ impl SessionCache {
             .insert(config.name.clone(), config);
         cache.mcp_servers.updated_at = Some(Utc::now());
 
-        *self.dirty.write().await = true;
+        self.mark_dirty().await;
         Ok(())
     }
 
@@ -84,7 +89,7 @@ impl SessionCache {
         let mut cache = self.global_cache.write().await;
         cache.add_recent_session(session, self.config.max_recent_sessions);
 
-        *self.dirty.write().await = true;
+        self.mark_dirty().await;
         Ok(())
     }
 
@@ -101,7 +106,7 @@ impl SessionCache {
         let mut cache = self.global_cache.write().await;
         updater(&mut cache.preferences);
 
-        *self.dirty.write().await = true;
+        self.mark_dirty().await;
         Ok(())
     }
 
@@ -113,7 +118,7 @@ impl SessionCache {
     /// Set current session ID
     pub async fn set_current_session_id(&self, id: Option<String>) -> SageResult<()> {
         self.global_cache.write().await.current_session_id = id;
-        *self.dirty.write().await = true;
+        self.mark_dirty().await;
         Ok(())
     }
 

@@ -159,7 +159,7 @@ impl SessionHeader {
 
 /// Session aggregate view (in-memory)
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Session {
+pub struct UnifiedSession {
     /// Session metadata
     pub header: SessionHeader,
 
@@ -172,7 +172,7 @@ pub struct Session {
     pub snapshots: Vec<FileHistorySnapshot>,
 }
 
-impl Session {
+impl UnifiedSession {
     /// Create a new session
     pub fn new(working_directory: PathBuf) -> Self {
         let id = uuid::Uuid::new_v4().to_string();

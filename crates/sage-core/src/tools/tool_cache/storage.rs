@@ -45,16 +45,22 @@ impl ToolCache {
         if let Some(entry) = entries.get_mut(key) {
             if entry.is_valid() {
                 entry.hit_count += 1;
-                self.stats.write().await.hits += 1;
-                return Some(entry.clone());
-            } else {
-                // Remove expired entry
-                entries.remove(key);
-                self.stats.write().await.expirations += 1;
+                let cached = entry.clone();
+                drop(entries);
+                self.record_hit().await;
+                return Some(cached);
             }
+
+            // Remove expired entry
+            entries.remove(key);
+            drop(entries);
+            self.record_expiration().await;
+            self.record_miss().await;
+            return None;
         }
 
-        self.stats.write().await.misses += 1;
+        drop(entries);
+        self.record_miss().await;
         None
     }
 
@@ -127,6 +133,18 @@ impl ToolCache {
         }
 
         removed
+    }
+
+    async fn record_hit(&self) {
+        self.stats.write().await.hits += 1;
+    }
+
+    async fn record_miss(&self) {
+        self.stats.write().await.misses += 1;
+    }
+
+    async fn record_expiration(&self) {
+        self.stats.write().await.expirations += 1;
     }
 
     /// Get cache statistics

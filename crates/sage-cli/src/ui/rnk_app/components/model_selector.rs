@@ -2,7 +2,7 @@
 
 use rnk::prelude::*;
 
-use crate::ui::rnk_app::theme::Theme;
+use crate::ui::rnk_app::theme::TerminalTheme;
 
 // Alias rnk's Box to avoid conflict with std::boxed::Box
 use rnk::prelude::Box as RnkBox;
@@ -11,7 +11,7 @@ use rnk::prelude::Box as RnkBox;
 const MAX_VISIBLE: usize = 6;
 
 /// Render model selector when in model selection mode
-pub fn render_model_selector(models: &[String], selected_index: usize, theme: &Theme) -> Element {
+pub fn render_model_selector(models: &[String], selected_index: usize, theme: &TerminalTheme) -> Element {
     let match_count = models.len();
     let selected = selected_index.min(match_count.saturating_sub(1));
 

@@ -17,7 +17,7 @@ use tokio::task::JoinHandle;
 
 /// Application state for signal handling
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum AppState {
+pub enum SignalHandlerState {
     /// Waiting for user input at prompt
     WaitingForInput,
     /// Executing a task
@@ -31,7 +31,7 @@ pub struct SignalHandler {
     /// Handle to the signal handling task
     task_handle: Option<JoinHandle<()>>,
     /// Current application state (using parking_lot::Mutex for async safety)
-    app_state: Arc<Mutex<AppState>>,
+    app_state: Arc<Mutex<SignalHandlerState>>,
     /// Counter for consecutive Ctrl+C presses
     ctrl_c_count: Arc<AtomicU32>,
     /// Timestamp of last Ctrl+C press (using parking_lot::Mutex for async safety)
@@ -44,10 +44,38 @@ impl SignalHandler {
         Self {
             is_active: Arc::new(AtomicBool::new(false)),
             task_handle: None,
-            app_state: Arc::new(Mutex::new(AppState::WaitingForInput)),
+            app_state: Arc::new(Mutex::new(SignalHandlerState::WaitingForInput)),
             ctrl_c_count: Arc::new(AtomicU32::new(0)),
             last_ctrl_c_time: Arc::new(Mutex::new(None)),
         }
+    }
+
+    fn update_ctrl_c_exit_state(
+        last_ctrl_c_time: &Arc<Mutex<Option<Instant>>>,
+        ctrl_c_count: &Arc<AtomicU32>,
+    ) -> bool {
+        let now = Instant::now();
+        let mut should_exit = false;
+
+        let mut last_time = last_ctrl_c_time.lock();
+        if let Some(last) = *last_time {
+            if now.duration_since(last) < Duration::from_secs(2) {
+                should_exit = true;
+            } else {
+                ctrl_c_count.store(1, Ordering::Relaxed);
+            }
+        } else {
+            ctrl_c_count.store(1, Ordering::Relaxed);
+        }
+        *last_time = Some(now);
+
+        should_exit
+    }
+
+    fn interrupt_current_task() {
+        global_interrupt_manager()
+            .lock()
+            .interrupt(InterruptReason::UserInterrupt);
     }
 
     /// Start signal handling
@@ -76,28 +104,10 @@ impl SignalHandler {
                             // Using parking_lot::Mutex - lock() returns guard directly
                             let state = *app_state.lock();
                             match state {
-                                AppState::WaitingForInput => {
+                                SignalHandlerState::WaitingForInput => {
                                     // During input prompt - implement double Ctrl+C to exit
-                                    let now = Instant::now();
-                                    let mut should_exit = false;
-
-                                    {
-                                        let mut last_time = last_ctrl_c_time.lock();
-                                        if let Some(last) = *last_time {
-                                            // Check if this is within 2 seconds of the last Ctrl+C
-                                            if now.duration_since(last) < Duration::from_secs(2) {
-                                                // Second Ctrl+C within 2 seconds - exit
-                                                should_exit = true;
-                                            } else {
-                                                // Reset counter if too much time has passed
-                                                ctrl_c_count.store(1, Ordering::Relaxed);
-                                            }
-                                        } else {
-                                            // First Ctrl+C
-                                            ctrl_c_count.store(1, Ordering::Relaxed);
-                                        }
-                                        *last_time = Some(now);
-                                    }
+                                    let should_exit =
+                                        Self::update_ctrl_c_exit_state(&last_ctrl_c_time, &ctrl_c_count);
 
                                     if should_exit {
                                         eprintln!("\nGoodbye!");
@@ -108,12 +118,10 @@ impl SignalHandler {
                                         );
                                     }
                                 }
-                                AppState::ExecutingTask => {
+                                SignalHandlerState::ExecutingTask => {
                                     // During task execution - interrupt the task
                                     // parking_lot::Mutex is used in sage-core, .lock() returns guard directly
-                                    global_interrupt_manager()
-                                        .lock()
-                                        .interrupt(InterruptReason::UserInterrupt);
+                                    Self::interrupt_current_task();
 
                                     // Print a message to let user know the task was interrupted
                                     eprintln!("\n🛑 Interrupting current task... (Ctrl+C)");
@@ -160,13 +168,13 @@ impl SignalHandler {
     }
 
     /// Set the application state for signal handling
-    pub fn set_app_state(&self, state: AppState) {
+    pub fn set_app_state(&self, state: SignalHandlerState) {
         // parking_lot::Mutex - lock() returns guard directly
         *self.app_state.lock() = state;
     }
 
     /// Get the current application state
-    pub fn get_app_state(&self) -> AppState {
+    pub fn get_app_state(&self) -> SignalHandlerState {
         // parking_lot::Mutex - lock() returns guard directly
         *self.app_state.lock()
     }
@@ -254,12 +262,12 @@ pub fn is_global_signal_handling_active() -> bool {
 }
 
 /// Set the global application state for signal handling
-pub fn set_global_app_state(state: AppState) {
+pub fn set_global_app_state(state: SignalHandlerState) {
     global_signal_handler().lock().set_app_state(state);
 }
 
 /// Get the global application state
-pub fn get_global_app_state() -> AppState {
+pub fn get_global_app_state() -> SignalHandlerState {
     global_signal_handler().lock().get_app_state()
 }
 

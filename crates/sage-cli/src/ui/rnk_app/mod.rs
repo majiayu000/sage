@@ -74,192 +74,142 @@ fn app() -> Element {
     // Get terminal width each render so resize is handled naturally
     let (term_width, _) = terminal::size().unwrap_or((80, 24));
 
-    // Check if should quit
-    {
+    // Handle keyboard input
+    use_input({
+        let state = Arc::clone(state);
+        let cmd_tx = cmd_tx.clone();
+
+        move |ch, key| {
+            let mut command: Option<UiCommand> = None;
+
+            {
+                let mut s = state.write();
+
+                // Ctrl+C to quit
+                if key.ctrl && ch == "c" {
+                    s.should_quit = true;
+                    command = Some(UiCommand::Quit);
+                } else if key.escape {
+                    // ESC to cancel or exit model select mode
+                    if s.model_select_mode {
+                        s.model_select_mode = false;
+                        s.model_select_index = 0;
+                        s.available_models.clear();
+                    } else if s.is_busy {
+                        command = Some(UiCommand::Cancel);
+                    } else {
+                        s.suggestion_index = 0;
+                    }
+                } else if key.shift && ch == "\t" {
+                    // Shift+Tab to cycle permission mode
+                    s.permission_mode = s.permission_mode.cycle();
+                } else if s.is_busy {
+                    // Don't accept input while busy
+                    return;
+                } else if s.model_select_mode {
+                    // Model selection mode
+                    if key.up_arrow {
+                        if s.model_select_index > 0 {
+                            s.model_select_index -= 1;
+                        }
+                    } else if key.down_arrow {
+                        let max = s.available_models.len().saturating_sub(1);
+                        if s.model_select_index < max {
+                            s.model_select_index += 1;
+                        }
+                    } else if key.return_key || (key.tab && !key.shift) {
+                        if let Some(m) = s.available_models.get(s.model_select_index).cloned() {
+                            command = Some(UiCommand::Submit(format!("/model {}", m)));
+                        }
+                        s.model_select_mode = false;
+                        s.model_select_index = 0;
+                        s.available_models.clear();
+                    }
+                    // Ignore other keys in model mode
+                } else if key.up_arrow {
+                    // Normal mode - Up arrow
+                    if s.input_text.starts_with('/') && s.suggestion_index > 0 {
+                        s.suggestion_index -= 1;
+                    }
+                } else if key.down_arrow {
+                    // Down arrow - move selection down (with clamping)
+                    if s.input_text.starts_with('/') {
+                        let max_count = count_matching_commands(&s.input_text);
+                        if s.suggestion_index < max_count.saturating_sub(1) {
+                            s.suggestion_index += 1;
+                        }
+                    }
+                } else if key.tab && !key.shift {
+                    // Tab - auto-complete selected command
+                    if let Some(cmd) = get_selected_command(&s.input_text, s.suggestion_index) {
+                        s.input_text = cmd;
+                        s.suggestion_index = 0;
+                    }
+                } else if key.backspace {
+                    // Backspace
+                    s.input_text.pop();
+                    s.suggestion_index = 0;
+                } else if key.return_key {
+                    // Enter to submit
+                    let text = if s.input_text.starts_with('/') {
+                        get_selected_command(&s.input_text, s.suggestion_index)
+                            .unwrap_or_else(|| s.input_text.clone())
+                    } else {
+                        s.input_text.clone()
+                    };
+                    s.input_text.clear();
+                    s.suggestion_index = 0;
+                    if !text.is_empty() {
+                        command = Some(UiCommand::Submit(text));
+                    }
+                } else if !ch.is_empty() && !key.ctrl && !key.alt {
+                    // Regular character input
+                    s.input_text.push_str(ch);
+                    s.suggestion_index = 0;
+                }
+            }
+
+            if let Some(cmd) = command {
+                if let Err(e) = cmd_tx.try_send(cmd) {
+                    tracing::warn!("Failed to send UI command: {}", e);
+                }
+            }
+        }
+    });
+
+    // Read state snapshot and check if should quit
+    let (
+        is_busy,
+        input_text,
+        status_text,
+        permission_mode,
+        suggestion_index,
+        animation_frame,
+        model_name,
+        model_select_mode,
+        available_models,
+        model_select_index,
+    ) = {
         let ui_state = state.read();
         if ui_state.should_quit {
             drop(ui_state);
             app_ctx.exit();
             return Text::new("Goodbye!").into_element();
         }
-    }
 
-    // Handle keyboard input
-    use_input({
-        let state = Arc::clone(state);
-        let cmd_tx = cmd_tx.clone();
-        let app_ctx = app_ctx.clone();
-
-        move |ch, key| {
-            // Ctrl+C to quit
-            if key.ctrl && ch == "c" {
-                let _ = cmd_tx.try_send(UiCommand::Quit);
-                app_ctx.exit();
-                return;
-            }
-
-            // Check if in model select mode
-            let in_model_mode = state.read().model_select_mode;
-
-            // ESC to cancel or exit model select mode
-            if key.escape {
-                let mut s = state.write();
-                if s.model_select_mode {
-                    // Exit model selection mode
-                    s.model_select_mode = false;
-                    s.model_select_index = 0;
-                    s.available_models.clear();
-                } else if s.is_busy {
-                    drop(s);
-                    let _ = cmd_tx.try_send(UiCommand::Cancel);
-                } else {
-                    // Reset suggestion index
-                    s.suggestion_index = 0;
-                }
-                return;
-            }
-
-            // Shift+Tab to cycle permission mode
-            if key.shift && ch == "\t" {
-                let mut s = state.write();
-                s.permission_mode = s.permission_mode.cycle();
-                return;
-            }
-
-            // Don't accept input while busy
-            {
-                let s = state.read();
-                if s.is_busy {
-                    return;
-                }
-            }
-
-            // Model selection mode - handle separately
-            if in_model_mode {
-                if key.up_arrow {
-                    let mut s = state.write();
-                    if s.model_select_index > 0 {
-                        s.model_select_index -= 1;
-                    }
-                    return;
-                }
-
-                if key.down_arrow {
-                    let mut s = state.write();
-                    let max = s.available_models.len().saturating_sub(1);
-                    if s.model_select_index < max {
-                        s.model_select_index += 1;
-                    }
-                    return;
-                }
-
-                if key.return_key || (key.tab && !key.shift) {
-                    // Select the model and switch
-                    let model = {
-                        let mut s = state.write();
-                        let model = s.available_models.get(s.model_select_index).cloned();
-                        s.model_select_mode = false;
-                        s.model_select_index = 0;
-                        s.available_models.clear();
-                        model
-                    };
-                    if let Some(m) = model {
-                        let _ = cmd_tx.try_send(UiCommand::Submit(format!("/model {}", m)));
-                    }
-                    return;
-                }
-
-                // Any other key exits model select mode
-                return;
-            }
-
-            // Normal mode - Up arrow - move selection up
-            if key.up_arrow {
-                let mut s = state.write();
-                if s.input_text.starts_with('/') && s.suggestion_index > 0 {
-                    s.suggestion_index -= 1;
-                }
-                return;
-            }
-
-            // Down arrow - move selection down (with clamping)
-            if key.down_arrow {
-                let mut s = state.write();
-                if s.input_text.starts_with('/') {
-                    let max_count = count_matching_commands(&s.input_text);
-                    if s.suggestion_index < max_count.saturating_sub(1) {
-                        s.suggestion_index += 1;
-                    }
-                }
-                return;
-            }
-
-            // Tab - auto-complete selected command
-            if key.tab && !key.shift {
-                let mut s = state.write();
-                if let Some(cmd) = get_selected_command(&s.input_text, s.suggestion_index) {
-                    s.input_text = cmd;
-                    s.suggestion_index = 0;
-                }
-                return;
-            }
-
-            // Backspace
-            if key.backspace {
-                let mut s = state.write();
-                s.input_text.pop();
-                // Reset suggestion index when input changes
-                s.suggestion_index = 0;
-                return;
-            }
-
-            // Enter to submit
-            if key.return_key {
-                let text = {
-                    let mut s = state.write();
-                    // If showing suggestions and a command is selected, use that
-                    let text = if s.input_text.starts_with('/') {
-                        if let Some(cmd) = get_selected_command(&s.input_text, s.suggestion_index) {
-                            cmd
-                        } else {
-                            s.input_text.clone()
-                        }
-                    } else {
-                        s.input_text.clone()
-                    };
-                    s.input_text.clear();
-                    s.suggestion_index = 0;
-                    text
-                };
-                if !text.is_empty() {
-                    let _ = cmd_tx.try_send(UiCommand::Submit(text));
-                }
-                return;
-            }
-
-            // Regular character input
-            if !ch.is_empty() && !key.ctrl && !key.alt {
-                let mut s = state.write();
-                s.input_text.push_str(ch);
-                // Reset suggestion index when input changes
-                s.suggestion_index = 0;
-            }
-        }
-    });
-
-    // Read current state
-    let ui_state = state.read();
-    let is_busy = ui_state.is_busy;
-    let input_text = ui_state.input_text.clone();
-    let status_text = ui_state.status_text.clone();
-    let permission_mode = ui_state.permission_mode;
-    let suggestion_index = ui_state.suggestion_index;
-    let animation_frame = ui_state.animation_frame;
-    let model_name = ui_state.session.model.clone();
-    let model_select_mode = ui_state.model_select_mode;
-    let available_models = ui_state.available_models.clone();
-    let model_select_index = ui_state.model_select_index;
-    drop(ui_state);
+        (
+            ui_state.is_busy,
+            ui_state.input_text.clone(),
+            ui_state.status_text.clone(),
+            ui_state.permission_mode,
+            ui_state.suggestion_index,
+            ui_state.animation_frame,
+            ui_state.session.model.clone(),
+            ui_state.model_select_mode,
+            ui_state.available_models.clone(),
+            ui_state.model_select_index,
+        )
+    };
 
     let theme = current_theme();
     let term_width_usize = term_width as usize;

@@ -88,23 +88,35 @@ impl SessionCache {
         Ok(())
     }
 
+    async fn save_global_cache(&self) -> SageResult<()> {
+        let global = self.global_cache.read().await;
+        save_cache_file(&self.global_path, &global).await
+    }
+
+    async fn save_project_cache_if_present(&self) -> SageResult<()> {
+        if let Some(path) = &self.project_path {
+            let project = self.project_cache.read().await;
+            if let Some(data) = &*project {
+                save_cache_file(path, data).await?;
+            }
+        }
+        Ok(())
+    }
+
+    async fn mark_clean(&self) {
+        let mut dirty = self.dirty.write().await;
+        *dirty = false;
+    }
+
     /// Save cache to disk
     pub async fn save(&self) -> SageResult<()> {
         if !self.config.enabled {
             return Ok(());
         }
 
-        // Save global cache
-        save_cache_file(&self.global_path, &*self.global_cache.read().await).await?;
-
-        // Save project cache if exists
-        if let Some(path) = &self.project_path {
-            if let Some(data) = &*self.project_cache.read().await {
-                save_cache_file(path, data).await?;
-            }
-        }
-
-        *self.dirty.write().await = false;
+        self.save_global_cache().await?;
+        self.save_project_cache_if_present().await?;
+        self.mark_clean().await;
         Ok(())
     }
 }

@@ -8,7 +8,7 @@ use tokio::time::sleep;
 
 /// Rate limiter using token bucket algorithm
 #[derive(Debug)]
-pub struct RateLimiter {
+pub struct RecoveryRateLimiter {
     /// Configuration
     config: RateLimitConfig,
     /// Current tokens available
@@ -19,7 +19,7 @@ pub struct RateLimiter {
     concurrent_semaphore: Arc<Semaphore>,
 }
 
-impl RateLimiter {
+impl RecoveryRateLimiter {
     /// Create a new rate limiter with default configuration
     pub fn new() -> Self {
         Self::with_config(RateLimitConfig::default())
@@ -167,7 +167,7 @@ impl RateLimiter {
     }
 }
 
-impl Default for RateLimiter {
+impl Default for RecoveryRateLimiter {
     fn default() -> Self {
         Self::new()
     }

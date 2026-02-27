@@ -44,25 +44,28 @@ impl ViolationStore {
     pub fn record(&self, violation: Violation) {
         let vtype = violation.violation_type;
 
-        let mut violations = self.violations.write();
+        let removed_type = {
+            let mut violations = self.violations.write();
 
-        // Enforce max capacity by removing oldest
-        if violations.len() >= self.max_violations {
-            if let Some(removed) = violations.front() {
-                let removed_type = removed.violation_type;
-                let mut counts = self.counts.write();
-                if let Some(count) = counts.get_mut(&removed_type) {
-                    *count = count.saturating_sub(1);
-                }
-            }
-            violations.pop_front();
-        }
+            // Enforce max capacity by removing oldest
+            let removed_type = if violations.len() >= self.max_violations {
+                let removed_type = violations.front().map(|v| v.violation_type);
+                violations.pop_front();
+                removed_type
+            } else {
+                None
+            };
 
-        violations.push_back(violation);
-        drop(violations);
+            violations.push_back(violation);
+            removed_type
+        };
 
-        // Update count
         let mut counts = self.counts.write();
+        if let Some(removed_type) = removed_type {
+            if let Some(count) = counts.get_mut(&removed_type) {
+                *count = count.saturating_sub(1);
+            }
+        }
         *counts.entry(vtype).or_insert(0) += 1;
     }
 

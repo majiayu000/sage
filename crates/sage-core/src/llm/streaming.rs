@@ -305,7 +305,7 @@ pub mod sse {
 
     /// SSE event for streaming responses
     #[derive(Debug, Clone)]
-    pub struct SseEvent {
+    pub struct StreamingSseEvent {
         /// Event type
         pub event: Option<String>,
         /// Event data
@@ -316,7 +316,7 @@ pub mod sse {
         pub retry: Option<u64>,
     }
 
-    impl SseEvent {
+    impl StreamingSseEvent {
         /// Create a new SSE event
         pub fn new(data: impl Into<String>) -> Self {
             Self {
@@ -346,7 +346,7 @@ pub mod sse {
         }
     }
 
-    impl fmt::Display for SseEvent {
+    impl fmt::Display for StreamingSseEvent {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             if let Some(event) = &self.event {
                 writeln!(f, "event: {}", event)?;
@@ -364,7 +364,7 @@ pub mod sse {
     }
 
     /// Convert a stream chunk to SSE event
-    pub fn chunk_to_sse(chunk: StreamChunk) -> SageResult<SseEvent> {
+    pub fn chunk_to_sse(chunk: StreamChunk) -> SageResult<StreamingSseEvent> {
         let data = serde_json::to_string(&chunk)?;
 
         let event_type = if chunk.is_final {
@@ -375,13 +375,13 @@ pub mod sse {
             "chunk"
         };
 
-        Ok(SseEvent::new(data).with_event(event_type))
+        Ok(StreamingSseEvent::new(data).with_event(event_type))
     }
 
     /// Convert a stream to SSE events
     pub fn stream_to_sse(
         stream: LlmStream,
-    ) -> Pin<Box<dyn Stream<Item = SageResult<SseEvent>> + Send>> {
+    ) -> Pin<Box<dyn Stream<Item = SageResult<StreamingSseEvent>> + Send>> {
         Box::pin(stream.map(|chunk_result| chunk_result.and_then(chunk_to_sse)))
     }
 }

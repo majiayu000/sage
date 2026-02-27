@@ -11,7 +11,7 @@ mod types;
 mod tests;
 
 // Re-export public types
-pub use bucket::RateLimiter;
+pub use bucket::LlmRateLimiter;
 pub use types::RateLimitConfig;
 
 // Re-export global registry functions

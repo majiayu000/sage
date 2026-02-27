@@ -129,14 +129,33 @@ impl McpClient {
         let result: InitializeResult = self.call(methods::INITIALIZE, Some(json!(params))).await?;
 
         // Store server info and capabilities
-        *self.server_info.write().await = Some(result.server_info.clone());
-        *self.capabilities.write().await = result.capabilities;
-        *self.initialized.write().await = true;
+        self.apply_initialize_result(&result).await;
 
         // Send initialized notification
         self.notify(methods::INITIALIZED, None).await?;
 
         Ok(result.server_info)
+    }
+
+    async fn set_server_info(&self, info: McpServerInfo) {
+        let mut server_info = self.server_info.write().await;
+        *server_info = Some(info);
+    }
+
+    async fn set_capabilities(&self, capabilities: McpCapabilities) {
+        let mut capabilities_guard = self.capabilities.write().await;
+        *capabilities_guard = capabilities;
+    }
+
+    async fn set_initialized(&self, initialized: bool) {
+        let mut initialized_guard = self.initialized.write().await;
+        *initialized_guard = initialized;
+    }
+
+    async fn apply_initialize_result(&self, result: &InitializeResult) {
+        self.set_server_info(result.server_info.clone()).await;
+        self.set_capabilities(result.capabilities.clone()).await;
+        self.set_initialized(true).await;
     }
 
     /// Check if the client is initialized
@@ -154,29 +173,36 @@ impl McpClient {
         self.capabilities.read().await.clone()
     }
 
+    fn take_receiver_handle(&self) -> Result<Option<JoinHandle<()>>, McpError> {
+        let mut guard = self
+            .receiver_handle
+            .lock()
+            .map_err(|_| McpError::other("receiver handle lock poisoned"))?;
+        Ok(guard.take())
+    }
+
     /// Close the client connection
     pub async fn close(&self) -> Result<(), McpError> {
         // Signal the receiver to stop
         self.running.store(false, Ordering::SeqCst);
-        let _ = self.command_sender.send(ReceiverCommand::Shutdown).await;
-
-        // Close the transport
-        let mut transport = self.transport.lock().await;
-        transport.close().await?;
-
-        // Wait for background receiver to finish
-        let handle = {
-            let mut guard = self
-                .receiver_handle
-                .lock()
-                .map_err(|_| McpError::other("receiver handle lock poisoned"))?;
-            guard.take()
-        };
-        if let Some(handle) = handle {
-            let _ = handle.await;
+        if let Err(e) = self.command_sender.send(ReceiverCommand::Shutdown).await {
+            tracing::debug!("Failed to send MCP shutdown command: {}", e);
         }
 
-        *self.initialized.write().await = false;
+        // Close the transport
+        {
+            let mut transport = self.transport.lock().await;
+            transport.close().await?;
+        }
+
+        // Wait for background receiver to finish
+        if let Some(handle) = self.take_receiver_handle()? {
+            if let Err(e) = handle.await {
+                tracing::debug!("MCP receiver task ended with error: {}", e);
+            }
+        }
+
+        self.set_initialized(false).await;
         Ok(())
     }
 
