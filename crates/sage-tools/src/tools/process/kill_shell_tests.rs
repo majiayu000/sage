@@ -1,8 +1,6 @@
 use super::*;
 use serde_json::json;
 use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::Mutex;
 
 fn create_tool_call(id: &str, name: &str, args: serde_json::Value) -> ToolCall {
     let arguments = if let serde_json::Value::Object(map) = args {
@@ -21,8 +19,7 @@ fn create_tool_call(id: &str, name: &str, args: serde_json::Value) -> ToolCall {
 
 #[tokio::test]
 async fn test_kill_shell_not_found() {
-    let registry = Arc::new(Mutex::new(HashMap::new()));
-    let tool = KillShellTool::with_registry(registry);
+    let tool = KillShellTool::new();
 
     let call = create_tool_call(
         "test-1",
@@ -156,24 +153,25 @@ fn test_kill_shell_tool_properties() {
 #[cfg(unix)]
 #[tokio::test]
 async fn test_kill_shell_with_mock_process() {
-    use std::process::Command;
+    use sage_core::tools::BackgroundShellTask;
+    use std::path::PathBuf;
+    use std::sync::Arc;
+    use tokio_util::sync::CancellationToken;
 
-    // Start a simple sleep process
-    let mut child = Command::new("sleep")
-        .arg("60")
-        .spawn()
-        .expect("Failed to spawn sleep process");
+    let shell_id = "test_shell";
+    let _ = BACKGROUND_REGISTRY.remove(shell_id);
 
-    let pid = child.id();
+    let task = BackgroundShellTask::spawn(
+        shell_id.to_string(),
+        "sleep 60",
+        &PathBuf::from("/tmp"),
+        CancellationToken::new(),
+    )
+    .await
+    .expect("Failed to spawn background shell task");
+    BACKGROUND_REGISTRY.register(Arc::new(task));
 
-    // Register the shell
-    let registry = Arc::new(Mutex::new(HashMap::new()));
-    {
-        let mut shells = registry.lock().await;
-        shells.insert("test_shell".to_string(), pid);
-    }
-
-    let tool = KillShellTool::with_registry(registry.clone());
+    let tool = KillShellTool::new();
 
     let call = create_tool_call(
         "test-6",
@@ -195,11 +193,5 @@ async fn test_kill_shell_with_mock_process() {
             .contains("Successfully terminated")
     );
 
-    // Verify the shell was removed from registry
-    let shells = registry.lock().await;
-    assert!(!shells.contains_key("test_shell"));
-
-    // Clean up: ensure child is killed
-    let _ = child.kill();
-    let _ = child.wait();
+    assert!(!BACKGROUND_REGISTRY.exists(shell_id));
 }
