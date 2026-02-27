@@ -6,9 +6,11 @@ use sage_core::{
     agent::{ExecutionMode, ExecutionOptions, UnifiedExecutor},
     error::SageResult,
     input::{InputChannel, InputResponse},
+    mcp::{clear_active_mcp_registry, set_active_mcp_registry},
     types::TaskMetadata,
 };
 use std::path::PathBuf;
+use std::sync::Arc;
 
 impl SageAgentSdk {
     /// Run a task with default options.
@@ -106,6 +108,8 @@ impl SageAgentSdk {
             tracing::info!("MCP is enabled, building MCP registry...");
             match sage_core::mcp::build_mcp_registry_from_config(&self.config).await {
                 Ok(mcp_registry) => {
+                    let mcp_registry = Arc::new(mcp_registry);
+                    set_active_mcp_registry(Arc::clone(&mcp_registry));
                     let mcp_tools = mcp_registry.as_tools().await;
                     tracing::info!(
                         "Loaded {} MCP tools from {} servers",
@@ -118,9 +122,12 @@ impl SageAgentSdk {
                     }
                 }
                 Err(e) => {
+                    clear_active_mcp_registry();
                     tracing::error!("Failed to build MCP registry: {}", e);
                 }
             }
+        } else {
+            clear_active_mcp_registry();
         }
 
         executor.register_tools(all_tools);

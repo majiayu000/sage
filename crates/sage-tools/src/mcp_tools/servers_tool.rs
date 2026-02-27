@@ -2,27 +2,47 @@
 //!
 //! Provides a tool for viewing and managing MCP server connections within the agent.
 
-use anyhow::anyhow;
 use async_trait::async_trait;
+use sage_core::mcp::{McpRegistry, get_active_mcp_registry, set_active_mcp_registry};
 use sage_core::tools::{Tool, ToolCall, ToolError, ToolParameter, ToolResult, ToolSchema};
 use std::sync::Arc;
-use tokio::sync::OnceCell;
-
-use super::registry::SharedMcpToolRegistry;
-
-/// Global MCP tool registry instance
-static GLOBAL_MCP_REGISTRY: OnceCell<SharedMcpToolRegistry> = OnceCell::const_new();
 
 /// Initialize the global MCP tool registry
-pub async fn init_global_mcp_registry(registry: SharedMcpToolRegistry) -> anyhow::Result<()> {
-    GLOBAL_MCP_REGISTRY
-        .set(registry)
-        .map_err(|_| anyhow!("MCP registry already initialized"))
+pub async fn init_global_mcp_registry(registry: Arc<McpRegistry>) -> anyhow::Result<()> {
+    set_active_mcp_registry(registry);
+    Ok(())
 }
 
 /// Get the global MCP tool registry
-pub fn get_global_mcp_registry() -> Option<SharedMcpToolRegistry> {
-    GLOBAL_MCP_REGISTRY.get().cloned()
+pub fn get_global_mcp_registry() -> Option<Arc<McpRegistry>> {
+    get_active_mcp_registry()
+}
+
+async fn server_tool_names(registry: &McpRegistry, server_name: &str) -> Option<Vec<String>> {
+    let client = registry.get_client(server_name)?;
+    let mut names = client
+        .cached_tools()
+        .await
+        .into_iter()
+        .map(|tool| tool.name)
+        .collect::<Vec<_>>();
+    names.sort();
+    Some(names)
+}
+
+async fn all_server_tools(registry: &McpRegistry) -> Vec<(String, Vec<String>)> {
+    let mut server_names = registry.server_names();
+    server_names.sort();
+
+    let mut by_server = Vec::with_capacity(server_names.len());
+    for server_name in server_names {
+        let tools = server_tool_names(registry, &server_name)
+            .await
+            .unwrap_or_default();
+        by_server.push((server_name, tools));
+    }
+
+    by_server
 }
 
 /// MCP Servers management tool
@@ -101,25 +121,13 @@ Example:
 
         let response = match action.to_lowercase().as_str() {
             "list" => {
-                let statuses = registry.server_statuses().await;
-
-                if statuses.is_empty() {
+                let by_server = all_server_tools(&registry).await;
+                if by_server.is_empty() {
                     "No MCP servers configured.".to_string()
                 } else {
-                    let mut output = format!("MCP Servers ({} total):\n\n", statuses.len());
-                    for status in statuses {
-                        let status_icon = if status.connected { "✓" } else { "✗" };
-                        output.push_str(&format!(
-                            "{} {} - {} tool(s){}\n",
-                            status_icon,
-                            status.name,
-                            status.tool_count,
-                            if let Some(err) = &status.error {
-                                format!(" (Error: {})", err)
-                            } else {
-                                String::new()
-                            }
-                        ));
+                    let mut output = format!("MCP Servers ({} total):\n\n", by_server.len());
+                    for (server_name, tools) in by_server {
+                        output.push_str(&format!("✓ {} - {} tool(s)\n", server_name, tools.len()));
                     }
                     output
                 }
@@ -127,14 +135,15 @@ Example:
 
             "tools" => {
                 let server_name = call.get_string("server");
-
-                let tools_by_server = registry.tool_names_by_server().await;
+                let tools_by_server = all_server_tools(&registry).await;
 
                 if tools_by_server.is_empty() {
                     "No MCP tools available. Connect to an MCP server first.".to_string()
                 } else if let Some(server) = server_name {
                     // Show tools from specific server
-                    if let Some(tools) = tools_by_server.get(&server) {
+                    if let Some((_, tools)) =
+                        tools_by_server.iter().find(|(name, _)| name == &server)
+                    {
                         let mut output = format!("Tools from '{}':\n\n", server);
                         for (i, tool) in tools.iter().enumerate() {
                             output.push_str(&format!("{}. {}\n", i + 1, tool));
@@ -146,9 +155,9 @@ Example:
                 } else {
                     // Show all tools organized by server
                     let mut output = String::from("Available MCP Tools:\n\n");
-                    for (server, tools) in &tools_by_server {
+                    for (server, tools) in tools_by_server {
                         output.push_str(&format!("From '{}':\n", server));
-                        for tool in tools {
+                        for tool in &tools {
                             output.push_str(&format!("  - {}\n", tool));
                         }
                         output.push('\n');
@@ -164,22 +173,14 @@ Example:
                     )
                 })?;
 
-                let statuses = registry.server_statuses().await;
-
-                if let Some(status) = statuses.iter().find(|s| s.name == server_name) {
+                if let Some(tools) = server_tool_names(&registry, &server_name).await {
                     format!(
                         "Server: {}\n\
                          Connected: {}\n\
-                         Tools: {}\n\
-                         {}",
-                        status.name,
-                        if status.connected { "Yes" } else { "No" },
-                        status.tool_count,
-                        if let Some(err) = &status.error {
-                            format!("Error: {}", err)
-                        } else {
-                            String::new()
-                        }
+                         Tools: {}",
+                        server_name,
+                        "Yes",
+                        tools.len()
                     )
                 } else {
                     format!("Server '{}' not found.", server_name)
@@ -187,8 +188,8 @@ Example:
             }
 
             "refresh" => {
-                let tool_count = registry.tool_count().await;
-                let server_count = registry.server_count().await;
+                let server_count = registry.server_names().len();
+                let tool_count = registry.as_tools().await.len();
 
                 format!(
                     "MCP registry refreshed.\n\
@@ -224,7 +225,7 @@ Example:
 /// Get all MCP tools as Sage tools for the agent
 pub async fn get_mcp_tools() -> Vec<Arc<dyn Tool>> {
     match get_global_mcp_registry() {
-        Some(registry) => registry.all_tools().await,
+        Some(registry) => registry.as_tools().await,
         None => Vec::new(),
     }
 }
@@ -236,6 +237,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_mcp_servers_tool_list_no_registry() {
+        sage_core::mcp::clear_active_mcp_registry();
         let tool = McpServersTool::new();
 
         let call = ToolCall {

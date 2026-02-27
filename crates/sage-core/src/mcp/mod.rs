@@ -40,6 +40,7 @@ pub mod error;
 pub mod notifications;
 pub mod protocol;
 pub mod registry;
+pub mod runtime_registry;
 pub mod schema_translator;
 pub mod transport;
 pub mod types;
@@ -56,6 +57,9 @@ pub use notifications::{
 };
 pub use protocol::{McpMessage, McpNotification, McpRequest, McpResponse};
 pub use registry::{McpRegistry, McpToolAdapter};
+pub use runtime_registry::{
+    clear_active_mcp_registry, get_active_mcp_registry, set_active_mcp_registry,
+};
 pub use schema_translator::SchemaTranslator;
 pub use transport::{
     HttpTransport, HttpTransportConfig, McpTransport, StdioTransport, TransportConfig,

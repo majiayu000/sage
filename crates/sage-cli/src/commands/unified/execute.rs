@@ -6,6 +6,7 @@ use sage_core::agent::{ExecutionMode, ExecutionOptions, UnifiedExecutor};
 use sage_core::config::load_config_from_file;
 use sage_core::error::SageResult;
 use sage_core::input::InputChannel;
+use sage_core::mcp::{clear_active_mcp_registry, set_active_mcp_registry};
 use sage_core::output::OutputMode;
 use sage_tools::get_default_tools;
 use std::path::PathBuf;
@@ -81,6 +82,8 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
         tracing::info!("MCP is enabled, building MCP registry...");
         match build_mcp_registry_from_config(&config).await {
             Ok(mcp_registry) => {
+                let mcp_registry = Arc::new(mcp_registry);
+                set_active_mcp_registry(Arc::clone(&mcp_registry));
                 let mcp_tools = mcp_registry.as_tools().await;
                 tracing::info!(
                     "Loaded {} MCP tools from {} servers",
@@ -92,10 +95,12 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
                 }
             }
             Err(e) => {
+                clear_active_mcp_registry();
                 tracing::error!("Failed to build MCP registry: {}", e);
             }
         }
     } else {
+        clear_active_mcp_registry();
         tracing::debug!("MCP is disabled in configuration");
     }
 

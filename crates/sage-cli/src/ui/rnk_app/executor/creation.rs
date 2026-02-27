@@ -3,8 +3,10 @@
 use sage_core::agent::UnifiedExecutor;
 use sage_core::agent::{ExecutionMode, ExecutionOptions};
 use sage_core::error::SageResult;
+use sage_core::mcp::{clear_active_mcp_registry, set_active_mcp_registry};
 use sage_core::output::OutputMode;
 use sage_core::ui::traits::UiContext;
+use std::sync::Arc;
 
 /// Create executor with unified configuration path
 pub async fn create_executor(
@@ -48,15 +50,20 @@ pub async fn create_executor(
     if config.mcp.enabled {
         match crate::commands::unified::build_mcp_registry_from_config(&config).await {
             Ok(mcp_registry) => {
+                let mcp_registry = Arc::new(mcp_registry);
+                set_active_mcp_registry(Arc::clone(&mcp_registry));
                 let mcp_tools = mcp_registry.as_tools().await;
                 if !mcp_tools.is_empty() {
                     all_tools.extend(mcp_tools);
                 }
             }
             Err(e) => {
+                clear_active_mcp_registry();
                 tracing::error!("Failed to build MCP registry: {}", e);
             }
         }
+    } else {
+        clear_active_mcp_registry();
     }
 
     executor.register_tools(all_tools);
