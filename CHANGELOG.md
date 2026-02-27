@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Reduced RS-03 (`unwrap`/`expect`) hotspots in lifecycle, subagent, and tool extension test paths by switching to explicit `Result`/`Option` assertions.
 - unified execute + RNK executor now resolve working directory consistently with precedence: arg/param > config.working_directory > current_dir > ".".
 - unified input handling now tracks spawned input tasks and aborts them on exit paths to avoid untracked background tasks.
 - http_client timeout parsing now validates finite/non-negative/range-safe numeric inputs and removes f64->u64 narrowing casts.

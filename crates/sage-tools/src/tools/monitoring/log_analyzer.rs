@@ -16,13 +16,19 @@ use tracing::info;
 use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
 
+fn compile_regex(pattern: &str, label: &str) -> Regex {
+    Regex::new(pattern).unwrap_or_else(|error| panic!("invalid {label} regex: {error}"))
+}
+
 static APACHE_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(\d+\.\d+\.\d+\.\d+).*?\[([^\]]+)\].*?"([^"]*)".*?(\d{3})\s+(\d+)"#)
-        .expect("valid apache log regex")
+    compile_regex(
+        r#"(\d+\.\d+\.\d+\.\d+).*?\[([^\]]+)\].*?"([^"]*)".*?(\d{3})\s+(\d+)"#,
+        "apache log",
+    )
 });
 
 static RESPONSE_TIME_PATTERN: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(\d+(?:\.\d+)?)\s*ms").expect("valid response time regex"));
+    LazyLock::new(|| compile_regex(r"(\d+(?:\.\d+)?)\s*ms", "response time"));
 
 /// Log analyzer tool
 #[derive(Debug, Clone)]

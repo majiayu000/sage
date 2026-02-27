@@ -45,12 +45,11 @@ struct ValidationSpinner {
 impl ValidationSpinner {
     fn new(message: &str) -> Self {
         let bar = ProgressBar::new_spinner();
-        bar.set_style(
-            ProgressStyle::default_spinner()
-                .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ")
-                .template("{spinner:.blue} {msg}")
-                .unwrap(),
-        );
+        let style = ProgressStyle::default_spinner()
+            .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ")
+            .template("{spinner:.blue} {msg}")
+            .unwrap_or_else(|_| ProgressStyle::default_spinner());
+        bar.set_style(style);
         bar.set_message(message.to_string());
         bar.enable_steady_tick(std::time::Duration::from_millis(100));
         Self { bar }

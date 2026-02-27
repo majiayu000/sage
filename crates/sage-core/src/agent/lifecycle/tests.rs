@@ -58,28 +58,22 @@ async fn test_hook_registry() {
 
     // Execute init hook
     let context = LifecycleContext::new(LifecyclePhase::Init, AgentState::Initializing);
-    registry
-        .execute_hooks(LifecyclePhase::Init, context)
-        .await
-        .unwrap();
+    let init_result = registry.execute_hooks(LifecyclePhase::Init, context).await;
+    assert!(init_result.is_ok());
 
     assert_eq!(hook.count(), 1);
 
     // Execute task start hook
     let context = LifecycleContext::new(LifecyclePhase::TaskStart, AgentState::Thinking);
-    registry
-        .execute_hooks(LifecyclePhase::TaskStart, context)
-        .await
-        .unwrap();
+    let task_start_result = registry.execute_hooks(LifecyclePhase::TaskStart, context).await;
+    assert!(task_start_result.is_ok());
 
     assert_eq!(hook.count(), 2);
 
     // Execute hook for different phase (should not increment)
     let context = LifecycleContext::new(LifecyclePhase::Shutdown, AgentState::Completed);
-    registry
-        .execute_hooks(LifecyclePhase::Shutdown, context)
-        .await
-        .unwrap();
+    let shutdown_result = registry.execute_hooks(LifecyclePhase::Shutdown, context).await;
+    assert!(shutdown_result.is_ok());
 
     assert_eq!(hook.count(), 2);
 }
@@ -137,10 +131,8 @@ async fn test_hook_priority() {
     registry.register(hook3).await;
 
     let context = LifecycleContext::new(LifecyclePhase::Init, AgentState::Initializing);
-    registry
-        .execute_hooks(LifecyclePhase::Init, context)
-        .await
-        .unwrap();
+    let execute_result = registry.execute_hooks(LifecyclePhase::Init, context).await;
+    assert!(execute_result.is_ok());
 
     let execution_order = order.read().await;
     assert_eq!(*execution_order, vec!["high", "medium", "low"]);
@@ -201,27 +193,32 @@ async fn test_lifecycle_manager() {
     manager.registry().register(hook.clone()).await;
 
     // Initialize
-    manager.initialize(agent_id).await.unwrap();
+    let init_result = manager.initialize(agent_id).await;
+    assert!(init_result.is_ok());
     assert!(manager.is_initialized().await);
     assert_eq!(hook.count(), 1);
 
     // Task start
     let task = TaskMetadata::new("Test task", "/tmp");
-    manager.notify_task_start(agent_id, &task).await.unwrap();
+    let task_start_result = manager.notify_task_start(agent_id, &task).await;
+    assert!(task_start_result.is_ok());
     assert_eq!(manager.state().await, AgentState::Thinking);
     assert_eq!(hook.count(), 2);
 
     // Step start
-    manager.notify_step_start(agent_id, 1).await.unwrap();
+    let step_start_result = manager.notify_step_start(agent_id, 1).await;
+    assert!(step_start_result.is_ok());
     assert_eq!(hook.count(), 3);
 
     // Step complete
     let step = AgentStep::new(1, AgentState::ToolExecution);
-    manager.notify_step_complete(agent_id, &step).await.unwrap();
+    let step_complete_result = manager.notify_step_complete(agent_id, &step).await;
+    assert!(step_complete_result.is_ok());
     assert_eq!(hook.count(), 4);
 
     // Shutdown
-    manager.shutdown(agent_id).await.unwrap();
+    let shutdown_result = manager.shutdown(agent_id).await;
+    assert!(shutdown_result.is_ok());
     assert!(!manager.is_initialized().await);
 }
 
@@ -248,8 +245,11 @@ async fn test_logging_hook() {
     assert_eq!(hook.phases().len(), 8);
 
     let context = LifecycleContext::new(LifecyclePhase::Init, AgentState::Initializing);
-    let result = hook.execute(&context).await.unwrap();
-    assert!(matches!(result, HookResult::Continue));
+    let result = hook.execute(&context).await;
+    assert!(result.is_ok());
+    if let Ok(result) = result {
+        assert!(matches!(result, HookResult::Continue));
+    }
 }
 
 #[tokio::test]
@@ -260,8 +260,11 @@ async fn test_metrics_hook() {
 
     let context = LifecycleContext::new(LifecyclePhase::TaskStart, AgentState::Thinking)
         .with_task(TaskMetadata::new("Test", "/tmp"));
-    let result = hook.execute(&context).await.unwrap();
-    assert!(matches!(result, HookResult::Continue));
+    let result = hook.execute(&context).await;
+    assert!(result.is_ok());
+    if let Ok(result) = result {
+        assert!(matches!(result, HookResult::Continue));
+    }
 }
 
 #[tokio::test]
@@ -279,10 +282,8 @@ async fn test_unregister_hook() {
     assert_eq!(registry.count().await, 1);
 
     let context = LifecycleContext::new(LifecyclePhase::Init, AgentState::Initializing);
-    registry
-        .execute_hooks(LifecyclePhase::Init, context)
-        .await
-        .unwrap();
+    let execute_result = registry.execute_hooks(LifecyclePhase::Init, context).await;
+    assert!(execute_result.is_ok());
 
     assert_eq!(hook2.count(), 1);
 }

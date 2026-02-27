@@ -19,9 +19,11 @@
 //! register_builtin_agents(&registry);
 //!
 //! // Get the explore agent for fast codebase search
-//! let explore = registry.get(&AgentType::Explore).unwrap();
-//! println!("Agent: {}", explore.name);
-//! println!("Description: {}", explore.description);
+//! let explore = registry.get(&AgentType::Explore);
+//! if let Some(explore) = explore {
+//!     println!("Agent: {}", explore.name);
+//!     println!("Description: {}", explore.description);
+//! }
 //! ```
 
 pub mod builtin;

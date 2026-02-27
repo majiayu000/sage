@@ -138,11 +138,17 @@ mod tests {
             }),
         );
 
-        let result = tool.execute(&call).await.unwrap();
-        assert!(result.success);
-        let output = result.output.as_ref().unwrap();
-        assert!(output.contains("Platform tool"));
-        assert!(output.contains("invoked"));
+        let result = tool.execute(&call).await;
+        assert!(result.is_ok());
+        if let Ok(result) = result {
+            assert!(result.success);
+            if let Some(output) = result.output {
+                assert!(output.contains("Platform tool"));
+                assert!(output.contains("invoked"));
+            } else {
+                panic!("expected platform tool output");
+            }
+        }
     }
 
     #[tokio::test]
@@ -150,10 +156,16 @@ mod tests {
         let tool = PlatformToolProxy::new("test_platform_tool", "Test tool");
         let call = create_tool_call("test-2", "test_platform_tool", json!({}));
 
-        let result = tool.execute(&call).await.unwrap();
-        assert!(result.success);
-        let output = result.output.as_ref().unwrap();
-        assert!(output.contains("no arguments"));
+        let result = tool.execute(&call).await;
+        assert!(result.is_ok());
+        if let Ok(result) = result {
+            assert!(result.success);
+            if let Some(output) = result.output {
+                assert!(output.contains("no arguments"));
+            } else {
+                panic!("expected no-args output");
+            }
+        }
     }
 
     #[tokio::test]

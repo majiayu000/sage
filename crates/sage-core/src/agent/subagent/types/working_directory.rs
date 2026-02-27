@@ -85,8 +85,11 @@ impl WorkingDirectoryConfig {
     ///
     /// let config = WorkingDirectoryConfig::Inherited;
     /// let parent_cwd = PathBuf::from("/parent/project");
-    /// let resolved = config.resolve(Some(&parent_cwd)).unwrap();
-    /// assert_eq!(resolved, PathBuf::from("/parent/project"));
+    /// let resolved = config.resolve(Some(&parent_cwd));
+    /// assert!(resolved.is_ok());
+    /// if let Ok(resolved) = resolved {
+    ///     assert_eq!(resolved, PathBuf::from("/parent/project"));
+    /// }
     /// ```
     pub fn resolve(&self, parent_cwd: Option<&PathBuf>) -> std::io::Result<PathBuf> {
         match self {
@@ -158,30 +161,46 @@ mod tests {
     fn test_resolve_inherited_with_parent() {
         let config = WorkingDirectoryConfig::Inherited;
         let parent = PathBuf::from("/parent/dir");
-        let resolved = config.resolve(Some(&parent)).unwrap();
-        assert_eq!(resolved, PathBuf::from("/parent/dir"));
+        let resolved = config.resolve(Some(&parent));
+        assert!(resolved.is_ok());
+        if let Ok(resolved) = resolved {
+            assert_eq!(resolved, PathBuf::from("/parent/dir"));
+        }
     }
 
     #[test]
     fn test_resolve_inherited_without_parent() {
         let config = WorkingDirectoryConfig::Inherited;
-        let resolved = config.resolve(None).unwrap();
-        // Should fall back to current directory
-        assert_eq!(resolved, env::current_dir().unwrap());
+        let resolved = config.resolve(None);
+        assert!(resolved.is_ok());
+        let current_dir = env::current_dir();
+        assert!(current_dir.is_ok());
+        if let (Ok(resolved), Ok(current_dir)) = (resolved, current_dir) {
+            // Should fall back to current directory
+            assert_eq!(resolved, current_dir);
+        }
     }
 
     #[test]
     fn test_resolve_explicit() {
         let config = WorkingDirectoryConfig::Explicit(PathBuf::from("/explicit/path"));
-        let resolved = config.resolve(None).unwrap();
-        assert_eq!(resolved, PathBuf::from("/explicit/path"));
+        let resolved = config.resolve(None);
+        assert!(resolved.is_ok());
+        if let Ok(resolved) = resolved {
+            assert_eq!(resolved, PathBuf::from("/explicit/path"));
+        }
     }
 
     #[test]
     fn test_resolve_process_cwd() {
         let config = WorkingDirectoryConfig::ProcessCwd;
-        let resolved = config.resolve(None).unwrap();
-        assert_eq!(resolved, env::current_dir().unwrap());
+        let resolved = config.resolve(None);
+        assert!(resolved.is_ok());
+        let current_dir = env::current_dir();
+        assert!(current_dir.is_ok());
+        if let (Ok(resolved), Ok(current_dir)) = (resolved, current_dir) {
+            assert_eq!(resolved, current_dir);
+        }
     }
 
     #[test]
@@ -200,9 +219,16 @@ mod tests {
         ];
 
         for config in configs {
-            let json = serde_json::to_string(&config).unwrap();
-            let deserialized: WorkingDirectoryConfig = serde_json::from_str(&json).unwrap();
-            assert_eq!(config, deserialized);
+            let json = serde_json::to_string(&config);
+            assert!(json.is_ok());
+            if let Ok(json) = json {
+                let deserialized: serde_json::Result<WorkingDirectoryConfig> =
+                    serde_json::from_str(&json);
+                assert!(deserialized.is_ok());
+                if let Ok(deserialized) = deserialized {
+                    assert_eq!(config, deserialized);
+                }
+            }
         }
     }
 }

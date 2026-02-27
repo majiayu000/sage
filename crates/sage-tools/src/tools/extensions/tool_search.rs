@@ -242,9 +242,16 @@ mod tests {
         }
 
         let call = create_tool_call("slack");
-        let result = tool.execute(&call).await.unwrap();
-        assert!(result.success);
-        assert!(result.output.as_ref().unwrap().contains("slack"));
+        let result = tool.execute(&call).await;
+        assert!(result.is_ok());
+        if let Ok(result) = result {
+            assert!(result.success);
+            if let Some(output) = result.output {
+                assert!(output.contains("slack"));
+            } else {
+                panic!("expected search output");
+            }
+        }
     }
 
     #[tokio::test]
@@ -264,7 +271,9 @@ mod tests {
         let call = create_tool_call("select:NotebookEdit");
         let result = tool.execute(&call).await;
         // Will fail because no loader is set, but that's expected
-        assert!(result.is_err() || result.unwrap().success);
+        if let Ok(result) = result {
+            assert!(result.success);
+        }
     }
 
     #[tokio::test]
@@ -296,11 +305,17 @@ mod tests {
         }
 
         let call = create_tool_call("+linear create issue");
-        let result = tool.execute(&call).await.unwrap();
-        assert!(result.success);
-        let output = result.output.unwrap();
-        assert!(output.contains("linear"));
-        assert!(!output.contains("github"));
+        let result = tool.execute(&call).await;
+        assert!(result.is_ok());
+        if let Ok(result) = result {
+            assert!(result.success);
+            if let Some(output) = result.output {
+                assert!(output.contains("linear"));
+                assert!(!output.contains("github"));
+            } else {
+                panic!("expected search output");
+            }
+        }
     }
 
     #[tokio::test]
@@ -315,15 +330,16 @@ mod tests {
     async fn test_no_results() {
         let tool = ToolSearchTool::new();
         let call = create_tool_call("nonexistent_tool_xyz");
-        let result = tool.execute(&call).await.unwrap();
-        assert!(result.success);
-        assert!(
-            result
-                .output
-                .as_ref()
-                .unwrap()
-                .contains("No matching tools")
-        );
+        let result = tool.execute(&call).await;
+        assert!(result.is_ok());
+        if let Ok(result) = result {
+            assert!(result.success);
+            if let Some(output) = result.output {
+                assert!(output.contains("No matching tools"));
+            } else {
+                panic!("expected no-results output");
+            }
+        }
     }
 
     #[test]

@@ -308,7 +308,9 @@ mod tests {
 
         let last = execution.last_step();
         assert!(last.is_some());
-        assert_eq!(last.unwrap().step_number, 2);
+        if let Some(last) = last {
+            assert_eq!(last.step_number, 2);
+        }
     }
 
     #[test]
@@ -324,7 +326,9 @@ mod tests {
         // Duration should be Some after completion
         let duration = execution.duration();
         assert!(duration.is_some());
-        assert!(duration.unwrap().num_milliseconds() >= 0);
+        if let Some(duration) = duration {
+            assert!(duration.num_milliseconds() >= 0);
+        }
     }
 
     #[test]
@@ -359,14 +363,10 @@ mod tests {
             .with_metadata("key2", 42);
 
         assert_eq!(execution.metadata.len(), 2);
-        assert_eq!(
-            execution.metadata.get("key1").unwrap().as_str().unwrap(),
-            "value1"
-        );
-        assert_eq!(
-            execution.metadata.get("key2").unwrap().as_i64().unwrap(),
-            42
-        );
+        let key1 = execution.metadata.get("key1").and_then(|v| v.as_str());
+        assert_eq!(key1, Some("value1"));
+        let key2 = execution.metadata.get("key2").and_then(|v| v.as_i64());
+        assert_eq!(key2, Some(42));
     }
 
     #[test]

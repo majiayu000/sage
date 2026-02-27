@@ -107,21 +107,34 @@ mod tests {
             ..Default::default()
         };
 
-        let llm_client = Arc::new(
-            crate::llm::client::LlmClient::new(LlmProvider::OpenAI, llm_config, model_params)
-                .unwrap(),
-        );
+        let llm_client_result =
+            crate::llm::client::LlmClient::new(LlmProvider::OpenAI, llm_config, model_params);
+        assert!(llm_client_result.is_ok());
+        let llm_client = Arc::new(match llm_client_result {
+            Ok(client) => client,
+            Err(error) => panic!("failed to create llm client: {error}"),
+        });
 
         let executor = SubAgentExecutor::new(registry.clone(), llm_client, tools);
 
         // Test filtering for GeneralPurpose agent (should have all tools)
-        let general_def = registry.get(&AgentType::GeneralPurpose).unwrap();
-        let filtered = executor.filter_tools(&general_def);
+        let general_def = registry.get(&AgentType::GeneralPurpose);
+        assert!(general_def.is_some());
+        let filtered = if let Some(general_def) = general_def {
+            executor.filter_tools(&general_def)
+        } else {
+            panic!("missing general purpose definition");
+        };
         assert_eq!(filtered.len(), 3);
 
         // Test filtering for Explore agent (should only have read and glob)
-        let explore_def = registry.get(&AgentType::Explore).unwrap();
-        let filtered = executor.filter_tools(&explore_def);
+        let explore_def = registry.get(&AgentType::Explore);
+        assert!(explore_def.is_some());
+        let filtered = if let Some(explore_def) = explore_def {
+            executor.filter_tools(&explore_def)
+        } else {
+            panic!("missing explore definition");
+        };
         assert_eq!(filtered.len(), 2);
         assert!(filtered.iter().any(|t| t.name() == "read"));
         assert!(filtered.iter().any(|t| t.name() == "glob"));

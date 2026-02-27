@@ -107,14 +107,13 @@ impl DeferredToolRegistry {
         results
             .into_iter()
             .take(limit)
-            .map(|(name, score)| {
-                let info = self.available.get(&name).unwrap();
-                ToolSearchResult {
+            .filter_map(|(name, score)| {
+                self.available.get(&name).map(|info| ToolSearchResult {
                     name: name.clone(),
                     description: info.description.clone(),
                     score,
                     loaded: false,
-                }
+                })
             })
             .collect()
     }
@@ -152,14 +151,13 @@ impl DeferredToolRegistry {
         results
             .into_iter()
             .take(limit)
-            .map(|(name, score)| {
-                let info = self.available.get(&name).unwrap();
-                ToolSearchResult {
+            .filter_map(|(name, score)| {
+                self.available.get(&name).map(|info| ToolSearchResult {
                     name: name.clone(),
                     description: info.description.clone(),
                     score,
                     loaded: false,
-                }
+                })
             })
             .collect()
     }

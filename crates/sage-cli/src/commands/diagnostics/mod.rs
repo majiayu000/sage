@@ -48,10 +48,13 @@ mod tests {
             }
         });
 
-        let usage = extract_usage_from_json(&json).unwrap();
-        assert_eq!(usage.prompt_tokens, 100);
-        assert_eq!(usage.completion_tokens, 50);
-        assert_eq!(usage.cache_read_tokens, 20);
+        let usage = extract_usage_from_json(&json);
+        assert!(usage.is_some());
+        if let Some(usage) = usage {
+            assert_eq!(usage.prompt_tokens, 100);
+            assert_eq!(usage.completion_tokens, 50);
+            assert_eq!(usage.cache_read_tokens, 20);
+        }
     }
 
     #[test]
@@ -61,8 +64,11 @@ mod tests {
 {"usage": {"prompt_tokens": 200, "completion_tokens": 100}}
 "#;
 
-        let usage = extract_usage_from_content(content).unwrap();
-        assert_eq!(usage.prompt_tokens, 300);
-        assert_eq!(usage.completion_tokens, 150);
+        let usage = extract_usage_from_content(content);
+        assert!(usage.is_some());
+        if let Some(usage) = usage {
+            assert_eq!(usage.prompt_tokens, 300);
+            assert_eq!(usage.completion_tokens, 150);
+        }
     }
 }

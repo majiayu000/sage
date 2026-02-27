@@ -28,7 +28,9 @@ fn test_registry_register_and_get() {
 
     let retrieved = registry.get(&AgentType::GeneralPurpose);
     assert!(retrieved.is_some());
-    assert_eq!(retrieved.unwrap().name, "General");
+    if let Some(retrieved) = retrieved {
+        assert_eq!(retrieved.name, "General");
+    }
 }
 
 #[test]
@@ -40,7 +42,9 @@ fn test_registry_get_by_name() {
 
     let retrieved = registry.get_by_name("plan");
     assert!(retrieved.is_some());
-    assert_eq!(retrieved.unwrap().agent_type, AgentType::Plan);
+    if let Some(retrieved) = retrieved {
+        assert_eq!(retrieved.agent_type, AgentType::Plan);
+    }
 }
 
 #[test]
@@ -142,10 +146,11 @@ fn test_update_and_get_progress() {
 
     let retrieved_progress = registry.get_progress(&agent_id);
     assert!(retrieved_progress.is_some());
-    let retrieved_progress = retrieved_progress.unwrap();
-    assert_eq!(retrieved_progress.current_step, 1);
-    assert_eq!(retrieved_progress.token_count, 100);
-    assert_eq!(retrieved_progress.tool_use_count, 1);
+    if let Some(retrieved_progress) = retrieved_progress {
+        assert_eq!(retrieved_progress.current_step, 1);
+        assert_eq!(retrieved_progress.token_count, 100);
+        assert_eq!(retrieved_progress.tool_use_count, 1);
+    }
 }
 
 #[test]
@@ -174,9 +179,10 @@ fn test_list_running() {
     // Find our agents in the list
     let agent1 = running.iter().find(|(id, _, _)| id == &id1);
     assert!(agent1.is_some());
-    let (_, agent_type, status) = agent1.unwrap();
-    assert_eq!(*agent_type, AgentType::GeneralPurpose);
-    assert!(matches!(status, AgentStatus::Running(_)));
+    if let Some((_, agent_type, status)) = agent1 {
+        assert_eq!(*agent_type, AgentType::GeneralPurpose);
+        assert!(matches!(status, AgentStatus::Running(_)));
+    }
 }
 
 #[test]
@@ -188,7 +194,11 @@ fn test_kill_agent() {
     // Get cancel token and verify it's not cancelled
     let token = registry.get_cancel_token(&agent_id);
     assert!(token.is_some());
-    let token = token.unwrap();
+    let token = if let Some(token) = token {
+        token
+    } else {
+        panic!("missing cancel token for running agent");
+    };
     assert!(!token.is_cancelled());
 
     // Kill the agent

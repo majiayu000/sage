@@ -186,15 +186,21 @@ mod tests {
         // Verify we can retrieve them
         let general = registry.get(&AgentType::GeneralPurpose);
         assert!(general.is_some());
-        assert_eq!(general.unwrap().name, "General Purpose");
+        if let Some(general) = general {
+            assert_eq!(general.name, "General Purpose");
+        }
 
         let explore = registry.get(&AgentType::Explore);
         assert!(explore.is_some());
-        assert_eq!(explore.unwrap().name, "Explore");
+        if let Some(explore) = explore {
+            assert_eq!(explore.name, "Explore");
+        }
 
         let plan = registry.get(&AgentType::Plan);
         assert!(plan.is_some());
-        assert_eq!(plan.unwrap().name, "Plan");
+        if let Some(plan) = plan {
+            assert_eq!(plan.name, "Plan");
+        }
     }
 
     #[test]
@@ -239,7 +245,9 @@ mod tests {
     fn test_explore_agent_model_override() {
         let explore = explore_agent();
         assert!(explore.model.is_some());
-        assert_eq!(explore.model.unwrap(), "haiku");
+        if let Some(model) = explore.model {
+            assert_eq!(model, "haiku");
+        }
 
         let general = general_purpose_agent();
         assert!(general.model.is_none());

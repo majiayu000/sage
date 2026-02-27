@@ -238,7 +238,8 @@ mod tests {
         let manager = LifecycleManager::new();
         let agent_id = uuid::Uuid::new_v4();
 
-        manager.initialize(agent_id).await.unwrap();
+        let init_result = manager.initialize(agent_id).await;
+        assert!(init_result.is_ok());
 
         let task = TaskMetadata::new("Test task", ".");
 
@@ -252,7 +253,8 @@ mod tests {
         let manager = LifecycleManager::new();
         let agent_id = uuid::Uuid::new_v4();
 
-        manager.initialize(agent_id).await.unwrap();
+        let init_result = manager.initialize(agent_id).await;
+        assert!(init_result.is_ok());
 
         let result = manager.notify_step_start(agent_id, 1).await;
         assert!(result.is_ok());
@@ -263,7 +265,8 @@ mod tests {
         let manager = LifecycleManager::new();
         let agent_id = uuid::Uuid::new_v4();
 
-        manager.initialize(agent_id).await.unwrap();
+        let init_result = manager.initialize(agent_id).await;
+        assert!(init_result.is_ok());
 
         let step = AgentStep::new(1, AgentState::Completed);
         let result = manager.notify_step_complete(agent_id, &step).await;
@@ -277,7 +280,8 @@ mod tests {
         let manager = LifecycleManager::new();
         let agent_id = uuid::Uuid::new_v4();
 
-        manager.initialize(agent_id).await.unwrap();
+        let init_result = manager.initialize(agent_id).await;
+        assert!(init_result.is_ok());
 
         let mut execution = AgentExecution::new(TaskMetadata::new("Test task", "."));
         execution.complete(true, Some("Success".to_string()));
@@ -292,7 +296,8 @@ mod tests {
         let manager = LifecycleManager::new();
         let agent_id = uuid::Uuid::new_v4();
 
-        manager.initialize(agent_id).await.unwrap();
+        let init_result = manager.initialize(agent_id).await;
+        assert!(init_result.is_ok());
 
         // Valid transition: Initializing -> Thinking
         let result = manager
@@ -308,7 +313,8 @@ mod tests {
         let manager = LifecycleManager::new();
         let agent_id = uuid::Uuid::new_v4();
 
-        manager.initialize(agent_id).await.unwrap();
+        let init_result = manager.initialize(agent_id).await;
+        assert!(init_result.is_ok());
 
         // Invalid transition: Initializing -> Completed
         let result = manager
@@ -323,7 +329,8 @@ mod tests {
         let manager = LifecycleManager::new();
         let agent_id = uuid::Uuid::new_v4();
 
-        manager.initialize(agent_id).await.unwrap();
+        let init_result = manager.initialize(agent_id).await;
+        assert!(init_result.is_ok());
 
         let error = crate::error::SageError::agent("Test error");
         let result = manager.notify_error(agent_id, &error).await;
@@ -336,7 +343,8 @@ mod tests {
         let manager = LifecycleManager::new();
         let agent_id = uuid::Uuid::new_v4();
 
-        manager.initialize(agent_id).await.unwrap();
+        let init_result = manager.initialize(agent_id).await;
+        assert!(init_result.is_ok());
         assert!(manager.is_initialized().await);
 
         let result = manager.shutdown(agent_id).await;

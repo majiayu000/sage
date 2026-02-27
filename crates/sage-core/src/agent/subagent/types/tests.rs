@@ -28,11 +28,17 @@ mod tests {
     #[test]
     fn test_agent_type_serde() {
         let agent_type = AgentType::Explore;
-        let json = serde_json::to_string(&agent_type).unwrap();
-        assert_eq!(json, "\"explore\"");
+        let json = serde_json::to_string(&agent_type);
+        assert!(json.is_ok());
+        if let Ok(json) = json {
+            assert_eq!(json, "\"explore\"");
 
-        let deserialized: AgentType = serde_json::from_str(&json).unwrap();
-        assert_eq!(deserialized, agent_type);
+            let deserialized: serde_json::Result<AgentType> = serde_json::from_str(&json);
+            assert!(deserialized.is_ok());
+            if let Ok(deserialized) = deserialized {
+                assert_eq!(deserialized, agent_type);
+            }
+        }
     }
 
     #[test]
@@ -73,8 +79,11 @@ mod tests {
         assert!(!access.allows_tool("write"));
         assert!(!access.allows_tool("bash"));
 
-        let tools = access.allowed_tools().unwrap();
-        assert_eq!(tools.len(), 3);
+        let tools = access.allowed_tools();
+        assert!(tools.is_some());
+        if let Some(tools) = tools {
+            assert_eq!(tools.len(), 3);
+        }
     }
 
     #[test]
@@ -221,10 +230,15 @@ mod tests {
             current_step: 2,
         };
 
-        let json = serde_json::to_string(&progress).unwrap();
-        let deserialized: AgentProgress = serde_json::from_str(&json).unwrap();
-
-        assert_eq!(deserialized, progress);
+        let json = serde_json::to_string(&progress);
+        assert!(json.is_ok());
+        if let Ok(json) = json {
+            let deserialized: serde_json::Result<AgentProgress> = serde_json::from_str(&json);
+            assert!(deserialized.is_ok());
+            if let Ok(deserialized) = deserialized {
+                assert_eq!(deserialized, progress);
+            }
+        }
     }
 
     #[test]
@@ -301,7 +315,9 @@ mod tests {
 
         let status = AgentStatus::Running(progress.clone());
         assert!(status.progress().is_some());
-        assert_eq!(status.progress().unwrap().token_count, 100);
+        if let Some(current_progress) = status.progress() {
+            assert_eq!(current_progress.token_count, 100);
+        }
 
         assert!(AgentStatus::Pending.progress().is_none());
         assert!(AgentStatus::Killed.progress().is_none());
@@ -315,7 +331,10 @@ mod tests {
             progress.add_tokens(500);
         }
 
-        assert_eq!(status.progress().unwrap().token_count, 500);
+        assert!(status.progress().is_some());
+        if let Some(current_progress) = status.progress() {
+            assert_eq!(current_progress.token_count, 500);
+        }
     }
 
     #[test]
@@ -328,7 +347,9 @@ mod tests {
 
         let status = AgentStatus::Completed(result.clone());
         assert!(status.result().is_some());
-        assert_eq!(status.result().unwrap().agent_id, "test-123");
+        if let Some(completed_result) = status.result() {
+            assert_eq!(completed_result.agent_id, "test-123");
+        }
 
         assert!(AgentStatus::Pending.result().is_none());
         assert!(
@@ -420,15 +441,20 @@ mod tests {
             parent_tools: None,
         };
 
-        let json = serde_json::to_string(&config).unwrap();
-        let deserialized: SubAgentConfig = serde_json::from_str(&json).unwrap();
-
-        assert_eq!(deserialized.agent_type, AgentType::Plan);
-        assert_eq!(deserialized.prompt, "Design the system");
-        assert_eq!(deserialized.resume_id, Some("resume-123".to_string()));
-        assert!(deserialized.run_in_background);
-        assert_eq!(deserialized.model_override, Some("gpt-4".to_string()));
-        assert_eq!(deserialized.thoroughness, Thoroughness::VeryThorough);
+        let json = serde_json::to_string(&config);
+        assert!(json.is_ok());
+        if let Ok(json) = json {
+            let deserialized: serde_json::Result<SubAgentConfig> = serde_json::from_str(&json);
+            assert!(deserialized.is_ok());
+            if let Ok(deserialized) = deserialized {
+                assert_eq!(deserialized.agent_type, AgentType::Plan);
+                assert_eq!(deserialized.prompt, "Design the system");
+                assert_eq!(deserialized.resume_id, Some("resume-123".to_string()));
+                assert!(deserialized.run_in_background);
+                assert_eq!(deserialized.model_override, Some("gpt-4".to_string()));
+                assert_eq!(deserialized.thoroughness, Thoroughness::VeryThorough);
+            }
+        }
     }
 
     #[test]
@@ -455,14 +481,19 @@ mod tests {
             },
         };
 
-        let json = serde_json::to_string(&result).unwrap();
-        let deserialized: SubAgentResult = serde_json::from_str(&json).unwrap();
-
-        assert_eq!(deserialized.agent_id, "agent-456");
-        assert_eq!(deserialized.content, "Task completed successfully");
-        assert_eq!(deserialized.metadata.total_tokens, 2500);
-        assert_eq!(deserialized.metadata.total_tool_uses, 8);
-        assert_eq!(deserialized.metadata.execution_time_ms, 15000);
-        assert_eq!(deserialized.metadata.tools_used.len(), 2);
+        let json = serde_json::to_string(&result);
+        assert!(json.is_ok());
+        if let Ok(json) = json {
+            let deserialized: serde_json::Result<SubAgentResult> = serde_json::from_str(&json);
+            assert!(deserialized.is_ok());
+            if let Ok(deserialized) = deserialized {
+                assert_eq!(deserialized.agent_id, "agent-456");
+                assert_eq!(deserialized.content, "Task completed successfully");
+                assert_eq!(deserialized.metadata.total_tokens, 2500);
+                assert_eq!(deserialized.metadata.total_tool_uses, 8);
+                assert_eq!(deserialized.metadata.execution_time_ms, 15000);
+                assert_eq!(deserialized.metadata.tools_used.len(), 2);
+            }
+        }
     }
 }

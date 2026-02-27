@@ -188,7 +188,6 @@ impl Default for SignalHandler {
 
 impl Drop for SignalHandler {
     fn drop(&mut self) {
-        self.is_active.store(false, Ordering::Relaxed);
         if let Some(handle) = self.task_handle.take() {
             handle.abort();
         }
