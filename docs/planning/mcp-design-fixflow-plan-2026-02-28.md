@@ -52,7 +52,7 @@ Steps:
      - Remove dead initialization APIs that are no longer needed.
    - Done condition:
      - Only one MCP registry implementation remains (in `sage-core`).
-   - Status: in_progress
+   - Status: completed
 
 4. Namespace MCP tool names to eliminate collisions.
    - Scope:
@@ -60,7 +60,7 @@ Steps:
      - Keep MCP call routing bound to original MCP tool name.
    - Done condition:
      - Multiple servers with same tool name can coexist without override in tool executor.
-   - Status: pending
+   - Status: completed
 
 5. Remove KillShell legacy registry path.
    - Scope:
@@ -69,7 +69,7 @@ Steps:
      - Update tests accordingly.
    - Done condition:
      - `KillShell` has one registry path, tests pass.
-   - Status: pending
+   - Status: completed
 
 6. Final cleanup and verification.
    - Scope:
@@ -77,9 +77,13 @@ Steps:
      - Run final full validation matrix.
    - Done condition:
      - All planned steps completed and fully validated.
-   - Status: pending
+   - Status: completed
 
 Execution log:
 - 2026-02-28: Plan created.
 - 2026-02-28 Step 1: executor init/fallback cleanup committed (`3d6ab8d`) and `cargo test --workspace` passed.
 - 2026-02-28 Step 2: core active MCP registry + entrypoint wiring committed (`85be23f`) and `cargo test --workspace` passed.
+- 2026-02-28 Step 3: duplicate MCP registry implementation removed in `sage-tools` via core aliases (`a1caabd`) and `cargo test --workspace` passed.
+- 2026-02-28 Step 4: MCP tool name collision fix with server namespaces (`32e27b3`) and `cargo test --workspace` passed.
+- 2026-02-28 Step 5: KillShell legacy registry path removed (`e2883c3`) and demo/example aligned to background registry (`d31821b`); `cargo test --workspace` passed.
+- 2026-02-28 Step 6: final validation matrix passed (`cargo test --workspace`, `cargo check --workspace`) and plan/status docs synchronized.
