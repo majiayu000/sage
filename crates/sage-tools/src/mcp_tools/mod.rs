@@ -15,10 +15,10 @@
 //!
 //! ```rust,ignore
 //! use sage_tools::mcp_tools::{McpToolRegistry, create_mcp_registry, McpServersTool};
-//! use sage_core::config::McpConfig;
+//! use sage_core::config::Config;
 //!
 //! // Create registry from config
-//! let config = McpConfig::default();
+//! let config = Config::default();
 //! let registry = create_mcp_registry(&config).await?;
 //!
 //! // Initialize global registry for McpServersTool
@@ -26,17 +26,12 @@
 //!
 //! // Get all available tools
 //! let tools = registry.all_tools().await;
-//!
-//! // Get tools from a specific server
-//! let server_tools = registry.tools_from_server("my-server").await;
 //! ```
 
 pub mod registry;
 pub mod servers_tool;
 
-pub use registry::{
-    McpToolRegistry, ServerConnectionStatus, SharedMcpToolRegistry, create_mcp_registry,
-};
+pub use registry::{McpToolRegistry, SharedMcpToolRegistry, create_mcp_registry};
 pub use sage_core::mcp::McpToolAdapter;
 pub use servers_tool::{
     McpServersTool, get_global_mcp_registry, get_mcp_tools, init_global_mcp_registry,
