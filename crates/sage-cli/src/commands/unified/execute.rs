@@ -29,7 +29,7 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
     }
 
     // Load configuration
-    let mut config = if std::path::Path::new(&args.config_file).exists() {
+    let config = if std::path::Path::new(&args.config_file).exists() {
         load_config_from_file(&args.config_file)?
     } else {
         let global_config = dirs::home_dir().map(|h| h.join(".sage").join("config.json"));
@@ -41,22 +41,6 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
         }
         sage_core::config::load_config()?
     };
-
-    // If the default provider has no key, pick the first provider that does.
-    if let Some(params) = config.model_providers.get(&config.default_provider) {
-        if params
-            .get_api_key_info_for_provider(&config.default_provider)
-            .key
-            .is_none()
-        {
-            if let Some((provider, _)) = config.model_providers.iter().find(|(provider, params)| {
-                params.get_api_key_info_for_provider(provider).key.is_some()
-                    || provider.as_str() == "ollama"
-            }) {
-                config.default_provider = provider.clone();
-            }
-        }
-    }
 
     // Determine working directory
     let working_dir = args

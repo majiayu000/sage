@@ -70,11 +70,6 @@ impl SageAgentSdk {
         // Register default tools
         executor.register_tools(default_tools());
 
-        // Initialize sub-agent support
-        if let Err(e) = executor.init_subagent_support() {
-            tracing::warn!("Failed to initialize sub-agent support: {}", e);
-        }
-
         // Set up input channel if interactive
         let input_handle = if !options.non_interactive {
             let (input_channel, handle) = InputChannel::new(16);
@@ -122,6 +117,10 @@ impl SageAgentSdk {
                 }
             } else {
                 tracing::debug!("MCP is disabled in configuration");
+            }
+
+            if let Err(e) = executor.init_subagent_support() {
+                tracing::warn!("Failed to initialize sub-agent support: {}", e);
             }
 
             let outcome = executor.execute(task).await?;

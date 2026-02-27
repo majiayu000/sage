@@ -13,27 +13,11 @@ pub async fn create_executor(
     working_dir: Option<std::path::PathBuf>,
     max_steps: Option<u32>,
 ) -> SageResult<UnifiedExecutor> {
-    let mut config = if std::path::Path::new(config_file).exists() {
+    let config = if std::path::Path::new(config_file).exists() {
         sage_core::config::load_config_from_file(config_file)?
     } else {
         sage_core::config::load_config()?
     };
-
-    // If the default provider has no key, pick the first provider that does.
-    if let Some(params) = config.model_providers.get(&config.default_provider) {
-        if params
-            .get_api_key_info_for_provider(&config.default_provider)
-            .key
-            .is_none()
-        {
-            if let Some((provider, _)) = config.model_providers.iter().find(|(provider, params)| {
-                params.get_api_key_info_for_provider(provider).key.is_some()
-                    || provider.as_str() == "ollama"
-            }) {
-                config.default_provider = provider.clone();
-            }
-        }
-    }
 
     let resolved_working_dir = working_dir
         .or_else(|| config.working_directory.clone())
