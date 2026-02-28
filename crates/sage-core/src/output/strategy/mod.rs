@@ -8,12 +8,14 @@ mod json;
 mod rnk;
 mod silent;
 mod streaming;
+mod ui_event;
 
 pub use batch::BatchOutput;
 pub use json::JsonOutputStrategy;
 pub use rnk::RnkOutput;
 pub use silent::SilentOutput;
 pub use streaming::StreamingOutput;
+pub use ui_event::UiEventOutput;
 
 /// Output strategy trait for different display modes
 ///

@@ -33,7 +33,6 @@ impl UnifiedExecutor {
 
         // Convert to Question structs
         let mut questions: Vec<Question> = Vec::new();
-        let mut question_text = String::from("User Input Required:\n\n");
 
         for q in raw_questions.iter() {
             let question_str = q.get("question").and_then(|v| v.as_str()).unwrap_or("");
@@ -46,22 +45,14 @@ impl UnifiedExecutor {
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
 
-            question_text.push_str(&format!("[{}] {}\n", header, question_str));
-
             let mut options: Vec<QuestionOption> = Vec::new();
             if let Some(opts) = q.get("options").and_then(|v| v.as_array()) {
-                for (opt_idx, opt) in opts.iter().enumerate() {
+                for opt in opts {
                     let label = opt.get("label").and_then(|v| v.as_str()).unwrap_or("");
                     let description = opt
                         .get("description")
                         .and_then(|v| v.as_str())
                         .unwrap_or("");
-                    question_text.push_str(&format!(
-                        "  {}. {}: {}\n",
-                        opt_idx + 1,
-                        label,
-                        description
-                    ));
                     options.push(QuestionOption::new(label, description));
                 }
             }
@@ -71,14 +62,10 @@ impl UnifiedExecutor {
                 question = question.with_multi_select();
             }
             questions.push(question);
-            question_text.push('\n');
         }
 
         // Create input request with structured questions
         let request = InputRequest::questions(questions);
-
-        // Print the question
-        println!("\n{}", question_text);
 
         // Block and wait for user input via InputChannel
         let response = self

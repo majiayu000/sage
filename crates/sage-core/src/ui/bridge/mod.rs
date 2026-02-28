@@ -7,12 +7,18 @@
 //! - Testable UI state management
 
 pub mod adapter;
+pub mod dto;
 pub mod events;
 pub mod state;
 
 #[allow(deprecated)]
 pub use adapter::{
     EventAdapter, emit_event, global_adapter, set_global_adapter, set_refresh_callback,
+};
+pub use dto::{
+    AgentEventDto, AppStateDto, ExecutionPhaseDto, InputStateDto, MessageDto, RoleDto,
+    StreamingContentDto, ToolExecutionDto, ToolStatusDto, UiMessageContentDto, UiSessionInfoDto,
+    UiToolResultDto,
 };
 pub use events::AgentEvent;
 pub use state::{

@@ -23,7 +23,6 @@ mod executor;
 mod input_channel;
 mod llm_orchestrator;
 mod message_builder;
-mod permission_handler;
 mod recording;
 mod session_branching;
 mod session_manager;

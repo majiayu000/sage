@@ -4,7 +4,7 @@ use sage_core::agent::UnifiedExecutor;
 use sage_core::agent::{ExecutionMode, ExecutionOptions};
 use sage_core::error::SageResult;
 use sage_core::mcp::{clear_active_mcp_registry, set_active_mcp_registry};
-use sage_core::output::OutputMode;
+use sage_core::output::{OutputMode, UiEventOutput};
 use sage_core::ui::traits::UiContext;
 use std::sync::Arc;
 
@@ -38,10 +38,11 @@ pub async fn create_executor(
     let mut executor = UnifiedExecutor::with_options(config.clone(), options)?;
 
     if let Some(ctx) = ui_context {
-        executor.set_ui_context(ctx);
+        executor.set_ui_context(ctx.clone());
+        executor.set_output_strategy(Arc::new(UiEventOutput::new(ctx)));
+    } else {
+        executor.set_output_mode(OutputMode::Rnk);
     }
-
-    executor.set_output_mode(OutputMode::Rnk);
 
     // Register default tools
     let mut all_tools = sage_tools::get_default_tools();

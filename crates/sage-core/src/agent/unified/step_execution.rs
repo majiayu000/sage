@@ -2,6 +2,7 @@
 
 use crate::agent::{AgentState, AgentStep};
 use crate::error::{SageError, SageResult};
+use crate::input::{InputRequest, InputResponseKind};
 use crate::interrupt::global_interrupt_manager;
 use crate::llm::client::LlmClient;
 use crate::llm::messages::LlmMessage;
@@ -10,7 +11,6 @@ use tracing::instrument;
 
 use super::UnifiedExecutor;
 use super::event_manager::ExecutionEvent;
-use super::permission_handler;
 use super::tool_display;
 use super::tool_orchestrator::ToolExecutionContext;
 
@@ -279,14 +279,95 @@ impl UnifiedExecutor {
                 .execution_phase(tool_call, cancel_token)
                 .await)
         } else {
-            Ok(permission_handler::execute_with_permission_check(
-                &self.tool_orchestrator,
-                &self.event_manager,
-                tool_call,
-                cancel_token,
-            )
-            .await)
+            Ok(self
+                .execute_with_permission_check(tool_call, cancel_token)
+                .await)
         }
+    }
+
+    /// Execute a tool and request explicit user confirmation for destructive operations.
+    async fn execute_with_permission_check(
+        &mut self,
+        tool_call: &ToolCall,
+        cancel_token: tokio_util::sync::CancellationToken,
+    ) -> crate::tools::types::ToolResult {
+        let first_result = self
+            .tool_orchestrator
+            .execution_phase(tool_call, cancel_token.clone())
+            .await;
+
+        if !Self::requires_destructive_confirmation(&first_result) {
+            return first_result;
+        }
+
+        self.event_manager.stop_animation().await;
+
+        let command = tool_call
+            .arguments
+            .get("command")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown command");
+        let description = format!(
+            "Tool '{}' requires confirmation for a potentially destructive operation.\nCommand: {}",
+            tool_call.name, command
+        );
+        let input = serde_json::to_value(&tool_call.arguments).unwrap_or(serde_json::Value::Null);
+        let request = InputRequest::permission(&tool_call.name, description, input);
+
+        let response = match self.request_user_input(request).await {
+            Ok(response) => response,
+            Err(err) => {
+                return crate::tools::types::ToolResult::error(
+                    &tool_call.id,
+                    &tool_call.name,
+                    format!("Operation cancelled: {}", err),
+                );
+            }
+        };
+
+        match response.kind {
+            InputResponseKind::PermissionGranted { modified_input, .. } => {
+                let mut confirmed_call = tool_call.clone();
+                if let Some(serde_json::Value::Object(map)) = modified_input {
+                    confirmed_call.arguments = map.into_iter().collect();
+                }
+                confirmed_call
+                    .arguments
+                    .insert("user_confirmed".to_string(), serde_json::Value::Bool(true));
+
+                self.tool_orchestrator
+                    .execution_phase(&confirmed_call, cancel_token)
+                    .await
+            }
+            InputResponseKind::PermissionDenied { reason } => {
+                let reason = reason.unwrap_or_else(|| "No reason provided".to_string());
+                crate::tools::types::ToolResult::error(
+                    &tool_call.id,
+                    &tool_call.name,
+                    format!("Operation cancelled by user: {}", reason),
+                )
+            }
+            InputResponseKind::Cancelled => crate::tools::types::ToolResult::error(
+                &tool_call.id,
+                &tool_call.name,
+                "Operation cancelled by user.",
+            ),
+            _ => crate::tools::types::ToolResult::error(
+                &tool_call.id,
+                &tool_call.name,
+                "Invalid permission response from input handler.",
+            ),
+        }
+    }
+
+    fn requires_destructive_confirmation(result: &crate::tools::types::ToolResult) -> bool {
+        if result.success {
+            return false;
+        }
+
+        result.error.as_ref().is_some_and(|err| {
+            err.contains("DESTRUCTIVE COMMAND BLOCKED") || err.contains("Confirmation required")
+        })
     }
 
     /// Track file for undo capability

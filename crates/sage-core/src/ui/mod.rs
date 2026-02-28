@@ -20,8 +20,10 @@ pub use traits::{EventSink, NoopEventSink, UiContext};
 
 // === Re-exports: Bridge ===
 pub use bridge::{
-    AgentEvent, AppState, EventAdapter, ExecutionPhase, InputState, Message, Role, ThinkingState,
-    ToolExecution, ToolStatus, UiMessageContent, UiSessionInfo,
+    AgentEvent, AgentEventDto, AppState, AppStateDto, EventAdapter, ExecutionPhase,
+    ExecutionPhaseDto, InputState, InputStateDto, Message, MessageDto, Role, RoleDto,
+    StreamingContentDto, ThinkingState, ToolExecution, ToolExecutionDto, ToolStatus, ToolStatusDto,
+    UiMessageContent, UiMessageContentDto, UiSessionInfo, UiSessionInfoDto, UiToolResultDto,
 };
 
 pub use icons::{Icons, init_from_env as init_icons, is_nerd_fonts_enabled, set_nerd_fonts};

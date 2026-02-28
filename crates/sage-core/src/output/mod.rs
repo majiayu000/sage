@@ -69,6 +69,7 @@ pub use formatter::{
 };
 pub use strategy::{
     BatchOutput, JsonOutputStrategy, OutputMode, OutputStrategy, SilentOutput, StreamingOutput,
+    UiEventOutput,
 };
 pub use types::{
     AssistantEvent, CostInfo, ErrorEvent, JsonOutput, OutputEvent, OutputFormat, ResultEvent,

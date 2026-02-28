@@ -3,10 +3,9 @@
 use crate::agent::{AgentExecution, AgentState, AgentStep, ExecutionError, ExecutionOutcome};
 use crate::error::{SageError, SageResult, UnifiedError};
 use crate::session::{UnifiedToolCall, WireTokenUsage};
-#[allow(deprecated)]
-use crate::ui::bridge::{AgentEvent, emit_event};
 
 use super::UnifiedExecutor;
+use super::event_manager::ExecutionEvent;
 
 impl UnifiedExecutor {
     /// Run the main execution loop
@@ -166,9 +165,13 @@ impl UnifiedExecutor {
                         execution.add_step(error_step);
                         execution.complete(false, Some(format!("Task failed: {}", e)));
 
-                        // Emit error event to UI
-                        #[allow(deprecated)]
-                        emit_event(AgentEvent::error(error_type, &error_message));
+                        // Emit error event through injected UI context.
+                        self.event_manager
+                            .emit(ExecutionEvent::ErrorOccurred {
+                                error_type: error_type.to_string(),
+                                message: error_message.clone(),
+                            })
+                            .await;
 
                         let exec_error =
                             ExecutionError::from_sage_error(&e, Some(provider_name.clone()));
