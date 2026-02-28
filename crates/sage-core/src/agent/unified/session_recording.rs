@@ -176,8 +176,10 @@ impl UnifiedExecutor {
         let session_id = self
             .session_manager
             .current_session_id()
-            .map(|s| s.to_string())
-            .unwrap();
+            .map(|s| s.to_string());
+        let Some(session_id) = session_id else {
+            return Ok(None);
+        };
         let context = self.session_manager.message_tracker().context().clone();
         let parent_uuid = self
             .session_manager

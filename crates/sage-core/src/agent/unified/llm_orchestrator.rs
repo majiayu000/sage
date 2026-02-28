@@ -249,11 +249,14 @@ mod tests {
             ..Default::default()
         };
 
-        let client = LlmClient::new(provider, provider_config, model_params).unwrap();
-        let orchestrator =
-            LlmOrchestrator::with_client(client, "openai".to_string(), "gpt-4".to_string());
+        let client_result = LlmClient::new(provider, provider_config, model_params);
+        assert!(client_result.is_ok());
+        if let Ok(client) = client_result {
+            let orchestrator =
+                LlmOrchestrator::with_client(client, "openai".to_string(), "gpt-4".to_string());
 
-        assert_eq!(orchestrator.provider_name(), "openai");
-        assert_eq!(orchestrator.model_name(), "gpt-4");
+            assert_eq!(orchestrator.provider_name(), "openai");
+            assert_eq!(orchestrator.model_name(), "gpt-4");
+        }
     }
 }

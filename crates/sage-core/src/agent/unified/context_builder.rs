@@ -194,48 +194,68 @@ mod tests {
 
     #[test]
     fn test_context_builder_no_files() {
-        let dir = tempdir().unwrap();
-        let builder = ContextBuilder::new(dir.path());
-        let ctx = builder.build_context();
+        let dir = tempdir();
+        assert!(dir.is_ok());
+        if let Ok(dir) = dir {
+            let builder = ContextBuilder::new(dir.path());
+            let ctx = builder.build_context();
 
-        assert!(ctx.claude_md.is_none());
-        assert!(ctx.project_instructions.is_none());
+            assert!(ctx.claude_md.is_none());
+            assert!(ctx.project_instructions.is_none());
+        }
     }
 
     #[test]
     fn test_load_claude_md() {
-        let dir = tempdir().unwrap();
-        let content = "# Test CLAUDE.md\nSome instructions.";
-        fs::write(dir.path().join("CLAUDE.md"), content).unwrap();
+        let dir = tempdir();
+        assert!(dir.is_ok());
+        if let Ok(dir) = dir {
+            let content = "# Test CLAUDE.md\nSome instructions.";
+            let write_result = fs::write(dir.path().join("CLAUDE.md"), content);
+            assert!(write_result.is_ok());
 
-        let builder = ContextBuilder::new(dir.path());
-        let claude_md = builder.load_claude_md();
+            let builder = ContextBuilder::new(dir.path());
+            let claude_md = builder.load_claude_md();
 
-        assert!(claude_md.is_some());
-        assert_eq!(claude_md.unwrap(), content);
+            assert!(claude_md.is_some());
+            if let Some(claude_md) = claude_md {
+                assert_eq!(claude_md, content);
+            }
+        }
     }
 
     #[test]
     fn test_load_project_instructions() {
-        let dir = tempdir().unwrap();
-        let sage_dir = dir.path().join(".sage");
-        fs::create_dir_all(&sage_dir).unwrap();
-        let content = "# Project Instructions";
-        fs::write(sage_dir.join("instructions.md"), content).unwrap();
+        let dir = tempdir();
+        assert!(dir.is_ok());
+        if let Ok(dir) = dir {
+            let sage_dir = dir.path().join(".sage");
+            let create_dir_result = fs::create_dir_all(&sage_dir);
+            assert!(create_dir_result.is_ok());
+            let content = "# Project Instructions";
+            let write_result = fs::write(sage_dir.join("instructions.md"), content);
+            assert!(write_result.is_ok());
 
-        let builder = ContextBuilder::new(dir.path());
-        let instructions = builder.load_project_instructions();
+            let builder = ContextBuilder::new(dir.path());
+            let instructions = builder.load_project_instructions();
 
-        assert!(instructions.is_some());
-        assert_eq!(instructions.unwrap(), content);
+            assert!(instructions.is_some());
+            if let Some(instructions) = instructions {
+                assert_eq!(instructions, content);
+            }
+        }
     }
 
     #[test]
     fn test_empty_file_returns_none() {
-        let dir = tempdir().unwrap();
-        fs::write(dir.path().join("CLAUDE.md"), "   \n  ").unwrap();
+        let dir = tempdir();
+        assert!(dir.is_ok());
+        if let Ok(dir) = dir {
+            let write_result = fs::write(dir.path().join("CLAUDE.md"), "   \n  ");
+            assert!(write_result.is_ok());
 
-        let builder = ContextBuilder::new(dir.path());
-        assert!(builder.load_claude_md().is_none());
+            let builder = ContextBuilder::new(dir.path());
+            assert!(builder.load_claude_md().is_none());
+        }
     }
 }

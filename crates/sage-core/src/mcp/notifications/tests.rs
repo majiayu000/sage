@@ -48,12 +48,14 @@ mod tests {
         }));
 
         let event = NotificationEvent::new("server1", &notification);
-        let progress = event.get_progress().unwrap();
-
-        assert_eq!(progress.token, "task-1");
-        assert_eq!(progress.progress, 50.0);
-        assert_eq!(progress.total, Some(100.0));
-        assert_eq!(progress.percentage(), Some(50.0));
+        let progress = event.get_progress();
+        assert!(progress.is_some());
+        if let Some(progress) = progress {
+            assert_eq!(progress.token, "task-1");
+            assert_eq!(progress.progress, 50.0);
+            assert_eq!(progress.total, Some(100.0));
+            assert_eq!(progress.percentage(), Some(50.0));
+        }
     }
 
     #[tokio::test]
@@ -72,7 +74,8 @@ mod tests {
         let notification = McpNotification::new("test/method");
         let event = NotificationEvent::new("server1", &notification);
 
-        handler.handle(event).await.unwrap();
+        let handle_result = handler.handle(event).await;
+        assert!(handle_result.is_ok());
 
         let events = handler.events().await;
         assert_eq!(events.len(), 1);
@@ -86,7 +89,8 @@ mod tests {
         for i in 0..3 {
             let notification = McpNotification::new(format!("test/{}", i));
             let event = NotificationEvent::new("server1", &notification);
-            handler.handle(event).await.unwrap();
+            let handle_result = handler.handle(event).await;
+            assert!(handle_result.is_ok());
         }
 
         let events = handler.events().await;
@@ -117,8 +121,11 @@ mod tests {
         let notification = McpNotification::new("test/method");
         dispatcher.notify("server1", &notification).await;
 
-        let event = receiver.recv().await.unwrap();
-        assert_eq!(event.method, "test/method");
+        let event_result = receiver.recv().await;
+        assert!(event_result.is_ok());
+        if let Ok(event) = event_result {
+            assert_eq!(event.method, "test/method");
+        }
     }
 
     #[tokio::test]
@@ -135,7 +142,8 @@ mod tests {
         let notification = McpNotification::new("test/method");
         let event = NotificationEvent::new("server1", &notification);
 
-        handler.handle(event).await.unwrap();
+        let handle_result = handler.handle(event).await;
+        assert!(handle_result.is_ok());
 
         assert_eq!(counter.load(Ordering::SeqCst), 1);
     }
