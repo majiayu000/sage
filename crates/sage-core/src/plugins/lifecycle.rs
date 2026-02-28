@@ -390,10 +390,10 @@ mod tests {
     fn test_lifecycle_history() {
         let mut lifecycle = PluginLifecycle::new();
 
-        lifecycle
-            .transition(PluginState::Initializing, Some("test".into()))
-            .unwrap();
-        lifecycle.transition(PluginState::Active, None).unwrap();
+        let init_result = lifecycle.transition(PluginState::Initializing, Some("test".into()));
+        assert!(init_result.is_ok());
+        let active_result = lifecycle.transition(PluginState::Active, None);
+        assert!(active_result.is_ok());
 
         assert_eq!(lifecycle.history().len(), 2);
         assert_eq!(lifecycle.history()[0].from, PluginState::Created);
@@ -416,7 +416,8 @@ mod tests {
         let mut plugin = TestPlugin::new("test", "1.0.0");
         let ctx = PluginContext::new("test", "1.0.0");
 
-        lifecycle.initialize(&mut plugin, &ctx).await.unwrap();
+        let init_result = lifecycle.initialize(&mut plugin, &ctx).await;
+        assert!(init_result.is_ok());
 
         assert!(lifecycle.suspend(&mut plugin).await.is_ok());
         assert_eq!(lifecycle.state(), PluginState::Suspended);
@@ -431,7 +432,8 @@ mod tests {
         let mut plugin = TestPlugin::new("test", "1.0.0");
         let ctx = PluginContext::new("test", "1.0.0");
 
-        lifecycle.initialize(&mut plugin, &ctx).await.unwrap();
+        let init_result = lifecycle.initialize(&mut plugin, &ctx).await;
+        assert!(init_result.is_ok());
 
         assert!(lifecycle.shutdown(&mut plugin).await.is_ok());
         assert_eq!(lifecycle.state(), PluginState::Stopped);
@@ -448,7 +450,8 @@ mod tests {
         assert!(!health.healthy);
 
         // After init - healthy
-        lifecycle.initialize(&mut plugin, &ctx).await.unwrap();
+        let init_result = lifecycle.initialize(&mut plugin, &ctx).await;
+        assert!(init_result.is_ok());
         let health = check_plugin_health(&plugin, &lifecycle).await;
         assert!(health.healthy);
     }

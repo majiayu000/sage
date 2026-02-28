@@ -58,12 +58,16 @@ async fn test_branch_manager_auto_name() {
     let id1 = manager.create_branch(None, vec![], vec![]).await;
     let id2 = manager.create_branch(None, vec![], vec![]).await;
 
-    let branch1 = manager.get(&id1).await.unwrap();
-    let branch2 = manager.get(&id2).await.unwrap();
+    let branch1 = manager.get(&id1).await;
+    assert!(branch1.is_some());
+    let branch2 = manager.get(&id2).await;
+    assert!(branch2.is_some());
 
-    assert!(branch1.name.contains("branch-"));
-    assert!(branch2.name.contains("branch-"));
-    assert_ne!(branch1.name, branch2.name);
+    if let (Some(branch1), Some(branch2)) = (branch1, branch2) {
+        assert!(branch1.name.contains("branch-"));
+        assert!(branch2.name.contains("branch-"));
+        assert_ne!(branch1.name, branch2.name);
+    }
 }
 
 #[tokio::test]
@@ -73,12 +77,18 @@ async fn test_branch_manager_switch() {
     let id1 = manager.create_branch(Some("first"), vec![], vec![]).await;
     let id2 = manager.create_branch(Some("second"), vec![], vec![]).await;
 
-    let current = manager.current().await.unwrap();
-    assert_eq!(current.id, id2);
+    let current = manager.current().await;
+    assert!(current.is_some());
+    if let Some(current) = current {
+        assert_eq!(current.id, id2);
+    }
 
     manager.switch_to(&id1).await;
-    let current = manager.current().await.unwrap();
-    assert_eq!(current.id, id1);
+    let current = manager.current().await;
+    assert!(current.is_some());
+    if let Some(current) = current {
+        assert_eq!(current.id, id1);
+    }
 }
 
 #[tokio::test]
@@ -104,8 +114,11 @@ async fn test_branch_manager_rename() {
         .await;
     manager.rename(&id, "new-name").await;
 
-    let branch = manager.get(&id).await.unwrap();
-    assert_eq!(branch.name, "new-name");
+    let branch = manager.get(&id).await;
+    assert!(branch.is_some());
+    if let Some(branch) = branch {
+        assert_eq!(branch.name, "new-name");
+    }
 }
 
 #[tokio::test]
@@ -147,8 +160,11 @@ async fn test_branch_manager_tree() {
 
     // Switch back to root and create another child
     let branches = manager.list().await;
-    let root = branches.iter().find(|b| b.name == "root").unwrap();
-    manager.switch_to(&root.id).await;
+    let root = branches.iter().find(|b| b.name == "root");
+    assert!(root.is_some());
+    if let Some(root) = root {
+        manager.switch_to(&root.id).await;
+    }
     manager.create_branch(Some("child2"), vec![], vec![]).await;
 
     let tree = manager.get_tree().await;
@@ -193,9 +209,11 @@ async fn test_branch_manager_export_import() {
     let exported = manager.export().await;
 
     let manager2 = BranchManager::new();
-    let count = manager2.import(&exported).await.unwrap();
-
-    assert_eq!(count, 1);
+    let count_result = manager2.import(&exported).await;
+    assert!(count_result.is_ok());
+    if let Ok(count) = count_result {
+        assert_eq!(count, 1);
+    }
     assert_eq!(manager2.count().await, 1);
 }
 
@@ -228,11 +246,16 @@ async fn test_branch_merge() {
         .create_branch(Some("branch2"), vec![msg2], vec![])
         .await;
 
-    let merged_id = manager.merge(&id1, &id2).await.unwrap();
-    let merged = manager.get(&merged_id).await.unwrap();
-
-    assert_eq!(merged.messages.len(), 2);
-    assert!(merged.tags.contains(&"merge".to_string()));
+    let merged_id = manager.merge(&id1, &id2).await;
+    assert!(merged_id.is_some());
+    if let Some(merged_id) = merged_id {
+        let merged = manager.get(&merged_id).await;
+        assert!(merged.is_some());
+        if let Some(merged) = merged {
+            assert_eq!(merged.messages.len(), 2);
+            assert!(merged.tags.contains(&"merge".to_string()));
+        }
+    }
 }
 
 #[test]
@@ -245,11 +268,16 @@ fn test_serialized_message() {
         timestamp: Utc::now(),
     };
 
-    let json = serde_json::to_string(&msg).unwrap();
-    let parsed: SerializedMessage = serde_json::from_str(&json).unwrap();
-
-    assert_eq!(parsed.role, "assistant");
-    assert_eq!(parsed.content, "Hello!");
+    let json_result = serde_json::to_string(&msg);
+    assert!(json_result.is_ok());
+    if let Ok(json) = json_result {
+        let parsed_result: Result<SerializedMessage, _> = serde_json::from_str(&json);
+        assert!(parsed_result.is_ok());
+        if let Ok(parsed) = parsed_result {
+            assert_eq!(parsed.role, "assistant");
+            assert_eq!(parsed.content, "Hello!");
+        }
+    }
 }
 
 #[test]
@@ -262,9 +290,14 @@ fn test_serialized_tool_call() {
         timestamp: Utc::now(),
     };
 
-    let json = serde_json::to_string(&call).unwrap();
-    let parsed: SerializedToolCall = serde_json::from_str(&json).unwrap();
-
-    assert_eq!(parsed.tool_name, "Read");
-    assert!(parsed.success);
+    let json_result = serde_json::to_string(&call);
+    assert!(json_result.is_ok());
+    if let Ok(json) = json_result {
+        let parsed_result: Result<SerializedToolCall, _> = serde_json::from_str(&json);
+        assert!(parsed_result.is_ok());
+        if let Ok(parsed) = parsed_result {
+            assert_eq!(parsed.tool_name, "Read");
+            assert!(parsed.success);
+        }
+    }
 }

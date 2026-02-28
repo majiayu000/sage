@@ -28,7 +28,8 @@ async fn test_registry_unregister() {
     let registry = PluginRegistry::new();
     let plugin = Box::new(TestPlugin::new("test", "1.0.0"));
 
-    registry.register(plugin).unwrap();
+    let register_result = registry.register(plugin);
+    assert!(register_result.is_ok());
     assert!(registry.unregister("test").await.is_ok());
     assert!(!registry.contains("test"));
 }
@@ -38,11 +39,15 @@ async fn test_registry_initialize() {
     let registry = PluginRegistry::new();
     let plugin = Box::new(TestPlugin::new("test", "1.0.0"));
 
-    registry.register(plugin).unwrap();
+    let register_result = registry.register(plugin);
+    assert!(register_result.is_ok());
     assert!(registry.initialize_plugin("test", vec![]).await.is_ok());
 
-    let entry = registry.get("test").unwrap();
-    assert_eq!(entry.state().await, PluginState::Active);
+    let entry = registry.get("test");
+    assert!(entry.is_some());
+    if let Some(entry) = entry {
+        assert_eq!(entry.state().await, PluginState::Active);
+    }
 }
 
 #[tokio::test]
@@ -50,35 +55,41 @@ async fn test_registry_enable_disable() {
     let registry = PluginRegistry::new();
     let plugin = Box::new(TestPlugin::new("test", "1.0.0"));
 
-    registry.register(plugin).unwrap();
-    registry.initialize_plugin("test", vec![]).await.unwrap();
+    let register_result = registry.register(plugin);
+    assert!(register_result.is_ok());
+    let init_result = registry.initialize_plugin("test", vec![]).await;
+    assert!(init_result.is_ok());
 
     // Disable
     assert!(registry.disable_plugin("test").await.is_ok());
     {
-        let entry = registry.get("test").unwrap();
-        assert!(!entry.is_enabled().await);
-        assert_eq!(entry.state().await, PluginState::Suspended);
+        let entry = registry.get("test");
+        assert!(entry.is_some());
+        if let Some(entry) = entry {
+            assert!(!entry.is_enabled().await);
+            assert_eq!(entry.state().await, PluginState::Suspended);
+        }
     }
 
     // Enable
     assert!(registry.enable_plugin("test").await.is_ok());
     {
-        let entry = registry.get("test").unwrap();
-        assert!(entry.is_enabled().await);
-        assert_eq!(entry.state().await, PluginState::Active);
+        let entry = registry.get("test");
+        assert!(entry.is_some());
+        if let Some(entry) = entry {
+            assert!(entry.is_enabled().await);
+            assert_eq!(entry.state().await, PluginState::Active);
+        }
     }
 }
 
 #[tokio::test]
 async fn test_registry_plugin_infos() {
     let registry = PluginRegistry::new();
-    registry
-        .register(Box::new(TestPlugin::new("test1", "1.0.0")))
-        .unwrap();
-    registry
-        .register(Box::new(TestPlugin::new("test2", "2.0.0")))
-        .unwrap();
+    let register_result = registry.register(Box::new(TestPlugin::new("test1", "1.0.0")));
+    assert!(register_result.is_ok());
+    let register_result = registry.register(Box::new(TestPlugin::new("test2", "2.0.0")));
+    assert!(register_result.is_ok());
 
     let infos = registry.plugin_infos().await;
     assert_eq!(infos.len(), 2);
@@ -87,10 +98,10 @@ async fn test_registry_plugin_infos() {
 #[tokio::test]
 async fn test_registry_capability_query() {
     let registry = PluginRegistry::new();
-    registry
-        .register(Box::new(TestPlugin::new("test", "1.0.0")))
-        .unwrap();
-    registry.initialize_plugin("test", vec![]).await.unwrap();
+    let register_result = registry.register(Box::new(TestPlugin::new("test", "1.0.0")));
+    assert!(register_result.is_ok());
+    let init_result = registry.initialize_plugin("test", vec![]).await;
+    assert!(init_result.is_ok());
 
     let plugins = registry
         .plugins_with_capability(PluginCapability::Tools)
@@ -107,15 +118,15 @@ async fn test_registry_capability_query() {
 #[tokio::test]
 async fn test_registry_shutdown_all() {
     let registry = PluginRegistry::new();
-    registry
-        .register(Box::new(TestPlugin::new("test1", "1.0.0")))
-        .unwrap();
-    registry
-        .register(Box::new(TestPlugin::new("test2", "1.0.0")))
-        .unwrap();
+    let register_result = registry.register(Box::new(TestPlugin::new("test1", "1.0.0")));
+    assert!(register_result.is_ok());
+    let register_result = registry.register(Box::new(TestPlugin::new("test2", "1.0.0")));
+    assert!(register_result.is_ok());
 
-    registry.initialize_plugin("test1", vec![]).await.unwrap();
-    registry.initialize_plugin("test2", vec![]).await.unwrap();
+    let init_result = registry.initialize_plugin("test1", vec![]).await;
+    assert!(init_result.is_ok());
+    let init_result = registry.initialize_plugin("test2", vec![]).await;
+    assert!(init_result.is_ok());
 
     let results = registry.shutdown_all().await;
     assert_eq!(results.len(), 2);
