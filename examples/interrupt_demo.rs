@@ -83,7 +83,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n📋 Demo 3: Multiple Task Scopes");
     reset_global_interrupt_manager();
 
-    let (scope1, scope2, scope3) = (create_task_scope(), create_task_scope(), create_task_scope());
+    let (scope1, scope2, scope3) = (
+        create_task_scope(),
+        create_task_scope(),
+        create_task_scope(),
+    );
 
     println!("Created 3 task scopes");
     println!("Scope 1 cancelled: {}", scope1.is_cancelled());

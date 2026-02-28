@@ -163,8 +163,12 @@ impl UnifiedConfigLoader {
 
     /// Load a config file
     fn load_config_file(&self, path: &Path) -> Result<Config, SageError> {
-        let content = std::fs::read_to_string(path)
-            .map_err(|e| SageError::io_with_path(format!("Failed to read file: {}", e), path.display().to_string()))?;
+        let content = std::fs::read_to_string(path).map_err(|e| {
+            SageError::io_with_path(
+                format!("Failed to read file: {}", e),
+                path.display().to_string(),
+            )
+        })?;
 
         serde_json::from_str(&content)
             .map_err(|e| SageError::json(format!("Failed to parse config: {}", e)))

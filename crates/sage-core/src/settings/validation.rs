@@ -115,8 +115,9 @@ impl SettingsValidator {
 
     /// Validate a single permission pattern
     fn validate_permission_pattern(&self, pattern: &str, list_name: &str) -> SageResult<()> {
-        let parsed = PermissionSettings::parse_pattern(pattern)
-            .ok_or_else(|| SageError::config(format!("Invalid {} pattern: '{}'", list_name, pattern)))?;
+        let parsed = PermissionSettings::parse_pattern(pattern).ok_or_else(|| {
+            SageError::config(format!("Invalid {} pattern: '{}'", list_name, pattern))
+        })?;
 
         // Check if tool is known
         if !self.allow_unknown_tools {

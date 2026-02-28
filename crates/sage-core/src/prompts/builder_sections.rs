@@ -37,10 +37,7 @@ pub(super) fn build_reminders(
 
     if in_plan_mode {
         if let Some(plan_path) = plan_file_path {
-            reminders.insert(
-                0,
-                SystemReminder::plan_mode_active(plan_path, plan_exists),
-            );
+            reminders.insert(0, SystemReminder::plan_mode_active(plan_path, plan_exists));
         }
     }
 

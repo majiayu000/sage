@@ -49,7 +49,9 @@ impl TodoList {
     /// Complete the current in-progress task and promote the next pending one.
     pub fn complete_current_task(&self) -> Option<TodoItem> {
         let mut list = self.todos.write();
-        let current_idx = list.iter().position(|t| t.status == TodoStatus::InProgress)?;
+        let current_idx = list
+            .iter()
+            .position(|t| t.status == TodoStatus::InProgress)?;
 
         list[current_idx].status = TodoStatus::Completed;
         let completed = list[current_idx].clone();

@@ -91,8 +91,8 @@ impl TeamManager {
 
         // Save config
         let config_path = team_dir.join("config.json");
-        let config_json = serde_json::to_string_pretty(&config)
-            .context("Failed to serialize config")?;
+        let config_json =
+            serde_json::to_string_pretty(&config).context("Failed to serialize config")?;
         tokio::fs::write(&config_path, config_json)
             .await
             .context("Failed to write config")?;
@@ -116,11 +116,7 @@ impl TeamManager {
             .await
             .context("Failed to read teams directory")?;
 
-        while let Some(entry) = entries
-            .next_entry()
-            .await
-            .context("Failed to read entry")?
-        {
+        while let Some(entry) = entries.next_entry().await.context("Failed to read entry")? {
             let path = entry.path();
             if path.is_dir() {
                 let config_path = path.join("config.json");
@@ -172,8 +168,8 @@ impl TeamManager {
 
         requests.push(request.clone());
 
-        let requests_json = serde_json::to_string_pretty(&requests)
-            .context("Failed to serialize requests")?;
+        let requests_json =
+            serde_json::to_string_pretty(&requests).context("Failed to serialize requests")?;
         tokio::fs::write(&requests_path, requests_json)
             .await
             .context("Failed to write requests")?;
@@ -228,15 +224,15 @@ impl TeamManager {
         config.updated_at = chrono::Utc::now();
 
         // Save updated config
-        let config_json = serde_json::to_string_pretty(&config)
-            .context("Failed to serialize config")?;
+        let config_json =
+            serde_json::to_string_pretty(&config).context("Failed to serialize config")?;
         tokio::fs::write(&config_path, config_json)
             .await
             .context("Failed to write config")?;
 
         // Save updated requests
-        let requests_json = serde_json::to_string_pretty(&requests)
-            .context("Failed to serialize requests")?;
+        let requests_json =
+            serde_json::to_string_pretty(&requests).context("Failed to serialize requests")?;
         tokio::fs::write(&requests_path, requests_json)
             .await
             .context("Failed to write requests")?;
@@ -267,8 +263,8 @@ impl TeamManager {
 
         requests.remove(request_idx);
 
-        let requests_json = serde_json::to_string_pretty(&requests)
-            .context("Failed to serialize requests")?;
+        let requests_json =
+            serde_json::to_string_pretty(&requests).context("Failed to serialize requests")?;
         tokio::fs::write(&requests_path, requests_json)
             .await
             .context("Failed to write requests")?;
@@ -287,8 +283,8 @@ impl TeamManager {
             let content = tokio::fs::read_to_string(&config_path)
                 .await
                 .context("Failed to read config")?;
-            let config: TeamConfig = serde_json::from_str(&content)
-                .context("Failed to parse config")?;
+            let config: TeamConfig =
+                serde_json::from_str(&content).context("Failed to parse config")?;
 
             let active_count = config.members.iter().filter(|m| m.active).count();
             if active_count > 1 {

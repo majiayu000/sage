@@ -222,7 +222,6 @@ impl BackgroundShellTask {
         }
     }
 
-
     /// Get current status
     pub async fn status(&self) -> BackgroundTaskStatus {
         self.status.read().await.clone()

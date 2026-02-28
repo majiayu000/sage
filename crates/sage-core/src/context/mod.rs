@@ -53,9 +53,8 @@ pub use auto_compact::{
 };
 pub use compact::{
     COMPACT_BOUNDARY_KEY, COMPACT_ID_KEY, COMPACT_SUMMARY_KEY, COMPACT_TIMESTAMP_KEY,
-    SummaryPromptConfig, build_summary_prompt, create_compact_boundary,
-    create_compact_summary, find_last_compact_boundary_index, is_compact_boundary,
-    slice_from_last_compact_boundary,
+    SummaryPromptConfig, build_summary_prompt, create_compact_boundary, create_compact_summary,
+    find_last_compact_boundary_index, is_compact_boundary, slice_from_last_compact_boundary,
 };
 pub use config::{ContextConfig, OverflowStrategy};
 pub use estimator::TokenEstimator;

@@ -81,7 +81,6 @@ impl LearningEngine {
         *stats = LearningStats::default();
     }
 
-
     async fn record_event_inner(&self, event: LearningEvent) {
         let mut events = self.events.write().await;
         events.push(event);

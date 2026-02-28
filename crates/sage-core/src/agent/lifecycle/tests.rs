@@ -65,14 +65,18 @@ async fn test_hook_registry() {
 
     // Execute task start hook
     let context = LifecycleContext::new(LifecyclePhase::TaskStart, AgentState::Thinking);
-    let task_start_result = registry.execute_hooks(LifecyclePhase::TaskStart, context).await;
+    let task_start_result = registry
+        .execute_hooks(LifecyclePhase::TaskStart, context)
+        .await;
     assert!(task_start_result.is_ok());
 
     assert_eq!(hook.count(), 2);
 
     // Execute hook for different phase (should not increment)
     let context = LifecycleContext::new(LifecyclePhase::Shutdown, AgentState::Completed);
-    let shutdown_result = registry.execute_hooks(LifecyclePhase::Shutdown, context).await;
+    let shutdown_result = registry
+        .execute_hooks(LifecyclePhase::Shutdown, context)
+        .await;
     assert!(shutdown_result.is_ok());
 
     assert_eq!(hook.count(), 2);

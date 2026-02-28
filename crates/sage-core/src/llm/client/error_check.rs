@@ -153,8 +153,7 @@ impl LlmClient {
             || msg_lower.contains("exceeds the maximum")
             || msg_lower.contains("token limit")
             || msg_lower.contains("request too large")
-            || msg_lower.contains("max_tokens")
-                && msg_lower.contains("exceed")
+            || msg_lower.contains("max_tokens") && msg_lower.contains("exceed")
     }
 
     /// Check if this is a throttling error (429 or 503).

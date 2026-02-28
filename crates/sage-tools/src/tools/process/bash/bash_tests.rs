@@ -97,8 +97,7 @@ async fn test_bash_tool_missing_command() {
 
 #[tokio::test]
 async fn test_bash_tool_allowed_commands() {
-    let tool =
-        BashTool::new().with_allowed_commands(vec!["echo".to_string(), "pwd".to_string()]);
+    let tool = BashTool::new().with_allowed_commands(vec!["echo".to_string(), "pwd".to_string()]);
 
     // Test allowed command
     let call = create_tool_call(

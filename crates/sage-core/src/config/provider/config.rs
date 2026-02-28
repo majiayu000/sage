@@ -231,9 +231,7 @@ impl ProviderConfig {
             }
             "openai" => {
                 if !key.starts_with("sk-") {
-                    return Err(SageError::config(
-                        "OpenAI API key should start with 'sk-'",
-                    ));
+                    return Err(SageError::config("OpenAI API key should start with 'sk-'"));
                 }
             }
             "google" => {

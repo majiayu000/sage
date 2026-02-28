@@ -408,4 +408,3 @@ pub struct SessionInfo {
     pub file_path: PathBuf,
     pub modified: Option<chrono::DateTime<chrono::Utc>>,
 }
-

@@ -11,7 +11,11 @@ use rnk::prelude::Box as RnkBox;
 const MAX_VISIBLE: usize = 6;
 
 /// Render model selector when in model selection mode
-pub fn render_model_selector(models: &[String], selected_index: usize, theme: &TerminalTheme) -> Element {
+pub fn render_model_selector(
+    models: &[String],
+    selected_index: usize,
+    theme: &TerminalTheme,
+) -> Element {
     let match_count = models.len();
     let selected = selected_index.min(match_count.saturating_sub(1));
 

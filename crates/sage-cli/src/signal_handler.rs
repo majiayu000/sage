@@ -106,8 +106,10 @@ impl SignalHandler {
                             match state {
                                 SignalHandlerState::WaitingForInput => {
                                     // During input prompt - implement double Ctrl+C to exit
-                                    let should_exit =
-                                        Self::update_ctrl_c_exit_state(&last_ctrl_c_time, &ctrl_c_count);
+                                    let should_exit = Self::update_ctrl_c_exit_state(
+                                        &last_ctrl_c_time,
+                                        &ctrl_c_count,
+                                    );
 
                                     if should_exit {
                                         eprintln!("\nGoodbye!");

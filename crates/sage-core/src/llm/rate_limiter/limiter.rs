@@ -47,5 +47,8 @@ pub async fn set_rate_limit(provider: &str, config: RateLimitConfig) {
 pub async fn disable_rate_limit(provider: &str) {
     let provider_key = provider.to_lowercase();
     let mut registry = get_registry().write().await;
-    registry.insert(provider_key, LlmRateLimiter::new(RateLimitConfig::disabled()));
+    registry.insert(
+        provider_key,
+        LlmRateLimiter::new(RateLimitConfig::disabled()),
+    );
 }

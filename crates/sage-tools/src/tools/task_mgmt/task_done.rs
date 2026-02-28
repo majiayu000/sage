@@ -91,7 +91,10 @@ impl Tool for TaskDoneTool {
         }
 
         if let Some(next_task) = self.todo_list.get_current_task() {
-            completion_message.push_str(&format!("\nNext task in progress: {}", next_task.active_form));
+            completion_message.push_str(&format!(
+                "\nNext task in progress: {}",
+                next_task.active_form
+            ));
         }
 
         // Add timestamp
@@ -101,7 +104,10 @@ impl Tool for TaskDoneTool {
         let mut result = ToolResult::success(&call.id, self.name(), completion_message);
         result = result
             .with_metadata("todo_state_updated", json!(completed_task.is_some()))
-            .with_metadata("completed_todo", json!(completed_task.as_ref().map(|t| &t.content)));
+            .with_metadata(
+                "completed_todo",
+                json!(completed_task.as_ref().map(|t| &t.content)),
+            );
 
         Ok(result)
     }
