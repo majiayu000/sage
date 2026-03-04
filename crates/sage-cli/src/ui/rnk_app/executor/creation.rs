@@ -45,7 +45,10 @@ pub async fn create_executor(
     }
 
     // Register default tools
-    let mut all_tools = sage_tools::get_default_tools();
+    let mut all_tools = sage_tools::get_default_tools_with_context(
+        resolved_working_dir.clone(),
+        executor.skill_registry(),
+    );
 
     // Load MCP tools if MCP is enabled
     if config.mcp.enabled {

@@ -8,7 +8,7 @@ use sage_core::error::SageResult;
 use sage_core::input::InputChannel;
 use sage_core::mcp::{clear_active_mcp_registry, set_active_mcp_registry};
 use sage_core::output::OutputMode;
-use sage_tools::get_default_tools;
+use sage_tools::get_default_tools_with_context;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::task::JoinHandle;
@@ -75,7 +75,8 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
     executor.set_output_mode(output_mode);
 
     // Register default tools
-    let mut all_tools = get_default_tools();
+    let mut all_tools =
+        get_default_tools_with_context(working_dir.clone(), executor.skill_registry());
 
     // Load MCP tools if MCP is enabled
     if config.mcp.enabled {

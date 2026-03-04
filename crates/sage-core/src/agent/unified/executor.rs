@@ -83,6 +83,11 @@ impl UnifiedExecutor {
             })
             .await;
 
+        // Refresh project/user skills before building system prompt.
+        if let Err(e) = self.discover_skills().await {
+            tracing::warn!(error = %e, "Failed to discover custom skills");
+        }
+
         // Build system prompt (includes skills for AI auto-invocation)
         let system_prompt = self.build_system_prompt().await?;
 
