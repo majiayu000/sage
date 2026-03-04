@@ -142,6 +142,7 @@ pub use tools::{
     get_current_todos,
     // Factory functions
     get_default_tools,
+    get_default_tools_with_context,
     get_diagnostics_tools,
     get_extension_tools,
     get_file_ops_tools,

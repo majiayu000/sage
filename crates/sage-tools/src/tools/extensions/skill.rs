@@ -18,6 +18,7 @@ use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::RwLock;
 
 /// Tool for executing specialized skills
@@ -35,6 +36,8 @@ pub struct SkillTool {
     registry: Arc<RwLock<SkillRegistry>>,
     /// Current working directory
     working_directory: PathBuf,
+    /// Whether custom skills have been discovered from filesystem
+    skills_discovered: AtomicBool,
 }
 
 impl Default for SkillTool {
@@ -53,6 +56,7 @@ impl SkillTool {
         Self {
             registry: Arc::new(RwLock::new(registry)),
             working_directory,
+            skills_discovered: AtomicBool::new(false),
         }
     }
 
@@ -65,25 +69,37 @@ impl SkillTool {
         Self {
             registry: Arc::new(RwLock::new(registry)),
             working_directory,
+            skills_discovered: AtomicBool::new(false),
         }
     }
 
     /// Create with an existing registry
     pub fn with_registry(registry: Arc<RwLock<SkillRegistry>>) -> Self {
         let working_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        Self::with_registry_and_working_directory(registry, working_directory)
+    }
+
+    /// Create with an existing registry and working directory
+    pub fn with_registry_and_working_directory(
+        registry: Arc<RwLock<SkillRegistry>>,
+        working_directory: impl Into<PathBuf>,
+    ) -> Self {
         Self {
             registry,
-            working_directory,
+            working_directory: working_directory.into(),
+            skills_discovered: AtomicBool::new(false),
         }
     }
 
     /// Discover skills from the file system
     pub async fn discover_skills(&self) -> Result<usize, ToolError> {
         let mut registry = self.registry.write().await;
-        registry
+        let count = registry
             .discover()
             .await
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to discover skills: {}", e)))
+            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to discover skills: {}", e)))?;
+        self.skills_discovered.store(true, Ordering::Release);
+        Ok(count)
     }
 
     /// Get a reference to the registry
@@ -91,13 +107,25 @@ impl SkillTool {
         Arc::clone(&self.registry)
     }
 
+    fn normalize_skill_name(&self, skill: &str) -> String {
+        skill.trim().trim_start_matches('/').to_string()
+    }
+
     /// Validate skill name
     fn validate_skill_name(&self, skill: &str) -> Result<(), ToolError> {
-        if skill.is_empty() {
+        if skill.trim().is_empty() {
             return Err(ToolError::InvalidArguments(
                 "Skill name cannot be empty".to_string(),
             ));
         }
+        Ok(())
+    }
+
+    async fn ensure_skills_discovered(&self) -> Result<(), ToolError> {
+        if self.skills_discovered.load(Ordering::Acquire) {
+            return Ok(());
+        }
+        let _ = self.discover_skills().await?;
         Ok(())
     }
 
@@ -107,9 +135,16 @@ impl SkillTool {
         skill_name: &str,
         args: Option<&str>,
     ) -> Result<String, ToolError> {
+        let normalized_skill_name = self.normalize_skill_name(skill_name);
         let registry = self.registry.read().await;
 
-        if let Some(skill) = registry.get(skill_name) {
+        if let Some(skill) = registry.get(&normalized_skill_name) {
+            if !skill.model_invocable() {
+                return Err(ToolError::ExecutionFailed(format!(
+                    "Skill '{}' cannot be invoked by model (disable_model_invocation is enabled)",
+                    normalized_skill_name
+                )));
+            }
             let context = SkillContext::new("").with_working_dir(&self.working_directory);
 
             let prompt = skill.get_prompt_with_args(&context, args);
@@ -131,12 +166,13 @@ impl SkillTool {
             let available: Vec<String> = registry
                 .list_enabled()
                 .iter()
+                .filter(|s| s.model_invocable())
                 .map(|s| s.name().to_string())
                 .collect();
 
             Err(ToolError::ExecutionFailed(format!(
                 "Skill '{}' not found. Available skills: {}",
-                skill_name,
+                normalized_skill_name,
                 available.join(", ")
             )))
         }
@@ -184,6 +220,9 @@ impl Tool for SkillTool {
 
         // Validate skill name
         self.validate_skill_name(&skill)?;
+
+        // Keep registry in sync with filesystem (project/user custom skills)
+        self.ensure_skills_discovered().await?;
 
         // Execute the skill
         let result = self.execute_skill(&skill, args.as_deref()).await?;
