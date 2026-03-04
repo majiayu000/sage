@@ -175,7 +175,8 @@ pub use hooks::{
     HookType, HookVariant, HooksConfig, PromptHook,
 };
 pub use input::{
-    InputChannel, InputChannelHandle, InputContext, InputOption, InputRequest, InputResponse,
+    InputChannel, InputChannelHandle, InputContext, InputOption, InputRequest, InputRequestDto,
+    InputRequestKindDto, InputResponse, InputResponseDto, InputResponseKindDto,
 };
 pub use interrupt::{InterruptManager, InterruptReason, TaskScope};
 pub use llm::{LlmClient, LlmMessage, LlmProvider, LlmResponse};
@@ -240,6 +241,7 @@ pub use telemetry::{
     MetricValue, MetricsCollector, MetricsSnapshot, SharedMetricsCollector, TelemetryCollector,
     TelemetrySummary, ToolStats, ToolUsageEvent, create_metrics_collector, global_telemetry,
 };
+pub use ui::ExternalUiRuntime;
 pub use workspace::{
     AnalysisResult, BuildSystem, DependencyInfo, EntryPoint, FileStats, FrameworkType, GitInfo,
     ImportantFile, ImportantFileType, LanguageType, PatternMatcher, ProjectPattern,

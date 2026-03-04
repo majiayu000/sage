@@ -13,6 +13,7 @@ pub mod traits;
 
 // === UI System ===
 pub mod bridge;
+pub mod external;
 pub mod icons;
 
 // === Re-exports: Traits ===
@@ -25,5 +26,6 @@ pub use bridge::{
     StreamingContentDto, ThinkingState, ToolExecution, ToolExecutionDto, ToolStatus, ToolStatusDto,
     UiMessageContent, UiMessageContentDto, UiSessionInfo, UiSessionInfoDto, UiToolResultDto,
 };
+pub use external::ExternalUiRuntime;
 
 pub use icons::{Icons, init_from_env as init_icons, is_nerd_fonts_enabled, set_nerd_fonts};

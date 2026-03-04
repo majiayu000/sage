@@ -40,6 +40,7 @@
 // Module declarations
 mod auto_response;
 mod channel;
+mod dto;
 mod permission;
 mod request;
 mod response;
@@ -67,6 +68,7 @@ pub use auto_response::{AutoResponder, InputAutoResponse};
 
 // Channel types
 pub use channel::{InputChannel, InputChannelHandle};
+pub use dto::{InputRequestDto, InputRequestKindDto, InputResponseDto, InputResponseKindDto};
 
 // ============================================================================
 // Tests
