@@ -1,27 +1,21 @@
 //! Slash command execution tool
 //!
-//! Allows executing custom slash commands within conversation context.
-//! Slash commands are user-defined shortcuts that expand to prompts or execute actions.
+//! Executes custom slash commands from `.sage/commands/` and `~/.config/sage/commands/`.
+//! Built-in commands (for example `/help`, `/clear`) are intentionally excluded from
+//! this tool and must be handled by the CLI command pipeline.
 
 use async_trait::async_trait;
+use sage_core::commands::{CommandExecutor, CommandInvocation, CommandRegistry, CommandSource};
 use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
 use std::path::PathBuf;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
-/// Tool for executing slash commands
-///
-/// Slash commands are custom shortcuts defined in `.claude/commands/` that can
-/// expand to prompts or trigger specific actions. They provide a way to create
-/// reusable command templates.
-///
-/// # Examples
-///
-/// - `command: "/review-pr 123"` - Review pull request #123
-/// - `command: "/test"` - Run test suite
-/// - `command: "/deploy production"` - Deploy to production
+/// Tool for executing custom slash commands.
 pub struct SlashCommandTool {
-    /// Base directory for command files (typically `.claude/commands/`)
-    command_dir: Option<PathBuf>,
+    /// Working directory used to resolve `.sage/commands/`.
+    working_directory: PathBuf,
 }
 
 impl Default for SlashCommandTool {
@@ -31,98 +25,123 @@ impl Default for SlashCommandTool {
 }
 
 impl SlashCommandTool {
-    /// Create a new SlashCommandTool instance
+    /// Create a new SlashCommandTool instance.
     pub fn new() -> Self {
-        Self { command_dir: None }
+        let working_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        Self { working_directory }
     }
 
-    /// Create a SlashCommandTool with a specific command directory
-    pub fn with_command_dir(command_dir: PathBuf) -> Self {
+    /// Create a SlashCommandTool bound to a specific working directory.
+    pub fn with_working_directory(working_directory: impl Into<PathBuf>) -> Self {
         Self {
-            command_dir: Some(command_dir),
+            working_directory: working_directory.into(),
         }
     }
 
-    /// Get the command directory
-    fn get_command_dir(&self) -> PathBuf {
-        self.command_dir.clone().unwrap_or_else(|| {
-            // Default to .claude/commands in current directory
-            PathBuf::from(".claude/commands")
+    /// Parse command string into command invocation.
+    fn parse_command(&self, command: &str) -> Result<CommandInvocation, ToolError> {
+        CommandInvocation::parse(command).ok_or_else(|| {
+            ToolError::InvalidArguments(format!("Invalid slash command format: {}", command))
         })
     }
 
-    /// Parse command string into command name and arguments
-    fn parse_command(&self, command: &str) -> Result<(String, Vec<String>), ToolError> {
-        if !command.starts_with('/') {
-            return Err(ToolError::InvalidArguments(
-                "Slash command must start with '/'".to_string(),
-            ));
-        }
-
-        let parts: Vec<&str> = command[1..].split_whitespace().collect();
-        if parts.is_empty() {
-            return Err(ToolError::InvalidArguments(
-                "Invalid slash command format".to_string(),
-            ));
-        }
-
-        let command_name = parts[0].to_string();
-        let args = parts[1..].iter().map(|s| s.to_string()).collect();
-
-        Ok((command_name, args))
-    }
-
-    /// Execute the slash command
-    async fn execute_command(
-        &self,
-        command_name: &str,
-        args: &[String],
-    ) -> Result<String, ToolError> {
-        // In a real implementation, this would:
-        // 1. Look up the command file in .claude/commands/
-        // 2. Read and expand the command template
-        // 3. Substitute arguments
-        // 4. Return the expanded prompt or execute the action
-
-        let command_dir = self.get_command_dir();
-        let command_file = command_dir.join(format!("{}.md", command_name));
-
-        // For now, return a message indicating the command would be executed
-        let args_str = if args.is_empty() {
-            String::new()
-        } else {
-            format!(" with arguments: {}", args.join(" "))
-        };
-
-        Ok(format!(
-            "Slash command '{}' execution initiated{}.\n\
-             Command file: {}\n\
-             \n\
-             The command prompt will be expanded and processed in the conversation context.",
-            command_name,
-            args_str,
-            command_file.display()
-        ))
-    }
-
-    /// Validate command format
+    /// Validate command format.
     fn validate_command(&self, command: &str) -> Result<(), ToolError> {
-        if command.is_empty() {
+        if command.trim().is_empty() {
             return Err(ToolError::InvalidArguments(
                 "Command cannot be empty".to_string(),
             ));
         }
 
-        if !command.starts_with('/') {
-            return Err(ToolError::InvalidArguments(
-                "Slash command must start with '/'".to_string(),
-            ));
+        let _ = self.parse_command(command)?;
+        Ok(())
+    }
+
+    async fn load_registry(&self) -> Result<Arc<RwLock<CommandRegistry>>, ToolError> {
+        let mut registry = CommandRegistry::new(&self.working_directory);
+        registry.register_builtins();
+        registry.discover().await.map_err(|e| {
+            ToolError::ExecutionFailed(format!("Failed to discover slash commands: {}", e))
+        })?;
+        Ok(Arc::new(RwLock::new(registry)))
+    }
+
+    async fn ensure_custom_command(
+        &self,
+        invocation: &CommandInvocation,
+        registry: &Arc<RwLock<CommandRegistry>>,
+    ) -> Result<(), ToolError> {
+        let registry = registry.read().await;
+
+        let (_, source) = registry
+            .get_with_source(&invocation.command_name)
+            .ok_or_else(|| {
+                let mut available_custom: Vec<String> = registry
+                    .list()
+                    .iter()
+                    .filter(|(_, src)| **src != CommandSource::Builtin)
+                    .map(|(cmd, _)| format!("/{}", cmd.name))
+                    .collect();
+                available_custom.sort();
+
+                if available_custom.is_empty() {
+                    ToolError::ExecutionFailed(format!(
+                        "Unknown slash command: /{}. No custom slash commands are available.",
+                        invocation.command_name
+                    ))
+                } else {
+                    ToolError::ExecutionFailed(format!(
+                        "Unknown slash command: /{}. Available custom commands: {}",
+                        invocation.command_name,
+                        available_custom.join(", ")
+                    ))
+                }
+            })?;
+
+        if *source == CommandSource::Builtin {
+            return Err(ToolError::ExecutionFailed(format!(
+                "Built-in command '/{}' is not supported by SlashCommand tool",
+                invocation.command_name
+            )));
         }
 
-        // Parse to ensure valid format
-        self.parse_command(command)?;
-
         Ok(())
+    }
+
+    /// Execute the slash command via command registry/executor.
+    async fn execute_command(
+        &self,
+        invocation: &CommandInvocation,
+    ) -> Result<sage_core::commands::CommandResult, ToolError> {
+        let registry = self.load_registry().await?;
+        self.ensure_custom_command(invocation, &registry).await?;
+
+        let executor = CommandExecutor::new(Arc::clone(&registry));
+        let result = executor
+            .process(&invocation.raw_input)
+            .await
+            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to execute command: {}", e)))?
+            .ok_or_else(|| {
+                ToolError::ExecutionFailed(
+                    "Command did not produce an execution result".to_string(),
+                )
+            })?;
+
+        if result.is_local {
+            return Err(ToolError::ExecutionFailed(format!(
+                "Slash command '/{}' resolved to local execution, which is not supported by this tool",
+                invocation.command_name
+            )));
+        }
+
+        if result.interactive.is_some() {
+            return Err(ToolError::ExecutionFailed(format!(
+                "Slash command '/{}' requires interactive handling and cannot run in this tool",
+                invocation.command_name
+            )));
+        }
+
+        Ok(result)
     }
 }
 
@@ -133,9 +152,8 @@ impl Tool for SlashCommandTool {
     }
 
     fn description(&self) -> &str {
-        "Execute a custom slash command. Slash commands are user-defined shortcuts stored in \
-         `.claude/commands/` that expand to prompts or trigger actions. Each command can accept \
-         arguments. Use this when you need to run a predefined command template or workflow."
+        "Execute a custom slash command from .sage/commands. Only project/user custom commands \
+         are allowed here; built-in CLI commands are intentionally excluded."
     }
 
     fn schema(&self) -> ToolSchema {
@@ -144,34 +162,57 @@ impl Tool for SlashCommandTool {
             self.description(),
             vec![ToolParameter::string(
                 "command",
-                "The slash command to execute with its arguments (e.g., '/review-pr 123', '/test', '/deploy production')",
+                "The slash command to execute with arguments, for example '/review-pr 123'",
             )],
         )
     }
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
-        // Extract command parameter
         let command = call.get_string("command").ok_or_else(|| {
             ToolError::InvalidArguments("Missing required parameter: command".to_string())
         })?;
 
-        // Validate command format
         self.validate_command(&command)?;
+        let invocation = self.parse_command(&command)?;
+        let result = self.execute_command(&invocation).await?;
 
-        // Parse command
-        let (command_name, args) = self.parse_command(&command)?;
+        let mut sections = Vec::new();
+        if !result.context_messages.is_empty() {
+            sections.push(result.context_messages.join("\n"));
+        }
+        if !result.expanded_prompt.trim().is_empty() {
+            sections.push(result.expanded_prompt.clone());
+        }
 
-        // Execute the command
-        let result = self.execute_command(&command_name, &args).await?;
+        if sections.is_empty() {
+            return Err(ToolError::ExecutionFailed(format!(
+                "Slash command '/{}' produced empty prompt output",
+                invocation.command_name
+            )));
+        }
 
-        Ok(ToolResult::success(&call.id, self.name(), result))
+        let mut tool_result = ToolResult::success(&call.id, self.name(), sections.join("\n\n"))
+            .with_metadata("command_name", serde_json::json!(invocation.command_name));
+
+        if let Some(status) = result.status_message {
+            tool_result = tool_result.with_metadata("status_message", serde_json::json!(status));
+        }
+
+        if let Some(tools) = result.tool_restrictions {
+            tool_result = tool_result.with_metadata("allowed_tools", serde_json::json!(tools));
+        }
+
+        if let Some(model) = result.model_override {
+            tool_result = tool_result.with_metadata("model_override", serde_json::json!(model));
+        }
+
+        Ok(tool_result)
     }
 
     fn validate(&self, call: &ToolCall) -> Result<(), ToolError> {
         let command = call.get_string("command").ok_or_else(|| {
             ToolError::InvalidArguments("Missing required parameter: command".to_string())
         })?;
-
         self.validate_command(&command)?;
         Ok(())
     }
@@ -182,6 +223,8 @@ mod tests {
     use super::*;
     use serde_json::json;
     use std::collections::HashMap;
+    use std::fs;
+    use tempfile::TempDir;
 
     fn create_tool_call(id: &str, name: &str, command: &str) -> ToolCall {
         let mut arguments = HashMap::new();
@@ -195,85 +238,72 @@ mod tests {
         }
     }
 
+    fn write_custom_command(
+        temp_dir: &TempDir,
+        command_name: &str,
+        prompt_template: &str,
+    ) -> PathBuf {
+        let commands_dir = temp_dir.path().join(".sage").join("commands");
+        fs::create_dir_all(&commands_dir).unwrap();
+        let command_file = commands_dir.join(format!("{}.md", command_name));
+        fs::write(
+            &command_file,
+            format!(
+                "---\ndescription: test command {}\n---\n{}",
+                command_name, prompt_template
+            ),
+        )
+        .unwrap();
+        command_file
+    }
+
     #[tokio::test]
-    async fn test_slash_command_execution() {
-        let tool = SlashCommandTool::new();
+    async fn test_custom_slash_command_execution() {
+        let temp_dir = TempDir::new().unwrap();
+        write_custom_command(&temp_dir, "review-pr", "Review PR #$ARG1");
+
+        let tool = SlashCommandTool::with_working_directory(temp_dir.path());
         let call = create_tool_call("test-1", "SlashCommand", "/review-pr 123");
 
         let result = tool.execute(&call).await.unwrap();
         assert!(result.success);
-        assert!(result.output.as_ref().unwrap().contains("review-pr"));
-        assert!(result.output.as_ref().unwrap().contains("123"));
+        assert!(result.output.as_ref().unwrap().contains("Review PR #123"));
+        assert_eq!(
+            result.metadata.get("command_name"),
+            Some(&serde_json::json!("review-pr"))
+        );
     }
 
     #[tokio::test]
-    async fn test_command_parsing() {
-        let tool = SlashCommandTool::new();
+    async fn test_command_parsing_with_quotes() {
+        let temp_dir = TempDir::new().unwrap();
+        write_custom_command(&temp_dir, "greet", "Hello $ARG1 from $ARG2");
 
-        // Simple command without args
-        let (name, args) = tool.parse_command("/test").unwrap();
-        assert_eq!(name, "test");
-        assert!(args.is_empty());
+        let tool = SlashCommandTool::with_working_directory(temp_dir.path());
+        let call = create_tool_call("test-2", "SlashCommand", "/greet \"Jane Doe\" team");
 
-        // Command with single arg
-        let (name, args) = tool.parse_command("/review-pr 123").unwrap();
-        assert_eq!(name, "review-pr");
-        assert_eq!(args, vec!["123"]);
-
-        // Command with multiple args
-        let (name, args) = tool.parse_command("/deploy production --force").unwrap();
-        assert_eq!(name, "deploy");
-        assert_eq!(args, vec!["production", "--force"]);
+        let result = tool.execute(&call).await.unwrap();
+        assert!(result.success);
+        let output = result.output.as_ref().unwrap();
+        assert!(output.contains("Hello Jane Doe from team"));
     }
 
     #[tokio::test]
-    async fn test_invalid_command_format() {
-        let tool = SlashCommandTool::new();
+    async fn test_reject_builtin_command() {
+        let temp_dir = TempDir::new().unwrap();
+        let tool = SlashCommandTool::with_working_directory(temp_dir.path());
+        let call = create_tool_call("test-builtin", "SlashCommand", "/help");
 
-        // Missing slash
-        let call = create_tool_call("test-2", "SlashCommand", "test");
-        assert!(tool.validate(&call).is_err());
-
-        // Empty command
-        let call = create_tool_call("test-3", "SlashCommand", "");
-        assert!(tool.validate(&call).is_err());
-
-        // Just slash
-        let call = create_tool_call("test-4", "SlashCommand", "/");
-        assert!(tool.validate(&call).is_err());
+        let result = tool.execute(&call).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Built-in command"));
     }
 
     #[tokio::test]
-    async fn test_valid_commands() {
-        let tool = SlashCommandTool::new();
-
-        let valid_commands = vec![
-            "/test",
-            "/review-pr 123",
-            "/deploy production",
-            "/help",
-            "/clear",
-        ];
-
-        for cmd in valid_commands {
-            let call = create_tool_call(&format!("test-{}", cmd), "SlashCommand", cmd);
-            assert!(
-                tool.validate(&call).is_ok(),
-                "Command should be valid: {}",
-                cmd
-            );
-        }
-    }
-
-    #[tokio::test]
-    async fn test_missing_command_parameter() {
-        let tool = SlashCommandTool::new();
-        let call = ToolCall {
-            id: "test-5".to_string(),
-            name: "SlashCommand".to_string(),
-            arguments: HashMap::new(),
-            call_id: None,
-        };
+    async fn test_unknown_command_error() {
+        let temp_dir = TempDir::new().unwrap();
+        let tool = SlashCommandTool::with_working_directory(temp_dir.path());
+        let call = create_tool_call("test-unknown", "SlashCommand", "/does-not-exist");
 
         let result = tool.execute(&call).await;
         assert!(result.is_err());
@@ -281,16 +311,21 @@ mod tests {
             result
                 .unwrap_err()
                 .to_string()
-                .contains("Missing required parameter")
+                .contains("Unknown slash command")
         );
     }
 
     #[tokio::test]
-    async fn test_custom_command_dir() {
-        let custom_dir = PathBuf::from("/custom/commands");
-        let tool = SlashCommandTool::with_command_dir(custom_dir.clone());
-
-        assert_eq!(tool.get_command_dir(), custom_dir);
+    async fn test_invalid_command_format() {
+        let tool = SlashCommandTool::new();
+        let invalid = vec!["", "test", "/"];
+        for cmd in invalid {
+            let call = create_tool_call("invalid", "SlashCommand", cmd);
+            assert!(
+                tool.validate(&call).is_err(),
+                "command should be invalid: {cmd}"
+            );
+        }
     }
 
     #[tokio::test]
@@ -301,41 +336,9 @@ mod tests {
         assert_eq!(schema.name, "SlashCommand");
         assert!(!schema.description.is_empty());
 
-        // Check that the schema has the command parameter
         let params = schema.parameters.as_object().unwrap();
         assert!(params.contains_key("properties"));
-
         let properties = params.get("properties").unwrap().as_object().unwrap();
         assert!(properties.contains_key("command"));
-    }
-
-    #[tokio::test]
-    async fn test_command_with_special_characters() {
-        let tool = SlashCommandTool::new();
-
-        // Command with dashes
-        let call = create_tool_call("test-6", "SlashCommand", "/git-commit-smart");
-        let result = tool.execute(&call).await.unwrap();
-        assert!(result.success);
-
-        // Command with underscores
-        let call = create_tool_call("test-7", "SlashCommand", "/run_tests");
-        let result = tool.execute(&call).await.unwrap();
-        assert!(result.success);
-    }
-
-    #[tokio::test]
-    async fn test_command_execution_output() {
-        let tool = SlashCommandTool::new();
-        let call = create_tool_call("test-8", "SlashCommand", "/review-pr 123");
-
-        let result = tool.execute(&call).await.unwrap();
-        let output = result.output.unwrap();
-
-        // Check that output contains expected information
-        assert!(output.contains("review-pr"));
-        assert!(output.contains("123"));
-        assert!(output.contains("Command file:"));
-        assert!(output.contains(".claude/commands"));
     }
 }
