@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use sage_core::tools::{Tool, ToolCall, ToolError, ToolParameter, ToolResult, ToolSchema};
 use serde::{Deserialize, Serialize};
-use std::process::Command;
+use tokio::process::Command;
 
 #[derive(Debug, Clone)]
 pub struct BrowserTool;
@@ -51,11 +51,11 @@ impl Tool for BrowserTool {
 
         // Open URL in default browser
         let result = if cfg!(target_os = "macos") {
-            Command::new("open").arg(&url).output()
+            Command::new("open").arg(&url).output().await
         } else if cfg!(target_os = "windows") {
-            Command::new("cmd").args(["/C", "start", &url]).output()
+            Command::new("cmd").args(["/C", "start", &url]).output().await
         } else {
-            Command::new("xdg-open").arg(&url).output()
+            Command::new("xdg-open").arg(&url).output().await
         };
 
         match result {
