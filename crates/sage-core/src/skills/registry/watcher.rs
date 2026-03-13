@@ -5,6 +5,7 @@
 
 use crate::error::{SageError, SageResult};
 use notify::{RecommendedWatcher, RecursiveMode};
+use std::collections::HashSet;
 use notify_debouncer_mini::{DebouncedEvent, DebouncedEventKind, Debouncer, new_debouncer};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -310,7 +311,7 @@ impl SkillHotReloader {
         let mut registry = self.registry.write().await;
 
         // Clear non-builtin skills
-        let builtin_names: Vec<String> = registry
+        let builtin_names: HashSet<String> = registry
             .list()
             .iter()
             .filter(|s| *s.source() == crate::skills::types::SkillSource::Builtin)

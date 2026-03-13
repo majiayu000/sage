@@ -4,6 +4,7 @@ use super::{Plugin, PluginContext, PluginError, PluginResult};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::time::Instant;
+use tracing::warn;
 
 /// Plugin lifecycle state
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -268,7 +269,9 @@ impl PluginLifecycle {
 
     /// Mark as failed
     pub fn fail(&mut self, reason: impl Into<String>) {
-        let _ = self.transition(PluginState::Failed, Some(reason.into()));
+        if let Err(e) = self.transition(PluginState::Failed, Some(reason.into())) {
+            warn!("Failed to transition plugin to Failed state: {}", e);
+        }
     }
 }
 

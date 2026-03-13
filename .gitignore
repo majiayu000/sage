@@ -24,6 +24,7 @@ sage_config.json
 sage_config.*.json
 *.env
 .env*
+.sage/credentials.json
 
 # Trajectory files (execution logs)
 trajectories/

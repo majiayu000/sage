@@ -85,17 +85,15 @@ impl ExternalUiRuntime {
     /// Returns an error if another task is still running.
     pub async fn start_task(&self, task_description: impl Into<String>) -> SageResult<()> {
         let task_description = task_description.into();
+        let mut running = self.running_task.lock().await;
 
-        {
-            let mut running = self.running_task.lock().await;
-            if running.as_ref().is_some_and(|handle| !handle.is_finished()) {
-                return Err(SageError::invalid_input(
-                    "A task is already running; cancel or wait for completion.",
-                ));
-            }
-            if running.as_ref().is_some_and(|handle| handle.is_finished()) {
-                *running = None;
-            }
+        if running.as_ref().is_some_and(|handle| !handle.is_finished()) {
+            return Err(SageError::invalid_input(
+                "A task is already running; cancel or wait for completion.",
+            ));
+        }
+        if running.as_ref().is_some_and(|handle| handle.is_finished()) {
+            *running = None;
         }
 
         let task = {
@@ -116,7 +114,6 @@ impl ExternalUiRuntime {
             locked.execute(task).await
         });
 
-        let mut running = self.running_task.lock().await;
         *running = Some(handle);
         Ok(())
     }

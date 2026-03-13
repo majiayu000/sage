@@ -37,7 +37,7 @@ pub enum EmailOperation {
 }
 
 /// SMTP configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct SmtpConfig {
     pub host: String,
     pub port: u16,
@@ -47,14 +47,39 @@ pub struct SmtpConfig {
     pub use_starttls: bool,
 }
 
+impl std::fmt::Debug for SmtpConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SmtpConfig")
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("username", &self.username)
+            .field("password", &"***")
+            .field("use_tls", &self.use_tls)
+            .field("use_starttls", &self.use_starttls)
+            .finish()
+    }
+}
+
 /// IMAP configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ImapConfig {
     pub host: String,
     pub port: u16,
     pub username: String,
     pub password: String,
     pub use_tls: bool,
+}
+
+impl std::fmt::Debug for ImapConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ImapConfig")
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("username", &self.username)
+            .field("password", &"***")
+            .field("use_tls", &self.use_tls)
+            .finish()
+    }
 }
 
 /// Email message
