@@ -3,6 +3,23 @@
 use crate::sandbox::limits::ResourceLimits;
 use tokio::process::Command;
 
+/// Try to set a resource limit; return error only for unexpected failures.
+/// EINVAL is treated as non-fatal because some platforms (e.g., macOS) don't
+/// support certain limits like RLIMIT_AS.
+#[cfg(unix)]
+fn try_setrlimit(resource: libc::c_int, limit: &libc::rlimit) -> std::io::Result<()> {
+    // SAFETY: setrlimit is async-signal-safe and the limit pointer is valid.
+    if unsafe { libc::setrlimit(resource, limit) } != 0 {
+        let err = std::io::Error::last_os_error();
+        if err.raw_os_error() == Some(libc::EINVAL) {
+            // Kernel doesn't support this limit — skip gracefully
+            return Ok(());
+        }
+        return Err(err);
+    }
+    Ok(())
+}
+
 /// Apply Unix-specific resource limits
 #[cfg(unix)]
 #[allow(unused_imports)]
@@ -28,9 +45,7 @@ pub(super) fn apply_unix_limits(cmd: &mut Command, limits: &ResourceLimits) {
                     rlim_cur: mem,
                     rlim_max: mem,
                 };
-                if libc::setrlimit(libc::RLIMIT_AS, &limit) != 0 {
-                    return Err(std::io::Error::last_os_error());
-                }
+                try_setrlimit(libc::RLIMIT_AS, &limit)?;
             }
 
             // Set CPU time limit (RLIMIT_CPU)
@@ -39,9 +54,7 @@ pub(super) fn apply_unix_limits(cmd: &mut Command, limits: &ResourceLimits) {
                     rlim_cur: cpu,
                     rlim_max: cpu,
                 };
-                if libc::setrlimit(libc::RLIMIT_CPU, &limit) != 0 {
-                    return Err(std::io::Error::last_os_error());
-                }
+                try_setrlimit(libc::RLIMIT_CPU, &limit)?;
             }
 
             // Set open files limit (RLIMIT_NOFILE)
@@ -50,9 +63,7 @@ pub(super) fn apply_unix_limits(cmd: &mut Command, limits: &ResourceLimits) {
                     rlim_cur: files as u64,
                     rlim_max: files as u64,
                 };
-                if libc::setrlimit(libc::RLIMIT_NOFILE, &limit) != 0 {
-                    return Err(std::io::Error::last_os_error());
-                }
+                try_setrlimit(libc::RLIMIT_NOFILE, &limit)?;
             }
 
             // Set stack size limit (RLIMIT_STACK)
@@ -61,9 +72,7 @@ pub(super) fn apply_unix_limits(cmd: &mut Command, limits: &ResourceLimits) {
                     rlim_cur: stack,
                     rlim_max: stack,
                 };
-                if libc::setrlimit(libc::RLIMIT_STACK, &limit) != 0 {
-                    return Err(std::io::Error::last_os_error());
-                }
+                try_setrlimit(libc::RLIMIT_STACK, &limit)?;
             }
 
             Ok(())
