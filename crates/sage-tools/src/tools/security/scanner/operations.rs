@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 use anyhow::Result;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::tools::security::scanner::types::{
     ScanType, ScanResult, SecurityFinding,
@@ -13,7 +13,7 @@ use crate::tools::security::scanner::patterns::{
     get_findings_by_type, count_by_severity,
 };
 
-/// Perform security scan
+/// Perform security scan (stub — returns sample findings, not real scan results)
 pub async fn perform_scan(
     scan_type: ScanType,
     path: &str,
@@ -22,14 +22,7 @@ pub async fn perform_scan(
     working_dir: Option<&str>,
 ) -> Result<ScanResult> {
     info!("Performing {:?} scan on path: {}", scan_type, path);
-
-    // Mock implementation - in reality, you would integrate with tools like:
-    // - Bandit (Python SAST)
-    // - Semgrep (Multi-language SAST)
-    // - Safety (Python dependency scanning)
-    // - npm audit (Node.js dependency scanning)
-    // - TruffleHog (Secret scanning)
-    // - FOSSA (License scanning)
+    warn!("Security scan is a stub implementation returning sample data");
 
     let start = std::time::Instant::now();
     let findings = get_findings_by_type(&scan_type);
@@ -40,19 +33,20 @@ pub async fn perform_scan(
         summary,
         findings,
         duration: start.elapsed().as_secs_f64(),
-        status: "completed".to_string(),
+        status: "mock".to_string(),
     })
 }
 
-/// Audit dependencies for vulnerabilities
+/// Audit dependencies for vulnerabilities (stub — returns sample findings)
 pub async fn audit_dependencies(
     path: &str,
     package_manager: &str,
     working_dir: Option<&str>,
 ) -> Result<ScanResult> {
     info!("Auditing dependencies with {} in path: {}", package_manager, path);
+    warn!("Dependency audit is a stub implementation returning sample data");
 
-    // Mock implementation - would integrate with package manager audit tools
+    let start = std::time::Instant::now();
     let findings = vec![
         SecurityFinding {
             id: "AUDIT-001".to_string(),
@@ -79,20 +73,19 @@ pub async fn audit_dependencies(
         scan_type: ScanType::Dependencies,
         summary,
         findings,
-        duration: 2.5,
-        status: "completed".to_string(),
+        duration: start.elapsed().as_secs_f64(),
+        status: "mock".to_string(),
     })
 }
 
-/// Scan for secrets
+/// Scan for secrets (stub — returns sample findings)
 pub async fn scan_secrets(
     path: &str,
     _patterns: Option<&Vec<String>>,
     working_dir: Option<&str>,
 ) -> Result<ScanResult> {
     info!("Scanning for secrets in path: {}", path);
-
-    // Mock implementation - would integrate with tools like TruffleHog, GitLeaks
+    warn!("Secret scan is a stub implementation returning sample data");
     let findings = vec![
         SecurityFinding {
             id: "SECRET-001".to_string(),
@@ -110,24 +103,27 @@ pub async fn scan_secrets(
 
     let summary = count_by_severity(&findings);
 
+    let start = std::time::Instant::now();
+
     Ok(ScanResult {
         scan_type: ScanType::Secrets,
         summary,
         findings,
-        duration: 1.2,
-        status: "completed".to_string(),
+        duration: start.elapsed().as_secs_f64(),
+        status: "mock".to_string(),
     })
 }
 
-/// Check for specific vulnerability
+/// Check for specific vulnerability (stub — returns sample findings)
 pub async fn check_vulnerability(
     cve_id: &str,
     path: &str,
     working_dir: Option<&str>,
 ) -> Result<ScanResult> {
     info!("Checking for vulnerability {} in path: {}", cve_id, path);
+    warn!("Vulnerability check is a stub implementation returning sample data");
 
-    // Mock implementation
+    let start = std::time::Instant::now();
     let findings = vec![
         SecurityFinding {
             id: format!("CVE-CHECK-{}", cve_id),
@@ -150,16 +146,15 @@ pub async fn check_vulnerability(
         scan_type: ScanType::Full,
         summary,
         findings,
-        duration: 0.5,
-        status: "completed".to_string(),
+        duration: start.elapsed().as_secs_f64(),
+        status: "mock".to_string(),
     })
 }
 
-/// Generate security report
+/// Generate security report (stub — returns sample data)
 pub async fn generate_report(_scan_results: &str, format: &str) -> Result<ScanResult> {
     info!("Generating security report in format: {}", format);
-
-    // Mock implementation
+    warn!("Report generation is a stub implementation returning sample data");
     let findings = vec![
         SecurityFinding {
             id: "REPORT-001".to_string(),
@@ -178,11 +173,13 @@ pub async fn generate_report(_scan_results: &str, format: &str) -> Result<ScanRe
     let mut summary = HashMap::new();
     summary.insert("INFO".to_string(), 1);
 
+    let start = std::time::Instant::now();
+
     Ok(ScanResult {
         scan_type: ScanType::Full,
         summary,
         findings,
-        duration: 0.2,
-        status: "completed".to_string(),
+        duration: start.elapsed().as_secs_f64(),
+        status: "mock".to_string(),
     })
 }
