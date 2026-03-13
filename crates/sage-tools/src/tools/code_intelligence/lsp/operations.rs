@@ -22,7 +22,7 @@ impl LspTool {
             ))
         })?;
 
-        if !self.is_server_available(&language) {
+        if !self.is_server_available(&language).await {
             return Err(ToolError::ExecutionFailed(format!(
                 "LSP server for '{}' is not installed. Install '{}' to enable this feature.",
                 language,
@@ -61,7 +61,7 @@ impl LspTool {
             ))
         })?;
 
-        if !self.is_server_available(&language) {
+        if !self.is_server_available(&language).await {
             return Err(ToolError::ExecutionFailed(format!(
                 "LSP server for '{}' is not installed.",
                 language
@@ -91,7 +91,7 @@ impl LspTool {
             ))
         })?;
 
-        if !self.is_server_available(&language) {
+        if !self.is_server_available(&language).await {
             return Err(ToolError::ExecutionFailed(format!(
                 "LSP server for '{}' is not installed.",
                 language
@@ -116,7 +116,7 @@ impl LspTool {
             ))
         })?;
 
-        if !self.is_server_available(&language) {
+        if !self.is_server_available(&language).await {
             return Err(ToolError::ExecutionFailed(format!(
                 "LSP server for '{}' is not installed.",
                 language

@@ -81,10 +81,17 @@ impl JsonlSessionStorage {
 
         let mut metadata = SessionMetadata::new(&id, working_directory.clone());
 
-        // Detect git branch
-        let mut context = SessionContext::new(working_directory);
-        context.detect_git_branch();
-        if let Some(branch) = context.git_branch {
+        // Detect git branch (blocking git command — run off async thread)
+        let wd = working_directory;
+        let branch = tokio::task::spawn_blocking(move || {
+            let mut context = SessionContext::new(wd);
+            context.detect_git_branch();
+            context.git_branch
+        })
+        .await
+        .ok()
+        .flatten();
+        if let Some(branch) = branch {
             metadata = metadata.with_git_branch(branch);
         }
 
@@ -111,10 +118,17 @@ impl JsonlSessionStorage {
 
         let mut metadata = SessionMetadata::new(&id, working_directory.clone());
 
-        // Detect git branch
-        let mut context = SessionContext::new(working_directory);
-        context.detect_git_branch();
-        if let Some(branch) = context.git_branch {
+        // Detect git branch (blocking git command — run off async thread)
+        let wd = working_directory;
+        let branch = tokio::task::spawn_blocking(move || {
+            let mut context = SessionContext::new(wd);
+            context.detect_git_branch();
+            context.git_branch
+        })
+        .await
+        .ok()
+        .flatten();
+        if let Some(branch) = branch {
             metadata = metadata.with_git_branch(branch);
         }
 

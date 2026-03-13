@@ -68,13 +68,14 @@ impl LspTool {
     }
 
     /// Check if LSP server is available for a language
-    fn is_server_available(&self, language: &str) -> bool {
+    async fn is_server_available(&self, language: &str) -> bool {
         if let Some(config) = self.config.servers.get(language) {
-            std::process::Command::new(&config.command)
+            tokio::process::Command::new(&config.command)
                 .arg("--version")
                 .stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null())
                 .status()
+                .await
                 .is_ok()
         } else {
             false
