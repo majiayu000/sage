@@ -18,8 +18,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     init();
 
     // Create a Google provider configuration with retry settings
+    let api_key = std::env::var("GOOGLE_API_KEY")?;
     let provider_config = ProviderConfig::new("google")
-        .with_api_key("AIzaSyCtI947T9sCiW6fMob6Sipt8l0JfGFS_U4")
+        .with_api_key(&api_key)
         .with_timeouts(TimeoutConfig::new().with_request_timeout_secs(30))
         .with_max_retries(3);
 

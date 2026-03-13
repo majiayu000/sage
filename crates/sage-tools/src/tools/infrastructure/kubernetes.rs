@@ -127,7 +127,9 @@ spec:
                 );
 
                 // Write to temporary file and apply
-                let temp_file = format!("/tmp/{}-deployment.yaml", name);
+                let temp_dir = std::env::temp_dir();
+                let temp_file = temp_dir.join(format!("sage-{}-{}.yaml", name, std::process::id()));
+                let temp_file_str = temp_file.display().to_string();
                 tokio::fs::write(&temp_file, deployment_yaml)
                     .await
                     .map_err(|e| {
@@ -138,7 +140,7 @@ spec:
                     })?;
 
                 let result = self
-                    .execute_kubectl(&["apply", "-f", &temp_file], namespace)
+                    .execute_kubectl(&["apply", "-f", &temp_file_str], namespace)
                     .await?;
 
                 // Clean up temp file
@@ -247,7 +249,9 @@ spec:
                     name, name
                 );
 
-                let temp_file = format!("/tmp/{}-service.yaml", name);
+                let temp_dir = std::env::temp_dir();
+                let temp_file = temp_dir.join(format!("sage-svc-{}-{}.yaml", name, std::process::id()));
+                let temp_file_str = temp_file.display().to_string();
                 tokio::fs::write(&temp_file, service_yaml)
                     .await
                     .map_err(|e| {
@@ -255,7 +259,7 @@ spec:
                     })?;
 
                 let result = self
-                    .execute_kubectl(&["apply", "-f", &temp_file], namespace)
+                    .execute_kubectl(&["apply", "-f", &temp_file_str], namespace)
                     .await?;
 
                 let _ = tokio::fs::remove_file(&temp_file).await;

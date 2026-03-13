@@ -114,7 +114,7 @@ impl Tool for GitTool {
             "add" => {
                 let files = call.get_string("files").unwrap_or_else(|| ".".to_string());
                 let file_list: Vec<&str> = files.split_whitespace().collect();
-                let mut args = vec!["add"];
+                let mut args = vec!["add", "--"];
                 args.extend(file_list);
                 self.execute_git_command(&args, working_dir.as_deref())
                     .await?

@@ -152,7 +152,7 @@ pub(super) async fn execute_config(invocation: &CommandInvocation) -> SageResult
 pub(super) async fn execute_checkpoint(
     invocation: &CommandInvocation,
 ) -> SageResult<CommandResult> {
-    use std::process::Command;
+    use tokio::process::Command;
 
     let name = invocation
         .arguments
@@ -163,7 +163,7 @@ pub(super) async fn execute_checkpoint(
     // Use git stash to create a checkpoint
     let output = Command::new("git")
         .args(["stash", "push", "-m", &format!("sage-checkpoint: {}", name)])
-        .output();
+        .output().await;
 
     match output {
         Ok(result) => {
@@ -195,11 +195,11 @@ pub(super) async fn execute_checkpoint(
 
 /// Execute /restore command - restore checkpoint locally
 pub(super) async fn execute_restore(invocation: &CommandInvocation) -> SageResult<CommandResult> {
-    use std::process::Command;
+    use tokio::process::Command;
 
     if invocation.arguments.is_empty() {
         // List available checkpoints
-        let output = Command::new("git").args(["stash", "list"]).output();
+        let output = Command::new("git").args(["stash", "list"]).output().await;
 
         match output {
             Ok(result) => {
@@ -230,7 +230,7 @@ pub(super) async fn execute_restore(invocation: &CommandInvocation) -> SageResul
         let checkpoint_name = &invocation.arguments[0];
 
         // Find and restore the checkpoint
-        let list_output = Command::new("git").args(["stash", "list"]).output();
+        let list_output = Command::new("git").args(["stash", "list"]).output().await;
 
         match list_output {
             Ok(result) => {
@@ -248,7 +248,7 @@ pub(super) async fn execute_restore(invocation: &CommandInvocation) -> SageResul
                     Some(idx) => {
                         let restore = Command::new("git")
                             .args(["stash", "pop", &format!("stash@{{{}}}", idx)])
-                            .output();
+                            .output().await;
 
                         match restore {
                             Ok(r) if r.status.success() => Ok(CommandResult::local(format!(
@@ -286,10 +286,10 @@ pub(super) async fn execute_tasks() -> SageResult<CommandResult> {
 
 /// Execute /undo command - undo file changes via git
 pub(super) async fn execute_undo(_invocation: &CommandInvocation) -> SageResult<CommandResult> {
-    use std::process::Command;
+    use tokio::process::Command;
 
     // First check git status
-    let status = Command::new("git").args(["status", "--porcelain"]).output();
+    let status = Command::new("git").args(["status", "--porcelain"]).output().await;
 
     match status {
         Ok(result) => {

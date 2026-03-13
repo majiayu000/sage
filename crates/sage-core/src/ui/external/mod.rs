@@ -21,13 +21,13 @@ use std::sync::Arc;
 use tokio::sync::{Mutex, mpsc};
 use tokio::task::JoinHandle;
 
-#[derive(Clone)]
 pub struct ExternalUiRuntime {
     executor: Arc<Mutex<UnifiedExecutor>>,
     event_adapter: Arc<EventAdapter>,
     input_request_rx: Arc<Mutex<mpsc::UnboundedReceiver<InputRequestDto>>>,
     input_response_tx: mpsc::Sender<InputResponse>,
     running_task: Arc<Mutex<Option<JoinHandle<SageResult<ExecutionOutcome>>>>>,
+    input_relay_handle: JoinHandle<()>,
 }
 
 impl ExternalUiRuntime {
@@ -49,7 +49,7 @@ impl ExternalUiRuntime {
 
         let input_response_tx = input_handle.response_tx.clone();
         let (input_request_tx, input_request_rx) = mpsc::unbounded_channel();
-        tokio::spawn(async move {
+        let input_relay_handle = tokio::spawn(async move {
             while let Some(request) = input_handle.request_rx.recv().await {
                 if input_request_tx
                     .send(InputRequestDto::from(request))
@@ -66,6 +66,7 @@ impl ExternalUiRuntime {
             input_request_rx: Arc::new(Mutex::new(input_request_rx)),
             input_response_tx,
             running_task: Arc::new(Mutex::new(None)),
+            input_relay_handle,
         }
     }
 
@@ -185,6 +186,12 @@ impl ExternalUiRuntime {
 
         let mut executor = self.executor.lock().await;
         executor.switch_model(model)
+    }
+}
+
+impl Drop for ExternalUiRuntime {
+    fn drop(&mut self) {
+        self.input_relay_handle.abort();
     }
 }
 

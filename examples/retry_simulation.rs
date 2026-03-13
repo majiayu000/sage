@@ -59,8 +59,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n📡 测试2: 使用有效API密钥但可能遇到服务过载");
 
     // 使用真实的API密钥（如果可用）
+    let real_api_key = std::env::var("GOOGLE_API_KEY")?;
     let real_config = ProviderConfig::new("google")
-        .with_api_key("AIzaSyCtI947T9sCiW6fMob6Sipt8l0JfGFS_U4")
+        .with_api_key(&real_api_key)
         .with_timeouts(TimeoutConfig::new().with_request_timeout_secs(30))
         .with_max_retries(2);
 

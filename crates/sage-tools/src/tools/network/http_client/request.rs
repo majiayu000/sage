@@ -152,10 +152,25 @@ pub async fn execute_request(
         .context("Failed to read response body")?;
 
     if let Some(file_path) = &params.save_to_file {
-        tokio::fs::write(file_path, &body)
-            .await
-            .context("Failed to save response to file")?;
-        info!("Response saved to: {}", file_path);
+        let path = std::path::Path::new(file_path);
+        let canonical = path
+            .parent()
+            .and_then(|p| p.canonicalize().ok())
+            .map(|p| p.join(path.file_name().unwrap_or_default()));
+        if let Some(ref safe_path) = canonical {
+            if safe_path.to_string_lossy().contains("..") {
+                anyhow::bail!("Path traversal detected in save_to_file: {}", file_path);
+            }
+            tokio::fs::write(safe_path, &body)
+                .await
+                .context("Failed to save response to file")?;
+            info!("Response saved to: {}", safe_path.display());
+        } else {
+            tokio::fs::write(file_path, &body)
+                .await
+                .context("Failed to save response to file")?;
+            info!("Response saved to: {}", file_path);
+        }
     }
 
     Ok(HttpResponse {

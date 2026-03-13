@@ -28,7 +28,9 @@ pub(super) fn apply_unix_limits(cmd: &mut Command, limits: &ResourceLimits) {
                     rlim_cur: mem,
                     rlim_max: mem,
                 };
-                libc::setrlimit(libc::RLIMIT_AS, &limit);
+                if libc::setrlimit(libc::RLIMIT_AS, &limit) != 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
             }
 
             // Set CPU time limit (RLIMIT_CPU)
@@ -37,7 +39,9 @@ pub(super) fn apply_unix_limits(cmd: &mut Command, limits: &ResourceLimits) {
                     rlim_cur: cpu,
                     rlim_max: cpu,
                 };
-                libc::setrlimit(libc::RLIMIT_CPU, &limit);
+                if libc::setrlimit(libc::RLIMIT_CPU, &limit) != 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
             }
 
             // Set open files limit (RLIMIT_NOFILE)
@@ -46,7 +50,9 @@ pub(super) fn apply_unix_limits(cmd: &mut Command, limits: &ResourceLimits) {
                     rlim_cur: files as u64,
                     rlim_max: files as u64,
                 };
-                libc::setrlimit(libc::RLIMIT_NOFILE, &limit);
+                if libc::setrlimit(libc::RLIMIT_NOFILE, &limit) != 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
             }
 
             // Set stack size limit (RLIMIT_STACK)
@@ -55,7 +61,9 @@ pub(super) fn apply_unix_limits(cmd: &mut Command, limits: &ResourceLimits) {
                     rlim_cur: stack,
                     rlim_max: stack,
                 };
-                libc::setrlimit(libc::RLIMIT_STACK, &limit);
+                if libc::setrlimit(libc::RLIMIT_STACK, &limit) != 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
             }
 
             Ok(())

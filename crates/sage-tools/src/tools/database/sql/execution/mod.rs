@@ -23,7 +23,20 @@ pub async fn execute_operation(params: DatabaseParams) -> Result<SqlQueryResult>
     // 3. Return real results
 
     let connection_string = build_connection_string(&params.config)?;
-    info!("Connecting to database: {}", connection_string);
+    let redacted = connection_string
+        .find("://")
+        .and_then(|scheme_end| {
+            let after_scheme = &connection_string[scheme_end + 3..];
+            after_scheme.find('@').map(|at_pos| {
+                format!(
+                    "{}://***@{}",
+                    &connection_string[..scheme_end],
+                    &after_scheme[at_pos + 1..]
+                )
+            })
+        })
+        .unwrap_or_else(|| "***".to_string());
+    info!("Connecting to database: {}", redacted);
 
     operations::execute_operation_internal(params.operation, start_time).await
 }

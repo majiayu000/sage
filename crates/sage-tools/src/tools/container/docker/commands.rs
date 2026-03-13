@@ -130,6 +130,9 @@ pub async fn handle_container_operation(operation: &DockerOperation, working_dir
             args.push(image);
 
             if let Some(cmd) = command {
+                for token in cmd.split_whitespace() {
+                    super::validation::validate_docker_name(token, "command argument")?;
+                }
                 args.extend(cmd.split_whitespace());
             }
 
@@ -171,6 +174,9 @@ pub async fn handle_container_operation(operation: &DockerOperation, working_dir
                 args.push("-it");
             }
             args.push(container);
+            for token in command.split_whitespace() {
+                super::validation::validate_docker_name(token, "exec argument")?;
+            }
             args.extend(command.split_whitespace());
             execute_docker_command(&args, working_dir).await
         }

@@ -31,6 +31,7 @@ pub async fn perform_scan(
     // - TruffleHog (Secret scanning)
     // - FOSSA (License scanning)
 
+    let start = std::time::Instant::now();
     let findings = get_findings_by_type(&scan_type);
     let summary = count_by_severity(&findings);
 
@@ -38,7 +39,7 @@ pub async fn perform_scan(
         scan_type,
         summary,
         findings,
-        duration: std::time::Instant::now().duration_since(std::time::Instant::now()).as_secs_f64(),
+        duration: start.elapsed().as_secs_f64(),
         status: "completed".to_string(),
     })
 }
