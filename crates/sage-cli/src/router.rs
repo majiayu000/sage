@@ -36,6 +36,10 @@ pub async fn route(cli: Cli) -> SageResult<()> {
 
 /// Main execution route - unified entry point for all execution modes
 async fn route_main(mut cli: Cli) -> SageResult<()> {
+    // Initialize icon mode only for the main execution path.
+    // Utility subcommands do not use the shared UI icon layer.
+    sage_core::ui::init_icons();
+
     // Check configuration status and run onboarding if needed
     let (config_status, _status_hint) = check_config_status();
 

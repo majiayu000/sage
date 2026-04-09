@@ -48,64 +48,64 @@ use sage_core::error::SageResult;
 // Re-export for external use
 pub use args::{Cli, Commands, ConfigAction, DEFAULT_CONFIG_FILE};
 
-#[tokio::main]
-async fn main() -> SageResult<()> {
-    let cli = Cli::parse();
+#[derive(Debug, Clone, Copy)]
+enum LogFormat {
+    Json,
+    Pretty,
+    Compact,
+}
 
+fn resolve_log_format(cli: &Cli) -> LogFormat {
     let config = if cli.config_file == args::DEFAULT_CONFIG_FILE {
         load_config().ok()
     } else {
         load_config_from_file(&cli.config_file).ok()
     };
 
-    if let Some(config) = config {
-        // Only use config level if RUST_LOG is explicitly set; otherwise disable
-        // tracing entirely. Any stderr output corrupts the TUI layout since stderr
-        // shares the terminal. Use RUST_LOG=warn (or debug/info) to opt in.
-        let env_filter = if std::env::var_os("RUST_LOG").is_some() {
-            tracing_subscriber::EnvFilter::from_default_env()
-        } else {
-            tracing_subscriber::EnvFilter::new("off")
-        };
+    match config.as_ref().map(|cfg| cfg.logging.format.as_str()) {
+        Some("json") => LogFormat::Json,
+        Some("pretty") => LogFormat::Pretty,
+        _ => LogFormat::Compact,
+    }
+}
 
-        match config.logging.format.as_str() {
-            "json" => {
-                tracing_subscriber::fmt()
-                    .json()
-                    .with_env_filter(env_filter)
-                    .with_writer(std::io::stderr)
-                    .init();
-            }
-            "pretty" => {
-                tracing_subscriber::fmt()
-                    .pretty()
-                    .with_env_filter(env_filter)
-                    .with_writer(std::io::stderr)
-                    .init();
-            }
-            _ => {
-                tracing_subscriber::fmt()
-                    .compact()
-                    .with_env_filter(env_filter)
-                    .with_writer(std::io::stderr)
-                    .init();
-            }
-        }
-    } else {
-        // No config loaded — disable tracing by default, respect RUST_LOG if set
-        let env_filter = if std::env::var_os("RUST_LOG").is_some() {
-            tracing_subscriber::EnvFilter::from_default_env()
-        } else {
-            tracing_subscriber::EnvFilter::new("off")
-        };
-        tracing_subscriber::fmt()
-            .with_env_filter(env_filter)
-            .with_writer(std::io::stderr)
-            .init();
+fn init_tracing(cli: &Cli) {
+    // Keep logging disabled by default to avoid corrupting TUI output on stderr.
+    // When RUST_LOG is not set, skip subscriber initialization entirely.
+    if std::env::var_os("RUST_LOG").is_none() {
+        return;
     }
 
-    // Initialize icon mode from environment (SAGE_NERD_FONTS=false to disable)
-    sage_core::ui::init_icons();
+    let env_filter = tracing_subscriber::EnvFilter::from_default_env();
+    match resolve_log_format(cli) {
+        LogFormat::Json => {
+            tracing_subscriber::fmt()
+                .json()
+                .with_env_filter(env_filter)
+                .with_writer(std::io::stderr)
+                .init();
+        }
+        LogFormat::Pretty => {
+            tracing_subscriber::fmt()
+                .pretty()
+                .with_env_filter(env_filter)
+                .with_writer(std::io::stderr)
+                .init();
+        }
+        LogFormat::Compact => {
+            tracing_subscriber::fmt()
+                .compact()
+                .with_env_filter(env_filter)
+                .with_writer(std::io::stderr)
+                .init();
+        }
+    }
+}
+
+#[tokio::main]
+async fn main() -> SageResult<()> {
+    let cli = Cli::parse();
+    init_tracing(&cli);
 
     router::route(cli).await
 }
