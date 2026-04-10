@@ -48,6 +48,39 @@ use sage_core::error::SageResult;
 // Re-export for external use
 pub use args::{Cli, Commands, ConfigAction, DEFAULT_CONFIG_FILE};
 
+fn try_fast_tools_subcommand() -> bool {
+    let mut args = std::env::args_os();
+    let _ = args.next();
+
+    let Some(first) = args.next() else {
+        return false;
+    };
+    if args.next().is_some() {
+        return false;
+    }
+
+    first == "tools"
+}
+
+fn try_fast_version_flag() -> bool {
+    let mut args = std::env::args_os();
+    let _ = args.next();
+
+    let Some(first) = args.next() else {
+        return false;
+    };
+    if args.next().is_some() {
+        return false;
+    }
+
+    if first == "--version" || first == "-V" {
+        println!("sage {}", env!("CARGO_PKG_VERSION"));
+        return true;
+    }
+
+    false
+}
+
 #[derive(Debug, Clone, Copy)]
 enum LogFormat {
     Json,
@@ -102,10 +135,21 @@ fn init_tracing(cli: &Cli) {
     }
 }
 
-#[tokio::main]
-async fn main() -> SageResult<()> {
+async fn async_main() -> SageResult<()> {
     let cli = Cli::parse();
     init_tracing(&cli);
 
     router::route(cli).await
+}
+
+fn main() -> SageResult<()> {
+    if try_fast_version_flag() {
+        return Ok(());
+    }
+
+    if try_fast_tools_subcommand() {
+        return commands::tools::show_tools_sync();
+    }
+
+    tokio::runtime::Runtime::new()?.block_on(async_main())
 }
