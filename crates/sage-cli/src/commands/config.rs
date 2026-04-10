@@ -12,7 +12,7 @@ use sage_core::{
 use std::path::Path;
 
 /// Show current configuration
-pub async fn show(config_file: &str) -> SageResult<()> {
+pub fn show_sync(config_file: &str) -> SageResult<()> {
     let console = CliConsole::new(true);
 
     console.print_header("Configuration");
@@ -33,8 +33,13 @@ pub async fn show(config_file: &str) -> SageResult<()> {
     Ok(())
 }
 
+/// Show current configuration
+pub async fn show(config_file: &str) -> SageResult<()> {
+    show_sync(config_file)
+}
+
 /// Validate configuration
-pub async fn validate(config_file: &str) -> SageResult<()> {
+pub fn validate_sync(config_file: &str) -> SageResult<()> {
     let console = CliConsole::new(true);
 
     console.print_header("Configuration Validation");
@@ -83,6 +88,11 @@ pub async fn validate(config_file: &str) -> SageResult<()> {
     }
 
     Ok(())
+}
+
+/// Validate configuration
+pub async fn validate(config_file: &str) -> SageResult<()> {
+    validate_sync(config_file)
 }
 
 /// Initialize a new configuration file

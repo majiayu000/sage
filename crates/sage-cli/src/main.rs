@@ -135,8 +135,21 @@ fn init_tracing(cli: &Cli) {
     }
 }
 
-async fn async_main() -> SageResult<()> {
-    let cli = Cli::parse();
+fn try_sync_utility_command(cli: &Cli) -> Option<SageResult<()>> {
+    match &cli.command {
+        Some(Commands::Tools) => Some(commands::tools::show_tools_sync()),
+        Some(Commands::Config { action }) => match action {
+            ConfigAction::Show { config_file } => Some(commands::config::show_sync(config_file)),
+            ConfigAction::Validate { config_file } => {
+                Some(commands::config::validate_sync(config_file))
+            }
+            ConfigAction::Init { .. } => None,
+        },
+        _ => None,
+    }
+}
+
+async fn async_main(cli: Cli) -> SageResult<()> {
     init_tracing(&cli);
 
     router::route(cli).await
@@ -151,5 +164,10 @@ fn main() -> SageResult<()> {
         return commands::tools::show_tools_sync();
     }
 
-    tokio::runtime::Runtime::new()?.block_on(async_main())
+    let cli = Cli::parse();
+    if let Some(result) = try_sync_utility_command(&cli) {
+        return result;
+    }
+
+    tokio::runtime::Runtime::new()?.block_on(async_main(cli))
 }
