@@ -67,7 +67,7 @@ pub async fn validate(config_file: &str) -> SageResult<()> {
                         "Providers configured: {}",
                         config.model_providers.len()
                     ));
-                    let tools_count = sage_tools::get_default_tools().len();
+                    let tools_count = sage_tools::get_default_tool_count();
                     console.info(&format!("Tools available: {}", tools_count));
                 }
                 Err(e) => {
@@ -163,12 +163,12 @@ fn print_config(console: &CliConsole, config: &Config) {
 
     console.print_header("Tools Configuration");
     // All default tools are always available
-    let tools = sage_tools::get_default_tools();
-    console.info(&format!("Available Tools: {}", tools.len()));
+    let tool_names = sage_tools::get_default_tool_names();
+    console.info(&format!("Available Tools: {}", tool_names.len()));
 
     console.info("All default tools are enabled:");
-    for tool in tools {
-        console.info(&format!("  • {}", tool.name()));
+    for tool_name in tool_names {
+        console.info(&format!("  • {}", tool_name));
     }
 
     console.info(&format!(

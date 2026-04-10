@@ -659,4 +659,13 @@ mod tool_integration_tests {
             );
         }
     }
+
+    #[test]
+    fn test_default_tool_names_match_default_tools() {
+        let tools = get_default_tools();
+        let tool_names: Vec<&str> = tools.iter().map(|tool| tool.name()).collect();
+
+        assert_eq!(get_default_tool_names(), tool_names.as_slice());
+        assert_eq!(get_default_tool_count(), tool_names.len());
+    }
 }

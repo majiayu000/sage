@@ -94,6 +94,53 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+const DEFAULT_TOOL_NAMES: &[&str] = &[
+    "Edit",
+    "Read",
+    "Write",
+    "Glob",
+    "Grep",
+    "NotebookEdit",
+    "Bash",
+    "KillShell",
+    "Task",
+    "TaskOutput",
+    "TodoWrite",
+    "TodoRead",
+    "TaskDone",
+    "EnterPlanMode",
+    "ExitPlanMode",
+    "AskUserQuestion",
+    "Skill",
+    "SlashCommand",
+    "ToolSearch",
+    "claim_glm_camp_coupon",
+    "SequentialThinking",
+    "TelemetryStats",
+    "WebSearch",
+    "WebFetch",
+    "OpenBrowser",
+    "http_client",
+    "Diagnostics",
+    "ViewRangeUntruncated",
+    "SearchUntruncated",
+    "Remember",
+    "SessionNotes",
+    "RenderMermaid",
+    "Learn",
+    "LearningPatterns",
+    "McpServers",
+    "git",
+    "log_analyzer",
+    "test_generator",
+    "kubernetes",
+    "terraform",
+    "cloud",
+    "LSP",
+    "TeammateTool",
+    "SendMessageTool",
+];
+
 fn build_default_tools(
     skill_tool: Arc<dyn Tool>,
     slash_command_tool: Arc<dyn Tool>,
@@ -169,6 +216,14 @@ pub fn get_default_tools() -> Vec<Arc<dyn Tool>> {
         Arc::new(SkillTool::new()),
         Arc::new(SlashCommandTool::new()),
     )
+}
+
+pub fn get_default_tool_names() -> &'static [&'static str] {
+    DEFAULT_TOOL_NAMES
+}
+
+pub const fn get_default_tool_count() -> usize {
+    DEFAULT_TOOL_NAMES.len()
 }
 
 /// Get default tools bound to a specific working directory and shared skill registry.
