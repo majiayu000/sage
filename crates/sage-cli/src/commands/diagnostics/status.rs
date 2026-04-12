@@ -73,10 +73,13 @@ pub async fn status(config_file: &str) -> SageResult<()> {
     // Git info
     if is_git_repository() {
         println!("{}", "Git Repository".cyan().bold());
-        if let Ok(branch) = get_git_branch().await {
+        let (branch_result, status_result) =
+            tokio::join!(get_git_branch(), get_git_status_summary());
+
+        if let Ok(branch) = branch_result {
             println!("  Branch: {}", branch.green());
         }
-        if let Ok(status) = get_git_status_summary().await {
+        if let Ok(status) = status_result {
             println!("  Status: {}", status);
         }
         println!();

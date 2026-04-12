@@ -6,7 +6,7 @@ use futures::{StreamExt, stream};
 use sage_core::{
     error::SageResult,
     llm::streaming::stream_utils,
-    llm::{LlmMessage, LlmResponse, MessageRole, StreamChunk},
+    llm::{LlmMessage, MessageRole, StreamChunk},
     types::TokenUsage,
 };
 use std::collections::HashMap;

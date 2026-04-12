@@ -4,7 +4,7 @@ use crate::console::CliConsole;
 use sage_core::error::SageResult;
 
 /// Show available tools and their descriptions
-pub async fn show_tools() -> SageResult<()> {
+pub fn show_tools_sync() -> SageResult<()> {
     let console = CliConsole::new(true);
 
     console.print_header("Available Tools");
@@ -23,4 +23,9 @@ pub async fn show_tools() -> SageResult<()> {
     console.info("Use these tools in your task descriptions to perform specific operations.");
 
     Ok(())
+}
+
+/// Show available tools and their descriptions
+pub async fn show_tools() -> SageResult<()> {
+    show_tools_sync()
 }

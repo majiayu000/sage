@@ -36,25 +36,30 @@ pub async fn route(cli: Cli) -> SageResult<()> {
 
 /// Main execution route - unified entry point for all execution modes
 async fn route_main(mut cli: Cli) -> SageResult<()> {
-    // Check configuration status and run onboarding if needed
-    let (config_status, _status_hint) = check_config_status();
+    // Initialize icon mode only for the main execution path.
+    // Utility subcommands do not use the shared UI icon layer.
+    sage_core::ui::init_icons();
 
     // Check if stdin is a TTY (required for rnk App mode to read user input)
     let is_tty = std::io::stdin().is_terminal();
 
-    // Only run onboarding if we're in a TTY (can interact with user)
-    if config_status == ConfigStatus::Unconfigured && is_tty {
-        let console = CliConsole::new(true);
-        let mut onboarding = CliOnboarding::new();
-        match onboarding.run().await {
-            Ok(true) => {
-                console.success("Setup complete! Starting sage...");
-            }
-            Ok(false) => {
-                console.warn("Setup incomplete. You can run /login anytime to configure.");
-            }
-            Err(e) => {
-                console.warn(&format!("Setup error: {}. Continuing anyway.", e));
+    // Only check onboarding status for interactive TTY flows.
+    if is_tty && !cli.print_mode {
+        let (config_status, _status_hint) = check_config_status();
+
+        if config_status == ConfigStatus::Unconfigured {
+            let console = CliConsole::new(true);
+            let mut onboarding = CliOnboarding::new();
+            match onboarding.run().await {
+                Ok(true) => {
+                    console.success("Setup complete! Starting sage...");
+                }
+                Ok(false) => {
+                    console.warn("Setup incomplete. You can run /login anytime to configure.");
+                }
+                Err(e) => {
+                    console.warn(&format!("Setup error: {}. Continuing anyway.", e));
+                }
             }
         }
     }

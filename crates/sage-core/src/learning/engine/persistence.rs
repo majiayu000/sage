@@ -79,7 +79,9 @@ impl LearningEngine {
             memory.add_tag("learning_pattern");
             memory.add_tag(pattern.pattern_type.name());
 
-            if let Err(e) = manager.store(memory).await { tracing::warn!("Failed to persist learning pattern: {}", e); }
+            if let Err(e) = manager.store(memory).await {
+                tracing::warn!("Failed to persist learning pattern: {}", e);
+            }
         }
     }
 }

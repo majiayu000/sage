@@ -72,7 +72,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|| "127.0.0.1:7878".to_string());
     let config_file = std::env::args().nth(2);
 
-    let runtime = build_runtime(config_file, None, None).await?;
+    let runtime = Arc::new(build_runtime(config_file, None, None).await?);
 
     let listener = TcpListener::bind(&addr).await?;
     println!("Service mode demo listening on {}", addr);
@@ -80,7 +80,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         let (socket, peer) = listener.accept().await?;
         println!("Client connected: {}", peer);
-        if let Err(err) = handle_client(socket, runtime.clone()).await {
+        if let Err(err) = handle_client(socket, Arc::clone(&runtime)).await {
             eprintln!("Client session error: {}", err);
         }
         println!("Client disconnected: {}", peer);
@@ -144,7 +144,7 @@ async fn build_runtime(
     Ok(ExternalUiRuntime::new(executor))
 }
 
-async fn handle_client(socket: TcpStream, runtime: ExternalUiRuntime) -> SageResult<()> {
+async fn handle_client(socket: TcpStream, runtime: Arc<ExternalUiRuntime>) -> SageResult<()> {
     let (read_half, mut write_half) = socket.into_split();
     let mut lines = BufReader::new(read_half).lines();
 
@@ -192,7 +192,7 @@ async fn handle_client(socket: TcpStream, runtime: ExternalUiRuntime) -> SageRes
 
     // Push input requests from executor.
     {
-        let input_runtime = runtime.clone();
+        let input_runtime = Arc::clone(&runtime);
         let input_tx = out_tx.clone();
         tokio::spawn(async move {
             while let Some(request) = input_runtime.recv_input_request().await {
@@ -208,7 +208,7 @@ async fn handle_client(socket: TcpStream, runtime: ExternalUiRuntime) -> SageRes
 
     // Push completed outcomes.
     {
-        let outcome_runtime = runtime.clone();
+        let outcome_runtime = Arc::clone(&runtime);
         let outcome_tx = out_tx.clone();
         tokio::spawn(async move {
             loop {

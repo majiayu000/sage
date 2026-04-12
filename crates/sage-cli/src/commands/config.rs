@@ -12,7 +12,7 @@ use sage_core::{
 use std::path::Path;
 
 /// Show current configuration
-pub async fn show(config_file: &str) -> SageResult<()> {
+pub fn show_sync(config_file: &str) -> SageResult<()> {
     let console = CliConsole::new(true);
 
     console.print_header("Configuration");
@@ -33,8 +33,13 @@ pub async fn show(config_file: &str) -> SageResult<()> {
     Ok(())
 }
 
+/// Show current configuration
+pub async fn show(config_file: &str) -> SageResult<()> {
+    show_sync(config_file)
+}
+
 /// Validate configuration
-pub async fn validate(config_file: &str) -> SageResult<()> {
+pub fn validate_sync(config_file: &str) -> SageResult<()> {
     let console = CliConsole::new(true);
 
     console.print_header("Configuration Validation");
@@ -67,7 +72,7 @@ pub async fn validate(config_file: &str) -> SageResult<()> {
                         "Providers configured: {}",
                         config.model_providers.len()
                     ));
-                    let tools_count = sage_tools::get_default_tools().len();
+                    let tools_count = sage_tools::get_default_tool_count();
                     console.info(&format!("Tools available: {}", tools_count));
                 }
                 Err(e) => {
@@ -83,6 +88,11 @@ pub async fn validate(config_file: &str) -> SageResult<()> {
     }
 
     Ok(())
+}
+
+/// Validate configuration
+pub async fn validate(config_file: &str) -> SageResult<()> {
+    validate_sync(config_file)
 }
 
 /// Initialize a new configuration file
@@ -163,12 +173,12 @@ fn print_config(console: &CliConsole, config: &Config) {
 
     console.print_header("Tools Configuration");
     // All default tools are always available
-    let tools = sage_tools::get_default_tools();
-    console.info(&format!("Available Tools: {}", tools.len()));
+    let tool_names = sage_tools::get_default_tool_names();
+    console.info(&format!("Available Tools: {}", tool_names.len()));
 
     console.info("All default tools are enabled:");
-    for tool in tools {
-        console.info(&format!("  • {}", tool.name()));
+    for tool_name in tool_names {
+        console.info(&format!("  • {}", tool_name));
     }
 
     console.info(&format!(

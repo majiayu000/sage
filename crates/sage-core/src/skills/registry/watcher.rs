@@ -5,8 +5,8 @@
 
 use crate::error::{SageError, SageResult};
 use notify::{RecommendedWatcher, RecursiveMode};
-use std::collections::HashSet;
 use notify_debouncer_mini::{DebouncedEvent, DebouncedEventKind, Debouncer, new_debouncer};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;

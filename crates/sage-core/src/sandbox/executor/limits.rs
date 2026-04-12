@@ -3,11 +3,27 @@
 use crate::sandbox::limits::ResourceLimits;
 use tokio::process::Command;
 
+#[cfg(any(target_os = "linux", target_os = "android"))]
+type RlimitResource = libc::__rlimit_resource_t;
+
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
+type RlimitResource = libc::c_int;
+
 /// Try to set a resource limit; return error only for unexpected failures.
 /// EINVAL is treated as non-fatal because some platforms (e.g., macOS) don't
 /// support certain limits like RLIMIT_AS.
 #[cfg(unix)]
-fn try_setrlimit(resource: libc::c_int, limit: &libc::rlimit) -> std::io::Result<()> {
+fn try_setrlimit<T>(resource: T, limit: &libc::rlimit) -> std::io::Result<()>
+where
+    T: TryInto<RlimitResource>,
+{
+    let resource: RlimitResource = resource.try_into().map_err(|_| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "unsupported rlimit resource identifier",
+        )
+    })?;
+
     // SAFETY: setrlimit is async-signal-safe and the limit pointer is valid.
     if unsafe { libc::setrlimit(resource, limit) } != 0 {
         let err = std::io::Error::last_os_error();

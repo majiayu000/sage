@@ -318,6 +318,9 @@ cargo test
 ./target/release/sage --help
 ```
 
+Local developer state directories such as `.claude/` and `.omx/` are
+intentionally ignored and should not be committed.
+
 ## 📄 License
 
 MIT License - see [LICENSE](LICENSE) for details.
