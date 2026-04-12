@@ -7,7 +7,17 @@ use tokio::process::Command;
 /// EINVAL is treated as non-fatal because some platforms (e.g., macOS) don't
 /// support certain limits like RLIMIT_AS.
 #[cfg(unix)]
-fn try_setrlimit(resource: libc::c_int, limit: &libc::rlimit) -> std::io::Result<()> {
+fn try_setrlimit<T>(resource: T, limit: &libc::rlimit) -> std::io::Result<()>
+where
+    T: TryInto<libc::c_int>,
+{
+    let resource = resource.try_into().map_err(|_| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "unsupported rlimit resource identifier",
+        )
+    })?;
+
     // SAFETY: setrlimit is async-signal-safe and the limit pointer is valid.
     if unsafe { libc::setrlimit(resource, limit) } != 0 {
         let err = std::io::Error::last_os_error();

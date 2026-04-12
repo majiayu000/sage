@@ -158,7 +158,7 @@ impl LlmClient {
     /// Both include jitter (random value between 0 and delay/2) following
     /// Claude Code's pattern for distributed systems.
     fn calculate_retry_delay(&self, attempt: u32, error: &SageError) -> Duration {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         if self.is_throttling_error(error) {
             // Throttling strategy: longer delays for rate limit errors
@@ -168,7 +168,7 @@ impl LlmClient {
 
             // Jitter: random value between delay/2 and delay (like Claude Code)
             let min_delay = capped_delay_secs / 2;
-            let jitter_secs = rng.gen_range(0..=(capped_delay_secs - min_delay));
+            let jitter_secs = rng.random_range(0..=(capped_delay_secs - min_delay));
 
             Duration::from_secs(min_delay + jitter_secs)
         } else {
@@ -178,7 +178,7 @@ impl LlmClient {
             let capped_delay_secs = base_delay_secs.min(MAX_RETRY_DELAY_SECS);
 
             // Jitter: random value between 0 and delay/2 (like Claude Code)
-            let jitter_ms = rng.gen_range(0..=(capped_delay_secs * 500));
+            let jitter_ms = rng.random_range(0..=(capped_delay_secs * 500));
 
             Duration::from_secs(capped_delay_secs) + Duration::from_millis(jitter_ms)
         }

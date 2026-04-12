@@ -30,11 +30,10 @@ impl UnifiedExecutor {
         // Load project context (CLAUDE.md, instructions, git info)
         // Use spawn_blocking because ContextBuilder runs sync git commands
         let wd = working_dir_path.clone();
-        let project_context = tokio::task::spawn_blocking(move || {
-            ContextBuilder::new(&wd).build_context()
-        })
-        .await
-        .unwrap_or_default();
+        let project_context =
+            tokio::task::spawn_blocking(move || ContextBuilder::new(&wd).build_context())
+                .await
+                .unwrap_or_default();
 
         // Get tool schemas to include in prompt - CRITICAL for AI to know what tools are available
         let tool_schemas = self.tool_orchestrator.tool_executor().get_tool_schemas();

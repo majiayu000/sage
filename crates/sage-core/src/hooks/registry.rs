@@ -115,43 +115,69 @@ impl HookRegistry {
 
         // Register all event hooks
         for matcher in &config.pre_tool_use {
-            if let Err(e) = registry.register(HookEvent::PreToolUse, matcher.clone()) { tracing::warn!("Failed to register hook: {}", e); }
+            if let Err(e) = registry.register(HookEvent::PreToolUse, matcher.clone()) {
+                tracing::warn!("Failed to register hook: {}", e);
+            }
         }
         for matcher in &config.post_tool_use {
-            if let Err(e) = registry.register(HookEvent::PostToolUse, matcher.clone()) { tracing::warn!("Failed to register hook: {}", e); }
+            if let Err(e) = registry.register(HookEvent::PostToolUse, matcher.clone()) {
+                tracing::warn!("Failed to register hook: {}", e);
+            }
         }
         for matcher in &config.post_tool_use_failure {
-            if let Err(e) = registry.register(HookEvent::PostToolUseFailure, matcher.clone()) { tracing::warn!("Failed to register hook: {}", e); }
+            if let Err(e) = registry.register(HookEvent::PostToolUseFailure, matcher.clone()) {
+                tracing::warn!("Failed to register hook: {}", e);
+            }
         }
         for matcher in &config.user_prompt_submit {
-            if let Err(e) = registry.register(HookEvent::UserPromptSubmit, matcher.clone()) { tracing::warn!("Failed to register hook: {}", e); }
+            if let Err(e) = registry.register(HookEvent::UserPromptSubmit, matcher.clone()) {
+                tracing::warn!("Failed to register hook: {}", e);
+            }
         }
         for matcher in &config.session_start {
-            if let Err(e) = registry.register(HookEvent::SessionStart, matcher.clone()) { tracing::warn!("Failed to register hook: {}", e); }
+            if let Err(e) = registry.register(HookEvent::SessionStart, matcher.clone()) {
+                tracing::warn!("Failed to register hook: {}", e);
+            }
         }
         for matcher in &config.session_end {
-            if let Err(e) = registry.register(HookEvent::SessionEnd, matcher.clone()) { tracing::warn!("Failed to register hook: {}", e); }
+            if let Err(e) = registry.register(HookEvent::SessionEnd, matcher.clone()) {
+                tracing::warn!("Failed to register hook: {}", e);
+            }
         }
         for matcher in &config.subagent_start {
-            if let Err(e) = registry.register(HookEvent::SubagentStart, matcher.clone()) { tracing::warn!("Failed to register hook: {}", e); }
+            if let Err(e) = registry.register(HookEvent::SubagentStart, matcher.clone()) {
+                tracing::warn!("Failed to register hook: {}", e);
+            }
         }
         for matcher in &config.subagent_stop {
-            if let Err(e) = registry.register(HookEvent::SubagentStop, matcher.clone()) { tracing::warn!("Failed to register hook: {}", e); }
+            if let Err(e) = registry.register(HookEvent::SubagentStop, matcher.clone()) {
+                tracing::warn!("Failed to register hook: {}", e);
+            }
         }
         for matcher in &config.permission_request {
-            if let Err(e) = registry.register(HookEvent::PermissionRequest, matcher.clone()) { tracing::warn!("Failed to register hook: {}", e); }
+            if let Err(e) = registry.register(HookEvent::PermissionRequest, matcher.clone()) {
+                tracing::warn!("Failed to register hook: {}", e);
+            }
         }
         for matcher in &config.pre_compact {
-            if let Err(e) = registry.register(HookEvent::PreCompact, matcher.clone()) { tracing::warn!("Failed to register hook: {}", e); }
+            if let Err(e) = registry.register(HookEvent::PreCompact, matcher.clone()) {
+                tracing::warn!("Failed to register hook: {}", e);
+            }
         }
         for matcher in &config.notification {
-            if let Err(e) = registry.register(HookEvent::Notification, matcher.clone()) { tracing::warn!("Failed to register hook: {}", e); }
+            if let Err(e) = registry.register(HookEvent::Notification, matcher.clone()) {
+                tracing::warn!("Failed to register hook: {}", e);
+            }
         }
         for matcher in &config.stop {
-            if let Err(e) = registry.register(HookEvent::Stop, matcher.clone()) { tracing::warn!("Failed to register hook: {}", e); }
+            if let Err(e) = registry.register(HookEvent::Stop, matcher.clone()) {
+                tracing::warn!("Failed to register hook: {}", e);
+            }
         }
         for matcher in &config.status_line {
-            if let Err(e) = registry.register(HookEvent::StatusLine, matcher.clone()) { tracing::warn!("Failed to register hook: {}", e); }
+            if let Err(e) = registry.register(HookEvent::StatusLine, matcher.clone()) {
+                tracing::warn!("Failed to register hook: {}", e);
+            }
         }
 
         registry

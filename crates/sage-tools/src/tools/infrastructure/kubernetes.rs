@@ -250,7 +250,8 @@ spec:
                 );
 
                 let temp_dir = std::env::temp_dir();
-                let temp_file = temp_dir.join(format!("sage-svc-{}-{}.yaml", name, std::process::id()));
+                let temp_file =
+                    temp_dir.join(format!("sage-svc-{}-{}.yaml", name, std::process::id()));
                 let temp_file_str = temp_file.display().to_string();
                 tokio::fs::write(&temp_file, service_yaml)
                     .await

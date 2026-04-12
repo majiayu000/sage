@@ -163,7 +163,8 @@ pub(super) async fn execute_checkpoint(
     // Use git stash to create a checkpoint
     let output = Command::new("git")
         .args(["stash", "push", "-m", &format!("sage-checkpoint: {}", name)])
-        .output().await;
+        .output()
+        .await;
 
     match output {
         Ok(result) => {
@@ -248,7 +249,8 @@ pub(super) async fn execute_restore(invocation: &CommandInvocation) -> SageResul
                     Some(idx) => {
                         let restore = Command::new("git")
                             .args(["stash", "pop", &format!("stash@{{{}}}", idx)])
-                            .output().await;
+                            .output()
+                            .await;
 
                         match restore {
                             Ok(r) if r.status.success() => Ok(CommandResult::local(format!(
@@ -289,7 +291,10 @@ pub(super) async fn execute_undo(_invocation: &CommandInvocation) -> SageResult<
     use tokio::process::Command;
 
     // First check git status
-    let status = Command::new("git").args(["status", "--porcelain"]).output().await;
+    let status = Command::new("git")
+        .args(["status", "--porcelain"])
+        .output()
+        .await;
 
     match status {
         Ok(result) => {

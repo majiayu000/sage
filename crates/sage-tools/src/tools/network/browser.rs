@@ -53,7 +53,10 @@ impl Tool for BrowserTool {
         let result = if cfg!(target_os = "macos") {
             Command::new("open").arg(&url).output().await
         } else if cfg!(target_os = "windows") {
-            Command::new("cmd").args(["/C", "start", &url]).output().await
+            Command::new("cmd")
+                .args(["/C", "start", &url])
+                .output()
+                .await
         } else {
             Command::new("xdg-open").arg(&url).output().await
         };
