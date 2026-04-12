@@ -59,7 +59,7 @@ mod tests {
     }
 
     fn create_test_registry() -> Arc<AgentRegistry> {
-        let mut registry = AgentRegistry::new();
+        let registry = AgentRegistry::new();
 
         registry.register(AgentDefinition {
             agent_type: AgentType::GeneralPurpose,

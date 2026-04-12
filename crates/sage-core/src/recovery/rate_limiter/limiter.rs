@@ -155,12 +155,6 @@ impl RecoveryRateLimiter {
         }
     }
 
-    /// Check if rate limited (would need to wait)
-    #[cfg(test)]
-    pub async fn is_limited(&self) -> bool {
-        self.available_tokens().await < 1.0
-    }
-
     /// Get configuration
     pub fn config(&self) -> &RateLimitConfig {
         &self.config

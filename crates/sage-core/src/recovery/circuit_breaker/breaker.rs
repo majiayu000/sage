@@ -31,12 +31,6 @@ pub struct CircuitBreaker {
 }
 
 impl CircuitBreaker {
-    /// Create a new circuit breaker with default config (used in tests)
-    #[cfg(test)]
-    pub fn new(name: impl Into<String>) -> Self {
-        Self::with_config(name, CircuitBreakerConfig::default())
-    }
-
     /// Create a new circuit breaker with custom config
     pub fn with_config(name: impl Into<String>, config: CircuitBreakerConfig) -> Self {
         Self {
