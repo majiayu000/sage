@@ -48,15 +48,22 @@ pub async fn validate_api_key_format(provider: &str, api_key: &str) -> ApiKeyVal
                 );
             }
         }
+        "moonshot" | "kimi" => {
+            if !api_key.starts_with("sk-") {
+                return ApiKeyValidationResult::failure(
+                    "Moonshot API keys typically start with 'sk-'",
+                );
+            }
+        }
         "google" => {
             if api_key.len() < 30 {
                 return ApiKeyValidationResult::failure("Google API keys are typically longer");
             }
         }
-        "glm" => {
+        "glm" | "zhipu" | "zai" => {
             if api_key.len() < 20 {
                 return ApiKeyValidationResult::failure(
-                    "智谱AI API keys are typically longer (20+ characters)",
+                    "GLM/Z.AI API keys are typically longer (20+ characters)",
                 );
             }
         }

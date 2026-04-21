@@ -52,20 +52,32 @@ pub fn default_provider_options() -> Vec<ProviderOption> {
         ProviderOption::new(
             "openai",
             "OpenAI (GPT)",
-            "GPT-4 and GPT-3.5 models - widely used and well-documented",
+            "GPT-5.4 frontier models - strongest OpenAI coding defaults",
             "https://platform.openai.com/api-keys",
         ),
         ProviderOption::new(
             "google",
             "Google (Gemini)",
-            "Gemini models - multimodal capabilities",
+            "Gemini 2.5 models - production multimodal and agentic workflows",
             "https://makersuite.google.com/app/apikey",
         ),
         ProviderOption::new(
             "glm",
             "智谱AI (GLM)",
-            "GLM-4 models - powerful Chinese and English capabilities",
+            "GLM-4.7 models - strong Chinese and English capabilities",
             "https://open.bigmodel.cn/",
+        ),
+        ProviderOption::new(
+            "zai",
+            "Z.AI",
+            "GLM-5.1 via OpenAI-compatible API",
+            "https://docs.z.ai/api-reference/introduction",
+        ),
+        ProviderOption::new(
+            "moonshot",
+            "Moonshot AI (Kimi)",
+            "Kimi K2.6 coding and multimodal models",
+            "https://platform.kimi.ai/docs/models",
         ),
         ProviderOption::new(
             "ollama",
@@ -102,7 +114,7 @@ mod tests {
     #[test]
     fn test_default_provider_options() {
         let providers = default_provider_options();
-        assert!(providers.len() >= 5);
+        assert!(providers.len() >= 7);
 
         let anthropic = providers.iter().find(|p| p.id == "anthropic");
         assert!(anthropic.is_some());
@@ -112,5 +124,8 @@ mod tests {
         let glm = providers.iter().find(|p| p.id == "glm");
         assert!(glm.is_some());
         assert_eq!(glm.unwrap().name, "智谱AI (GLM)");
+
+        let zai = providers.iter().find(|p| p.id == "zai");
+        assert!(zai.is_some());
     }
 }

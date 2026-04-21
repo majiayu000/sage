@@ -1,6 +1,6 @@
 //! Command line arguments-based configuration loading
 
-use crate::config::model::Config;
+use crate::config::model::{Config, ModelParameters};
 use crate::error::{SageError, SageResult};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -38,7 +38,10 @@ pub fn load_from_args(args: &HashMap<String, String>) -> SageResult<Config> {
             .model_providers
             .get(&provider)
             .cloned()
-            .unwrap_or_default();
+            .unwrap_or_else(|| ModelParameters {
+                model: String::new(),
+                ..ModelParameters::default()
+            });
         params.model = model.clone();
         config.model_providers.insert(provider, params);
     }
@@ -49,7 +52,10 @@ pub fn load_from_args(args: &HashMap<String, String>) -> SageResult<Config> {
             .model_providers
             .get(&provider)
             .cloned()
-            .unwrap_or_default();
+            .unwrap_or_else(|| ModelParameters {
+                model: String::new(),
+                ..ModelParameters::default()
+            });
         params.api_key = Some(api_key.clone());
         config.model_providers.insert(provider, params);
     }
@@ -60,7 +66,10 @@ pub fn load_from_args(args: &HashMap<String, String>) -> SageResult<Config> {
             .model_providers
             .get(&provider)
             .cloned()
-            .unwrap_or_default();
+            .unwrap_or_else(|| ModelParameters {
+                model: String::new(),
+                ..ModelParameters::default()
+            });
         params.base_url = Some(base_url.clone());
         config.model_providers.insert(provider, params);
     }

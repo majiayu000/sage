@@ -21,6 +21,7 @@ pub fn validate_providers(config: &Config) -> SageResult<()> {
     // All providers from LlmProvider enum in llm/providers.rs
     let valid_providers: HashSet<&str> = [
         "openai",     // OpenAI (GPT models)
+        "zai",        // Z.AI (OpenAI-compatible GLM models)
         "anthropic",  // Anthropic (Claude models)
         "google",     // Google (Gemini models)
         "azure",      // Azure OpenAI
@@ -29,6 +30,8 @@ pub fn validate_providers(config: &Config) -> SageResult<()> {
         "ollama",     // Ollama (local models)
         "glm",        // GLM (Zhipu AI)
         "zhipu",      // Alias for GLM
+        "moonshot",   // Moonshot AI / Kimi
+        "kimi",       // Alias for Moonshot AI
     ]
     .iter()
     .cloned()

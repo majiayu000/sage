@@ -68,17 +68,17 @@ impl Default for FallbackChainBuilder {
 pub async fn anthropic_fallback_chain() -> FallbackChain {
     FallbackChainBuilder::new()
         .add(
-            ModelConfig::new("claude-3-5-sonnet-20241022", "anthropic")
+            ModelConfig::new("claude-opus-4-7", "anthropic")
                 .with_priority(0)
-                .with_max_context(200_000),
+                .with_max_context(1_000_000),
         )
         .add(
-            ModelConfig::new("claude-3-5-haiku-20241022", "anthropic")
+            ModelConfig::new("claude-sonnet-4-6", "anthropic")
                 .with_priority(1)
-                .with_max_context(200_000),
+                .with_max_context(1_000_000),
         )
         .add(
-            ModelConfig::new("claude-3-opus-20240229", "anthropic")
+            ModelConfig::new("claude-haiku-4-5", "anthropic")
                 .with_priority(2)
                 .with_max_context(200_000),
         )
@@ -90,19 +90,19 @@ pub async fn anthropic_fallback_chain() -> FallbackChain {
 pub async fn openai_fallback_chain() -> FallbackChain {
     FallbackChainBuilder::new()
         .add(
-            ModelConfig::new("gpt-4o", "openai")
+            ModelConfig::new("gpt-5.4", "openai")
                 .with_priority(0)
-                .with_max_context(128_000),
+                .with_max_context(1_050_000),
         )
         .add(
-            ModelConfig::new("gpt-4o-mini", "openai")
+            ModelConfig::new("gpt-5.4-mini", "openai")
                 .with_priority(1)
-                .with_max_context(128_000),
+                .with_max_context(400_000),
         )
         .add(
-            ModelConfig::new("gpt-4-turbo", "openai")
+            ModelConfig::new("gpt-5.4-nano", "openai")
                 .with_priority(2)
-                .with_max_context(128_000),
+                .with_max_context(400_000),
         )
         .build()
         .await
@@ -128,14 +128,14 @@ mod tests {
     async fn test_anthropic_chain() {
         let chain = anthropic_fallback_chain().await;
         assert_eq!(chain.model_count().await, 3);
-        assert!(chain.current_model().await.unwrap().contains("sonnet"));
+        assert!(chain.current_model().await.unwrap().contains("opus-4-7"));
     }
 
     #[tokio::test]
     async fn test_openai_chain() {
         let chain = openai_fallback_chain().await;
         assert_eq!(chain.model_count().await, 3);
-        assert!(chain.current_model().await.unwrap().contains("gpt-4o"));
+        assert!(chain.current_model().await.unwrap().contains("gpt-5.4"));
     }
 
     #[tokio::test]

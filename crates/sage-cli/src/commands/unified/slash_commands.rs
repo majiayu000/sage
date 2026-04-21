@@ -183,8 +183,10 @@ pub async fn handle_interactive_command_v2(
                     let env_var = match provider_name {
                         "anthropic" => "ANTHROPIC_API_KEY",
                         "openai" => "OPENAI_API_KEY",
+                        "zai" => "ZAI_API_KEY",
                         "google" => "GOOGLE_API_KEY",
                         "glm" | "zhipu" => "GLM_API_KEY",
+                        "moonshot" | "kimi" => "MOONSHOT_API_KEY",
                         _ => "",
                     };
                     if !env_var.is_empty() {
@@ -210,7 +212,7 @@ pub async fn handle_interactive_command_v2(
                             .unwrap_or_default(),
                     }
                 }
-                "openai" | "openrouter" => {
+                "openai" | "openrouter" | "zai" | "moonshot" | "kimi" => {
                     match client
                         .fetch_openai_models(&base_url, api_key.as_deref().unwrap_or(""))
                         .await

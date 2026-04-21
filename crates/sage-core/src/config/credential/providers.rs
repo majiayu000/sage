@@ -30,6 +30,9 @@ pub fn default_providers() -> Vec<ProviderEnvConfig> {
         ProviderEnvConfig::new("google", "GOOGLE_API_KEY"),
         ProviderEnvConfig::new("glm", "GLM_API_KEY"),
         ProviderEnvConfig::new("zhipu", "ZHIPU_API_KEY"),
+        ProviderEnvConfig::new("zai", "ZAI_API_KEY"),
+        ProviderEnvConfig::new("moonshot", "MOONSHOT_API_KEY"),
+        ProviderEnvConfig::new("kimi", "KIMI_API_KEY"),
         ProviderEnvConfig::new("ollama", "OLLAMA_API_KEY"),
     ]
 }

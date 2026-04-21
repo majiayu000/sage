@@ -217,7 +217,7 @@ fn create_sample_config() -> Config {
     model_providers.insert(
         "openai".to_string(),
         ModelParameters {
-            model: "gpt-4".to_string(),
+            model: "gpt-5.4".to_string(),
             api_key: Some("your-openai-api-key-here".to_string()),
             max_tokens: Some(4096),
             temperature: Some(0.7),
@@ -235,7 +235,7 @@ fn create_sample_config() -> Config {
     model_providers.insert(
         "anthropic".to_string(),
         ModelParameters {
-            model: "claude-3-sonnet-20240229".to_string(),
+            model: "claude-opus-4-7".to_string(),
             api_key: Some("your-anthropic-api-key-here".to_string()),
             max_tokens: Some(4096),
             temperature: Some(0.7),
@@ -249,8 +249,59 @@ fn create_sample_config() -> Config {
         },
     );
 
+    model_providers.insert(
+        "google".to_string(),
+        ModelParameters {
+            model: "gemini-2.5-pro".to_string(),
+            api_key: Some("your-google-api-key-here".to_string()),
+            max_tokens: Some(4096),
+            temperature: Some(0.7),
+            top_p: Some(1.0),
+            top_k: None,
+            parallel_tool_calls: Some(true),
+            max_retries: Some(3),
+            base_url: None,
+            api_version: None,
+            stop_sequences: None,
+        },
+    );
+
+    model_providers.insert(
+        "zai".to_string(),
+        ModelParameters {
+            model: "glm-5.1".to_string(),
+            api_key: Some("your-zai-api-key-here".to_string()),
+            max_tokens: Some(4096),
+            temperature: Some(1.0),
+            top_p: Some(0.95),
+            top_k: None,
+            parallel_tool_calls: Some(true),
+            max_retries: Some(3),
+            base_url: Some("https://api.z.ai/api/paas/v4".to_string()),
+            api_version: None,
+            stop_sequences: None,
+        },
+    );
+
+    model_providers.insert(
+        "moonshot".to_string(),
+        ModelParameters {
+            model: "kimi-k2.6".to_string(),
+            api_key: Some("your-moonshot-api-key-here".to_string()),
+            max_tokens: Some(4096),
+            temperature: Some(1.0),
+            top_p: Some(0.95),
+            top_k: None,
+            parallel_tool_calls: Some(true),
+            max_retries: Some(3),
+            base_url: Some("https://api.moonshot.ai/v1".to_string()),
+            api_version: None,
+            stop_sequences: None,
+        },
+    );
+
     Config {
-        default_provider: "openai".to_string(),
+        default_provider: "anthropic".to_string(),
         max_steps: None, // None = unlimited
         total_token_budget: None,
         model_providers,

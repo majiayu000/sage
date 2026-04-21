@@ -145,6 +145,8 @@ impl Default for TimeoutConfig {
 pub enum LlmProvider {
     /// OpenAI (GPT models)
     OpenAI,
+    /// Z.AI (OpenAI-compatible GLM models)
+    Zai,
     /// Anthropic (Claude models)
     Anthropic,
     /// Google (Gemini models)
@@ -159,6 +161,8 @@ pub enum LlmProvider {
     Ollama,
     /// GLM (Zhipu AI)
     Glm,
+    /// Moonshot AI / Kimi (OpenAI-compatible Kimi models)
+    Moonshot,
     /// Custom provider
     Custom(String),
 }
@@ -168,6 +172,7 @@ impl LlmProvider {
     pub fn name(&self) -> &str {
         match self {
             LlmProvider::OpenAI => "openai",
+            LlmProvider::Zai => "zai",
             LlmProvider::Anthropic => "anthropic",
             LlmProvider::Google => "google",
             LlmProvider::Azure => "azure",
@@ -175,6 +180,7 @@ impl LlmProvider {
             LlmProvider::Doubao => "doubao",
             LlmProvider::Ollama => "ollama",
             LlmProvider::Glm => "glm",
+            LlmProvider::Moonshot => "moonshot",
             LlmProvider::Custom(name) => name,
         }
     }
@@ -192,6 +198,7 @@ impl std::str::FromStr for LlmProvider {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "openai" => Ok(LlmProvider::OpenAI),
+            "zai" => Ok(LlmProvider::Zai),
             "anthropic" => Ok(LlmProvider::Anthropic),
             "google" => Ok(LlmProvider::Google),
             "azure" => Ok(LlmProvider::Azure),
@@ -199,6 +206,7 @@ impl std::str::FromStr for LlmProvider {
             "doubao" => Ok(LlmProvider::Doubao),
             "ollama" => Ok(LlmProvider::Ollama),
             "glm" | "zhipu" => Ok(LlmProvider::Glm),
+            "moonshot" | "kimi" => Ok(LlmProvider::Moonshot),
             _ => Ok(LlmProvider::Custom(s.to_string())),
         }
     }

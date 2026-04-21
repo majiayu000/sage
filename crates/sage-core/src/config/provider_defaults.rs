@@ -11,7 +11,7 @@ pub fn create_default_providers() -> HashMap<String, ModelParameters> {
     providers.insert(
         "anthropic".to_string(),
         ModelParameters {
-            model: "claude-sonnet-4-5-20250929".to_string(),
+            model: "claude-opus-4-7".to_string(),
             api_key: None,
             base_url: Some("https://api.anthropic.com".to_string()),
             max_tokens: Some(4096),
@@ -29,7 +29,7 @@ pub fn create_default_providers() -> HashMap<String, ModelParameters> {
     providers.insert(
         "openai".to_string(),
         ModelParameters {
-            model: "gpt-4".to_string(),
+            model: "gpt-5.4".to_string(),
             api_key: None,
             base_url: Some("https://api.openai.com".to_string()),
             max_tokens: Some(4096),
@@ -47,7 +47,7 @@ pub fn create_default_providers() -> HashMap<String, ModelParameters> {
     providers.insert(
         "google".to_string(),
         ModelParameters {
-            model: "gemini-1.5-pro".to_string(),
+            model: "gemini-2.5-pro".to_string(),
             api_key: None,
             base_url: Some("https://generativelanguage.googleapis.com".to_string()),
             max_tokens: Some(4096),
@@ -165,6 +165,57 @@ pub fn create_default_providers() -> HashMap<String, ModelParameters> {
             parallel_tool_calls: Some(false),
             max_retries: Some(3),
             api_version: Some("2023-06-01".to_string()),
+            stop_sequences: None,
+        },
+    );
+
+    providers.insert(
+        "zai".to_string(),
+        ModelParameters {
+            model: "glm-5.1".to_string(),
+            api_key: None,
+            base_url: Some("https://api.z.ai/api/paas/v4".to_string()),
+            max_tokens: Some(4096),
+            temperature: Some(1.0),
+            top_p: Some(0.95),
+            top_k: None,
+            parallel_tool_calls: Some(true),
+            max_retries: Some(3),
+            api_version: None,
+            stop_sequences: None,
+        },
+    );
+
+    providers.insert(
+        "moonshot".to_string(),
+        ModelParameters {
+            model: "kimi-k2.6".to_string(),
+            api_key: None,
+            base_url: Some("https://api.moonshot.ai/v1".to_string()),
+            max_tokens: Some(4096),
+            temperature: Some(1.0),
+            top_p: Some(0.95),
+            top_k: None,
+            parallel_tool_calls: Some(true),
+            max_retries: Some(3),
+            api_version: None,
+            stop_sequences: None,
+        },
+    );
+
+    providers.insert(
+        "kimi".to_string(),
+        ModelParameters {
+            model: "kimi-k2.6".to_string(),
+            api_key: None,
+            base_url: Some("https://api.moonshot.ai/v1".to_string()),
+            max_tokens: Some(4096),
+            temperature: Some(1.0),
+            top_p: Some(0.95),
+            top_k: None,
+            parallel_tool_calls: Some(true),
+            max_retries: Some(3),
+            api_version: None,
             stop_sequences: None,
         },
     );

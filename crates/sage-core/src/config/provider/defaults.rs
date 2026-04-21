@@ -17,6 +17,15 @@ impl ProviderDefaults {
             .with_rate_limit(RateLimitConfig::for_provider("openai"))
     }
 
+    /// Get default configuration for Z.AI
+    pub fn zai() -> ProviderConfig {
+        ProviderConfig::new("zai")
+            .with_base_url("https://api.z.ai/api/paas/v4")
+            .with_timeouts(TimeoutConfig::default())
+            .with_max_retries(3)
+            .with_rate_limit(RateLimitConfig::for_provider("zai"))
+    }
+
     /// Get default configuration for Anthropic
     pub fn anthropic() -> ProviderConfig {
         ProviderConfig::new("anthropic")
@@ -58,6 +67,15 @@ impl ProviderDefaults {
             .with_rate_limit(RateLimitConfig::for_provider("glm"))
     }
 
+    /// Get default configuration for Moonshot AI / Kimi
+    pub fn moonshot() -> ProviderConfig {
+        ProviderConfig::new("moonshot")
+            .with_base_url("https://api.moonshot.ai/v1")
+            .with_timeouts(TimeoutConfig::default())
+            .with_max_retries(3)
+            .with_rate_limit(RateLimitConfig::for_provider("moonshot"))
+    }
+
     /// Get default configuration for Azure OpenAI
     pub fn azure() -> ProviderConfig {
         ProviderConfig::new("azure")
@@ -91,6 +109,7 @@ impl ProviderDefaults {
     pub fn for_provider(name: &str) -> ProviderConfig {
         match name {
             "openai" => Self::openai(),
+            "zai" => Self::zai(),
             "anthropic" => Self::anthropic(),
             "google" => Self::google(),
             "azure" => Self::azure(),
@@ -98,6 +117,7 @@ impl ProviderDefaults {
             "doubao" => Self::doubao(),
             "ollama" => Self::ollama(),
             "glm" | "zhipu" => Self::glm(),
+            "moonshot" | "kimi" => Self::moonshot(),
             _ => ProviderConfig::new(name),
         }
     }

@@ -74,6 +74,7 @@ pub fn validate_models(config: &Config) -> SageResult<()> {
         // Local providers like ollama don't require API keys
         let cloud_providers = [
             "openai",
+            "zai",
             "anthropic",
             "google",
             "azure",
@@ -81,6 +82,8 @@ pub fn validate_models(config: &Config) -> SageResult<()> {
             "doubao",
             "glm",
             "zhipu",
+            "moonshot",
+            "kimi",
         ];
         if cloud_providers.contains(&provider.as_str()) {
             if params.api_key.is_none() && params.get_api_key().is_none() {

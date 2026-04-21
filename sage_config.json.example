@@ -1,5 +1,5 @@
 {
-  "default_provider": "google",
+  "default_provider": "anthropic",
   "max_steps": 20,
   "total_token_budget": 100000,
   "enable_lakeview": false,
@@ -18,7 +18,7 @@
       "base_url": null,
       "max_retries": 3,
       "max_tokens": 4096,
-      "model": "claude-3-sonnet-20240229",
+      "model": "claude-opus-4-7",
       "parallel_tool_calls": false,
       "stop_sequences": null,
       "temperature": 0.7,
@@ -57,12 +57,38 @@
       "base_url": null,
       "max_retries": 3,
       "max_tokens": 4096,
-      "model": "gpt-4",
+      "model": "gpt-5.4",
       "parallel_tool_calls": true,
       "stop_sequences": null,
       "temperature": 0.7,
       "top_k": null,
       "top_p": 1.0
+    },
+    "zai": {
+      "api_key": "your-zai-api-key-here",
+      "api_version": null,
+      "base_url": "https://api.z.ai/api/paas/v4",
+      "max_retries": 3,
+      "max_tokens": 4096,
+      "model": "glm-5.1",
+      "parallel_tool_calls": true,
+      "stop_sequences": null,
+      "temperature": 1.0,
+      "top_k": null,
+      "top_p": 0.95
+    },
+    "moonshot": {
+      "api_key": "your-moonshot-api-key-here",
+      "api_version": null,
+      "base_url": "https://api.moonshot.ai/v1",
+      "max_retries": 3,
+      "max_tokens": 4096,
+      "model": "kimi-k2.6",
+      "parallel_tool_calls": true,
+      "stop_sequences": null,
+      "temperature": 1.0,
+      "top_k": null,
+      "top_p": 0.95
     }
   },
   "tools": {
