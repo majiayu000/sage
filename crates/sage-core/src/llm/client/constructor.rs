@@ -160,11 +160,9 @@ impl LlmClient {
             LlmProvider::Glm => {
                 ProviderInstance::Glm(GlmProvider::new(config, model_params, http_client))
             }
-            LlmProvider::Moonshot => ProviderInstance::Moonshot(OpenAiProvider::new(
-                config,
-                model_params,
-                http_client,
-            )),
+            LlmProvider::Moonshot => {
+                ProviderInstance::Moonshot(OpenAiProvider::new(config, model_params, http_client))
+            }
             LlmProvider::Custom(name) => {
                 return Err(SageError::llm_with_provider(
                     "Custom provider not implemented. Consider using OpenRouter or Ollama for custom models.".to_string(),

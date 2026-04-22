@@ -89,7 +89,9 @@ impl ContextConfig {
     pub fn for_provider(provider: &str, model: &str) -> Self {
         match (provider.to_lowercase().as_str(), model) {
             // OpenAI models
-            ("openai", m) if m.contains("gpt-5.4") && !m.contains("mini") && !m.contains("nano") => {
+            ("openai", m)
+                if m.contains("gpt-5.4") && !m.contains("mini") && !m.contains("nano") =>
+            {
                 Self {
                     max_context_tokens: 1_050_000,
                     reserved_for_response: 32_000,
@@ -128,9 +130,7 @@ impl ContextConfig {
                 min_messages_to_keep: 15,
                 ..Default::default()
             },
-            ("anthropic", m)
-                if m.contains("claude-opus-4") || m.contains("claude-sonnet-4") =>
-            {
+            ("anthropic", m) if m.contains("claude-opus-4") || m.contains("claude-sonnet-4") => {
                 Self {
                     max_context_tokens: 1_000_000,
                     reserved_for_response: 32_000,
