@@ -60,12 +60,10 @@ pub async fn validate_api_key_format(provider: &str, api_key: &str) -> ApiKeyVal
                 return ApiKeyValidationResult::failure("Google API keys are typically longer");
             }
         }
-        "glm" | "zhipu" | "zai" => {
-            if api_key.len() < 20 {
-                return ApiKeyValidationResult::failure(
-                    "GLM/Z.AI API keys are typically longer (20+ characters)",
-                );
-            }
+        "glm" | "zhipu" | "zai" if api_key.len() < 20 => {
+            return ApiKeyValidationResult::failure(
+                "GLM/Z.AI API keys are typically longer (20+ characters)",
+            );
         }
         "ollama" => {
             return ApiKeyValidationResult::success("Ollama configured (local)");

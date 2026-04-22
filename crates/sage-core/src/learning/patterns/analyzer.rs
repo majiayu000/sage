@@ -145,7 +145,7 @@ impl PatternDetector {
             .iter()
             .map(|(k, v)| (k.clone(), *v))
             .collect();
-        tools.sort_by(|a, b| b.1.cmp(&a.1));
+        tools.sort_by_key(|entry| std::cmp::Reverse(entry.1));
         tools.truncate(limit);
         tools
     }

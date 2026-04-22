@@ -102,12 +102,10 @@ impl StreamingMetrics {
     /// Get average time to first token
     pub fn avg_ttft(&self) -> Option<Duration> {
         let count = self.ttft_count.load(Ordering::SeqCst);
-        if count > 0 {
-            let total_ms = self.total_ttft_ms.load(Ordering::SeqCst);
-            Some(Duration::from_millis((total_ms / count) as u64))
-        } else {
-            None
-        }
+        let total_ms = self.total_ttft_ms.load(Ordering::SeqCst);
+        total_ms
+            .checked_div(count)
+            .map(|avg_ms| Duration::from_millis(avg_ms as u64))
     }
 
     /// Get minimum time to first token

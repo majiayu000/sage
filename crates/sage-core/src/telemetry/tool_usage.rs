@@ -127,7 +127,7 @@ impl TelemetryCollector {
     /// Get most used tools
     pub fn get_most_used_tools(&self, limit: usize) -> Vec<ToolStats> {
         let mut stats = self.get_all_stats();
-        stats.sort_by(|a, b| b.total_calls.cmp(&a.total_calls));
+        stats.sort_by_key(|stat| std::cmp::Reverse(stat.total_calls));
         stats.truncate(limit);
         stats
     }

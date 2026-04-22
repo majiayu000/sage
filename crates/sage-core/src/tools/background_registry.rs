@@ -102,7 +102,7 @@ impl BackgroundTaskRegistry {
         }
 
         // Sort by shell_id for consistent ordering
-        summaries.sort_by(|a, b| a.shell_id.cmp(&b.shell_id));
+        summaries.sort_by_key(|summary| summary.shell_id);
         summaries
     }
 

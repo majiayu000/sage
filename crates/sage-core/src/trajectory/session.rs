@@ -395,7 +395,7 @@ impl SessionRecorder {
         }
 
         // Sort by modified time, newest first
-        sessions.sort_by(|a, b| b.modified.cmp(&a.modified));
+        sessions.sort_by_key(|session| std::cmp::Reverse(session.modified));
 
         Ok(sessions)
     }
