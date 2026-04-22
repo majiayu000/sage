@@ -58,6 +58,8 @@ impl AutoCompactConfig {
             "anthropic" => {
                 if model.contains("claude-opus-4") || model.contains("claude-sonnet-4") {
                     (1_000_000, 32_000)
+                } else if model.contains("claude-haiku-4-5") {
+                    (200_000, 13_000)
                 } else if model.contains("3.5") || model.contains("3-5") {
                     (200_000, 13_000) // Claude 3.5: 200K context, 13K reserved (like Claude Code)
                 } else {

@@ -123,18 +123,24 @@ impl ContextConfig {
                 ..Default::default()
             },
 
-            // Anthropic models - match Claude Code's 13K reserved
-            ("anthropic", m) if m.contains("claude-3") || m.contains("claude-opus") => Self {
-                max_context_tokens: 200_000,
-                reserved_for_response: 13_000, // Claude Code uses 13000
-                min_messages_to_keep: 15,
-                ..Default::default()
-            },
             ("anthropic", m) if m.contains("claude-opus-4") || m.contains("claude-sonnet-4") => {
                 Self {
                     max_context_tokens: 1_000_000,
                     reserved_for_response: 32_000,
                     min_messages_to_keep: 20,
+                    ..Default::default()
+                }
+            }
+            // Anthropic models - match Claude Code's 13K reserved
+            ("anthropic", m)
+                if m.contains("claude-3")
+                    || m.contains("claude-opus")
+                    || m.contains("claude-haiku-4-5") =>
+            {
+                Self {
+                    max_context_tokens: 200_000,
+                    reserved_for_response: 13_000, // Claude Code uses 13000
+                    min_messages_to_keep: 15,
                     ..Default::default()
                 }
             }
