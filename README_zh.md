@@ -49,11 +49,6 @@ curl -fsSL https://raw.githubusercontent.com/majiayu000/sage/main/install.sh | b
 irm https://raw.githubusercontent.com/majiayu000/sage/main/install.ps1 | iex
 ```
 
-**Homebrew:**
-```bash
-brew install majiayu000/sage/sage
-```
-
 **Cargo:**
 ```bash
 cargo install --git https://github.com/majiayu000/sage sage-cli
