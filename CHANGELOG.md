@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.56] - 2026-05-01
+
+### Changed
+
+- Switched release builds to rustls-backed HTTP dependencies so Linux cross targets do not require target OpenSSL packages.
+- Decoupled crates.io publishing from release binary builds so owned sub-crates can still publish if a platform binary fails.
+- Removed unsupported Windows binary and unavailable Homebrew release/install paths until those distribution channels are restored.
+
 ## [0.13.55] - 2026-05-01
 
 ### Changed
