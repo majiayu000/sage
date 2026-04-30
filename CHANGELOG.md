@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.57] - 2026-05-01
+
+### Fixed
+
+- Fixed Linux musl release builds by using the `libc::setrlimit` resource type exposed by musl targets.
+- Added release-target parity to CI build checks so unsupported target regressions fail before tagging.
+
 ## [0.13.56] - 2026-05-01
 
 ### Changed
