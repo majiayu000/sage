@@ -51,16 +51,6 @@ jobs:
             curl -fsSL https://raw.githubusercontent.com/majiayu000/sage/main/install.sh | bash
             ```
 
-            **Windows (PowerShell):**
-            ```powershell
-            irm https://raw.githubusercontent.com/majiayu000/sage/main/install.ps1 | iex
-            ```
-
-            **Homebrew:**
-            ```bash
-            brew install majiayu000/sage/sage
-            ```
-
             **Cargo:**
             ```bash
             cargo install sage-cli
@@ -75,7 +65,6 @@ jobs:
             | Linux | x64 (glibc) | `sage-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz` |
             | Linux | x64 (musl) | `sage-${{ github.ref_name }}-x86_64-unknown-linux-musl.tar.gz` |
             | Linux | ARM64 | `sage-${{ github.ref_name }}-aarch64-unknown-linux-gnu.tar.gz` |
-            | Windows | x64 | `sage-${{ github.ref_name }}-x86_64-pc-windows-msvc.zip` |
 
             ### Checksums
 
@@ -130,13 +119,6 @@ jobs:
             asset_name: sage-${{ needs.create-release.outputs.version }}-aarch64-unknown-linux-gnu
             archive: tar.gz
             cross: true
-
-          # Windows
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            artifact_name: sage.exe
-            asset_name: sage-${{ needs.create-release.outputs.version }}-x86_64-pc-windows-msvc
-            archive: zip
 
     steps:
       - name: Checkout
@@ -262,7 +244,7 @@ jobs:
   # because the "sage" crate name is owned by another crates.io package.
   publish-crates:
     name: Publish to crates.io
-    needs: build-release
+    needs: create-release
     runs-on: ubuntu-latest
     if: ${{ !contains(github.ref_name, '-') }}  # Skip for pre-releases
     steps:
