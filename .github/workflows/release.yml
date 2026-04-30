@@ -10,6 +10,9 @@ on:
       - 'v[0-9]+.[0-9]+.[0-9]+'
       - 'v[0-9]+.[0-9]+.[0-9]+-*'
 
+permissions:
+  contents: write
+
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
@@ -20,6 +23,7 @@ jobs:
     name: Create Release
     runs-on: ubuntu-latest
     outputs:
+      release_id: ${{ steps.create_release.outputs.id }}
       upload_url: ${{ steps.create_release.outputs.upload_url }}
       version: ${{ github.ref_name }}
     steps:
@@ -59,7 +63,7 @@ jobs:
 
             **Cargo:**
             ```bash
-            cargo install --git https://github.com/majiayu000/sage sage-cli
+            cargo install sage-cli
             ```
 
             ### Download Binaries
@@ -252,9 +256,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          release_id: ${{ needs.create-release.outputs.upload_url }}
+          release_id: ${{ needs.create-release.outputs.release_id }}
 
-  # Publish to crates.io (optional)
+  # Publish only the owned Sage sub-crates. The root package is not published
+  # because the "sage" crate name is owned by another crates.io package.
   publish-crates:
     name: Publish to crates.io
     needs: build-release
@@ -266,23 +271,97 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Publish sage-core
-        run: cargo publish -p sage-core --token ${{ secrets.CRATES_IO_TOKEN }}
+      - name: Check crates.io token
+        id: crates_io_token
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+        run: |
+          if [ -z "${CARGO_REGISTRY_TOKEN}" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=crates.io publish skipped::CRATES_IO_TOKEN is not configured for this repository."
+            exit 0
+          fi
 
-      - name: Wait for crates.io
-        run: sleep 30
+          echo "available=true" >> "$GITHUB_OUTPUT"
 
-      - name: Publish sage-tools
-        run: cargo publish -p sage-tools --token ${{ secrets.CRATES_IO_TOKEN }}
+      - name: Publish owned Sage crates
+        if: steps.crates_io_token.outputs.available == 'true'
+        shell: bash
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+        run: |
+          set -euo pipefail
 
-      - name: Wait for crates.io
-        run: sleep 30
+          already_published=10
 
-      - name: Publish sage-sdk
-        run: cargo publish -p sage-sdk --token ${{ secrets.CRATES_IO_TOKEN }}
+          crate_version() {
+            local crate="$1"
+            cargo metadata --no-deps --format-version 1 \
+              | python3 -c '
+          import json
+          import sys
 
-      - name: Wait for crates.io
-        run: sleep 30
+          crate = sys.argv[1]
+          metadata = json.load(sys.stdin)
+          for package in metadata["packages"]:
+              if package["name"] == crate:
+                  print(package["version"])
+                  raise SystemExit(0)
 
-      - name: Publish sage-cli
-        run: cargo publish -p sage-cli --token ${{ secrets.CRATES_IO_TOKEN }}
+          raise SystemExit(f"package {crate!r} was not found in cargo metadata")
+          ' "$crate"
+          }
+
+          crate_exists() {
+            local crate="$1"
+            local version="$2"
+            curl -fsSL \
+              -H "User-Agent: majiayu000/sage-release-workflow" \
+              "https://crates.io/api/v1/crates/${crate}/${version}" >/dev/null 2>&1
+          }
+
+          wait_for_crate() {
+            local crate="$1"
+            local version="$2"
+
+            for attempt in {1..30}; do
+              if crate_exists "$crate" "$version"; then
+                echo "${crate} ${version} is visible on crates.io"
+                return 0
+              fi
+
+              echo "Waiting for ${crate} ${version} to appear on crates.io (${attempt}/30)"
+              sleep 10
+            done
+
+            echo "::error title=crates.io publish timeout::${crate} ${version} was not visible after publish."
+            return 1
+          }
+
+          publish_crate() {
+            local crate="$1"
+            local version
+            version="$(crate_version "$crate")"
+
+            if crate_exists "$crate" "$version"; then
+              echo "::notice title=crates.io publish skipped::${crate} ${version} is already published."
+              return "$already_published"
+            fi
+
+            echo "Publishing ${crate} ${version} to crates.io"
+            cargo publish -p "$crate"
+            wait_for_crate "$crate" "$version"
+          }
+
+          for crate in sage-core sage-tools sage-sdk sage-cli; do
+            if publish_crate "$crate"; then
+              continue
+            fi
+
+            status="$?"
+            if [ "$status" -eq "$already_published" ]; then
+              continue
+            fi
+
+            exit "$status"
+          done

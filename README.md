@@ -56,7 +56,7 @@ brew install majiayu000/sage/sage
 
 **Cargo:**
 ```bash
-cargo install --git https://github.com/majiayu000/sage sage-cli
+cargo install sage-cli
 ```
 
 ## ⚡ Quick Start

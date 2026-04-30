@@ -1,16 +1,17 @@
 [package]
 name = "sage"
-version = "0.13.54"
+version = "0.13.55"
 edition = "2024"
 authors = ["Sage Agent Team"]
 license = "MIT"
 repository = "https://github.com/majiayu000/sage"
 description = "LLM-based agent for general purpose software engineering tasks"
+publish = false
 
 [dependencies]
-sage-sdk = { path = "crates/sage-sdk", version = "0.13.54" }
-sage-core = { path = "crates/sage-core", version = "0.13.54" }
-sage-tools = { path = "crates/sage-tools", version = "0.13.54" }
+sage-sdk = { path = "crates/sage-sdk", version = "0.13.55" }
+sage-core = { path = "crates/sage-core", version = "0.13.55" }
+sage-tools = { path = "crates/sage-tools", version = "0.13.55" }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 tracing-subscriber = { workspace = true }
@@ -34,7 +35,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.13.54"
+version = "0.13.55"
 edition = "2024"
 authors = ["Sage Agent Team"]
 license = "MIT"

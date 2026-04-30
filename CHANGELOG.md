@@ -7,8 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.55] - 2026-05-01
+
 ### Changed
 
+- Marked the root `sage` package as private because the crates.io name belongs to another package.
+- Hardened the release workflow to publish only owned Sage sub-crates and skip versions that already exist on crates.io.
 - Reduced RS-03 (`unwrap`/`expect`) hotspots in lifecycle, subagent, and tool extension test paths by switching to explicit `Result`/`Option` assertions.
 - unified execute + RNK executor now resolve working directory consistently with precedence: arg/param > config.working_directory > current_dir > ".".
 - unified input handling now tracks spawned input tasks and aborts them on exit paths to avoid untracked background tasks.

@@ -15,9 +15,9 @@ path = "src/main.rs"
 
 [dependencies]
 # Core library
-sage-core = { path = "../sage-core", version = "0.13.54" }
-sage-tools = { path = "../sage-tools", version = "0.13.54" }
-sage-sdk = { path = "../sage-sdk", version = "0.13.54" }
+sage-core = { path = "../sage-core", version = "0.13.55" }
+sage-tools = { path = "../sage-tools", version = "0.13.55" }
+sage-sdk = { path = "../sage-sdk", version = "0.13.55" }
 
 # CLI
 clap = { workspace = true }
@@ -61,4 +61,3 @@ signal-hook-tokio = { workspace = true }
 tempfile = "3.10"
 expectrl = "0.7"
 rexpect = "0.5"
-
