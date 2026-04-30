@@ -3,10 +3,10 @@
 use crate::sandbox::limits::ResourceLimits;
 use tokio::process::Command;
 
-#[cfg(any(target_os = "linux", target_os = "android"))]
+#[cfg(all(target_os = "linux", any(target_env = "gnu", target_env = "uclibc")))]
 type RlimitResource = libc::__rlimit_resource_t;
 
-#[cfg(not(any(target_os = "linux", target_os = "android")))]
+#[cfg(not(all(target_os = "linux", any(target_env = "gnu", target_env = "uclibc"))))]
 type RlimitResource = libc::c_int;
 
 /// Try to set a resource limit; return error only for unexpected failures.
