@@ -51,6 +51,7 @@ impl ApiKeyInfo {
 pub fn get_standard_env_vars(provider: &str) -> Vec<String> {
     match provider {
         "openai" => vec!["OPENAI_API_KEY".to_string()],
+        "zai" => vec!["ZAI_API_KEY".to_string()],
         "anthropic" => vec![
             "ANTHROPIC_API_KEY".to_string(),
             "CLAUDE_API_KEY".to_string(),
@@ -63,6 +64,7 @@ pub fn get_standard_env_vars(provider: &str) -> Vec<String> {
         "openrouter" => vec!["OPENROUTER_API_KEY".to_string()],
         "doubao" => vec!["DOUBAO_API_KEY".to_string(), "ARK_API_KEY".to_string()],
         "glm" | "zhipu" => vec!["GLM_API_KEY".to_string(), "ZHIPU_API_KEY".to_string()],
+        "moonshot" | "kimi" => vec!["MOONSHOT_API_KEY".to_string(), "KIMI_API_KEY".to_string()],
         _ => {
             vec![format!("{}_API_KEY", provider.to_uppercase())]
         }

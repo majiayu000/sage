@@ -21,7 +21,7 @@ impl Default for LakeviewConfig {
     fn default() -> Self {
         Self {
             model_provider: "openai".to_string(),
-            model_name: "gpt-4".to_string(),
+            model_name: "gpt-5.4".to_string(),
             endpoint: None,
             api_key: None,
             enabled: false,
@@ -37,7 +37,7 @@ mod tests {
     fn test_lakeview_config_default() {
         let config = LakeviewConfig::default();
         assert_eq!(config.model_provider, "openai");
-        assert_eq!(config.model_name, "gpt-4");
+        assert_eq!(config.model_name, "gpt-5.4");
         assert!(!config.enabled);
     }
 }

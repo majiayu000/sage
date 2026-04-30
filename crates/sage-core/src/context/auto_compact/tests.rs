@@ -63,6 +63,11 @@ mod tests {
         // Claude 3.5: 200K - 13K = 187K threshold (~93.5%, matches Claude Code)
         assert_eq!(config.threshold_tokens(), 187_000);
 
+        let haiku = AutoCompactConfig::for_provider("anthropic", "claude-haiku-4-5");
+        assert_eq!(haiku.max_context_tokens, 200_000);
+        assert_eq!(haiku.reserved_for_response, 13_000);
+        assert_eq!(haiku.threshold_tokens(), 187_000);
+
         let config = AutoCompactConfig::for_provider("openai", "gpt-4-turbo");
         assert_eq!(config.max_context_tokens, 128_000);
         assert_eq!(config.reserved_for_response, 10_000);

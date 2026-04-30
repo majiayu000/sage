@@ -20,7 +20,10 @@ fn get_provider_env_var(provider: &str) -> &'static str {
     match provider {
         "anthropic" => "ANTHROPIC_API_KEY",
         "openai" => "OPENAI_API_KEY",
+        "zai" => "ZAI_API_KEY",
         "google" => "GOOGLE_API_KEY",
+        "glm" | "zhipu" => "GLM_API_KEY",
+        "moonshot" | "kimi" => "MOONSHOT_API_KEY",
         "deepseek" => "DEEPSEEK_API_KEY",
         _ => "API_KEY",
     }
@@ -31,7 +34,10 @@ fn get_provider_help_url(provider: &str) -> &'static str {
     match provider {
         "anthropic" => "https://console.anthropic.com/settings/keys",
         "openai" => "https://platform.openai.com/api-keys",
+        "zai" => "https://docs.z.ai/api-reference/introduction",
         "google" => "https://makersuite.google.com/app/apikey",
+        "glm" | "zhipu" => "https://open.bigmodel.cn/usercenter/apikeys",
+        "moonshot" | "kimi" => "https://platform.kimi.ai/docs/models",
         "deepseek" => "https://platform.deepseek.com/api_keys",
         _ => "https://docs.sage-agent.dev/configuration",
     }

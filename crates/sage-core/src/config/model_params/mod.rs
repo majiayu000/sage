@@ -256,7 +256,7 @@ impl ModelParameters {
 
     /// Deep merge with another ModelParameters
     pub fn merge(&mut self, other: Self) {
-        if !other.model.is_empty() && other.model != "gpt-4" {
+        if !other.model.is_empty() {
             self.model = other.model;
         }
         if other.api_key.is_some() {

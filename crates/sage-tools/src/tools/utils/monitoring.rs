@@ -136,7 +136,7 @@ impl ToolMonitor {
         };
 
         let mut tool_metrics: Vec<ToolMetrics> = metrics.values().cloned().collect();
-        tool_metrics.sort_by(|a, b| b.execution_count.cmp(&a.execution_count));
+        tool_metrics.sort_by_key(|metric| std::cmp::Reverse(metric.execution_count));
 
         MonitoringReport {
             uptime: self.get_uptime(),

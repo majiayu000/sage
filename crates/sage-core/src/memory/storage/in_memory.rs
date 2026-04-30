@@ -104,7 +104,7 @@ impl MemoryStorage for InMemoryStorage {
     async fn list(&self, offset: usize, limit: usize) -> Result<Vec<Memory>, MemoryStorageError> {
         let memories = self.memories.read().await;
         let mut all: Vec<Memory> = memories.values().cloned().collect();
-        all.sort_by(|a, b| b.metadata.created_at.cmp(&a.metadata.created_at));
+        all.sort_by_key(|memory| std::cmp::Reverse(memory.metadata.created_at));
         Ok(all.into_iter().skip(offset).take(limit).collect())
     }
 

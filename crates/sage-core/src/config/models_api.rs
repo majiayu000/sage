@@ -166,7 +166,12 @@ impl ModelsApiClient {
             .data
             .into_iter()
             .filter(|m| {
-                m.id.starts_with("gpt-") || m.id.starts_with("o1") || m.id.starts_with("o3")
+                m.id.starts_with("gpt-")
+                    || m.id.starts_with("o1")
+                    || m.id.starts_with("o3")
+                    || m.id.starts_with("glm-")
+                    || m.id.starts_with("kimi-")
+                    || m.id.starts_with("moonshot-")
             })
             .map(|m| FetchedModel {
                 name: m.id.clone(),

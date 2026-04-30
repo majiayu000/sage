@@ -78,6 +78,36 @@ static MODEL_CAPABILITIES: LazyLock<HashMap<&'static str, ModelCapability>> = La
             supports_streaming: true,
         },
     );
+    m.insert(
+        "claude-opus-4-7",
+        ModelCapability {
+            max_output_tokens: 128_000,
+            context_window: 1_000_000,
+            supports_tools: true,
+            supports_vision: true,
+            supports_streaming: true,
+        },
+    );
+    m.insert(
+        "claude-sonnet-4-6",
+        ModelCapability {
+            max_output_tokens: 64_000,
+            context_window: 1_000_000,
+            supports_tools: true,
+            supports_vision: true,
+            supports_streaming: true,
+        },
+    );
+    m.insert(
+        "claude-haiku-4-5",
+        ModelCapability {
+            max_output_tokens: 64_000,
+            context_window: 200_000,
+            supports_tools: true,
+            supports_vision: true,
+            supports_streaming: true,
+        },
+    );
 
     // OpenAI GPT models
     m.insert(
@@ -140,6 +170,36 @@ static MODEL_CAPABILITIES: LazyLock<HashMap<&'static str, ModelCapability>> = La
             supports_streaming: true,
         },
     );
+    m.insert(
+        "gpt-5.4",
+        ModelCapability {
+            max_output_tokens: 128_000,
+            context_window: 1_050_000,
+            supports_tools: true,
+            supports_vision: true,
+            supports_streaming: true,
+        },
+    );
+    m.insert(
+        "gpt-5.4-mini",
+        ModelCapability {
+            max_output_tokens: 128_000,
+            context_window: 400_000,
+            supports_tools: true,
+            supports_vision: true,
+            supports_streaming: true,
+        },
+    );
+    m.insert(
+        "gpt-5.4-nano",
+        ModelCapability {
+            max_output_tokens: 128_000,
+            context_window: 400_000,
+            supports_tools: true,
+            supports_vision: true,
+            supports_streaming: true,
+        },
+    );
 
     // Google Gemini models
     m.insert(
@@ -172,6 +232,26 @@ static MODEL_CAPABILITIES: LazyLock<HashMap<&'static str, ModelCapability>> = La
             supports_streaming: true,
         },
     );
+    m.insert(
+        "gemini-2.5-pro",
+        ModelCapability {
+            max_output_tokens: 65_536,
+            context_window: 1_048_576,
+            supports_tools: true,
+            supports_vision: true,
+            supports_streaming: true,
+        },
+    );
+    m.insert(
+        "gemini-2.5-flash",
+        ModelCapability {
+            max_output_tokens: 65_536,
+            context_window: 1_048_576,
+            supports_tools: true,
+            supports_vision: true,
+            supports_streaming: true,
+        },
+    );
 
     // GLM models (Zhipu)
     m.insert(
@@ -191,6 +271,46 @@ static MODEL_CAPABILITIES: LazyLock<HashMap<&'static str, ModelCapability>> = La
             context_window: 128_000,
             supports_tools: true,
             supports_vision: false,
+            supports_streaming: true,
+        },
+    );
+    m.insert(
+        "glm-4.7",
+        ModelCapability {
+            max_output_tokens: 131_072,
+            context_window: 204_800,
+            supports_tools: true,
+            supports_vision: false,
+            supports_streaming: true,
+        },
+    );
+    m.insert(
+        "glm-5.1",
+        ModelCapability {
+            max_output_tokens: 131_072,
+            context_window: 204_800,
+            supports_tools: true,
+            supports_vision: false,
+            supports_streaming: true,
+        },
+    );
+    m.insert(
+        "kimi-k2.6",
+        ModelCapability {
+            max_output_tokens: 32_768,
+            context_window: 256_000,
+            supports_tools: true,
+            supports_vision: true,
+            supports_streaming: true,
+        },
+    );
+    m.insert(
+        "kimi-k2.5",
+        ModelCapability {
+            max_output_tokens: 32_768,
+            context_window: 256_000,
+            supports_tools: true,
+            supports_vision: true,
             supports_streaming: true,
         },
     );

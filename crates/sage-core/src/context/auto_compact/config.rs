@@ -56,14 +56,23 @@ impl AutoCompactConfig {
     pub fn for_provider(provider: &str, model: &str) -> Self {
         let (max_tokens, reserved) = match provider.to_lowercase().as_str() {
             "anthropic" => {
-                if model.contains("3.5") || model.contains("3-5") {
+                if model.contains("claude-opus-4") || model.contains("claude-sonnet-4") {
+                    (1_000_000, 32_000)
+                } else if model.contains("claude-haiku-4-5")
+                    || model.contains("3.5")
+                    || model.contains("3-5")
+                {
                     (200_000, 13_000) // Claude 3.5: 200K context, 13K reserved (like Claude Code)
                 } else {
                     (100_000, 10_000)
                 }
             }
             "openai" => {
-                if model.contains("gpt-4-turbo") || model.contains("gpt-4o") {
+                if model.contains("gpt-5.4") && !model.contains("mini") && !model.contains("nano") {
+                    (1_050_000, 32_000)
+                } else if model.contains("gpt-5.4-mini") || model.contains("gpt-5.4-nano") {
+                    (400_000, 24_000)
+                } else if model.contains("gpt-4-turbo") || model.contains("gpt-4o") {
                     (128_000, 10_000)
                 } else if model.contains("gpt-4") {
                     (8_192, 2_000)
@@ -71,7 +80,9 @@ impl AutoCompactConfig {
                     (16_385, 4_000)
                 }
             }
-            "google" => (1_000_000, 20_000), // Gemini 1.5 Pro: larger context, more reserved
+            "google" => (1_048_576, 20_000),
+            "zai" | "glm" | "zhipu" => (204_800, 16_384),
+            "moonshot" | "kimi" => (256_000, 20_000),
             _ => (128_000, DEFAULT_RESERVED_FOR_RESPONSE),
         };
 

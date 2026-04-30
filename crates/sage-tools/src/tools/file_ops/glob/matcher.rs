@@ -90,7 +90,7 @@ impl GlobTool {
         }
 
         // Sort by modification time (newest first)
-        matches.sort_by(|a, b| b.1.cmp(&a.1));
+        matches.sort_by_key(|entry| std::cmp::Reverse(entry.1));
 
         // Extract just the paths
         let file_paths: Vec<String> = matches

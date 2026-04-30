@@ -44,7 +44,7 @@ impl CheckpointStorage for MemoryCheckpointStorage {
     async fn list(&self) -> SageResult<Vec<CheckpointSummary>> {
         let checkpoints = self.checkpoints.read().await;
         let mut summaries: Vec<_> = checkpoints.values().map(CheckpointSummary::from).collect();
-        summaries.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        summaries.sort_by_key(|summary| std::cmp::Reverse(summary.created_at));
         Ok(summaries)
     }
 

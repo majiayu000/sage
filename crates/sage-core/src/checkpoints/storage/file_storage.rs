@@ -332,7 +332,7 @@ impl CheckpointStorage for FileCheckpointStorage {
         }
 
         // Sort by creation time (newest first)
-        summaries.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        summaries.sort_by_key(|summary| std::cmp::Reverse(summary.created_at));
 
         Ok(summaries)
     }

@@ -43,8 +43,13 @@ pub fn load_from_env() -> SageResult<Config> {
 
     // Load model parameters for different providers
     load_provider_from_env(&mut config, "openai", "OPENAI")?;
+    load_provider_from_env(&mut config, "zai", "ZAI")?;
     load_provider_from_env(&mut config, "anthropic", "ANTHROPIC")?;
     load_provider_from_env(&mut config, "google", "GOOGLE")?;
+    load_provider_from_env(&mut config, "glm", "GLM")?;
+    load_provider_from_env(&mut config, "zhipu", "ZHIPU")?;
+    load_provider_from_env(&mut config, "moonshot", "MOONSHOT")?;
+    load_provider_from_env(&mut config, "kimi", "KIMI")?;
     load_provider_from_env(&mut config, "ollama", "OLLAMA")?;
 
     // Load working directory
@@ -62,7 +67,10 @@ pub fn load_from_env() -> SageResult<Config> {
 
 /// Load provider configuration from environment variables
 fn load_provider_from_env(config: &mut Config, provider: &str, env_prefix: &str) -> SageResult<()> {
-    let mut params = ModelParameters::default();
+    let mut params = ModelParameters {
+        model: String::new(),
+        ..ModelParameters::default()
+    };
     let mut has_config = false;
 
     // API Key

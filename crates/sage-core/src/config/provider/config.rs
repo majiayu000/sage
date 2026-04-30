@@ -133,10 +133,12 @@ impl ProviderConfig {
         } else {
             match self.name.as_str() {
                 "openai" => "https://api.openai.com/v1".to_string(),
+                "zai" => "https://api.z.ai/api/paas/v4".to_string(),
                 "anthropic" => "https://api.anthropic.com".to_string(),
                 "google" => "https://generativelanguage.googleapis.com".to_string(),
                 "ollama" => "http://localhost:11434".to_string(),
                 "glm" | "zhipu" => "https://open.bigmodel.cn/api/anthropic".to_string(),
+                "moonshot" | "kimi" => "https://api.moonshot.ai/v1".to_string(),
                 _ => "http://localhost:8000".to_string(),
             }
         }
@@ -234,12 +236,19 @@ impl ProviderConfig {
                     return Err(SageError::config("OpenAI API key should start with 'sk-'"));
                 }
             }
+            "moonshot" | "kimi" => {
+                if !key.starts_with("sk-") {
+                    return Err(SageError::config(
+                        "Moonshot API key should start with 'sk-'",
+                    ));
+                }
+            }
             "google" => {
                 if key.len() < 20 {
                     return Err(SageError::config("Google API key appears too short"));
                 }
             }
-            "glm" => {
+            "glm" | "zhipu" => {
                 if key.len() < 10 {
                     return Err(SageError::config("GLM API key appears too short"));
                 }

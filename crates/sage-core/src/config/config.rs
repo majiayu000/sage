@@ -228,7 +228,7 @@ mod tests {
     fn test_config_default_model_parameters() {
         let config = Config::default();
         let params = config.default_model_parameters().unwrap();
-        assert_eq!(params.model, "claude-sonnet-4-5-20250929");
+        assert_eq!(params.model, "claude-opus-4-7");
     }
 
     #[test]

@@ -89,6 +89,22 @@ impl ContextConfig {
     pub fn for_provider(provider: &str, model: &str) -> Self {
         match (provider.to_lowercase().as_str(), model) {
             // OpenAI models
+            ("openai", m)
+                if m.contains("gpt-5.4") && !m.contains("mini") && !m.contains("nano") =>
+            {
+                Self {
+                    max_context_tokens: 1_050_000,
+                    reserved_for_response: 32_000,
+                    min_messages_to_keep: 20,
+                    ..Default::default()
+                }
+            }
+            ("openai", m) if m.contains("gpt-5.4-mini") || m.contains("gpt-5.4-nano") => Self {
+                max_context_tokens: 400_000,
+                reserved_for_response: 24_000,
+                min_messages_to_keep: 15,
+                ..Default::default()
+            },
             ("openai", m) if m.contains("gpt-4-turbo") || m.contains("gpt-4o") => Self {
                 max_context_tokens: 128_000,
                 reserved_for_response: 10_000,
@@ -107,13 +123,27 @@ impl ContextConfig {
                 ..Default::default()
             },
 
+            ("anthropic", m) if m.contains("claude-opus-4") || m.contains("claude-sonnet-4") => {
+                Self {
+                    max_context_tokens: 1_000_000,
+                    reserved_for_response: 32_000,
+                    min_messages_to_keep: 20,
+                    ..Default::default()
+                }
+            }
             // Anthropic models - match Claude Code's 13K reserved
-            ("anthropic", m) if m.contains("claude-3") || m.contains("claude-opus") => Self {
-                max_context_tokens: 200_000,
-                reserved_for_response: 13_000, // Claude Code uses 13000
-                min_messages_to_keep: 15,
-                ..Default::default()
-            },
+            ("anthropic", m)
+                if m.contains("claude-3")
+                    || m.contains("claude-opus")
+                    || m.contains("claude-haiku-4-5") =>
+            {
+                Self {
+                    max_context_tokens: 200_000,
+                    reserved_for_response: 13_000, // Claude Code uses 13000
+                    min_messages_to_keep: 15,
+                    ..Default::default()
+                }
+            }
             ("anthropic", _) => Self {
                 max_context_tokens: 100_000,
                 reserved_for_response: 10_000,
@@ -121,10 +151,28 @@ impl ContextConfig {
             },
 
             // Google models
+            ("google", m) if m.contains("gemini-2.5") => Self {
+                max_context_tokens: 1_048_576,
+                reserved_for_response: 20_000,
+                min_messages_to_keep: 20,
+                ..Default::default()
+            },
             ("google", m) if m.contains("gemini-1.5") => Self {
                 max_context_tokens: 1_000_000,
                 reserved_for_response: 20_000,
                 min_messages_to_keep: 20,
+                ..Default::default()
+            },
+            ("zai", _) | ("glm", _) | ("zhipu", _) => Self {
+                max_context_tokens: 204_800,
+                reserved_for_response: 16_384,
+                min_messages_to_keep: 15,
+                ..Default::default()
+            },
+            ("moonshot", _) | ("kimi", _) => Self {
+                max_context_tokens: 256_000,
+                reserved_for_response: 20_000,
+                min_messages_to_keep: 15,
                 ..Default::default()
             },
             ("google", _) => Self {

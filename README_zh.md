@@ -86,9 +86,11 @@ sage -r <session-id>
 - **Efficient memory** - Low footprint, handles large codebases
 
 ### 🤖 Multi-LLM Support
-- **Anthropic** - Claude Sonnet, Opus (with prompt caching)
-- **OpenAI** - GPT-4, GPT-4 Turbo
-- **Google** - Gemini Pro
+- **Anthropic** - Claude Opus 4.7、Sonnet 4.6、Haiku 4.5
+- **OpenAI** - GPT-5.4 系列
+- **Google** - Gemini 2.5 Pro / Flash
+- **Z.AI** - GLM-5.1 和 GLM-5
+- **Moonshot AI** - Kimi K2.6 / K2.5
 - **Ollama** - Llama, Mistral, CodeLlama (offline)
 - **Azure OpenAI** - Enterprise deployments
 - **OpenRouter** - Access 100+ models
@@ -206,9 +208,19 @@ Create `sage_config.json` or use environment variables:
   "default_provider": "anthropic",
   "model_providers": {
     "anthropic": {
-      "model": "claude-sonnet-4-20250514",
+      "model": "claude-opus-4-7",
       "api_key": "${ANTHROPIC_API_KEY}",
       "enable_prompt_caching": true
+    },
+    "zai": {
+      "model": "glm-5.1",
+      "api_key": "${ZAI_API_KEY}",
+      "base_url": "https://api.z.ai/api/paas/v4"
+    },
+    "moonshot": {
+      "model": "kimi-k2.6",
+      "api_key": "${MOONSHOT_API_KEY}",
+      "base_url": "https://api.moonshot.ai/v1"
     },
     "ollama": {
       "model": "codellama",
@@ -226,6 +238,8 @@ Create `sage_config.json` or use environment variables:
 # API Keys
 export ANTHROPIC_API_KEY="sk-ant-..."
 export OPENAI_API_KEY="sk-..."
+export ZAI_API_KEY="..."
+export MOONSHOT_API_KEY="sk-..."
 
 # Configuration
 export SAGE_DEFAULT_PROVIDER="anthropic"

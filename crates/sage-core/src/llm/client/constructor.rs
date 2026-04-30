@@ -132,6 +132,9 @@ impl LlmClient {
             LlmProvider::OpenAI => {
                 ProviderInstance::OpenAI(OpenAiProvider::new(config, model_params, http_client))
             }
+            LlmProvider::Zai => {
+                ProviderInstance::Zai(OpenAiProvider::new(config, model_params, http_client))
+            }
             LlmProvider::Anthropic => ProviderInstance::Anthropic(AnthropicProvider::new(
                 config,
                 model_params,
@@ -156,6 +159,9 @@ impl LlmClient {
             }
             LlmProvider::Glm => {
                 ProviderInstance::Glm(GlmProvider::new(config, model_params, http_client))
+            }
+            LlmProvider::Moonshot => {
+                ProviderInstance::Moonshot(OpenAiProvider::new(config, model_params, http_client))
             }
             LlmProvider::Custom(name) => {
                 return Err(SageError::llm_with_provider(

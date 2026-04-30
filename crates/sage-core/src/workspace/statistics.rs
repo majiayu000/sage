@@ -23,7 +23,9 @@ pub fn collect_stats(root: &Path, config: &WorkspaceConfig) -> Result<FileStats,
     )?;
 
     // Sort largest files
-    stats.largest_files.sort_by(|a, b| b.1.cmp(&a.1));
+    stats
+        .largest_files
+        .sort_by_key(|entry| std::cmp::Reverse(entry.1));
     stats.largest_files.truncate(10);
 
     Ok(stats)

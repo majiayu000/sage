@@ -180,6 +180,8 @@ impl RateLimitConfig {
         match provider.to_lowercase().as_str() {
             // OpenAI: Varies by tier, use conservative defaults
             "openai" => Self::for_llm(60, 100_000, 10),
+            // Z.AI: OpenAI-compatible API
+            "zai" => Self::for_llm(60, 120_000, 10),
             // Anthropic: 60 RPM for Claude models
             "anthropic" => Self::for_llm(50, 80_000, 5),
             // Google: 60 RPM for Gemini
@@ -201,7 +203,9 @@ impl RateLimitConfig {
                 max_wait: Duration::from_secs(120),
             },
             // GLM: Conservative defaults
-            "glm" => Self::for_llm(60, 100_000, 6),
+            "glm" | "zhipu" => Self::for_llm(60, 100_000, 6),
+            // Moonshot / Kimi: OpenAI-compatible API
+            "moonshot" | "kimi" => Self::for_llm(60, 120_000, 8),
             // Default for unknown providers
             _ => Self::default(),
         }

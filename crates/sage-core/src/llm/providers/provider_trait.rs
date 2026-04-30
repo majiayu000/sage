@@ -27,6 +27,7 @@ pub trait LlmProviderTrait: Send + Sync {
 /// Unified provider enum that wraps all provider implementations
 pub enum ProviderInstance {
     OpenAI(super::OpenAiProvider),
+    Zai(super::OpenAiProvider),
     Anthropic(super::AnthropicProvider),
     Google(super::GoogleProvider),
     Azure(super::AzureProvider),
@@ -34,6 +35,7 @@ pub enum ProviderInstance {
     Ollama(super::OllamaProvider),
     Doubao(super::DoubaoProvider),
     Glm(super::GlmProvider),
+    Moonshot(super::OpenAiProvider),
 }
 
 /// Dispatch a method call to the inner provider for all variants
@@ -41,6 +43,7 @@ macro_rules! dispatch_provider {
     ($self:expr, $method:ident($($arg:expr),*)) => {
         match $self {
             Self::OpenAI(p) => p.$method($($arg),*).await,
+            Self::Zai(p) => p.$method($($arg),*).await,
             Self::Anthropic(p) => p.$method($($arg),*).await,
             Self::Google(p) => p.$method($($arg),*).await,
             Self::Azure(p) => p.$method($($arg),*).await,
@@ -48,6 +51,7 @@ macro_rules! dispatch_provider {
             Self::Ollama(p) => p.$method($($arg),*).await,
             Self::Doubao(p) => p.$method($($arg),*).await,
             Self::Glm(p) => p.$method($($arg),*).await,
+            Self::Moonshot(p) => p.$method($($arg),*).await,
         }
     };
 }

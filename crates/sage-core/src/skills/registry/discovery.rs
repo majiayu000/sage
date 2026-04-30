@@ -138,27 +138,23 @@ impl SkillFrontmatter {
                 self.disable_model_invocation = value == "true" || value == "yes" || value == "1"
             }
             "argument_hint" | "argument-hint" => self.argument_hint = Some(value.to_string()),
-            "model" => {
-                if value != "inherit" {
-                    self.model = Some(value.to_string());
-                }
-            }
+            "model" if value != "inherit" => self.model = Some(value.to_string()),
+            "model" => {}
             "version" => self.version = Some(value.to_string()),
             "priority" => {
                 if let Ok(p) = value.parse() {
                     self.priority = Some(p);
                 }
             }
-            "allowed_tools" | "allowed-tools" | "tools" => {
+            "allowed_tools" | "allowed-tools" | "tools" if !value.is_empty() => {
                 // Handle comma-separated inline list
-                if !value.is_empty() {
-                    self.allowed_tools = value
-                        .split(',')
-                        .map(|s| s.trim().to_string())
-                        .filter(|s| !s.is_empty())
-                        .collect();
-                }
+                self.allowed_tools = value
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect();
             }
+            "allowed_tools" | "allowed-tools" | "tools" => {}
             "triggers" => {
                 self.triggers = value
                     .split(',')

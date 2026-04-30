@@ -34,39 +34,26 @@ impl ApiKeyValidationResult {
 /// Validate an API key format for a specific provider
 pub async fn validate_api_key_format(provider: &str, api_key: &str) -> ApiKeyValidationResult {
     match provider {
-        "anthropic" => {
-            if !api_key.starts_with("sk-ant-") && !api_key.starts_with("sk-") {
-                return ApiKeyValidationResult::failure(
-                    "Anthropic API keys typically start with 'sk-ant-' or 'sk-'",
-                );
-            }
+        "anthropic" if !api_key.starts_with("sk-ant-") && !api_key.starts_with("sk-") => {
+            ApiKeyValidationResult::failure(
+                "Anthropic API keys typically start with 'sk-ant-' or 'sk-'",
+            )
         }
-        "openai" => {
-            if !api_key.starts_with("sk-") {
-                return ApiKeyValidationResult::failure(
-                    "OpenAI API keys typically start with 'sk-'",
-                );
-            }
+        "openai" if !api_key.starts_with("sk-") => {
+            ApiKeyValidationResult::failure("OpenAI API keys typically start with 'sk-'")
         }
-        "google" => {
-            if api_key.len() < 30 {
-                return ApiKeyValidationResult::failure("Google API keys are typically longer");
-            }
+        "moonshot" | "kimi" if !api_key.starts_with("sk-") => {
+            ApiKeyValidationResult::failure("Moonshot API keys typically start with 'sk-'")
         }
-        "glm" => {
-            if api_key.len() < 20 {
-                return ApiKeyValidationResult::failure(
-                    "智谱AI API keys are typically longer (20+ characters)",
-                );
-            }
+        "google" if api_key.len() < 30 => {
+            ApiKeyValidationResult::failure("Google API keys are typically longer")
         }
-        "ollama" => {
-            return ApiKeyValidationResult::success("Ollama configured (local)");
-        }
-        _ => {}
+        "glm" | "zhipu" | "zai" if api_key.len() < 20 => ApiKeyValidationResult::failure(
+            "GLM/Z.AI API keys are typically longer (20+ characters)",
+        ),
+        "ollama" => ApiKeyValidationResult::success("Ollama configured (local)"),
+        _ => ApiKeyValidationResult::success(format!("{} API key format valid", provider)),
     }
-
-    ApiKeyValidationResult::success(format!("{} API key format valid", provider))
 }
 
 #[cfg(test)]
