@@ -51,7 +51,7 @@ jobs:
             curl -fsSL https://raw.githubusercontent.com/majiayu000/sage/main/install.sh | bash
             ```
 
-            **Cargo:**
+            **Cargo (Sage CLI):**
             ```bash
             cargo install sage-cli
             ```
@@ -240,10 +240,11 @@ jobs:
         with:
           release_id: ${{ needs.create-release.outputs.release_id }}
 
-  # Publish only the owned Sage sub-crates. The root package is not published
-  # because the "sage" crate name is owned by another crates.io package.
-  publish-crates:
-    name: Publish to crates.io
+  # Publish the public Cargo install target. The root "sage" package is private
+  # because that crates.io name belongs to another package; users install Sage
+  # through the "sage-cli" crate, which exposes the "sage" binary.
+  publish-sage-cli:
+    name: Publish sage-cli to crates.io
     needs: create-release
     runs-on: ubuntu-latest
     if: ${{ !contains(github.ref_name, '-') }}  # Skip for pre-releases
@@ -266,15 +267,13 @@ jobs:
 
           echo "available=true" >> "$GITHUB_OUTPUT"
 
-      - name: Publish owned Sage crates
+      - name: Publish Sage CLI crate
         if: steps.crates_io_token.outputs.available == 'true'
         shell: bash
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
         run: |
           set -euo pipefail
-
-          already_published=10
 
           crate_version() {
             local crate="$1"
@@ -294,20 +293,37 @@ jobs:
           ' "$crate"
           }
 
-          crate_exists() {
+          crate_state() {
             local crate="$1"
             local version="$2"
-            curl -fsSL \
-              -H "User-Agent: majiayu000/sage-release-workflow" \
-              "https://crates.io/api/v1/crates/${crate}/${version}" >/dev/null 2>&1
+            local state
+
+            state="$(
+              curl -fsSL \
+                -H "User-Agent: majiayu000/sage-release-workflow" \
+                "https://crates.io/api/v1/crates/${crate}/${version}" \
+              | python3 -c '
+          import json
+          import sys
+
+          version = json.load(sys.stdin)["version"]
+          print("yanked" if version.get("yanked") else "available")
+          ' 2>/dev/null || true
+            )"
+
+            if [ -z "${state}" ]; then
+              echo "missing"
+            else
+              echo "${state}"
+            fi
           }
 
-          wait_for_crate() {
+          wait_for_crate_available() {
             local crate="$1"
             local version="$2"
 
             for attempt in {1..30}; do
-              if crate_exists "$crate" "$version"; then
+              if [ "$(crate_state "$crate" "$version")" = "available" ]; then
                 echo "${crate} ${version} is visible on crates.io"
                 return 0
               fi
@@ -320,30 +336,40 @@ jobs:
             return 1
           }
 
-          publish_crate() {
+          ensure_crate_available() {
             local crate="$1"
             local version
+            local state
+
             version="$(crate_version "$crate")"
+            state="$(crate_state "$crate" "$version")"
 
-            if crate_exists "$crate" "$version"; then
-              echo "::notice title=crates.io publish skipped::${crate} ${version} is already published."
-              return "$already_published"
-            fi
-
-            echo "Publishing ${crate} ${version} to crates.io"
-            cargo publish -p "$crate"
-            wait_for_crate "$crate" "$version"
+            case "$state" in
+              available)
+                echo "::notice title=crates.io publish skipped::${crate} ${version} is already available."
+                ;;
+              yanked)
+                echo "Restoring ${crate} ${version} on crates.io"
+                cargo yank "$crate" --version "$version" --undo
+                wait_for_crate_available "$crate" "$version"
+                ;;
+              missing)
+                echo "Publishing ${crate} ${version} to crates.io"
+                cargo publish -p "$crate"
+                wait_for_crate_available "$crate" "$version"
+                ;;
+              *)
+                echo "::error title=unexpected crates.io state::${crate} ${version}: ${state}"
+                return 1
+                ;;
+            esac
           }
 
-          for crate in sage-core sage-tools sage-sdk sage-cli; do
-            if publish_crate "$crate"; then
-              continue
-            fi
-
-            status="$?"
-            if [ "$status" -eq "$already_published" ]; then
-              continue
-            fi
-
-            exit "$status"
+          # crates.io does not bundle workspace path dependencies into one
+          # package. These dependency crates are restored/published only so
+          # the public `cargo install sage-cli` path can resolve.
+          for crate in sage-core sage-tools sage-sdk; do
+            ensure_crate_available "$crate"
           done
+
+          ensure_crate_available sage-cli
