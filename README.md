@@ -44,14 +44,14 @@ The fastest open-source alternative to Claude Code.<br/>
 curl -fsSL https://raw.githubusercontent.com/majiayu000/sage/main/install.sh | bash
 ```
 
+**Cargo (Sage CLI):**
+```bash
+cargo install sage-cli
+```
+
 **Homebrew:**
 ```bash
 brew install majiayu000/sage/sage
-```
-
-**Cargo:**
-```bash
-cargo install sage-cli
 ```
 
 ## ⚡ Quick Start

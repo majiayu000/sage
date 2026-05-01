@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Restored crates.io publishing as a `sage-cli` distribution channel because the root `sage` crate name is owned by another package.
+- Scoped Cargo install guidance and generated release notes to `cargo install sage-cli` as the user-facing Sage CLI package.
+
 ### Fixed
 
 - Moved the Homebrew formula to the dedicated `majiayu000/homebrew-sage` tap and restored the verified Homebrew install command.
