@@ -350,24 +350,40 @@ static MODEL_CAPABILITIES: LazyLock<HashMap<&'static str, ModelCapability>> = La
     m
 });
 
-/// Get the capability for a specific model
+/// Get the capability for a specific model.
 ///
-/// Returns the known capability if the model is recognized,
-/// otherwise returns a default capability.
+/// Resolution order:
+///
+/// 1. Exact match on the registered key.
+/// 2. Longest registered prefix of `model`. For example, given the
+///    registered keys `"claude"` (hypothetical family default) and
+///    `"claude-sonnet-4-6"`, the input `"claude-sonnet-4-6-preview"`
+///    resolves to the more specific `"claude-sonnet-4-6"` entry.
+/// 3. `ModelCapability::default()` for unknown models.
+///
+/// Picking the *longest* prefix is what makes the lookup deterministic.
+/// Iterating `MODEL_CAPABILITIES` in `HashMap` order would otherwise
+/// return whichever matching key the iterator visited first, which is
+/// randomized per process and can flip the result between runs.
 pub fn get_model_capability(model: &str) -> ModelCapability {
-    // Try exact match first
+    // Try exact match first.
     if let Some(cap) = MODEL_CAPABILITIES.get(model) {
         return cap.clone();
     }
 
-    // Try prefix matching for versioned models
+    // Fall back to the longest registered prefix of `model`.
+    let mut best: Option<(&&str, &ModelCapability)> = None;
     for (known_model, cap) in MODEL_CAPABILITIES.iter() {
-        if model.starts_with(known_model) || known_model.starts_with(model) {
-            return cap.clone();
+        if model.starts_with(*known_model) && best.is_none_or(|(b, _)| known_model.len() > b.len())
+        {
+            best = Some((known_model, cap));
         }
     }
 
-    // Return default for unknown models
+    if let Some((_, cap)) = best {
+        return cap.clone();
+    }
+
     ModelCapability::default()
 }
 
@@ -419,5 +435,58 @@ mod tests {
     fn test_recommended_max_tokens() {
         let tokens = get_recommended_max_tokens("claude-sonnet-4-20250514");
         assert_eq!(tokens, 12288); // 75% of 16384
+    }
+
+    #[test]
+    fn test_longest_prefix_wins() {
+        // `claude-sonnet-4-6-preview` is longer than any registered key, so the
+        // lookup must pick the most-specific registered prefix.
+        // `claude-sonnet-4-6` is registered, `claude-sonnet-4` is not, and
+        // older keys like `claude-3-5-sonnet-20241022` are not prefixes here.
+        // The most-specific match must be `claude-sonnet-4-6`.
+        let cap = get_model_capability("claude-sonnet-4-6-preview");
+        let registered = get_model_capability("claude-sonnet-4-6");
+        assert_eq!(cap.max_output_tokens, registered.max_output_tokens);
+        assert_eq!(cap.context_window, registered.context_window);
+    }
+
+    #[test]
+    fn test_short_input_does_not_match_longer_registered_keys() {
+        // Before the fix, `get_model_capability("gpt")` matched both
+        // `"gpt-4"` and `"gpt-5.4"` via the bidirectional `starts_with`
+        // and returned whichever the HashMap iterator visited first.
+        // After the fix, `"gpt"` is not itself a registered key and is
+        // also not a prefix of any *registered* key in the prefix
+        // direction we care about (we now only allow `model.starts_with(known)`),
+        // so it must fall through to the default capability deterministically.
+        let cap = get_model_capability("gpt");
+        let default_cap = ModelCapability::default();
+        assert_eq!(cap.max_output_tokens, default_cap.max_output_tokens);
+        assert_eq!(cap.context_window, default_cap.context_window);
+    }
+
+    #[test]
+    fn test_lookup_is_deterministic_across_calls() {
+        // Sanity check: regardless of HashMap iteration order, the same
+        // input always returns the same capability.
+        let inputs = [
+            "gpt-4-0613",
+            "gpt-4o-2024-08-06",
+            "claude-3-5-sonnet-20241022",
+            "claude-sonnet-4-6-preview",
+            "gemini-2.5-pro-exp",
+            "definitely-not-a-real-model",
+        ];
+        for input in inputs {
+            let first = get_model_capability(input);
+            for _ in 0..16 {
+                let again = get_model_capability(input);
+                assert_eq!(first.max_output_tokens, again.max_output_tokens);
+                assert_eq!(first.context_window, again.context_window);
+                assert_eq!(first.supports_tools, again.supports_tools);
+                assert_eq!(first.supports_vision, again.supports_vision);
+                assert_eq!(first.supports_streaming, again.supports_streaming);
+            }
+        }
     }
 }
