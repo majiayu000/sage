@@ -33,7 +33,7 @@ pub mod validation;
 // Re-export public API
 pub use api_key_helpers::format_api_key_status_for_provider;
 pub use config::Config;
-pub use data_dir::{default_data_dir, default_data_dir_or_warn, SAGE_STATE_SUBDIR};
+pub use data_dir::{SAGE_STATE_SUBDIR, default_data_dir, default_data_dir_or_warn};
 pub use defaults::{load_config, load_config_from_file, load_config_with_overrides};
 pub use lakeview_config::LakeviewConfig;
 pub use loader::{ConfigLoader, ConfigSource};

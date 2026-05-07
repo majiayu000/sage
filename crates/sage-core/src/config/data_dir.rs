@@ -37,15 +37,17 @@ pub const SAGE_STATE_SUBDIR: &str = ".sage";
 /// error — a typed failure is always more debuggable than a silent
 /// fallback to the current working directory.
 pub fn default_data_dir() -> SageResult<PathBuf> {
-    dirs::home_dir().map(|home| home.join(SAGE_STATE_SUBDIR)).ok_or_else(|| {
-        SageError::config(
-            "Could not determine the user\'s home directory; set HOME (Unix) or \
+    dirs::home_dir()
+        .map(|home| home.join(SAGE_STATE_SUBDIR))
+        .ok_or_else(|| {
+            SageError::config(
+                "Could not determine the user\'s home directory; set HOME (Unix) or \
              USERPROFILE (Windows) so Sage knows where to read and write its state. \
              Falling back to a relative path silently splits user state across \
              whichever directory the binary was launched from."
-                .to_string(),
-        )
-    })
+                    .to_string(),
+            )
+        })
 }
 
 /// Resolve the shared Sage data directory with a logged fallback.
@@ -85,7 +87,10 @@ mod tests {
             path.ends_with(SAGE_STATE_SUBDIR),
             "expected `{SAGE_STATE_SUBDIR}` suffix, got {path:?}"
         );
-        assert!(path.is_absolute(), "data dir must be absolute, got {path:?}");
+        assert!(
+            path.is_absolute(),
+            "data dir must be absolute, got {path:?}"
+        );
     }
 
     #[test]
