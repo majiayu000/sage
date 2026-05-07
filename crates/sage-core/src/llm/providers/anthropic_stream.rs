@@ -124,7 +124,25 @@ fn process_events(
     for event in events {
         let data: Value = match serde_json::from_str(&event.data) {
             Ok(v) => v,
-            Err(_) => continue,
+            Err(e) => {
+                // Skipping a malformed event silently was the previous
+                // behaviour and that masked real bugs: a swallowed
+                // `message_stop` looked like a truncated stream
+                // (#21), and a swallowed `error` event hid the
+                // upstream's reason for failing. Log enough context
+                // for an operator to triage without leaking the full
+                // payload, then continue so a single corrupted event
+                // does not poison the whole stream.
+                let preview: String = event.data.chars().take(120).collect();
+                tracing::warn!(
+                    provider = %state.provider_name,
+                    event_type = ?event.event_type,
+                    error = %e,
+                    data_preview = %preview,
+                    "Anthropic SSE event JSON failed to parse; skipping this event"
+                );
+                continue;
+            }
         };
 
         let event_type = event
@@ -445,6 +463,67 @@ mod tests {
         );
         // tool_calls + final_chunk
         assert_eq!(ok_chunks(&chunks), 2);
+    }
+
+    #[test]
+    fn malformed_event_is_skipped_and_does_not_poison_following_events() {
+        // A single malformed event must be logged-and-skipped; the
+        // subsequent valid event must still be processed normally so
+        // one corrupted event does not poison the rest of the stream.
+        // Before the fix the parse failure was silently `continue`d and
+        // there was no signal at all that an event had been dropped.
+        let events = vec![
+            // Garbage payload; bare `not-json` cannot be parsed by serde_json.
+            SseEvent::with_type("content_block_start", "not-json"),
+            // A subsequent valid text_delta event must still produce a
+            // content chunk — proving the parser recovered.
+            SseEvent::with_type(
+                "content_block_start",
+                r#"{"index":0,"content_block":{"type":"text"}}"#,
+            ),
+            SseEvent::with_type(
+                "content_block_delta",
+                r#"{"index":0,"delta":{"type":"text_delta","text":"hello"}}"#,
+            ),
+            SseEvent::with_type("message_stop", r#"{}"#),
+        ];
+
+        let (_, chunks) = run_events(events);
+        // The malformed event must NOT produce an Err chunk; parse
+        // failures are observability events (warn log) rather than
+        // stream errors so a single corrupted event cannot poison the
+        // whole stream.
+        assert!(
+            chunks.iter().all(|c| c.is_ok()),
+            "parse failures must not surface as Err chunks: {chunks:?}"
+        );
+        // We expect: content("hello") + final_chunk = 2 ok chunks. The
+        // earlier malformed event contributed 0. If recovery were
+        // broken, the second `content_block_start` would also fail to
+        // be processed and we'd see only the final_chunk.
+        assert_eq!(
+            ok_chunks(&chunks),
+            2,
+            "valid events after a malformed one must still be processed: {chunks:?}"
+        );
+    }
+
+    #[test]
+    fn malformed_event_does_not_eat_subsequent_message_stop() {
+        // Specifically guard against the failure mode in #21: a
+        // swallowed `message_stop` made the stream look truncated. Now
+        // that we log+continue, message_stop on the line after a
+        // malformed event must still set saw_message_stop and emit
+        // final_chunk during normal processing, so the EOF flush is a
+        // no-op afterwards.
+        let events = vec![
+            SseEvent::with_type("message_start", "garbage{"),
+            SseEvent::with_type("message_stop", r#"{}"#),
+        ];
+        let (state, chunks) = run_events(events);
+        assert!(state.saw_message_stop);
+        // exactly one final_chunk emitted by the message_stop arm.
+        assert_eq!(ok_chunks(&chunks), 1);
     }
 }
 
