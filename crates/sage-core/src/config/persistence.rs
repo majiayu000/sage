@@ -32,7 +32,7 @@ impl ConfigPersistence {
 
     /// Create persistence manager with default paths (~/.sage)
     pub fn with_defaults() -> Self {
-        let base_dir = dirs::home_dir().unwrap_or_default().join(".sage");
+        let base_dir = crate::config::default_data_dir_or_warn();
         Self::new(&base_dir)
     }
 

@@ -37,9 +37,24 @@ pub fn default_providers() -> Vec<ProviderEnvConfig> {
     ]
 }
 
-/// Paths to check for auto-import from other tools
+/// Paths to check for auto-import from other tools.
+///
+/// Returns an empty Vec if the user\'s home directory cannot be
+/// determined. Previously this fell back to `dirs::home_dir()
+/// .unwrap_or_default()`, which silently produced relative paths like
+/// `./.claude/credentials.json` — so on a host without `HOME` the
+/// resolver would either find a stray local directory or, worse,
+/// import a sibling file that happens to exist in cwd. Returning an
+/// empty list with a warn-level log makes the failure mode explicit.
 pub fn auto_import_paths() -> Vec<(String, PathBuf)> {
-    let home = dirs::home_dir().unwrap_or_default();
+    let Some(home) = dirs::home_dir() else {
+        tracing::warn!(
+            "Could not determine home directory; auto-import from Claude Code / \
+             Cursor / Aider is disabled. Set HOME (Unix) or USERPROFILE (Windows) \
+             to enable."
+        );
+        return Vec::new();
+    };
     vec![
         // Claude Code
         (
