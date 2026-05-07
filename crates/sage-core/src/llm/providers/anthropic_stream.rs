@@ -22,6 +22,10 @@ struct StreamState {
     usage: Option<TokenUsage>,
     input_tokens: u64,
     provider_name: String,
+    /// Tracks whether the parser already emitted the terminal
+    /// `message_stop` flush. Used by `finalize_stream` to avoid emitting
+    /// a duplicate final chunk when the stream ends cleanly.
+    saw_message_stop: bool,
 }
 
 /// Parse an Anthropic-compatible SSE byte stream into an LlmStream.
@@ -42,27 +46,74 @@ pub fn anthropic_sse_stream(
         usage: None,
         input_tokens: 0,
         provider_name: provider_name.to_string(),
+        saw_message_stop: false,
     }));
 
-    let stream = byte_stream.flat_map(move |chunk_result| {
+    let stream = byte_stream.flat_map({
         let state = state.clone();
-        futures::stream::once(async move {
-            match chunk_result {
-                Ok(chunk) => {
-                    let mut state = state.lock().await;
-                    let events = state.decoder.feed(chunk.as_ref());
-                    let mut chunks: Vec<SageResult<StreamChunk>> = Vec::new();
-                    process_events(&mut state, events, &mut chunks);
-                    futures::stream::iter(chunks)
+        move |chunk_result| {
+            let state = state.clone();
+            futures::stream::once(async move {
+                match chunk_result {
+                    Ok(chunk) => {
+                        let mut state = state.lock().await;
+                        let events = state.decoder.feed(chunk.as_ref());
+                        let mut chunks: Vec<SageResult<StreamChunk>> = Vec::new();
+                        process_events(&mut state, events, &mut chunks);
+                        futures::stream::iter(chunks)
+                    }
+                    Err(e) => futures::stream::iter(vec![Err(SageError::llm(format!(
+                        "Stream error: {}",
+                        e
+                    )))]),
                 }
-                Err(e) => {
-                    futures::stream::iter(vec![Err(SageError::llm(format!("Stream error: {}", e)))])
-                }
-            }
-        })
+            })
+        }
     });
 
-    Box::pin(stream.flatten())
+    // After the byte stream ends, run a synthetic terminal flush. If the
+    // upstream emitted `message_stop` we already pushed the final chunk
+    // and `finalize_stream` is a no-op. If the upstream truncated before
+    // `message_stop` (proxy cut, client timeout, network drop) we flush
+    // any pending tool calls instead of dropping them silently.
+    let flush_state = state.clone();
+    let flush = futures::stream::once(async move {
+        let mut state = flush_state.lock().await;
+        let mut chunks: Vec<SageResult<StreamChunk>> = Vec::new();
+        finalize_stream(&mut state, &mut chunks);
+        futures::stream::iter(chunks)
+    })
+    .flatten();
+
+    Box::pin(stream.flatten().chain(flush))
+}
+
+/// Emit any state that did not get flushed by an explicit `message_stop`.
+///
+/// Called once after the upstream byte stream terminates. If
+/// `saw_message_stop` is true the parser already emitted everything
+/// during the regular event loop, so this is a no-op. Otherwise we
+/// flush pending tool calls (if any) and then a final chunk so the
+/// caller sees a terminal event instead of an empty turn.
+fn finalize_stream(state: &mut StreamState, chunks: &mut Vec<SageResult<StreamChunk>>) {
+    if state.saw_message_stop {
+        return;
+    }
+    if !state.pending_tool_calls.is_empty() {
+        tracing::warn!(
+            provider = %state.provider_name,
+            pending = state.pending_tool_calls.len(),
+            "Stream ended without `message_stop`; flushing pending tool calls so the \
+             orchestrator does not see an empty turn"
+        );
+        let tool_calls = std::mem::take(&mut state.pending_tool_calls);
+        chunks.push(Ok(StreamChunk::tool_calls(tool_calls)));
+    }
+    chunks.push(Ok(StreamChunk::final_chunk(
+        state.usage.take(),
+        state.stop_reason.take(),
+    )));
+    state.saw_message_stop = true;
 }
 
 fn process_events(
@@ -182,6 +233,7 @@ fn process_events(
                     state.usage.take(),
                     state.stop_reason.take(),
                 )));
+                state.saw_message_stop = true;
             }
             Some("error") => {
                 let error_msg = data["error"]["message"].as_str().unwrap_or("Unknown error");
@@ -212,6 +264,7 @@ mod tests {
             usage: None,
             input_tokens: 0,
             provider_name: "anthropic".to_string(),
+            saw_message_stop: false,
         }
     }
 
@@ -288,6 +341,87 @@ mod tests {
             msg.contains("shell"),
             "error must include the tool name: {msg}"
         );
+    }
+
+    #[test]
+    fn finalize_stream_is_noop_after_message_stop() {
+        // After a normal `message_stop`, finalize_stream must NOT
+        // double-emit. saw_message_stop is set true by the message_stop
+        // arm of process_events, and finalize_stream short-circuits on it.
+        let mut state = fresh_state();
+        state.saw_message_stop = true;
+        state.pending_tool_calls.push(ToolCall {
+            id: "x".into(),
+            name: "y".into(),
+            arguments: HashMap::new(),
+            call_id: None,
+        }); // intentionally non-empty: the flag must take precedence
+        let mut chunks = Vec::new();
+        finalize_stream(&mut state, &mut chunks);
+        assert!(chunks.is_empty(), "no double-emit after message_stop");
+    }
+
+    #[test]
+    fn finalize_stream_flushes_pending_tool_calls_on_truncation() {
+        // The model emitted complete content_block_stop events for tool
+        // blocks but the upstream byte stream ended *before* the parser
+        // saw `message_stop` (proxy cut, client timeout, …). Without
+        // the EOF flush the orchestrator would observe an empty turn
+        // and silently drop the model's tool calls.
+        let events = vec![
+            SseEvent::with_type(
+                "content_block_start",
+                r#"{"index":0,"content_block":{"type":"tool_use","id":"toolu_x","name":"shell"}}"#,
+            ),
+            SseEvent::with_type(
+                "content_block_delta",
+                r#"{"index":0,"delta":{"type":"input_json_delta","partial_json":"{\"cmd\":\"ls\"}"}}"#,
+            ),
+            SseEvent::with_type("content_block_stop", r#"{"index":0}"#),
+            // Intentionally NO message_stop here — simulating a
+            // truncated stream.
+        ];
+        let (mut state, chunks) = run_events(events);
+        // Mid-stream: process_events should NOT have emitted tool_calls
+        // yet (that is the message_stop arm's job).
+        assert_eq!(
+            ok_chunks(&chunks),
+            0,
+            "no terminal emission expected before message_stop / EOF flush"
+        );
+        assert_eq!(state.pending_tool_calls.len(), 1);
+
+        // Now simulate the byte stream ending without message_stop.
+        let mut tail = Vec::new();
+        finalize_stream(&mut state, &mut tail);
+        assert!(state.pending_tool_calls.is_empty(), "must drain on flush");
+        assert_eq!(
+            tail.len(),
+            2,
+            "expected tool_calls + final_chunk on truncation flush"
+        );
+        assert!(tail.iter().all(|c| c.is_ok()));
+        // First chunk must carry the tool call.
+        match &tail[0] {
+            Ok(c) if c.tool_calls.as_ref().is_some_and(|tcs| !tcs.is_empty()) => {}
+            other => panic!("first flushed chunk must be tool_calls, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn finalize_stream_emits_only_final_chunk_when_nothing_pending() {
+        // A truly empty completion (no message_stop, no pending tool
+        // calls) should emit exactly one final chunk so the orchestrator
+        // observes a clean termination instead of an empty stream.
+        let mut state = fresh_state();
+        let mut chunks = Vec::new();
+        finalize_stream(&mut state, &mut chunks);
+        assert_eq!(chunks.len(), 1);
+        assert!(chunks[0].is_ok());
+        // Idempotency: a second call after the first is a no-op.
+        let mut more = Vec::new();
+        finalize_stream(&mut state, &mut more);
+        assert!(more.is_empty());
     }
 
     #[test]
