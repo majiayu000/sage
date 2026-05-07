@@ -128,3 +128,80 @@ fn test_resolver_default() {
     assert!(!config.providers.is_empty());
     assert!(config.enable_auto_import);
 }
+
+#[test]
+fn has_default_provider_accepts_azure_legacy_env_var() {
+    // Regression guard for the Azure resolver regression: before this
+    // fix, adding `AZURE_OPENAI_API_KEY` as the canonical Azure entry
+    // caused `has_default_provider("azure")` to ignore users who only
+    // had the long-supported `AZURE_API_KEY` set. The resolver now
+    // tries every standard env-var name from
+    // `get_standard_env_vars_for_provider("azure")`, so both names
+    // resolve.
+    //
+    // Tests run in parallel; use unique env-var names — but here we
+    // need the actual `AZURE_API_KEY` name because it's part of the
+    // production fallback list. Save/restore on every exit path.
+    let prev_legacy = std::env::var("AZURE_API_KEY").ok();
+    let prev_canonical = std::env::var("AZURE_OPENAI_API_KEY").ok();
+
+    let restore = |legacy: &Option<String>, canonical: &Option<String>| {
+        // SAFETY: env mutation, this test is the sole writer of these vars
+        unsafe {
+            match legacy {
+                Some(v) => std::env::set_var("AZURE_API_KEY", v),
+                None => std::env::remove_var("AZURE_API_KEY"),
+            }
+            match canonical {
+                Some(v) => std::env::set_var("AZURE_OPENAI_API_KEY", v),
+                None => std::env::remove_var("AZURE_OPENAI_API_KEY"),
+            }
+        }
+    };
+
+    // Clean slate.
+    // SAFETY: restore() above keeps state consistent on early exit.
+    unsafe {
+        std::env::remove_var("AZURE_API_KEY");
+        std::env::remove_var("AZURE_OPENAI_API_KEY");
+    }
+
+    let resolver = CredentialResolver::new(ResolverConfig::default());
+
+    // Case A: only the legacy env var is set.
+    // SAFETY: see `restore` above.
+    unsafe { std::env::set_var("AZURE_API_KEY", "legacy_secret") };
+    let configured = resolver.has_default_provider("azure");
+    if !configured {
+        restore(&prev_legacy, &prev_canonical);
+        panic!(
+            "AZURE_API_KEY-only users must show as configured (regression of multi-env-var fallback)"
+        );
+    }
+
+    // Case B: only the canonical env var is set.
+    // SAFETY: see `restore` above.
+    unsafe {
+        std::env::remove_var("AZURE_API_KEY");
+        std::env::set_var("AZURE_OPENAI_API_KEY", "canonical_secret");
+    }
+    let configured_canonical = resolver.has_default_provider("azure");
+    if !configured_canonical {
+        restore(&prev_legacy, &prev_canonical);
+        panic!("AZURE_OPENAI_API_KEY-only users must show as configured");
+    }
+
+    // Case C: neither set.
+    // SAFETY: see `restore` above.
+    unsafe {
+        std::env::remove_var("AZURE_API_KEY");
+        std::env::remove_var("AZURE_OPENAI_API_KEY");
+    }
+    let configured_neither = resolver.has_default_provider("azure");
+    if configured_neither {
+        restore(&prev_legacy, &prev_canonical);
+        panic!("with neither env var set, azure must NOT show as configured");
+    }
+
+    restore(&prev_legacy, &prev_canonical);
+}
