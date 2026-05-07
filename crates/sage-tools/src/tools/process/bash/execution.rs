@@ -28,6 +28,11 @@ const ALLOWLIST_BYPASS_METACHARS: &[&str] = &[
     // Longer patterns first so `find()` returns the most-specific match
     // (e.g. `>>` before `>`).
     "&&", "||", ">>", "<<", ";", "|", "$(", "`", ">", "<",
+    // Newline / carriage-return act as command separators when the
+    // string is handed to `bash -c`. A `\n`-joined chain like
+    // `git status<NEWLINE>rm -rf /tmp/x` smuggles the second command
+    // past an `argv[0]`-only allowlist just like the `;` chain.
+    "\n", "\r",
 ];
 
 fn contains_allowlist_bypass_metachar(command: &str) -> Option<&'static str> {
@@ -279,6 +284,24 @@ mod allowlist_bypass_tests {
                 .execute_command(cmd)
                 .await
                 .expect_err(&format!("{cmd:?} must be rejected under an allowlist"));
+            assert!(
+                matches!(err, ToolError::PermissionDenied(_)),
+                "{cmd:?}: expected PermissionDenied, got {err:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn rejects_newline_chain_when_allowlist_set() {
+        let tool = tool_with_allowlist();
+        for cmd in [
+            "git status\nrm -rf /tmp/x",
+            "git status\r\nrm -rf /tmp/x",
+            "git status\rrm -rf /tmp/x",
+        ] {
+            let err = tool.execute_command(cmd).await.expect_err(&format!(
+                "newline-separated chain must be rejected: {cmd:?}"
+            ));
             assert!(
                 matches!(err, ToolError::PermissionDenied(_)),
                 "{cmd:?}: expected PermissionDenied, got {err:?}"
