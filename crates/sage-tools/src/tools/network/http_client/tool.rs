@@ -19,12 +19,17 @@ use super::types::{HttpClientParams, HttpMethod};
 const ALLOW_INSECURE_TLS_ENV: &str = "SAGE_ALLOW_INSECURE_TLS";
 
 fn sage_allow_insecure_tls() -> bool {
-    matches!(
-        std::env::var(ALLOW_INSECURE_TLS_ENV)
-            .as_deref()
-            .map(str::trim),
-        Ok("1") | Ok("true") | Ok("yes") | Ok("TRUE") | Ok("YES")
-    )
+    // Documented as case-insensitive opt-in. The previous `matches!`
+    // form only accepted the exact spellings `1 / true / yes / TRUE
+    // / YES`, silently rejecting `True`, `Yes`, `tRuE`, etc., which
+    // are common in `.env` files and docker-compose configs.
+    match std::env::var(ALLOW_INSECURE_TLS_ENV)
+        .as_deref()
+        .map(str::trim)
+    {
+        Ok(v) => v == "1" || v.eq_ignore_ascii_case("true") || v.eq_ignore_ascii_case("yes"),
+        Err(_) => false,
+    }
 }
 
 /// Resolve the per-call `verify_ssl` parameter against the workspace
@@ -393,6 +398,36 @@ mod tests {
             other => {
                 restore(&prev);
                 panic!("SAGE_ALLOW_INSECURE_TLS=0 must NOT opt in, got {other:?}");
+            }
+        }
+
+        // --- Case 6: mixed-case `True` / `Yes` / `tRuE` opt-in (docs
+        // promise case-insensitive). Before the eq_ignore_ascii_case
+        // fix these were silently rejected.
+        for value in ["True", "Yes", "tRuE", "yEs"] {
+            // SAFETY: see `restore` above.
+            unsafe { std::env::set_var(ALLOW_INSECURE_TLS_ENV, value) };
+            match resolve_verify_ssl(Some(false)) {
+                Ok(false) => {}
+                other => {
+                    restore(&prev);
+                    panic!(
+                        "SAGE_ALLOW_INSECURE_TLS={value} (mixed case) must opt in, got {other:?}"
+                    );
+                }
+            }
+        }
+
+        // --- Case 7: surrounding whitespace must still be trimmed.
+        // SAFETY: see `restore` above.
+        unsafe { std::env::set_var(ALLOW_INSECURE_TLS_ENV, "  true  ") };
+        match resolve_verify_ssl(Some(false)) {
+            Ok(false) => {}
+            other => {
+                restore(&prev);
+                panic!(
+                    "SAGE_ALLOW_INSECURE_TLS with surrounding whitespace must opt in, got {other:?}"
+                );
             }
         }
 
