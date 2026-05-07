@@ -200,7 +200,25 @@ fn process_events(
     for event in events {
         let data: Value = match serde_json::from_str(&event.data) {
             Ok(v) => v,
-            Err(_) => continue,
+            Err(e) => {
+                // Skipping a malformed event silently was the previous
+                // behaviour and that masked real bugs: a swallowed
+                // `message_stop` looked like a truncated stream
+                // (#21), and a swallowed `error` event hid the
+                // upstream's reason for failing. Log enough context
+                // for an operator to triage without leaking the full
+                // payload, then continue so a single corrupted event
+                // does not poison the whole stream.
+                let preview: String = event.data.chars().take(120).collect();
+                tracing::warn!(
+                    provider = %state.provider_name,
+                    event_type = ?event.event_type,
+                    error = %e,
+                    data_preview = %preview,
+                    "Anthropic SSE event JSON failed to parse; skipping this event"
+                );
+                continue;
+            }
         };
 
         let event_type = event
