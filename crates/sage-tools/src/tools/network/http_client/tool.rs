@@ -1,13 +1,52 @@
 //! HTTP client tool implementation
 
 use async_trait::async_trait;
-use tracing::info;
+use tracing::{info, warn};
 
 use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
 
 use super::request::{create_client, execute_request, format_response};
 use super::types::{HttpClientParams, HttpMethod};
+
+/// Environment variable that opts into TLS-verification overrides.
+///
+/// `verify_ssl=false` is reachable from the LLM agent's tool arguments,
+/// so a prompt-injected page can ask the agent to disable certificate
+/// validation and enable an MITM. We refuse the override unless the
+/// operator explicitly sets `SAGE_ALLOW_INSECURE_TLS=1` (or `true` /
+/// `yes`) at the workspace level.
+const ALLOW_INSECURE_TLS_ENV: &str = "SAGE_ALLOW_INSECURE_TLS";
+
+fn sage_allow_insecure_tls() -> bool {
+    // Documented as case-insensitive opt-in. The previous `matches!`
+    // form only accepted the exact spellings `1 / true / yes / TRUE
+    // / YES`, silently rejecting `True`, `Yes`, `tRuE`, etc., which
+    // are common in `.env` files and docker-compose configs.
+    match std::env::var(ALLOW_INSECURE_TLS_ENV)
+        .as_deref()
+        .map(str::trim)
+    {
+        Ok(v) => v == "1" || v.eq_ignore_ascii_case("true") || v.eq_ignore_ascii_case("yes"),
+        Err(_) => false,
+    }
+}
+
+/// Resolve the per-call `verify_ssl` parameter against the workspace
+/// opt-in. Returns the value to use, or an error if the caller asked
+/// to disable TLS validation without the operator's permission.
+pub(super) fn resolve_verify_ssl(requested: Option<bool>) -> Result<bool, ToolError> {
+    match requested {
+        Some(false) if !sage_allow_insecure_tls() => Err(ToolError::PermissionDenied(format!(
+            "verify_ssl=false is rejected: TLS validation cannot be disabled by tool \
+             arguments. To opt in at the workspace level, set the environment variable \
+             {ALLOW_INSECURE_TLS_ENV}=1. Default behavior (verify_ssl=true) is enforced \
+             so prompt injection cannot quietly disable certificate validation."
+        ))),
+        Some(value) => Ok(value),
+        None => Ok(true),
+    }
+}
 
 /// HTTP client tool for making HTTP requests
 #[derive(Debug, Clone)]
@@ -103,9 +142,15 @@ impl Tool for HttpClientTool {
                 ToolParameter::boolean("follow_redirects", "Follow redirects")
                     .optional()
                     .with_default(true),
-                ToolParameter::boolean("verify_ssl", "Verify SSL certificates")
-                    .optional()
-                    .with_default(true),
+                ToolParameter::boolean(
+                    "verify_ssl",
+                    "Verify SSL certificates. Default: true. Setting this to false \
+                     is rejected unless the operator has set SAGE_ALLOW_INSECURE_TLS=1 \
+                     at the workspace level — this prevents prompt injection from \
+                     silently disabling TLS validation.",
+                )
+                .optional()
+                .with_default(true),
                 ToolParameter::optional_string("save_to_file", "Save response to file"),
                 ToolParameter::optional_string("graphql_query", "GraphQL query string"),
                 ToolParameter::optional_string(
@@ -185,7 +230,14 @@ impl Tool for HttpClientTool {
         info!("Executing HTTP request: {:?} {}", params.method, params.url);
 
         let mut tool = self.clone();
-        let verify_ssl = params.verify_ssl.unwrap_or(true);
+        let verify_ssl = resolve_verify_ssl(params.verify_ssl)?;
+        if !verify_ssl {
+            warn!(
+                url = %params.url,
+                "TLS certificate validation is DISABLED for this request because \
+                 SAGE_ALLOW_INSECURE_TLS is set. The connection is vulnerable to MITM."
+            );
+        }
         let follow_redirects = params.follow_redirects.unwrap_or(true);
         let timeout_secs = params.timeout.unwrap_or(30);
 
@@ -267,5 +319,118 @@ mod tests {
         assert_eq!(schema.name, "http_client");
         assert!(!schema.description.is_empty());
         assert!(schema.parameters.is_object());
+    }
+
+    /// All verify_ssl behavior in one test so the env-var manipulations
+    /// don't race against parallel test threads.
+    #[test]
+    fn resolve_verify_ssl_behavior() {
+        let prev = std::env::var(ALLOW_INSECURE_TLS_ENV).ok();
+
+        // Restore env on every exit path.
+        let restore = |prev: &Option<String>| {
+            // SAFETY: env mutation, only this test holds the logical lock
+            // because no other test in the suite touches ALLOW_INSECURE_TLS_ENV.
+            unsafe {
+                match prev {
+                    Some(v) => std::env::set_var(ALLOW_INSECURE_TLS_ENV, v),
+                    None => std::env::remove_var(ALLOW_INSECURE_TLS_ENV),
+                }
+            }
+        };
+
+        // --- Case 1: env var not set, no per-call override → verify_ssl = true.
+        // SAFETY: see `restore` above.
+        unsafe { std::env::remove_var(ALLOW_INSECURE_TLS_ENV) };
+        match resolve_verify_ssl(None) {
+            Ok(true) => {}
+            other => {
+                restore(&prev);
+                panic!("None should default to verify_ssl=true, got {other:?}");
+            }
+        }
+
+        // --- Case 2: explicit Some(true) is always honored.
+        match resolve_verify_ssl(Some(true)) {
+            Ok(true) => {}
+            other => {
+                restore(&prev);
+                panic!("Some(true) should pass through, got {other:?}");
+            }
+        }
+
+        // --- Case 3: env var unset, Some(false) → rejected with named env var.
+        match resolve_verify_ssl(Some(false)) {
+            Err(ToolError::PermissionDenied(msg)) => {
+                if !msg.contains(ALLOW_INSECURE_TLS_ENV) {
+                    restore(&prev);
+                    panic!("error must name the opt-in env var: {msg}");
+                }
+                if !msg.to_lowercase().contains("verify_ssl") {
+                    restore(&prev);
+                    panic!("error must reference the parameter: {msg}");
+                }
+            }
+            other => {
+                restore(&prev);
+                panic!("Some(false) without opt-in must error, got {other:?}");
+            }
+        }
+
+        // --- Case 4: env var set, Some(false) is accepted.
+        // SAFETY: see `restore` above.
+        unsafe { std::env::set_var(ALLOW_INSECURE_TLS_ENV, "1") };
+        match resolve_verify_ssl(Some(false)) {
+            Ok(false) => {}
+            other => {
+                restore(&prev);
+                panic!(
+                    "Some(false) with SAGE_ALLOW_INSECURE_TLS=1 must be accepted, got {other:?}"
+                );
+            }
+        }
+
+        // --- Case 5: garbage env values do not opt in.
+        // SAFETY: see `restore` above.
+        unsafe { std::env::set_var(ALLOW_INSECURE_TLS_ENV, "0") };
+        match resolve_verify_ssl(Some(false)) {
+            Err(ToolError::PermissionDenied(_)) => {}
+            other => {
+                restore(&prev);
+                panic!("SAGE_ALLOW_INSECURE_TLS=0 must NOT opt in, got {other:?}");
+            }
+        }
+
+        // --- Case 6: mixed-case `True` / `Yes` / `tRuE` opt-in (docs
+        // promise case-insensitive). Before the eq_ignore_ascii_case
+        // fix these were silently rejected.
+        for value in ["True", "Yes", "tRuE", "yEs"] {
+            // SAFETY: see `restore` above.
+            unsafe { std::env::set_var(ALLOW_INSECURE_TLS_ENV, value) };
+            match resolve_verify_ssl(Some(false)) {
+                Ok(false) => {}
+                other => {
+                    restore(&prev);
+                    panic!(
+                        "SAGE_ALLOW_INSECURE_TLS={value} (mixed case) must opt in, got {other:?}"
+                    );
+                }
+            }
+        }
+
+        // --- Case 7: surrounding whitespace must still be trimmed.
+        // SAFETY: see `restore` above.
+        unsafe { std::env::set_var(ALLOW_INSECURE_TLS_ENV, "  true  ") };
+        match resolve_verify_ssl(Some(false)) {
+            Ok(false) => {}
+            other => {
+                restore(&prev);
+                panic!(
+                    "SAGE_ALLOW_INSECURE_TLS with surrounding whitespace must opt in, got {other:?}"
+                );
+            }
+        }
+
+        restore(&prev);
     }
 }
