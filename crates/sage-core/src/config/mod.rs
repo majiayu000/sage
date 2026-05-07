@@ -5,6 +5,7 @@ mod api_key_helpers;
 mod args_loader;
 #[allow(clippy::module_inception)] // config module in config directory is intentional
 mod config;
+mod data_dir;
 mod defaults;
 mod embedded_providers;
 mod env_loader;
@@ -32,6 +33,7 @@ pub mod validation;
 // Re-export public API
 pub use api_key_helpers::format_api_key_status_for_provider;
 pub use config::Config;
+pub use data_dir::{SAGE_STATE_SUBDIR, default_data_dir, default_data_dir_or_warn};
 pub use defaults::{load_config, load_config_from_file, load_config_with_overrides};
 pub use lakeview_config::LakeviewConfig;
 pub use loader::{ConfigLoader, ConfigSource};

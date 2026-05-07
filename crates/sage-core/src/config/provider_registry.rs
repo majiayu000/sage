@@ -102,7 +102,7 @@ impl ProviderRegistry {
 
     /// Create a registry with default paths (~/.sage)
     pub fn with_defaults() -> Self {
-        let cache_dir = dirs::home_dir().unwrap_or_default().join(".sage");
+        let cache_dir = crate::config::default_data_dir_or_warn();
         Self::new(&cache_dir)
     }
 

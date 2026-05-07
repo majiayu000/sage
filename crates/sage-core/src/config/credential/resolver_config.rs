@@ -25,7 +25,7 @@ impl Default for ResolverConfig {
     fn default() -> Self {
         Self {
             working_dir: std::env::current_dir().unwrap_or_default(),
-            global_dir: dirs::home_dir().unwrap_or_default().join(".sage"),
+            global_dir: crate::config::default_data_dir_or_warn(),
             providers: default_providers(),
             cli_keys: HashMap::new(),
             enable_auto_import: true,

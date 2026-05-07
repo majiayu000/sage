@@ -36,7 +36,7 @@ impl UnifiedConfigLoader {
         Self {
             config_file: None,
             working_dir: std::env::current_dir().unwrap_or_default(),
-            global_dir: dirs::home_dir().unwrap_or_default().join(".sage"),
+            global_dir: crate::config::default_data_dir_or_warn(),
             cli_overrides: CliOverrides::default(),
         }
     }

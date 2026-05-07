@@ -37,7 +37,7 @@ impl OnboardingManager {
 
     /// Create with default global directory (~/.sage)
     pub fn with_defaults() -> Self {
-        Self::new(dirs::home_dir().unwrap_or_default().join(".sage"))
+        Self::new(crate::config::default_data_dir_or_warn())
     }
 
     /// Skip API key validation (useful for testing)
