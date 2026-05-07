@@ -6,14 +6,18 @@
 use std::net::IpAddr;
 
 use anyhow::{Result, anyhow};
+use url::Host;
 
 /// Validate URL to prevent SSRF attacks
 ///
 /// This function checks for:
 /// - Valid URL format
 /// - Only http/https schemes allowed
+/// - Literal IP hosts (decimal, hex, IPv4-in-IPv6, etc.) routed
+///   directly through `is_private_ip` so encoding tricks cannot
+///   bypass the textual short-circuit.
 /// - No localhost or internal hostnames
-/// - No private IP addresses
+/// - No private IP addresses (after DNS resolution)
 /// - No cloud metadata endpoints
 pub async fn validate_url_security(url_str: &str) -> Result<()> {
     let url = url::Url::parse(url_str).map_err(|e| anyhow!("Invalid URL format: {}", e))?;
@@ -29,13 +33,45 @@ pub async fn validate_url_security(url_str: &str) -> Result<()> {
         }
     }
 
-    let host = url
+    let host = url.host().ok_or_else(|| anyhow!("URL must have a host"))?;
+
+    // If the host is a literal IP address (in any encoding the URL
+    // parser canonicalised — decimal `2130706433`, octal `0177.0.0.1`,
+    // IPv4-mapped `[::ffff:127.0.0.1]`, etc.), route it through
+    // `is_private_ip` directly. This closes the previous bypass where
+    // a decimal-encoded loopback evaded the literal-string short-circuit.
+    match host {
+        Host::Ipv4(ip) => {
+            if is_private_ip(&IpAddr::V4(ip)) {
+                return Err(anyhow!(
+                    "Requests to private/internal IP addresses are not allowed (literal {})",
+                    ip
+                ));
+            }
+            // Public IP literal: allow.
+            return Ok(());
+        }
+        Host::Ipv6(ip) => {
+            if is_private_ip(&IpAddr::V6(ip)) {
+                return Err(anyhow!(
+                    "Requests to private/internal IP addresses are not allowed (literal {})",
+                    ip
+                ));
+            }
+            return Ok(());
+        }
+        Host::Domain(_) => {}
+    }
+
+    // Domain-name path. host_str() is safe here because Host::Domain
+    // round-trips through the same string.
+    let host_str = url
         .host_str()
         .ok_or_else(|| anyhow!("URL must have a host"))?;
 
     // Block localhost variants
-    let host_lower = host.to_lowercase();
-    if host_lower == "localhost" || host_lower == "127.0.0.1" || host_lower == "::1" {
+    let host_lower = host_str.to_lowercase();
+    if host_lower == "localhost" {
         return Err(anyhow!(
             "Requests to localhost are not allowed for security reasons"
         ));
@@ -48,12 +84,20 @@ pub async fn validate_url_security(url_str: &str) -> Result<()> {
     {
         return Err(anyhow!(
             "Requests to internal hostnames ({}) are not allowed",
-            host
+            host_str
+        ));
+    }
+
+    // Block known cloud metadata hostnames before DNS resolution so a
+    // poisoned resolver cannot return a public IP for them.
+    if host_lower == "metadata.google.internal" {
+        return Err(anyhow!(
+            "Requests to cloud metadata endpoints are not allowed"
         ));
     }
 
     // Try to resolve the hostname asynchronously and check if it's a private IP
-    if let Ok(addrs) = tokio::net::lookup_host(format!("{}:80", host)).await {
+    if let Ok(addrs) = tokio::net::lookup_host(format!("{}:80", host_str)).await {
         for addr in addrs {
             if is_private_ip(&addr.ip()) {
                 return Err(anyhow!(
@@ -62,13 +106,6 @@ pub async fn validate_url_security(url_str: &str) -> Result<()> {
                 ));
             }
         }
-    }
-
-    // Block AWS/cloud metadata endpoints
-    if host == "169.254.169.254" || host == "metadata.google.internal" {
-        return Err(anyhow!(
-            "Requests to cloud metadata endpoints are not allowed"
-        ));
     }
 
     Ok(())
@@ -106,11 +143,32 @@ pub fn is_private_ip(ip: &IpAddr) -> bool {
         }
         IpAddr::V6(ipv6) => {
             // ::1 - Loopback
-            ipv6.is_loopback()
+            if ipv6.is_loopback() {
+                return true;
+            }
             // fe80::/10 - Link-local
-            || (ipv6.segments()[0] & 0xffc0) == 0xfe80
+            if (ipv6.segments()[0] & 0xffc0) == 0xfe80 {
+                return true;
+            }
             // fc00::/7 - Unique local
-            || (ipv6.segments()[0] & 0xfe00) == 0xfc00
+            if (ipv6.segments()[0] & 0xfe00) == 0xfc00 {
+                return true;
+            }
+            // ::ffff:0:0/96 — IPv4-mapped IPv6. Recurse on the embedded
+            // v4 address so e.g. ::ffff:127.0.0.1 is treated as private.
+            if let Some(v4) = ipv6.to_ipv4_mapped() {
+                return is_private_ip(&IpAddr::V4(v4));
+            }
+            // ::ffff:a.b.c.d (legacy IPv4-compatible, deprecated but
+            // still parseable). `to_ipv4()` covers both forms.
+            if let Some(v4) = ipv6.to_ipv4() {
+                // Skip the all-zeros / unspecified case which `to_ipv4`
+                // returns as 0.0.0.0; not a real address.
+                if !v4.is_unspecified() {
+                    return is_private_ip(&IpAddr::V4(v4));
+                }
+            }
+            false
         }
     }
 }
@@ -230,5 +288,83 @@ mod tests {
         // Public IPs should return false
         assert!(!is_private_ip(&IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8))));
         assert!(!is_private_ip(&IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1))));
+    }
+
+    #[test]
+    fn test_is_private_ip_ipv4_mapped_ipv6() {
+        // ::ffff:127.0.0.1 must be detected as private (loopback),
+        // closing the IPv4-in-IPv6 encoding bypass.
+        let mapped: std::net::Ipv6Addr = "::ffff:127.0.0.1".parse().unwrap();
+        assert!(is_private_ip(&IpAddr::V6(mapped)));
+
+        // ::ffff:10.0.0.1 also private.
+        let mapped_priv: std::net::Ipv6Addr = "::ffff:10.0.0.1".parse().unwrap();
+        assert!(is_private_ip(&IpAddr::V6(mapped_priv)));
+
+        // ::ffff:8.8.8.8 — public IPv4 mapped into IPv6 — must NOT be
+        // flagged as private.
+        let mapped_public: std::net::Ipv6Addr = "::ffff:8.8.8.8".parse().unwrap();
+        assert!(!is_private_ip(&IpAddr::V6(mapped_public)));
+    }
+
+    #[tokio::test]
+    async fn test_url_validation_blocks_decimal_encoded_loopback() {
+        // `http://2130706433/` is the dotted-quad 127.0.0.1 in decimal.
+        // The url crate canonicalizes it into Host::Ipv4, and the new
+        // literal-IP path routes it through `is_private_ip` regardless
+        // of the textual form.
+        let result = validate_url_security("http://2130706433/").await;
+        assert!(
+            result.is_err(),
+            "decimal-encoded loopback must be rejected: {result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_url_validation_blocks_ipv4_mapped_ipv6_loopback() {
+        // `http://[::ffff:127.0.0.1]/` is the IPv4-mapped IPv6 form of
+        // the loopback. Must be rejected via the IPv4-mapped recursion
+        // in `is_private_ip`.
+        let result = validate_url_security("http://[::ffff:127.0.0.1]/").await;
+        assert!(
+            result.is_err(),
+            "IPv4-mapped IPv6 loopback must be rejected: {result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_url_validation_blocks_ipv6_loopback_literal() {
+        // `http://[::1]/` is the bracketed IPv6 loopback literal. The
+        // url crate parses this as Host::Ipv6(::1) and the literal-IP
+        // branch routes it through is_private_ip.
+        let result = validate_url_security("http://[::1]/").await;
+        assert!(
+            result.is_err(),
+            "IPv6 loopback literal must be rejected: {result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_url_validation_blocks_link_local_ipv6() {
+        // fe80::/10 — IPv6 link-local. Caught by the existing
+        // is_private_ip rule plus the new literal-IP branch.
+        let result = validate_url_security("http://[fe80::1]/").await;
+        assert!(
+            result.is_err(),
+            "IPv6 link-local must be rejected: {result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_url_validation_blocks_metadata_ipv4_literal() {
+        // 169.254.169.254 (EC2/GCP metadata) is now caught by the
+        // literal-IP branch routing through is_private_ip's
+        // 169.254.0.0/16 link-local rule. The hostname-based check for
+        // `metadata.google.internal` still runs for the domain path.
+        let result = validate_url_security("http://169.254.169.254/").await;
+        assert!(
+            result.is_err(),
+            "metadata IPv4 literal must be rejected: {result:?}"
+        );
     }
 }
