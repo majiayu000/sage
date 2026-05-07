@@ -38,7 +38,7 @@ pub fn validate_providers(config: &Config) -> SageResult<()> {
     .collect();
 
     for provider in config.model_providers.keys() {
-        if !valid_providers.contains(provider.as_str()) && !provider.starts_with("custom_") {
+        if !valid_providers.contains(provider.as_str()) {
             return Err(SageError::config(format!(
                 "Unknown provider '{}'. Valid providers are: {:?}",
                 provider, valid_providers
@@ -131,14 +131,28 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_providers_custom_prefix_allowed() {
+    fn test_validate_providers_custom_prefix_rejected_until_supported() {
+        // The validator used to accept any provider key starting with `custom_`,
+        // but the LLM client constructor unconditionally errors on
+        // `LlmProvider::Custom(_)`. That meant a config like
+        // `default_provider = "custom_my_llm"` validated cleanly and then
+        // failed at runtime — a U-26 declaration-execution gap.
+        //
+        // We now reject `custom_*` at validation time so the user sees a
+        // single, consistent error at config-load. Once the client learns
+        // to construct a custom provider (e.g. via OpenAI-compatible
+        // routing), this test should be updated, not deleted.
         let mut config = create_test_config();
         config
             .model_providers
             .insert("custom_my_llm".to_string(), ModelParameters::default());
         config.default_provider = "custom_my_llm".to_string();
 
-        // Custom providers with custom_ prefix should be allowed
-        assert!(validate_providers(&config).is_ok());
+        let result = validate_providers(&config);
+        assert!(
+            result.is_err(),
+            "validator must reject custom_ prefix until the client supports it"
+        );
+        assert!(result.unwrap_err().to_string().contains("Unknown provider"));
     }
 }
