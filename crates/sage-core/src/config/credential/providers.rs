@@ -45,6 +45,28 @@ pub fn default_providers() -> Vec<ProviderEnvConfig> {
     ]
 }
 
+/// Paths to check for auto-import from other tools
+pub fn auto_import_paths() -> Vec<(String, PathBuf)> {
+    let home = dirs::home_dir().unwrap_or_default();
+    vec![
+        // Claude Code
+        (
+            "claude-code".to_string(),
+            home.join(".claude").join("credentials.json"),
+        ),
+        // Cursor
+        (
+            "cursor".to_string(),
+            home.join(".cursor").join("credentials.json"),
+        ),
+        // Aider
+        (
+            "aider".to_string(),
+            home.join(".aider").join("credentials.json"),
+        ),
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -104,26 +126,4 @@ mod tests {
             "env_var mismatch between embedded_providers() and default_providers(): {mismatched:?}"
         );
     }
-}
-
-/// Paths to check for auto-import from other tools
-pub fn auto_import_paths() -> Vec<(String, PathBuf)> {
-    let home = dirs::home_dir().unwrap_or_default();
-    vec![
-        // Claude Code
-        (
-            "claude-code".to_string(),
-            home.join(".claude").join("credentials.json"),
-        ),
-        // Cursor
-        (
-            "cursor".to_string(),
-            home.join(".cursor").join("credentials.json"),
-        ),
-        // Aider
-        (
-            "aider".to_string(),
-            home.join(".aider").join("credentials.json"),
-        ),
-    ]
 }

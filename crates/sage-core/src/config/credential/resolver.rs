@@ -146,19 +146,52 @@ impl CredentialResolver {
         }
     }
 
-    /// Check if the default provider is configured
+    /// Check if the default provider is configured.
+    ///
+    /// Tries every standard env-var name for the provider (e.g. Azure
+    /// accepts both `AZURE_OPENAI_API_KEY` and `AZURE_API_KEY`), plus
+    /// the resolver's own configured `env_var`, plus the generic
+    /// `{PROVIDER}_API_KEY` fallback. Returns `true` as soon as any of
+    /// them resolves to a value.
+    ///
+    /// This avoids a regression introduced when explicit Azure /
+    /// OpenRouter entries were added to the resolver: previously
+    /// `has_default_provider("azure")` fell back to the generated
+    /// `AZURE_API_KEY`; without the multi-env-var probe, adding an
+    /// `AZURE_OPENAI_API_KEY` entry would cause a user with only the
+    /// long-supported `AZURE_API_KEY` set to be reported as
+    /// unconfigured.
     pub fn has_default_provider(&self, default_provider: &str) -> bool {
-        let default_env_var = format!("{}_API_KEY", default_provider.to_uppercase());
-        let env_var = self
+        use crate::config::api_key_helpers::get_standard_env_vars_for_provider;
+
+        // 1. The resolver's own configured env_var, if any.
+        let configured_env_var = self
             .config
             .providers
             .iter()
             .find(|p| p.name == default_provider)
-            .map(|p| p.env_var.as_str())
-            .unwrap_or(&default_env_var);
+            .map(|p| p.env_var.clone());
 
-        let credential = self.resolve_provider(default_provider, env_var);
-        credential.has_value()
+        // 2. The published standard list for the provider (covers
+        //    aliases like AZURE_API_KEY, CLAUDE_API_KEY, GEMINI_API_KEY).
+        let mut candidates: Vec<String> = get_standard_env_vars_for_provider(default_provider);
+
+        // Merge the configured one to the front so it takes priority.
+        if let Some(configured) = configured_env_var {
+            if !candidates.iter().any(|c| c == &configured) {
+                candidates.insert(0, configured);
+            }
+        }
+
+        // 3. Generic fallback so the loop below is never empty.
+        let generic = format!("{}_API_KEY", default_provider.to_uppercase());
+        if !candidates.iter().any(|c| c == &generic) {
+            candidates.push(generic);
+        }
+
+        candidates
+            .iter()
+            .any(|env_var| self.resolve_provider(default_provider, env_var).has_value())
     }
 
     /// Save a credential to the global credentials file
