@@ -22,6 +22,10 @@ struct StreamState {
     usage: Option<TokenUsage>,
     input_tokens: u64,
     provider_name: String,
+    /// Tracks whether the parser already emitted the terminal
+    /// `message_stop` flush. Used by `finalize_stream` to avoid emitting
+    /// a duplicate final chunk when the stream ends cleanly.
+    saw_message_stop: bool,
 }
 
 /// Parse an Anthropic-compatible SSE byte stream into an LlmStream.
@@ -42,27 +46,150 @@ pub fn anthropic_sse_stream(
         usage: None,
         input_tokens: 0,
         provider_name: provider_name.to_string(),
+        saw_message_stop: false,
     }));
 
-    let stream = byte_stream.flat_map(move |chunk_result| {
+    let stream = byte_stream.flat_map({
         let state = state.clone();
-        futures::stream::once(async move {
-            match chunk_result {
-                Ok(chunk) => {
-                    let mut state = state.lock().await;
-                    let events = state.decoder.feed(chunk.as_ref());
-                    let mut chunks: Vec<SageResult<StreamChunk>> = Vec::new();
-                    process_events(&mut state, events, &mut chunks);
-                    futures::stream::iter(chunks)
+        move |chunk_result| {
+            let state = state.clone();
+            futures::stream::once(async move {
+                match chunk_result {
+                    Ok(chunk) => {
+                        let mut state = state.lock().await;
+                        let events = state.decoder.feed(chunk.as_ref());
+                        let mut chunks: Vec<SageResult<StreamChunk>> = Vec::new();
+                        process_events(&mut state, events, &mut chunks);
+                        futures::stream::iter(chunks)
+                    }
+                    Err(e) => {
+                        let mut state = state.lock().await;
+                        let items = flush_on_transport_error(&mut state, e.to_string());
+                        futures::stream::iter(items)
+                    }
                 }
-                Err(e) => {
-                    futures::stream::iter(vec![Err(SageError::llm(format!("Stream error: {}", e)))])
-                }
-            }
-        })
+            })
+        }
     });
 
-    Box::pin(stream.flatten())
+    // After the byte stream ends, run a synthetic terminal flush. If the
+    // upstream emitted `message_stop` we already pushed the final chunk
+    // and `finalize_stream` is a no-op. If the upstream truncated before
+    // `message_stop` (proxy cut, client timeout, network drop) we flush
+    // any pending tool calls instead of dropping them silently.
+    let flush_state = state.clone();
+    let flush = futures::stream::once(async move {
+        let mut state = flush_state.lock().await;
+        let mut chunks: Vec<SageResult<StreamChunk>> = Vec::new();
+        finalize_stream(&mut state, &mut chunks);
+        futures::stream::iter(chunks)
+    })
+    .flatten();
+
+    Box::pin(stream.flatten().chain(flush))
+}
+
+/// Emit any state that did not get flushed by an explicit `message_stop`.
+///
+/// Called once after the upstream byte stream terminates. If
+/// `saw_message_stop` is true the parser already emitted everything
+/// during the regular event loop, so this is a no-op. Otherwise we
+/// flush pending tool calls (if any) and then a final chunk so the
+/// caller sees a terminal event instead of an empty turn.
+fn finalize_stream(state: &mut StreamState, chunks: &mut Vec<SageResult<StreamChunk>>) {
+    if state.saw_message_stop {
+        return;
+    }
+
+    // The stream ended while a `tool_use` block was still open: we saw
+    // `content_block_start` but never `content_block_stop`, so the model
+    // had begun emitting tool input but did not finish. Emitting a clean
+    // `final_chunk` here would silently drop the partial tool call and
+    // leave the orchestrator with no signal at all. Surface it as a
+    // typed error and clear the buffer so a subsequent recovery can
+    // proceed from a clean slate.
+    if state.current_block_type.as_deref() == Some("tool_use") {
+        let tool_name = state
+            .current_tool_name
+            .take()
+            .unwrap_or_else(|| "unknown".to_string());
+        let block_id = state.current_block_id.take().unwrap_or_default();
+        tracing::error!(
+            provider = %state.provider_name,
+            tool = %tool_name,
+            tool_call_id = %block_id,
+            buffer_len = state.tool_input_buffer.len(),
+            "Stream ended mid-`tool_use` block (no `content_block_stop`); \
+             refusing to emit a partial tool call"
+        );
+        chunks.push(Err(SageError::llm(format!(
+            "{} stream ended mid-tool_use block: tool '{}' (id={}) had no \
+             `content_block_stop`",
+            state.provider_name, tool_name, block_id
+        ))));
+        state.tool_input_buffer.clear();
+        state.current_block_type = None;
+        state.saw_message_stop = true;
+        return;
+    }
+
+    if !state.pending_tool_calls.is_empty() {
+        tracing::warn!(
+            provider = %state.provider_name,
+            pending = state.pending_tool_calls.len(),
+            "Stream ended without `message_stop`; flushing pending tool calls so the \
+             orchestrator does not see an empty turn"
+        );
+        let tool_calls = std::mem::take(&mut state.pending_tool_calls);
+        chunks.push(Ok(StreamChunk::tool_calls(tool_calls)));
+    }
+    chunks.push(Ok(StreamChunk::final_chunk(
+        state.usage.take(),
+        state.stop_reason.take(),
+    )));
+    state.saw_message_stop = true;
+}
+
+/// Drain any pending state and append a terminal error in response to
+/// a transport-level failure on the byte stream (proxy cut, client
+/// timeout, network drop).
+///
+/// Downstream consumers short-circuit on the first `Err` chunk via
+/// `chunk_result?` / `return Err(e)`, so the post-stream
+/// `chain(flush)` in [`anthropic_sse_stream`] is never polled when an
+/// `Err` is yielded mid-stream. Without this drain, any
+/// `pending_tool_calls` that the parser had already accumulated would
+/// be silently dropped — the exact failure mode issue #21 was filed
+/// against, in its transport-error variant.
+///
+/// The returned `Vec` always ends with the `Err` so consumers still
+/// observe the terminal failure; tool calls (if any) are emitted
+/// first so the orchestrator can record what the model managed to
+/// produce before the connection broke. We also flip
+/// `saw_message_stop` so that if the chain flush ever does get
+/// polled (e.g. because a different consumer pattern continues past
+/// the error), it will be a no-op.
+fn flush_on_transport_error(
+    state: &mut StreamState,
+    error_message: String,
+) -> Vec<SageResult<StreamChunk>> {
+    let mut items: Vec<SageResult<StreamChunk>> = Vec::new();
+    if !state.pending_tool_calls.is_empty() {
+        tracing::warn!(
+            provider = %state.provider_name,
+            pending = state.pending_tool_calls.len(),
+            "Transport error after complete tool blocks; \
+             flushing pending tool calls before surfacing error"
+        );
+        let tool_calls = std::mem::take(&mut state.pending_tool_calls);
+        items.push(Ok(StreamChunk::tool_calls(tool_calls)));
+    }
+    state.saw_message_stop = true;
+    items.push(Err(SageError::llm(format!(
+        "{} stream error: {}",
+        state.provider_name, error_message
+    ))));
+    items
 }
 
 fn process_events(
@@ -182,6 +309,7 @@ fn process_events(
                     state.usage.take(),
                     state.stop_reason.take(),
                 )));
+                state.saw_message_stop = true;
             }
             Some("error") => {
                 let error_msg = data["error"]["message"].as_str().unwrap_or("Unknown error");
@@ -192,125 +320,6 @@ fn process_events(
             }
             _ => {}
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::llm::sse_decoder::SseEvent;
-
-    fn fresh_state() -> StreamState {
-        StreamState {
-            decoder: SseDecoder::new(),
-            current_block_type: None,
-            current_block_id: None,
-            current_tool_name: None,
-            tool_input_buffer: String::new(),
-            pending_tool_calls: Vec::new(),
-            stop_reason: None,
-            usage: None,
-            input_tokens: 0,
-            provider_name: "anthropic".to_string(),
-        }
-    }
-
-    fn run_events(events: Vec<SseEvent>) -> (StreamState, Vec<SageResult<StreamChunk>>) {
-        let mut state = fresh_state();
-        let mut chunks = Vec::new();
-        process_events(&mut state, events, &mut chunks);
-        (state, chunks)
-    }
-
-    fn ok_chunks(chunks: &[SageResult<StreamChunk>]) -> usize {
-        chunks.iter().filter(|c| c.is_ok()).count()
-    }
-
-    #[test]
-    fn valid_tool_use_dispatches_with_parsed_arguments() {
-        let events = vec![
-            SseEvent::with_type(
-                "content_block_start",
-                r#"{"index":0,"content_block":{"type":"tool_use","id":"toolu_1","name":"shell"}}"#,
-            ),
-            SseEvent::with_type(
-                "content_block_delta",
-                r#"{"index":0,"delta":{"type":"input_json_delta","partial_json":"{\"cmd\":\"ls\"}"}}"#,
-            ),
-            SseEvent::with_type("content_block_stop", r#"{"index":0}"#),
-            SseEvent::with_type("message_stop", r#"{}"#),
-        ];
-
-        let (_, chunks) = run_events(events);
-        // Errors must NOT be emitted on the happy path.
-        assert!(
-            chunks.iter().all(|c| c.is_ok()),
-            "no errors expected; got: {chunks:?}"
-        );
-        // tool_calls + final_chunk == 2 ok chunks.
-        assert_eq!(ok_chunks(&chunks), 2);
-    }
-
-    #[test]
-    fn unparseable_tool_input_emits_error_and_does_not_dispatch() {
-        // Buffer ends mid-object — broken JSON. Before the fix this would
-        // silently dispatch the tool with empty arguments. After the fix
-        // it must emit an Err and not push anything into pending_tool_calls.
-        let events = vec![
-            SseEvent::with_type(
-                "content_block_start",
-                r#"{"index":0,"content_block":{"type":"tool_use","id":"toolu_2","name":"shell"}}"#,
-            ),
-            SseEvent::with_type(
-                "content_block_delta",
-                r#"{"index":0,"delta":{"type":"input_json_delta","partial_json":"{\"cmd\":\"ls"}}"#,
-            ),
-            // Note: NO closing partial — buffer is `{"cmd":"ls`.
-            SseEvent::with_type("content_block_stop", r#"{"index":0}"#),
-        ];
-
-        let (state, chunks) = run_events(events);
-        assert!(
-            state.pending_tool_calls.is_empty(),
-            "unparseable tool input must not produce a pending ToolCall, got: {:?}",
-            state.pending_tool_calls
-        );
-        let err = chunks
-            .iter()
-            .find_map(|c| c.as_ref().err())
-            .expect("must emit a typed error chunk on parse failure");
-        let msg = err.to_string();
-        assert!(
-            msg.contains("toolu_2"),
-            "error must include the tool_use id: {msg}"
-        );
-        assert!(
-            msg.contains("shell"),
-            "error must include the tool name: {msg}"
-        );
-    }
-
-    #[test]
-    fn empty_tool_input_buffer_is_a_legitimate_no_arg_call() {
-        // Anthropic emits an empty tool_use block when the model genuinely
-        // calls a no-arg tool. Empty buffer should be treated as `{}`, not
-        // a parse error.
-        let events = vec![
-            SseEvent::with_type(
-                "content_block_start",
-                r#"{"index":0,"content_block":{"type":"tool_use","id":"toolu_3","name":"now"}}"#,
-            ),
-            SseEvent::with_type("content_block_stop", r#"{"index":0}"#),
-            SseEvent::with_type("message_stop", r#"{}"#),
-        ];
-
-        let (_, chunks) = run_events(events);
-        assert!(
-            chunks.iter().all(|c| c.is_ok()),
-            "empty buffer must NOT error; got: {chunks:?}"
-        );
-        // tool_calls + final_chunk
-        assert_eq!(ok_chunks(&chunks), 2);
     }
 }
 
@@ -346,3 +355,7 @@ fn handle_message_delta(state: &mut StreamState, data: &Value) {
         });
     }
 }
+
+#[cfg(test)]
+#[path = "anthropic_stream_tests.rs"]
+mod tests;
