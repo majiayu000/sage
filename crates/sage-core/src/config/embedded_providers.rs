@@ -5,7 +5,7 @@
 use super::provider_registry::{ModelInfo, ProviderInfo};
 
 /// Get the built-in provider list
-pub(super) fn embedded_providers() -> Vec<ProviderInfo> {
+pub(crate) fn embedded_providers() -> Vec<ProviderInfo> {
     vec![
         ProviderInfo {
             id: "anthropic".to_string(),
