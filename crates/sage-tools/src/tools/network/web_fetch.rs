@@ -11,18 +11,21 @@ use super::redirect::{MAX_REDIRECTS, is_redirect_status, same_origin, validate_r
 use super::validation::validate_url_security;
 
 /// HTTP client for web fetching
-static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
+static CLIENT: std::sync::OnceLock<Result<reqwest::Client, String>> = std::sync::OnceLock::new();
 const WEB_FETCH_TIMEOUT: Duration = Duration::from_secs(30);
 
-fn get_client() -> &'static reqwest::Client {
-    CLIENT.get_or_init(|| {
-        reqwest::Client::builder()
-            .timeout(WEB_FETCH_TIMEOUT)
-            .redirect(reqwest::redirect::Policy::none())
-            .user_agent("Sage-Agent-WebFetch/1.0")
-            .build()
-            .unwrap_or_else(|_| reqwest::Client::new())
-    })
+fn get_client() -> anyhow::Result<&'static reqwest::Client> {
+    CLIENT
+        .get_or_init(|| {
+            reqwest::Client::builder()
+                .timeout(WEB_FETCH_TIMEOUT)
+                .redirect(reqwest::redirect::Policy::none())
+                .user_agent("Sage-Agent-WebFetch/1.0")
+                .build()
+                .map_err(|error| error.to_string())
+        })
+        .as_ref()
+        .map_err(|error| anyhow::anyhow!("Failed to create WebFetch HTTP client: {error}"))
 }
 
 #[derive(Debug, Clone)]
@@ -99,7 +102,7 @@ impl WebFetchTool {
     async fn fetch_and_convert(&self, url: &str) -> anyhow::Result<String> {
         debug!("Fetching URL: {}", url);
 
-        let client = get_client();
+        let client = get_client()?;
         let response = Self::fetch_response_with_redirects(client, url).await?;
 
         let status = response.status();
