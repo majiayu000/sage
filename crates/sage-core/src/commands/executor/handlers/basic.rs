@@ -150,9 +150,11 @@ pub(super) async fn execute_config(invocation: &CommandInvocation) -> SageResult
 
 /// Execute /checkpoint command - create checkpoint locally
 pub(super) async fn execute_checkpoint(
+    executor: &CommandExecutor,
     invocation: &CommandInvocation,
 ) -> SageResult<CommandResult> {
     use tokio::process::Command;
+    let project_root = executor.project_root().await;
 
     let name = invocation
         .arguments
@@ -163,6 +165,7 @@ pub(super) async fn execute_checkpoint(
     // Use git stash to create a checkpoint
     let output = Command::new("git")
         .args(["stash", "push", "-m", &format!("sage-checkpoint: {}", name)])
+        .current_dir(&project_root)
         .output()
         .await;
 
@@ -195,12 +198,20 @@ pub(super) async fn execute_checkpoint(
 }
 
 /// Execute /restore command - restore checkpoint locally
-pub(super) async fn execute_restore(invocation: &CommandInvocation) -> SageResult<CommandResult> {
+pub(super) async fn execute_restore(
+    executor: &CommandExecutor,
+    invocation: &CommandInvocation,
+) -> SageResult<CommandResult> {
     use tokio::process::Command;
+    let project_root = executor.project_root().await;
 
     if invocation.arguments.is_empty() {
         // List available checkpoints
-        let output = Command::new("git").args(["stash", "list"]).output().await;
+        let output = Command::new("git")
+            .args(["stash", "list"])
+            .current_dir(&project_root)
+            .output()
+            .await;
 
         match output {
             Ok(result) => {
@@ -231,7 +242,11 @@ pub(super) async fn execute_restore(invocation: &CommandInvocation) -> SageResul
         let checkpoint_name = &invocation.arguments[0];
 
         // Find and restore the checkpoint
-        let list_output = Command::new("git").args(["stash", "list"]).output().await;
+        let list_output = Command::new("git")
+            .args(["stash", "list"])
+            .current_dir(&project_root)
+            .output()
+            .await;
 
         match list_output {
             Ok(result) => {
@@ -249,6 +264,7 @@ pub(super) async fn execute_restore(invocation: &CommandInvocation) -> SageResul
                     Some(idx) => {
                         let restore = Command::new("git")
                             .args(["stash", "pop", &format!("stash@{{{}}}", idx)])
+                            .current_dir(&project_root)
                             .output()
                             .await;
 
@@ -287,12 +303,17 @@ pub(super) async fn execute_tasks() -> SageResult<CommandResult> {
 }
 
 /// Execute /undo command - undo file changes via git
-pub(super) async fn execute_undo(_invocation: &CommandInvocation) -> SageResult<CommandResult> {
+pub(super) async fn execute_undo(
+    executor: &CommandExecutor,
+    _invocation: &CommandInvocation,
+) -> SageResult<CommandResult> {
     use tokio::process::Command;
+    let project_root = executor.project_root().await;
 
     // First check git status
     let status = Command::new("git")
         .args(["status", "--porcelain"])
+        .current_dir(&project_root)
         .output()
         .await;
 

@@ -323,7 +323,7 @@ mod suite {
     #[test]
     fn test_error_category_clone() {
         let category = ErrorCategory::Network;
-        let cloned = category.clone();
+        let cloned = category;
         assert_eq!(category, cloned);
     }
 

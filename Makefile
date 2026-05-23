@@ -26,7 +26,7 @@ help:
 	@echo ""
 	@echo "Documentation:"
 	@echo "  docs       - Generate and open documentation"
-	@echo "  examples   - Run all examples"
+	@echo "  examples   - Run smoke-test examples"
 	@echo "  doc-check  - Check documentation consistency"
 	@echo "  doc-status - Show documentation status"
 	@echo ""
@@ -40,36 +40,36 @@ help:
 
 # Building
 build:
-	cargo build
+	cargo build --workspace
 
 release:
-	cargo build --release
+	cargo build --workspace --release
 
 install:
 	cargo install --path crates/sage-cli
 
 # Testing
 test:
-	cargo test
+	cargo test --workspace --all-targets
 
 test-unit:
-	cargo test --lib
+	cargo test --workspace --lib
 
 test-int:
-	cargo test --test integration_test
+	cargo test --workspace --tests
 
 # Development
 dev:
 	cargo run --bin sage
 
 check:
-	cargo check
+	cargo check --workspace --all-targets --all-features
 
 fmt:
 	cargo fmt
 
 clippy:
-	cargo clippy -- -D warnings
+	cargo clippy --workspace --all-targets --all-features -- -D warnings
 
 clean:
 	cargo clean
@@ -78,13 +78,13 @@ clean:
 
 # Documentation
 docs:
-	cargo doc --open
+	cargo doc --workspace --open
 
 examples:
 	@echo "Running examples..."
-	cargo run --example basic_usage
-	cargo run --example markdown_demo
-	cargo run --example ui_demo
+	cargo run -p sage --example read_tool_demo
+	cargo run -p sage --example grep_demo
+	cargo run -p sage --example planning_demo
 
 # Run with arguments
 run:

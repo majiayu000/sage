@@ -25,7 +25,7 @@ fn collect_rs_files(dir: &Path, filter: &dyn Fn(&Path) -> bool) -> Vec<PathBuf> 
         return result;
     }
     for entry in walkdir(dir) {
-        if entry.extension().map_or(false, |e| e == "rs") && filter(&entry) {
+        if entry.extension().is_some_and(|e| e == "rs") && filter(&entry) {
             result.push(entry);
         }
     }

@@ -348,12 +348,10 @@ impl CliOnboarding {
                     println!();
                     break;
                 }
-                Ok(Key::Backspace) => {
-                    if !password.is_empty() {
-                        password.pop();
-                        print!("\x08 \x08"); // Erase last asterisk
-                        io::stdout().flush().ok();
-                    }
+                Ok(Key::Backspace) if !password.is_empty() => {
+                    password.pop();
+                    print!("\x08 \x08"); // Erase last asterisk
+                    io::stdout().flush().ok();
                 }
                 Ok(Key::Char(c)) if !c.is_control() => {
                     password.push(c);

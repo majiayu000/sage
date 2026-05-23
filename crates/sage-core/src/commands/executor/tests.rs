@@ -3,11 +3,19 @@
 use super::types::CommandExecutor;
 use crate::commands::registry::CommandRegistry;
 use crate::commands::types::SlashCommand;
+use std::path::Path;
+use std::process::Command;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
 async fn create_test_executor() -> CommandExecutor {
     let mut registry = CommandRegistry::new("/project");
+    registry.register_builtins();
+    CommandExecutor::new(Arc::new(RwLock::new(registry)))
+}
+
+async fn create_test_executor_with_project_root(project_root: &Path) -> CommandExecutor {
+    let mut registry = CommandRegistry::new(project_root);
     registry.register_builtins();
     CommandExecutor::new(Arc::new(RwLock::new(registry)))
 }
@@ -63,22 +71,32 @@ async fn test_execute_clear() {
 }
 
 #[tokio::test]
-async fn test_execute_checkpoint_with_name() {
-    let executor = create_test_executor().await;
+async fn test_execute_checkpoint_with_name() -> Result<(), Box<dyn std::error::Error>> {
+    let temp_dir = tempfile::tempdir()?;
+    let status = Command::new("git")
+        .arg("init")
+        .current_dir(temp_dir.path())
+        .status()?;
+    assert!(status.success());
+
+    let executor = create_test_executor_with_project_root(temp_dir.path()).await;
     let result = executor
         .process("/checkpoint my-save")
-        .await
-        .unwrap()
-        .unwrap();
+        .await?
+        .ok_or_else(|| std::io::Error::other("checkpoint command returned no result"))?;
 
     assert!(result.is_local);
     assert!(result.local_output.is_some());
-    let output = result.local_output.as_ref().unwrap();
+    let output = result
+        .local_output
+        .as_ref()
+        .ok_or_else(|| std::io::Error::other("checkpoint command returned no output"))?;
     assert!(
         output.contains("my-save")
             || output.contains("checkpoint")
             || output.contains("No changes")
     );
+    Ok(())
 }
 
 #[tokio::test]

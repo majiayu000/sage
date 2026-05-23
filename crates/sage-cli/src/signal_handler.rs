@@ -98,37 +98,35 @@ impl SignalHandler {
         let handle = tokio::spawn(async move {
             while let Some(signal) = signals.next().await {
                 match signal {
-                    SIGINT => {
-                        if is_active.load(Ordering::Relaxed) {
-                            // Check current application state
-                            // Using parking_lot::Mutex - lock() returns guard directly
-                            let state = *app_state.lock();
-                            match state {
-                                SignalHandlerState::WaitingForInput => {
-                                    // During input prompt - implement double Ctrl+C to exit
-                                    let should_exit = Self::update_ctrl_c_exit_state(
-                                        &last_ctrl_c_time,
-                                        &ctrl_c_count,
+                    SIGINT if is_active.load(Ordering::Relaxed) => {
+                        // Check current application state
+                        // Using parking_lot::Mutex - lock() returns guard directly
+                        let state = *app_state.lock();
+                        match state {
+                            SignalHandlerState::WaitingForInput => {
+                                // During input prompt - implement double Ctrl+C to exit
+                                let should_exit = Self::update_ctrl_c_exit_state(
+                                    &last_ctrl_c_time,
+                                    &ctrl_c_count,
+                                );
+
+                                if should_exit {
+                                    eprintln!("\nGoodbye!");
+                                    std::process::exit(0);
+                                } else {
+                                    eprintln!(
+                                        "\n💡 Press Ctrl+C again within 2 seconds to exit, or continue typing..."
                                     );
-
-                                    if should_exit {
-                                        eprintln!("\nGoodbye!");
-                                        std::process::exit(0);
-                                    } else {
-                                        eprintln!(
-                                            "\n💡 Press Ctrl+C again within 2 seconds to exit, or continue typing..."
-                                        );
-                                    }
                                 }
-                                SignalHandlerState::ExecutingTask => {
-                                    // During task execution - interrupt the task
-                                    // parking_lot::Mutex is used in sage-core, .lock() returns guard directly
-                                    Self::interrupt_current_task();
+                            }
+                            SignalHandlerState::ExecutingTask => {
+                                // During task execution - interrupt the task
+                                // parking_lot::Mutex is used in sage-core, .lock() returns guard directly
+                                Self::interrupt_current_task();
 
-                                    // Print a message to let user know the task was interrupted
-                                    eprintln!("\n🛑 Interrupting current task... (Ctrl+C)");
-                                    eprintln!("   Task will stop gracefully. Please wait...");
-                                }
+                                // Print a message to let user know the task was interrupted
+                                eprintln!("\n🛑 Interrupting current task... (Ctrl+C)");
+                                eprintln!("   Task will stop gracefully. Please wait...");
                             }
                         }
                     }

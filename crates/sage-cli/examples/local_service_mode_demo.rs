@@ -50,7 +50,7 @@ enum ServiceEvent {
         message: String,
     },
     State {
-        state: AppStateDto,
+        state: Box<AppStateDto>,
     },
     InputRequest {
         request: sage_core::input::InputRequestDto,
@@ -181,7 +181,9 @@ async fn handle_client(socket: TcpStream, runtime: Arc<ExternalUiRuntime>) -> Sa
                 }
                 let snapshot = AppStateDto::from(state_rx.borrow().clone());
                 if state_tx
-                    .send(ServiceEvent::State { state: snapshot })
+                    .send(ServiceEvent::State {
+                        state: Box::new(snapshot),
+                    })
                     .is_err()
                 {
                     break;
@@ -259,7 +261,9 @@ async fn handle_client(socket: TcpStream, runtime: Arc<ExternalUiRuntime>) -> Sa
             }
             ServiceCommand::GetState => {
                 let snapshot = AppStateDto::from(runtime.state_snapshot());
-                let _ = out_tx.send(ServiceEvent::State { state: snapshot });
+                let _ = out_tx.send(ServiceEvent::State {
+                    state: Box::new(snapshot),
+                });
             }
             ServiceCommand::StartTask { task } => {
                 let result = runtime.start_task(task).await;

@@ -1,6 +1,7 @@
 //! Core types for command executor
 
 use crate::error::SageResult;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -59,5 +60,10 @@ impl CommandExecutor {
     /// Get command suggestions for autocomplete
     pub async fn get_suggestions(&self, prefix: &str) -> Vec<String> {
         super::executor::get_command_suggestions(self, prefix).await
+    }
+
+    /// Get the project root used for filesystem-affecting built-in commands.
+    pub(super) async fn project_root(&self) -> PathBuf {
+        self.registry.read().await.project_root().to_path_buf()
     }
 }

@@ -318,10 +318,10 @@ git clone https://github.com/majiayu000/sage
 cd sage
 
 # Build
-cargo build --release
+cargo build --workspace --release
 
 # Test
-cargo test
+cargo test --workspace --all-targets
 
 # Run
 ./target/release/sage --help
