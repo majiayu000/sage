@@ -16,15 +16,7 @@ pub async fn read_file<T: FileSystemTool>(
     offset: Option<usize>,
     limit: Option<usize>,
 ) -> Result<(ToolResult, PathBuf), ToolError> {
-    let path = tool.resolve_path(file_path);
-
-    // Security check
-    if !tool.is_safe_path(&path) {
-        return Err(ToolError::PermissionDenied(format!(
-            "Access denied to path: {}",
-            path.display()
-        )));
-    }
+    let path = tool.resolve_workspace_path(file_path)?;
 
     // Check if file exists
     if !path.exists() {

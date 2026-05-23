@@ -1,7 +1,8 @@
 //! File system helper trait for tools
 
+use super::ToolError;
 use super::tool_trait::Tool;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Helper trait for tools that need access to the file system.
 ///
@@ -109,6 +110,22 @@ pub trait FileSystemTool: Tool {
             path.to_path_buf()
         } else {
             self.working_directory().join(path)
+        }
+    }
+
+    /// Resolve a path and enforce the workspace boundary.
+    ///
+    /// Tools that touch the filesystem should use this instead of duplicating
+    /// path resolution plus `is_safe_path` checks.
+    fn resolve_workspace_path(&self, path: &str) -> Result<PathBuf, ToolError> {
+        let resolved_path = self.resolve_path(path);
+        if self.is_safe_path(&resolved_path) {
+            Ok(resolved_path)
+        } else {
+            Err(ToolError::PermissionDenied(format!(
+                "Access denied to path: {}",
+                resolved_path.display()
+            )))
         }
     }
 

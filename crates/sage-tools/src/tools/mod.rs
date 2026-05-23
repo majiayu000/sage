@@ -224,7 +224,9 @@ fn build_default_tools(config: DefaultToolConfig) -> Vec<Arc<dyn Tool>> {
         Arc::new(WebSearchTool::new()),
         Arc::new(WebFetchTool::new()),
         Arc::new(BrowserTool::new()),
-        Arc::new(HttpClientTool::new()),
+        Arc::new(HttpClientTool::with_working_directory(
+            working_directory.clone(),
+        )),
         // Diagnostics
         Arc::new(DiagnosticsTool::new()),
         Arc::new(ViewRangeUntruncatedTool::new()),
