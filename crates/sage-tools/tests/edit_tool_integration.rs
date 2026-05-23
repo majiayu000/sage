@@ -2,9 +2,11 @@
 
 use sage_core::tools::base::Tool;
 use sage_core::tools::types::ToolCall;
-use sage_tools::tools::file_ops::EditTool;
+use sage_tools::tools::file_ops::{EditTool, FileAccessTracker};
 use serde_json::json;
 use std::collections::HashMap;
+use std::path::Path;
+use std::sync::Arc;
 use tempfile::TempDir;
 use tokio::fs;
 
@@ -23,6 +25,21 @@ fn create_tool_call(id: &str, name: &str, args: serde_json::Value) -> ToolCall {
     }
 }
 
+fn edit_tool_with_tracker(temp_dir: &TempDir) -> (EditTool, Arc<FileAccessTracker>) {
+    let tracker = Arc::new(FileAccessTracker::new());
+    (
+        EditTool::with_working_directory_and_tracker(temp_dir.path(), Arc::clone(&tracker)),
+        tracker,
+    )
+}
+
+async fn mark_file_as_read(tracker: &FileAccessTracker, path: &Path) {
+    let Ok(canonical_path) = path.canonicalize() else {
+        panic!("test file should canonicalize");
+    };
+    tracker.mark_read(canonical_path).await;
+}
+
 #[tokio::test]
 async fn test_edit_tool_basic_replacement() {
     let temp_dir = TempDir::new().unwrap();
@@ -32,7 +49,8 @@ async fn test_edit_tool_basic_replacement() {
     let initial_content = "Hello, World!\nThis is a test.\nGoodbye!";
     fs::write(&file_path, initial_content).await.unwrap();
 
-    let tool = EditTool::with_working_directory(temp_dir.path());
+    let (tool, tracker) = edit_tool_with_tracker(&temp_dir);
+    mark_file_as_read(&tracker, &file_path).await;
 
     // Perform basic replacement
     println!("\n=== Test 1: Basic string replacement ===");
@@ -65,7 +83,8 @@ async fn test_edit_tool_multiline_replacement() {
     let initial_content = "fn main() {\n    println!(\"Hello\");\n}\n";
     fs::write(&file_path, initial_content).await.unwrap();
 
-    let tool = EditTool::with_working_directory(temp_dir.path());
+    let (tool, tracker) = edit_tool_with_tracker(&temp_dir);
+    mark_file_as_read(&tracker, &file_path).await;
 
     println!("\n=== Test 2: Multiline replacement ===");
     let call = create_tool_call(
@@ -96,7 +115,8 @@ async fn test_edit_tool_replace_all() {
     let initial_content = "test test test\nanother test\nfinal test";
     fs::write(&file_path, initial_content).await.unwrap();
 
-    let tool = EditTool::with_working_directory(temp_dir.path());
+    let (tool, tracker) = edit_tool_with_tracker(&temp_dir);
+    mark_file_as_read(&tracker, &file_path).await;
 
     println!("\n=== Test 3: Replace all occurrences ===");
     let call = create_tool_call(
@@ -132,7 +152,8 @@ async fn test_edit_tool_preserve_indentation() {
     let initial_content = "def hello():\n    print(\"hello\")\n    return True";
     fs::write(&file_path, initial_content).await.unwrap();
 
-    let tool = EditTool::with_working_directory(temp_dir.path());
+    let (tool, tracker) = edit_tool_with_tracker(&temp_dir);
+    mark_file_as_read(&tracker, &file_path).await;
 
     println!("\n=== Test 4: Preserve indentation ===");
     let call = create_tool_call(
@@ -165,7 +186,8 @@ async fn test_edit_tool_special_characters() {
     let initial_content = "Symbols: $VAR, @user, #tag, 100%";
     fs::write(&file_path, initial_content).await.unwrap();
 
-    let tool = EditTool::with_working_directory(temp_dir.path());
+    let (tool, tracker) = edit_tool_with_tracker(&temp_dir);
+    mark_file_as_read(&tracker, &file_path).await;
 
     println!("\n=== Test 5: Handle special characters ===");
     let call = create_tool_call(
@@ -195,7 +217,8 @@ async fn test_edit_tool_error_string_not_found() {
 
     fs::write(&file_path, "Hello, World!").await.unwrap();
 
-    let tool = EditTool::with_working_directory(temp_dir.path());
+    let (tool, tracker) = edit_tool_with_tracker(&temp_dir);
+    mark_file_as_read(&tracker, &file_path).await;
 
     println!("\n=== Test 6: Error - String not found ===");
     let call = create_tool_call(
@@ -222,7 +245,8 @@ async fn test_edit_tool_error_multiple_occurrences() {
 
     fs::write(&file_path, "test test test").await.unwrap();
 
-    let tool = EditTool::with_working_directory(temp_dir.path());
+    let (tool, tracker) = edit_tool_with_tracker(&temp_dir);
+    mark_file_as_read(&tracker, &file_path).await;
 
     println!("\n=== Test 7: Error - Multiple occurrences without replace_all ===");
     let call = create_tool_call(
@@ -250,7 +274,8 @@ async fn test_edit_tool_error_same_strings() {
 
     fs::write(&file_path, "Hello, World!").await.unwrap();
 
-    let tool = EditTool::with_working_directory(temp_dir.path());
+    let (tool, tracker) = edit_tool_with_tracker(&temp_dir);
+    mark_file_as_read(&tracker, &file_path).await;
 
     println!("\n=== Test 8: Error - Same old and new strings ===");
     let call = create_tool_call(
@@ -277,7 +302,8 @@ async fn test_edit_tool_error_empty_old_string() {
 
     fs::write(&file_path, "Hello, World!").await.unwrap();
 
-    let tool = EditTool::with_working_directory(temp_dir.path());
+    let (tool, tracker) = edit_tool_with_tracker(&temp_dir);
+    mark_file_as_read(&tracker, &file_path).await;
 
     println!("\n=== Test 9: Error - Empty old_string ===");
     let call = create_tool_call(
@@ -337,7 +363,8 @@ fn main() {
 }"#;
     fs::write(&file_path, initial_content).await.unwrap();
 
-    let tool = EditTool::with_working_directory(temp_dir.path());
+    let (tool, tracker) = edit_tool_with_tracker(&temp_dir);
+    mark_file_as_read(&tracker, &file_path).await;
 
     println!("\n=== Test 11: Code refactoring ===");
 
@@ -388,7 +415,8 @@ async fn test_edit_tool_json_modification() {
 }"#;
     fs::write(&file_path, initial_content).await.unwrap();
 
-    let tool = EditTool::with_working_directory(temp_dir.path());
+    let (tool, tracker) = edit_tool_with_tracker(&temp_dir);
+    mark_file_as_read(&tracker, &file_path).await;
 
     println!("\n=== Test 12: JSON modification ===");
     let call = create_tool_call(
@@ -422,7 +450,8 @@ async fn test_edit_tool_unicode_content() {
     let initial_content = "你好，世界！\nHello, World!\nこんにちは世界！";
     fs::write(&file_path, initial_content).await.unwrap();
 
-    let tool = EditTool::with_working_directory(temp_dir.path());
+    let (tool, tracker) = edit_tool_with_tracker(&temp_dir);
+    mark_file_as_read(&tracker, &file_path).await;
 
     println!("\n=== Test 13: Unicode content ===");
     let call = create_tool_call(
@@ -453,7 +482,8 @@ async fn test_edit_tool_newline_preservation() {
     let initial_content = "Line 1\n\nLine 3\nLine 4";
     fs::write(&file_path, initial_content).await.unwrap();
 
-    let tool = EditTool::with_working_directory(temp_dir.path());
+    let (tool, tracker) = edit_tool_with_tracker(&temp_dir);
+    mark_file_as_read(&tracker, &file_path).await;
 
     println!("\n=== Test 14: Newline preservation ===");
     let call = create_tool_call(

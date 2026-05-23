@@ -1,5 +1,6 @@
 //! File and code operations tools
 
+pub mod access_tracker;
 pub mod edit;
 pub mod glob;
 pub mod grep;
@@ -8,6 +9,7 @@ pub mod read;
 pub mod write;
 
 // Re-export tools
+pub use access_tracker::FileAccessTracker;
 pub use edit::EditTool;
 pub use glob::GlobTool;
 pub use grep::GrepTool;

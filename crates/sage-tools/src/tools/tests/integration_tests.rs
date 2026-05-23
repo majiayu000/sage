@@ -810,6 +810,118 @@ mod tool_integration_tests {
         Ok(())
     }
 
+    #[tokio::test]
+    async fn test_default_file_tools_share_read_before_write_state()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let workspace = TempDir::new()?;
+        let workspace_path = workspace.path().to_path_buf();
+        fs::create_dir_all(workspace_path.join("nested")).await?;
+        fs::write(workspace_path.join("target.txt"), "original text\n").await?;
+        fs::write(workspace_path.join("blind-edit.txt"), "blind text\n").await?;
+
+        let mut registry = SkillRegistry::new(&workspace_path);
+        registry.register_builtins();
+        let tools =
+            get_default_tools_with_context(workspace_path.clone(), Arc::new(RwLock::new(registry)));
+
+        let blind_write = find_tool(&tools, "Write")?
+            .execute(&create_tool_call(
+                "blind-write",
+                "Write",
+                json!({
+                    "file_path": "target.txt",
+                    "content": "blind overwrite\n"
+                }),
+            ))
+            .await;
+        assert!(blind_write.is_err());
+        assert!(
+            blind_write
+                .unwrap_err()
+                .to_string()
+                .contains("has not been read")
+        );
+
+        let read_result = find_tool(&tools, "Read")?
+            .execute(&create_tool_call(
+                "read-target",
+                "Read",
+                json!({ "file_path": "nested/../target.txt" }),
+            ))
+            .await?;
+        assert!(read_result.success);
+
+        let write_result = find_tool(&tools, "Write")?
+            .execute(&create_tool_call(
+                "write-target",
+                "Write",
+                json!({
+                    "file_path": "target.txt",
+                    "content": "updated text\n"
+                }),
+            ))
+            .await?;
+        assert!(write_result.success);
+        assert_eq!(
+            fs::read_to_string(workspace_path.join("target.txt")).await?,
+            "updated text\n"
+        );
+
+        let edit_result = find_tool(&tools, "Edit")?
+            .execute(&create_tool_call(
+                "edit-target",
+                "Edit",
+                json!({
+                    "file_path": "target.txt",
+                    "old_string": "updated",
+                    "new_string": "edited"
+                }),
+            ))
+            .await?;
+        assert!(edit_result.success);
+        assert_eq!(
+            fs::read_to_string(workspace_path.join("target.txt")).await?,
+            "edited text\n"
+        );
+
+        let blind_edit = find_tool(&tools, "Edit")?
+            .execute(&create_tool_call(
+                "blind-edit",
+                "Edit",
+                json!({
+                    "file_path": "blind-edit.txt",
+                    "old_string": "blind",
+                    "new_string": "edited"
+                }),
+            ))
+            .await;
+        assert!(blind_edit.is_err());
+        assert!(
+            blind_edit
+                .unwrap_err()
+                .to_string()
+                .contains("has not been read")
+        );
+
+        let create_result = find_tool(&tools, "Write")?
+            .execute(&create_tool_call(
+                "create-new",
+                "Write",
+                json!({
+                    "file_path": "new-file.txt",
+                    "content": "new content\n"
+                }),
+            ))
+            .await?;
+        assert!(create_result.success);
+        assert_eq!(
+            fs::read_to_string(workspace_path.join("new-file.txt")).await?,
+            "new content\n"
+        );
+
+        Ok(())
+    }
+
     #[test]
     fn test_default_factory_does_not_use_context_sensitive_new_constructors() {
         let source = include_str!("../mod.rs");

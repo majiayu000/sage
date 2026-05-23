@@ -1,8 +1,9 @@
 //! Type definitions for the Write tool
 
-use std::collections::HashSet;
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use crate::tools::file_ops::access_tracker::{FileAccessTracker, canonicalize_existing_path};
+use sage_core::tools::base::ToolError;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 /// Tool for writing files to the filesystem
 ///
@@ -17,9 +18,7 @@ use std::sync::{Arc, Mutex};
 /// - Absolute path requirements
 pub struct WriteTool {
     pub(crate) working_directory: PathBuf,
-    /// Track files that have been read in this session
-    /// This prevents blind overwrites of files that haven't been examined
-    pub(crate) read_files: Arc<Mutex<HashSet<PathBuf>>>,
+    pub(crate) access_tracker: Arc<FileAccessTracker>,
 }
 
 impl WriteTool {
@@ -27,7 +26,7 @@ impl WriteTool {
     pub fn new() -> Self {
         Self {
             working_directory: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
-            read_files: Arc::new(Mutex::new(HashSet::new())),
+            access_tracker: Arc::new(FileAccessTracker::new()),
         }
     }
 
@@ -35,26 +34,34 @@ impl WriteTool {
     pub fn with_working_directory<P: Into<PathBuf>>(working_dir: P) -> Self {
         Self {
             working_directory: working_dir.into(),
-            read_files: Arc::new(Mutex::new(HashSet::new())),
+            access_tracker: Arc::new(FileAccessTracker::new()),
+        }
+    }
+
+    /// Create a write tool with specific working directory and shared access tracker.
+    pub fn with_working_directory_and_tracker<P: Into<PathBuf>>(
+        working_dir: P,
+        access_tracker: Arc<FileAccessTracker>,
+    ) -> Self {
+        Self {
+            working_directory: working_dir.into(),
+            access_tracker,
         }
     }
 
     /// Mark a file as having been read
     ///
     /// This should be called by Read tools to allow subsequent writes
-    pub fn mark_file_as_read(&self, path: PathBuf) {
-        if let Ok(mut files) = self.read_files.lock() {
-            files.insert(path);
-        }
+    pub async fn mark_file_as_read(&self, path: PathBuf) -> Result<(), ToolError> {
+        let canonical_path = canonicalize_existing_path(&path, &path.display().to_string())?;
+        self.access_tracker.mark_read(canonical_path).await;
+        Ok(())
     }
 
     /// Check if a file has been read in this session
-    pub(crate) fn has_been_read(&self, path: &PathBuf) -> bool {
-        if let Ok(files) = self.read_files.lock() {
-            files.contains(path)
-        } else {
-            false
-        }
+    pub(crate) async fn has_been_read(&self, path: &Path) -> Result<bool, ToolError> {
+        let canonical_path = canonicalize_existing_path(path, &path.display().to_string())?;
+        Ok(self.access_tracker.has_read(&canonical_path).await)
     }
 }
 

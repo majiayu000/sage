@@ -63,7 +63,9 @@ pub use extensions::{
     DeferredToolInfo, DeferredToolRegistry, PlatformToolProxy, SkillTool, SlashCommandTool,
     ToolSearchResult, ToolSearchTool,
 };
-pub use file_ops::{EditTool, GlobTool, GrepTool, NotebookEditTool, ReadTool, WriteTool};
+pub use file_ops::{
+    EditTool, FileAccessTracker, GlobTool, GrepTool, NotebookEditTool, ReadTool, WriteTool,
+};
 pub use infrastructure::{CloudTool, KubernetesTool, TerraformTool};
 pub use interaction::AskUserQuestionTool;
 pub use monitoring::{LogAnalyzerTool, TestGeneratorTool};
@@ -144,6 +146,7 @@ const DEFAULT_TOOL_NAMES: &[&str] = &[
 struct DefaultToolConfig {
     working_directory: PathBuf,
     skill_registry: Arc<RwLock<SkillRegistry>>,
+    file_access_tracker: Arc<FileAccessTracker>,
 }
 
 impl DefaultToolConfig {
@@ -154,6 +157,7 @@ impl DefaultToolConfig {
         Self {
             working_directory: working_directory.into(),
             skill_registry,
+            file_access_tracker: Arc::new(FileAccessTracker::new()),
         }
     }
 
@@ -167,15 +171,26 @@ impl DefaultToolConfig {
 
 fn build_default_tools(config: DefaultToolConfig) -> Vec<Arc<dyn Tool>> {
     let working_directory = config.working_directory;
+    let file_access_tracker = config.file_access_tracker;
     vec![
         // File operations
-        Arc::new(EditTool::with_working_directory(working_directory.clone())),
-        Arc::new(ReadTool::with_working_directory(working_directory.clone())),
-        Arc::new(WriteTool::with_working_directory(working_directory.clone())),
+        Arc::new(EditTool::with_working_directory_and_tracker(
+            working_directory.clone(),
+            Arc::clone(&file_access_tracker),
+        )),
+        Arc::new(ReadTool::with_working_directory_and_tracker(
+            working_directory.clone(),
+            Arc::clone(&file_access_tracker),
+        )),
+        Arc::new(WriteTool::with_working_directory_and_tracker(
+            working_directory.clone(),
+            Arc::clone(&file_access_tracker),
+        )),
         Arc::new(GlobTool::with_working_directory(working_directory.clone())),
         Arc::new(GrepTool::with_working_directory(working_directory.clone())),
-        Arc::new(NotebookEditTool::with_working_directory(
+        Arc::new(NotebookEditTool::with_working_directory_and_tracker(
             working_directory.clone(),
+            Arc::clone(&file_access_tracker),
         )),
         // Process tools
         Arc::new(BashTool::with_working_directory(working_directory.clone())),

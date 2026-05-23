@@ -1,6 +1,7 @@
 //! Core write logic and file operations
 
 use super::types::WriteTool;
+use crate::tools::file_ops::access_tracker::canonicalize_existing_path;
 use sage_core::tools::base::{FileSystemTool, Tool, ToolError};
 use sage_core::tools::types::ToolResult;
 use tokio::fs;
@@ -24,7 +25,7 @@ impl WriteTool {
 
         // Check if file exists and hasn't been read
         let file_exists = path.exists();
-        if file_exists && !self.has_been_read(&path) {
+        if file_exists && !self.has_been_read(&path).await? {
             return Err(ToolError::ValidationFailed(format!(
                 "File exists but has not been read: {}. You must use the Read tool first to examine the file before overwriting it.",
                 file_path
@@ -50,7 +51,8 @@ impl WriteTool {
         })?;
 
         // Mark as read for future operations
-        self.mark_file_as_read(path.clone());
+        let canonical_path = canonicalize_existing_path(&path, file_path)?;
+        self.access_tracker.mark_read(canonical_path).await;
 
         let action = if file_exists {
             "overwritten"

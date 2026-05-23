@@ -2,8 +2,10 @@
 
 use super::binary::{create_binary_result, handle_binary_file};
 use super::types::{DEFAULT_MAX_LINES, MAX_FILE_SIZE, MAX_LINE_LENGTH};
+use crate::tools::file_ops::access_tracker::canonicalize_existing_path;
 use sage_core::tools::base::{FileSystemTool, ToolError};
 use sage_core::tools::types::ToolResult;
+use std::path::PathBuf;
 use tokio::fs;
 
 /// Read a file with line numbers and pagination
@@ -13,7 +15,7 @@ pub async fn read_file<T: FileSystemTool>(
     file_path: &str,
     offset: Option<usize>,
     limit: Option<usize>,
-) -> Result<ToolResult, ToolError> {
+) -> Result<(ToolResult, PathBuf), ToolError> {
     let path = tool.resolve_path(file_path);
 
     // Security check
@@ -40,6 +42,8 @@ pub async fn read_file<T: FileSystemTool>(
         )));
     }
 
+    let canonical_path = canonicalize_existing_path(&path, file_path)?;
+
     // Get file metadata
     let metadata = fs::metadata(&path).await.map_err(|e| {
         ToolError::ExecutionFailed(format!(
@@ -58,7 +62,7 @@ pub async fn read_file<T: FileSystemTool>(
 
     // Try to detect binary files by extension
     if let Some(binary_result) = handle_binary_file(&path, file_path, tool_name).await? {
-        return Ok(binary_result);
+        return Ok((binary_result, canonical_path));
     }
 
     // Read the file as text
@@ -67,13 +71,17 @@ pub async fn read_file<T: FileSystemTool>(
         Err(e) => {
             // If read_to_string fails, it might be a binary file
             if e.kind() == std::io::ErrorKind::InvalidData {
-                return Ok(create_binary_result(file_path, metadata.len(), tool_name));
+                return Ok((
+                    create_binary_result(file_path, metadata.len(), tool_name),
+                    canonical_path,
+                ));
             }
             return Err(ToolError::Io(e));
         }
     };
 
-    format_content(tool_name, file_path, &content, offset, limit)
+    let result = format_content(tool_name, file_path, &content, offset, limit)?;
+    Ok((result, canonical_path))
 }
 
 /// Format file content with line numbers and pagination

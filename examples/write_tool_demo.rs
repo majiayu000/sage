@@ -82,7 +82,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Example 4: Mark file as read and then overwrite
     println!("\n4. Marking file as read, then overwriting...");
     let file_path = temp_dir.path().join("hello.txt");
-    tool.mark_file_as_read(file_path);
+    tool.mark_file_as_read(file_path).await?;
 
     let call = create_tool_call(
         "call-4",

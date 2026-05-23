@@ -1,9 +1,11 @@
 //! Edit tool - Claude Code style string replacement based file editing
 
+use crate::tools::file_ops::access_tracker::{FileAccessTracker, canonicalize_existing_path};
 use async_trait::async_trait;
 use sage_core::tools::base::{FileSystemTool, Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
 use std::path::PathBuf;
+use std::sync::Arc;
 use tokio::fs;
 use tracing::instrument;
 
@@ -11,6 +13,7 @@ use tracing::instrument;
 /// Matches Claude Code's Edit tool design
 pub struct EditTool {
     working_directory: PathBuf,
+    access_tracker: Arc<FileAccessTracker>,
 }
 
 impl EditTool {
@@ -18,6 +21,7 @@ impl EditTool {
     pub fn new() -> Self {
         Self {
             working_directory: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            access_tracker: Arc::new(FileAccessTracker::new()),
         }
     }
 
@@ -25,6 +29,18 @@ impl EditTool {
     pub fn with_working_directory<P: Into<PathBuf>>(working_dir: P) -> Self {
         Self {
             working_directory: working_dir.into(),
+            access_tracker: Arc::new(FileAccessTracker::new()),
+        }
+    }
+
+    /// Create an edit tool with specific working directory and shared access tracker.
+    pub fn with_working_directory_and_tracker<P: Into<PathBuf>>(
+        working_dir: P,
+        access_tracker: Arc<FileAccessTracker>,
+    ) -> Self {
+        Self {
+            working_directory: working_dir.into(),
+            access_tracker,
         }
     }
 }
@@ -127,6 +143,13 @@ Parameters:
                 file_path
             )));
         }
+        let canonical_path = canonicalize_existing_path(&path, &file_path)?;
+        if !self.access_tracker.has_read(&canonical_path).await {
+            return Err(ToolError::ValidationFailed(format!(
+                "File exists but has not been read: {}. You must use the Read tool first to examine the file before editing it.",
+                file_path
+            )));
+        }
 
         // Read the file
         let content = fs::read_to_string(&path).await.map_err(|e| {
@@ -168,6 +191,7 @@ Parameters:
                 e
             ))
         })?;
+        self.access_tracker.mark_read(canonical_path).await;
 
         let mut result = if replace_all && occurrences > 1 {
             ToolResult::success(
@@ -227,8 +251,11 @@ impl FileSystemTool for EditTool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tools::file_ops::access_tracker::FileAccessTracker;
     use serde_json::json;
     use std::collections::HashMap;
+    use std::path::Path;
+    use std::sync::Arc;
     use tempfile::TempDir;
     use tokio::fs;
 
@@ -247,6 +274,21 @@ mod tests {
         }
     }
 
+    fn edit_tool_with_tracker(temp_dir: &TempDir) -> (EditTool, Arc<FileAccessTracker>) {
+        let tracker = Arc::new(FileAccessTracker::new());
+        (
+            EditTool::with_working_directory_and_tracker(temp_dir.path(), Arc::clone(&tracker)),
+            tracker,
+        )
+    }
+
+    async fn mark_file_as_read(tracker: &FileAccessTracker, path: &Path) {
+        let Ok(canonical_path) = path.canonicalize() else {
+            panic!("test file should canonicalize");
+        };
+        tracker.mark_read(canonical_path).await;
+    }
+
     #[tokio::test]
     async fn test_edit_tool_string_replacement() {
         let temp_dir = TempDir::new().unwrap();
@@ -257,7 +299,8 @@ mod tests {
             .await
             .unwrap();
 
-        let tool = EditTool::with_working_directory(temp_dir.path());
+        let (tool, tracker) = edit_tool_with_tracker(&temp_dir);
+        mark_file_as_read(&tracker, &file_path).await;
         let call = create_tool_call(
             "test-1",
             "Edit",
@@ -285,7 +328,8 @@ mod tests {
         // Create test file with multiple occurrences
         fs::write(&file_path, "test test test\n").await.unwrap();
 
-        let tool = EditTool::with_working_directory(temp_dir.path());
+        let (tool, tracker) = edit_tool_with_tracker(&temp_dir);
+        mark_file_as_read(&tracker, &file_path).await;
         let call = create_tool_call(
             "test-2",
             "Edit",
@@ -313,7 +357,8 @@ mod tests {
         // Create test file
         fs::write(&file_path, "Hello, World!\n").await.unwrap();
 
-        let tool = EditTool::with_working_directory(temp_dir.path());
+        let (tool, tracker) = edit_tool_with_tracker(&temp_dir);
+        mark_file_as_read(&tracker, &file_path).await;
         let call = create_tool_call(
             "test-3",
             "Edit",
@@ -336,7 +381,8 @@ mod tests {
         // Create test file with multiple occurrences
         fs::write(&file_path, "test test test\n").await.unwrap();
 
-        let tool = EditTool::with_working_directory(temp_dir.path());
+        let (tool, tracker) = edit_tool_with_tracker(&temp_dir);
+        mark_file_as_read(&tracker, &file_path).await;
         let call = create_tool_call(
             "test-4",
             "Edit",
