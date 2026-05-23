@@ -10,8 +10,7 @@
 mod request;
 mod tool;
 mod types;
-mod validation;
 
+pub use super::validation::{is_private_ip, validate_url_security};
 pub use tool::HttpClientTool;
 pub use types::{AuthType, HttpClientParams, HttpMethod, HttpResponse, RequestBody};
-pub use validation::{is_private_ip, validate_url_security};
