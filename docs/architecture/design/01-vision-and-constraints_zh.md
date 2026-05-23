@@ -51,7 +51,7 @@ Sage is a **concurrent, asynchronous Code Agent system** built in Rust, designed
 Language:
   required: Rust (stable)
   edition: 2021
-  msrv: 1.75.0  # Minimum Supported Rust Version
+  msrv: 1.88.0  # Minimum Supported Rust Version
 
 Runtime:
   async_runtime: tokio (full features)
