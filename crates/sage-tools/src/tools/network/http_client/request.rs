@@ -8,7 +8,7 @@ use tokio::time::timeout;
 use tracing::{debug, info};
 
 use super::types::{AuthType, HttpClientParams, HttpMethod, HttpResponse, RequestBody};
-use super::validation::validate_url_security;
+use super::validate_url_security;
 
 /// Build request with authentication
 pub fn add_auth(request: reqwest::RequestBuilder, auth: &AuthType) -> reqwest::RequestBuilder {
@@ -226,6 +226,16 @@ mod tests {
         assert_eq!(
             to_reqwest_method(&HttpMethod::Delete),
             reqwest::Method::DELETE
+        );
+    }
+
+    #[tokio::test]
+    async fn test_http_request_validation_blocks_ipv4_mapped_loopback() {
+        let result = validate_url_security("http://[::ffff:127.0.0.1]/").await;
+
+        assert!(
+            result.is_err(),
+            "HTTP client request validation must reject IPv4-mapped loopback literals"
         );
     }
 }
