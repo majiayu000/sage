@@ -181,7 +181,8 @@ pub async fn execute_request(
         }
 
         let next_url = validate_redirect_target(response.url(), response.headers()).await?;
-        include_sensitive_headers = same_origin(response.url(), &next_url);
+        include_sensitive_headers =
+            include_sensitive_headers && same_origin(response.url(), &next_url);
         if should_rewrite_redirect_to_get(response.status(), &method) {
             method = reqwest::Method::GET;
             include_body = false;
@@ -273,9 +274,9 @@ pub fn format_response(response: &HttpResponse) -> String {
 mod tests {
     use super::*;
     use serde_json::json;
-    use serial_test::serial;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
+    use tokio::sync::oneshot;
 
     #[test]
     fn test_graphql_request_creation() {
@@ -307,32 +308,6 @@ mod tests {
             result.is_err(),
             "HTTP client request validation must reject IPv4-mapped loopback literals"
         );
-    }
-
-    struct EnvGuard {
-        key: &'static str,
-        previous: Option<String>,
-    }
-
-    impl EnvGuard {
-        fn set(key: &'static str, value: String) -> Self {
-            let previous = std::env::var(key).ok();
-            // SAFETY: tests that mutate proxy environment are serialized.
-            unsafe { std::env::set_var(key, value) };
-            Self { key, previous }
-        }
-    }
-
-    impl Drop for EnvGuard {
-        fn drop(&mut self) {
-            // SAFETY: tests that mutate proxy environment are serialized.
-            unsafe {
-                match &self.previous {
-                    Some(value) => std::env::set_var(self.key, value),
-                    None => std::env::remove_var(self.key),
-                }
-            }
-        }
     }
 
     async fn spawn_redirecting_server() -> Result<String> {
@@ -373,16 +348,62 @@ mod tests {
         Ok(proxy_url)
     }
 
+    async fn spawn_sensitive_header_capture_proxy() -> Result<(String, oneshot::Receiver<String>)> {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .context("bind header capture test proxy")?;
+        let addr = listener.local_addr().context("read header capture addr")?;
+        let proxy_url = format!("http://{}", addr);
+        let (request_sender, request_receiver) = oneshot::channel();
+
+        tokio::spawn(async move {
+            let mut request_sender = Some(request_sender);
+
+            for request_index in 0..3 {
+                let Ok((mut socket, _)) = listener.accept().await else {
+                    return;
+                };
+
+                let mut buffer = [0_u8; 4096];
+                let Ok(bytes_read) = socket.read(&mut buffer).await else {
+                    return;
+                };
+                let request_text = String::from_utf8_lossy(&buffer[..bytes_read]).into_owned();
+
+                let response = match request_index {
+                    0 => {
+                        "HTTP/1.1 302 Found\r\nLocation: http://2.2.2.2/step\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string()
+                    }
+                    1 => {
+                        "HTTP/1.1 302 Found\r\nLocation: http://2.2.2.2/final\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string()
+                    }
+                    _ => {
+                        let Some(sender) = request_sender.take() else {
+                            return;
+                        };
+                        if sender.send(request_text).is_err() {
+                            return;
+                        }
+                        "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok".to_string()
+                    }
+                };
+
+                if socket.write_all(response.as_bytes()).await.is_err() {
+                    return;
+                }
+            }
+        });
+
+        Ok((proxy_url, request_receiver))
+    }
+
     #[tokio::test]
-    #[serial]
     async fn test_http_request_rejects_redirect_to_loopback() -> Result<()> {
         let proxy_url = spawn_redirecting_server().await?;
-        let _http_proxy = EnvGuard::set("HTTP_PROXY", proxy_url.clone());
-        let _http_proxy_lower = EnvGuard::set("http_proxy", proxy_url);
-        let _no_proxy = EnvGuard::set("NO_PROXY", String::new());
-        let _no_proxy_lower = EnvGuard::set("no_proxy", String::new());
-
-        let client = create_client(true, true, 5)?;
+        let client = reqwest::Client::builder()
+            .proxy(reqwest::Proxy::http(proxy_url)?)
+            .redirect(reqwest::redirect::Policy::none())
+            .build()?;
         let params = HttpClientParams {
             method: HttpMethod::Get,
             url: "http://1.1.1.1/".to_string(),
@@ -402,6 +423,57 @@ mod tests {
         assert!(
             result.is_err(),
             "HTTP request must reject redirects to loopback/private targets"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_cross_origin_redirect_keeps_sensitive_headers_stripped() -> Result<()> {
+        let (proxy_url, final_request_receiver) = spawn_sensitive_header_capture_proxy().await?;
+        let client = reqwest::Client::builder()
+            .proxy(reqwest::Proxy::http(proxy_url)?)
+            .redirect(reqwest::redirect::Policy::none())
+            .build()?;
+
+        let mut headers = HashMap::new();
+        headers.insert("Authorization".to_string(), "Bearer secret".to_string());
+        headers.insert("Cookie".to_string(), "session=secret".to_string());
+        headers.insert("X-Api-Key".to_string(), "secret".to_string());
+
+        let params = HttpClientParams {
+            method: HttpMethod::Get,
+            url: "http://1.1.1.1/".to_string(),
+            headers: Some(headers),
+            body: None,
+            auth: None,
+            timeout: Some(5),
+            follow_redirects: Some(true),
+            verify_ssl: Some(true),
+            save_to_file: None,
+            graphql_query: None,
+            graphql_variables: None,
+        };
+
+        let response = execute_request(&client, params).await?;
+        let final_request = final_request_receiver
+            .await
+            .context("capture final redirected request")?;
+
+        assert_eq!(response.status, 200);
+        assert!(
+            !final_request
+                .to_ascii_lowercase()
+                .contains("authorization:"),
+            "Authorization must stay stripped after any cross-origin redirect"
+        );
+        assert!(
+            !final_request.to_ascii_lowercase().contains("cookie:"),
+            "Cookie must stay stripped after any cross-origin redirect"
+        );
+        assert!(
+            !final_request.to_ascii_lowercase().contains("x-api-key:"),
+            "X-Api-Key must stay stripped after any cross-origin redirect"
         );
 
         Ok(())
