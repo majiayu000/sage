@@ -8,6 +8,8 @@
 //! - SSRF protection via URL validation
 
 mod request;
+#[cfg(test)]
+mod request_tests;
 mod tool;
 mod types;
 

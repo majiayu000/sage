@@ -4,11 +4,15 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use tokio::time::timeout;
+use reqwest::{Response, StatusCode, Url};
+use tokio::time::{Instant, timeout};
 use tracing::{debug, info};
 
 use super::types::{AuthType, HttpClientParams, HttpMethod, HttpResponse, RequestBody};
 use super::validate_url_security;
+use crate::tools::network::redirect::{
+    MAX_REDIRECTS, is_redirect_status, same_origin, validate_redirect_target,
+};
 
 /// Build request with authentication
 pub fn add_auth(request: reqwest::RequestBuilder, auth: &AuthType) -> reqwest::RequestBuilder {
@@ -70,20 +74,75 @@ pub fn to_reqwest_method(method: &HttpMethod) -> reqwest::Method {
 /// Create HTTP client with configuration
 pub fn create_client(
     verify_ssl: bool,
-    follow_redirects: bool,
+    _follow_redirects: bool,
     timeout_secs: u64,
 ) -> Result<reqwest::Client> {
     reqwest::Client::builder()
         .danger_accept_invalid_certs(!verify_ssl)
-        .redirect(if follow_redirects {
-            reqwest::redirect::Policy::limited(10)
-        } else {
-            reqwest::redirect::Policy::none()
-        })
+        .redirect(reqwest::redirect::Policy::none())
         .timeout(Duration::from_secs(timeout_secs))
         .user_agent("Sage-Agent-HTTP-Client/1.0")
         .build()
         .context("Failed to create HTTP client")
+}
+
+fn is_sensitive_header(header_name: &str) -> bool {
+    matches!(
+        header_name.to_ascii_lowercase().as_str(),
+        "authorization" | "cookie" | "proxy-authorization" | "x-api-key"
+    )
+}
+
+pub(super) fn should_rewrite_redirect_to_get(status: StatusCode, method: &reqwest::Method) -> bool {
+    match status {
+        StatusCode::SEE_OTHER => {
+            *method != reqwest::Method::GET && *method != reqwest::Method::HEAD
+        }
+        StatusCode::MOVED_PERMANENTLY | StatusCode::FOUND => *method == reqwest::Method::POST,
+        _ => false,
+    }
+}
+
+async fn send_request_once(
+    client: &reqwest::Client,
+    params: &HttpClientParams,
+    method: reqwest::Method,
+    url: Url,
+    request_timeout: Duration,
+    include_body: bool,
+    include_sensitive_headers: bool,
+) -> Result<Response> {
+    debug!("Making HTTP request: {} {}", method, url);
+
+    let mut request = client.request(method, url);
+
+    if let Some(headers) = &params.headers {
+        for (key, value) in headers {
+            if include_sensitive_headers || !is_sensitive_header(key) {
+                request = request.header(key, value);
+            }
+        }
+    }
+
+    if include_sensitive_headers {
+        if let Some(auth) = &params.auth {
+            request = add_auth(request, auth);
+        }
+    }
+
+    if include_body {
+        if let Some(query) = &params.graphql_query {
+            let graphql_body = create_graphql_request(query, params.graphql_variables.as_ref());
+            request = request.json(&graphql_body);
+        } else if let Some(body) = &params.body {
+            request = add_body(request, body)?;
+        }
+    }
+
+    timeout(request_timeout, request.send())
+        .await
+        .context("Request timeout")?
+        .context("HTTP request failed")
 }
 
 /// Execute HTTP request with full configuration
@@ -94,35 +153,55 @@ pub async fn execute_request(
     validate_url_security(&params.url).await?;
 
     let timeout_secs = params.timeout.unwrap_or(30);
-    let method = to_reqwest_method(&params.method);
-
-    debug!("Making HTTP request: {} {}", method, params.url);
-
-    let mut request = client.request(method, &params.url);
-
-    if let Some(headers) = &params.headers {
-        for (key, value) in headers {
-            request = request.header(key, value);
-        }
-    }
-
-    if let Some(auth) = &params.auth {
-        request = add_auth(request, auth);
-    }
-
-    if let Some(query) = &params.graphql_query {
-        let graphql_body = create_graphql_request(query, params.graphql_variables.as_ref());
-        request = request.json(&graphql_body);
-    } else if let Some(body) = &params.body {
-        request = add_body(request, body)?;
-    }
+    let request_timeout = Duration::from_secs(timeout_secs);
+    let deadline = Instant::now()
+        .checked_add(request_timeout)
+        .ok_or_else(|| anyhow::anyhow!("timeout is too large"))?;
+    let mut method = to_reqwest_method(&params.method);
+    let follow_redirects = params.follow_redirects.unwrap_or(true);
+    let mut current_url = Url::parse(&params.url).context("Invalid URL format")?;
+    let mut include_body = true;
+    let mut include_sensitive_headers = true;
+    let mut redirect_count = 0;
 
     let start_time = std::time::Instant::now();
 
-    let response = timeout(Duration::from_secs(timeout_secs), request.send())
-        .await
-        .context("Request timeout")?
-        .context("HTTP request failed")?;
+    let response = loop {
+        let now = Instant::now();
+        if now >= deadline {
+            anyhow::bail!("Request timeout");
+        }
+        let remaining_timeout = deadline.saturating_duration_since(now);
+        let response = send_request_once(
+            client,
+            &params,
+            method.clone(),
+            current_url.clone(),
+            remaining_timeout,
+            include_body,
+            include_sensitive_headers,
+        )
+        .await?;
+
+        if !follow_redirects || !is_redirect_status(response.status()) {
+            break response;
+        }
+
+        if redirect_count >= MAX_REDIRECTS {
+            anyhow::bail!("Redirect limit exceeded ({MAX_REDIRECTS})");
+        }
+
+        let next_url = validate_redirect_target(response.url(), response.headers()).await?;
+        include_sensitive_headers =
+            include_sensitive_headers && same_origin(response.url(), &next_url);
+        if should_rewrite_redirect_to_get(response.status(), &method) {
+            method = reqwest::Method::GET;
+            include_body = false;
+        }
+
+        current_url = next_url;
+        redirect_count += 1;
+    };
 
     let response_time = u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX);
     let status = response.status().as_u16();
@@ -200,42 +279,4 @@ pub fn format_response(response: &HttpResponse) -> String {
     }
     output.push_str(&response.body);
     output
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn test_graphql_request_creation() {
-        let query = "query { user { name } }";
-        let variables = json!({ "id": 1 });
-
-        let request = create_graphql_request(query, Some(&variables));
-
-        assert_eq!(request["query"], query);
-        assert_eq!(request["variables"], variables);
-    }
-
-    #[test]
-    fn test_to_reqwest_method() {
-        assert_eq!(to_reqwest_method(&HttpMethod::Get), reqwest::Method::GET);
-        assert_eq!(to_reqwest_method(&HttpMethod::Post), reqwest::Method::POST);
-        assert_eq!(to_reqwest_method(&HttpMethod::Put), reqwest::Method::PUT);
-        assert_eq!(
-            to_reqwest_method(&HttpMethod::Delete),
-            reqwest::Method::DELETE
-        );
-    }
-
-    #[tokio::test]
-    async fn test_http_request_validation_blocks_ipv4_mapped_loopback() {
-        let result = validate_url_security("http://[::ffff:127.0.0.1]/").await;
-
-        assert!(
-            result.is_err(),
-            "HTTP client request validation must reject IPv4-mapped loopback literals"
-        );
-    }
 }
