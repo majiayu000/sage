@@ -27,13 +27,17 @@ cargo install --path crates/sage-cli
 # Run all tests
 make test
 # or
-cargo test
+cargo test --workspace --all-targets
 
 # Unit tests only
 make test-unit
+# or
+cargo test --workspace --lib
 
-# Integration tests only  
+# Integration tests only
 make test-int
+# or
+cargo test --workspace --tests
 ```
 
 ### Development
@@ -54,8 +58,10 @@ cargo run -p sage-cli -- -c
 
 # Code quality checks
 make clippy        # Linting
+cargo clippy --workspace --all-targets --all-features -- -D warnings
 make fmt          # Formatting
 make check        # Type checking without building
+cargo check --workspace --all-targets --all-features
 
 # Full development cycle
 make quick        # fmt + clippy + test
@@ -64,12 +70,11 @@ make ci          # Full CI check
 
 ### Examples
 ```bash
-# Run example code
+# Run smoke-test examples
 make examples
-cargo run --example basic_usage
-cargo run --example markdown_demo
-cargo run --example ui_demo
-cargo run --example trajectory_demo
+cargo run -p sage --example read_tool_demo
+cargo run -p sage --example grep_demo
+cargo run -p sage --example planning_demo
 ```
 
 ## Architecture
@@ -120,9 +125,9 @@ The project has extensive documentation in `docs/`:
 ## Testing Strategy
 
 Tests are organized as:
-- Unit tests: `cargo test --lib`
-- Integration tests: `cargo test --test integration_test`
-- Examples serve as integration tests: `make examples`
+- Workspace unit tests: `cargo test --workspace --lib`
+- Workspace integration tests: `cargo test --workspace --tests`
+- Smoke-test examples serve as integration checks: `make examples`
 
 ## Development Guidelines
 
@@ -153,7 +158,7 @@ To suppress false positives for duplicate types, add type names to `.vibeguard-d
 
 ### Architecture Guards (Automated)
 
-Enforced by `crates/sage-core/tests/architecture_guards.rs`, run via `cargo test`.
+Enforced by `crates/sage-core/tests/architecture_guards.rs`, run via the workspace test gate.
 
 | Guard | ID | Rule |
 |-------|----|------|

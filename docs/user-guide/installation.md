@@ -3,7 +3,7 @@
 ## System Requirements / 系统要求
 
 **Minimum Requirements / 最低要求:**
-- Rust 1.85 or higher / Rust 1.85 或更高版本
+- Rust 1.88 or higher / Rust 1.88 或更高版本
 - Operating System / 操作系统:
   - Linux (Ubuntu 20.04+, Debian 11+, etc.)
   - macOS 12.0+ (Monterey or later)

@@ -2,7 +2,7 @@
 
 use crate::error::SageResult;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::super::types::{CommandSource, SlashCommand};
 
@@ -87,6 +87,11 @@ impl CommandRegistry {
     /// Get project commands directory
     pub fn project_commands_dir(&self) -> PathBuf {
         self.project_root.join(".sage").join("commands")
+    }
+
+    /// Get project root directory
+    pub fn project_root(&self) -> &Path {
+        &self.project_root
     }
 
     /// Get user commands directory

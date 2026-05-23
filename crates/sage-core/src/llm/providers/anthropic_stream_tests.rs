@@ -203,8 +203,7 @@ fn flush_on_transport_error_drains_pending_tool_calls_before_error() {
     }
     let err = items[1]
         .as_ref()
-        .err()
-        .expect("second item must be the typed error");
+        .expect_err("second item must be the typed error");
     assert!(err.to_string().contains("connection reset"));
 
     // saw_message_stop must be set so a later EOF flush no-ops.

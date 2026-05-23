@@ -32,6 +32,13 @@ members = [
     "crates/sage-sdk",
     "crates/sage-tools",
 ]
+default-members = [
+    ".",
+    "crates/sage-core",
+    "crates/sage-cli",
+    "crates/sage-sdk",
+    "crates/sage-tools",
+]
 resolver = "2"
 
 [workspace.package]

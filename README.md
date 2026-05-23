@@ -7,7 +7,7 @@
 The fastest open-source alternative to Claude Code.<br/>
 10x faster startup • Single binary • Works offline with Ollama
 
-[![Rust](https://img.shields.io/badge/Rust-1.85+-orange?logo=rust)](https://www.rust-lang.org/)
+[![Rust](https://img.shields.io/badge/Rust-1.88+-orange?logo=rust)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![CI](https://github.com/majiayu000/sage/actions/workflows/ci.yml/badge.svg)](https://github.com/majiayu000/sage/actions)
 [![Release](https://img.shields.io/github/v/release/majiayu000/sage)](https://github.com/majiayu000/sage/releases)
@@ -318,10 +318,10 @@ git clone https://github.com/majiayu000/sage
 cd sage
 
 # Build
-cargo build --release
+cargo build --workspace --release
 
 # Test
-cargo test
+cargo test --workspace --all-targets
 
 # Run
 ./target/release/sage --help

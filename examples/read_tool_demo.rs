@@ -24,8 +24,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Created test file: {}", test_file.display());
     println!("File contains 50 lines\n");
 
-    // Create the Read tool
-    let tool = ReadTool::new();
+    // Create the Read tool scoped to the temporary directory.
+    let tool = ReadTool::with_working_directory(&temp_dir);
 
     // Test 1: Read entire file (default)
     println!("--- Test 1: Read entire file (first 50 lines) ---");

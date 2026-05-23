@@ -358,7 +358,7 @@ Sage-Agent demonstrates that a well-designed agent system with appropriate tooli
 
 ## Appendix: System Requirements
 
-- **Rust**: 1.75+ (2024 edition)
+- **Rust**: 1.88+ (2024 edition)
 - **Python**: 3.10+ (for SWE-bench evaluation harness)
 - **Docker**: For official SWE-bench evaluation
 - **Memory**: 16GB+ recommended
