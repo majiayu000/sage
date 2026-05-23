@@ -13,15 +13,7 @@ impl WriteTool {
         file_path: &str,
         content: &str,
     ) -> Result<ToolResult, ToolError> {
-        let path = self.resolve_path(file_path);
-
-        // Security check
-        if !self.is_safe_path(&path) {
-            return Err(ToolError::PermissionDenied(format!(
-                "Access denied to path: {}",
-                path.display()
-            )));
-        }
+        let path = self.resolve_workspace_path(file_path)?;
 
         // Check if file exists and hasn't been read
         let file_exists = path.exists();

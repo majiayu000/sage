@@ -3,11 +3,12 @@
 use async_trait::async_trait;
 use tracing::{info, warn};
 
-use sage_core::tools::base::{Tool, ToolError};
+use sage_core::tools::base::{FileSystemTool, Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
 
 use super::request::{create_client, execute_request, format_response};
 use super::types::{HttpClientParams, HttpMethod};
+use std::path::{Path, PathBuf};
 
 /// Environment variable that opts into TLS-verification overrides.
 ///
@@ -54,6 +55,7 @@ pub struct HttpClientTool {
     name: String,
     description: String,
     client: Option<reqwest::Client>,
+    working_directory: PathBuf,
 }
 
 impl HttpClientTool {
@@ -64,6 +66,15 @@ impl HttpClientTool {
             description: "HTTP client for REST API interactions, GraphQL queries, and web requests"
                 .to_string(),
             client: None,
+            working_directory: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+        }
+    }
+
+    /// Create an HTTP client tool bound to a workspace directory for file output.
+    pub fn with_working_directory<P: Into<PathBuf>>(working_directory: P) -> Self {
+        Self {
+            working_directory: working_directory.into(),
+            ..Self::new()
         }
     }
 
@@ -107,6 +118,18 @@ impl HttpClientTool {
         self.client
             .as_ref()
             .ok_or_else(|| ToolError::ExecutionFailed("Client initialization failed".to_string()))
+    }
+
+    fn resolve_save_to_file_path(
+        &self,
+        save_to_file: Option<String>,
+    ) -> Result<Option<String>, ToolError> {
+        save_to_file
+            .map(|path| {
+                self.resolve_workspace_path(&path)
+                    .map(|path| path.to_string_lossy().into_owned())
+            })
+            .transpose()
     }
 }
 
@@ -222,7 +245,7 @@ impl Tool for HttpClientTool {
             timeout,
             follow_redirects: call.get_bool("follow_redirects"),
             verify_ssl: call.get_bool("verify_ssl"),
-            save_to_file: call.get_string("save_to_file"),
+            save_to_file: self.resolve_save_to_file_path(call.get_string("save_to_file"))?,
             graphql_query: call.get_string("graphql_query"),
             graphql_variables,
         };
@@ -300,9 +323,22 @@ impl Tool for HttpClientTool {
     }
 }
 
+impl FileSystemTool for HttpClientTool {
+    fn working_directory(&self) -> &Path {
+        &self.working_directory
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn temp_dir() -> tempfile::TempDir {
+        match tempfile::tempdir() {
+            Ok(dir) => dir,
+            Err(error) => panic!("tempdir: {error}"),
+        }
+    }
 
     #[tokio::test]
     async fn test_http_client_tool_creation() {
@@ -319,6 +355,21 @@ mod tests {
         assert_eq!(schema.name, "http_client");
         assert!(!schema.description.is_empty());
         assert!(schema.parameters.is_object());
+    }
+
+    #[test]
+    fn test_http_save_to_file_rejects_workspace_escape() {
+        let temp_dir = temp_dir();
+        let tool = HttpClientTool::with_working_directory(temp_dir.path());
+
+        let result = tool.resolve_save_to_file_path(Some("../outside.txt".to_string()));
+
+        match result {
+            Err(ToolError::PermissionDenied(message)) => {
+                assert!(message.contains("Access denied to path"));
+            }
+            other => panic!("workspace escape must be rejected, got {other:?}"),
+        }
     }
 
     /// All verify_ssl behavior in one test so the env-var manipulations

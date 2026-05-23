@@ -126,15 +126,7 @@ Parameters:
             ));
         }
 
-        let path = self.resolve_path(&file_path);
-
-        // Security check
-        if !self.is_safe_path(&path) {
-            return Err(ToolError::PermissionDenied(format!(
-                "Access denied to path: {}",
-                path.display()
-            )));
-        }
+        let path = self.resolve_workspace_path(&file_path)?;
 
         // Check if file exists
         if !path.exists() {

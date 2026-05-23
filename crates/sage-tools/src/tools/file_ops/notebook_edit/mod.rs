@@ -51,13 +51,7 @@ impl NotebookEditTool {
     }
 
     async fn require_prior_read(&self, notebook_path: &str) -> Result<PathBuf, ToolError> {
-        let path = self.resolve_path(notebook_path);
-        if !self.is_safe_path(&path) {
-            return Err(ToolError::PermissionDenied(format!(
-                "Access denied to path: {}",
-                path.display()
-            )));
-        }
+        let path = self.resolve_workspace_path(notebook_path)?;
         if !path.exists() {
             return Err(ToolError::ExecutionFailed(format!(
                 "Notebook file not found: {}",
