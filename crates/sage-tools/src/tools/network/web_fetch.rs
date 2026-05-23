@@ -4,6 +4,7 @@ use anyhow::Context;
 use async_trait::async_trait;
 use sage_core::tools::{Tool, ToolCall, ToolError, ToolParameter, ToolResult, ToolSchema};
 use serde::{Deserialize, Serialize};
+use tokio::time::{Instant, timeout};
 use tracing::debug;
 
 use super::redirect::{MAX_REDIRECTS, is_redirect_status, same_origin, validate_redirect_target};
@@ -11,11 +12,12 @@ use super::validation::validate_url_security;
 
 /// HTTP client for web fetching
 static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
+const WEB_FETCH_TIMEOUT: Duration = Duration::from_secs(30);
 
 fn get_client() -> &'static reqwest::Client {
     CLIENT.get_or_init(|| {
         reqwest::Client::builder()
-            .timeout(Duration::from_secs(30))
+            .timeout(WEB_FETCH_TIMEOUT)
             .redirect(reqwest::redirect::Policy::none())
             .user_agent("Sage-Agent-WebFetch/1.0")
             .build()
@@ -46,15 +48,30 @@ impl WebFetchTool {
         client: &reqwest::Client,
         url: &str,
     ) -> anyhow::Result<reqwest::Response> {
+        Self::fetch_response_with_redirects_with_timeout(client, url, WEB_FETCH_TIMEOUT).await
+    }
+
+    async fn fetch_response_with_redirects_with_timeout(
+        client: &reqwest::Client,
+        url: &str,
+        request_timeout: Duration,
+    ) -> anyhow::Result<reqwest::Response> {
         validate_url_security(url).await?;
+        let deadline = Instant::now()
+            .checked_add(request_timeout)
+            .ok_or_else(|| anyhow::anyhow!("timeout is too large"))?;
         let mut current_url = reqwest::Url::parse(url).context("Invalid URL format")?;
         let mut redirect_count = 0;
 
         loop {
-            let response = client
-                .get(current_url.clone())
-                .send()
+            let now = Instant::now();
+            if now >= deadline {
+                anyhow::bail!("Request timeout");
+            }
+            let remaining_timeout = deadline.saturating_duration_since(now);
+            let response = timeout(remaining_timeout, client.get(current_url.clone()).send())
                 .await
+                .context("Request timeout")?
                 .context("Failed to fetch URL")?;
 
             if !is_redirect_status(response.status()) {
@@ -345,6 +362,42 @@ mod tests {
         Ok(proxy_url)
     }
 
+    async fn spawn_slow_web_fetch_redirect_proxy() -> anyhow::Result<String> {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .context("bind slow WebFetch redirect test proxy")?;
+        let addr = listener
+            .local_addr()
+            .context("read slow WebFetch redirect test proxy addr")?;
+        let proxy_url = format!("http://{}", addr);
+
+        tokio::spawn(async move {
+            for request_index in 0..2 {
+                let Ok((mut socket, _)) = listener.accept().await else {
+                    return;
+                };
+
+                let mut buffer = [0_u8; 2048];
+                if socket.read(&mut buffer).await.is_err() {
+                    return;
+                }
+
+                tokio::time::sleep(Duration::from_millis(700)).await;
+                let response = if request_index == 0 {
+                    "HTTP/1.1 302 Found\r\nLocation: http://2.2.2.2/final\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                } else {
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"
+                };
+
+                if socket.write_all(response.as_bytes()).await.is_err() {
+                    return;
+                }
+            }
+        });
+
+        Ok(proxy_url)
+    }
+
     #[tokio::test]
     async fn test_web_fetch_rejects_redirect_to_loopback() -> anyhow::Result<()> {
         let proxy_url = spawn_redirecting_server().await?;
@@ -358,6 +411,31 @@ mod tests {
         assert!(
             result.is_err(),
             "WebFetch must reject redirects to loopback/private targets"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_web_fetch_redirect_chain_uses_single_timeout_budget() -> anyhow::Result<()> {
+        let proxy_url = spawn_slow_web_fetch_redirect_proxy().await?;
+        let client = reqwest::Client::builder()
+            .proxy(reqwest::Proxy::http(proxy_url)?)
+            .redirect(reqwest::redirect::Policy::none())
+            .build()?;
+
+        let start = Instant::now();
+        let result = WebFetchTool::fetch_response_with_redirects_with_timeout(
+            &client,
+            "http://1.1.1.1/",
+            Duration::from_secs(1),
+        )
+        .await;
+
+        assert!(result.is_err(), "WebFetch redirect chain must time out");
+        assert!(
+            start.elapsed() < Duration::from_millis(1300),
+            "WebFetch redirect chain exceeded the single timeout budget"
         );
 
         Ok(())
