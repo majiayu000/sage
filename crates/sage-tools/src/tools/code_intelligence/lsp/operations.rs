@@ -1,7 +1,6 @@
 //! LSP operation implementations
 
 use sage_core::tools::base::ToolError;
-use std::path::Path;
 
 use super::LspTool;
 use super::symbols::extract_symbols_simple;
@@ -14,8 +13,8 @@ impl LspTool {
         line: u32,
         character: u32,
     ) -> Result<String, ToolError> {
-        let path = Path::new(file_path);
-        let language = self.detect_language(path).ok_or_else(|| {
+        let resolved_path = self.resolve_workspace_path(file_path);
+        let language = self.detect_language(&resolved_path).ok_or_else(|| {
             ToolError::ExecutionFailed(format!(
                 "No LSP server configured for file type: {}",
                 file_path
@@ -42,7 +41,10 @@ impl LspTool {
              1. Ensure the LSP server is installed\n\
              2. The server will be started automatically when needed\n\
              3. Results will show the definition location",
-            file_path, line, character, language
+            resolved_path.display(),
+            line,
+            character,
+            language
         ))
     }
 
@@ -53,8 +55,8 @@ impl LspTool {
         line: u32,
         character: u32,
     ) -> Result<String, ToolError> {
-        let path = Path::new(file_path);
-        let language = self.detect_language(path).ok_or_else(|| {
+        let resolved_path = self.resolve_workspace_path(file_path);
+        let language = self.detect_language(&resolved_path).ok_or_else(|| {
             ToolError::ExecutionFailed(format!(
                 "No LSP server configured for file type: {}",
                 file_path
@@ -72,7 +74,10 @@ impl LspTool {
             "Find references for {}:{}:{}\n\n\
              Note: Full LSP integration requires running LSP servers.\n\
              Language detected: {}",
-            file_path, line, character, language
+            resolved_path.display(),
+            line,
+            character,
+            language
         ))
     }
 
@@ -83,8 +88,8 @@ impl LspTool {
         line: u32,
         character: u32,
     ) -> Result<String, ToolError> {
-        let path = Path::new(file_path);
-        let language = self.detect_language(path).ok_or_else(|| {
+        let resolved_path = self.resolve_workspace_path(file_path);
+        let language = self.detect_language(&resolved_path).ok_or_else(|| {
             ToolError::ExecutionFailed(format!(
                 "No LSP server configured for file type: {}",
                 file_path
@@ -102,14 +107,17 @@ impl LspTool {
             "Hover info for {}:{}:{}\n\n\
              Note: Full LSP integration requires running LSP servers.\n\
              Language detected: {}",
-            file_path, line, character, language
+            resolved_path.display(),
+            line,
+            character,
+            language
         ))
     }
 
     /// Get document symbols
     pub(super) async fn document_symbol(&self, file_path: &str) -> Result<String, ToolError> {
-        let path = Path::new(file_path);
-        let language = self.detect_language(path).ok_or_else(|| {
+        let resolved_path = self.resolve_workspace_path(file_path);
+        let language = self.detect_language(&resolved_path).ok_or_else(|| {
             ToolError::ExecutionFailed(format!(
                 "No LSP server configured for file type: {}",
                 file_path
@@ -124,9 +132,15 @@ impl LspTool {
         }
 
         // Use regex-based symbol extraction as fallback
-        let content = tokio::fs::read_to_string(file_path)
+        let content = tokio::fs::read_to_string(&resolved_path)
             .await
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to read file: {}", e)))?;
+            .map_err(|e| {
+                ToolError::ExecutionFailed(format!(
+                    "Failed to read file '{}': {}",
+                    resolved_path.display(),
+                    e
+                ))
+            })?;
 
         let symbols = extract_symbols_simple(&content, &language);
 
@@ -134,10 +148,10 @@ impl LspTool {
             Ok(format!(
                 "No symbols found in {}.\n\n\
                  Note: For better results, ensure the LSP server is running.",
-                file_path
+                resolved_path.display()
             ))
         } else {
-            let mut output = format!("Symbols in {} ({}):\n\n", file_path, language);
+            let mut output = format!("Symbols in {} ({}):\n\n", resolved_path.display(), language);
             for symbol in symbols {
                 output.push_str(&format!(
                     "- {} ({}) at line {}\n",
@@ -152,9 +166,11 @@ impl LspTool {
     pub(super) async fn workspace_symbol(&self, query: &str) -> Result<String, ToolError> {
         Ok(format!(
             "Workspace symbol search for '{}'\n\n\
+             Workspace: {}\n\
              Note: Full LSP integration requires running LSP servers.\n\
              This operation searches across all files in the workspace.",
-            query
+            query,
+            self.working_directory.display()
         ))
     }
 
@@ -165,8 +181,8 @@ impl LspTool {
         line: u32,
         character: u32,
     ) -> Result<String, ToolError> {
-        let path = Path::new(file_path);
-        let language = self.detect_language(path).ok_or_else(|| {
+        let resolved_path = self.resolve_workspace_path(file_path);
+        let language = self.detect_language(&resolved_path).ok_or_else(|| {
             ToolError::ExecutionFailed(format!(
                 "No LSP server configured for file type: {}",
                 file_path
@@ -177,7 +193,10 @@ impl LspTool {
             "Go to implementation for {}:{}:{}\n\n\
              Language detected: {}\n\
              Note: This finds implementations of interfaces/traits.",
-            file_path, line, character, language
+            resolved_path.display(),
+            line,
+            character,
+            language
         ))
     }
 
@@ -188,10 +207,13 @@ impl LspTool {
         line: u32,
         character: u32,
     ) -> Result<String, ToolError> {
+        let resolved_path = self.resolve_workspace_path(file_path);
         Ok(format!(
             "Call hierarchy for {}:{}:{}\n\n\
              Note: Use incomingCalls or outgoingCalls to explore the hierarchy.",
-            file_path, line, character
+            resolved_path.display(),
+            line,
+            character
         ))
     }
 
@@ -202,10 +224,13 @@ impl LspTool {
         line: u32,
         character: u32,
     ) -> Result<String, ToolError> {
+        let resolved_path = self.resolve_workspace_path(file_path);
         Ok(format!(
             "Incoming calls to function at {}:{}:{}\n\n\
              Note: Shows all functions/methods that call this function.",
-            file_path, line, character
+            resolved_path.display(),
+            line,
+            character
         ))
     }
 
@@ -216,10 +241,13 @@ impl LspTool {
         line: u32,
         character: u32,
     ) -> Result<String, ToolError> {
+        let resolved_path = self.resolve_workspace_path(file_path);
         Ok(format!(
             "Outgoing calls from function at {}:{}:{}\n\n\
              Note: Shows all functions/methods called by this function.",
-            file_path, line, character
+            resolved_path.display(),
+            line,
+            character
         ))
     }
 }

@@ -30,3 +30,6 @@ thiserror = { workspace = true }
 
 # Logging
 tracing = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3.8"

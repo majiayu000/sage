@@ -1,6 +1,6 @@
 //! Unified executor methods
 
-use super::default_tools;
+use super::{default_tools, resolve_working_directory};
 use crate::client::{ExecutionResult, SageAgentSdk, UnifiedRunOptions};
 use sage_core::{
     agent::{ExecutionMode, ExecutionOptions, UnifiedExecutor},
@@ -9,7 +9,6 @@ use sage_core::{
     mcp::{build_mcp_registry_from_config, clear_active_mcp_registry, set_active_mcp_registry},
     types::TaskMetadata,
 };
-use std::path::PathBuf;
 use std::sync::Arc;
 
 impl SageAgentSdk {
@@ -44,11 +43,8 @@ impl SageAgentSdk {
         Option<InputChannelHandle>,
     )> {
         // Create task metadata
-        let working_dir = options
-            .working_directory
-            .clone()
-            .or_else(|| self.config.working_directory.clone())
-            .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+        let working_dir =
+            resolve_working_directory(options.working_directory.clone(), &self.config);
 
         let task = TaskMetadata::new(task_description, &working_dir.to_string_lossy());
 
@@ -69,7 +65,10 @@ impl SageAgentSdk {
         let mut executor = UnifiedExecutor::with_options(self.config.clone(), exec_options)?;
 
         // Register default tools
-        executor.register_tools(default_tools());
+        executor.register_tools(default_tools(
+            working_dir.clone(),
+            executor.skill_registry(),
+        ));
 
         // Set up input channel if interactive
         let input_handle = if !options.non_interactive {

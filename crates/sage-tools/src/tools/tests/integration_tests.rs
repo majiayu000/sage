@@ -575,6 +575,24 @@ mod cloud_tool_tests {
 #[cfg(test)]
 mod tool_integration_tests {
     use super::*;
+    use sage_core::skills::SkillRegistry;
+    use std::sync::Arc;
+    use tokio::sync::RwLock;
+
+    fn find_tool<'a>(
+        tools: &'a [Arc<dyn Tool>],
+        name: &str,
+    ) -> Result<&'a Arc<dyn Tool>, std::io::Error> {
+        tools
+            .iter()
+            .find(|tool| tool.name() == name)
+            .ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    format!("{name} tool should be registered"),
+                )
+            })
+    }
 
     #[tokio::test]
     async fn test_all_tools_have_valid_schemas() {
@@ -667,5 +685,158 @@ mod tool_integration_tests {
 
         assert_eq!(get_default_tool_names(), tool_names.as_slice());
         assert_eq!(get_default_tool_count(), tool_names.len());
+    }
+
+    #[tokio::test]
+    async fn test_default_tools_with_context_use_configured_working_directory()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let workspace = TempDir::new()?;
+        let workspace_path = workspace.path().to_path_buf();
+        let process_cwd = std::env::current_dir()?;
+        assert_ne!(workspace_path, process_cwd);
+
+        fs::write(workspace_path.join("marker.txt"), "workspace_b_unique\n").await?;
+        fs::create_dir_all(workspace_path.join("src")).await?;
+        fs::write(
+            workspace_path.join("src/lib.rs"),
+            "pub trait Greeter {\n    fn greet(&self);\n}\n",
+        )
+        .await?;
+
+        let mut registry = SkillRegistry::new(&workspace_path);
+        registry.register_builtins();
+        let tools =
+            get_default_tools_with_context(workspace_path.clone(), Arc::new(RwLock::new(registry)));
+        let workspace_display = workspace_path.to_string_lossy().to_string();
+
+        let bash_result = find_tool(&tools, "Bash")?
+            .execute(&create_tool_call(
+                "pwd",
+                "Bash",
+                json!({ "command": "pwd" }),
+            ))
+            .await?;
+        assert!(bash_result.success);
+        assert!(
+            bash_result
+                .output
+                .as_deref()
+                .unwrap_or("")
+                .contains(&workspace_display)
+        );
+
+        let read_result = find_tool(&tools, "Read")?
+            .execute(&create_tool_call(
+                "read-marker",
+                "Read",
+                json!({ "file_path": "marker.txt" }),
+            ))
+            .await?;
+        assert!(read_result.success);
+        assert!(
+            read_result
+                .output
+                .as_deref()
+                .unwrap_or("")
+                .contains("workspace_b_unique")
+        );
+
+        let write_result = find_tool(&tools, "Write")?
+            .execute(&create_tool_call(
+                "write-created",
+                "Write",
+                json!({
+                    "file_path": "created.txt",
+                    "content": "created in configured workspace\n"
+                }),
+            ))
+            .await?;
+        assert!(write_result.success);
+        assert!(workspace_path.join("created.txt").exists());
+        assert!(!process_cwd.join("created.txt").exists());
+
+        let glob_result = find_tool(&tools, "Glob")?
+            .execute(&create_tool_call(
+                "glob-text",
+                "Glob",
+                json!({ "pattern": "*.txt" }),
+            ))
+            .await?;
+        assert!(glob_result.success);
+        let glob_output = glob_result.output.as_deref().unwrap_or("");
+        assert!(glob_output.contains("marker.txt"));
+        assert!(glob_output.contains("created.txt"));
+
+        let grep_result = find_tool(&tools, "Grep")?
+            .execute(&create_tool_call(
+                "grep-marker",
+                "Grep",
+                json!({
+                    "pattern": "workspace_b_unique",
+                    "output_mode": "content"
+                }),
+            ))
+            .await?;
+        assert!(grep_result.success);
+        assert!(
+            grep_result
+                .output
+                .as_deref()
+                .unwrap_or("")
+                .contains("workspace_b_unique")
+        );
+
+        let lsp_result = find_tool(&tools, "LSP")?
+            .execute(&create_tool_call(
+                "lsp-impl",
+                "LSP",
+                json!({
+                    "operation": "goToImplementation",
+                    "filePath": "src/lib.rs",
+                    "line": 1,
+                    "character": 5
+                }),
+            ))
+            .await?;
+        assert!(lsp_result.success);
+        assert!(
+            lsp_result
+                .output
+                .as_deref()
+                .unwrap_or("")
+                .contains(&workspace_display)
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_default_factory_does_not_use_context_sensitive_new_constructors() {
+        let source = include_str!("../mod.rs");
+        let Some(factory_start) = source.find("fn build_default_tools") else {
+            panic!("default tool factory should exist");
+        };
+        let Some(factory_end) = source.find("/// Get all default tools") else {
+            panic!("default tools section should exist");
+        };
+        let factory_source = &source[factory_start..factory_end];
+
+        for forbidden_constructor in [
+            "Arc::new(EditTool::new())",
+            "Arc::new(ReadTool::new())",
+            "Arc::new(WriteTool::new())",
+            "Arc::new(GlobTool::new())",
+            "Arc::new(GrepTool::new())",
+            "Arc::new(NotebookEditTool::new())",
+            "Arc::new(BashTool::new())",
+            "Arc::new(LspTool::new())",
+            "Arc::new(SkillTool::new())",
+            "Arc::new(SlashCommandTool::new())",
+        ] {
+            assert!(
+                !factory_source.contains(forbidden_constructor),
+                "default tool factory must bind context-sensitive tool via with_working_directory: {forbidden_constructor}"
+            );
+        }
     }
 }

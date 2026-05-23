@@ -141,20 +141,44 @@ const DEFAULT_TOOL_NAMES: &[&str] = &[
     "SendMessageTool",
 ];
 
-fn build_default_tools(
-    skill_tool: Arc<dyn Tool>,
-    slash_command_tool: Arc<dyn Tool>,
-) -> Vec<Arc<dyn Tool>> {
+struct DefaultToolConfig {
+    working_directory: PathBuf,
+    skill_registry: Arc<RwLock<SkillRegistry>>,
+}
+
+impl DefaultToolConfig {
+    fn new(
+        working_directory: impl Into<PathBuf>,
+        skill_registry: Arc<RwLock<SkillRegistry>>,
+    ) -> Self {
+        Self {
+            working_directory: working_directory.into(),
+            skill_registry,
+        }
+    }
+
+    fn with_new_skill_registry(working_directory: impl Into<PathBuf>) -> Self {
+        let working_directory = working_directory.into();
+        let mut registry = SkillRegistry::new(&working_directory);
+        registry.register_builtins();
+        Self::new(working_directory, Arc::new(RwLock::new(registry)))
+    }
+}
+
+fn build_default_tools(config: DefaultToolConfig) -> Vec<Arc<dyn Tool>> {
+    let working_directory = config.working_directory;
     vec![
         // File operations
-        Arc::new(EditTool::new()),
-        Arc::new(ReadTool::new()),
-        Arc::new(WriteTool::new()),
-        Arc::new(GlobTool::new()),
-        Arc::new(GrepTool::new()),
-        Arc::new(NotebookEditTool::new()),
+        Arc::new(EditTool::with_working_directory(working_directory.clone())),
+        Arc::new(ReadTool::with_working_directory(working_directory.clone())),
+        Arc::new(WriteTool::with_working_directory(working_directory.clone())),
+        Arc::new(GlobTool::with_working_directory(working_directory.clone())),
+        Arc::new(GrepTool::with_working_directory(working_directory.clone())),
+        Arc::new(NotebookEditTool::with_working_directory(
+            working_directory.clone(),
+        )),
         // Process tools
-        Arc::new(BashTool::new()),
+        Arc::new(BashTool::with_working_directory(working_directory.clone())),
         Arc::new(KillShellTool::new()),
         Arc::new(TaskTool::new()), // Claude Code compatible subagent spawning
         Arc::new(TaskOutputTool::new()),
@@ -168,8 +192,13 @@ fn build_default_tools(
         // User interaction
         Arc::new(AskUserQuestionTool::new()),
         // Extensions
-        skill_tool,
-        slash_command_tool,
+        Arc::new(SkillTool::with_registry_and_working_directory(
+            config.skill_registry,
+            working_directory.clone(),
+        )),
+        Arc::new(SlashCommandTool::with_working_directory(
+            working_directory.clone(),
+        )),
         Arc::new(ToolSearchTool::new()), // Claude Code compatible deferred tool search
         // Platform tool proxies (for LLM platform built-in tools)
         Arc::new(PlatformToolProxy::glm_claim_coupon()),
@@ -203,7 +232,7 @@ fn build_default_tools(
         Arc::new(TerraformTool::new()),
         Arc::new(CloudTool::new()),
         // Code intelligence
-        Arc::new(LspTool::new()),
+        Arc::new(LspTool::with_working_directory(working_directory)),
         // Team collaboration
         Arc::new(TeammateTool::new()),
         Arc::new(SendMessageTool::new()),
@@ -212,10 +241,10 @@ fn build_default_tools(
 
 /// Get all default tools organized by category
 pub fn get_default_tools() -> Vec<Arc<dyn Tool>> {
-    build_default_tools(
-        Arc::new(SkillTool::new()),
-        Arc::new(SlashCommandTool::new()),
-    )
+    let working_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    build_default_tools(DefaultToolConfig::with_new_skill_registry(
+        working_directory,
+    ))
 }
 
 pub fn get_default_tool_names() -> &'static [&'static str] {
@@ -237,14 +266,7 @@ pub fn get_default_tools_with_context(
     working_directory: impl Into<PathBuf>,
     skill_registry: Arc<RwLock<SkillRegistry>>,
 ) -> Vec<Arc<dyn Tool>> {
-    let working_directory = working_directory.into();
-    build_default_tools(
-        Arc::new(SkillTool::with_registry_and_working_directory(
-            skill_registry,
-            working_directory.clone(),
-        )),
-        Arc::new(SlashCommandTool::with_working_directory(working_directory)),
-    )
+    build_default_tools(DefaultToolConfig::new(working_directory, skill_registry))
 }
 
 /// Get tools by category
