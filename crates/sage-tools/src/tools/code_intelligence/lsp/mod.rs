@@ -67,6 +67,15 @@ impl LspTool {
         None
     }
 
+    fn resolve_workspace_path(&self, file_path: &str) -> PathBuf {
+        let path = Path::new(file_path);
+        if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            self.working_directory.join(path)
+        }
+    }
+
     /// Check if LSP server is available for a language
     async fn is_server_available(&self, language: &str) -> bool {
         if let Some(config) = self.config.servers.get(language) {
