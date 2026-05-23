@@ -9,14 +9,17 @@ mod validation;
 #[cfg(test)]
 mod tests;
 
+use crate::tools::file_ops::access_tracker::{FileAccessTracker, canonicalize_existing_path};
 use async_trait::async_trait;
 use sage_core::tools::base::{FileSystemTool, Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolResult, ToolSchema};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 /// Tool for editing Jupyter notebook cells
 pub struct NotebookEditTool {
     working_directory: PathBuf,
+    access_tracker: Arc<FileAccessTracker>,
 }
 
 impl NotebookEditTool {
@@ -24,6 +27,7 @@ impl NotebookEditTool {
     pub fn new() -> Self {
         Self {
             working_directory: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            access_tracker: Arc::new(FileAccessTracker::new()),
         }
     }
 
@@ -31,7 +35,43 @@ impl NotebookEditTool {
     pub fn with_working_directory<P: Into<PathBuf>>(working_dir: P) -> Self {
         Self {
             working_directory: working_dir.into(),
+            access_tracker: Arc::new(FileAccessTracker::new()),
         }
+    }
+
+    /// Create a notebook edit tool with specific working directory and shared access tracker.
+    pub fn with_working_directory_and_tracker<P: Into<PathBuf>>(
+        working_dir: P,
+        access_tracker: Arc<FileAccessTracker>,
+    ) -> Self {
+        Self {
+            working_directory: working_dir.into(),
+            access_tracker,
+        }
+    }
+
+    async fn require_prior_read(&self, notebook_path: &str) -> Result<PathBuf, ToolError> {
+        let path = self.resolve_path(notebook_path);
+        if !self.is_safe_path(&path) {
+            return Err(ToolError::PermissionDenied(format!(
+                "Access denied to path: {}",
+                path.display()
+            )));
+        }
+        if !path.exists() {
+            return Err(ToolError::ExecutionFailed(format!(
+                "Notebook file not found: {}",
+                notebook_path
+            )));
+        }
+        let canonical_path = canonicalize_existing_path(&path, notebook_path)?;
+        if !self.access_tracker.has_read(&canonical_path).await {
+            return Err(ToolError::ValidationFailed(format!(
+                "Notebook exists but has not been read: {}. You must use the Read tool first to examine the notebook before editing it.",
+                notebook_path
+            )));
+        }
+        Ok(canonical_path)
     }
 }
 
@@ -69,6 +109,7 @@ Cell IDs can be found by reading the notebook file first."
         let edit_mode = call
             .get_string("edit_mode")
             .unwrap_or_else(|| "replace".to_string());
+        let canonical_path = self.require_prior_read(&notebook_path).await?;
 
         let mut result = match edit_mode.as_str() {
             "replace" => {
@@ -127,6 +168,7 @@ Cell IDs can be found by reading the notebook file first."
             }
         };
 
+        self.access_tracker.mark_read(canonical_path).await;
         result.call_id = call.id.clone();
         Ok(result)
     }

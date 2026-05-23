@@ -3,14 +3,17 @@
 use super::reader;
 use super::schema;
 use super::types::MAX_LIMIT;
+use crate::tools::file_ops::access_tracker::FileAccessTracker;
 use async_trait::async_trait;
 use sage_core::tools::base::{FileSystemTool, Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolResult, ToolSchema};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 /// Tool for reading files with line numbers and pagination
 pub struct ReadTool {
     working_directory: PathBuf,
+    access_tracker: Arc<FileAccessTracker>,
 }
 
 impl ReadTool {
@@ -18,6 +21,7 @@ impl ReadTool {
     pub fn new() -> Self {
         Self {
             working_directory: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            access_tracker: Arc::new(FileAccessTracker::new()),
         }
     }
 
@@ -25,6 +29,18 @@ impl ReadTool {
     pub fn with_working_directory<P: Into<PathBuf>>(working_dir: P) -> Self {
         Self {
             working_directory: working_dir.into(),
+            access_tracker: Arc::new(FileAccessTracker::new()),
+        }
+    }
+
+    /// Create a read tool with specific working directory and shared access tracker.
+    pub fn with_working_directory_and_tracker<P: Into<PathBuf>>(
+        working_dir: P,
+        access_tracker: Arc<FileAccessTracker>,
+    ) -> Self {
+        Self {
+            working_directory: working_dir.into(),
+            access_tracker,
         }
     }
 }
@@ -67,7 +83,9 @@ impl Tool for ReadTool {
             }
         });
 
-        let mut result = reader::read_file(self, self.name(), &file_path, offset, limit).await?;
+        let (mut result, canonical_path) =
+            reader::read_file(self, self.name(), &file_path, offset, limit).await?;
+        self.access_tracker.mark_read(canonical_path).await;
         result.call_id = call.id.clone();
         Ok(result)
     }

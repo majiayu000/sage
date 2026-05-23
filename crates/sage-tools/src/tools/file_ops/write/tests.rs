@@ -84,7 +84,7 @@ mod suite {
         let tool = WriteTool::with_working_directory(temp_dir.path());
 
         // Mark file as read
-        tool.mark_file_as_read(file_path.clone());
+        assert!(tool.mark_file_as_read(file_path.clone()).await.is_ok());
 
         let call = create_tool_call(
             "test-3",

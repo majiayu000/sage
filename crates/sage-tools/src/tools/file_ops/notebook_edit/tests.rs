@@ -2,10 +2,13 @@
 
 use super::NotebookEditTool;
 use super::conversion::{source_to_string, string_to_source};
+use crate::tools::file_ops::access_tracker::FileAccessTracker;
 use sage_core::tools::base::Tool;
 use sage_core::tools::types::ToolCall;
 use serde_json::json;
 use std::collections::HashMap;
+use std::path::Path;
+use std::sync::Arc;
 use tempfile::TempDir;
 use tokio::fs;
 
@@ -51,6 +54,21 @@ fn create_test_notebook() -> String {
     .to_string()
 }
 
+fn notebook_tool_with_tracker(temp_dir: &TempDir) -> (NotebookEditTool, Arc<FileAccessTracker>) {
+    let tracker = Arc::new(FileAccessTracker::new());
+    (
+        NotebookEditTool::with_working_directory_and_tracker(temp_dir.path(), Arc::clone(&tracker)),
+        tracker,
+    )
+}
+
+async fn mark_notebook_as_read(tracker: &FileAccessTracker, path: &Path) {
+    let Ok(canonical_path) = path.canonicalize() else {
+        panic!("test notebook should canonicalize");
+    };
+    tracker.mark_read(canonical_path).await;
+}
+
 #[tokio::test]
 async fn test_notebook_edit_replace_cell() {
     let temp_dir = TempDir::new().unwrap();
@@ -61,7 +79,8 @@ async fn test_notebook_edit_replace_cell() {
         .await
         .unwrap();
 
-    let tool = NotebookEditTool::with_working_directory(temp_dir.path());
+    let (tool, tracker) = notebook_tool_with_tracker(&temp_dir);
+    mark_notebook_as_read(&tracker, &notebook_path).await;
     let call = create_tool_call(
         "test-1",
         "NotebookEdit",
@@ -94,7 +113,8 @@ async fn test_notebook_edit_insert_cell() {
         .await
         .unwrap();
 
-    let tool = NotebookEditTool::with_working_directory(temp_dir.path());
+    let (tool, tracker) = notebook_tool_with_tracker(&temp_dir);
+    mark_notebook_as_read(&tracker, &notebook_path).await;
     let call = create_tool_call(
         "test-2",
         "NotebookEdit",
@@ -128,7 +148,8 @@ async fn test_notebook_edit_delete_cell() {
         .await
         .unwrap();
 
-    let tool = NotebookEditTool::with_working_directory(temp_dir.path());
+    let (tool, tracker) = notebook_tool_with_tracker(&temp_dir);
+    mark_notebook_as_read(&tracker, &notebook_path).await;
     let call = create_tool_call(
         "test-3",
         "NotebookEdit",
@@ -159,7 +180,8 @@ async fn test_notebook_edit_cell_not_found() {
         .await
         .unwrap();
 
-    let tool = NotebookEditTool::with_working_directory(temp_dir.path());
+    let (tool, tracker) = notebook_tool_with_tracker(&temp_dir);
+    mark_notebook_as_read(&tracker, &notebook_path).await;
     let call = create_tool_call(
         "test-4",
         "NotebookEdit",
@@ -175,6 +197,34 @@ async fn test_notebook_edit_cell_not_found() {
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert!(err.to_string().contains("not found"));
+}
+
+#[tokio::test]
+async fn test_notebook_edit_without_prior_read_fails() -> Result<(), Box<dyn std::error::Error>> {
+    let temp_dir = TempDir::new()?;
+    let notebook_path = temp_dir.path().join("test.ipynb");
+
+    fs::write(&notebook_path, create_test_notebook()).await?;
+
+    let tool = NotebookEditTool::with_working_directory(temp_dir.path());
+    let call = create_tool_call(
+        "test-no-read",
+        "NotebookEdit",
+        json!({
+            "notebook_path": notebook_path.to_string_lossy(),
+            "cell_id": "cell-1",
+            "new_source": "print('blocked')",
+            "edit_mode": "replace"
+        }),
+    );
+
+    let result = tool.execute(&call).await;
+    assert!(result.is_err());
+    let Err(err) = result else {
+        panic!("notebook edit should require prior read");
+    };
+    assert!(err.to_string().contains("has not been read"));
+    Ok(())
 }
 
 #[tokio::test]
@@ -230,7 +280,8 @@ async fn test_notebook_edit_insert_at_beginning() {
         .await
         .unwrap();
 
-    let tool = NotebookEditTool::with_working_directory(temp_dir.path());
+    let (tool, tracker) = notebook_tool_with_tracker(&temp_dir);
+    mark_notebook_as_read(&tracker, &notebook_path).await;
     let call = create_tool_call(
         "test-6",
         "NotebookEdit",
