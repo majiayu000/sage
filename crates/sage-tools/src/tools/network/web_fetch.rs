@@ -6,6 +6,7 @@ use sage_core::tools::{Tool, ToolCall, ToolError, ToolParameter, ToolResult, Too
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
+use super::redirect::{MAX_REDIRECTS, is_redirect_status, same_origin, validate_redirect_target};
 use super::validation::validate_url_security;
 
 /// HTTP client for web fetching
@@ -15,6 +16,7 @@ fn get_client() -> &'static reqwest::Client {
     CLIENT.get_or_init(|| {
         reqwest::Client::builder()
             .timeout(Duration::from_secs(30))
+            .redirect(reqwest::redirect::Policy::none())
             .user_agent("Sage-Agent-WebFetch/1.0")
             .build()
             .unwrap_or_else(|_| reqwest::Client::new())
@@ -40,16 +42,48 @@ impl WebFetchTool {
         Self
     }
 
+    async fn fetch_response_with_redirects(
+        client: &reqwest::Client,
+        url: &str,
+    ) -> anyhow::Result<reqwest::Response> {
+        validate_url_security(url).await?;
+        let mut current_url = reqwest::Url::parse(url).context("Invalid URL format")?;
+        let mut redirect_count = 0;
+
+        loop {
+            let response = client
+                .get(current_url.clone())
+                .send()
+                .await
+                .context("Failed to fetch URL")?;
+
+            if !is_redirect_status(response.status()) {
+                return Ok(response);
+            }
+
+            if redirect_count >= MAX_REDIRECTS {
+                anyhow::bail!("Redirect limit exceeded ({MAX_REDIRECTS})");
+            }
+
+            let next_url = validate_redirect_target(response.url(), response.headers()).await?;
+            if !same_origin(response.url(), &next_url) {
+                debug!(
+                    "WebFetch redirect changed origin: {} -> {}",
+                    response.url(),
+                    next_url
+                );
+            }
+            current_url = next_url;
+            redirect_count += 1;
+        }
+    }
+
     /// Fetch URL and convert HTML to Markdown
     async fn fetch_and_convert(&self, url: &str) -> anyhow::Result<String> {
         debug!("Fetching URL: {}", url);
 
         let client = get_client();
-        let response = client
-            .get(url)
-            .send()
-            .await
-            .context("Failed to fetch URL")?;
+        let response = Self::fetch_response_with_redirects(client, url).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -251,7 +285,8 @@ Parameters:
             .get_string("url")
             .ok_or_else(|| ToolError::InvalidArguments("Missing 'url' parameter".to_string()))?;
 
-        // Validate URL to prevent SSRF attacks
+        // Validate the initial URL here to keep argument errors classified
+        // before the fetch path validates each redirect target.
         validate_url_security(&url)
             .await
             .map_err(|e| ToolError::InvalidArguments(format!("URL validation failed: {}", e)))?;
@@ -263,5 +298,68 @@ Parameters:
             .map_err(|e| ToolError::ExecutionFailed(format!("Failed to fetch URL: {}", e)))?;
 
         Ok(ToolResult::success(&call.id, self.name(), markdown_content))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+
+    async fn spawn_redirecting_server() -> anyhow::Result<String> {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .context("bind WebFetch redirect test server")?;
+        let addr = listener
+            .local_addr()
+            .context("read WebFetch redirect test server addr")?;
+        let redirect_target = format!("http://127.0.0.1:{}/private", addr.port());
+        let proxy_url = format!("http://{}", addr);
+
+        tokio::spawn(async move {
+            for request_index in 0..2 {
+                let Ok((mut socket, _)) = listener.accept().await else {
+                    return;
+                };
+
+                let mut buffer = [0_u8; 2048];
+                if socket.read(&mut buffer).await.is_err() {
+                    return;
+                }
+
+                let response = if request_index == 0 {
+                    format!(
+                        "HTTP/1.1 302 Found\r\nLocation: {redirect_target}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                    )
+                } else {
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 12\r\nConnection: close\r\n\r\nprivate body".to_string()
+                };
+
+                if socket.write_all(response.as_bytes()).await.is_err() {
+                    return;
+                }
+            }
+        });
+
+        Ok(proxy_url)
+    }
+
+    #[tokio::test]
+    async fn test_web_fetch_rejects_redirect_to_loopback() -> anyhow::Result<()> {
+        let proxy_url = spawn_redirecting_server().await?;
+        let client = reqwest::Client::builder()
+            .proxy(reqwest::Proxy::http(proxy_url)?)
+            .redirect(reqwest::redirect::Policy::none())
+            .build()?;
+
+        let result = WebFetchTool::fetch_response_with_redirects(&client, "http://1.1.1.1/").await;
+
+        assert!(
+            result.is_err(),
+            "WebFetch must reject redirects to loopback/private targets"
+        );
+
+        Ok(())
     }
 }

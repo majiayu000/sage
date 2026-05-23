@@ -40,6 +40,7 @@ pub mod vcs {
 pub mod network {
     pub mod browser;
     pub mod http_client;
+    pub(super) mod redirect;
     pub mod validation;
     pub mod web_fetch;
     pub mod web_search;
