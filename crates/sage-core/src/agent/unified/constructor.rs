@@ -3,13 +3,12 @@
 use crate::agent::ExecutionOptions;
 use crate::config::model::Config;
 use crate::context::{AutoCompact, AutoCompactConfig};
-use crate::error::SageResult;
+use crate::error::{ResultExt, SageResult};
 use crate::hooks::{HookExecutor, HookRegistry};
 use crate::llm::model_capabilities::get_model_capability;
 use crate::output::StreamingOutput;
 use crate::skills::SkillRegistry;
 use crate::tools::executor::ToolExecutor;
-use anyhow::Context;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 

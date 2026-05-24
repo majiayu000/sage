@@ -1,5 +1,6 @@
 //! ProviderConfig accessor methods and validation
 
+use super::api_key::get_standard_env_vars;
 use super::config::ProviderConfig;
 use super::resilience::RateLimitConfig;
 use crate::error::{SageError, SageResult};
@@ -19,9 +20,14 @@ impl ProviderConfig {
         }
 
         if self.requires_api_key() && self.get_api_key().is_none() {
+            let sage_env_var = format!("SAGE_{}_API_KEY", self.name.to_uppercase());
+            let provider_env_var = get_standard_env_vars(&self.name)
+                .into_iter()
+                .next()
+                .unwrap_or_else(|| format!("{}_API_KEY", self.name.to_uppercase()));
             return Err(SageError::config(format!(
-                "API key is required for provider '{}'. Set it in config or environment variables",
-                self.name
+                "API key is required for provider '{}'. Set {} or {}, add it to sage_config.json, or run `sage config init`.",
+                self.name, sage_env_var, provider_env_var
             )));
         }
 
