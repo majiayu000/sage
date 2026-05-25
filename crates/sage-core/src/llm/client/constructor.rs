@@ -3,14 +3,13 @@
 use super::types::LlmClient;
 use crate::config::model::Config;
 use crate::config::provider::ProviderConfig;
-use crate::error::{SageError, SageResult};
+use crate::error::{ResultExt, SageError, SageResult};
 use crate::llm::provider_types::{LlmProvider, LlmRequestParams, TimeoutConfig};
 use crate::llm::providers::{
     AnthropicProvider, AzureProvider, DoubaoProvider, GlmProvider, GoogleProvider, OllamaProvider,
     OpenAiProvider, OpenRouterProvider, ProviderInstance,
 };
 use crate::recovery::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig};
-use anyhow::Context;
 use reqwest::Client;
 use std::sync::Arc;
 use std::time::Duration;

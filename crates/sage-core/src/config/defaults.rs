@@ -7,7 +7,8 @@ use crate::config::model::Config;
 use crate::config::provider_defaults::create_default_providers;
 use crate::error::SageResult;
 use std::collections::HashMap;
-use std::path::Path;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 /// Convenience function to load configuration with default sources
 ///
@@ -45,6 +46,7 @@ pub fn load_config_with_overrides(
     overrides: HashMap<String, String>,
 ) -> SageResult<Config> {
     let mut loader = ConfigLoader::new().with_defaults().with_env();
+    let explicit_default_provider = explicit_default_provider_requested(config_file, &overrides);
 
     if let Some(file) = config_file {
         loader = loader.with_file(file);
@@ -109,29 +111,175 @@ pub fn load_config_with_overrides(
         }
     }
 
-    if let Some(params) = config.model_providers.get(&config.default_provider) {
-        let has_key = params
-            .get_api_key_info_for_provider(&config.default_provider)
-            .key
-            .is_some();
-        if !has_key {
-            if let Some((provider, _)) = config.model_providers.iter().find(|(provider, params)| {
-                params.get_api_key_info_for_provider(provider).key.is_some()
-                    || provider.as_str() == "ollama"
-            }) {
-                config.default_provider = provider.clone();
-            }
-        }
-    }
+    select_default_provider_with_credentials(&mut config, explicit_default_provider);
 
     Ok(config)
+}
+
+fn explicit_default_provider_requested(
+    config_file: Option<&str>,
+    overrides: &HashMap<String, String>,
+) -> bool {
+    if overrides
+        .get("provider")
+        .is_some_and(|provider| !provider.is_empty())
+        || overrides
+            .get("default_provider")
+            .is_some_and(|provider| !provider.is_empty())
+    {
+        return true;
+    }
+
+    if matches!(std::env::var("SAGE_DEFAULT_PROVIDER"), Ok(provider) if !provider.is_empty()) {
+        return true;
+    }
+
+    match config_file {
+        Some(file) => file_declares_default_provider(Path::new(file)),
+        None => default_config_paths()
+            .iter()
+            .any(|path| file_declares_default_provider(path)),
+    }
+}
+
+fn default_config_paths() -> Vec<PathBuf> {
+    let mut paths = vec![
+        PathBuf::from("sage_config.json"),
+        PathBuf::from("sage_config.toml"),
+    ];
+
+    if let Some(global_config) = dirs::home_dir().map(|h| h.join(".sage").join("config.json")) {
+        paths.push(global_config);
+    }
+
+    paths
+}
+
+fn file_declares_default_provider(path: &Path) -> bool {
+    let Ok(content) = fs::read_to_string(path) else {
+        return false;
+    };
+
+    match path.extension().and_then(|s| s.to_str()) {
+        Some("toml") => toml::from_str::<toml::Value>(&content)
+            .ok()
+            .and_then(|value| {
+                value
+                    .get("default_provider")
+                    .and_then(|provider| provider.as_str().map(str::to_string))
+            })
+            .is_some_and(|provider| !provider.is_empty()),
+        Some("yaml") | Some("yml") => serde_yaml::from_str::<serde_yaml::Value>(&content)
+            .ok()
+            .and_then(|value| {
+                value
+                    .get("default_provider")
+                    .and_then(|provider| provider.as_str().map(str::to_string))
+            })
+            .is_some_and(|provider| !provider.is_empty()),
+        _ => serde_json::from_str::<serde_json::Value>(&content)
+            .ok()
+            .and_then(|value| {
+                value
+                    .get("default_provider")
+                    .and_then(|provider| provider.as_str().map(str::to_string))
+            })
+            .is_some_and(|provider| !provider.is_empty()),
+    }
+}
+
+fn select_default_provider_with_credentials(config: &mut Config, explicit_default_provider: bool) {
+    if explicit_default_provider {
+        return;
+    }
+
+    let Some(params) = config.model_providers.get(&config.default_provider) else {
+        return;
+    };
+
+    if params
+        .get_api_key_info_for_provider(&config.default_provider)
+        .key
+        .is_some()
+    {
+        return;
+    }
+
+    if let Some(provider) = config
+        .model_providers
+        .iter()
+        .filter(|(provider, params)| params.get_api_key_info_for_provider(provider).key.is_some())
+        .map(|(provider, _)| provider)
+        .min()
+        .cloned()
+    {
+        config.default_provider = provider;
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::api_key_helpers::get_standard_env_vars_for_provider;
+    use serial_test::serial;
     use std::fs;
     use tempfile::TempDir;
+
+    struct EnvVarGuard {
+        values: Vec<(String, Option<String>)>,
+    }
+
+    impl EnvVarGuard {
+        fn remove_provider_vars() -> Self {
+            let mut vars = vec!["SAGE_DEFAULT_PROVIDER".to_string()];
+            for provider in [
+                "openai",
+                "zai",
+                "anthropic",
+                "google",
+                "azure",
+                "openrouter",
+                "doubao",
+                "ollama",
+                "glm",
+                "zhipu",
+                "moonshot",
+                "kimi",
+            ] {
+                vars.push(format!("SAGE_{}_API_KEY", provider.to_uppercase()));
+                vars.extend(get_standard_env_vars_for_provider(provider));
+            }
+
+            vars.sort();
+            vars.dedup();
+
+            let values = vars
+                .into_iter()
+                .map(|var| {
+                    let value = std::env::var(&var).ok();
+                    unsafe {
+                        std::env::remove_var(&var);
+                    }
+                    (var, value)
+                })
+                .collect();
+
+            Self { values }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            for (var, value) in &self.values {
+                unsafe {
+                    match value {
+                        Some(value) => std::env::set_var(var, value),
+                        None => std::env::remove_var(var),
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn test_load_config_from_file() {
@@ -180,18 +328,54 @@ mod tests {
 
     #[test]
     fn test_load_config_with_overrides_no_file() {
-        // Note: If the provider doesn't have an API key, the code will fallback to
-        // a provider that has one or to "ollama". We test the override mechanism
-        // by checking max_steps is applied correctly.
         let overrides = HashMap::from([
             ("provider".to_string(), "anthropic".to_string()),
             ("max_steps".to_string(), "50".to_string()),
         ]);
 
         let config = load_config_with_overrides(None, overrides).unwrap();
-        // Provider may be overridden to ollama if anthropic has no API key configured
-        // What we're really testing is that overrides are applied
+        assert_eq!(config.default_provider, "anthropic");
         assert_eq!(config.max_steps, Some(50));
+    }
+
+    #[test]
+    #[serial]
+    fn test_implicit_default_provider_does_not_fallback_to_ollama_without_credentials() {
+        let _env = EnvVarGuard::remove_provider_vars();
+        let mut config = Config::default();
+
+        select_default_provider_with_credentials(&mut config, false);
+
+        assert_eq!(config.default_provider, "anthropic");
+    }
+
+    #[test]
+    #[serial]
+    fn test_implicit_default_provider_uses_available_credentialed_provider() {
+        let _env = EnvVarGuard::remove_provider_vars();
+        unsafe {
+            std::env::set_var("OPENAI_API_KEY", "sk-test-key");
+        }
+        let mut config = Config::default();
+
+        select_default_provider_with_credentials(&mut config, false);
+
+        assert_eq!(config.default_provider, "openai");
+    }
+
+    #[test]
+    #[serial]
+    fn test_explicit_ollama_default_provider_is_preserved() {
+        let _env = EnvVarGuard::remove_provider_vars();
+        unsafe {
+            std::env::set_var("OPENAI_API_KEY", "sk-test-key");
+        }
+        let mut config = Config::default();
+        config.default_provider = "ollama".to_string();
+
+        select_default_provider_with_credentials(&mut config, true);
+
+        assert_eq!(config.default_provider, "ollama");
     }
 
     #[test]
