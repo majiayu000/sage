@@ -14,13 +14,21 @@ fn sage_binary() -> String {
     format!("{}/../../target/debug/sage", manifest_dir)
 }
 
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
+fn sage_command(args: &str) -> String {
+    format!("{} {}", shell_quote(&sage_binary()), args)
+}
+
 /// Test that sage starts and shows the header
 #[test]
 fn test_sage_starts_with_header() {
     let mut p = spawn_bash(Some(TIMEOUT_MS)).expect("Failed to spawn bash");
 
     // Start sage in print mode with a simple command
-    p.send_line(&format!("{} -p 'echo hello'", sage_binary()))
+    p.send_line(&sage_command("-p 'echo hello'"))
         .expect("Failed to send command");
 
     // Should see some output (header or response)
@@ -38,7 +46,7 @@ fn test_invalid_provider_shows_error() {
         .expect("Failed to set env");
 
     // Run sage with print mode
-    p.send_line(&format!("{} -p 'hello'", sage_binary()))
+    p.send_line(&sage_command("-p 'hello'"))
         .expect("Failed to send command");
 
     // Should see error message (authentication, invalid key, etc.)
@@ -57,7 +65,7 @@ fn test_ctrl_c_cancellation() {
     let mut p = spawn_bash(Some(TIMEOUT_MS)).expect("Failed to spawn bash");
 
     // Start sage interactively
-    p.send_line(&sage_binary().to_string())
+    p.send_line(&shell_quote(&sage_binary()))
         .expect("Failed to start sage");
 
     // Wait a bit for startup
@@ -76,9 +84,8 @@ fn test_read_nonexistent_file_error() {
     let mut p = spawn_bash(Some(TIMEOUT_MS)).expect("Failed to spawn bash");
 
     // Run sage with a task that will fail
-    p.send_line(&format!(
-        "{} -p 'read the file /nonexistent/path/file_that_does_not_exist_12345.txt'",
-        sage_binary()
+    p.send_line(&sage_command(
+        "-p 'read the file /nonexistent/path/file_that_does_not_exist_12345.txt'",
     ))
     .expect("Failed to send command");
 
@@ -96,7 +103,7 @@ fn test_read_nonexistent_file_error() {
 fn test_help_command() {
     let mut p = spawn_bash(Some(TIMEOUT_MS)).expect("Failed to spawn bash");
 
-    p.send_line(&format!("{} --help", sage_binary()))
+    p.send_line(&sage_command("--help"))
         .expect("Failed to send command");
 
     // Should see help text
@@ -109,7 +116,7 @@ fn test_help_command() {
 fn test_version_command() {
     let mut p = spawn_bash(Some(TIMEOUT_MS)).expect("Failed to spawn bash");
 
-    p.send_line(&format!("{} --version", sage_binary()))
+    p.send_line(&sage_command("--version"))
         .expect("Failed to send command");
 
     // Should see version number
@@ -122,7 +129,7 @@ fn test_version_command() {
 fn test_doctor_command() {
     let mut p = spawn_bash(Some(TIMEOUT_MS)).expect("Failed to spawn bash");
 
-    p.send_line(&format!("{} doctor", sage_binary()))
+    p.send_line(&sage_command("doctor"))
         .expect("Failed to send command");
 
     // Should see health check output
