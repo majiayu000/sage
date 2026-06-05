@@ -256,8 +256,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
-- [Unreleased] - Current development (pre-release improvements)
-- [0.1.0] - Initial release (unreleased)
+- [Unreleased] - Current development.
+- [0.13.57] - Latest GitHub release, published on 2026-04-30.
+- [0.13.56] - Release workflow and cross-target build fixes.
+- [0.13.55] - Release packaging hardening and CLI architecture cleanup.
+- [0.11.5] - Quality, documentation, architecture, and security improvements.
+- [0.1.0] - Initial project baseline.
 
 ## Links
 

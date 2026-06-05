@@ -19,13 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-This project is a Rust rewrite of the original Trae Agent by ByteDance, which is 
-also licensed under the MIT License. We acknowledge and respect the original work 
-and maintain compatibility with the MIT License terms.
-
-Original Trae Agent: https://github.com/bytedance/trae-agent
-Original License: MIT License
-Copyright (c) 2025 ByteDance Ltd.
