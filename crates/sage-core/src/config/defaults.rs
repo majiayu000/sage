@@ -231,7 +231,12 @@ mod tests {
 
     impl EnvVarGuard {
         fn remove_provider_vars() -> Self {
-            let mut vars = vec!["SAGE_DEFAULT_PROVIDER".to_string()];
+            let mut vars = vec![
+                "SAGE_DEFAULT_PROVIDER".to_string(),
+                "SAGE_MAX_STEPS".to_string(),
+                "SAGE_WORKING_DIR".to_string(),
+                "SAGE_ENABLE_LAKEVIEW".to_string(),
+            ];
             for provider in [
                 "openai",
                 "zai",
@@ -246,7 +251,11 @@ mod tests {
                 "moonshot",
                 "kimi",
             ] {
-                vars.push(format!("SAGE_{}_API_KEY", provider.to_uppercase()));
+                let prefix = provider.to_uppercase();
+                vars.push(format!("SAGE_{prefix}_API_KEY"));
+                for suffix in ["API_KEY", "MODEL", "BASE_URL", "TEMPERATURE", "MAX_TOKENS"] {
+                    vars.push(format!("{prefix}_{suffix}"));
+                }
                 vars.extend(get_standard_env_vars_for_provider(provider));
             }
 
@@ -282,7 +291,10 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_load_config_from_file() {
+        let _env = EnvVarGuard::remove_provider_vars();
+
         let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path().join("test.json");
         let config_json = r#"{
@@ -327,7 +339,10 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_load_config_with_overrides_no_file() {
+        let _env = EnvVarGuard::remove_provider_vars();
+
         let overrides = HashMap::from([
             ("provider".to_string(), "anthropic".to_string()),
             ("max_steps".to_string(), "50".to_string()),
@@ -379,12 +394,9 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_load_config_with_overrides_with_file() {
-        // Clear any interfering environment variables from other tests
-        // SAFETY: This is a single-threaded test environment
-        unsafe {
-            std::env::remove_var("GOOGLE_TEMPERATURE");
-        }
+        let _env = EnvVarGuard::remove_provider_vars();
 
         let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path().join("test.json");

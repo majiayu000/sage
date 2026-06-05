@@ -6,6 +6,41 @@ mod tests {
     use crate::error::SageError;
     use crate::llm::client::LlmClient;
     use crate::llm::provider_types::{LlmProvider, LlmRequestParams, TimeoutConfig};
+    use serial_test::serial;
+
+    struct EnvVarGuard {
+        values: Vec<(&'static str, Option<String>)>,
+    }
+
+    impl EnvVarGuard {
+        fn clean(vars: &[&'static str]) -> Self {
+            let values = vars
+                .iter()
+                .map(|var| {
+                    let value = std::env::var(var).ok();
+                    unsafe {
+                        std::env::remove_var(var);
+                    }
+                    (*var, value)
+                })
+                .collect();
+
+            Self { values }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            for (var, value) in &self.values {
+                unsafe {
+                    match value {
+                        Some(value) => std::env::set_var(var, value),
+                        None => std::env::remove_var(var),
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn test_llm_client_creation() {
@@ -332,7 +367,10 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_client_config_validation() {
+        let _env = EnvVarGuard::clean(&["SAGE_OPENAI_API_KEY", "OPENAI_API_KEY"]);
+
         // Config without API key should fail validation for most providers
         let config = ProviderConfig::new("openai");
         let model_params = LlmRequestParams::default();

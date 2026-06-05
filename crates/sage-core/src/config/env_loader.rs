@@ -139,19 +139,73 @@ mod tests {
     use super::*;
     use serial_test::serial;
 
-    /// Clean up any leftover env vars from other tests that might run in parallel
-    fn clean_test_env() {
-        // SAFETY: Tests are run serially (#[serial]) so no concurrent access to env vars
-        unsafe {
-            std::env::remove_var("GOOGLE_TEMPERATURE");
-            std::env::remove_var("GOOGLE_API_KEY");
+    const ENV_PROVIDER_PREFIXES: &[&str] = &[
+        "OPENAI",
+        "ZAI",
+        "ANTHROPIC",
+        "GOOGLE",
+        "GLM",
+        "ZHIPU",
+        "MOONSHOT",
+        "KIMI",
+        "OLLAMA",
+    ];
+
+    struct EnvVarGuard {
+        values: Vec<(String, Option<String>)>,
+    }
+
+    impl EnvVarGuard {
+        fn clean_config_env() -> Self {
+            let mut vars = vec![
+                "SAGE_DEFAULT_PROVIDER".to_string(),
+                "SAGE_MAX_STEPS".to_string(),
+                "SAGE_WORKING_DIR".to_string(),
+                "SAGE_ENABLE_LAKEVIEW".to_string(),
+            ];
+
+            for prefix in ENV_PROVIDER_PREFIXES {
+                for suffix in ["API_KEY", "MODEL", "BASE_URL", "TEMPERATURE", "MAX_TOKENS"] {
+                    vars.push(format!("{prefix}_{suffix}"));
+                }
+            }
+
+            vars.sort();
+            vars.dedup();
+
+            let values = vars
+                .into_iter()
+                .map(|var| {
+                    let value = std::env::var(&var).ok();
+                    unsafe {
+                        std::env::remove_var(&var);
+                    }
+                    (var, value)
+                })
+                .collect();
+
+            Self { values }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            for (var, value) in &self.values {
+                unsafe {
+                    match value {
+                        Some(value) => std::env::set_var(var, value),
+                        None => std::env::remove_var(var),
+                    }
+                }
+            }
         }
     }
 
     #[test]
     #[serial]
     fn test_load_from_env_basic() {
-        clean_test_env();
+        let _env = EnvVarGuard::clean_config_env();
+
         // SAFETY: Tests are run serially (#[serial]) so no concurrent access to env vars
         unsafe {
             std::env::set_var("SAGE_DEFAULT_PROVIDER", "google");
@@ -161,18 +215,13 @@ mod tests {
         let config = load_from_env().unwrap();
         assert_eq!(config.default_provider, "google");
         assert_eq!(config.max_steps, Some(75));
-
-        // SAFETY: Tests are run serially (#[serial]) so no concurrent access to env vars
-        unsafe {
-            std::env::remove_var("SAGE_DEFAULT_PROVIDER");
-            std::env::remove_var("SAGE_MAX_STEPS");
-        }
     }
 
     #[test]
     #[serial]
     fn test_load_from_env_with_provider() {
-        clean_test_env();
+        let _env = EnvVarGuard::clean_config_env();
+
         unsafe {
             std::env::set_var("OPENAI_API_KEY", "env_test_key");
             std::env::set_var("OPENAI_MODEL", "gpt-4-turbo");
@@ -186,17 +235,13 @@ mod tests {
         } else {
             panic!("OpenAI provider should be loaded");
         }
-
-        unsafe {
-            std::env::remove_var("OPENAI_API_KEY");
-            std::env::remove_var("OPENAI_MODEL");
-        }
     }
 
     #[test]
     #[serial]
     fn test_load_provider_temperature_and_tokens() {
-        clean_test_env();
+        let _env = EnvVarGuard::clean_config_env();
+
         unsafe {
             std::env::set_var("ANTHROPIC_API_KEY", "test_key");
             std::env::set_var("ANTHROPIC_MODEL", "claude-3");
@@ -210,19 +255,13 @@ mod tests {
             assert_eq!(params.temperature, Some(0.9));
             assert_eq!(params.max_tokens, Some(8192));
         }
-
-        unsafe {
-            std::env::remove_var("ANTHROPIC_API_KEY");
-            std::env::remove_var("ANTHROPIC_MODEL");
-            std::env::remove_var("ANTHROPIC_TEMPERATURE");
-            std::env::remove_var("ANTHROPIC_MAX_TOKENS");
-        }
     }
 
     #[test]
     #[serial]
     fn test_load_provider_invalid_temperature() {
-        clean_test_env();
+        let _env = EnvVarGuard::clean_config_env();
+
         unsafe {
             std::env::set_var("GOOGLE_API_KEY", "test_key");
             std::env::set_var("GOOGLE_TEMPERATURE", "invalid");
@@ -230,17 +269,13 @@ mod tests {
 
         let result = load_from_env();
         assert!(result.is_err());
-
-        unsafe {
-            std::env::remove_var("GOOGLE_API_KEY");
-            std::env::remove_var("GOOGLE_TEMPERATURE");
-        }
     }
 
     #[test]
     #[serial]
     fn test_load_provider_base_url() {
-        clean_test_env();
+        let _env = EnvVarGuard::clean_config_env();
+
         unsafe {
             std::env::set_var("OLLAMA_BASE_URL", "http://localhost:11434");
             std::env::set_var("OLLAMA_MODEL", "llama2");
@@ -251,32 +286,26 @@ mod tests {
         if let Some(params) = config.model_providers.get("ollama") {
             assert_eq!(params.base_url, Some("http://localhost:11434".to_string()));
         }
-
-        unsafe {
-            std::env::remove_var("OLLAMA_BASE_URL");
-            std::env::remove_var("OLLAMA_MODEL");
-        }
     }
 
     #[test]
+    #[serial]
     fn test_load_lakeview_enabled() {
-        clean_test_env();
+        let _env = EnvVarGuard::clean_config_env();
+
         unsafe {
             std::env::set_var("SAGE_ENABLE_LAKEVIEW", "true");
         }
 
         let config = load_from_env().unwrap();
         assert!(config.enable_lakeview);
-
-        unsafe {
-            std::env::remove_var("SAGE_ENABLE_LAKEVIEW");
-        }
     }
 
     #[test]
     #[serial]
     fn test_load_multiple_providers() {
-        clean_test_env();
+        let _env = EnvVarGuard::clean_config_env();
+
         unsafe {
             std::env::set_var("OPENAI_API_KEY", "openai_key");
             std::env::set_var("OPENAI_MODEL", "gpt-4");
@@ -291,14 +320,5 @@ mod tests {
         assert!(config.model_providers.contains_key("openai"));
         assert!(config.model_providers.contains_key("anthropic"));
         assert!(config.model_providers.contains_key("google"));
-
-        unsafe {
-            std::env::remove_var("OPENAI_API_KEY");
-            std::env::remove_var("OPENAI_MODEL");
-            std::env::remove_var("ANTHROPIC_API_KEY");
-            std::env::remove_var("ANTHROPIC_MODEL");
-            std::env::remove_var("GOOGLE_API_KEY");
-            std::env::remove_var("GOOGLE_MODEL");
-        }
     }
 }
