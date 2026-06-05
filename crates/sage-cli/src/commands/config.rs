@@ -314,3 +314,38 @@ fn create_sample_config() -> Config {
         mcp: sage_core::config::McpConfig::default(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_validate_sync_rejects_custom_provider_until_supported()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempdir()?;
+        let config_path = dir.path().join("sage_config.json");
+        std::fs::write(
+            &config_path,
+            r#"{
+                "default_provider": "custom_my_llm",
+                "model_providers": {
+                    "custom_my_llm": {
+                        "model": "custom-model"
+                    }
+                }
+            }"#,
+        )?;
+
+        let result = validate_sync(config_path.to_str().ok_or("non-utf8 config path")?);
+
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Unknown provider 'custom_my_llm'")
+        );
+        Ok(())
+    }
+}

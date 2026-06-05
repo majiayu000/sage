@@ -112,6 +112,7 @@ pub fn load_config_with_overrides(
     }
 
     select_default_provider_with_credentials(&mut config, explicit_default_provider);
+    config.validate()?;
 
     Ok(config)
 }
@@ -275,6 +276,16 @@ mod tests {
 
             Self { values }
         }
+
+        fn remove_provider_vars_and_set_home(home: &Path) -> Self {
+            let mut guard = Self::remove_provider_vars();
+            let value = std::env::var("HOME").ok();
+            unsafe {
+                std::env::set_var("HOME", home);
+            }
+            guard.values.push(("HOME".to_string(), value));
+            guard
+        }
     }
 
     impl Drop for EnvVarGuard {
@@ -391,6 +402,33 @@ mod tests {
         select_default_provider_with_credentials(&mut config, true);
 
         assert_eq!(config.default_provider, "ollama");
+    }
+
+    #[test]
+    #[serial]
+    fn test_load_config_rejects_unknown_provider_from_global_credentials()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp_home = TempDir::new()?;
+        let _env = EnvVarGuard::remove_provider_vars_and_set_home(temp_home.path());
+        let sage_dir = temp_home.path().join(".sage");
+        fs::create_dir_all(&sage_dir)?;
+        fs::write(
+            sage_dir.join("credentials.json"),
+            r#"{"api_keys":{"custom_my_llm":"sk-test-key"}}"#,
+        )?;
+
+        let result = load_config_with_overrides(None, HashMap::new());
+        let error = match result {
+            Ok(_) => panic!("unknown credential provider should fail validation"),
+            Err(error) => error,
+        };
+
+        assert!(
+            error
+                .to_string()
+                .contains("Unknown provider 'custom_my_llm'")
+        );
+        Ok(())
     }
 
     #[test]

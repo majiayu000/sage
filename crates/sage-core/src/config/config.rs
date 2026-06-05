@@ -4,7 +4,7 @@ use crate::config::model::{
     LakeviewConfig, LoggingConfig, McpConfig, ModelParameters, ToolConfig, TrajectoryConfig,
 };
 use crate::config::provider_defaults::create_default_providers;
-use crate::config::validation::validate_logging;
+use crate::config::validation::{validate_logging, validate_providers};
 use crate::error::{SageError, SageResult};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -109,6 +109,8 @@ impl Config {
 
     /// Validate the entire configuration
     pub fn validate(&self) -> SageResult<()> {
+        validate_providers(self)?;
+
         // Validate default provider exists
         if !self.model_providers.contains_key(&self.default_provider) {
             return Err(SageError::config(format!(
@@ -283,6 +285,29 @@ mod tests {
         let mut config = Config::default();
         config.default_provider = "nonexistent".to_string();
         assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_config_validate_rejects_custom_provider_until_supported() {
+        let mut config = Config::default();
+        config.model_providers.insert(
+            "custom_my_llm".to_string(),
+            ModelParameters {
+                model: "custom-model".to_string(),
+                ..Default::default()
+            },
+        );
+        config.default_provider = "custom_my_llm".to_string();
+
+        let result = config.validate();
+
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Unknown provider 'custom_my_llm'")
+        );
     }
 
     #[test]
