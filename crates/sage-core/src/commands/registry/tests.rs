@@ -8,6 +8,12 @@ mod tests {
     use tokio::fs::{self, File};
     use tokio::io::AsyncWriteExt;
 
+    async fn close_command_fixture(mut file: File) {
+        if let Err(error) = file.flush().await {
+            panic!("failed to flush command fixture: {error}");
+        }
+    }
+
     #[tokio::test]
     async fn test_registry_creation() {
         let registry = CommandRegistry::new("/project");
@@ -93,6 +99,7 @@ mod tests {
         let cmd_file = commands_dir.join("greet.md");
         let mut file = File::create(&cmd_file).await.unwrap();
         file.write_all(b"Say hello to $ARGUMENTS").await.unwrap();
+        close_command_fixture(file).await;
 
         let mut registry = CommandRegistry::new(temp_dir.path());
         let count = registry.discover().await.unwrap();
@@ -112,6 +119,7 @@ mod tests {
         file.write_all(b"---\ndescription: A fancy command\n---\nDo something fancy")
             .await
             .unwrap();
+        close_command_fixture(file).await;
 
         let mut registry = CommandRegistry::new(temp_dir.path());
         registry.discover().await.unwrap();
@@ -129,6 +137,7 @@ mod tests {
         fs::create_dir_all(&user_dir).await.unwrap();
         let mut f1 = File::create(user_dir.join("test.md")).await.unwrap();
         f1.write_all(b"User version").await.unwrap();
+        close_command_fixture(f1).await;
 
         // Create project command
         let project_dir = temp_dir
@@ -139,6 +148,7 @@ mod tests {
         fs::create_dir_all(&project_dir).await.unwrap();
         let mut f2 = File::create(project_dir.join("test.md")).await.unwrap();
         f2.write_all(b"Project version").await.unwrap();
+        close_command_fixture(f2).await;
 
         let mut registry = CommandRegistry::new(temp_dir.path().join("project"))
             .with_user_config_dir(temp_dir.path().join("user"));
@@ -158,6 +168,7 @@ mod tests {
         // Try to override builtin
         let mut file = File::create(commands_dir.join("help.md")).await.unwrap();
         file.write_all(b"Overridden help").await.unwrap();
+        close_command_fixture(file).await;
 
         let mut registry = CommandRegistry::new(temp_dir.path());
         registry.register_builtins();
