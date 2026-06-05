@@ -175,14 +175,20 @@ jobs:
         if: matrix.archive == 'tar.gz'
         run: |
           cd target/${{ matrix.target }}/release
-          tar czf ../../../${{ matrix.asset_name }}.tar.gz ${{ matrix.artifact_name }}
+          mkdir -p package
+          cp ${{ matrix.artifact_name }} package/
+          cp ../../../LICENSE ../../../NOTICE package/
+          tar czf ../../../${{ matrix.asset_name }}.tar.gz -C package .
 
       - name: Package (zip)
         if: matrix.archive == 'zip'
         shell: pwsh
         run: |
           cd target/${{ matrix.target }}/release
-          Compress-Archive -Path ${{ matrix.artifact_name }} -DestinationPath ../../../${{ matrix.asset_name }}.zip
+          New-Item -ItemType Directory -Path package | Out-Null
+          Copy-Item ${{ matrix.artifact_name }} package/
+          Copy-Item ../../../LICENSE, ../../../NOTICE package/
+          Compress-Archive -Path package/* -DestinationPath ../../../${{ matrix.asset_name }}.zip
 
       - name: Calculate SHA256
         id: sha

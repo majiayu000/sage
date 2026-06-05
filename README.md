@@ -54,6 +54,13 @@ cargo install sage-cli
 brew install majiayu000/sage/sage
 ```
 
+## Release Status
+
+- Latest verified GitHub release: [`v0.13.57`](https://github.com/majiayu000/sage/releases/tag/v0.13.57), published on 2026-04-30.
+- GitHub release archives are the primary binary distribution path for macOS and Linux.
+- Cargo installs use the `sage-cli` package (`cargo install sage-cli`); the root workspace package named `sage` is private and is not the CLI package on crates.io.
+- Homebrew installs use the `majiayu000/sage` tap.
+
 ## ⚡ Quick Start
 
 ```bash
@@ -72,6 +79,14 @@ sage -c
 # Resume specific session
 sage -r <session-id>
 ```
+
+## Limitations
+
+- Sage can edit files and run shell commands in the current workspace; review tool requests and run in a trusted checkout.
+- Cloud LLM providers require user-supplied API keys. Only Ollama-backed workflows are designed for offline use.
+- Web, browser, MCP, and model-list features depend on local services or network availability and may fail when those dependencies are unavailable.
+- Startup benchmark numbers measure local process startup only; they do not measure model latency, task quality, or end-to-end coding speed.
+- Provider support is limited to the shipped provider set and documented OpenAI-compatible routes.
 
 ## ✨ Features
 
@@ -288,6 +303,8 @@ Run the startup benchmark:
 ./benchmarks/startup.sh
 ```
 
+Example output from the benchmark script:
+
 ```
 Code Agent Startup Benchmark
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -300,6 +317,8 @@ aider            780
 
 Sage is 11.5x faster than Claude Code
 ```
+
+Benchmark results depend on hardware, shell startup cost, installed comparison tools, and the selected iteration count. Re-run the script locally before relying on the numbers.
 
 ## 📚 Documentation
 
@@ -333,6 +352,9 @@ intentionally ignored and should not be committed.
 ## 📄 License
 
 MIT License - see [LICENSE](LICENSE) for details.
+
+Sage is a Rust rewrite inspired by [Trae Agent](https://github.com/bytedance/trae-agent), which is also MIT licensed.
+Third-party attribution and retained original MIT notices are listed in [NOTICE](NOTICE).
 
 ## 🙏 Acknowledgments
 

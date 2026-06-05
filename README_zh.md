@@ -54,6 +54,13 @@ cargo install sage-cli
 brew install majiayu000/sage/sage
 ```
 
+## Release Status
+
+- 最新已验证 GitHub release: [`v0.13.57`](https://github.com/majiayu000/sage/releases/tag/v0.13.57)，发布于 2026-04-30。
+- GitHub release archives 是 macOS 和 Linux 的主要二进制分发路径。
+- Cargo 安装使用 `sage-cli` 包 (`cargo install sage-cli`)；根 workspace 中名为 `sage` 的 package 是 private，不是 crates.io 上的 CLI 包。
+- Homebrew 安装使用 `majiayu000/sage` tap。
+
 ## ⚡ Quick Start
 
 ```bash
@@ -72,6 +79,14 @@ sage -c
 # Resume specific session
 sage -r <session-id>
 ```
+
+## Limitations
+
+- Sage 可以在当前 workspace 中编辑文件并运行 shell 命令；请审查 tool request，并在可信 checkout 中运行。
+- Cloud LLM providers 需要用户自行提供 API key。只有基于 Ollama 的 workflow 设计为离线使用。
+- Web、browser、MCP 和 model-list 功能依赖本地服务或网络可用性；这些依赖不可用时功能可能失败。
+- Startup benchmark 数字只测量本地进程启动耗时，不测量模型延迟、任务质量或端到端编码速度。
+- Provider support 限于已发布的 provider 集和文档化的 OpenAI-compatible routes。
 
 ## ✨ Features
 
@@ -301,6 +316,8 @@ aider            780
 Sage is 11.5x faster than Claude Code
 ```
 
+Benchmark results depend on hardware, shell startup cost, installed comparison tools, and the selected iteration count. Re-run the script locally before relying on the numbers.
+
 ## 📚 Documentation
 
 - [User Guide](docs/user-guide/) - Getting started, configuration, usage
@@ -333,6 +350,9 @@ intentionally ignored and should not be committed.
 ## 📄 License
 
 MIT License - see [LICENSE](LICENSE) for details.
+
+Sage is a Rust rewrite inspired by [Trae Agent](https://github.com/bytedance/trae-agent), which is also MIT licensed.
+Third-party attribution and retained original MIT notices are listed in [NOTICE](NOTICE).
 
 ## 🙏 Acknowledgments
 

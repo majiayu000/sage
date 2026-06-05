@@ -1,0 +1,9 @@
+Sage Third-Party Notices
+
+This crate is part of Sage, a Rust rewrite inspired by Trae Agent:
+https://github.com/bytedance/trae-agent
+
+Trae Agent is licensed under the MIT License.
+
+Original Trae Agent copyright notice:
+Copyright (c) 2025 ByteDance Ltd.
