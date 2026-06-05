@@ -4,6 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::io;
 use std::path::Path;
 use tracing::warn;
 
@@ -21,21 +22,31 @@ pub struct CredentialsFile {
 
 impl CredentialsFile {
     /// Load credentials from a file
-    pub fn load(path: &Path) -> Option<Self> {
-        if !path.exists() {
-            return None;
-        }
+    pub fn load(path: &Path) -> io::Result<Option<Self>> {
+        let content = match std::fs::read_to_string(path) {
+            Ok(content) => content,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(error),
+        };
 
-        match std::fs::read_to_string(path) {
-            Ok(content) => match serde_json::from_str(&content) {
-                Ok(creds) => Some(creds),
-                Err(e) => {
-                    warn!("Failed to parse credentials file {}: {}", path.display(), e);
-                    None
-                }
-            },
-            Err(e) => {
-                warn!("Failed to read credentials file {}: {}", path.display(), e);
+        serde_json::from_str(&content)
+            .map(Some)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
+    }
+
+    /// Load credentials for read-only discovery paths.
+    ///
+    /// Save paths must call `load` directly so corrupted or unreadable files
+    /// cannot be treated as missing and overwritten with a fresh default file.
+    pub fn load_or_warn(path: &Path) -> Option<Self> {
+        match Self::load(path) {
+            Ok(creds) => creds,
+            Err(error) => {
+                warn!(
+                    "Failed to load credentials file {}: {}",
+                    path.display(),
+                    error
+                );
                 None
             }
         }
@@ -163,7 +174,10 @@ mod tests {
             0o600,
             "rewrite must restore 0o600 even if the previous file was 0o644"
         );
-        let loaded = CredentialsFile::load(&path).unwrap();
+        let loaded = match CredentialsFile::load(&path) {
+            Ok(Some(loaded)) => loaded,
+            other => panic!("credentials should load after save, got {other:?}"),
+        };
         assert_eq!(loaded.get_api_key("openai"), Some("second"));
     }
 
@@ -185,5 +199,31 @@ mod tests {
             1,
             "save must clean up after itself: {entries:?}"
         );
+    }
+
+    #[test]
+    fn load_returns_error_for_invalid_json() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = TempDir::new()?;
+        let path = dir.path().join("credentials.json");
+        std::fs::write(&path, "{not valid json")?;
+
+        let error = match CredentialsFile::load(&path) {
+            Ok(_) => panic!("invalid JSON must error"),
+            Err(error) => error,
+        };
+
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        Ok(())
+    }
+
+    #[test]
+    fn load_returns_none_only_for_missing_file() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = TempDir::new()?;
+        let path = dir.path().join("missing.json");
+
+        let loaded = CredentialsFile::load(&path)?;
+
+        assert!(loaded.is_none());
+        Ok(())
     }
 }

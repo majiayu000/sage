@@ -71,7 +71,7 @@ impl CredentialResolver {
 
         // 3. Check project-level credentials
         let project_path = self.config.project_credentials_path();
-        if let Some(creds) = CredentialsFile::load(&project_path) {
+        if let Some(creds) = CredentialsFile::load_or_warn(&project_path) {
             if let Some(key) = creds.get_api_key(provider) {
                 debug!("Found {} key from project credentials", provider);
                 return ResolvedCredential::new(
@@ -84,7 +84,7 @@ impl CredentialResolver {
 
         // 4. Check global credentials
         let global_path = self.config.global_credentials_path();
-        if let Some(creds) = CredentialsFile::load(&global_path) {
+        if let Some(creds) = CredentialsFile::load_or_warn(&global_path) {
             if let Some(key) = creds.get_api_key(provider) {
                 debug!("Found {} key from global credentials", provider);
                 return ResolvedCredential::new(
@@ -98,7 +98,7 @@ impl CredentialResolver {
         // 5. Try auto-import from other tools
         if self.config.enable_auto_import {
             for (tool_name, path) in auto_import_paths() {
-                if let Some(creds) = CredentialsFile::load(&path) {
+                if let Some(creds) = CredentialsFile::load_or_warn(&path) {
                     if let Some(key) = creds.get_api_key(provider) {
                         info!(
                             "Auto-imported {} key from {} at {}",
@@ -197,7 +197,7 @@ impl CredentialResolver {
     /// Save a credential to the global credentials file
     pub fn save_credential(&self, provider: &str, key: &str) -> std::io::Result<()> {
         let path = self.config.global_credentials_path();
-        let mut creds = CredentialsFile::load(&path).unwrap_or_default();
+        let mut creds = CredentialsFile::load(&path)?.unwrap_or_default();
         creds.set_api_key(provider, key);
         creds.save(&path)
     }
