@@ -351,6 +351,9 @@ intentionally ignored and should not be committed.
 
 MIT License - see [LICENSE](LICENSE) for details.
 
+Sage is a Rust rewrite inspired by [Trae Agent](https://github.com/bytedance/trae-agent), which is also MIT licensed.
+Third-party attribution and retained original MIT notices are listed in [NOTICE](NOTICE).
+
 ## 🙏 Acknowledgments
 
 Inspired by:
