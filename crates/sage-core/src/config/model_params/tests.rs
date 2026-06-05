@@ -61,7 +61,7 @@ fn test_model_parameters_get_api_key_from_config() {
 #[test]
 #[serial]
 fn test_model_parameters_get_api_key_from_env() {
-    let _env = EnvVarGuard::clean(&["OPENAI_API_KEY"]);
+    let _env = EnvVarGuard::clean(&["SAGE_OPENAI_API_KEY", "OPENAI_API_KEY"]);
 
     unsafe {
         std::env::set_var("OPENAI_API_KEY", "env_key");

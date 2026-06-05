@@ -1,17 +1,24 @@
 //! Tests for the unified config loader
 
 use super::*;
+use crate::config::credential::providers::default_providers;
 use serial_test::serial;
 use std::env;
 use tempfile::tempdir;
 
 struct EnvVarGuard {
-    values: Vec<(&'static str, Option<String>)>,
+    values: Vec<(String, Option<String>)>,
 }
 
 impl EnvVarGuard {
     fn clean_config_env() -> Self {
-        let vars = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY"];
+        let mut vars: Vec<String> = default_providers()
+            .into_iter()
+            .map(|provider| provider.env_var)
+            .collect();
+        vars.sort();
+        vars.dedup();
+
         let values = vars
             .iter()
             .map(|var| {
@@ -19,7 +26,7 @@ impl EnvVarGuard {
                 unsafe {
                     env::remove_var(var);
                 }
-                (*var, value)
+                (var.clone(), value)
             })
             .collect();
 
