@@ -2,7 +2,7 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::config::provider::ProviderConfig;
+    use crate::config::{Config, provider::ProviderConfig};
     use crate::error::SageError;
     use crate::llm::client::LlmClient;
     use crate::llm::provider_types::{LlmProvider, LlmRequestParams, TimeoutConfig};
@@ -61,6 +61,32 @@ mod tests {
         let client = client.unwrap();
         assert_eq!(client.provider(), &LlmProvider::OpenAI);
         assert_eq!(client.model(), "gpt-4");
+    }
+
+    #[test]
+    #[serial]
+    fn test_openai_from_config_uses_v1_chat_completions_url()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let _env = EnvVarGuard::clean(&["SAGE_OPENAI_API_KEY", "OPENAI_API_KEY"]);
+
+        let mut config = Config::default();
+        config.set_default_provider("openai".to_string())?;
+        let openai = config
+            .model_providers
+            .get_mut("openai")
+            .ok_or_else(|| SageError::config("OpenAI default provider missing"))?;
+        openai.api_key = Some("sk-test-key".to_string());
+
+        let (client, provider_name, _) = LlmClient::from_config(&config)?;
+        let base_url = client.config().get_base_url();
+
+        assert_eq!(provider_name, "openai");
+        assert_eq!(base_url, "https://api.openai.com/v1");
+        assert_eq!(
+            format!("{base_url}/chat/completions"),
+            "https://api.openai.com/v1/chat/completions"
+        );
+        Ok(())
     }
 
     #[test]
