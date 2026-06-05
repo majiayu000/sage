@@ -110,6 +110,26 @@ fn test_save_and_load_credential() {
 }
 
 #[test]
+fn save_credential_does_not_overwrite_invalid_credentials_file()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp_dir = tempdir()?;
+    let global_dir = temp_dir.path().join(".sage");
+    std::fs::create_dir_all(&global_dir)?;
+    let creds_path = global_dir.join("credentials.json");
+    let invalid = "{not valid json";
+    std::fs::write(&creds_path, invalid)?;
+
+    let config = ResolverConfig::default().with_global_dir(&global_dir);
+    let resolver = CredentialResolver::new(config);
+
+    let result = resolver.save_credential("test_provider", "test_api_key");
+
+    assert!(result.is_err());
+    assert_eq!(std::fs::read_to_string(&creds_path)?, invalid);
+    Ok(())
+}
+
+#[test]
 fn test_get_status() {
     let temp_dir = tempdir().unwrap();
     let config = ResolverConfig::default()
