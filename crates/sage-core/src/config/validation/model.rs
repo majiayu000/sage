@@ -114,7 +114,42 @@ mod tests {
     use crate::config::model::{
         LoggingConfig, McpConfig, ModelParameters, ToolConfig, TrajectoryConfig,
     };
+    use serial_test::serial;
     use std::collections::HashMap;
+
+    struct EnvVarGuard {
+        values: Vec<(&'static str, Option<String>)>,
+    }
+
+    impl EnvVarGuard {
+        fn clean(vars: &[&'static str]) -> Self {
+            let values = vars
+                .iter()
+                .map(|var| {
+                    let value = std::env::var(var).ok();
+                    unsafe {
+                        std::env::remove_var(var);
+                    }
+                    (*var, value)
+                })
+                .collect();
+
+            Self { values }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            for (var, value) in &self.values {
+                unsafe {
+                    match value {
+                        Some(value) => std::env::set_var(var, value),
+                        None => std::env::remove_var(var),
+                    }
+                }
+            }
+        }
+    }
 
     fn create_minimal_config(params: ModelParameters) -> Config {
         let mut model_providers = HashMap::new();
@@ -240,18 +275,15 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_validate_models_missing_api_key_cloud_provider() {
+        let _env = EnvVarGuard::clean(&["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GOOGLE_API_KEY"]);
+
         let params = ModelParameters {
             model: "m".to_string(),
             api_key: None,
             ..Default::default()
         };
-        // SAFETY: Test code in single-threaded context
-        unsafe {
-            std::env::remove_var("ANTHROPIC_API_KEY");
-            std::env::remove_var("OPENAI_API_KEY");
-            std::env::remove_var("GOOGLE_API_KEY");
-        }
         let result = validate_models(&create_minimal_config(params));
         assert!(
             result.is_err()

@@ -2,6 +2,41 @@
 
 use super::*;
 use crate::config::provider::ApiKeySource;
+use serial_test::serial;
+
+struct EnvVarGuard {
+    values: Vec<(&'static str, Option<String>)>,
+}
+
+impl EnvVarGuard {
+    fn clean(vars: &[&'static str]) -> Self {
+        let values = vars
+            .iter()
+            .map(|var| {
+                let value = std::env::var(var).ok();
+                unsafe {
+                    std::env::remove_var(var);
+                }
+                (*var, value)
+            })
+            .collect();
+
+        Self { values }
+    }
+}
+
+impl Drop for EnvVarGuard {
+    fn drop(&mut self) {
+        for (var, value) in &self.values {
+            unsafe {
+                match value {
+                    Some(value) => std::env::set_var(var, value),
+                    None => std::env::remove_var(var),
+                }
+            }
+        }
+    }
+}
 
 #[test]
 fn test_model_parameters_default() {
@@ -24,7 +59,10 @@ fn test_model_parameters_get_api_key_from_config() {
 }
 
 #[test]
+#[serial]
 fn test_model_parameters_get_api_key_from_env() {
+    let _env = EnvVarGuard::clean(&["OPENAI_API_KEY"]);
+
     unsafe {
         std::env::set_var("OPENAI_API_KEY", "env_key");
     }
@@ -37,10 +75,6 @@ fn test_model_parameters_get_api_key_from_env() {
     let key_info = params.get_api_key_info_for_provider("openai");
     assert_eq!(key_info.key, Some("env_key".to_string()));
     assert_eq!(key_info.source, ApiKeySource::StandardEnvVar);
-
-    unsafe {
-        std::env::remove_var("OPENAI_API_KEY");
-    }
 }
 
 #[test]

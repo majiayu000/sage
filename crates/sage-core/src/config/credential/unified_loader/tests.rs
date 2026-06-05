@@ -5,10 +5,38 @@ use serial_test::serial;
 use std::env;
 use tempfile::tempdir;
 
-fn clean_env() {
-    unsafe {
-        env::remove_var("ANTHROPIC_API_KEY");
-        env::remove_var("OPENAI_API_KEY");
+struct EnvVarGuard {
+    values: Vec<(&'static str, Option<String>)>,
+}
+
+impl EnvVarGuard {
+    fn clean_config_env() -> Self {
+        let vars = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY"];
+        let values = vars
+            .iter()
+            .map(|var| {
+                let value = env::var(var).ok();
+                unsafe {
+                    env::remove_var(var);
+                }
+                (*var, value)
+            })
+            .collect();
+
+        Self { values }
+    }
+}
+
+impl Drop for EnvVarGuard {
+    fn drop(&mut self) {
+        for (var, value) in &self.values {
+            unsafe {
+                match value {
+                    Some(value) => env::set_var(var, value),
+                    None => env::remove_var(var),
+                }
+            }
+        }
     }
 }
 
@@ -36,7 +64,7 @@ fn test_unified_loader_builder() {
 #[test]
 #[serial]
 fn test_unified_loader_load_no_file() {
-    clean_env();
+    let _env = EnvVarGuard::clean_config_env();
 
     let dir = tempdir().unwrap();
     let loader = UnifiedConfigLoader::new()
@@ -54,7 +82,7 @@ fn test_unified_loader_load_no_file() {
 #[test]
 #[serial]
 fn test_unified_loader_load_with_file() {
-    clean_env();
+    let _env = EnvVarGuard::clean_config_env();
 
     let dir = tempdir().unwrap();
     let config_path = dir.path().join("sage_config.json");
@@ -86,7 +114,7 @@ fn test_unified_loader_load_with_file() {
 #[test]
 #[serial]
 fn test_unified_loader_load_nonexistent_file() {
-    clean_env();
+    let _env = EnvVarGuard::clean_config_env();
 
     let dir = tempdir().unwrap();
     let loader = UnifiedConfigLoader::new()
@@ -105,7 +133,7 @@ fn test_unified_loader_load_nonexistent_file() {
 #[test]
 #[serial]
 fn test_unified_loader_cli_overrides() {
-    clean_env();
+    let _env = EnvVarGuard::clean_config_env();
 
     let dir = tempdir().unwrap();
     let loader = UnifiedConfigLoader::new()
@@ -131,7 +159,7 @@ fn test_unified_loader_cli_overrides() {
 #[test]
 #[serial]
 fn test_unified_loader_env_var_resolution() {
-    clean_env();
+    let _env = EnvVarGuard::clean_config_env();
 
     unsafe {
         env::set_var("ANTHROPIC_API_KEY", "env-anthropic-key");
@@ -153,14 +181,12 @@ fn test_unified_loader_env_var_resolution() {
 
     // Should be at least partial status
     assert!(result.is_ready());
-
-    clean_env();
 }
 
 #[test]
 #[serial]
 fn test_unified_loader_project_config_discovery() {
-    clean_env();
+    let _env = EnvVarGuard::clean_config_env();
 
     let dir = tempdir().unwrap();
 
@@ -195,7 +221,7 @@ fn test_unified_loader_default() {
 #[test]
 #[serial]
 fn test_load_config_unified_function() {
-    clean_env();
+    let _env = EnvVarGuard::clean_config_env();
 
     let result = load_config_unified(None);
 
@@ -206,7 +232,7 @@ fn test_load_config_unified_function() {
 #[test]
 #[serial]
 fn test_unified_loader_env_var_placeholder_replacement() {
-    clean_env();
+    let _env = EnvVarGuard::clean_config_env();
 
     let dir = tempdir().unwrap();
     let config_path = dir.path().join("sage_config.json");
@@ -238,6 +264,4 @@ fn test_unified_loader_env_var_placeholder_replacement() {
     // The placeholder should be replaced with the actual env var value
     let anthropic_params = result.config.model_providers.get("anthropic").unwrap();
     assert_eq!(anthropic_params.api_key, Some("resolved-key".to_string()));
-
-    clean_env();
 }

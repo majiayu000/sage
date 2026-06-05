@@ -1,7 +1,42 @@
 //! Tests for the credential resolver
 
 use super::*;
+use serial_test::serial;
 use tempfile::tempdir;
+
+struct EnvVarGuard {
+    values: Vec<(&'static str, Option<String>)>,
+}
+
+impl EnvVarGuard {
+    fn clean(vars: &[&'static str]) -> Self {
+        let values = vars
+            .iter()
+            .map(|var| {
+                let value = std::env::var(var).ok();
+                unsafe {
+                    std::env::remove_var(var);
+                }
+                (*var, value)
+            })
+            .collect();
+
+        Self { values }
+    }
+}
+
+impl Drop for EnvVarGuard {
+    fn drop(&mut self) {
+        for (var, value) in &self.values {
+            unsafe {
+                match value {
+                    Some(value) => std::env::set_var(var, value),
+                    None => std::env::remove_var(var),
+                }
+            }
+        }
+    }
+}
 
 #[test]
 fn test_resolver_with_defaults() {
@@ -11,7 +46,10 @@ fn test_resolver_with_defaults() {
 }
 
 #[test]
+#[serial]
 fn test_resolve_from_env() {
+    let _env = EnvVarGuard::clean(&["SAGE_TEST_ANTHROPIC_KEY"]);
+
     // Set a test environment variable
     let test_key = "test_key_12345";
 
@@ -26,11 +64,6 @@ fn test_resolve_from_env() {
 
     assert!(credential.has_value());
     assert_eq!(credential.value(), Some(test_key));
-
-    // Clean up
-    unsafe {
-        std::env::remove_var("SAGE_TEST_ANTHROPIC_KEY");
-    }
 }
 
 #[test]
@@ -90,7 +123,10 @@ fn test_get_status() {
 }
 
 #[test]
+#[serial]
 fn test_priority_cli_over_env() {
+    let _env = EnvVarGuard::clean(&["SAGE_TEST_PRIORITY_KEY"]);
+
     // Set env var with unique name
     unsafe {
         std::env::set_var("SAGE_TEST_PRIORITY_KEY", "env_value");
@@ -104,11 +140,6 @@ fn test_priority_cli_over_env() {
     // CLI should take priority
     assert!(credential.has_value());
     assert_eq!(credential.value(), Some("cli_value"));
-
-    // Clean up
-    unsafe {
-        std::env::remove_var("SAGE_TEST_PRIORITY_KEY");
-    }
 }
 
 #[test]
@@ -130,7 +161,10 @@ fn test_resolver_default() {
 }
 
 #[test]
+#[serial]
 fn has_default_provider_accepts_azure_legacy_env_var() {
+    let _env = EnvVarGuard::clean(&["AZURE_API_KEY", "AZURE_OPENAI_API_KEY"]);
+
     // Regression guard for the Azure resolver regression: before this
     // fix, adding `AZURE_OPENAI_API_KEY` as the canonical Azure entry
     // caused `has_default_provider("azure")` to ignore users who only
@@ -139,69 +173,41 @@ fn has_default_provider_accepts_azure_legacy_env_var() {
     // `get_standard_env_vars_for_provider("azure")`, so both names
     // resolve.
     //
-    // Tests run in parallel; use unique env-var names — but here we
-    // need the actual `AZURE_API_KEY` name because it's part of the
-    // production fallback list. Save/restore on every exit path.
-    let prev_legacy = std::env::var("AZURE_API_KEY").ok();
-    let prev_canonical = std::env::var("AZURE_OPENAI_API_KEY").ok();
-
-    let restore = |legacy: &Option<String>, canonical: &Option<String>| {
-        // SAFETY: env mutation, this test is the sole writer of these vars
-        unsafe {
-            match legacy {
-                Some(v) => std::env::set_var("AZURE_API_KEY", v),
-                None => std::env::remove_var("AZURE_API_KEY"),
-            }
-            match canonical {
-                Some(v) => std::env::set_var("AZURE_OPENAI_API_KEY", v),
-                None => std::env::remove_var("AZURE_OPENAI_API_KEY"),
-            }
-        }
-    };
-
-    // Clean slate.
-    // SAFETY: restore() above keeps state consistent on early exit.
-    unsafe {
-        std::env::remove_var("AZURE_API_KEY");
-        std::env::remove_var("AZURE_OPENAI_API_KEY");
-    }
+    // This test must use the actual Azure env var names because they
+    // are part of the production fallback list. EnvVarGuard restores
+    // any caller-provided values on normal exit or panic.
 
     let resolver = CredentialResolver::new(ResolverConfig::default());
 
     // Case A: only the legacy env var is set.
-    // SAFETY: see `restore` above.
+    // SAFETY: this test holds the serial env lock and EnvVarGuard restores state.
     unsafe { std::env::set_var("AZURE_API_KEY", "legacy_secret") };
     let configured = resolver.has_default_provider("azure");
     if !configured {
-        restore(&prev_legacy, &prev_canonical);
         panic!(
             "AZURE_API_KEY-only users must show as configured (regression of multi-env-var fallback)"
         );
     }
 
     // Case B: only the canonical env var is set.
-    // SAFETY: see `restore` above.
+    // SAFETY: this test holds the serial env lock and EnvVarGuard restores state.
     unsafe {
         std::env::remove_var("AZURE_API_KEY");
         std::env::set_var("AZURE_OPENAI_API_KEY", "canonical_secret");
     }
     let configured_canonical = resolver.has_default_provider("azure");
     if !configured_canonical {
-        restore(&prev_legacy, &prev_canonical);
         panic!("AZURE_OPENAI_API_KEY-only users must show as configured");
     }
 
     // Case C: neither set.
-    // SAFETY: see `restore` above.
+    // SAFETY: this test holds the serial env lock and EnvVarGuard restores state.
     unsafe {
         std::env::remove_var("AZURE_API_KEY");
         std::env::remove_var("AZURE_OPENAI_API_KEY");
     }
     let configured_neither = resolver.has_default_provider("azure");
     if configured_neither {
-        restore(&prev_legacy, &prev_canonical);
         panic!("with neither env var set, azure must NOT show as configured");
     }
-
-    restore(&prev_legacy, &prev_canonical);
 }
