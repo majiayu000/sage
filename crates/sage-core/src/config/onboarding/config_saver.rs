@@ -12,7 +12,9 @@ use tracing::info;
 /// Save credentials to the credentials file
 pub fn save_credentials(global_dir: &Path, provider: &str, api_key: &str) -> SageResult<()> {
     let creds_path = global_dir.join("credentials.json");
-    let mut creds = CredentialsFile::load(&creds_path).unwrap_or_default();
+    let mut creds = CredentialsFile::load(&creds_path)
+        .map_err(|e| SageError::config(format!("Failed to load credentials: {}", e)))?
+        .unwrap_or_default();
     creds.set_api_key(provider, api_key);
 
     creds
@@ -70,5 +72,26 @@ fn apply_provider_defaults(provider: &str, params: &mut ModelParameters) {
         params.base_url = Some("https://open.bigmodel.cn/api/anthropic".to_string());
         params.api_version = Some("2023-06-01".to_string());
         params.parallel_tool_calls = Some(false);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn save_credentials_does_not_overwrite_invalid_credentials_file()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempdir()?;
+        let creds_path = dir.path().join("credentials.json");
+        let invalid = "{not valid json";
+        std::fs::write(&creds_path, invalid)?;
+
+        let result = save_credentials(dir.path(), "openai", "sk-test");
+
+        assert!(result.is_err());
+        assert_eq!(std::fs::read_to_string(&creds_path)?, invalid);
+        Ok(())
     }
 }

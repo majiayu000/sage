@@ -184,7 +184,10 @@ fn test_onboarding_manager_save_configuration() {
     assert!(creds_path.exists());
 
     // Load and verify
-    let creds = CredentialsFile::load(&creds_path).unwrap();
+    let creds = match CredentialsFile::load(&creds_path) {
+        Ok(Some(creds)) => creds,
+        other => panic!("credentials should load after save, got {other:?}"),
+    };
     assert_eq!(creds.get_api_key("anthropic"), Some("sk-test-key"));
 }
 

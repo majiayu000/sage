@@ -66,7 +66,7 @@ pub fn load_config_with_overrides(
 
     // Load credentials from ~/.sage/credentials.json
     if let Some(creds_path) = dirs::home_dir().map(|h| h.join(".sage").join("credentials.json")) {
-        if let Some(creds) = CredentialsFile::load(&creds_path) {
+        if let Some(creds) = CredentialsFile::load_or_warn(&creds_path) {
             let default_params = create_default_providers();
             // Merge credentials into config
             for (provider, api_key) in creds.api_keys {
