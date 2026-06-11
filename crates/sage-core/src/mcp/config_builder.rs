@@ -20,13 +20,23 @@ pub async fn build_mcp_registry_from_config(config: &Config) -> SageResult<McpRe
             continue;
         }
 
-        let server_info = registry.register_server(name, transport_config).await?;
-        tracing::info!(
-            "Connected to MCP server '{}': {} v{}",
-            name,
-            server_info.name,
-            server_info.version
-        );
+        match registry.register_server(name, transport_config).await {
+            Ok(server_info) => {
+                tracing::info!(
+                    "Connected to MCP server '{}': {} v{}",
+                    name,
+                    server_info.name,
+                    server_info.version
+                );
+            }
+            Err(err) => {
+                tracing::warn!(
+                    "Skipping MCP server '{}': failed to connect or initialize: {}",
+                    name,
+                    err
+                );
+            }
+        }
     }
 
     Ok(registry)
@@ -106,6 +116,19 @@ mod tests {
     async fn test_enabled_websocket_server_is_skipped_until_supported() -> SageResult<()> {
         let config =
             config_with_server("future", McpServerConfig::websocket("ws://localhost:9000"));
+
+        let registry = build_mcp_registry_from_config(&config).await?;
+
+        assert!(registry.server_names().is_empty());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_enabled_runtime_connection_failure_is_skipped() -> SageResult<()> {
+        let config = config_with_server(
+            "offline",
+            McpServerConfig::stdio("__sage_missing_mcp_binary__", Vec::new()),
+        );
 
         let registry = build_mcp_registry_from_config(&config).await?;
 

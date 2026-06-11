@@ -31,7 +31,9 @@ impl UnifiedExecutor {
         context: &ToolExecutionContext,
     ) -> SageResult<Option<SettingsPermissionCheck>> {
         let settings = Self::load_settings_strict(&context.working_dir)?;
-        let Some(decision) = Self::settings_permission_decision(&settings, tool_call) else {
+        let Some(decision) =
+            Self::settings_permission_decision(&settings, tool_call, &context.working_dir)
+        else {
             return Ok(None);
         };
 
@@ -135,6 +137,7 @@ impl UnifiedExecutor {
     fn settings_permission_decision(
         settings: &Settings,
         tool_call: &ToolCall,
+        working_dir: &std::path::Path,
     ) -> Option<SettingsPermissionDecision> {
         let permissions = &settings.permissions;
         let has_configured_permissions = !permissions.allow.is_empty()
@@ -147,6 +150,7 @@ impl UnifiedExecutor {
         let key = Self::actual_permission_key(
             &Self::canonical_permission_tool_name(&tool_call.name),
             tool_call,
+            working_dir,
         );
 
         if let Some(pattern) = permissions
@@ -200,19 +204,21 @@ impl UnifiedExecutor {
         }
     }
 
-    fn actual_permission_key(tool_name: &str, call: &ToolCall) -> String {
+    fn actual_permission_key(
+        tool_name: &str,
+        call: &ToolCall,
+        working_dir: &std::path::Path,
+    ) -> String {
         let argument = match tool_name.to_lowercase().as_str() {
             "bash" => call
                 .arguments
                 .get("command")
                 .and_then(|value| value.as_str())
                 .map(str::to_string),
-            "read" | "write" | "edit" | "multiedit" => call
-                .arguments
-                .get("file_path")
-                .or_else(|| call.arguments.get("path"))
-                .and_then(|value| value.as_str())
-                .map(|path| path.trim_start_matches('/').to_string()),
+            "read" | "write" | "edit" | "multiedit" => {
+                Self::path_permission_argument(call, &["file_path", "path"], working_dir)
+            }
+            "notebookedit" => Self::path_permission_argument(call, &["notebook_path"], working_dir),
             _ => None,
         };
 
@@ -220,6 +226,34 @@ impl UnifiedExecutor {
             Some(argument) => format!("{}({})", tool_name, argument),
             None => tool_name.to_string(),
         }
+    }
+
+    fn path_permission_argument(
+        call: &ToolCall,
+        keys: &[&str],
+        working_dir: &std::path::Path,
+    ) -> Option<String> {
+        for key in keys {
+            if let Some(path) = call.get_argument::<String>(key) {
+                return Some(Self::workspace_relative_path(&path, working_dir));
+            }
+        }
+
+        None
+    }
+
+    fn workspace_relative_path(path: &str, working_dir: &std::path::Path) -> String {
+        let path = std::path::Path::new(path);
+        let relative_path = if path.is_absolute() {
+            path.strip_prefix(working_dir).unwrap_or(path)
+        } else {
+            path
+        };
+
+        relative_path
+            .to_string_lossy()
+            .trim_start_matches('/')
+            .to_string()
     }
 }
 
@@ -229,7 +263,12 @@ mod tests {
     use crate::settings::types::PermissionSettings;
     use std::collections::HashMap;
     use std::fs;
+    use std::path::Path;
     use tempfile::TempDir;
+
+    fn workspace_dir() -> &'static Path {
+        Path::new("/workspace/sage")
+    }
 
     fn bash_call(command: &str) -> ToolCall {
         let mut arguments = HashMap::new();
@@ -238,6 +277,24 @@ mod tests {
             serde_json::Value::String(command.to_string()),
         );
         ToolCall::new("call-1", "bash", arguments)
+    }
+
+    fn read_call(path: &str) -> ToolCall {
+        let mut arguments = HashMap::new();
+        arguments.insert(
+            "file_path".to_string(),
+            serde_json::Value::String(path.to_string()),
+        );
+        ToolCall::new("call-1", "read", arguments)
+    }
+
+    fn notebook_call(path: &str) -> ToolCall {
+        let mut arguments = HashMap::new();
+        arguments.insert(
+            "notebook_path".to_string(),
+            serde_json::Value::String(path.to_string()),
+        );
+        ToolCall::new("call-1", "notebook_edit", arguments)
     }
 
     #[test]
@@ -250,8 +307,11 @@ mod tests {
             ..Default::default()
         };
 
-        let decision =
-            UnifiedExecutor::settings_permission_decision(&settings, &bash_call("echo blocked"));
+        let decision = UnifiedExecutor::settings_permission_decision(
+            &settings,
+            &bash_call("echo blocked"),
+            workspace_dir(),
+        );
 
         assert!(matches!(
             decision,
@@ -269,8 +329,11 @@ mod tests {
             ..Default::default()
         };
 
-        let decision =
-            UnifiedExecutor::settings_permission_decision(&settings, &bash_call("rm -rf /tmp/foo"));
+        let decision = UnifiedExecutor::settings_permission_decision(
+            &settings,
+            &bash_call("rm -rf /tmp/foo"),
+            workspace_dir(),
+        );
 
         assert!(matches!(
             decision,
@@ -288,8 +351,11 @@ mod tests {
             ..Default::default()
         };
 
-        let decision =
-            UnifiedExecutor::settings_permission_decision(&settings, &bash_call("echo blocked"));
+        let decision = UnifiedExecutor::settings_permission_decision(
+            &settings,
+            &bash_call("echo blocked"),
+            workspace_dir(),
+        );
 
         assert!(matches!(
             decision,
@@ -307,8 +373,11 @@ mod tests {
             ..Default::default()
         };
 
-        let decision =
-            UnifiedExecutor::settings_permission_decision(&settings, &bash_call("echo allowed"));
+        let decision = UnifiedExecutor::settings_permission_decision(
+            &settings,
+            &bash_call("echo allowed"),
+            workspace_dir(),
+        );
 
         assert_eq!(decision, Some(SettingsPermissionDecision::Allow));
     }
@@ -324,8 +393,11 @@ mod tests {
             ..Default::default()
         };
 
-        let decision =
-            UnifiedExecutor::settings_permission_decision(&settings, &bash_call("echo blocked"));
+        let decision = UnifiedExecutor::settings_permission_decision(
+            &settings,
+            &bash_call("echo blocked"),
+            workspace_dir(),
+        );
 
         assert!(matches!(
             decision,
@@ -343,8 +415,11 @@ mod tests {
             ..Default::default()
         };
 
-        let decision =
-            UnifiedExecutor::settings_permission_decision(&settings, &bash_call("cargo test"));
+        let decision = UnifiedExecutor::settings_permission_decision(
+            &settings,
+            &bash_call("cargo test"),
+            workspace_dir(),
+        );
 
         assert!(matches!(
             decision,
@@ -356,10 +431,56 @@ mod tests {
     fn test_empty_default_settings_do_not_force_permission_prompt() {
         let settings = Settings::default();
 
-        let decision =
-            UnifiedExecutor::settings_permission_decision(&settings, &bash_call("cargo test"));
+        let decision = UnifiedExecutor::settings_permission_decision(
+            &settings,
+            &bash_call("cargo test"),
+            workspace_dir(),
+        );
 
         assert_eq!(decision, None);
+    }
+
+    #[test]
+    fn test_settings_permission_matches_workspace_relative_absolute_path() {
+        let settings = Settings {
+            permissions: PermissionSettings {
+                allow: vec!["Read(src/**)".to_string()],
+                default_behavior: SettingsPermissionBehavior::Deny,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let decision = UnifiedExecutor::settings_permission_decision(
+            &settings,
+            &read_call("/workspace/sage/src/lib.rs"),
+            workspace_dir(),
+        );
+
+        assert_eq!(decision, Some(SettingsPermissionDecision::Allow));
+    }
+
+    #[test]
+    fn test_settings_permission_matches_notebook_path() {
+        let settings = Settings {
+            permissions: PermissionSettings {
+                deny: vec!["NotebookEdit(secrets/**)".to_string()],
+                default_behavior: SettingsPermissionBehavior::Allow,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let decision = UnifiedExecutor::settings_permission_decision(
+            &settings,
+            &notebook_call("/workspace/sage/secrets/private.ipynb"),
+            workspace_dir(),
+        );
+
+        assert!(matches!(
+            decision,
+            Some(SettingsPermissionDecision::Deny(_))
+        ));
     }
 
     #[test]

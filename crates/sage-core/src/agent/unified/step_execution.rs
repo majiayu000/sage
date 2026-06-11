@@ -241,9 +241,34 @@ impl UnifiedExecutor {
             match self.check_settings_permission(tool_call, context).await? {
                 Some(SettingsPermissionCheck::Blocked(permission_result)) => permission_result,
                 Some(SettingsPermissionCheck::Allowed(approved_call)) => {
+                    let input_was_modified = approved_call != execution_tool_call;
                     execution_tool_call = approved_call;
-                    self.execute_tool_phase(&execution_tool_call, cancel_token.clone())
-                        .await?
+
+                    if input_was_modified {
+                        self.track_file_for_undo(&execution_tool_call).await;
+                        let approved_pre_result = self
+                            .tool_orchestrator
+                            .pre_execution_phase(
+                                &execution_tool_call,
+                                context,
+                                cancel_token.clone(),
+                            )
+                            .await?;
+
+                        if let Some(reason) = approved_pre_result.block_reason() {
+                            crate::tools::types::ToolResult::error(
+                                &execution_tool_call.id,
+                                &execution_tool_call.name,
+                                format!("Tool blocked by hook: {}", reason),
+                            )
+                        } else {
+                            self.execute_tool_phase(&execution_tool_call, cancel_token.clone())
+                                .await?
+                        }
+                    } else {
+                        self.execute_tool_phase(&execution_tool_call, cancel_token.clone())
+                            .await?
+                    }
                 }
                 None => {
                     // Phase 2: Execution
