@@ -11,6 +11,7 @@ use tracing::instrument;
 
 use super::UnifiedExecutor;
 use super::event_manager::ExecutionEvent;
+use super::settings_permission::SettingsPermissionCheck;
 use super::tool_display;
 use super::tool_orchestrator::ToolExecutionContext;
 
@@ -228,32 +229,40 @@ impl UnifiedExecutor {
             .pre_execution_phase(tool_call, context, cancel_token.clone())
             .await?;
 
+        let mut execution_tool_call = tool_call.clone();
+
         let tool_result = if let Some(reason) = pre_result.block_reason() {
             crate::tools::types::ToolResult::error(
                 &tool_call.id,
                 &tool_call.name,
                 format!("Tool blocked by hook: {}", reason),
             )
-        } else if let Some(permission_result) =
-            self.check_settings_permission(tool_call, context).await?
-        {
-            permission_result
         } else {
-            // Phase 2: Execution
-            self.execute_tool_phase(tool_call, cancel_token.clone())
-                .await?
+            match self.check_settings_permission(tool_call, context).await? {
+                Some(SettingsPermissionCheck::Blocked(permission_result)) => permission_result,
+                Some(SettingsPermissionCheck::Allowed(approved_call)) => {
+                    execution_tool_call = approved_call;
+                    self.execute_tool_phase(&execution_tool_call, cancel_token.clone())
+                        .await?
+                }
+                None => {
+                    // Phase 2: Execution
+                    self.execute_tool_phase(&execution_tool_call, cancel_token.clone())
+                        .await?
+                }
+            }
         };
 
         // Phase 3: Post-execution
         self.tool_orchestrator
-            .post_execution_phase(tool_call, &tool_result, context, cancel_token)
+            .post_execution_phase(&execution_tool_call, &tool_result, context, cancel_token)
             .await?;
 
         // Record and display result
         let duration_ms = u64::try_from(tool_start_time.elapsed().as_millis()).unwrap_or(u64::MAX);
         self.session_manager
             .record_tool_result(
-                &tool_call.name,
+                &execution_tool_call.name,
                 tool_result.success,
                 tool_result.output.clone(),
                 tool_result.error.clone(),

@@ -162,30 +162,76 @@ impl PermissionCache {
 
     /// Check if a pattern matches a key
     pub(crate) fn pattern_matches(pattern: &str, key: &str) -> bool {
-        // Simple glob matching
-        if pattern.eq_ignore_ascii_case(key) {
+        if pattern == "*" {
             return true;
         }
 
-        if !pattern.contains('(') {
-            let tool_prefix = format!("{pattern}(");
-            return key
-                .get(..tool_prefix.len())
-                .is_some_and(|prefix| prefix.eq_ignore_ascii_case(&tool_prefix));
+        if let (Some((pattern_tool, pattern_arg)), Some((key_tool, key_arg))) = (
+            Self::split_permission_key(pattern),
+            Self::split_permission_key(key),
+        ) {
+            return pattern_tool.eq_ignore_ascii_case(key_tool)
+                && Self::glob_matches(pattern_arg, key_arg);
         }
 
-        // Handle wildcards
         if pattern.contains('*') {
-            let pattern_lower = pattern.to_lowercase();
-            let key_lower = key.to_lowercase();
-            let pattern_parts: Vec<&str> = pattern_lower.split('*').collect();
-            if pattern_parts.len() == 2 {
-                let (prefix, suffix) = (pattern_parts[0], pattern_parts[1]);
-                return key_lower.starts_with(prefix) && key_lower.ends_with(suffix);
+            return Self::glob_matches(pattern, key);
+        }
+
+        if let Some((key_tool, _)) = Self::split_permission_key(key) {
+            return pattern.eq_ignore_ascii_case(key_tool);
+        }
+
+        pattern.eq_ignore_ascii_case(key)
+    }
+
+    fn split_permission_key(value: &str) -> Option<(&str, &str)> {
+        let open = value.find('(')?;
+        let close = value.rfind(')')?;
+        if close <= open {
+            return None;
+        }
+
+        Some((value[..open].trim(), &value[open + 1..close]))
+    }
+
+    fn glob_matches(pattern: &str, text: &str) -> bool {
+        if pattern == "*" {
+            return true;
+        }
+
+        if !pattern.contains('*') {
+            return pattern == text;
+        }
+
+        let mut remaining = text;
+        let mut parts = pattern.split('*').peekable();
+
+        if let Some(first) = parts.next() {
+            if !first.is_empty() {
+                let Some(stripped) = remaining.strip_prefix(first) else {
+                    return false;
+                };
+                remaining = stripped;
             }
         }
 
-        false
+        while let Some(part) = parts.next() {
+            if part.is_empty() {
+                continue;
+            }
+
+            if parts.peek().is_none() {
+                return remaining.ends_with(part);
+            }
+
+            let Some(index) = remaining.find(part) else {
+                return false;
+            };
+            remaining = &remaining[index + part.len()..];
+        }
+
+        pattern.ends_with('*') || remaining.is_empty()
     }
 
     /// Cache a decision (session only)
@@ -365,6 +411,26 @@ mod tests {
         assert!(!PermissionCache::pattern_matches(
             "Bash(npm *)",
             "Bash(yarn install)"
+        ));
+        assert!(PermissionCache::pattern_matches(
+            "*",
+            "Bash(rm -rf /tmp/foo)"
+        ));
+        assert!(PermissionCache::pattern_matches(
+            "Bash*",
+            "Bash(rm -rf /tmp/foo)"
+        ));
+        assert!(PermissionCache::pattern_matches(
+            "Bash",
+            "Bash(rm -rf /tmp/foo)"
+        ));
+        assert!(PermissionCache::pattern_matches(
+            "Read(src/**)",
+            "Read(src/main.rs)"
+        ));
+        assert!(!PermissionCache::pattern_matches(
+            "Read(src/**)",
+            "Read(Src/main.rs)"
         ));
     }
 

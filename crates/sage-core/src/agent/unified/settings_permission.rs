@@ -19,70 +19,96 @@ enum SettingsPermissionDecision {
     Ask(String),
 }
 
+pub(in crate::agent::unified) enum SettingsPermissionCheck {
+    Allowed(ToolCall),
+    Blocked(ToolResult),
+}
+
 impl UnifiedExecutor {
     pub(in crate::agent::unified) async fn check_settings_permission(
         &mut self,
         tool_call: &ToolCall,
         context: &ToolExecutionContext,
-    ) -> SageResult<Option<ToolResult>> {
+    ) -> SageResult<Option<SettingsPermissionCheck>> {
         let settings = Self::load_settings_strict(&context.working_dir)?;
         let Some(decision) = Self::settings_permission_decision(&settings, tool_call) else {
             return Ok(None);
         };
 
         match decision {
-            SettingsPermissionDecision::Allow => Ok(None),
-            SettingsPermissionDecision::Deny(reason) => Ok(Some(ToolResult::error(
+            SettingsPermissionDecision::Allow => {
+                Ok(Some(SettingsPermissionCheck::Allowed(tool_call.clone())))
+            }
+            SettingsPermissionDecision::Deny(reason) => {
+                Ok(Some(SettingsPermissionCheck::Blocked(ToolResult::error(
+                    &tool_call.id,
+                    &tool_call.name,
+                    format!("Permission denied by settings: {}", reason),
+                ))))
+            }
+            SettingsPermissionDecision::Ask(reason) => self
+                .request_settings_permission(tool_call, reason)
+                .await
+                .map(Some),
+        }
+    }
+
+    async fn request_settings_permission(
+        &mut self,
+        tool_call: &ToolCall,
+        reason: String,
+    ) -> SageResult<SettingsPermissionCheck> {
+        self.event_manager.stop_animation().await;
+        let input = serde_json::to_value(&tool_call.arguments).unwrap_or(serde_json::Value::Null);
+        let request = InputRequest::permission(
+            &tool_call.name,
+            format!(
+                "Tool '{}' requires permission from settings.\n{}",
+                tool_call.name, reason
+            ),
+            input,
+        );
+
+        let response = match self.request_user_input(request).await {
+            Ok(response) => response,
+            Err(err) => {
+                return Ok(SettingsPermissionCheck::Blocked(ToolResult::error(
+                    &tool_call.id,
+                    &tool_call.name,
+                    format!("Permission request failed: {}", err),
+                )));
+            }
+        };
+
+        match response.kind {
+            InputResponseKind::PermissionGranted { modified_input, .. } => {
+                let mut approved_call = tool_call.clone();
+                if let Some(serde_json::Value::Object(map)) = modified_input {
+                    approved_call.arguments = map.into_iter().collect();
+                }
+
+                Ok(SettingsPermissionCheck::Allowed(approved_call))
+            }
+            InputResponseKind::PermissionDenied { reason } => {
+                let reason = reason.unwrap_or_else(|| "No reason provided".to_string());
+                Ok(SettingsPermissionCheck::Blocked(ToolResult::error(
+                    &tool_call.id,
+                    &tool_call.name,
+                    format!("Permission denied by user: {}", reason),
+                )))
+            }
+            InputResponseKind::Cancelled => {
+                Ok(SettingsPermissionCheck::Blocked(ToolResult::error(
+                    &tool_call.id,
+                    &tool_call.name,
+                    "Permission request cancelled by user.",
+                )))
+            }
+            _ => Ok(SettingsPermissionCheck::Blocked(ToolResult::error(
                 &tool_call.id,
                 &tool_call.name,
-                format!("Permission denied by settings: {}", reason),
+                "Invalid permission response from input handler.",
             ))),
-            SettingsPermissionDecision::Ask(reason) => {
-                self.event_manager.stop_animation().await;
-                let input =
-                    serde_json::to_value(&tool_call.arguments).unwrap_or(serde_json::Value::Null);
-                let request = InputRequest::permission(
-                    &tool_call.name,
-                    format!(
-                        "Tool '{}' requires permission from settings.\n{}",
-                        tool_call.name, reason
-                    ),
-                    input,
-                );
-
-                let response = match self.request_user_input(request).await {
-                    Ok(response) => response,
-                    Err(err) => {
-                        return Ok(Some(ToolResult::error(
-                            &tool_call.id,
-                            &tool_call.name,
-                            format!("Permission request failed: {}", err),
-                        )));
-                    }
-                };
-
-                match response.kind {
-                    InputResponseKind::PermissionGranted { .. } => Ok(None),
-                    InputResponseKind::PermissionDenied { reason } => {
-                        let reason = reason.unwrap_or_else(|| "No reason provided".to_string());
-                        Ok(Some(ToolResult::error(
-                            &tool_call.id,
-                            &tool_call.name,
-                            format!("Permission denied by user: {}", reason),
-                        )))
-                    }
-                    InputResponseKind::Cancelled => Ok(Some(ToolResult::error(
-                        &tool_call.id,
-                        &tool_call.name,
-                        "Permission request cancelled by user.",
-                    ))),
-                    _ => Ok(Some(ToolResult::error(
-                        &tool_call.id,
-                        &tool_call.name,
-                        "Invalid permission response from input handler.",
-                    ))),
-                }
-            }
         }
     }
 
@@ -118,7 +144,7 @@ impl UnifiedExecutor {
             return None;
         }
 
-        let key = PermissionCache::cache_key(
+        let key = Self::actual_permission_key(
             &Self::canonical_permission_tool_name(&tool_call.name),
             tool_call,
         );
@@ -173,6 +199,28 @@ impl UnifiedExecutor {
             _ => tool_name.to_string(),
         }
     }
+
+    fn actual_permission_key(tool_name: &str, call: &ToolCall) -> String {
+        let argument = match tool_name.to_lowercase().as_str() {
+            "bash" => call
+                .arguments
+                .get("command")
+                .and_then(|value| value.as_str())
+                .map(str::to_string),
+            "read" | "write" | "edit" | "multiedit" => call
+                .arguments
+                .get("file_path")
+                .or_else(|| call.arguments.get("path"))
+                .and_then(|value| value.as_str())
+                .map(|path| path.trim_start_matches('/').to_string()),
+            _ => None,
+        };
+
+        match argument {
+            Some(argument) => format!("{}({})", tool_name, argument),
+            None => tool_name.to_string(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -197,6 +245,44 @@ mod tests {
         let settings = Settings {
             permissions: PermissionSettings {
                 deny: vec!["Bash(echo *)".to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let decision =
+            UnifiedExecutor::settings_permission_decision(&settings, &bash_call("echo blocked"));
+
+        assert!(matches!(
+            decision,
+            Some(SettingsPermissionDecision::Deny(_))
+        ));
+    }
+
+    #[test]
+    fn test_settings_permission_matches_specific_command_against_actual_input() {
+        let settings = Settings {
+            permissions: PermissionSettings {
+                deny: vec!["Bash(rm -rf *)".to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let decision =
+            UnifiedExecutor::settings_permission_decision(&settings, &bash_call("rm -rf /tmp/foo"));
+
+        assert!(matches!(
+            decision,
+            Some(SettingsPermissionDecision::Deny(_))
+        ));
+    }
+
+    #[test]
+    fn test_settings_permission_wildcard_deny_matches_any_tool() {
+        let settings = Settings {
+            permissions: PermissionSettings {
+                deny: vec!["*".to_string()],
                 ..Default::default()
             },
             ..Default::default()
