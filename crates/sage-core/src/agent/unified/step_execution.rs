@@ -234,6 +234,10 @@ impl UnifiedExecutor {
                 &tool_call.name,
                 format!("Tool blocked by hook: {}", reason),
             )
+        } else if let Some(permission_result) =
+            self.check_settings_permission(tool_call, context).await?
+        {
+            permission_result
         } else {
             // Phase 2: Execution
             self.execute_tool_phase(tool_call, cancel_token.clone())

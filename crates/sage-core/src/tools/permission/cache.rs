@@ -141,15 +141,15 @@ impl PermissionCache {
                 if let Some(parent) = settings_path.parent() {
                     let loader = SettingsLoader::from_directory(parent);
                     if let Ok(settings) = loader.load() {
-                        // Check if key matches any allow/deny pattern
-                        for pattern in &settings.permissions.allow {
-                            if pattern == key || Self::pattern_matches(pattern, key) {
-                                return Some(true);
+                        // Deny rules take precedence over allow rules.
+                        for pattern in &settings.permissions.deny {
+                            if Self::pattern_matches(pattern, key) {
+                                return Some(false);
                             }
                         }
-                        for pattern in &settings.permissions.deny {
-                            if pattern == key || Self::pattern_matches(pattern, key) {
-                                return Some(false);
+                        for pattern in &settings.permissions.allow {
+                            if Self::pattern_matches(pattern, key) {
+                                return Some(true);
                             }
                         }
                     }
@@ -161,18 +161,27 @@ impl PermissionCache {
     }
 
     /// Check if a pattern matches a key
-    fn pattern_matches(pattern: &str, key: &str) -> bool {
+    pub(crate) fn pattern_matches(pattern: &str, key: &str) -> bool {
         // Simple glob matching
-        if pattern == key {
+        if pattern.eq_ignore_ascii_case(key) {
             return true;
+        }
+
+        if !pattern.contains('(') {
+            let tool_prefix = format!("{pattern}(");
+            return key
+                .get(..tool_prefix.len())
+                .is_some_and(|prefix| prefix.eq_ignore_ascii_case(&tool_prefix));
         }
 
         // Handle wildcards
         if pattern.contains('*') {
-            let pattern_parts: Vec<&str> = pattern.split('*').collect();
+            let pattern_lower = pattern.to_lowercase();
+            let key_lower = key.to_lowercase();
+            let pattern_parts: Vec<&str> = pattern_lower.split('*').collect();
             if pattern_parts.len() == 2 {
                 let (prefix, suffix) = (pattern_parts[0], pattern_parts[1]);
-                return key.starts_with(prefix) && key.ends_with(suffix);
+                return key_lower.starts_with(prefix) && key_lower.ends_with(suffix);
             }
         }
 

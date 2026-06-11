@@ -14,7 +14,7 @@ mod scanner;
 #[cfg(test)]
 mod tests;
 mod types;
-mod utils;
+pub(crate) mod utils;
 
 // Re-export public types
 pub use builder::McpServerManagerBuilder;

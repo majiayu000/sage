@@ -26,6 +26,11 @@ impl HookRegistry {
 
     /// Register a hook matcher for an event
     pub fn register(&self, event: HookEvent, matcher: HookMatcher) -> SageResult<()> {
+        if !matcher.hook.enabled {
+            tracing::debug!("Skipping disabled hook: {}", matcher.hook);
+            return Ok(());
+        }
+
         let mut event_hooks = self
             .event_hooks
             .write()
@@ -46,6 +51,7 @@ impl HookRegistry {
             .cloned()
             .unwrap_or_default()
             .into_iter()
+            .filter(|matcher| matcher.hook.enabled)
             .filter_map(|matcher| {
                 // Check if pattern matches
                 let matches = super::matcher::matches(matcher.pattern.as_deref(), query);

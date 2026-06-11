@@ -29,6 +29,7 @@ mod session_manager;
 mod session_recording;
 mod session_restore;
 mod session_summary;
+mod settings_permission;
 mod step_execution;
 mod tool_display;
 mod tool_orchestrator;

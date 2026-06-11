@@ -1,7 +1,7 @@
 //! MCP registry builder from configuration
 
+use super::discovery::utils::server_config_to_transport;
 use super::registry::McpRegistry;
-use super::transport::TransportConfig;
 use crate::config::Config;
 use crate::error::SageResult;
 
@@ -9,46 +9,87 @@ use crate::error::SageResult;
 pub async fn build_mcp_registry_from_config(config: &Config) -> SageResult<McpRegistry> {
     let registry = McpRegistry::new();
 
-    for (name, server_config) in &config.mcp.servers {
-        if !server_config.enabled {
-            continue;
-        }
-
-        let transport_config = match server_config.transport.as_str() {
-            "stdio" => {
-                let command = server_config.command.clone().unwrap_or_default();
-                let args = server_config.args.clone();
-                let env = server_config.env.clone();
-                TransportConfig::Stdio { command, args, env }
-            }
-            "http" | "https" | "sse" => {
-                let base_url = server_config.url.clone().unwrap_or_default();
-                let headers = server_config.headers.clone();
-                TransportConfig::Http { base_url, headers }
-            }
-            _ => {
-                tracing::warn!(
-                    "Unsupported MCP transport type: {}",
-                    server_config.transport
-                );
-                continue;
-            }
-        };
-
-        match registry.register_server(name, transport_config).await {
-            Ok(server_info) => {
-                tracing::info!(
-                    "Connected to MCP server '{}': {} v{}",
-                    name,
-                    server_info.name,
-                    server_info.version
-                );
-            }
-            Err(e) => {
-                tracing::error!("Failed to connect to MCP server '{}': {}", name, e);
-            }
-        }
+    for (name, server_config) in config.mcp.enabled_servers() {
+        let transport_config = server_config_to_transport(server_config)?;
+        let server_info = registry.register_server(name, transport_config).await?;
+        tracing::info!(
+            "Connected to MCP server '{}': {} v{}",
+            name,
+            server_info.name,
+            server_info.version
+        );
     }
 
     Ok(registry)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::McpServerConfig;
+
+    fn config_with_server(name: &str, server: McpServerConfig) -> Config {
+        let mut config = Config::default();
+        config.mcp.enabled = true;
+        config.mcp.servers.insert(name.to_string(), server);
+        config
+    }
+
+    #[tokio::test]
+    async fn test_enabled_stdio_server_without_command_fails() {
+        let mut server = McpServerConfig::stdio("ignored", Vec::new());
+        server.command = None;
+        let config = config_with_server("broken", server);
+
+        let result = build_mcp_registry_from_config(&config).await;
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_enabled_http_server_without_url_fails() {
+        let mut server = McpServerConfig::http("http://localhost:9999");
+        server.url = None;
+        let config = config_with_server("broken", server);
+
+        let result = build_mcp_registry_from_config(&config).await;
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_enabled_sse_server_without_url_fails() {
+        let mut server = McpServerConfig::http("http://localhost:9999");
+        server.transport = "sse".to_string();
+        server.url = None;
+        let config = config_with_server("broken", server);
+
+        let result = build_mcp_registry_from_config(&config).await;
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_enabled_unknown_transport_fails() {
+        let mut server = McpServerConfig::http("http://localhost:9999");
+        server.transport = "invalid".to_string();
+        let config = config_with_server("broken", server);
+
+        let result = build_mcp_registry_from_config(&config).await;
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_disabled_invalid_server_is_ignored() -> SageResult<()> {
+        let mut server = McpServerConfig::http("http://localhost:9999");
+        server.transport = "invalid".to_string();
+        server.enabled = false;
+        let config = config_with_server("disabled", server);
+
+        let registry = build_mcp_registry_from_config(&config).await?;
+
+        assert!(registry.server_names().is_empty());
+        Ok(())
+    }
 }

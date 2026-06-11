@@ -1,6 +1,6 @@
 # Sage Agent Makefile
 
-.PHONY: help build test clean install dev check fmt clippy docs examples doc-check doc-status guard guard-strict arch-guard
+.PHONY: help build test clean install dev check fmt clippy docs examples doc-check doc-status guard guard-strict guard-bash-check arch-guard
 
 # Default target
 help:
@@ -92,17 +92,21 @@ run:
 
 # VibeGuard checks
 VIBEGUARD_DIR ?= $(HOME)/Desktop/code/AI/tool/vibeguard
+VIBEGUARD_BASH ?= bash
 
-guard:
+guard-bash-check:
+	@$(VIBEGUARD_BASH) -c 'if [ "$${BASH_VERSINFO[0]:-0}" -lt 4 ]; then echo "VibeGuard Rust guards require Bash >= 4. Set VIBEGUARD_BASH to a modern bash, for example /opt/homebrew/bin/bash. Current: $${BASH_VERSION:-unknown}" >&2; exit 2; fi'
+
+guard: guard-bash-check
 	@echo "Running VibeGuard Rust guards..."
-	@bash $(VIBEGUARD_DIR)/guards/rust/check_duplicate_types.sh .
-	@bash $(VIBEGUARD_DIR)/guards/rust/check_nested_locks.sh .
-	@bash $(VIBEGUARD_DIR)/guards/rust/check_unwrap_in_prod.sh .
+	@$(VIBEGUARD_BASH) $(VIBEGUARD_DIR)/guards/rust/check_duplicate_types.sh .
+	@$(VIBEGUARD_BASH) $(VIBEGUARD_DIR)/guards/rust/check_nested_locks.sh .
+	@$(VIBEGUARD_BASH) $(VIBEGUARD_DIR)/guards/rust/check_unwrap_in_prod.sh .
 
-guard-strict:
+guard-strict: guard-bash-check
 	@echo "Running VibeGuard Rust guards (strict)..."
-	bash $(VIBEGUARD_DIR)/guards/rust/check_duplicate_types.sh --strict .
-	bash $(VIBEGUARD_DIR)/guards/rust/check_nested_locks.sh --strict .
+	$(VIBEGUARD_BASH) $(VIBEGUARD_DIR)/guards/rust/check_duplicate_types.sh --strict .
+	$(VIBEGUARD_BASH) $(VIBEGUARD_DIR)/guards/rust/check_nested_locks.sh --strict .
 
 arch-guard:
 	@echo "Running architecture guard tests..."
