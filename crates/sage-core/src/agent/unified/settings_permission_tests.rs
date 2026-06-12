@@ -371,6 +371,39 @@ fn test_settings_permission_normalizes_relative_path_components() {
     ));
 }
 
+#[cfg(unix)]
+#[test]
+fn test_settings_permission_canonicalizes_existing_symlink_target() -> SageResult<()> {
+    let temp_dir = TempDir::new()?;
+    fs::create_dir(temp_dir.path().join("secrets"))?;
+    fs::write(temp_dir.path().join("secrets/key.txt"), "secret")?;
+    std::os::unix::fs::symlink(
+        temp_dir.path().join("secrets"),
+        temp_dir.path().join("public"),
+    )?;
+
+    let settings = Settings {
+        permissions: PermissionSettings {
+            deny: vec!["Read(secrets/**)".to_string()],
+            default_behavior: SettingsPermissionBehavior::Allow,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let decision = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &read_call("public/key.txt"),
+        temp_dir.path(),
+    );
+
+    assert!(matches!(
+        decision,
+        Some(SettingsPermissionDecision::Deny(_))
+    ));
+    Ok(())
+}
+
 #[test]
 fn test_settings_permission_matches_notebook_path() {
     let settings = Settings {

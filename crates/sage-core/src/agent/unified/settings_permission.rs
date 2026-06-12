@@ -8,6 +8,7 @@ use crate::settings::types::{Settings, SettingsPermissionBehavior};
 use crate::settings::validation::SettingsValidator;
 use crate::tools::permission::PermissionCache;
 use crate::tools::types::{ToolCall, ToolResult};
+use std::ffi::OsString;
 use std::path::{Component, Path, PathBuf};
 
 use super::UnifiedExecutor;
@@ -368,8 +369,8 @@ impl UnifiedExecutor {
     }
 
     fn workspace_relative_path(path: &str, working_dir: &Path) -> String {
-        let path = Self::normalize_permission_path(Path::new(path));
         let working_dir = Self::absolute_working_dir(working_dir);
+        let path = Self::absolute_permission_path(path, &working_dir);
         let relative_path = if path.is_absolute() {
             path.strip_prefix(&working_dir)
                 .unwrap_or(&path)
@@ -392,7 +393,48 @@ impl UnifiedExecutor {
                 .unwrap_or_else(|_| PathBuf::from("."))
                 .join(working_dir)
         };
-        Self::normalize_permission_path(&path)
+        let normalized = Self::normalize_permission_path(&path);
+        normalized.canonicalize().unwrap_or(normalized)
+    }
+
+    fn absolute_permission_path(path: &str, working_dir: &Path) -> PathBuf {
+        let path = Path::new(path);
+        let absolute_path = if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            working_dir.join(path)
+        };
+        let normalized_path = Self::normalize_permission_path(&absolute_path);
+        Self::canonicalize_existing_prefix(&normalized_path).unwrap_or(normalized_path)
+    }
+
+    fn canonicalize_existing_prefix(path: &Path) -> Option<PathBuf> {
+        if let Ok(canonical) = path.canonicalize() {
+            return Some(Self::normalize_permission_path(&canonical));
+        }
+
+        let mut current = path.to_path_buf();
+        let mut missing_components: Vec<OsString> = Vec::new();
+
+        loop {
+            if current.exists() {
+                let mut resolved = current.canonicalize().ok()?;
+                for component in missing_components.iter().rev() {
+                    resolved.push(component);
+                }
+                return Some(Self::normalize_permission_path(&resolved));
+            }
+
+            if let Some(file_name) = current.file_name() {
+                missing_components.push(file_name.to_os_string());
+            }
+
+            let parent = current.parent()?;
+            if parent == current {
+                return None;
+            }
+            current = parent.to_path_buf();
+        }
     }
 
     fn normalize_permission_path(path: &Path) -> PathBuf {

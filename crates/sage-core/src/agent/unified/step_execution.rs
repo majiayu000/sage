@@ -282,13 +282,15 @@ impl UnifiedExecutor {
         }
 
         // Phase 2: Execution
-        self.execute_tool_phase(tool_call, cancel_token).await
+        self.execute_tool_phase(tool_call, context, cancel_token)
+            .await
     }
 
     /// Execute the tool (phase 2)
     async fn execute_tool_phase(
         &mut self,
         tool_call: &ToolCall,
+        context: &ToolExecutionContext,
         cancel_token: tokio_util::sync::CancellationToken,
     ) -> SageResult<crate::tools::types::ToolResult> {
         let requires_interaction = self
@@ -304,7 +306,7 @@ impl UnifiedExecutor {
                 .await)
         } else {
             Ok(self
-                .execute_with_permission_check(tool_call, cancel_token)
+                .execute_with_permission_check(tool_call, context, cancel_token)
                 .await)
         }
     }
@@ -313,6 +315,7 @@ impl UnifiedExecutor {
     async fn execute_with_permission_check(
         &mut self,
         tool_call: &ToolCall,
+        context: &ToolExecutionContext,
         cancel_token: tokio_util::sync::CancellationToken,
     ) -> crate::tools::types::ToolResult {
         let first_result = self
@@ -352,12 +355,23 @@ impl UnifiedExecutor {
         match response.kind {
             InputResponseKind::PermissionGranted { modified_input, .. } => {
                 let mut confirmed_call = tool_call.clone();
+                let input_modified = modified_input.is_some();
                 if let Some(serde_json::Value::Object(map)) = modified_input {
                     confirmed_call.arguments = map.into_iter().collect();
                 }
-                confirmed_call
-                    .arguments
-                    .insert("user_confirmed".to_string(), serde_json::Value::Bool(true));
+                Self::mark_user_confirmed(&mut confirmed_call);
+
+                let confirmed_call = match self
+                    .recheck_settings_after_destructive_confirmation(
+                        confirmed_call,
+                        context,
+                        input_modified,
+                    )
+                    .await
+                {
+                    Ok(confirmed_call) => confirmed_call,
+                    Err(blocked_result) => return blocked_result,
+                };
 
                 self.tool_orchestrator
                     .execution_phase(&confirmed_call, cancel_token)
@@ -382,6 +396,40 @@ impl UnifiedExecutor {
                 "Invalid permission response from input handler.",
             ),
         }
+    }
+
+    async fn recheck_settings_after_destructive_confirmation(
+        &mut self,
+        confirmed_call: ToolCall,
+        context: &ToolExecutionContext,
+        input_modified: bool,
+    ) -> std::result::Result<ToolCall, ToolResult> {
+        if !input_modified {
+            return Ok(confirmed_call);
+        }
+
+        match self
+            .check_settings_permission(&confirmed_call, context)
+            .await
+        {
+            Ok(Some(SettingsPermissionCheck::Blocked(result))) => Err(result),
+            Ok(Some(SettingsPermissionCheck::Allowed(mut approved_call))) => {
+                Self::mark_user_confirmed(&mut approved_call);
+                Ok(approved_call)
+            }
+            Ok(None) => Ok(confirmed_call),
+            Err(err) => Err(ToolResult::error(
+                &confirmed_call.id,
+                &confirmed_call.name,
+                format!("Settings permission check failed: {}", err),
+            )),
+        }
+    }
+
+    fn mark_user_confirmed(tool_call: &mut ToolCall) {
+        tool_call
+            .arguments
+            .insert("user_confirmed".to_string(), serde_json::Value::Bool(true));
     }
 
     fn requires_destructive_confirmation(result: &crate::tools::types::ToolResult) -> bool {
@@ -410,3 +458,7 @@ impl UnifiedExecutor {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "step_execution_tests.rs"]
+mod step_execution_tests;
