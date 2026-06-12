@@ -54,6 +54,7 @@ impl McpServerManager {
     /// Discover and connect to servers from multiple sources
     pub async fn discover(&self, sources: Vec<DiscoverySource>) -> Result<Vec<String>, McpError> {
         let mut connected_servers = Vec::new();
+        let mut failures = Vec::new();
 
         for source in sources {
             match discover_from_source(source).await {
@@ -73,6 +74,7 @@ impl McpServerManager {
                                 self.health_tracker
                                     .update_health(&name, ServerStatus::Failed(e.to_string()))
                                     .await;
+                                failures.push(format!("{}: {}", name, e));
                             }
                         }
                     }
@@ -83,17 +85,25 @@ impl McpServerManager {
             }
         }
 
+        if !failures.is_empty() {
+            return Err(McpError::connection(format!(
+                "Failed to connect or initialize discovered MCP server(s): {}",
+                failures.join("; ")
+            )));
+        }
+
         Ok(connected_servers)
     }
 
     /// Discover servers from configuration
     pub async fn discover_from_config(&self, config: McpConfig) -> Result<Vec<String>, McpError> {
-        if !config.enabled {
+        if !config.enabled || !config.auto_connect {
             debug!("MCP integration is disabled in config");
             return Ok(Vec::new());
         }
 
         let mut connected = Vec::new();
+        let mut failures = Vec::new();
 
         for (name, server_config) in config.enabled_servers() {
             match self
@@ -115,8 +125,16 @@ impl McpServerManager {
                     self.health_tracker
                         .update_health(name, ServerStatus::Failed(e.to_string()))
                         .await;
+                    failures.push(format!("{}: {}", name, e));
                 }
             }
+        }
+
+        if !failures.is_empty() {
+            return Err(McpError::connection(format!(
+                "Failed to connect or initialize enabled MCP server(s): {}",
+                failures.join("; ")
+            )));
         }
 
         Ok(connected)

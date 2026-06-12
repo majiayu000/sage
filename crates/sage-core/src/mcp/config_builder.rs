@@ -2,7 +2,6 @@
 
 use super::discovery::utils::server_config_to_transport;
 use super::registry::McpRegistry;
-use super::transport::TransportConfig;
 use crate::config::Config;
 use crate::error::{SageError, SageResult};
 
@@ -16,14 +15,6 @@ pub async fn build_mcp_registry_from_config(config: &Config) -> SageResult<McpRe
 
     for (name, server_config) in config.mcp.enabled_servers() {
         let transport_config = server_config_to_transport(server_config)?;
-        if matches!(transport_config, TransportConfig::WebSocket { .. }) {
-            tracing::warn!(
-                "Skipping MCP server '{}': WebSocket transport is not yet implemented",
-                name
-            );
-            continue;
-        }
-
         match registry.register_server(name, transport_config).await {
             Ok(server_info) => {
                 tracing::info!(
@@ -117,14 +108,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_enabled_websocket_server_is_skipped_until_supported() -> SageResult<()> {
+    async fn test_enabled_websocket_server_fails_until_supported() {
         let config =
             config_with_server("future", McpServerConfig::websocket("ws://localhost:9000"));
 
-        let registry = build_mcp_registry_from_config(&config).await?;
+        let result = build_mcp_registry_from_config(&config).await;
 
-        assert!(registry.server_names().is_empty());
-        Ok(())
+        assert!(result.is_err());
     }
 
     #[tokio::test]

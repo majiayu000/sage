@@ -260,7 +260,7 @@ impl Tool for WebFetchTool {
 
 Usage notes:
   - The URL must be a fully-formed valid URL
-  - HTTP URLs will be automatically upgraded to HTTPS
+  - HTTP URLs are fetched as requested; if the server redirects to HTTPS, make a new WebFetch request with the redirect URL
   - This tool is read-only and does not modify any files
   - Results may be summarized if the content is very large
   - Includes caching for faster responses when repeatedly accessing the same URL
