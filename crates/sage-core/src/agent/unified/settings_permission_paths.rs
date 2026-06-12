@@ -83,7 +83,7 @@ fn normalize_permission_pattern(pattern: &str) -> String {
 }
 
 fn literal_directory_prefix_before_glob(pattern: &str) -> String {
-    let Some(index) = pattern.find(|ch| matches!(ch, '*' | '?' | '[' | '{')) else {
+    let Some(index) = pattern.find(['*', '?', '[', '{']) else {
         return pattern.to_string();
     };
 
