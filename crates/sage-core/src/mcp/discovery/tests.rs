@@ -2,9 +2,10 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::config::McpServerConfig;
+    use crate::config::{McpConfig, McpServerConfig};
     use crate::mcp::discovery::manager::McpServerManager;
     use crate::mcp::discovery::scanner::get_standard_mcp_paths;
+    use crate::mcp::discovery::types::DiscoverySource;
     use crate::mcp::transport::TransportConfig;
 
     fn server_config_to_transport(
@@ -93,6 +94,58 @@ mod tests {
     #[test]
     fn test_manager_creation() {
         let manager = McpServerManager::new();
+        assert!(manager.connected_servers().is_empty());
+    }
+
+    fn config_with_server(name: &str, server: McpServerConfig) -> McpConfig {
+        let mut config = McpConfig::default();
+        config.enabled = true;
+        config.auto_connect = true;
+        config.servers.insert(name.to_string(), server);
+        config
+    }
+
+    #[tokio::test]
+    async fn test_manager_discover_from_config_fails_on_enabled_invalid_server() {
+        let manager = McpServerManager::new();
+        let mut server = McpServerConfig::stdio("ignored", Vec::new());
+        server.command = None;
+
+        let result = manager
+            .discover_from_config(config_with_server("broken", server))
+            .await;
+
+        assert!(result.is_err());
+        assert!(manager.connected_servers().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_manager_discover_from_config_respects_auto_connect_false()
+    -> Result<(), crate::mcp::error::McpError> {
+        let manager = McpServerManager::new();
+        let mut config = config_with_server(
+            "offline",
+            McpServerConfig::stdio("__sage_missing_mcp_binary__", Vec::new()),
+        );
+        config.auto_connect = false;
+
+        let connected = manager.discover_from_config(config).await?;
+
+        assert!(connected.is_empty());
+        assert!(manager.connected_servers().is_empty());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_manager_discover_config_source_fails_on_enabled_invalid_server() {
+        let manager = McpServerManager::new();
+        let mut server = McpServerConfig::http("http://localhost:9999");
+        server.url = None;
+        let source = DiscoverySource::Config(config_with_server("broken", server));
+
+        let result = manager.discover(vec![source]).await;
+
+        assert!(result.is_err());
         assert!(manager.connected_servers().is_empty());
     }
 }

@@ -116,6 +116,7 @@ impl HookExecutor {
 
             debug!("Executing hook: {}", hook_config);
             let result = self.execute_hook(&hook_config, &input, &cancel).await;
+            let result = Self::apply_blocking_policy(&hook_config, result);
 
             // Log the result
             match &result {
@@ -139,6 +140,25 @@ impl HookExecutor {
         }
 
         Ok(results)
+    }
+
+    fn apply_blocking_policy(
+        hook_config: &HookConfig,
+        result: HookExecutionResult,
+    ) -> HookExecutionResult {
+        match result {
+            HookExecutionResult::Success(mut output)
+                if !output.should_continue && !hook_config.can_block =>
+            {
+                warn!(
+                    "Non-blocking hook requested to block execution; continuing: {}",
+                    hook_config
+                );
+                output.should_continue = true;
+                HookExecutionResult::Success(output)
+            }
+            other => other,
+        }
     }
 
     /// Execute a single hook configuration
@@ -313,139 +333,5 @@ impl Default for HookExecutor {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::super::types::HookType;
-    use super::*;
-    use std::collections::HashMap;
-
-    #[test]
-    fn test_parse_output_empty() {
-        let output = HookExecutor::parse_output("");
-        assert!(output.should_continue);
-        assert_eq!(output.reason, None);
-    }
-
-    #[test]
-    fn test_parse_output_plain_text() {
-        let output = HookExecutor::parse_output("Hello, world!");
-        assert!(output.should_continue);
-        assert_eq!(output.reason.as_deref(), Some("Hello, world!"));
-    }
-
-    #[test]
-    fn test_parse_output_json() {
-        let json = r#"{"should_continue": false, "reason": "Blocked"}"#;
-        let output = HookExecutor::parse_output(json);
-        assert!(!output.should_continue);
-        assert_eq!(output.reason.as_deref(), Some("Blocked"));
-    }
-
-    #[test]
-    fn test_parse_output_json_with_data() {
-        let json = r#"{
-            "should_continue": true,
-            "reason": "Success",
-            "additional_context": ["context1"]
-        }"#;
-        let output = HookExecutor::parse_output(json);
-        assert!(output.should_continue);
-        assert_eq!(output.reason.as_deref(), Some("Success"));
-        assert_eq!(output.additional_context.len(), 1);
-    }
-
-    fn create_test_hook_config(command: &str) -> HookConfig {
-        HookConfig {
-            name: "test_hook".to_string(),
-            hook_type: HookType::PreToolExecution,
-            implementation: HookImplementation::Command(CommandHook {
-                command: command.to_string(),
-                timeout_secs: 60,
-                status_message: None,
-                working_dir: None,
-                env: HashMap::new(),
-            }),
-            can_block: false,
-            timeout_secs: 60,
-            enabled: true,
-        }
-    }
-
-    #[tokio::test]
-    async fn test_execute_command_success() {
-        let registry = HookRegistry::new();
-        let hook_config = create_test_hook_config("echo test");
-
-        let executor = HookExecutor::new(registry);
-        let input = HookInput::new(HookEvent::PreToolUse, "test-session");
-        let cancel = CancellationToken::new();
-
-        let cmd = match &hook_config.implementation {
-            HookImplementation::Command(cmd) => cmd,
-            _ => panic!("Expected command hook"),
-        };
-
-        let result = executor.execute_command(cmd, &input, &cancel).await;
-
-        match result {
-            HookExecutionResult::Success(output) => {
-                assert!(output.should_continue);
-                assert_eq!(output.reason.as_deref(), Some("test"));
-            }
-            _ => panic!("Expected success result, got: {:?}", result),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_execute_command_failure() {
-        let registry = HookRegistry::new();
-        let hook_config = create_test_hook_config("exit 1");
-
-        let executor = HookExecutor::new(registry);
-        let input = HookInput::new(HookEvent::PreToolUse, "test-session");
-        let cancel = CancellationToken::new();
-
-        let cmd = match &hook_config.implementation {
-            HookImplementation::Command(cmd) => cmd,
-            _ => panic!("Expected command hook"),
-        };
-
-        let result = executor.execute_command(cmd, &input, &cancel).await;
-
-        match result {
-            HookExecutionResult::Error(_) => {
-                // Expected
-            }
-            _ => panic!("Expected error result, got: {:?}", result),
-        }
-    }
-
-    #[test]
-    fn test_hook_result_should_continue() {
-        let success = HookExecutionResult::Success(HookOutput::allow());
-        assert!(success.should_continue());
-
-        let blocked = HookExecutionResult::Success(HookOutput::deny("Not allowed"));
-        assert!(!blocked.should_continue());
-
-        let error = HookExecutionResult::Error("Failed".to_string());
-        assert!(error.should_continue()); // Non-blocking errors continue
-
-        let timeout = HookExecutionResult::Timeout;
-        assert!(timeout.should_continue());
-
-        let cancelled = HookExecutionResult::Cancelled;
-        assert!(!cancelled.should_continue());
-    }
-
-    #[test]
-    fn test_hook_result_message() {
-        let success = HookExecutionResult::Success(HookOutput::deny("Custom message"));
-        assert_eq!(success.message(), Some("Custom message"));
-
-        let error = HookExecutionResult::Error("Failed".to_string());
-        assert_eq!(error.message(), Some("Failed"));
-
-        let timeout = HookExecutionResult::Timeout;
-        assert!(timeout.message().is_some());
-    }
-}
+#[path = "hook_executor_tests.rs"]
+mod tests;

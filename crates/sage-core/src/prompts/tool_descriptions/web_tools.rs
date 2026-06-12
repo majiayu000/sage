@@ -13,12 +13,12 @@ pub const WEB_FETCH: &str = r#"- Fetches content from a specified URL and proces
 Usage notes:
   - IMPORTANT: If an MCP-provided web fetch tool is available, prefer using that tool instead of this one, as it may have fewer restrictions.
   - The URL must be a fully-formed valid URL
-  - HTTP URLs will be automatically upgraded to HTTPS
+  - HTTP URLs are fetched as requested; if the server redirects to HTTPS, make a new ${WEB_FETCH_TOOL_NAME} request with the redirect URL
   - The prompt should describe what information you want to extract from the page
   - This tool is read-only and does not modify any files
   - Results may be summarized if the content is very large
   - Includes a self-cleaning 15-minute cache for faster responses when repeatedly accessing the same URL
-  - When a URL redirects to a different host, the tool will inform you and provide the redirect URL in a special format. You should then make a new ${WEB_FETCH_TOOL_NAME} request with the redirect URL to fetch the content."#;
+  - When a URL redirects, the tool will inform you and provide the redirect URL in a special format. You should then make a new ${WEB_FETCH_TOOL_NAME} request with the redirect URL to fetch the content."#;
 
 /// WebSearch tool description
 pub const WEB_SEARCH: &str = r#"- Allows you to search the web and use the results to inform responses

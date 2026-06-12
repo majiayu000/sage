@@ -6,6 +6,7 @@
 use crate::error::SageResult;
 use crate::settings::{Settings, SettingsLoader};
 use crate::tools::types::ToolCall;
+use glob::{MatchOptions, Pattern};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tokio::sync::RwLock;
@@ -141,15 +142,15 @@ impl PermissionCache {
                 if let Some(parent) = settings_path.parent() {
                     let loader = SettingsLoader::from_directory(parent);
                     if let Ok(settings) = loader.load() {
-                        // Check if key matches any allow/deny pattern
-                        for pattern in &settings.permissions.allow {
-                            if pattern == key || Self::pattern_matches(pattern, key) {
-                                return Some(true);
+                        // Deny rules take precedence over allow rules.
+                        for pattern in &settings.permissions.deny {
+                            if Self::pattern_matches(pattern, key) {
+                                return Some(false);
                             }
                         }
-                        for pattern in &settings.permissions.deny {
-                            if pattern == key || Self::pattern_matches(pattern, key) {
-                                return Some(false);
+                        for pattern in &settings.permissions.allow {
+                            if Self::pattern_matches(pattern, key) {
+                                return Some(true);
                             }
                         }
                     }
@@ -161,22 +162,131 @@ impl PermissionCache {
     }
 
     /// Check if a pattern matches a key
-    fn pattern_matches(pattern: &str, key: &str) -> bool {
-        // Simple glob matching
-        if pattern == key {
+    pub(crate) fn pattern_matches(pattern: &str, key: &str) -> bool {
+        if pattern == "*" {
             return true;
         }
 
-        // Handle wildcards
+        if let (Some((pattern_tool, pattern_arg)), Some((key_tool, key_arg))) = (
+            Self::split_permission_key(pattern),
+            Self::split_permission_key(key),
+        ) {
+            if !pattern_tool.eq_ignore_ascii_case(key_tool) {
+                return false;
+            }
+
+            return if Self::uses_path_glob(pattern_tool) && Self::uses_path_glob(key_tool) {
+                Self::path_glob_matches(pattern_arg, key_arg)
+            } else {
+                Self::glob_matches(pattern_arg, key_arg)
+            };
+        }
+
         if pattern.contains('*') {
-            let pattern_parts: Vec<&str> = pattern.split('*').collect();
-            if pattern_parts.len() == 2 {
-                let (prefix, suffix) = (pattern_parts[0], pattern_parts[1]);
-                return key.starts_with(prefix) && key.ends_with(suffix);
+            return Self::glob_matches(pattern, key);
+        }
+
+        if let Some((key_tool, _)) = Self::split_permission_key(key) {
+            return pattern.eq_ignore_ascii_case(key_tool);
+        }
+
+        pattern.eq_ignore_ascii_case(key)
+    }
+
+    fn uses_path_glob(tool_name: &str) -> bool {
+        matches!(
+            tool_name.to_lowercase().as_str(),
+            "read"
+                | "write"
+                | "edit"
+                | "multiedit"
+                | "multi_edit"
+                | "grep"
+                | "glob"
+                | "notebookedit"
+                | "notebook_edit"
+        )
+    }
+
+    fn split_permission_key(value: &str) -> Option<(&str, &str)> {
+        let open = value.find('(')?;
+        let close = value.rfind(')')?;
+        if close <= open {
+            return None;
+        }
+
+        Some((value[..open].trim(), &value[open + 1..close]))
+    }
+
+    fn glob_matches(pattern: &str, text: &str) -> bool {
+        if pattern == "*" {
+            return true;
+        }
+
+        if !pattern.contains('*') {
+            return pattern == text;
+        }
+
+        let mut remaining = text;
+        let mut parts = pattern.split('*').peekable();
+
+        if let Some(first) = parts.next() {
+            if !first.is_empty() {
+                let Some(stripped) = remaining.strip_prefix(first) else {
+                    return false;
+                };
+                remaining = stripped;
             }
         }
 
-        false
+        while let Some(part) = parts.next() {
+            if part.is_empty() {
+                continue;
+            }
+
+            if parts.peek().is_none() {
+                return remaining.ends_with(part);
+            }
+
+            let Some(index) = remaining.find(part) else {
+                return false;
+            };
+            remaining = &remaining[index + part.len()..];
+        }
+
+        pattern.ends_with('*') || remaining.is_empty()
+    }
+
+    fn path_glob_matches(pattern: &str, text: &str) -> bool {
+        let options = MatchOptions {
+            case_sensitive: true,
+            require_literal_separator: true,
+            require_literal_leading_dot: false,
+        };
+
+        Self::expand_braces(pattern).into_iter().any(|expanded| {
+            Pattern::new(&expanded)
+                .map(|pattern| pattern.matches_with(text, options))
+                .unwrap_or(false)
+        })
+    }
+
+    fn expand_braces(pattern: &str) -> Vec<String> {
+        let Some(open) = pattern.find('{') else {
+            return vec![pattern.to_string()];
+        };
+        let Some(close_offset) = pattern[open + 1..].find('}') else {
+            return vec![pattern.to_string()];
+        };
+        let close = open + 1 + close_offset;
+        let prefix = &pattern[..open];
+        let suffix = &pattern[close + 1..];
+        let choices = &pattern[open + 1..close];
+
+        choices
+            .split(',')
+            .flat_map(|choice| Self::expand_braces(&format!("{}{}{}", prefix, choice, suffix)))
+            .collect()
     }
 
     /// Cache a decision (session only)
@@ -267,120 +377,5 @@ impl PermissionCache {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs;
-    use tempfile::TempDir;
-
-    #[tokio::test]
-    async fn test_session_cache() {
-        let cache = PermissionCache::new();
-
-        cache.set("test_key".to_string(), true).await;
-        assert_eq!(cache.get("test_key").await, Some(true));
-
-        cache.set("test_key".to_string(), false).await;
-        assert_eq!(cache.get("test_key").await, Some(false));
-    }
-
-    #[tokio::test]
-    async fn test_persistent_cache() {
-        let temp_dir = TempDir::new().unwrap();
-        let sage_dir = temp_dir.path().join(".sage");
-        fs::create_dir(&sage_dir).unwrap();
-
-        let cache = PermissionCache::with_persistence(temp_dir.path());
-
-        // Persist a decision
-        cache
-            .set_with_persistence("Bash(npm *)".to_string(), true, true)
-            .await
-            .unwrap();
-
-        // Check that it was saved
-        let settings_path = sage_dir.join("settings.local.json");
-        assert!(settings_path.exists());
-
-        let content = fs::read_to_string(&settings_path).unwrap();
-        assert!(content.contains("Bash(npm *)"));
-    }
-
-    #[tokio::test]
-    async fn test_cache_key_bash() {
-        let mut arguments = HashMap::new();
-        arguments.insert(
-            "command".to_string(),
-            serde_json::Value::String("npm install lodash".to_string()),
-        );
-
-        let call = ToolCall {
-            id: "test-id".to_string(),
-            name: "bash".to_string(),
-            arguments,
-            call_id: None,
-        };
-
-        let key = PermissionCache::cache_key("Bash", &call);
-        assert_eq!(key, "Bash(npm *)");
-    }
-
-    #[tokio::test]
-    async fn test_cache_key_read() {
-        let mut arguments = HashMap::new();
-        arguments.insert(
-            "file_path".to_string(),
-            serde_json::Value::String("/src/main.rs".to_string()),
-        );
-
-        let call = ToolCall {
-            id: "test-id".to_string(),
-            name: "read".to_string(),
-            arguments,
-            call_id: None,
-        };
-
-        let key = PermissionCache::cache_key("Read", &call);
-        assert_eq!(key, "Read(src/**)");
-    }
-
-    #[tokio::test]
-    async fn test_pattern_matches() {
-        assert!(PermissionCache::pattern_matches(
-            "Bash(npm *)",
-            "Bash(npm *)"
-        ));
-        assert!(PermissionCache::pattern_matches(
-            "Bash(npm *)",
-            "Bash(npm install)"
-        ));
-        assert!(!PermissionCache::pattern_matches(
-            "Bash(npm *)",
-            "Bash(yarn install)"
-        ));
-    }
-
-    #[tokio::test]
-    async fn test_get_with_persistence() {
-        let temp_dir = TempDir::new().unwrap();
-        let sage_dir = temp_dir.path().join(".sage");
-        fs::create_dir(&sage_dir).unwrap();
-
-        // Create settings file with pre-existing permissions
-        let settings_content = r#"{
-            "permissions": {
-                "allow": ["Read(src/**)"],
-                "deny": ["Bash(rm *)"]
-            }
-        }"#;
-        fs::write(sage_dir.join("settings.local.json"), settings_content).unwrap();
-
-        let cache = PermissionCache::with_persistence(temp_dir.path());
-
-        // Should find in persistent settings
-        assert_eq!(cache.get_with_persistence("Read(src/**)").await, Some(true));
-        assert_eq!(cache.get_with_persistence("Bash(rm *)").await, Some(false));
-
-        // Should not find non-existent
-        assert_eq!(cache.get_with_persistence("Unknown").await, None);
-    }
-}
+#[path = "cache_tests.rs"]
+mod cache_tests;

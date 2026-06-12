@@ -19,11 +19,11 @@ pub fn server_config_to_transport(config: &McpServerConfig) -> Result<TransportC
                 env: config.env.clone(),
             })
         }
-        "http" => {
+        "http" | "https" | "sse" => {
             let url = config
                 .url
                 .as_ref()
-                .ok_or_else(|| McpError::invalid_request("HTTP transport requires url"))?;
+                .ok_or_else(|| McpError::invalid_request("HTTP/SSE transport requires url"))?;
 
             Ok(TransportConfig::Http {
                 base_url: url.clone(),

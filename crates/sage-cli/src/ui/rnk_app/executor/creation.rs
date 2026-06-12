@@ -64,6 +64,7 @@ pub async fn create_executor(
             Err(e) => {
                 clear_active_mcp_registry();
                 tracing::error!("Failed to build MCP registry: {}", e);
+                return Err(e);
             }
         }
     } else {

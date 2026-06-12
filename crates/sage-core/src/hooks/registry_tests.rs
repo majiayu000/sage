@@ -13,6 +13,12 @@ fn create_test_matcher(pattern: Option<String>) -> HookMatcher {
     HookMatcher::new(pattern, config)
 }
 
+fn create_disabled_test_matcher(pattern: Option<String>) -> HookMatcher {
+    let mut matcher = create_test_matcher(pattern);
+    matcher.hook.enabled = false;
+    matcher
+}
+
 #[test]
 fn test_register() {
     let registry = HookRegistry::new();
@@ -44,6 +50,23 @@ fn test_get_matching() {
 
     let ruby_hooks = registry.get_matching(HookEvent::PreToolUse, "ruby");
     assert_eq!(ruby_hooks.len(), 1); // only wildcard
+}
+
+#[test]
+fn test_disabled_hooks_do_not_match() -> SageResult<()> {
+    let registry = HookRegistry::new();
+    let disabled = create_disabled_test_matcher(Some("bash".to_string()));
+
+    registry.register(HookEvent::PreToolUse, disabled)?;
+
+    assert!(!registry.has_hooks(&HookEvent::PreToolUse));
+    assert!(registry.list_events().is_empty());
+    assert!(
+        registry
+            .get_matching(HookEvent::PreToolUse, "bash")
+            .is_empty()
+    );
+    Ok(())
 }
 
 #[test]
@@ -201,6 +224,25 @@ fn test_from_config_empty() {
 
     assert!(registry.list_events().is_empty());
     assert!(!registry.has_hooks(&HookEvent::PreToolUse));
+}
+
+#[test]
+fn test_from_config_skips_disabled_hooks() {
+    let config = HooksConfig {
+        pre_tool_use: vec![create_disabled_test_matcher(Some("bash".to_string()))],
+        ..HooksConfig::default()
+    };
+
+    let registry = HookRegistry::from_config(&config);
+
+    assert_eq!(registry.count(), 0);
+    assert!(!registry.has_hooks(&HookEvent::PreToolUse));
+    assert!(registry.list_events().is_empty());
+    assert!(
+        registry
+            .get_matching(HookEvent::PreToolUse, "bash")
+            .is_empty()
+    );
 }
 
 #[test]

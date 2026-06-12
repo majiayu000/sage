@@ -2,17 +2,23 @@
 
 use crate::agent::{AgentState, AgentStep};
 use crate::error::{SageError, SageResult};
-use crate::input::{InputRequest, InputResponseKind};
 use crate::interrupt::global_interrupt_manager;
 use crate::llm::client::LlmClient;
 use crate::llm::messages::LlmMessage;
-use crate::tools::types::{ToolCall, ToolSchema};
+use crate::tools::types::{ToolCall, ToolResult, ToolSchema};
 use tracing::instrument;
 
 use super::UnifiedExecutor;
 use super::event_manager::ExecutionEvent;
+use super::settings_permission::SettingsPermissionCheck;
 use super::tool_display;
 use super::tool_orchestrator::ToolExecutionContext;
+
+#[path = "step_execution_permissions.rs"]
+mod step_execution_permissions;
+
+#[cfg(test)]
+pub(super) use step_execution_permissions::SettingsRecheckAfterDestructiveConfirmation;
 
 impl UnifiedExecutor {
     /// Execute a single step in the loop
@@ -209,9 +215,8 @@ impl UnifiedExecutor {
         context: &ToolExecutionContext,
         task_scope: &crate::interrupt::TaskScope,
     ) -> SageResult<crate::tools::types::ToolResult> {
-        // Display and track
+        // Display and record the requested tool call.
         tool_display::display_tool_start(&mut self.event_manager, tool_call).await;
-        self.track_file_for_undo(tool_call).await;
         self.session_manager
             .record_tool_call(
                 &tool_call.name,
@@ -222,34 +227,45 @@ impl UnifiedExecutor {
         let tool_start_time = std::time::Instant::now();
         let cancel_token = task_scope.token().clone();
 
-        // Phase 1: Pre-execution
-        let pre_result = self
-            .tool_orchestrator
-            .pre_execution_phase(tool_call, context, cancel_token.clone())
-            .await?;
+        let mut execution_tool_call = tool_call.clone();
 
-        let tool_result = if let Some(reason) = pre_result.block_reason() {
-            crate::tools::types::ToolResult::error(
-                &tool_call.id,
-                &tool_call.name,
-                format!("Tool blocked by hook: {}", reason),
-            )
-        } else {
-            // Phase 2: Execution
-            self.execute_tool_phase(tool_call, cancel_token.clone())
-                .await?
+        let (tool_result, run_post_execution) = match self
+            .check_settings_permission(tool_call, context)
+            .await?
+        {
+            Some(SettingsPermissionCheck::Blocked(permission_result)) => (permission_result, false),
+            Some(SettingsPermissionCheck::Allowed(approved_call)) => {
+                execution_tool_call = approved_call;
+                self.track_file_for_undo(&execution_tool_call).await;
+
+                (
+                    self.pre_execute_or_block(&execution_tool_call, context, cancel_token.clone())
+                        .await?,
+                    true,
+                )
+            }
+            None => {
+                self.track_file_for_undo(&execution_tool_call).await;
+                (
+                    self.pre_execute_or_block(&execution_tool_call, context, cancel_token.clone())
+                        .await?,
+                    true,
+                )
+            }
         };
 
         // Phase 3: Post-execution
-        self.tool_orchestrator
-            .post_execution_phase(tool_call, &tool_result, context, cancel_token)
-            .await?;
+        if run_post_execution {
+            self.tool_orchestrator
+                .post_execution_phase(&execution_tool_call, &tool_result, context, cancel_token)
+                .await?;
+        }
 
         // Record and display result
         let duration_ms = u64::try_from(tool_start_time.elapsed().as_millis()).unwrap_or(u64::MAX);
         self.session_manager
             .record_tool_result(
-                &tool_call.name,
+                &execution_tool_call.name,
                 tool_result.success,
                 tool_result.output.clone(),
                 tool_result.error.clone(),
@@ -261,10 +277,36 @@ impl UnifiedExecutor {
         Ok(tool_result)
     }
 
+    async fn pre_execute_or_block(
+        &mut self,
+        tool_call: &ToolCall,
+        context: &ToolExecutionContext,
+        cancel_token: tokio_util::sync::CancellationToken,
+    ) -> SageResult<ToolResult> {
+        // Phase 1: Pre-execution
+        let pre_result = self
+            .tool_orchestrator
+            .pre_execution_phase(tool_call, context, cancel_token.clone())
+            .await?;
+
+        if let Some(reason) = pre_result.block_reason() {
+            return Ok(ToolResult::error(
+                &tool_call.id,
+                &tool_call.name,
+                format!("Tool blocked by hook: {}", reason),
+            ));
+        }
+
+        // Phase 2: Execution
+        self.execute_tool_phase(tool_call, context, cancel_token)
+            .await
+    }
+
     /// Execute the tool (phase 2)
     async fn execute_tool_phase(
         &mut self,
         tool_call: &ToolCall,
+        context: &ToolExecutionContext,
         cancel_token: tokio_util::sync::CancellationToken,
     ) -> SageResult<crate::tools::types::ToolResult> {
         let requires_interaction = self
@@ -280,94 +322,9 @@ impl UnifiedExecutor {
                 .await)
         } else {
             Ok(self
-                .execute_with_permission_check(tool_call, cancel_token)
+                .execute_with_permission_check(tool_call, context, cancel_token)
                 .await)
         }
-    }
-
-    /// Execute a tool and request explicit user confirmation for destructive operations.
-    async fn execute_with_permission_check(
-        &mut self,
-        tool_call: &ToolCall,
-        cancel_token: tokio_util::sync::CancellationToken,
-    ) -> crate::tools::types::ToolResult {
-        let first_result = self
-            .tool_orchestrator
-            .execution_phase(tool_call, cancel_token.clone())
-            .await;
-
-        if !Self::requires_destructive_confirmation(&first_result) {
-            return first_result;
-        }
-
-        self.event_manager.stop_animation().await;
-
-        let command = tool_call
-            .arguments
-            .get("command")
-            .and_then(|v| v.as_str())
-            .unwrap_or("unknown command");
-        let description = format!(
-            "Tool '{}' requires confirmation for a potentially destructive operation.\nCommand: {}",
-            tool_call.name, command
-        );
-        let input = serde_json::to_value(&tool_call.arguments).unwrap_or(serde_json::Value::Null);
-        let request = InputRequest::permission(&tool_call.name, description, input);
-
-        let response = match self.request_user_input(request).await {
-            Ok(response) => response,
-            Err(err) => {
-                return crate::tools::types::ToolResult::error(
-                    &tool_call.id,
-                    &tool_call.name,
-                    format!("Operation cancelled: {}", err),
-                );
-            }
-        };
-
-        match response.kind {
-            InputResponseKind::PermissionGranted { modified_input, .. } => {
-                let mut confirmed_call = tool_call.clone();
-                if let Some(serde_json::Value::Object(map)) = modified_input {
-                    confirmed_call.arguments = map.into_iter().collect();
-                }
-                confirmed_call
-                    .arguments
-                    .insert("user_confirmed".to_string(), serde_json::Value::Bool(true));
-
-                self.tool_orchestrator
-                    .execution_phase(&confirmed_call, cancel_token)
-                    .await
-            }
-            InputResponseKind::PermissionDenied { reason } => {
-                let reason = reason.unwrap_or_else(|| "No reason provided".to_string());
-                crate::tools::types::ToolResult::error(
-                    &tool_call.id,
-                    &tool_call.name,
-                    format!("Operation cancelled by user: {}", reason),
-                )
-            }
-            InputResponseKind::Cancelled => crate::tools::types::ToolResult::error(
-                &tool_call.id,
-                &tool_call.name,
-                "Operation cancelled by user.",
-            ),
-            _ => crate::tools::types::ToolResult::error(
-                &tool_call.id,
-                &tool_call.name,
-                "Invalid permission response from input handler.",
-            ),
-        }
-    }
-
-    fn requires_destructive_confirmation(result: &crate::tools::types::ToolResult) -> bool {
-        if result.success {
-            return false;
-        }
-
-        result.error.as_ref().is_some_and(|err| {
-            err.contains("DESTRUCTIVE COMMAND BLOCKED") || err.contains("Confirmation required")
-        })
     }
 
     /// Track file for undo capability
@@ -386,3 +343,7 @@ impl UnifiedExecutor {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "step_execution_tests.rs"]
+mod step_execution_tests;
