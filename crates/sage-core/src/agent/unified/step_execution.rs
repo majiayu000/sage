@@ -6,7 +6,7 @@ use crate::input::{InputRequest, InputResponseKind};
 use crate::interrupt::global_interrupt_manager;
 use crate::llm::client::LlmClient;
 use crate::llm::messages::LlmMessage;
-use crate::tools::types::{ToolCall, ToolSchema};
+use crate::tools::types::{ToolCall, ToolResult, ToolSchema};
 use tracing::instrument;
 
 use super::UnifiedExecutor;
@@ -210,9 +210,8 @@ impl UnifiedExecutor {
         context: &ToolExecutionContext,
         task_scope: &crate::interrupt::TaskScope,
     ) -> SageResult<crate::tools::types::ToolResult> {
-        // Display and track
+        // Display and record the requested tool call.
         tool_display::display_tool_start(&mut self.event_manager, tool_call).await;
-        self.track_file_for_undo(tool_call).await;
         self.session_manager
             .record_tool_call(
                 &tool_call.name,
@@ -223,58 +222,21 @@ impl UnifiedExecutor {
         let tool_start_time = std::time::Instant::now();
         let cancel_token = task_scope.token().clone();
 
-        // Phase 1: Pre-execution
-        let pre_result = self
-            .tool_orchestrator
-            .pre_execution_phase(tool_call, context, cancel_token.clone())
-            .await?;
-
         let mut execution_tool_call = tool_call.clone();
 
-        let tool_result = if let Some(reason) = pre_result.block_reason() {
-            crate::tools::types::ToolResult::error(
-                &tool_call.id,
-                &tool_call.name,
-                format!("Tool blocked by hook: {}", reason),
-            )
-        } else {
-            match self.check_settings_permission(tool_call, context).await? {
-                Some(SettingsPermissionCheck::Blocked(permission_result)) => permission_result,
-                Some(SettingsPermissionCheck::Allowed(approved_call)) => {
-                    let input_was_modified = approved_call != execution_tool_call;
-                    execution_tool_call = approved_call;
+        let tool_result = match self.check_settings_permission(tool_call, context).await? {
+            Some(SettingsPermissionCheck::Blocked(permission_result)) => permission_result,
+            Some(SettingsPermissionCheck::Allowed(approved_call)) => {
+                execution_tool_call = approved_call;
+                self.track_file_for_undo(&execution_tool_call).await;
 
-                    if input_was_modified {
-                        self.track_file_for_undo(&execution_tool_call).await;
-                        let approved_pre_result = self
-                            .tool_orchestrator
-                            .pre_execution_phase(
-                                &execution_tool_call,
-                                context,
-                                cancel_token.clone(),
-                            )
-                            .await?;
-
-                        if let Some(reason) = approved_pre_result.block_reason() {
-                            crate::tools::types::ToolResult::error(
-                                &execution_tool_call.id,
-                                &execution_tool_call.name,
-                                format!("Tool blocked by hook: {}", reason),
-                            )
-                        } else {
-                            self.execute_tool_phase(&execution_tool_call, cancel_token.clone())
-                                .await?
-                        }
-                    } else {
-                        self.execute_tool_phase(&execution_tool_call, cancel_token.clone())
-                            .await?
-                    }
-                }
-                None => {
-                    // Phase 2: Execution
-                    self.execute_tool_phase(&execution_tool_call, cancel_token.clone())
-                        .await?
-                }
+                self.pre_execute_or_block(&execution_tool_call, context, cancel_token.clone())
+                    .await?
+            }
+            None => {
+                self.track_file_for_undo(&execution_tool_call).await;
+                self.pre_execute_or_block(&execution_tool_call, context, cancel_token.clone())
+                    .await?
             }
         };
 
@@ -297,6 +259,30 @@ impl UnifiedExecutor {
         tool_display::display_tool_result(&mut self.event_manager, &tool_result, duration_ms).await;
 
         Ok(tool_result)
+    }
+
+    async fn pre_execute_or_block(
+        &mut self,
+        tool_call: &ToolCall,
+        context: &ToolExecutionContext,
+        cancel_token: tokio_util::sync::CancellationToken,
+    ) -> SageResult<ToolResult> {
+        // Phase 1: Pre-execution
+        let pre_result = self
+            .tool_orchestrator
+            .pre_execution_phase(tool_call, context, cancel_token.clone())
+            .await?;
+
+        if let Some(reason) = pre_result.block_reason() {
+            return Ok(ToolResult::error(
+                &tool_call.id,
+                &tool_call.name,
+                format!("Tool blocked by hook: {}", reason),
+            ));
+        }
+
+        // Phase 2: Execution
+        self.execute_tool_phase(tool_call, cancel_token).await
     }
 
     /// Execute the tool (phase 2)

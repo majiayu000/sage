@@ -24,6 +24,14 @@ pub(in crate::agent::unified) enum SettingsPermissionCheck {
     Blocked(ToolResult),
 }
 
+enum SettingsPermissionPromptResult {
+    Allowed {
+        tool_call: ToolCall,
+        input_modified: bool,
+    },
+    Blocked(ToolResult),
+}
+
 impl UnifiedExecutor {
     pub(in crate::agent::unified) async fn check_settings_permission(
         &mut self,
@@ -31,27 +39,64 @@ impl UnifiedExecutor {
         context: &ToolExecutionContext,
     ) -> SageResult<Option<SettingsPermissionCheck>> {
         let settings = Self::load_settings_strict(&context.working_dir)?;
-        let Some(decision) =
-            Self::settings_permission_decision(&settings, tool_call, &context.working_dir)
-        else {
-            return Ok(None);
-        };
+        let mut current_call = tool_call.clone();
+        let mut prompted_count = 0usize;
 
-        match decision {
-            SettingsPermissionDecision::Allow => {
-                Ok(Some(SettingsPermissionCheck::Allowed(tool_call.clone())))
+        loop {
+            let Some(decision) =
+                Self::settings_permission_decision(&settings, &current_call, &context.working_dir)
+            else {
+                return if current_call == *tool_call {
+                    Ok(None)
+                } else {
+                    Ok(Some(SettingsPermissionCheck::Allowed(current_call)))
+                };
+            };
+
+            match decision {
+                SettingsPermissionDecision::Allow => {
+                    return Ok(Some(SettingsPermissionCheck::Allowed(current_call)));
+                }
+                SettingsPermissionDecision::Deny(reason) => {
+                    return Ok(Some(SettingsPermissionCheck::Blocked(
+                        Self::settings_permission_blocked_result(
+                            &current_call,
+                            format!("Permission denied by settings: {}", reason),
+                        ),
+                    )));
+                }
+                SettingsPermissionDecision::Ask(reason) => {
+                    prompted_count += 1;
+                    if prompted_count > 8 {
+                        return Ok(Some(SettingsPermissionCheck::Blocked(
+                            Self::settings_permission_blocked_result(
+                                &current_call,
+                                "Permission request exceeded the maximum number of edited approvals.",
+                            ),
+                        )));
+                    }
+
+                    match self
+                        .request_settings_permission(&current_call, reason)
+                        .await?
+                    {
+                        SettingsPermissionPromptResult::Allowed {
+                            tool_call: approved_call,
+                            input_modified,
+                        } => {
+                            if input_modified && approved_call != current_call {
+                                current_call = approved_call;
+                                continue;
+                            }
+
+                            return Ok(Some(SettingsPermissionCheck::Allowed(approved_call)));
+                        }
+                        SettingsPermissionPromptResult::Blocked(result) => {
+                            return Ok(Some(SettingsPermissionCheck::Blocked(result)));
+                        }
+                    }
+                }
             }
-            SettingsPermissionDecision::Deny(reason) => {
-                Ok(Some(SettingsPermissionCheck::Blocked(ToolResult::error(
-                    &tool_call.id,
-                    &tool_call.name,
-                    format!("Permission denied by settings: {}", reason),
-                ))))
-            }
-            SettingsPermissionDecision::Ask(reason) => self
-                .request_settings_permission(tool_call, reason)
-                .await
-                .map(Some),
         }
     }
 
@@ -59,7 +104,7 @@ impl UnifiedExecutor {
         &mut self,
         tool_call: &ToolCall,
         reason: String,
-    ) -> SageResult<SettingsPermissionCheck> {
+    ) -> SageResult<SettingsPermissionPromptResult> {
         self.event_manager.stop_animation().await;
         let input = serde_json::to_value(&tool_call.arguments).unwrap_or(serde_json::Value::Null);
         let request = InputRequest::permission(
@@ -74,44 +119,78 @@ impl UnifiedExecutor {
         let response = match self.request_user_input(request).await {
             Ok(response) => response,
             Err(err) => {
-                return Ok(SettingsPermissionCheck::Blocked(ToolResult::error(
-                    &tool_call.id,
-                    &tool_call.name,
-                    format!("Permission request failed: {}", err),
-                )));
+                return Ok(SettingsPermissionPromptResult::Blocked(
+                    Self::settings_permission_blocked_result(
+                        tool_call,
+                        format!("Permission request failed: {}", err),
+                    ),
+                ));
             }
         };
 
         match response.kind {
             InputResponseKind::PermissionGranted { modified_input, .. } => {
                 let mut approved_call = tool_call.clone();
+                let input_modified = modified_input.is_some();
                 if let Some(serde_json::Value::Object(map)) = modified_input {
                     approved_call.arguments = map.into_iter().collect();
                 }
 
-                Ok(SettingsPermissionCheck::Allowed(approved_call))
+                Ok(SettingsPermissionPromptResult::Allowed {
+                    tool_call: approved_call,
+                    input_modified,
+                })
             }
             InputResponseKind::PermissionDenied { reason } => {
                 let reason = reason.unwrap_or_else(|| "No reason provided".to_string());
-                Ok(SettingsPermissionCheck::Blocked(ToolResult::error(
-                    &tool_call.id,
-                    &tool_call.name,
-                    format!("Permission denied by user: {}", reason),
-                )))
+                Ok(SettingsPermissionPromptResult::Blocked(
+                    Self::settings_permission_blocked_result(
+                        tool_call,
+                        format!("Permission denied by user: {}", reason),
+                    ),
+                ))
             }
-            InputResponseKind::Cancelled => {
-                Ok(SettingsPermissionCheck::Blocked(ToolResult::error(
-                    &tool_call.id,
-                    &tool_call.name,
+            InputResponseKind::Cancelled => Ok(SettingsPermissionPromptResult::Blocked(
+                Self::settings_permission_blocked_result(
+                    tool_call,
                     "Permission request cancelled by user.",
-                )))
+                ),
+            )),
+            InputResponseKind::FreeText { text }
+            | InputResponseKind::Simple { content: text, .. } => {
+                match Self::legacy_permission_text_decision(&text) {
+                    Some(true) => Ok(SettingsPermissionPromptResult::Allowed {
+                        tool_call: tool_call.clone(),
+                        input_modified: false,
+                    }),
+                    Some(false) => Ok(SettingsPermissionPromptResult::Blocked(
+                        Self::settings_permission_blocked_result(
+                            tool_call,
+                            format!("Permission denied by user response: {}", text),
+                        ),
+                    )),
+                    None => Ok(SettingsPermissionPromptResult::Blocked(
+                        Self::settings_permission_blocked_result(
+                            tool_call,
+                            "Invalid permission response from input handler.",
+                        ),
+                    )),
+                }
             }
-            _ => Ok(SettingsPermissionCheck::Blocked(ToolResult::error(
-                &tool_call.id,
-                &tool_call.name,
-                "Invalid permission response from input handler.",
-            ))),
+            _ => Ok(SettingsPermissionPromptResult::Blocked(
+                Self::settings_permission_blocked_result(
+                    tool_call,
+                    "Invalid permission response from input handler.",
+                ),
+            )),
         }
+    }
+
+    fn settings_permission_blocked_result(
+        tool_call: &ToolCall,
+        message: impl Into<String>,
+    ) -> ToolResult {
+        ToolResult::error(&tool_call.id, &tool_call.name, message.into())
     }
 
     fn load_settings_strict(working_dir: &std::path::Path) -> SageResult<Settings> {
@@ -218,6 +297,7 @@ impl UnifiedExecutor {
             "read" | "write" | "edit" | "multiedit" => {
                 Self::path_permission_argument(call, &["file_path", "path"], working_dir)
             }
+            "grep" | "glob" => Self::path_permission_argument(call, &["path"], working_dir),
             "notebookedit" => Self::path_permission_argument(call, &["notebook_path"], working_dir),
             _ => None,
         };
@@ -255,244 +335,18 @@ impl UnifiedExecutor {
             .trim_start_matches('/')
             .to_string()
     }
+
+    fn legacy_permission_text_decision(text: &str) -> Option<bool> {
+        match text.trim().to_ascii_lowercase().as_str() {
+            "y" | "yes" | "allow" | "allowed" | "approve" | "approved" | "ok" | "true" => {
+                Some(true)
+            }
+            "n" | "no" | "deny" | "denied" | "reject" | "rejected" | "false" => Some(false),
+            _ => None,
+        }
+    }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::settings::types::PermissionSettings;
-    use std::collections::HashMap;
-    use std::fs;
-    use std::path::Path;
-    use tempfile::TempDir;
-
-    fn workspace_dir() -> &'static Path {
-        Path::new("/workspace/sage")
-    }
-
-    fn bash_call(command: &str) -> ToolCall {
-        let mut arguments = HashMap::new();
-        arguments.insert(
-            "command".to_string(),
-            serde_json::Value::String(command.to_string()),
-        );
-        ToolCall::new("call-1", "bash", arguments)
-    }
-
-    fn read_call(path: &str) -> ToolCall {
-        let mut arguments = HashMap::new();
-        arguments.insert(
-            "file_path".to_string(),
-            serde_json::Value::String(path.to_string()),
-        );
-        ToolCall::new("call-1", "read", arguments)
-    }
-
-    fn notebook_call(path: &str) -> ToolCall {
-        let mut arguments = HashMap::new();
-        arguments.insert(
-            "notebook_path".to_string(),
-            serde_json::Value::String(path.to_string()),
-        );
-        ToolCall::new("call-1", "notebook_edit", arguments)
-    }
-
-    #[test]
-    fn test_settings_permission_denies_matching_rule() {
-        let settings = Settings {
-            permissions: PermissionSettings {
-                deny: vec!["Bash(echo *)".to_string()],
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-
-        let decision = UnifiedExecutor::settings_permission_decision(
-            &settings,
-            &bash_call("echo blocked"),
-            workspace_dir(),
-        );
-
-        assert!(matches!(
-            decision,
-            Some(SettingsPermissionDecision::Deny(_))
-        ));
-    }
-
-    #[test]
-    fn test_settings_permission_matches_specific_command_against_actual_input() {
-        let settings = Settings {
-            permissions: PermissionSettings {
-                deny: vec!["Bash(rm -rf *)".to_string()],
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-
-        let decision = UnifiedExecutor::settings_permission_decision(
-            &settings,
-            &bash_call("rm -rf /tmp/foo"),
-            workspace_dir(),
-        );
-
-        assert!(matches!(
-            decision,
-            Some(SettingsPermissionDecision::Deny(_))
-        ));
-    }
-
-    #[test]
-    fn test_settings_permission_wildcard_deny_matches_any_tool() {
-        let settings = Settings {
-            permissions: PermissionSettings {
-                deny: vec!["*".to_string()],
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-
-        let decision = UnifiedExecutor::settings_permission_decision(
-            &settings,
-            &bash_call("echo blocked"),
-            workspace_dir(),
-        );
-
-        assert!(matches!(
-            decision,
-            Some(SettingsPermissionDecision::Deny(_))
-        ));
-    }
-
-    #[test]
-    fn test_settings_permission_allows_matching_rule() {
-        let settings = Settings {
-            permissions: PermissionSettings {
-                allow: vec!["Bash(echo *)".to_string()],
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-
-        let decision = UnifiedExecutor::settings_permission_decision(
-            &settings,
-            &bash_call("echo allowed"),
-            workspace_dir(),
-        );
-
-        assert_eq!(decision, Some(SettingsPermissionDecision::Allow));
-    }
-
-    #[test]
-    fn test_settings_permission_deny_precedes_allow() {
-        let settings = Settings {
-            permissions: PermissionSettings {
-                allow: vec!["Bash".to_string()],
-                deny: vec!["Bash(echo *)".to_string()],
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-
-        let decision = UnifiedExecutor::settings_permission_decision(
-            &settings,
-            &bash_call("echo blocked"),
-            workspace_dir(),
-        );
-
-        assert!(matches!(
-            decision,
-            Some(SettingsPermissionDecision::Deny(_))
-        ));
-    }
-
-    #[test]
-    fn test_settings_permission_default_deny_blocks_unmatched_call() {
-        let settings = Settings {
-            permissions: PermissionSettings {
-                default_behavior: SettingsPermissionBehavior::Deny,
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-
-        let decision = UnifiedExecutor::settings_permission_decision(
-            &settings,
-            &bash_call("cargo test"),
-            workspace_dir(),
-        );
-
-        assert!(matches!(
-            decision,
-            Some(SettingsPermissionDecision::Deny(_))
-        ));
-    }
-
-    #[test]
-    fn test_empty_default_settings_do_not_force_permission_prompt() {
-        let settings = Settings::default();
-
-        let decision = UnifiedExecutor::settings_permission_decision(
-            &settings,
-            &bash_call("cargo test"),
-            workspace_dir(),
-        );
-
-        assert_eq!(decision, None);
-    }
-
-    #[test]
-    fn test_settings_permission_matches_workspace_relative_absolute_path() {
-        let settings = Settings {
-            permissions: PermissionSettings {
-                allow: vec!["Read(src/**)".to_string()],
-                default_behavior: SettingsPermissionBehavior::Deny,
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-
-        let decision = UnifiedExecutor::settings_permission_decision(
-            &settings,
-            &read_call("/workspace/sage/src/lib.rs"),
-            workspace_dir(),
-        );
-
-        assert_eq!(decision, Some(SettingsPermissionDecision::Allow));
-    }
-
-    #[test]
-    fn test_settings_permission_matches_notebook_path() {
-        let settings = Settings {
-            permissions: PermissionSettings {
-                deny: vec!["NotebookEdit(secrets/**)".to_string()],
-                default_behavior: SettingsPermissionBehavior::Allow,
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-
-        let decision = UnifiedExecutor::settings_permission_decision(
-            &settings,
-            &notebook_call("/workspace/sage/secrets/private.ipynb"),
-            workspace_dir(),
-        );
-
-        assert!(matches!(
-            decision,
-            Some(SettingsPermissionDecision::Deny(_))
-        ));
-    }
-
-    #[test]
-    fn test_load_settings_strict_rejects_invalid_project_settings() -> SageResult<()> {
-        let temp_dir = TempDir::new()?;
-        let sage_dir = temp_dir.path().join(".sage");
-        fs::create_dir(&sage_dir)?;
-        fs::write(sage_dir.join("settings.local.json"), "{ invalid json")?;
-
-        let result = UnifiedExecutor::load_settings_strict(temp_dir.path());
-
-        assert!(result.is_err());
-        Ok(())
-    }
-}
+#[path = "settings_permission_tests.rs"]
+mod settings_permission_tests;
