@@ -290,7 +290,7 @@ fn test_settings_permission_matches_grep_and_glob_paths() {
 }
 
 #[test]
-fn test_settings_permission_denies_workspace_wide_grep_when_path_is_omitted() {
+fn test_settings_permission_denies_workspace_wide_grep_scope() {
     let settings = Settings {
         permissions: PermissionSettings {
             deny: vec!["Grep(secrets/**)".to_string()],
@@ -305,9 +305,27 @@ fn test_settings_permission_denies_workspace_wide_grep_when_path_is_omitted() {
         &grep_call_without_path("token"),
         workspace_dir(),
     );
+    let dot_decision = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &path_call("grep", "."),
+        workspace_dir(),
+    );
+    let root_decision = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &path_call("grep", "/workspace/sage"),
+        workspace_dir(),
+    );
 
     assert!(matches!(
         decision,
+        Some(SettingsPermissionDecision::Deny(_))
+    ));
+    assert!(matches!(
+        dot_decision,
+        Some(SettingsPermissionDecision::Deny(_))
+    ));
+    assert!(matches!(
+        root_decision,
         Some(SettingsPermissionDecision::Deny(_))
     ));
 }

@@ -132,6 +132,14 @@ async fn test_non_path_permission_star_keeps_matching_slashes() {
 }
 
 #[tokio::test]
+async fn test_webfetch_permission_star_matches_url_slashes() {
+    assert!(PermissionCache::pattern_matches(
+        "WebFetch(https://internal.example/*)",
+        "WebFetch(https://internal.example/private/secret)"
+    ));
+}
+
+#[tokio::test]
 async fn test_get_with_persistence() {
     let temp_dir = TempDir::new().unwrap();
     let sage_dir = temp_dir.path().join(".sage");

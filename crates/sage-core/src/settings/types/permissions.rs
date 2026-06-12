@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Permission settings
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize)]
 pub struct PermissionSettings {
     /// Patterns to allow (e.g., "Bash(npm *)", "Read(src/**)")
     #[serde(default)]
@@ -14,8 +14,11 @@ pub struct PermissionSettings {
     pub deny: Vec<String>,
 
     /// Default behavior when no rule matches
-    #[serde(default)]
     pub default_behavior: SettingsPermissionBehavior,
+
+    /// Whether default_behavior was explicitly declared by a settings file.
+    #[serde(skip)]
+    pub default_behavior_set: bool,
 }
 
 impl PermissionSettings {
@@ -25,9 +28,13 @@ impl PermissionSettings {
         self.allow.extend(other.allow);
         self.deny.extend(other.deny);
 
-        // Override default behavior if explicitly set
-        if other.default_behavior != SettingsPermissionBehavior::default() {
+        // Override default behavior if explicitly set. Programmatic settings
+        // with allow/deny still override without the deserialization marker.
+        if other.default_behavior_set
+            || other.default_behavior != SettingsPermissionBehavior::default()
+        {
             self.default_behavior = other.default_behavior;
+            self.default_behavior_set = true;
         }
     }
 
@@ -52,6 +59,30 @@ impl PermissionSettings {
         Some(ParsedPattern {
             tool_name: pattern.to_string(),
             arg_pattern: None,
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for PermissionSettings {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct PermissionSettingsWire {
+            #[serde(default)]
+            allow: Vec<String>,
+            #[serde(default)]
+            deny: Vec<String>,
+            default_behavior: Option<SettingsPermissionBehavior>,
+        }
+
+        let wire = PermissionSettingsWire::deserialize(deserializer)?;
+        Ok(Self {
+            allow: wire.allow,
+            deny: wire.deny,
+            default_behavior: wire.default_behavior.unwrap_or_default(),
+            default_behavior_set: wire.default_behavior.is_some(),
         })
     }
 }

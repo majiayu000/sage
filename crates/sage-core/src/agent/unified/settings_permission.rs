@@ -272,17 +272,13 @@ impl UnifiedExecutor {
             )));
         }
 
-        if tool_name == "Grep"
-            && tool_call
-                .get_argument::<String>("path")
-                .is_none_or(|path| path.is_empty())
-        {
+        if tool_name == "Grep" && matches!(key.as_str(), "Grep" | "Grep()") {
             if let Some(pattern) = permissions.deny.iter().find(|pattern| {
                 let lower = pattern.to_ascii_lowercase();
                 lower == "grep" || lower.starts_with("grep(")
             }) {
                 return Some(SettingsPermissionDecision::Deny(format!(
-                    "omitted Grep path searches the workspace and overlaps deny rule '{}'",
+                    "workspace-wide Grep search overlaps deny rule '{}'",
                     pattern
                 )));
             }

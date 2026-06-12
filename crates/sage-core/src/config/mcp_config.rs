@@ -14,7 +14,7 @@ fn default_true() -> bool {
 }
 
 /// MCP (Model Context Protocol) configuration
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpConfig {
     /// Whether MCP integration is enabled
     #[serde(default)]
@@ -28,6 +28,17 @@ pub struct McpConfig {
     /// Whether to auto-connect to servers on startup
     #[serde(default = "default_true")]
     pub auto_connect: bool,
+}
+
+impl Default for McpConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            servers: HashMap::new(),
+            default_timeout_secs: default_mcp_timeout(),
+            auto_connect: true,
+        }
+    }
 }
 
 /// Configuration for a single MCP server
@@ -159,11 +170,8 @@ mod tests {
         let config = McpConfig::default();
         assert!(!config.enabled);
         assert!(config.servers.is_empty());
-        // Note: Default trait sets default_timeout_secs to 0
-        // The default_mcp_timeout() is only used during deserialization
-        assert_eq!(config.default_timeout_secs, 0);
-        // default_true() is also only for deserialization, Default trait sets to false
-        assert!(!config.auto_connect);
+        assert_eq!(config.default_timeout_secs, 300);
+        assert!(config.auto_connect);
     }
 
     #[test]

@@ -204,8 +204,6 @@ impl PermissionCache {
                 | "glob"
                 | "notebookedit"
                 | "notebook_edit"
-                | "webfetch"
-                | "web_fetch"
         )
     }
 

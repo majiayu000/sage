@@ -98,6 +98,7 @@ mod tests {
                 allow: vec!["Write(src/*)".to_string()],
                 deny: vec!["Bash(rm -rf *)".to_string()],
                 default_behavior: SettingsPermissionBehavior::Allow,
+                ..Default::default()
             },
             ..Default::default()
         };
@@ -119,6 +120,7 @@ mod tests {
                 allow: vec!["Read(src/*)".to_string()],
                 deny: vec![],
                 default_behavior: SettingsPermissionBehavior::Ask,
+                ..Default::default()
             },
             ..Default::default()
         };

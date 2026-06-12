@@ -307,6 +307,35 @@ mod tests {
     }
 
     #[test]
+    fn test_explicit_local_ask_overrides_project_deny() {
+        let temp_dir = TempDir::new().unwrap();
+        let sage_dir = temp_dir.path().join(".sage");
+        fs::create_dir(&sage_dir).unwrap();
+
+        let project_content = r#"{
+            "permissions": {
+                "default_behavior": "deny"
+            }
+        }"#;
+        fs::write(sage_dir.join("settings.json"), project_content).unwrap();
+
+        let local_content = r#"{
+            "permissions": {
+                "default_behavior": "ask"
+            }
+        }"#;
+        fs::write(sage_dir.join("settings.local.json"), local_content).unwrap();
+
+        let loader = SettingsLoader::from_directory(temp_dir.path());
+        let settings = loader.load().unwrap();
+
+        assert_eq!(
+            settings.permissions.default_behavior,
+            SettingsPermissionBehavior::Ask
+        );
+    }
+
+    #[test]
     fn test_strip_json_comments() {
         let content = r#"{
             // This is a comment
