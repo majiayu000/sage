@@ -23,6 +23,8 @@ pub struct McpConfig {
     pub servers: HashMap<String, McpServerConfig>,
     /// Default timeout for MCP requests in seconds
     pub default_timeout_secs: u64,
+    /// Whether default_timeout_secs was explicitly declared by a config source.
+    pub default_timeout_secs_set: bool,
     /// Whether to auto-connect to servers on startup
     pub auto_connect: bool,
     /// Whether auto_connect was explicitly declared by a config source.
@@ -35,6 +37,7 @@ impl Default for McpConfig {
             enabled: false,
             servers: HashMap::new(),
             default_timeout_secs: default_mcp_timeout(),
+            default_timeout_secs_set: false,
             auto_connect: true,
             auto_connect_set: false,
         }
@@ -73,8 +76,7 @@ impl<'de> Deserialize<'de> for McpConfig {
             enabled: bool,
             #[serde(default)]
             servers: HashMap<String, McpServerConfig>,
-            #[serde(default = "default_mcp_timeout")]
-            default_timeout_secs: u64,
+            default_timeout_secs: Option<u64>,
             auto_connect: Option<bool>,
         }
 
@@ -82,7 +84,10 @@ impl<'de> Deserialize<'de> for McpConfig {
         Ok(Self {
             enabled: wire.enabled,
             servers: wire.servers,
-            default_timeout_secs: wire.default_timeout_secs,
+            default_timeout_secs: wire
+                .default_timeout_secs
+                .unwrap_or_else(default_mcp_timeout),
+            default_timeout_secs_set: wire.default_timeout_secs.is_some(),
             auto_connect: wire.auto_connect.unwrap_or_else(default_true),
             auto_connect_set: wire.auto_connect.is_some(),
         })
@@ -126,8 +131,9 @@ impl McpConfig {
             self.servers.insert(name, config);
         }
 
-        if other.default_timeout_secs > 0 {
+        if other.default_timeout_secs_set {
             self.default_timeout_secs = other.default_timeout_secs;
+            self.default_timeout_secs_set = true;
         }
 
         if other.auto_connect_set || !other.auto_connect {
@@ -222,6 +228,7 @@ mod tests {
         assert!(!config.enabled);
         assert!(config.servers.is_empty());
         assert_eq!(config.default_timeout_secs, 300);
+        assert!(!config.default_timeout_secs_set);
         assert!(config.auto_connect);
     }
 
@@ -231,6 +238,7 @@ mod tests {
         let mut config2 = McpConfig::default();
         config2.enabled = true;
         config2.default_timeout_secs = 600;
+        config2.default_timeout_secs_set = true;
         config2.auto_connect = false;
         config2
             .servers
@@ -255,6 +263,18 @@ mod tests {
     }
 
     #[test]
+    fn test_mcp_config_merge_default_does_not_override_explicit_timeout() {
+        let mut config1 = McpConfig::default();
+        config1.default_timeout_secs = 10;
+        config1.default_timeout_secs_set = true;
+
+        config1.merge(McpConfig::default());
+
+        assert_eq!(config1.default_timeout_secs, 10);
+        assert!(config1.default_timeout_secs_set);
+    }
+
+    #[test]
     fn test_mcp_config_deserialize_tracks_explicit_auto_connect() {
         let implicit: McpConfig = serde_json::from_str("{}").unwrap();
         let explicit: McpConfig = serde_json::from_str(r#"{"auto_connect": true}"#).unwrap();
@@ -263,6 +283,17 @@ mod tests {
         assert!(!implicit.auto_connect_set);
         assert!(explicit.auto_connect);
         assert!(explicit.auto_connect_set);
+    }
+
+    #[test]
+    fn test_mcp_config_deserialize_tracks_explicit_timeout() {
+        let implicit: McpConfig = serde_json::from_str("{}").unwrap();
+        let explicit: McpConfig = serde_json::from_str(r#"{"default_timeout_secs": 10}"#).unwrap();
+
+        assert_eq!(implicit.default_timeout_secs, 300);
+        assert!(!implicit.default_timeout_secs_set);
+        assert_eq!(explicit.default_timeout_secs, 10);
+        assert!(explicit.default_timeout_secs_set);
     }
 
     #[test]

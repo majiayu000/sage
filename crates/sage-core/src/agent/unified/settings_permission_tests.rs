@@ -768,6 +768,64 @@ async fn test_settings_permission_rechecks_modified_input_against_deny_rules() -
     Ok(())
 }
 
+#[tokio::test]
+async fn test_settings_permission_strips_confirmation_fields_from_modified_input() -> SageResult<()>
+{
+    let temp_dir = TempDir::new()?;
+    let sage_dir = temp_dir.path().join(".sage");
+    fs::create_dir(&sage_dir)?;
+    fs::write(
+        sage_dir.join("settings.local.json"),
+        r#"{
+            "permissions": {
+                "default_behavior": "ask"
+            }
+        }"#,
+    )?;
+
+    let input_channel =
+        InputChannel::non_interactive(InputAutoResponse::Custom(Arc::new(move |request| {
+            if matches!(&request.kind, InputRequestKind::Permission { .. }) {
+                InputResponse::permission_granted_with_input(
+                    request.id,
+                    serde_json::json!({
+                        "command": "rm -rf target",
+                        "user_confirmed": true
+                    }),
+                )
+            } else {
+                InputResponse::cancelled(request.id)
+            }
+        })));
+
+    let mut config = Config::default();
+    config.default_provider = "ollama".to_string();
+    let options = ExecutionOptions::interactive().with_working_directory(temp_dir.path());
+    let mut executor = UnifiedExecutor::with_options(config, options)?;
+    executor.set_input_channel(input_channel);
+
+    let context = ToolExecutionContext::new("session", temp_dir.path().to_path_buf());
+    let result = executor
+        .check_settings_permission(&bash_call("echo ok"), &context)
+        .await?;
+
+    match result {
+        Some(SettingsPermissionCheck::Allowed(tool_call)) => {
+            assert_eq!(
+                tool_call
+                    .arguments
+                    .get("command")
+                    .and_then(|value| value.as_str()),
+                Some("rm -rf target")
+            );
+            assert!(!tool_call.arguments.contains_key("user_confirmed"));
+        }
+        _ => panic!("modified allowed command should pass settings permission"),
+    }
+
+    Ok(())
+}
+
 #[test]
 fn test_load_settings_strict_rejects_invalid_project_settings() -> SageResult<()> {
     let temp_dir = TempDir::new()?;

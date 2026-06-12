@@ -167,7 +167,10 @@ impl UnifiedExecutor {
                 let mut approved_call = tool_call.clone();
                 let input_modified = modified_input.is_some();
                 if let Some(serde_json::Value::Object(map)) = modified_input {
-                    approved_call.arguments = map.into_iter().collect();
+                    approved_call.arguments = map
+                        .into_iter()
+                        .filter(|(key, _)| !Self::is_confirmation_only_argument(key))
+                        .collect();
                 }
 
                 Ok(SettingsPermissionPromptResult::Allowed {
@@ -413,6 +416,10 @@ impl UnifiedExecutor {
             "n" | "no" | "deny" | "denied" | "reject" | "rejected" | "false" => Some(false),
             _ => None,
         }
+    }
+
+    fn is_confirmation_only_argument(key: &str) -> bool {
+        key == "user_confirmed"
     }
 }
 
