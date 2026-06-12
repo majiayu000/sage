@@ -1,7 +1,6 @@
 //! Path and glob helpers for settings-backed permission checks.
 
 use crate::tools::permission::PermissionCache;
-use std::ffi::OsString;
 use std::path::{Component, Path, PathBuf};
 
 pub(super) fn workspace_relative_path(path: &str, working_dir: &Path) -> String {
@@ -11,25 +10,37 @@ pub(super) fn workspace_relative_path(path: &str, working_dir: &Path) -> String 
     if path.is_absolute() {
         return path
             .strip_prefix(&working_dir)
-            .map(|relative| relative.to_string_lossy().to_string())
-            .unwrap_or_else(|_| path.to_string_lossy().to_string());
+            .map(permission_path_string)
+            .unwrap_or_else(|_| permission_path_string(&path));
     }
 
-    path.to_string_lossy().to_string()
+    permission_path_string(&path)
 }
 
 pub(super) fn glob_search_overlaps_deny_rule(request_key: &str, deny_rule: &str) -> bool {
-    let Some(request_arg) = permission_key_argument(request_key, "Glob") else {
+    path_search_overlaps_deny_rule(request_key, deny_rule, "Glob", false)
+}
+
+pub(super) fn grep_search_overlaps_deny_rule(request_key: &str, deny_rule: &str) -> bool {
+    path_search_overlaps_deny_rule(request_key, deny_rule, "Grep", true)
+}
+
+fn path_search_overlaps_deny_rule(
+    request_key: &str,
+    deny_rule: &str,
+    tool_name: &str,
+    request_covers_descendants: bool,
+) -> bool {
+    let Some(request_arg) = permission_key_argument(request_key, tool_name) else {
         return false;
     };
-    let Some(deny_arg) = permission_key_argument(deny_rule, "Glob") else {
+    let Some(deny_arg) = permission_key_argument(deny_rule, tool_name) else {
         return false;
     };
 
-    if PermissionCache::pattern_matches(
-        &format!("Glob({})", deny_arg),
-        &format!("Glob({})", request_arg),
-    ) {
+    let request_key = format!("{}({})", tool_name, request_arg);
+    let deny_key = format!("{}({})", tool_name, deny_arg);
+    if PermissionCache::pattern_matches(&deny_key, &request_key) {
         return true;
     }
 
@@ -42,8 +53,8 @@ pub(super) fn glob_search_overlaps_deny_rule(request_key: &str, deny_rule: &str)
         return false;
     }
 
-    let request_key = format!("Glob({})", request_arg);
-    let deny_root_key = format!("Glob({})", deny_root);
+    let request_key = format!("{}({})", tool_name, request_arg);
+    let deny_root_key = format!("{}({})", tool_name, deny_root);
     if PermissionCache::pattern_matches(&request_key, &deny_root_key) {
         return true;
     }
@@ -52,7 +63,8 @@ pub(super) fn glob_search_overlaps_deny_rule(request_key: &str, deny_rule: &str)
         return true;
     }
 
-    request_arg.contains("**") && path_may_contain(&request_root, &deny_root)
+    (request_covers_descendants || request_arg.contains("**"))
+        && path_may_contain(&request_root, &deny_root)
 }
 
 fn permission_key_argument<'a>(key: &'a str, expected_tool: &str) -> Option<&'a str> {
@@ -72,7 +84,7 @@ fn permission_key_argument<'a>(key: &'a str, expected_tool: &str) -> Option<&'a 
 
 fn normalize_permission_pattern(pattern: &str) -> String {
     let normalized = normalize_permission_path(Path::new(pattern));
-    let mut text = normalized.to_string_lossy().to_string();
+    let mut text = permission_path_string(&normalized);
     while let Some(stripped) = text.strip_prefix("./") {
         text = stripped.to_string();
     }
@@ -128,37 +140,25 @@ fn absolute_permission_path(path: &str, working_dir: &Path) -> PathBuf {
     } else {
         working_dir.join(path)
     };
-    let normalized_path = normalize_permission_path(&absolute_path);
-    canonicalize_existing_prefix(&normalized_path).unwrap_or(normalized_path)
+    let resolved_path = canonicalize_existing_components(&absolute_path);
+    normalize_permission_path(&resolved_path)
 }
 
-fn canonicalize_existing_prefix(path: &Path) -> Option<PathBuf> {
-    if let Ok(canonical) = path.canonicalize() {
-        return Some(normalize_permission_path(&canonical));
+fn canonicalize_existing_components(path: &Path) -> PathBuf {
+    let mut resolved = PathBuf::new();
+
+    for component in path.components() {
+        if matches!(component, Component::CurDir) {
+            continue;
+        }
+
+        resolved.push(component.as_os_str());
+        if let Ok(canonical) = resolved.canonicalize() {
+            resolved = canonical;
+        }
     }
 
-    let mut current = path.to_path_buf();
-    let mut missing_components: Vec<OsString> = Vec::new();
-
-    loop {
-        if current.exists() {
-            let mut resolved = current.canonicalize().ok()?;
-            for component in missing_components.iter().rev() {
-                resolved.push(component);
-            }
-            return Some(normalize_permission_path(&resolved));
-        }
-
-        if let Some(file_name) = current.file_name() {
-            missing_components.push(file_name.to_os_string());
-        }
-
-        let parent = current.parent()?;
-        if parent == current {
-            return None;
-        }
-        current = parent.to_path_buf();
-    }
+    resolved
 }
 
 fn normalize_permission_path(path: &Path) -> PathBuf {
@@ -178,4 +178,8 @@ fn normalize_permission_path(path: &Path) -> PathBuf {
     }
 
     normalized
+}
+
+fn permission_path_string(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
 }

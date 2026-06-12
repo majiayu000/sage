@@ -287,6 +287,17 @@ impl UnifiedExecutor {
             }
         }
 
+        if tool_name == "Grep" {
+            if let Some(pattern) = permissions.deny.iter().find(|pattern| {
+                settings_permission_paths::grep_search_overlaps_deny_rule(&key, pattern)
+            }) {
+                return Some(SettingsPermissionDecision::Deny(format!(
+                    "Grep search overlaps deny rule '{}'",
+                    pattern
+                )));
+            }
+        }
+
         if tool_name == "Glob" {
             if let Some(pattern) = permissions.deny.iter().find(|pattern| {
                 settings_permission_paths::glob_search_overlaps_deny_rule(&key, pattern)

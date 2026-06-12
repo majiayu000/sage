@@ -124,6 +124,38 @@ async fn test_path_permission_star_does_not_cross_separator() {
 }
 
 #[tokio::test]
+async fn test_path_permission_recursive_glob_matches_direct_children() {
+    assert!(PermissionCache::pattern_matches(
+        "Read(src/**/*)",
+        "Read(src/main.rs)"
+    ));
+    assert!(PermissionCache::pattern_matches(
+        "Read(src/**/*)",
+        "Read(src/nested/main.rs)"
+    ));
+}
+
+#[tokio::test]
+async fn test_path_permission_glob_metacharacters_match_paths() {
+    assert!(PermissionCache::pattern_matches(
+        "Glob(src/test_?.py)",
+        "Glob(src/test_a.py)"
+    ));
+    assert!(PermissionCache::pattern_matches(
+        "Glob(src/*.[jt]s)",
+        "Glob(src/app.ts)"
+    ));
+    assert!(PermissionCache::pattern_matches(
+        "Glob(src/*.{js,ts})",
+        "Glob(src/app.js)"
+    ));
+    assert!(PermissionCache::pattern_matches(
+        "Glob(src/*.{js,ts})",
+        "Glob(src/app.ts)"
+    ));
+}
+
+#[tokio::test]
 async fn test_non_path_permission_star_keeps_matching_slashes() {
     assert!(PermissionCache::pattern_matches(
         "Bash(rm -rf *)",

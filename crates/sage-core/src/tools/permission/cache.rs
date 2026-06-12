@@ -6,6 +6,7 @@
 use crate::error::SageResult;
 use crate::settings::{Settings, SettingsLoader};
 use crate::tools::types::ToolCall;
+use glob::{MatchOptions, Pattern};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tokio::sync::RwLock;
@@ -257,55 +258,35 @@ impl PermissionCache {
     }
 
     fn path_glob_matches(pattern: &str, text: &str) -> bool {
-        let pattern: Vec<char> = pattern.chars().collect();
-        let text: Vec<char> = text.chars().collect();
-        let mut memo = HashMap::new();
-        Self::path_glob_matches_inner(&pattern, &text, 0, 0, &mut memo)
-    }
-
-    fn path_glob_matches_inner(
-        pattern: &[char],
-        text: &[char],
-        pattern_index: usize,
-        text_index: usize,
-        memo: &mut HashMap<(usize, usize), bool>,
-    ) -> bool {
-        if let Some(result) = memo.get(&(pattern_index, text_index)) {
-            return *result;
-        }
-
-        let result = if pattern_index == pattern.len() {
-            text_index == text.len()
-        } else if pattern[pattern_index] == '*' {
-            if pattern.get(pattern_index + 1) == Some(&'*') {
-                (text_index..=text.len()).any(|next| {
-                    Self::path_glob_matches_inner(pattern, text, pattern_index + 2, next, memo)
-                })
-            } else {
-                let mut next = text_index;
-                loop {
-                    if Self::path_glob_matches_inner(pattern, text, pattern_index + 1, next, memo) {
-                        break true;
-                    }
-                    if next == text.len() || text[next] == '/' {
-                        break false;
-                    }
-                    next += 1;
-                }
-            }
-        } else {
-            text.get(text_index) == Some(&pattern[pattern_index])
-                && Self::path_glob_matches_inner(
-                    pattern,
-                    text,
-                    pattern_index + 1,
-                    text_index + 1,
-                    memo,
-                )
+        let options = MatchOptions {
+            case_sensitive: true,
+            require_literal_separator: true,
+            require_literal_leading_dot: false,
         };
 
-        memo.insert((pattern_index, text_index), result);
-        result
+        Self::expand_braces(pattern).into_iter().any(|expanded| {
+            Pattern::new(&expanded)
+                .map(|pattern| pattern.matches_with(text, options))
+                .unwrap_or(false)
+        })
+    }
+
+    fn expand_braces(pattern: &str) -> Vec<String> {
+        let Some(open) = pattern.find('{') else {
+            return vec![pattern.to_string()];
+        };
+        let Some(close_offset) = pattern[open + 1..].find('}') else {
+            return vec![pattern.to_string()];
+        };
+        let close = open + 1 + close_offset;
+        let prefix = &pattern[..open];
+        let suffix = &pattern[close + 1..];
+        let choices = &pattern[open + 1..close];
+
+        choices
+            .split(',')
+            .flat_map(|choice| Self::expand_braces(&format!("{}{}{}", prefix, choice, suffix)))
+            .collect()
     }
 
     /// Cache a decision (session only)

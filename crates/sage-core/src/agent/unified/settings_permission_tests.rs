@@ -321,6 +321,29 @@ fn test_settings_permission_keeps_outside_absolute_paths_distinct() {
 }
 
 #[test]
+fn test_settings_permission_normalizes_windows_separators() {
+    let settings = Settings {
+        permissions: PermissionSettings {
+            deny: vec!["Read(src/**)".to_string()],
+            default_behavior: SettingsPermissionBehavior::Allow,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let decision = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &read_call("src\\secret.txt"),
+        workspace_dir(),
+    );
+
+    assert!(matches!(
+        decision,
+        Some(SettingsPermissionDecision::Deny(_))
+    ));
+}
+
+#[test]
 fn test_settings_permission_matches_grep_and_glob_paths() {
     let settings = Settings {
         permissions: PermissionSettings {
@@ -414,6 +437,29 @@ fn test_settings_permission_denies_glob_search_path_overlapping_scoped_deny() {
         Some(SettingsPermissionDecision::Deny(_))
     ));
     assert_eq!(narrow_decision, Some(SettingsPermissionDecision::Allow));
+}
+
+#[test]
+fn test_settings_permission_denies_recursive_grep_overlapping_scoped_deny() {
+    let settings = Settings {
+        permissions: PermissionSettings {
+            deny: vec!["Grep(src/secrets/**)".to_string()],
+            default_behavior: SettingsPermissionBehavior::Allow,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let decision = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &path_call("grep", "src"),
+        workspace_dir(),
+    );
+
+    assert!(matches!(
+        decision,
+        Some(SettingsPermissionDecision::Deny(_))
+    ));
 }
 
 #[test]
@@ -536,6 +582,14 @@ fn test_settings_permission_normalizes_relative_path_components() {
         ..Default::default()
     };
 
+    assert_eq!(
+        settings_permission_paths::workspace_relative_path(
+            "src/../secrets/key.txt",
+            workspace_dir(),
+        ),
+        "secrets/key.txt"
+    );
+
     let decision = UnifiedExecutor::settings_permission_decision(
         &settings,
         &read_call("src/../secrets/key.txt"),
@@ -571,6 +625,40 @@ fn test_settings_permission_canonicalizes_existing_symlink_target() -> SageResul
     let decision = UnifiedExecutor::settings_permission_decision(
         &settings,
         &read_call("public/key.txt"),
+        temp_dir.path(),
+    );
+
+    assert!(matches!(
+        decision,
+        Some(SettingsPermissionDecision::Deny(_))
+    ));
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn test_settings_permission_resolves_symlink_before_parent_components() -> SageResult<()> {
+    let temp_dir = TempDir::new()?;
+    fs::create_dir(temp_dir.path().join("secrets"))?;
+    fs::create_dir(temp_dir.path().join("secrets/subdir"))?;
+    fs::write(temp_dir.path().join("secrets/key.txt"), "secret")?;
+    std::os::unix::fs::symlink(
+        temp_dir.path().join("secrets/subdir"),
+        temp_dir.path().join("allowed"),
+    )?;
+
+    let settings = Settings {
+        permissions: PermissionSettings {
+            deny: vec!["Read(secrets/**)".to_string()],
+            default_behavior: SettingsPermissionBehavior::Allow,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let decision = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &read_call("allowed/../key.txt"),
         temp_dir.path(),
     );
 
