@@ -8,11 +8,13 @@ use crate::settings::types::{Settings, SettingsPermissionBehavior};
 use crate::settings::validation::SettingsValidator;
 use crate::tools::permission::PermissionCache;
 use crate::tools::types::{ToolCall, ToolResult};
-use std::ffi::OsString;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 use super::UnifiedExecutor;
 use super::tool_orchestrator::ToolExecutionContext;
+
+#[path = "settings_permission_paths.rs"]
+mod settings_permission_paths;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum SettingsPermissionDecision {
@@ -285,6 +287,17 @@ impl UnifiedExecutor {
             }
         }
 
+        if tool_name == "Glob" {
+            if let Some(pattern) = permissions.deny.iter().find(|pattern| {
+                settings_permission_paths::glob_search_overlaps_deny_rule(&key, pattern)
+            }) {
+                return Some(SettingsPermissionDecision::Deny(format!(
+                    "Glob search overlaps deny rule '{}'",
+                    pattern
+                )));
+            }
+        }
+
         if permissions
             .allow
             .iter()
@@ -331,7 +344,7 @@ impl UnifiedExecutor {
                 .arguments
                 .get("command")
                 .and_then(|value| value.as_str())
-                .map(str::to_string),
+                .map(|command| command.trim().to_string()),
             "read" | "write" | "edit" | "multiedit" => {
                 Self::path_permission_argument(call, &["file_path", "path"], working_dir)
             }
@@ -359,7 +372,10 @@ impl UnifiedExecutor {
     ) -> Option<String> {
         for key in keys {
             if let Some(path) = call.get_argument::<String>(key) {
-                return Some(Self::workspace_relative_path(&path, working_dir));
+                return Some(settings_permission_paths::workspace_relative_path(
+                    &path,
+                    working_dir,
+                ));
             }
         }
 
@@ -372,98 +388,10 @@ impl UnifiedExecutor {
         let glob_path = path
             .map(|path| PathBuf::from(path).join(&pattern))
             .unwrap_or_else(|| PathBuf::from(pattern));
-        Some(Self::workspace_relative_path(
+        Some(settings_permission_paths::workspace_relative_path(
             &glob_path.to_string_lossy(),
             working_dir,
         ))
-    }
-
-    fn workspace_relative_path(path: &str, working_dir: &Path) -> String {
-        let working_dir = Self::absolute_working_dir(working_dir);
-        let path = Self::absolute_permission_path(path, &working_dir);
-        let relative_path = if path.is_absolute() {
-            path.strip_prefix(&working_dir)
-                .unwrap_or(&path)
-                .to_path_buf()
-        } else {
-            path
-        };
-
-        relative_path
-            .to_string_lossy()
-            .trim_start_matches('/')
-            .to_string()
-    }
-
-    fn absolute_working_dir(working_dir: &Path) -> PathBuf {
-        let path = if working_dir.is_absolute() {
-            working_dir.to_path_buf()
-        } else {
-            std::env::current_dir()
-                .unwrap_or_else(|_| PathBuf::from("."))
-                .join(working_dir)
-        };
-        let normalized = Self::normalize_permission_path(&path);
-        normalized.canonicalize().unwrap_or(normalized)
-    }
-
-    fn absolute_permission_path(path: &str, working_dir: &Path) -> PathBuf {
-        let path = Path::new(path);
-        let absolute_path = if path.is_absolute() {
-            path.to_path_buf()
-        } else {
-            working_dir.join(path)
-        };
-        let normalized_path = Self::normalize_permission_path(&absolute_path);
-        Self::canonicalize_existing_prefix(&normalized_path).unwrap_or(normalized_path)
-    }
-
-    fn canonicalize_existing_prefix(path: &Path) -> Option<PathBuf> {
-        if let Ok(canonical) = path.canonicalize() {
-            return Some(Self::normalize_permission_path(&canonical));
-        }
-
-        let mut current = path.to_path_buf();
-        let mut missing_components: Vec<OsString> = Vec::new();
-
-        loop {
-            if current.exists() {
-                let mut resolved = current.canonicalize().ok()?;
-                for component in missing_components.iter().rev() {
-                    resolved.push(component);
-                }
-                return Some(Self::normalize_permission_path(&resolved));
-            }
-
-            if let Some(file_name) = current.file_name() {
-                missing_components.push(file_name.to_os_string());
-            }
-
-            let parent = current.parent()?;
-            if parent == current {
-                return None;
-            }
-            current = parent.to_path_buf();
-        }
-    }
-
-    fn normalize_permission_path(path: &Path) -> PathBuf {
-        let mut normalized = PathBuf::new();
-
-        for component in path.components() {
-            match component {
-                Component::CurDir => {}
-                Component::ParentDir => {
-                    if !normalized.pop() {
-                        normalized.push("..");
-                    }
-                }
-                Component::Normal(part) => normalized.push(part),
-                Component::RootDir | Component::Prefix(_) => normalized.push(component.as_os_str()),
-            }
-        }
-
-        normalized
     }
 
     fn legacy_permission_text_decision(text: &str) -> Option<bool> {

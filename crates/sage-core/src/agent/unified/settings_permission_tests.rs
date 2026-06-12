@@ -136,6 +136,29 @@ fn test_settings_permission_matches_specific_command_against_actual_input() {
 }
 
 #[test]
+fn test_settings_permission_trims_bash_command_before_matching_rules() {
+    let settings = Settings {
+        permissions: PermissionSettings {
+            deny: vec!["Bash(curl *)".to_string()],
+            default_behavior: SettingsPermissionBehavior::Allow,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let decision = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &bash_call(" curl https://internal.example"),
+        workspace_dir(),
+    );
+
+    assert!(matches!(
+        decision,
+        Some(SettingsPermissionDecision::Deny(_))
+    ));
+}
+
+#[test]
 fn test_settings_permission_wildcard_deny_matches_any_tool() {
     let settings = Settings {
         permissions: PermissionSettings {
@@ -275,6 +298,29 @@ fn test_settings_permission_matches_workspace_relative_absolute_path() {
 }
 
 #[test]
+fn test_settings_permission_keeps_outside_absolute_paths_distinct() {
+    let settings = Settings {
+        permissions: PermissionSettings {
+            allow: vec!["Read(tmp/**)".to_string()],
+            default_behavior: SettingsPermissionBehavior::Deny,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let decision = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &read_call("/tmp/secret.txt"),
+        workspace_dir(),
+    );
+
+    assert!(matches!(
+        decision,
+        Some(SettingsPermissionDecision::Deny(_))
+    ));
+}
+
+#[test]
 fn test_settings_permission_matches_grep_and_glob_paths() {
     let settings = Settings {
         permissions: PermissionSettings {
@@ -307,6 +353,67 @@ fn test_settings_permission_matches_grep_and_glob_paths() {
         glob_decision,
         Some(SettingsPermissionDecision::Deny(_))
     ));
+}
+
+#[test]
+fn test_settings_permission_denies_broad_glob_overlapping_scoped_deny() {
+    let settings = Settings {
+        permissions: PermissionSettings {
+            deny: vec!["Glob(secrets/**)".to_string()],
+            default_behavior: SettingsPermissionBehavior::Allow,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let recursive_decision = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &glob_call("**/*", None),
+        workspace_dir(),
+    );
+    let root_decision = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &glob_call("*", None),
+        workspace_dir(),
+    );
+
+    assert!(matches!(
+        recursive_decision,
+        Some(SettingsPermissionDecision::Deny(_))
+    ));
+    assert!(matches!(
+        root_decision,
+        Some(SettingsPermissionDecision::Deny(_))
+    ));
+}
+
+#[test]
+fn test_settings_permission_denies_glob_search_path_overlapping_scoped_deny() {
+    let settings = Settings {
+        permissions: PermissionSettings {
+            deny: vec!["Glob(src/secrets/**)".to_string()],
+            default_behavior: SettingsPermissionBehavior::Allow,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let broad_decision = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &glob_call("**/*", Some("/workspace/sage/src")),
+        workspace_dir(),
+    );
+    let narrow_decision = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &glob_call("*.rs", Some("/workspace/sage/src")),
+        workspace_dir(),
+    );
+
+    assert!(matches!(
+        broad_decision,
+        Some(SettingsPermissionDecision::Deny(_))
+    ));
+    assert_eq!(narrow_decision, Some(SettingsPermissionDecision::Allow));
 }
 
 #[test]
