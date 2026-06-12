@@ -8,13 +8,16 @@ use crate::settings::types::{Settings, SettingsPermissionBehavior};
 use crate::settings::validation::SettingsValidator;
 use crate::tools::permission::PermissionCache;
 use crate::tools::types::{ToolCall, ToolResult};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use super::UnifiedExecutor;
 use super::tool_orchestrator::ToolExecutionContext;
 
 #[path = "settings_permission_paths.rs"]
 mod settings_permission_paths;
+
+#[path = "settings_permission_keys.rs"]
+mod settings_permission_keys;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum SettingsPermissionDecision {
@@ -264,14 +267,18 @@ impl UnifiedExecutor {
             return None;
         }
 
-        let tool_name = Self::canonical_permission_tool_name(&tool_call.name);
-        let key = Self::actual_permission_key(&tool_name, tool_call, working_dir);
+        let tool_name = settings_permission_keys::canonical_permission_tool_name(&tool_call.name);
+        let keys =
+            settings_permission_keys::actual_permission_keys(&tool_name, tool_call, working_dir);
+        let key = keys
+            .first()
+            .cloned()
+            .unwrap_or_else(|| tool_name.to_string());
 
-        if let Some(pattern) = permissions
-            .deny
-            .iter()
-            .find(|pattern| PermissionCache::pattern_matches(pattern, &key))
-        {
+        if let Some(pattern) = permissions.deny.iter().find(|pattern| {
+            keys.iter()
+                .any(|key| PermissionCache::pattern_matches(pattern, key))
+        }) {
             return Some(SettingsPermissionDecision::Deny(format!(
                 "matched deny rule '{}'",
                 pattern
@@ -312,10 +319,20 @@ impl UnifiedExecutor {
             }
         }
 
-        if permissions
-            .allow
-            .iter()
-            .any(|pattern| PermissionCache::pattern_matches(pattern, &key))
+        let all_keys_allowed = keys.iter().all(|key| {
+            permissions
+                .allow
+                .iter()
+                .any(|pattern| PermissionCache::pattern_matches(pattern, key))
+        });
+        if !keys.is_empty() && all_keys_allowed {
+            return Some(SettingsPermissionDecision::Allow);
+        }
+
+        if tool_name == "Grep"
+            && permissions.allow.iter().any(|pattern| {
+                settings_permission_paths::grep_search_within_allow_rule(&key, pattern)
+            })
         {
             return Some(SettingsPermissionDecision::Allow);
         }
@@ -331,120 +348,6 @@ impl UnifiedExecutor {
                 key
             ))),
         }
-    }
-
-    fn canonical_permission_tool_name(tool_name: &str) -> String {
-        match tool_name.to_lowercase().as_str() {
-            "bash" => "Bash".to_string(),
-            "read" => "Read".to_string(),
-            "write" => "Write".to_string(),
-            "edit" => "Edit".to_string(),
-            "multiedit" | "multi_edit" => "MultiEdit".to_string(),
-            "glob" => "Glob".to_string(),
-            "grep" => "Grep".to_string(),
-            "task" => "Task".to_string(),
-            "webfetch" | "web_fetch" => "WebFetch".to_string(),
-            "websearch" | "web_search" => "WebSearch".to_string(),
-            "todowrite" | "todo_write" => "TodoWrite".to_string(),
-            "askuserquestion" | "ask_user_question" => "AskUserQuestion".to_string(),
-            "notebookedit" | "notebook_edit" => "NotebookEdit".to_string(),
-            _ => tool_name.to_string(),
-        }
-    }
-
-    fn actual_permission_key(tool_name: &str, call: &ToolCall, working_dir: &Path) -> String {
-        let argument = match tool_name.to_lowercase().as_str() {
-            "bash" => call
-                .arguments
-                .get("command")
-                .and_then(|value| value.as_str())
-                .map(|command| command.trim().to_string()),
-            "read" | "write" | "edit" | "multiedit" => {
-                Self::path_permission_argument(call, &["file_path", "path"], working_dir)
-            }
-            "grep" => Self::path_permission_argument(call, &["path"], working_dir),
-            "glob" => Self::glob_permission_argument(call, working_dir),
-            "webfetch" => Self::webfetch_permission_argument(call),
-            "websearch" => call
-                .get_argument::<String>("query")
-                .map(|query| query.trim().to_string()),
-            "notebookedit" => Self::path_permission_argument(call, &["notebook_path"], working_dir),
-            _ => None,
-        };
-
-        match argument {
-            Some(argument) => format!("{}({})", tool_name, argument),
-            None => tool_name.to_string(),
-        }
-    }
-
-    fn path_permission_argument(
-        call: &ToolCall,
-        keys: &[&str],
-        working_dir: &Path,
-    ) -> Option<String> {
-        for key in keys {
-            if let Some(path) = call.get_argument::<String>(key) {
-                return Some(settings_permission_paths::workspace_relative_path(
-                    &path,
-                    working_dir,
-                ));
-            }
-        }
-
-        None
-    }
-
-    fn glob_permission_argument(call: &ToolCall, working_dir: &Path) -> Option<String> {
-        let pattern = call.get_argument::<String>("pattern")?;
-        let path = call.get_argument::<String>("path");
-        let glob_path = path
-            .map(|path| PathBuf::from(path).join(&pattern))
-            .unwrap_or_else(|| PathBuf::from(pattern));
-        Some(settings_permission_paths::workspace_relative_path(
-            &glob_path.to_string_lossy(),
-            working_dir,
-        ))
-    }
-
-    fn webfetch_permission_argument(call: &ToolCall) -> Option<String> {
-        let url = call.get_argument::<String>("url")?;
-        Some(Self::normalize_webfetch_url(&url))
-    }
-
-    fn normalize_webfetch_url(url: &str) -> String {
-        let trimmed = url.trim();
-        let Ok(mut parsed) = reqwest::Url::parse(trimmed) else {
-            return trimmed.to_string();
-        };
-
-        if !matches!(parsed.scheme(), "http" | "https") {
-            return trimmed.to_string();
-        }
-
-        if let Some(host) = parsed.host_str() {
-            let lowercase_host = host.to_ascii_lowercase();
-            if parsed.set_host(Some(&lowercase_host)).is_err() {
-                return trimmed.to_string();
-            }
-        }
-
-        let default_port = match parsed.scheme() {
-            "http" => Some(80),
-            "https" => Some(443),
-            _ => None,
-        };
-        if parsed.port() == default_port {
-            if parsed.set_port(None).is_err() {
-                return trimmed.to_string();
-            }
-        }
-
-        let mut normalized = parsed.to_string();
-        if parsed.path() == "/" && parsed.query().is_none() && parsed.fragment().is_none() {
-            normalized.truncate(normalized.trim_end_matches('/').len());
-        }
-        normalized
     }
 
     fn legacy_permission_text_decision(text: &str) -> Option<bool> {
@@ -463,9 +366,21 @@ impl UnifiedExecutor {
 }
 
 #[cfg(test)]
+#[path = "settings_permission_test_support.rs"]
+mod settings_permission_test_support;
+
+#[cfg(test)]
 #[path = "settings_permission_tests.rs"]
 mod settings_permission_tests;
 
 #[cfg(test)]
+#[path = "settings_permission_path_tests.rs"]
+mod settings_permission_path_tests;
+
+#[cfg(test)]
 #[path = "settings_permission_network_tests.rs"]
 mod settings_permission_network_tests;
+
+#[cfg(test)]
+#[path = "settings_permission_review_tests.rs"]
+mod settings_permission_review_tests;

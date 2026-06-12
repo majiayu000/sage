@@ -25,6 +25,24 @@ pub(super) fn grep_search_overlaps_deny_rule(request_key: &str, deny_rule: &str)
     path_search_overlaps_deny_rule(request_key, deny_rule, "Grep", true)
 }
 
+pub(super) fn grep_search_within_allow_rule(request_key: &str, allow_rule: &str) -> bool {
+    let Some(request_arg) = permission_key_argument(request_key, "Grep") else {
+        return false;
+    };
+    let Some(allow_arg) = permission_key_argument(allow_rule, "Grep") else {
+        return false;
+    };
+
+    let request_arg = normalize_permission_pattern(request_arg);
+    let allow_arg = normalize_permission_pattern(allow_arg);
+    let Some(allow_root) = recursive_allow_scope_root(&allow_arg) else {
+        return false;
+    };
+
+    let request_root = literal_directory_prefix_before_glob(&request_arg);
+    path_is_at_or_under(&request_root, &allow_root)
+}
+
 fn path_search_overlaps_deny_rule(
     request_key: &str,
     deny_rule: &str,
@@ -50,7 +68,7 @@ fn path_search_overlaps_deny_rule(
     let deny_root = literal_directory_prefix_before_glob(&deny_arg);
 
     if deny_root.is_empty() {
-        return false;
+        return request_root.is_empty() || request_covers_descendants || request_arg.contains("**");
     }
 
     let request_key = format!("{}({})", tool_name, request_arg);
@@ -108,6 +126,22 @@ fn literal_directory_prefix_before_glob(pattern: &str) -> String {
         .rsplit_once('/')
         .map(|(directory, _)| directory.to_string())
         .unwrap_or_default()
+}
+
+fn recursive_allow_scope_root(pattern: &str) -> Option<String> {
+    if !contains_glob_meta(pattern) {
+        return Some(pattern.to_string());
+    }
+
+    pattern
+        .strip_suffix("/**/*")
+        .or_else(|| pattern.strip_suffix("/**"))
+        .filter(|root| !contains_glob_meta(root))
+        .map(|root| root.trim_end_matches('/').to_string())
+}
+
+fn contains_glob_meta(pattern: &str) -> bool {
+    pattern.contains(['*', '?', '[', '{'])
 }
 
 fn path_is_at_or_under(path: &str, root: &str) -> bool {
