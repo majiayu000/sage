@@ -86,6 +86,7 @@ impl McpServerManager {
         }
 
         if !failures.is_empty() {
+            failures.extend(self.rollback_connected_servers(&connected_servers).await);
             return Err(McpError::connection(format!(
                 "Failed to connect or initialize discovered MCP server(s): {}",
                 failures.join("; ")
@@ -131,6 +132,7 @@ impl McpServerManager {
         }
 
         if !failures.is_empty() {
+            failures.extend(self.rollback_connected_servers(&connected).await);
             return Err(McpError::connection(format!(
                 "Failed to connect or initialize enabled MCP server(s): {}",
                 failures.join("; ")
@@ -191,6 +193,28 @@ impl McpServerManager {
     /// Get list of connected server names
     pub fn connected_servers(&self) -> Vec<String> {
         self.registry.server_names()
+    }
+
+    async fn rollback_connected_servers(&self, names: &[String]) -> Vec<String> {
+        let mut failures = Vec::new();
+        for name in names.iter().rev() {
+            match self.disconnect_server(name).await {
+                Ok(()) => {
+                    info!(
+                        "Rolled back MCP server connection after discovery failure: {}",
+                        name
+                    );
+                }
+                Err(e) => {
+                    error!(
+                        "Failed to roll back MCP server connection '{}' after discovery failure: {}",
+                        name, e
+                    );
+                    failures.push(format!("rollback {}: {}", name, e));
+                }
+            }
+        }
+        failures
     }
 
     /// Close all connections

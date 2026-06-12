@@ -224,26 +224,37 @@ impl UnifiedExecutor {
 
         let mut execution_tool_call = tool_call.clone();
 
-        let tool_result = match self.check_settings_permission(tool_call, context).await? {
-            Some(SettingsPermissionCheck::Blocked(permission_result)) => permission_result,
+        let (tool_result, run_post_execution) = match self
+            .check_settings_permission(tool_call, context)
+            .await?
+        {
+            Some(SettingsPermissionCheck::Blocked(permission_result)) => (permission_result, false),
             Some(SettingsPermissionCheck::Allowed(approved_call)) => {
                 execution_tool_call = approved_call;
                 self.track_file_for_undo(&execution_tool_call).await;
 
-                self.pre_execute_or_block(&execution_tool_call, context, cancel_token.clone())
-                    .await?
+                (
+                    self.pre_execute_or_block(&execution_tool_call, context, cancel_token.clone())
+                        .await?,
+                    true,
+                )
             }
             None => {
                 self.track_file_for_undo(&execution_tool_call).await;
-                self.pre_execute_or_block(&execution_tool_call, context, cancel_token.clone())
-                    .await?
+                (
+                    self.pre_execute_or_block(&execution_tool_call, context, cancel_token.clone())
+                        .await?,
+                    true,
+                )
             }
         };
 
         // Phase 3: Post-execution
-        self.tool_orchestrator
-            .post_execution_phase(&execution_tool_call, &tool_result, context, cancel_token)
-            .await?;
+        if run_post_execution {
+            self.tool_orchestrator
+                .post_execution_phase(&execution_tool_call, &tool_result, context, cancel_token)
+                .await?;
+        }
 
         // Record and display result
         let duration_ms = u64::try_from(tool_start_time.elapsed().as_millis()).unwrap_or(u64::MAX);

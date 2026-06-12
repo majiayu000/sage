@@ -364,11 +364,10 @@ impl UnifiedExecutor {
             }
             "grep" => Self::path_permission_argument(call, &["path"], working_dir),
             "glob" => Self::glob_permission_argument(call, working_dir),
-            "webfetch" => call
-                .arguments
-                .get("url")
-                .and_then(|value| value.as_str())
-                .map(str::to_string),
+            "webfetch" => Self::webfetch_permission_argument(call),
+            "websearch" => call
+                .get_argument::<String>("query")
+                .map(|query| query.trim().to_string()),
             "notebookedit" => Self::path_permission_argument(call, &["notebook_path"], working_dir),
             _ => None,
         };
@@ -408,6 +407,46 @@ impl UnifiedExecutor {
         ))
     }
 
+    fn webfetch_permission_argument(call: &ToolCall) -> Option<String> {
+        let url = call.get_argument::<String>("url")?;
+        Some(Self::normalize_webfetch_url(&url))
+    }
+
+    fn normalize_webfetch_url(url: &str) -> String {
+        let trimmed = url.trim();
+        let Ok(mut parsed) = reqwest::Url::parse(trimmed) else {
+            return trimmed.to_string();
+        };
+
+        if !matches!(parsed.scheme(), "http" | "https") {
+            return trimmed.to_string();
+        }
+
+        if let Some(host) = parsed.host_str() {
+            let lowercase_host = host.to_ascii_lowercase();
+            if parsed.set_host(Some(&lowercase_host)).is_err() {
+                return trimmed.to_string();
+            }
+        }
+
+        let default_port = match parsed.scheme() {
+            "http" => Some(80),
+            "https" => Some(443),
+            _ => None,
+        };
+        if parsed.port() == default_port {
+            if parsed.set_port(None).is_err() {
+                return trimmed.to_string();
+            }
+        }
+
+        let mut normalized = parsed.to_string();
+        if parsed.path() == "/" && parsed.query().is_none() && parsed.fragment().is_none() {
+            normalized.truncate(normalized.trim_end_matches('/').len());
+        }
+        normalized
+    }
+
     fn legacy_permission_text_decision(text: &str) -> Option<bool> {
         match text.trim().to_ascii_lowercase().as_str() {
             "y" | "yes" | "allow" | "allowed" | "approve" | "approved" | "ok" | "true" => {
@@ -426,3 +465,7 @@ impl UnifiedExecutor {
 #[cfg(test)]
 #[path = "settings_permission_tests.rs"]
 mod settings_permission_tests;
+
+#[cfg(test)]
+#[path = "settings_permission_network_tests.rs"]
+mod settings_permission_network_tests;
