@@ -30,17 +30,31 @@ pub(super) fn actual_permission_keys(
     call: &ToolCall,
     working_dir: &Path,
 ) -> Vec<String> {
-    let arguments = match tool_name.to_lowercase().as_str() {
-        "multiedit" => multiedit_permission_arguments(call, working_dir),
-        _ => actual_permission_argument(tool_name, call, working_dir)
-            .into_iter()
-            .collect(),
-    };
+    match tool_name.to_lowercase().as_str() {
+        "multiedit" => {
+            format_permission_keys(tool_name, multiedit_permission_arguments(call, working_dir))
+        }
+        "http_client" => {
+            let keys = http_client_permission_keys(call, working_dir);
+            if keys.is_empty() {
+                vec![tool_name.to_string()]
+            } else {
+                keys
+            }
+        }
+        _ => format_permission_keys(
+            tool_name,
+            actual_permission_argument(tool_name, call, working_dir)
+                .into_iter()
+                .collect(),
+        ),
+    }
+}
 
+fn format_permission_keys(tool_name: &str, arguments: Vec<String>) -> Vec<String> {
     if arguments.is_empty() {
         return vec![tool_name.to_string()];
     }
-
     arguments
         .into_iter()
         .map(|argument| format!("{}({})", tool_name, argument))
@@ -126,6 +140,17 @@ fn webfetch_permission_argument(call: &ToolCall) -> Option<String> {
     url_permission_argument(call)
 }
 
+fn http_client_permission_keys(call: &ToolCall, working_dir: &Path) -> Vec<String> {
+    let mut keys = Vec::new();
+    if let Some(url) = url_permission_argument(call) {
+        keys.push(format!("http_client({})", url));
+    }
+    if let Some(path) = path_permission_argument(call, &["save_to_file"], working_dir) {
+        keys.push(format!("Write({})", path));
+    }
+    keys
+}
+
 fn url_permission_argument(call: &ToolCall) -> Option<String> {
     let url = call.get_argument::<String>("url")?;
     Some(normalize_webfetch_url(&url))
@@ -147,6 +172,7 @@ fn normalize_webfetch_url(url: &str) -> String {
             return trimmed.to_string();
         }
     }
+    parsed.set_fragment(None);
 
     let default_port = match parsed.scheme() {
         "http" => Some(80),

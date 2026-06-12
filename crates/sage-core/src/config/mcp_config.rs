@@ -49,16 +49,17 @@ impl Serialize for McpConfig {
     where
         S: serde::Serializer,
     {
-        let len = if self.auto_connect_set || !self.auto_connect {
-            4
-        } else {
-            3
-        };
+        let include_timeout =
+            self.default_timeout_secs_set || self.default_timeout_secs != default_mcp_timeout();
+        let include_auto_connect = self.auto_connect_set || !self.auto_connect;
+        let len = 2 + usize::from(include_timeout) + usize::from(include_auto_connect);
         let mut state = serializer.serialize_struct("McpConfig", len)?;
         state.serialize_field("enabled", &self.enabled)?;
         state.serialize_field("servers", &self.servers)?;
-        state.serialize_field("default_timeout_secs", &self.default_timeout_secs)?;
-        if self.auto_connect_set || !self.auto_connect {
+        if include_timeout {
+            state.serialize_field("default_timeout_secs", &self.default_timeout_secs)?;
+        }
+        if include_auto_connect {
             state.serialize_field("auto_connect", &self.auto_connect)?;
         }
         state.end()
@@ -301,6 +302,37 @@ mod tests {
         let json = serde_json::to_string(&McpConfig::default()).unwrap();
 
         assert!(!json.contains("auto_connect"));
+    }
+
+    #[test]
+    fn test_mcp_config_default_does_not_serialize_implicit_timeout() -> Result<(), serde_json::Error>
+    {
+        let json = serde_json::to_string(&McpConfig::default())?;
+
+        assert!(!json.contains("default_timeout_secs"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_mcp_config_serializes_explicit_default_timeout() -> Result<(), serde_json::Error> {
+        let mut config = McpConfig::default();
+        config.default_timeout_secs_set = true;
+
+        let json = serde_json::to_string(&config)?;
+
+        assert!(json.contains("\"default_timeout_secs\":300"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_mcp_config_serializes_non_default_timeout() -> Result<(), serde_json::Error> {
+        let mut config = McpConfig::default();
+        config.default_timeout_secs = 10;
+
+        let json = serde_json::to_value(&config)?;
+
+        assert_eq!(json["default_timeout_secs"], 10);
+        Ok(())
     }
 
     #[test]

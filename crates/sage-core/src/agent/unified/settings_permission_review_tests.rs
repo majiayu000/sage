@@ -171,6 +171,49 @@ fn test_settings_permission_requires_http_client_redirects_disabled_for_url_rule
 }
 
 #[test]
+fn test_settings_permission_checks_http_client_save_to_file_path() {
+    let settings = Settings {
+        permissions: PermissionSettings {
+            allow: vec![
+                "http_client(https://trusted.example/**)".to_string(),
+                "Write(downloads/**)".to_string(),
+            ],
+            default_behavior: SettingsPermissionBehavior::Deny,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let allowed = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &review_tool_call(
+            "http_client",
+            serde_json::json!({
+                "url": "https://trusted.example/archive",
+                "follow_redirects": false,
+                "save_to_file": "downloads/archive.json"
+            }),
+        ),
+        review_workspace_dir(),
+    );
+    let denied = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &review_tool_call(
+            "http_client",
+            serde_json::json!({
+                "url": "https://trusted.example/archive",
+                "follow_redirects": false,
+                "save_to_file": "secrets/token.txt"
+            }),
+        ),
+        review_workspace_dir(),
+    );
+
+    assert_eq!(allowed, Some(SettingsPermissionDecision::Allow));
+    assert!(matches!(denied, Some(SettingsPermissionDecision::Deny(_))));
+}
+
+#[test]
 fn test_settings_permission_allows_recursive_grep_directory_scope() {
     let settings = Settings {
         permissions: PermissionSettings {

@@ -8,12 +8,16 @@ fn network_workspace_dir() -> &'static Path {
 }
 
 fn network_web_fetch_call(url: &str) -> ToolCall {
+    network_url_call("web_fetch", url)
+}
+
+fn network_url_call(name: &str, url: &str) -> ToolCall {
     let mut arguments = HashMap::new();
     arguments.insert(
         "url".to_string(),
         serde_json::Value::String(url.to_string()),
     );
-    ToolCall::new("call-1", "web_fetch", arguments)
+    ToolCall::new("call-1", name, arguments)
 }
 
 fn web_search_call(query: &str) -> ToolCall {
@@ -46,6 +50,42 @@ fn test_settings_permission_normalizes_webfetch_host_and_default_port() {
         decision,
         Some(SettingsPermissionDecision::Deny(_))
     ));
+}
+
+#[test]
+fn test_settings_permission_strips_url_fragments_before_matching() {
+    let settings = Settings {
+        permissions: PermissionSettings {
+            deny: vec![
+                "WebFetch(https://internal.example/private)".to_string(),
+                "http_client(https://internal.example/private)".to_string(),
+                "OpenBrowser(https://internal.example/private)".to_string(),
+            ],
+            default_behavior: SettingsPermissionBehavior::Allow,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    for tool_name in ["web_fetch", "http_client", "OpenBrowser"] {
+        let mut call = network_url_call(tool_name, "https://internal.example/private#ignored");
+        if tool_name == "http_client" {
+            call.arguments.insert(
+                "follow_redirects".to_string(),
+                serde_json::Value::Bool(false),
+            );
+        }
+        let decision = UnifiedExecutor::settings_permission_decision(
+            &settings,
+            &call,
+            network_workspace_dir(),
+        );
+
+        assert!(
+            matches!(decision, Some(SettingsPermissionDecision::Deny(_))),
+            "{tool_name} should match deny rule without URL fragment"
+        );
+    }
 }
 
 #[test]
