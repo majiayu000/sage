@@ -170,8 +170,15 @@ impl PermissionCache {
             Self::split_permission_key(pattern),
             Self::split_permission_key(key),
         ) {
-            return pattern_tool.eq_ignore_ascii_case(key_tool)
-                && Self::glob_matches(pattern_arg, key_arg);
+            if !pattern_tool.eq_ignore_ascii_case(key_tool) {
+                return false;
+            }
+
+            return if Self::uses_path_glob(pattern_tool) && Self::uses_path_glob(key_tool) {
+                Self::path_glob_matches(pattern_arg, key_arg)
+            } else {
+                Self::glob_matches(pattern_arg, key_arg)
+            };
         }
 
         if pattern.contains('*') {
@@ -183,6 +190,23 @@ impl PermissionCache {
         }
 
         pattern.eq_ignore_ascii_case(key)
+    }
+
+    fn uses_path_glob(tool_name: &str) -> bool {
+        matches!(
+            tool_name.to_lowercase().as_str(),
+            "read"
+                | "write"
+                | "edit"
+                | "multiedit"
+                | "multi_edit"
+                | "grep"
+                | "glob"
+                | "notebookedit"
+                | "notebook_edit"
+                | "webfetch"
+                | "web_fetch"
+        )
     }
 
     fn split_permission_key(value: &str) -> Option<(&str, &str)> {
@@ -232,6 +256,58 @@ impl PermissionCache {
         }
 
         pattern.ends_with('*') || remaining.is_empty()
+    }
+
+    fn path_glob_matches(pattern: &str, text: &str) -> bool {
+        let pattern: Vec<char> = pattern.chars().collect();
+        let text: Vec<char> = text.chars().collect();
+        let mut memo = HashMap::new();
+        Self::path_glob_matches_inner(&pattern, &text, 0, 0, &mut memo)
+    }
+
+    fn path_glob_matches_inner(
+        pattern: &[char],
+        text: &[char],
+        pattern_index: usize,
+        text_index: usize,
+        memo: &mut HashMap<(usize, usize), bool>,
+    ) -> bool {
+        if let Some(result) = memo.get(&(pattern_index, text_index)) {
+            return *result;
+        }
+
+        let result = if pattern_index == pattern.len() {
+            text_index == text.len()
+        } else if pattern[pattern_index] == '*' {
+            if pattern.get(pattern_index + 1) == Some(&'*') {
+                (text_index..=text.len()).any(|next| {
+                    Self::path_glob_matches_inner(pattern, text, pattern_index + 2, next, memo)
+                })
+            } else {
+                let mut next = text_index;
+                loop {
+                    if Self::path_glob_matches_inner(pattern, text, pattern_index + 1, next, memo) {
+                        break true;
+                    }
+                    if next == text.len() || text[next] == '/' {
+                        break false;
+                    }
+                    next += 1;
+                }
+            }
+        } else {
+            text.get(text_index) == Some(&pattern[pattern_index])
+                && Self::path_glob_matches_inner(
+                    pattern,
+                    text,
+                    pattern_index + 1,
+                    text_index + 1,
+                    memo,
+                )
+        };
+
+        memo.insert((pattern_index, text_index), result);
+        result
     }
 
     /// Cache a decision (session only)
@@ -322,140 +398,5 @@ impl PermissionCache {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs;
-    use tempfile::TempDir;
-
-    #[tokio::test]
-    async fn test_session_cache() {
-        let cache = PermissionCache::new();
-
-        cache.set("test_key".to_string(), true).await;
-        assert_eq!(cache.get("test_key").await, Some(true));
-
-        cache.set("test_key".to_string(), false).await;
-        assert_eq!(cache.get("test_key").await, Some(false));
-    }
-
-    #[tokio::test]
-    async fn test_persistent_cache() {
-        let temp_dir = TempDir::new().unwrap();
-        let sage_dir = temp_dir.path().join(".sage");
-        fs::create_dir(&sage_dir).unwrap();
-
-        let cache = PermissionCache::with_persistence(temp_dir.path());
-
-        // Persist a decision
-        cache
-            .set_with_persistence("Bash(npm *)".to_string(), true, true)
-            .await
-            .unwrap();
-
-        // Check that it was saved
-        let settings_path = sage_dir.join("settings.local.json");
-        assert!(settings_path.exists());
-
-        let content = fs::read_to_string(&settings_path).unwrap();
-        assert!(content.contains("Bash(npm *)"));
-    }
-
-    #[tokio::test]
-    async fn test_cache_key_bash() {
-        let mut arguments = HashMap::new();
-        arguments.insert(
-            "command".to_string(),
-            serde_json::Value::String("npm install lodash".to_string()),
-        );
-
-        let call = ToolCall {
-            id: "test-id".to_string(),
-            name: "bash".to_string(),
-            arguments,
-            call_id: None,
-        };
-
-        let key = PermissionCache::cache_key("Bash", &call);
-        assert_eq!(key, "Bash(npm *)");
-    }
-
-    #[tokio::test]
-    async fn test_cache_key_read() {
-        let mut arguments = HashMap::new();
-        arguments.insert(
-            "file_path".to_string(),
-            serde_json::Value::String("/src/main.rs".to_string()),
-        );
-
-        let call = ToolCall {
-            id: "test-id".to_string(),
-            name: "read".to_string(),
-            arguments,
-            call_id: None,
-        };
-
-        let key = PermissionCache::cache_key("Read", &call);
-        assert_eq!(key, "Read(src/**)");
-    }
-
-    #[tokio::test]
-    async fn test_pattern_matches() {
-        assert!(PermissionCache::pattern_matches(
-            "Bash(npm *)",
-            "Bash(npm *)"
-        ));
-        assert!(PermissionCache::pattern_matches(
-            "Bash(npm *)",
-            "Bash(npm install)"
-        ));
-        assert!(!PermissionCache::pattern_matches(
-            "Bash(npm *)",
-            "Bash(yarn install)"
-        ));
-        assert!(PermissionCache::pattern_matches(
-            "*",
-            "Bash(rm -rf /tmp/foo)"
-        ));
-        assert!(PermissionCache::pattern_matches(
-            "Bash*",
-            "Bash(rm -rf /tmp/foo)"
-        ));
-        assert!(PermissionCache::pattern_matches(
-            "Bash",
-            "Bash(rm -rf /tmp/foo)"
-        ));
-        assert!(PermissionCache::pattern_matches(
-            "Read(src/**)",
-            "Read(src/main.rs)"
-        ));
-        assert!(!PermissionCache::pattern_matches(
-            "Read(src/**)",
-            "Read(Src/main.rs)"
-        ));
-    }
-
-    #[tokio::test]
-    async fn test_get_with_persistence() {
-        let temp_dir = TempDir::new().unwrap();
-        let sage_dir = temp_dir.path().join(".sage");
-        fs::create_dir(&sage_dir).unwrap();
-
-        // Create settings file with pre-existing permissions
-        let settings_content = r#"{
-            "permissions": {
-                "allow": ["Read(src/**)"],
-                "deny": ["Bash(rm *)"]
-            }
-        }"#;
-        fs::write(sage_dir.join("settings.local.json"), settings_content).unwrap();
-
-        let cache = PermissionCache::with_persistence(temp_dir.path());
-
-        // Should find in persistent settings
-        assert_eq!(cache.get_with_persistence("Read(src/**)").await, Some(true));
-        assert_eq!(cache.get_with_persistence("Bash(rm *)").await, Some(false));
-
-        // Should not find non-existent
-        assert_eq!(cache.get_with_persistence("Unknown").await, None);
-    }
-}
+#[path = "cache_tests.rs"]
+mod cache_tests;

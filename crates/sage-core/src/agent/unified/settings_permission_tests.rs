@@ -49,6 +49,30 @@ fn path_call(tool_name: &str, path: &str) -> ToolCall {
     ToolCall::new("call-1", tool_name, arguments)
 }
 
+fn glob_call(pattern: &str, path: Option<&str>) -> ToolCall {
+    let mut arguments = HashMap::new();
+    arguments.insert(
+        "pattern".to_string(),
+        serde_json::Value::String(pattern.to_string()),
+    );
+    if let Some(path) = path {
+        arguments.insert(
+            "path".to_string(),
+            serde_json::Value::String(path.to_string()),
+        );
+    }
+    ToolCall::new("call-1", "glob", arguments)
+}
+
+fn web_fetch_call(url: &str) -> ToolCall {
+    let mut arguments = HashMap::new();
+    arguments.insert(
+        "url".to_string(),
+        serde_json::Value::String(url.to_string()),
+    );
+    ToolCall::new("call-1", "web_fetch", arguments)
+}
+
 fn notebook_call(path: &str) -> ToolCall {
     let mut arguments = HashMap::new();
     arguments.insert(
@@ -242,7 +266,7 @@ fn test_settings_permission_matches_grep_and_glob_paths() {
     );
     let glob_decision = UnifiedExecutor::settings_permission_decision(
         &settings,
-        &path_call("glob", "/workspace/sage/secrets/private.txt"),
+        &glob_call("secrets/**", None),
         workspace_dir(),
     );
 
@@ -252,6 +276,97 @@ fn test_settings_permission_matches_grep_and_glob_paths() {
     ));
     assert!(matches!(
         glob_decision,
+        Some(SettingsPermissionDecision::Deny(_))
+    ));
+}
+
+#[test]
+fn test_settings_permission_matches_glob_path_joined_with_pattern() {
+    let settings = Settings {
+        permissions: PermissionSettings {
+            deny: vec!["Glob(src/secrets/**)".to_string()],
+            default_behavior: SettingsPermissionBehavior::Allow,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let decision = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &glob_call("secrets/**", Some("/workspace/sage/src")),
+        workspace_dir(),
+    );
+
+    assert!(matches!(
+        decision,
+        Some(SettingsPermissionDecision::Deny(_))
+    ));
+}
+
+#[test]
+fn test_settings_permission_matches_webfetch_url() {
+    let settings = Settings {
+        permissions: PermissionSettings {
+            deny: vec!["WebFetch(https://internal.example/**)".to_string()],
+            default_behavior: SettingsPermissionBehavior::Allow,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let decision = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &web_fetch_call("https://internal.example/private"),
+        workspace_dir(),
+    );
+
+    assert!(matches!(
+        decision,
+        Some(SettingsPermissionDecision::Deny(_))
+    ));
+}
+
+#[test]
+fn test_settings_permission_matches_absolute_path_with_relative_working_dir() {
+    let settings = Settings {
+        permissions: PermissionSettings {
+            allow: vec!["Read(src/**)".to_string()],
+            default_behavior: SettingsPermissionBehavior::Deny,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let cwd = std::env::current_dir().expect("current dir available");
+    let absolute_path = cwd.join("src/lib.rs").to_string_lossy().to_string();
+
+    let decision = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &read_call(&absolute_path),
+        Path::new("."),
+    );
+
+    assert_eq!(decision, Some(SettingsPermissionDecision::Allow));
+}
+
+#[test]
+fn test_settings_permission_normalizes_relative_path_components() {
+    let settings = Settings {
+        permissions: PermissionSettings {
+            deny: vec!["Read(secrets/**)".to_string()],
+            default_behavior: SettingsPermissionBehavior::Allow,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let decision = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &read_call("src/../secrets/key.txt"),
+        workspace_dir(),
+    );
+
+    assert!(matches!(
+        decision,
         Some(SettingsPermissionDecision::Deny(_))
     ));
 }
