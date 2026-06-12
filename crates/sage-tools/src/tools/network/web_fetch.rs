@@ -4,10 +4,10 @@ use anyhow::Context;
 use async_trait::async_trait;
 use sage_core::tools::{Tool, ToolCall, ToolError, ToolParameter, ToolResult, ToolSchema};
 use serde::{Deserialize, Serialize};
-use tokio::time::{Instant, timeout};
+use tokio::time::timeout;
 use tracing::debug;
 
-use super::redirect::{MAX_REDIRECTS, is_redirect_status, same_origin, validate_redirect_target};
+use super::redirect::{is_redirect_status, validate_redirect_target};
 use super::validation::validate_url_security;
 
 /// HTTP client for web fetching
@@ -47,55 +47,34 @@ impl WebFetchTool {
         Self
     }
 
-    async fn fetch_response_with_redirects(
+    async fn fetch_response(
         client: &reqwest::Client,
         url: &str,
     ) -> anyhow::Result<reqwest::Response> {
-        Self::fetch_response_with_redirects_with_timeout(client, url, WEB_FETCH_TIMEOUT).await
+        Self::fetch_response_with_timeout(client, url, WEB_FETCH_TIMEOUT).await
     }
 
-    async fn fetch_response_with_redirects_with_timeout(
+    async fn fetch_response_with_timeout(
         client: &reqwest::Client,
         url: &str,
         request_timeout: Duration,
     ) -> anyhow::Result<reqwest::Response> {
         validate_url_security(url).await?;
-        let deadline = Instant::now()
-            .checked_add(request_timeout)
-            .ok_or_else(|| anyhow::anyhow!("timeout is too large"))?;
-        let mut current_url = reqwest::Url::parse(url).context("Invalid URL format")?;
-        let mut redirect_count = 0;
+        let current_url = reqwest::Url::parse(url).context("Invalid URL format")?;
+        let response = timeout(request_timeout, client.get(current_url).send())
+            .await
+            .context("Request timeout")?
+            .context("Failed to fetch URL")?;
 
-        loop {
-            let now = Instant::now();
-            if now >= deadline {
-                anyhow::bail!("Request timeout");
-            }
-            let remaining_timeout = deadline.saturating_duration_since(now);
-            let response = timeout(remaining_timeout, client.get(current_url.clone()).send())
-                .await
-                .context("Request timeout")?
-                .context("Failed to fetch URL")?;
-
-            if !is_redirect_status(response.status()) {
-                return Ok(response);
-            }
-
-            if redirect_count >= MAX_REDIRECTS {
-                anyhow::bail!("Redirect limit exceeded ({MAX_REDIRECTS})");
-            }
-
-            let next_url = validate_redirect_target(response.url(), response.headers()).await?;
-            if !same_origin(response.url(), &next_url) {
-                debug!(
-                    "WebFetch redirect changed origin: {} -> {}",
-                    response.url(),
-                    next_url
-                );
-            }
-            current_url = next_url;
-            redirect_count += 1;
+        if !is_redirect_status(response.status()) {
+            return Ok(response);
         }
+
+        let next_url = validate_redirect_target(response.url(), response.headers()).await?;
+        anyhow::bail!(
+            "WebFetch request redirected to {}. Make a new WebFetch request with the redirect URL to fetch it.",
+            next_url
+        );
     }
 
     /// Fetch URL and convert HTML to Markdown
@@ -103,7 +82,7 @@ impl WebFetchTool {
         debug!("Fetching URL: {}", url);
 
         let client = get_client()?;
-        let response = Self::fetch_response_with_redirects(client, url).await?;
+        let response = Self::fetch_response(client, url).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -285,7 +264,7 @@ Usage notes:
   - This tool is read-only and does not modify any files
   - Results may be summarized if the content is very large
   - Includes caching for faster responses when repeatedly accessing the same URL
-  - When a URL redirects to a different host, the tool will inform you and provide the redirect URL. You should then make a new WebFetch request with the redirect URL to fetch the content.
+  - When a URL redirects, the tool will inform you and provide the redirect URL. You should then make a new WebFetch request with the redirect URL to fetch the content.
   - If the return is not valid Markdown, it means the tool cannot successfully parse this page.
 
 Parameters:
@@ -409,7 +388,7 @@ mod tests {
             .redirect(reqwest::redirect::Policy::none())
             .build()?;
 
-        let result = WebFetchTool::fetch_response_with_redirects(&client, "http://1.1.1.1/").await;
+        let result = WebFetchTool::fetch_response(&client, "http://1.1.1.1/").await;
 
         assert!(
             result.is_err(),
@@ -420,25 +399,30 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_web_fetch_redirect_chain_uses_single_timeout_budget() -> anyhow::Result<()> {
+    async fn test_web_fetch_returns_redirect_target_without_fetching_it() -> anyhow::Result<()> {
         let proxy_url = spawn_slow_web_fetch_redirect_proxy().await?;
         let client = reqwest::Client::builder()
             .proxy(reqwest::Proxy::http(proxy_url)?)
             .redirect(reqwest::redirect::Policy::none())
             .build()?;
 
-        let start = Instant::now();
-        let result = WebFetchTool::fetch_response_with_redirects_with_timeout(
+        let start = tokio::time::Instant::now();
+        let result = WebFetchTool::fetch_response_with_timeout(
             &client,
             "http://1.1.1.1/",
-            Duration::from_secs(1),
+            Duration::from_secs(2),
         )
         .await;
 
-        assert!(result.is_err(), "WebFetch redirect chain must time out");
+        let error =
+            result.expect_err("WebFetch must return redirect targets without fetching them");
+        assert!(
+            error.to_string().contains("http://2.2.2.2/final"),
+            "redirect error should include the next URL: {error}"
+        );
         assert!(
             start.elapsed() < Duration::from_millis(1300),
-            "WebFetch redirect chain exceeded the single timeout budget"
+            "WebFetch fetched the redirect target instead of stopping at the redirect"
         );
 
         Ok(())

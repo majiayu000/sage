@@ -258,11 +258,8 @@ impl UnifiedExecutor {
             return None;
         }
 
-        let key = Self::actual_permission_key(
-            &Self::canonical_permission_tool_name(&tool_call.name),
-            tool_call,
-            working_dir,
-        );
+        let tool_name = Self::canonical_permission_tool_name(&tool_call.name);
+        let key = Self::actual_permission_key(&tool_name, tool_call, working_dir);
 
         if let Some(pattern) = permissions
             .deny
@@ -273,6 +270,22 @@ impl UnifiedExecutor {
                 "matched deny rule '{}'",
                 pattern
             )));
+        }
+
+        if tool_name == "Grep"
+            && tool_call
+                .get_argument::<String>("path")
+                .is_none_or(|path| path.is_empty())
+        {
+            if let Some(pattern) = permissions.deny.iter().find(|pattern| {
+                let lower = pattern.to_ascii_lowercase();
+                lower == "grep" || lower.starts_with("grep(")
+            }) {
+                return Some(SettingsPermissionDecision::Deny(format!(
+                    "omitted Grep path searches the workspace and overlaps deny rule '{}'",
+                    pattern
+                )));
+            }
         }
 
         if permissions

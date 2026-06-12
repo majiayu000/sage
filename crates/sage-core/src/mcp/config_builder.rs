@@ -10,6 +10,10 @@ use crate::error::{SageError, SageResult};
 pub async fn build_mcp_registry_from_config(config: &Config) -> SageResult<McpRegistry> {
     let registry = McpRegistry::new();
 
+    if !config.mcp.enabled || !config.mcp.auto_connect {
+        return Ok(registry);
+    }
+
     for (name, server_config) in config.mcp.enabled_servers() {
         let transport_config = server_config_to_transport(server_config)?;
         if matches!(transport_config, TransportConfig::WebSocket { .. }) {
@@ -49,6 +53,7 @@ mod tests {
     fn config_with_server(name: &str, server: McpServerConfig) -> Config {
         let mut config = Config::default();
         config.mcp.enabled = true;
+        config.mcp.auto_connect = true;
         config.mcp.servers.insert(name.to_string(), server);
         config
     }
@@ -132,5 +137,19 @@ mod tests {
         let result = build_mcp_registry_from_config(&config).await;
 
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_auto_connect_false_skips_runtime_connection() -> SageResult<()> {
+        let mut config = config_with_server(
+            "offline",
+            McpServerConfig::stdio("__sage_missing_mcp_binary__", Vec::new()),
+        );
+        config.mcp.auto_connect = false;
+
+        let registry = build_mcp_registry_from_config(&config).await?;
+
+        assert!(registry.server_names().is_empty());
+        Ok(())
     }
 }

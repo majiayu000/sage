@@ -49,6 +49,15 @@ fn path_call(tool_name: &str, path: &str) -> ToolCall {
     ToolCall::new("call-1", tool_name, arguments)
 }
 
+fn grep_call_without_path(pattern: &str) -> ToolCall {
+    let mut arguments = HashMap::new();
+    arguments.insert(
+        "pattern".to_string(),
+        serde_json::Value::String(pattern.to_string()),
+    );
+    ToolCall::new("call-1", "grep", arguments)
+}
+
 fn glob_call(pattern: &str, path: Option<&str>) -> ToolCall {
     let mut arguments = HashMap::new();
     arguments.insert(
@@ -276,6 +285,29 @@ fn test_settings_permission_matches_grep_and_glob_paths() {
     ));
     assert!(matches!(
         glob_decision,
+        Some(SettingsPermissionDecision::Deny(_))
+    ));
+}
+
+#[test]
+fn test_settings_permission_denies_workspace_wide_grep_when_path_is_omitted() {
+    let settings = Settings {
+        permissions: PermissionSettings {
+            deny: vec!["Grep(secrets/**)".to_string()],
+            default_behavior: SettingsPermissionBehavior::Allow,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let decision = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &grep_call_without_path("token"),
+        workspace_dir(),
+    );
+
+    assert!(matches!(
+        decision,
         Some(SettingsPermissionDecision::Deny(_))
     ));
 }
