@@ -319,6 +319,17 @@ impl UnifiedExecutor {
             }
         }
 
+        if tool_name == "http_client"
+            && Self::http_client_may_follow_redirects(tool_call)
+            && Self::has_http_client_url_permission_rule(
+                permissions.allow.iter().chain(permissions.deny.iter()),
+            )
+        {
+            return Some(SettingsPermissionDecision::Deny(
+                "http_client must set follow_redirects=false when URL-scoped settings permission rules are configured".to_string(),
+            ));
+        }
+
         let all_keys_allowed = keys.iter().all(|key| {
             permissions
                 .allow
@@ -362,6 +373,21 @@ impl UnifiedExecutor {
 
     fn is_confirmation_only_argument(key: &str) -> bool {
         key == "user_confirmed"
+    }
+
+    fn http_client_may_follow_redirects(tool_call: &ToolCall) -> bool {
+        tool_call.get_bool("follow_redirects").unwrap_or(true)
+    }
+
+    fn has_http_client_url_permission_rule<'a>(
+        mut patterns: impl Iterator<Item = &'a String>,
+    ) -> bool {
+        patterns.any(|pattern| {
+            pattern
+                .trim_start()
+                .to_ascii_lowercase()
+                .starts_with("http_client(")
+        })
     }
 }
 

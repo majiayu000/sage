@@ -4,6 +4,7 @@ use crate::agent::unified::CheckpointConfig;
 use crate::checkpoints::CheckpointManager;
 use crate::checkpoints::config::CheckpointManagerConfig;
 use crate::config::Config;
+use crate::input::{InputAutoResponse, InputChannel, InputRequestKind, InputResponse};
 use crate::interrupt::InterruptManager;
 use crate::tools::types::ToolCall;
 use std::collections::HashMap;
@@ -68,6 +69,65 @@ async fn test_destructive_confirmation_edit_rechecks_settings() -> SageResult<()
             }));
         }
         Ok(_) => panic!("modified denied command should be blocked by settings"),
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_destructive_confirmation_settings_edit_requires_new_confirmation() -> SageResult<()> {
+    let temp_dir = TempDir::new()?;
+    let sage_dir = temp_dir.path().join(".sage");
+    fs::create_dir_all(&sage_dir)?;
+    fs::write(
+        sage_dir.join("settings.local.json"),
+        r#"{
+            "permissions": {
+                "default_behavior": "ask"
+            }
+        }"#,
+    )?;
+
+    let input_channel =
+        InputChannel::non_interactive(InputAutoResponse::Custom(Arc::new(move |request| {
+            if matches!(&request.kind, InputRequestKind::Permission { .. }) {
+                InputResponse::permission_granted_with_input(
+                    request.id,
+                    serde_json::json!({ "command": "rm -rf target" }),
+                )
+            } else {
+                InputResponse::cancelled(request.id)
+            }
+        })));
+
+    let mut config = Config::default();
+    config.default_provider = "ollama".to_string();
+    let options = ExecutionOptions::interactive().with_working_directory(temp_dir.path());
+    let mut executor = UnifiedExecutor::with_options(config, options)?;
+    executor.set_input_channel(input_channel);
+    let context = ToolExecutionContext::new("session", temp_dir.path().to_path_buf());
+
+    let mut confirmed_call = bash_call("rm -rf harmless");
+    UnifiedExecutor::mark_user_confirmed(&mut confirmed_call);
+
+    let result = executor
+        .recheck_settings_after_destructive_confirmation(confirmed_call, &context, true)
+        .await
+        .expect("settings recheck should return an approved call");
+
+    match result {
+        SettingsRecheckAfterDestructiveConfirmation::NeedsDestructiveConfirmation(call) => {
+            assert_eq!(
+                call.arguments
+                    .get("command")
+                    .and_then(|value| value.as_str()),
+                Some("rm -rf target")
+            );
+            assert!(!call.arguments.contains_key("user_confirmed"));
+        }
+        SettingsRecheckAfterDestructiveConfirmation::Ready(_) => {
+            panic!("settings-edited destructive command must be confirmed again")
+        }
     }
 
     Ok(())

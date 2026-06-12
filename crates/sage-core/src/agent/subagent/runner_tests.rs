@@ -111,3 +111,36 @@ fn test_subagent_settings_permission_allows_matching_rule() {
 
     assert!(result.is_none());
 }
+
+#[test]
+fn test_subagent_settings_permission_uses_inherited_tool_cwd() {
+    let parent_dir = TempDir::new().expect("parent temp dir");
+    let child_dir = TempDir::new().expect("child temp dir");
+    write_settings(
+        &parent_dir,
+        r#"{
+            "permissions": {
+                "deny": ["Read(secrets/**)"],
+                "default_behavior": "allow"
+            }
+        }"#,
+    );
+
+    let parent_result = SubAgentRunner::settings_permission_block(
+        &tool_call("Read", "file_path", "secrets/key.txt"),
+        parent_dir.path(),
+    );
+    let child_result = SubAgentRunner::settings_permission_block(
+        &tool_call("Read", "file_path", "secrets/key.txt"),
+        child_dir.path(),
+    );
+
+    assert!(
+        parent_result.is_some(),
+        "permission must be checked against the inherited cwd used by the tool"
+    );
+    assert!(
+        child_result.is_none(),
+        "checking against a distinct child cwd would miss the parent tool rule"
+    );
+}

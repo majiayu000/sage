@@ -199,6 +199,7 @@ impl SubAgentRunner {
                     &mut messages,
                     &tools,
                     &effective_cwd,
+                    &self.working_directory,
                     &mut progress,
                     &mut metadata,
                 )
@@ -262,7 +263,8 @@ impl SubAgentRunner {
         &self,
         messages: &mut Vec<LlmMessage>,
         tools: &[Arc<dyn Tool>],
-        working_dir: &Path,
+        _working_dir: &Path,
+        tool_cwd: &Path,
         progress: &mut AgentProgress,
         metadata: &mut ExecutionMetadata,
     ) -> SageResult<StepResult> {
@@ -300,7 +302,7 @@ impl SubAgentRunner {
                 metadata.add_tool(call.name.clone());
                 metadata.total_tool_uses += 1;
 
-                let result = self.execute_tool_call(call, tools, working_dir).await;
+                let result = self.execute_tool_call(call, tools, tool_cwd).await;
 
                 // Add tool result message
                 let tool_msg = LlmMessage::tool(

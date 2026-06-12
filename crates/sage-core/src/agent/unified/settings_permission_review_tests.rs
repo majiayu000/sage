@@ -129,6 +129,48 @@ fn test_settings_permission_matches_default_network_url_arguments() {
 }
 
 #[test]
+fn test_settings_permission_requires_http_client_redirects_disabled_for_url_rules() {
+    let settings = Settings {
+        permissions: PermissionSettings {
+            deny: vec!["http_client(https://internal.example/**)".to_string()],
+            default_behavior: SettingsPermissionBehavior::Allow,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let redirecting_decision = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &review_tool_call(
+            "http_client",
+            serde_json::json!({"url": "https://public.example"}),
+        ),
+        review_workspace_dir(),
+    );
+    let no_redirect_decision = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &review_tool_call(
+            "http_client",
+            serde_json::json!({
+                "url": "https://public.example",
+                "follow_redirects": false
+            }),
+        ),
+        review_workspace_dir(),
+    );
+
+    assert!(matches!(
+        redirecting_decision,
+        Some(SettingsPermissionDecision::Deny(reason))
+            if reason.contains("follow_redirects=false")
+    ));
+    assert_eq!(
+        no_redirect_decision,
+        Some(SettingsPermissionDecision::Allow)
+    );
+}
+
+#[test]
 fn test_settings_permission_allows_recursive_grep_directory_scope() {
     let settings = Settings {
         permissions: PermissionSettings {
