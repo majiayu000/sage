@@ -8,12 +8,13 @@ use std::time::Instant;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::builtin::{explore_agent, general_purpose_agent, plan_agent};
 use super::types::{
     AgentDefinition, AgentProgress, AgentType, ExecutionMetadata, SubAgentConfig, SubAgentResult,
 };
+use crate::agent::unified::UnifiedExecutor;
 use crate::config::model::Config;
 use crate::error::{SageError, SageResult};
 use crate::llm::client::LlmClient;
@@ -194,7 +195,13 @@ impl SubAgentRunner {
 
             // Execute one step
             match self
-                .execute_step(&mut messages, &tools, &mut progress, &mut metadata)
+                .execute_step(
+                    &mut messages,
+                    &tools,
+                    &effective_cwd,
+                    &mut progress,
+                    &mut metadata,
+                )
                 .await?
             {
                 StepResult::Continue => continue,
@@ -255,6 +262,7 @@ impl SubAgentRunner {
         &self,
         messages: &mut Vec<LlmMessage>,
         tools: &[Arc<dyn Tool>],
+        working_dir: &Path,
         progress: &mut AgentProgress,
         metadata: &mut ExecutionMetadata,
     ) -> SageResult<StepResult> {
@@ -292,7 +300,7 @@ impl SubAgentRunner {
                 metadata.add_tool(call.name.clone());
                 metadata.total_tool_uses += 1;
 
-                let result = self.execute_tool_call(call, tools).await;
+                let result = self.execute_tool_call(call, tools, working_dir).await;
 
                 // Add tool result message
                 let tool_msg = LlmMessage::tool(
@@ -316,7 +324,12 @@ impl SubAgentRunner {
     }
 
     /// Execute a tool call
-    async fn execute_tool_call(&self, call: &ToolCall, tools: &[Arc<dyn Tool>]) -> ToolResult {
+    async fn execute_tool_call(
+        &self,
+        call: &ToolCall,
+        tools: &[Arc<dyn Tool>],
+        working_dir: &Path,
+    ) -> ToolResult {
         // Find the tool
         let tool = match tools.iter().find(|t| t.name() == call.name) {
             Some(t) => t,
@@ -329,8 +342,26 @@ impl SubAgentRunner {
             }
         };
 
+        if let Some(blocked) = Self::settings_permission_block(call, working_dir) {
+            return blocked;
+        }
+
         // Execute the tool
         tool.execute_with_timing(call).await
+    }
+
+    pub(super) fn settings_permission_block(
+        call: &ToolCall,
+        working_dir: &Path,
+    ) -> Option<ToolResult> {
+        match UnifiedExecutor::unattended_settings_permission_result(call, working_dir) {
+            Ok(result) => result,
+            Err(err) => Some(ToolResult::error(
+                &call.id,
+                &call.name,
+                format!("Settings permission check failed: {}", err),
+            )),
+        }
     }
 }
 

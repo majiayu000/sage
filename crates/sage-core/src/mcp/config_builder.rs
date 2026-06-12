@@ -4,7 +4,7 @@ use super::discovery::utils::server_config_to_transport;
 use super::registry::McpRegistry;
 use super::transport::TransportConfig;
 use crate::config::Config;
-use crate::error::SageResult;
+use crate::error::{SageError, SageResult};
 
 /// Build MCP registry from configuration
 pub async fn build_mcp_registry_from_config(config: &Config) -> SageResult<McpRegistry> {
@@ -30,11 +30,10 @@ pub async fn build_mcp_registry_from_config(config: &Config) -> SageResult<McpRe
                 );
             }
             Err(err) => {
-                tracing::warn!(
-                    "Skipping MCP server '{}': failed to connect or initialize: {}",
-                    name,
-                    err
-                );
+                return Err(SageError::config(format!(
+                    "Failed to connect or initialize enabled MCP server '{}': {}",
+                    name, err
+                )));
             }
         }
     }
@@ -124,15 +123,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_enabled_runtime_connection_failure_is_skipped() -> SageResult<()> {
+    async fn test_enabled_runtime_connection_failure_fails() {
         let config = config_with_server(
             "offline",
             McpServerConfig::stdio("__sage_missing_mcp_binary__", Vec::new()),
         );
 
-        let registry = build_mcp_registry_from_config(&config).await?;
+        let result = build_mcp_registry_from_config(&config).await;
 
-        assert!(registry.server_names().is_empty());
-        Ok(())
+        assert!(result.is_err());
     }
 }

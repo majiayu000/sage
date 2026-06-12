@@ -101,6 +101,36 @@ impl UnifiedExecutor {
         }
     }
 
+    pub(in crate::agent) fn unattended_settings_permission_result(
+        tool_call: &ToolCall,
+        working_dir: &Path,
+    ) -> SageResult<Option<ToolResult>> {
+        let settings = Self::load_settings_strict(working_dir)?;
+        let Some(decision) = Self::settings_permission_decision(&settings, tool_call, working_dir)
+        else {
+            return Ok(None);
+        };
+
+        match decision {
+            SettingsPermissionDecision::Allow => Ok(None),
+            SettingsPermissionDecision::Deny(reason) => {
+                Ok(Some(Self::settings_permission_blocked_result(
+                    tool_call,
+                    format!("Permission denied by settings: {}", reason),
+                )))
+            }
+            SettingsPermissionDecision::Ask(reason) => {
+                Ok(Some(Self::settings_permission_blocked_result(
+                    tool_call,
+                    format!(
+                        "Permission required by settings but sub-agent tool calls cannot prompt for approval: {}",
+                        reason
+                    ),
+                )))
+            }
+        }
+    }
+
     async fn request_settings_permission(
         &mut self,
         tool_call: &ToolCall,
