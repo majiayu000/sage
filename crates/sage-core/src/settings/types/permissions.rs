@@ -1,24 +1,56 @@
 //! Permission settings and patterns
 
+use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize};
 
 /// Permission settings
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Clone, Default)]
 pub struct PermissionSettings {
     /// Patterns to allow (e.g., "Bash(npm *)", "Read(src/**)")
-    #[serde(default)]
     pub allow: Vec<String>,
 
     /// Patterns to deny
-    #[serde(default)]
     pub deny: Vec<String>,
 
     /// Default behavior when no rule matches
     pub default_behavior: SettingsPermissionBehavior,
 
     /// Whether default_behavior was explicitly declared by a settings file.
-    #[serde(skip)]
     pub default_behavior_set: bool,
+}
+
+impl Serialize for PermissionSettings {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut len = 0;
+        if !self.allow.is_empty() {
+            len += 1;
+        }
+        if !self.deny.is_empty() {
+            len += 1;
+        }
+        if self.default_behavior_set
+            || self.default_behavior != SettingsPermissionBehavior::default()
+        {
+            len += 1;
+        }
+
+        let mut state = serializer.serialize_struct("PermissionSettings", len)?;
+        if !self.allow.is_empty() {
+            state.serialize_field("allow", &self.allow)?;
+        }
+        if !self.deny.is_empty() {
+            state.serialize_field("deny", &self.deny)?;
+        }
+        if self.default_behavior_set
+            || self.default_behavior != SettingsPermissionBehavior::default()
+        {
+            state.serialize_field("default_behavior", &self.default_behavior)?;
+        }
+        state.end()
+    }
 }
 
 impl PermissionSettings {
@@ -145,5 +177,26 @@ mod tests {
             SettingsPermissionBehavior::default(),
             SettingsPermissionBehavior::Ask
         );
+    }
+
+    #[test]
+    fn test_deserialize_tracks_explicit_default_behavior() {
+        let implicit: PermissionSettings = serde_json::from_str("{}").unwrap();
+        let explicit: PermissionSettings =
+            serde_json::from_str(r#"{"default_behavior": "ask"}"#).unwrap();
+
+        assert_eq!(implicit.default_behavior, SettingsPermissionBehavior::Ask);
+        assert!(!implicit.default_behavior_set);
+        assert_eq!(explicit.default_behavior, SettingsPermissionBehavior::Ask);
+        assert!(explicit.default_behavior_set);
+    }
+
+    #[test]
+    fn test_implicit_default_behavior_is_not_serialized() {
+        let settings = PermissionSettings::default();
+
+        let json = serde_json::to_string(&settings).unwrap();
+
+        assert!(!json.contains("default_behavior"));
     }
 }

@@ -1,5 +1,6 @@
 //! MCP (Model Context Protocol) configuration
 
+use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -14,20 +15,18 @@ fn default_true() -> bool {
 }
 
 /// MCP (Model Context Protocol) configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct McpConfig {
     /// Whether MCP integration is enabled
-    #[serde(default)]
     pub enabled: bool,
     /// MCP servers to connect to
-    #[serde(default)]
     pub servers: HashMap<String, McpServerConfig>,
     /// Default timeout for MCP requests in seconds
-    #[serde(default = "default_mcp_timeout")]
     pub default_timeout_secs: u64,
     /// Whether to auto-connect to servers on startup
-    #[serde(default = "default_true")]
     pub auto_connect: bool,
+    /// Whether auto_connect was explicitly declared by a config source.
+    pub auto_connect_set: bool,
 }
 
 impl Default for McpConfig {
@@ -37,7 +36,56 @@ impl Default for McpConfig {
             servers: HashMap::new(),
             default_timeout_secs: default_mcp_timeout(),
             auto_connect: true,
+            auto_connect_set: false,
         }
+    }
+}
+
+impl Serialize for McpConfig {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let len = if self.auto_connect_set || !self.auto_connect {
+            4
+        } else {
+            3
+        };
+        let mut state = serializer.serialize_struct("McpConfig", len)?;
+        state.serialize_field("enabled", &self.enabled)?;
+        state.serialize_field("servers", &self.servers)?;
+        state.serialize_field("default_timeout_secs", &self.default_timeout_secs)?;
+        if self.auto_connect_set || !self.auto_connect {
+            state.serialize_field("auto_connect", &self.auto_connect)?;
+        }
+        state.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for McpConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct McpConfigWire {
+            #[serde(default)]
+            enabled: bool,
+            #[serde(default)]
+            servers: HashMap<String, McpServerConfig>,
+            #[serde(default = "default_mcp_timeout")]
+            default_timeout_secs: u64,
+            auto_connect: Option<bool>,
+        }
+
+        let wire = McpConfigWire::deserialize(deserializer)?;
+        Ok(Self {
+            enabled: wire.enabled,
+            servers: wire.servers,
+            default_timeout_secs: wire.default_timeout_secs,
+            auto_connect: wire.auto_connect.unwrap_or_else(default_true),
+            auto_connect_set: wire.auto_connect.is_some(),
+        })
     }
 }
 
@@ -82,7 +130,10 @@ impl McpConfig {
             self.default_timeout_secs = other.default_timeout_secs;
         }
 
-        self.auto_connect = other.auto_connect;
+        if other.auto_connect_set || !other.auto_connect {
+            self.auto_connect = other.auto_connect;
+            self.auto_connect_set = true;
+        }
     }
 
     /// Get enabled servers
@@ -190,6 +241,35 @@ mod tests {
         assert_eq!(config1.default_timeout_secs, 600);
         assert!(!config1.auto_connect);
         assert!(config1.servers.contains_key("test"));
+    }
+
+    #[test]
+    fn test_mcp_config_merge_default_does_not_override_disabled_auto_connect() {
+        let mut config1 = McpConfig::default();
+        config1.auto_connect = false;
+        config1.auto_connect_set = true;
+
+        config1.merge(McpConfig::default());
+
+        assert!(!config1.auto_connect);
+    }
+
+    #[test]
+    fn test_mcp_config_deserialize_tracks_explicit_auto_connect() {
+        let implicit: McpConfig = serde_json::from_str("{}").unwrap();
+        let explicit: McpConfig = serde_json::from_str(r#"{"auto_connect": true}"#).unwrap();
+
+        assert!(implicit.auto_connect);
+        assert!(!implicit.auto_connect_set);
+        assert!(explicit.auto_connect);
+        assert!(explicit.auto_connect_set);
+    }
+
+    #[test]
+    fn test_mcp_config_default_does_not_serialize_auto_connect() {
+        let json = serde_json::to_string(&McpConfig::default()).unwrap();
+
+        assert!(!json.contains("auto_connect"));
     }
 
     #[test]

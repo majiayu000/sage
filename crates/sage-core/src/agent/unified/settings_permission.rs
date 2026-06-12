@@ -253,6 +253,7 @@ impl UnifiedExecutor {
         let permissions = &settings.permissions;
         let has_configured_permissions = !permissions.allow.is_empty()
             || !permissions.deny.is_empty()
+            || permissions.default_behavior_set
             || permissions.default_behavior != SettingsPermissionBehavior::Ask;
         if !has_configured_permissions {
             return None;

@@ -235,6 +235,26 @@ fn test_empty_default_settings_do_not_force_permission_prompt() {
 }
 
 #[test]
+fn test_explicit_ask_default_requires_prompt_without_rules() {
+    let settings = Settings {
+        permissions: PermissionSettings {
+            default_behavior: SettingsPermissionBehavior::Ask,
+            default_behavior_set: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let decision = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &bash_call("echo needs prompt"),
+        workspace_dir(),
+    );
+
+    assert!(matches!(decision, Some(SettingsPermissionDecision::Ask(_))));
+}
+
+#[test]
 fn test_settings_permission_matches_workspace_relative_absolute_path() {
     let settings = Settings {
         permissions: PermissionSettings {
