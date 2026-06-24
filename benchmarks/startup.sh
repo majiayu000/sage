@@ -14,8 +14,8 @@
 set -e
 
 # Configuration
-ITERATIONS="${1:-10}"
-OUTPUT_FORMAT="${2:-text}"  # text or json
+ITERATIONS=10
+OUTPUT_FORMAT="text"  # text or json
 
 # Colors
 RED='\033[0;31m'
@@ -30,6 +30,10 @@ NC='\033[0m'
 while [[ $# -gt 0 ]]; do
     case $1 in
         --iterations|-i)
+            if [[ $# -lt 2 || ! "$2" =~ ^[0-9]+$ || "$2" -lt 1 ]]; then
+                echo "Error: --iterations requires a positive integer" >&2
+                exit 1
+            fi
             ITERATIONS="$2"
             shift 2
             ;;
@@ -46,8 +50,21 @@ while [[ $# -gt 0 ]]; do
             echo "  -h, --help           Show this help"
             exit 0
             ;;
-        *)
+        [0-9]*)
+            if [[ ! "$1" =~ ^[0-9]+$ || "$1" -lt 1 ]]; then
+                echo "Error: iterations must be a positive integer" >&2
+                exit 1
+            fi
+            ITERATIONS="$1"
             shift
+            ;;
+        text|json)
+            OUTPUT_FORMAT="$1"
+            shift
+            ;;
+        *)
+            echo "Error: unknown option: $1" >&2
+            exit 1
             ;;
     esac
 done
@@ -57,9 +74,15 @@ get_time_ms() {
     if command -v gdate &> /dev/null; then
         # macOS with coreutils
         echo $(($(gdate +%s%N) / 1000000))
-    elif command -v date &> /dev/null && date +%N &> /dev/null 2>&1; then
+    elif command -v date &> /dev/null; then
         # Linux
-        echo $(($(date +%s%N) / 1000000))
+        local timestamp_ns
+        timestamp_ns="$(date +%s%N 2>/dev/null || true)"
+        if [[ "$timestamp_ns" =~ ^[0-9]+$ ]]; then
+            echo $((timestamp_ns / 1000000))
+        else
+            echo $(($(date +%s) * 1000))
+        fi
     else
         # Fallback: seconds only (less precise)
         echo $(($(date +%s) * 1000))
@@ -93,6 +116,12 @@ benchmark_command() {
     local avg=$((total / iterations))
 
     echo "$name|$avg|$min|$max"
+}
+
+has_executable() {
+    local path
+    path="$(command -v "$1" 2>/dev/null || true)"
+    [[ -n "$path" && -f "$path" && -x "$path" ]]
 }
 
 # Print header
@@ -223,7 +252,7 @@ main() {
     local tools_found=0
 
     # Sage (required)
-    if command -v sage &> /dev/null; then
+    if has_executable sage; then
         if [ "$OUTPUT_FORMAT" = "text" ]; then
             echo -e "  Benchmarking ${GREEN}sage${NC}..."
         fi
@@ -248,7 +277,7 @@ main() {
     fi
 
     # Claude Code
-    if command -v claude &> /dev/null; then
+    if has_executable claude; then
         if [ "$OUTPUT_FORMAT" = "text" ]; then
             echo -e "  Benchmarking claude..."
         fi
@@ -259,7 +288,7 @@ main() {
     fi
 
     # Aider
-    if command -v aider &> /dev/null; then
+    if has_executable aider; then
         if [ "$OUTPUT_FORMAT" = "text" ]; then
             echo -e "  Benchmarking aider..."
         fi
@@ -270,7 +299,7 @@ main() {
     fi
 
     # Codex CLI
-    if command -v codex &> /dev/null; then
+    if has_executable codex; then
         if [ "$OUTPUT_FORMAT" = "text" ]; then
             echo -e "  Benchmarking codex..."
         fi
@@ -281,7 +310,7 @@ main() {
     fi
 
     # Continue
-    if command -v continue &> /dev/null; then
+    if has_executable continue; then
         if [ "$OUTPUT_FORMAT" = "text" ]; then
             echo -e "  Benchmarking continue..."
         fi
@@ -292,7 +321,7 @@ main() {
     fi
 
     # Node.js (reference)
-    if command -v node &> /dev/null; then
+    if has_executable node; then
         if [ "$OUTPUT_FORMAT" = "text" ]; then
             echo -e "  Benchmarking node (reference)..."
         fi
@@ -302,7 +331,7 @@ main() {
     fi
 
     # Python (reference)
-    if command -v python3 &> /dev/null; then
+    if has_executable python3; then
         if [ "$OUTPUT_FORMAT" = "text" ]; then
             echo -e "  Benchmarking python3 (reference)..."
         fi

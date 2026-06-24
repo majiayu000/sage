@@ -84,9 +84,6 @@ detect_platform() {
                 aarch64|arm64)
                     echo "aarch64-unknown-linux-gnu"
                     ;;
-                armv7l)
-                    echo "armv7-unknown-linux-gnueabihf"
-                    ;;
                 *)
                     echo "unsupported"
                     ;;
@@ -106,14 +103,7 @@ detect_platform() {
             esac
             ;;
         mingw*|msys*|cygwin*)
-            case "$arch" in
-                x86_64|amd64)
-                    echo "x86_64-pc-windows-msvc"
-                    ;;
-                *)
-                    echo "unsupported"
-                    ;;
-            esac
+            echo "unsupported"
             ;;
         *)
             echo "unsupported"

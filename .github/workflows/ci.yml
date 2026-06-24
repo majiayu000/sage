@@ -48,6 +48,50 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
 
+  shell-scripts:
+    name: Shell scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check shell script line endings and syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          failed=0
+          while IFS= read -r script; do
+            if grep -Il $'\r' "$script" >/dev/null; then
+              echo "::error file=${script}::Shell scripts must use LF line endings"
+              failed=1
+            fi
+
+            first_line="$(head -n 1 "$script")"
+            case "$first_line" in
+              *bash*) bash -n "$script" ;;
+            esac
+          done < <(git ls-files '*.sh')
+
+          exit "$failed"
+
+      - name: Smoke test startup benchmark CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          fake_bin="$(mktemp -d)"
+          trap 'rm -rf "$fake_bin"' EXIT
+
+          cat > "$fake_bin/sage" <<'EOF'
+          #!/usr/bin/env bash
+          echo "sage 0.0.0"
+          EOF
+          chmod +x "$fake_bin/sage"
+
+          PATH="$fake_bin:$PATH" bash benchmarks/startup.sh --help
+          PATH="$fake_bin:$PATH" bash benchmarks/startup.sh --iterations 1 --json \
+            | python3 -m json.tool >/dev/null
+
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
@@ -105,7 +149,7 @@ jobs:
   build:
     name: Build
     runs-on: ${{ matrix.os }}
-    needs: [fmt, clippy, test]
+    needs: [fmt, shell-scripts, clippy, test]
     strategy:
       fail-fast: false
       matrix:
