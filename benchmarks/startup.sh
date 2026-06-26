@@ -69,29 +69,100 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Get high-resolution timestamp (milliseconds)
-get_time_ms() {
+detect_timer() {
+    local timestamp_ns
+
     if command -v gdate &> /dev/null; then
-        # macOS with coreutils
-        echo $(($(gdate +%s%N) / 1000000))
-    elif command -v date &> /dev/null; then
-        # Linux
-        local timestamp_ns
+        timestamp_ns="$(gdate +%s%N 2>/dev/null || true)"
+        if [[ "$timestamp_ns" =~ ^[0-9]+$ ]]; then
+            echo "gdate_ns"
+            return 0
+        fi
+    fi
+
+    if command -v date &> /dev/null; then
         timestamp_ns="$(date +%s%N 2>/dev/null || true)"
         if [[ "$timestamp_ns" =~ ^[0-9]+$ ]]; then
-            echo $((timestamp_ns / 1000000))
-        elif command -v python3 &> /dev/null; then
-            python3 -c 'import time; print(int(time.time() * 1000))'
-        elif command -v perl &> /dev/null; then
-            perl -MTime::HiRes=time -e 'printf "%d\n", time() * 1000'
-        else
-            echo $(($(date +%s) * 1000))
+            echo "date_ns"
+            return 0
         fi
-    else
-        # Fallback: seconds only (less precise)
-        echo $(($(date +%s) * 1000))
     fi
+
+    if [ -n "${EPOCHREALTIME:-}" ]; then
+        echo "bash_epoch"
+        return 0
+    fi
+
+    if command -v perl &> /dev/null; then
+        echo "perl"
+        return 0
+    fi
+
+    if command -v python3 &> /dev/null; then
+        echo "python3"
+        return 0
+    fi
+
+    echo "date_s"
 }
+
+TIMER_MODE="$(detect_timer)"
+TIMER_OVERHEAD_MS=0
+
+# Get high-resolution timestamp (milliseconds)
+get_time_ms() {
+    case "$TIMER_MODE" in
+        gdate_ns)
+            echo $(($(gdate +%s%N) / 1000000))
+            ;;
+        date_ns)
+            echo $(($(date +%s%N) / 1000000))
+            ;;
+        bash_epoch)
+            local seconds fraction millis
+            seconds="${EPOCHREALTIME%.*}"
+            fraction="${EPOCHREALTIME#*.}"
+            millis="${fraction:0:3}"
+            while [ "${#millis}" -lt 3 ]; do
+                millis="${millis}0"
+            done
+            echo $((seconds * 1000 + 10#$millis))
+            ;;
+        perl)
+            perl -MTime::HiRes=time -e 'printf "%d\n", time() * 1000'
+            ;;
+        python3)
+            python3 -c 'import time; print(int(time.time() * 1000))'
+            ;;
+        *)
+            echo $(($(date +%s) * 1000))
+            ;;
+    esac
+}
+
+calibrate_timer_overhead_ms() {
+    if [ "$TIMER_MODE" = "date_s" ]; then
+        echo 0
+        return 0
+    fi
+
+    local samples=7
+    local total=0
+    local start end elapsed
+
+    for ((i=1; i<=samples; i++)); do
+        start=$(get_time_ms)
+        end=$(get_time_ms)
+        elapsed=$((end - start))
+        if [ "$elapsed" -gt 0 ]; then
+            total=$((total + elapsed))
+        fi
+    done
+
+    echo $((total / samples))
+}
+
+TIMER_OVERHEAD_MS="$(calibrate_timer_overhead_ms)"
 
 # Benchmark a single command
 benchmark_command() {
@@ -108,7 +179,7 @@ benchmark_command() {
         local start=$(get_time_ms)
         eval "$cmd" > /dev/null 2>&1 || true
         local end=$(get_time_ms)
-        local elapsed=$((end - start))
+        local elapsed=$((end - start - TIMER_OVERHEAD_MS))
         if [ "$elapsed" -lt 1 ]; then
             elapsed=1
         fi
