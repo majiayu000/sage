@@ -80,6 +80,10 @@ get_time_ms() {
         timestamp_ns="$(date +%s%N 2>/dev/null || true)"
         if [[ "$timestamp_ns" =~ ^[0-9]+$ ]]; then
             echo $((timestamp_ns / 1000000))
+        elif command -v python3 &> /dev/null; then
+            python3 -c 'import time; print(int(time.time() * 1000))'
+        elif command -v perl &> /dev/null; then
+            perl -MTime::HiRes=time -e 'printf "%d\n", time() * 1000'
         else
             echo $(($(date +%s) * 1000))
         fi
@@ -105,6 +109,9 @@ benchmark_command() {
         eval "$cmd" > /dev/null 2>&1 || true
         local end=$(get_time_ms)
         local elapsed=$((end - start))
+        if [ "$elapsed" -lt 1 ]; then
+            elapsed=1
+        fi
 
         times+=($elapsed)
         total=$((total + elapsed))
@@ -185,6 +192,12 @@ print_chart() {
         IFS='|' read -r name avg min max <<< "$result"
         if [ $avg -gt $max_avg ]; then max_avg=$avg; fi
     done
+
+    if [ "$max_avg" -le 0 ]; then
+        echo -e "${YELLOW}Visual comparison skipped: timings were below timer resolution.${NC}"
+        echo ""
+        return 0
+    fi
 
     echo -e "${BOLD}Visual Comparison:${NC}"
     echo ""

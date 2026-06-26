@@ -92,6 +92,18 @@ jobs:
           PATH="$fake_bin:$PATH" bash benchmarks/startup.sh --iterations 1 --json \
             | python3 -m json.tool >/dev/null
 
+          cat > "$fake_bin/date" <<'EOF'
+          #!/usr/bin/env bash
+          case "$1" in
+            +%s%N) echo "1000N" ;;
+            +%s) echo "1000" ;;
+            *) /usr/bin/date "$@" ;;
+          esac
+          EOF
+          chmod +x "$fake_bin/date"
+
+          PATH="$fake_bin:$PATH" bash benchmarks/startup.sh --iterations 1 >/dev/null
+
   clippy:
     name: Clippy
     runs-on: ubuntu-latest

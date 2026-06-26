@@ -111,6 +111,17 @@ detect_platform() {
     esac
 }
 
+binary_filename() {
+    case "$(uname -s | tr '[:upper:]' '[:lower:]')" in
+        mingw*|msys*|cygwin*)
+            echo "${BINARY_NAME}.exe"
+            ;;
+        *)
+            echo "$BINARY_NAME"
+            ;;
+    esac
+}
+
 # ============================================================
 # Version Management
 # ============================================================
@@ -182,11 +193,21 @@ download_and_install() {
     tar -xzf "$download_path" -C "$tmp_dir" || error "Extraction failed"
 
     # Find binary (might be in subdirectory)
+    local install_name
+    install_name=$(binary_filename)
+
     local binary_path
-    binary_path=$(find "$tmp_dir" -name "$BINARY_NAME" -type f -perm -u+x 2>/dev/null | head -1)
+    binary_path=$(find "$tmp_dir" -name "$install_name" -type f -perm -u+x 2>/dev/null | head -1)
 
     if [ -z "$binary_path" ]; then
-        binary_path=$(find "$tmp_dir" -name "$BINARY_NAME" -type f 2>/dev/null | head -1)
+        binary_path=$(find "$tmp_dir" -name "$install_name" -type f 2>/dev/null | head -1)
+    fi
+
+    if [ -z "$binary_path" ] && [ "$install_name" != "$BINARY_NAME" ]; then
+        binary_path=$(find "$tmp_dir" -name "$BINARY_NAME" -type f -perm -u+x 2>/dev/null | head -1)
+        if [ -z "$binary_path" ]; then
+            binary_path=$(find "$tmp_dir" -name "$BINARY_NAME" -type f 2>/dev/null | head -1)
+        fi
     fi
 
     if [ -z "$binary_path" ]; then
@@ -196,8 +217,8 @@ download_and_install() {
     # Install
     info "Installing to ${INSTALL_DIR}..."
     mkdir -p "$INSTALL_DIR"
-    mv "$binary_path" "$INSTALL_DIR/$BINARY_NAME"
-    chmod +x "$INSTALL_DIR/$BINARY_NAME"
+    mv "$binary_path" "$INSTALL_DIR/$install_name"
+    chmod +x "$INSTALL_DIR/$install_name"
 
     success "Installed successfully!"
 }
@@ -257,7 +278,7 @@ setup_path() {
 # ============================================================
 
 verify_installation() {
-    local sage_path="$INSTALL_DIR/$BINARY_NAME"
+    local sage_path="$INSTALL_DIR/$(binary_filename)"
 
     if [ -x "$sage_path" ]; then
         echo ""
@@ -314,8 +335,13 @@ build_from_source() {
 
     info "Installing..."
     mkdir -p "$INSTALL_DIR"
-    cp "target/release/$BINARY_NAME" "$INSTALL_DIR/"
-    chmod +x "$INSTALL_DIR/$BINARY_NAME"
+    local source_binary
+    source_binary=$(binary_filename)
+    if [ ! -f "target/release/$source_binary" ]; then
+        error "Built binary not found at target/release/$source_binary"
+    fi
+    cp "target/release/$source_binary" "$INSTALL_DIR/"
+    chmod +x "$INSTALL_DIR/$source_binary"
 
     success "Built and installed successfully!"
 }
