@@ -2,10 +2,10 @@
 
 # Sage 🦀
 
-**Blazing fast code agent in pure Rust**
+**Rust-native code agent in a single binary**
 
-The fastest open-source alternative to Claude Code.<br/>
-10x faster startup • Single binary • Works offline with Ollama
+Open-source software engineering agent CLI.<br/>
+Local startup benchmark • Single binary • Works offline with Ollama
 
 [![Rust](https://img.shields.io/badge/Rust-1.88+-orange?logo=rust)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -91,16 +91,16 @@ sage -r <session-id>
 ## ✨ Features
 
 ### 🚀 Performance
-- **10x faster startup** - Rust native, no runtime overhead
+- **Fast startup path** - Rust-native binary with a local benchmark script for verification
 - **Single ~15MB binary** - No dependencies, instant install
 - **Efficient memory** - Low footprint, handles large codebases
 
 ### 🤖 Multi-LLM Support
-- **Anthropic** - Claude Opus 4.7、Sonnet 4.6、Haiku 4.5
-- **OpenAI** - GPT-5.4 系列
-- **Google** - Gemini 2.5 Pro / Flash
+- **Anthropic** - Claude-compatible models
+- **OpenAI** - GPT-compatible models
+- **Google** - Gemini-compatible models
 - **Z.AI** - GLM-5.1 和 GLM-5
-- **Moonshot AI** - Kimi K2.6 / K2.5
+- **Moonshot AI** - Kimi-compatible models
 - **Ollama** - Llama, Mistral, CodeLlama (offline)
 - **Azure OpenAI** - Enterprise deployments
 - **OpenRouter** - Access 100+ models

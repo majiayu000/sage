@@ -2,9 +2,12 @@
 name = "sage"
 version = "0.13.57"
 edition = "2024"
+rust-version = "1.88"
 authors = ["Sage Agent Team"]
 license = "MIT"
 repository = "https://github.com/majiayu000/sage"
+homepage = "https://docs.rs/sage-cli"
+readme = "README.md"
 description = "LLM-based agent for general purpose software engineering tasks"
 publish = false
 
@@ -44,10 +47,13 @@ resolver = "2"
 [workspace.package]
 version = "0.13.57"
 edition = "2024"
+rust-version = "1.88"
 authors = ["Sage Agent Team"]
 license = "MIT"
 repository = "https://github.com/majiayu000/sage"
-description = "Blazing fast code agent in pure Rust - 10x faster startup than Node.js alternatives"
+homepage = "https://docs.rs/sage-cli"
+readme = "README.md"
+description = "Rust-native code agent for software engineering tasks"
 keywords = ["llm", "agent", "ai", "code-agent", "cli"]
 categories = ["command-line-utilities", "development-tools"]
 
