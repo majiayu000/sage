@@ -23,58 +23,63 @@ jobs:
     name: Create Release
     runs-on: ubuntu-latest
     outputs:
-      release_id: ${{ steps.create_release.outputs.id }}
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
       version: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
+        shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref_name }}
-          release_name: Sage ${{ github.ref_name }}
-          draft: true
-          prerelease: ${{ contains(github.ref_name, '-') }}
-          body: |
-            ## Sage ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
 
-            **Blazing fast code agent in pure Rust** - 10x faster startup than Node.js alternatives.
+          prerelease_args=()
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+            prerelease_args=(--prerelease)
+          fi
 
-            ### Quick Install
+          cat > release-notes.md <<EOF
+          ## Sage ${GITHUB_REF_NAME}
 
-            **macOS/Linux:**
-            ```bash
-            curl -fsSL https://raw.githubusercontent.com/majiayu000/sage/main/install.sh | bash
-            ```
+          **Blazing fast code agent in pure Rust** - 10x faster startup than Node.js alternatives.
 
-            **Cargo (Sage CLI):**
-            ```bash
-            cargo install sage-cli
-            ```
+          ### Quick Install
 
-            ### Download Binaries
+          **macOS/Linux:**
+          \`\`\`bash
+          curl -fsSL https://raw.githubusercontent.com/majiayu000/sage/main/install.sh | bash
+          \`\`\`
 
-            | Platform | Architecture | File |
-            |----------|--------------|------|
-            | macOS | Apple Silicon | `sage-${{ github.ref_name }}-aarch64-apple-darwin.tar.gz` |
-            | macOS | Intel x64 | `sage-${{ github.ref_name }}-x86_64-apple-darwin.tar.gz` |
-            | Linux | x64 (glibc) | `sage-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz` |
-            | Linux | x64 (musl) | `sage-${{ github.ref_name }}-x86_64-unknown-linux-musl.tar.gz` |
-            | Linux | ARM64 | `sage-${{ github.ref_name }}-aarch64-unknown-linux-gnu.tar.gz` |
+          **Cargo (Sage CLI):**
+          \`\`\`bash
+          cargo install sage-cli
+          \`\`\`
 
-            ### Checksums
+          ### Download Binaries
 
-            ```
-            SHA256 checksums will be added after build completes
-            ```
+          | Platform | Architecture | File |
+          |----------|--------------|------|
+          | macOS | Apple Silicon | \`sage-${GITHUB_REF_NAME}-aarch64-apple-darwin.tar.gz\` |
+          | macOS | Intel x64 | \`sage-${GITHUB_REF_NAME}-x86_64-apple-darwin.tar.gz\` |
+          | Linux | x64 (glibc) | \`sage-${GITHUB_REF_NAME}-x86_64-unknown-linux-gnu.tar.gz\` |
+          | Linux | x64 (musl) | \`sage-${GITHUB_REF_NAME}-x86_64-unknown-linux-musl.tar.gz\` |
+          | Linux | ARM64 | \`sage-${GITHUB_REF_NAME}-aarch64-unknown-linux-gnu.tar.gz\` |
 
-            ### What's New
+          ### Checksums
 
-            See [CHANGELOG.md](https://github.com/majiayu000/sage/blob/main/CHANGELOG.md) for details.
+          Each binary archive is uploaded with a matching \`.sha256\` asset generated from the final archive.
+
+          ### What's New
+
+          See [CHANGELOG.md](https://github.com/majiayu000/sage/blob/main/CHANGELOG.md) for details.
+          EOF
+
+          gh release create "${GITHUB_REF_NAME}" \
+            --draft \
+            "${prerelease_args[@]}" \
+            --title "Sage ${GITHUB_REF_NAME}" \
+            --notes-file release-notes.md
 
   # Build binaries for each platform
   build-release:
@@ -194,33 +199,34 @@ jobs:
         id: sha
         shell: bash
         run: |
+          set -euo pipefail
+
           if [ "${{ matrix.archive }}" = "tar.gz" ]; then
-            echo "sha256=$(sha256sum ${{ matrix.asset_name }}.tar.gz | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
+            asset="${{ matrix.asset_name }}.tar.gz"
           else
-            echo "sha256=$(sha256sum ${{ matrix.asset_name }}.zip | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
+            asset="${{ matrix.asset_name }}.zip"
           fi
 
-      - name: Upload Release Asset (tar.gz)
-        if: matrix.archive == 'tar.gz'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./${{ matrix.asset_name }}.tar.gz
-          asset_name: ${{ matrix.asset_name }}.tar.gz
-          asset_content_type: application/gzip
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "$asset" > "${asset}.sha256"
+          else
+            shasum -a 256 "$asset" > "${asset}.sha256"
+          fi
 
-      - name: Upload Release Asset (zip)
-        if: matrix.archive == 'zip'
-        uses: actions/upload-release-asset@v1
+          echo "asset=${asset}" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(cut -d ' ' -f 1 "${asset}.sha256")" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Release Assets
+        shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./${{ matrix.asset_name }}.zip
-          asset_name: ${{ matrix.asset_name }}.zip
-          asset_content_type: application/zip
+        run: |
+          set -euo pipefail
+
+          gh release upload "${{ needs.create-release.outputs.version }}" \
+            "${{ steps.sha.outputs.asset }}" \
+            "${{ steps.sha.outputs.asset }}.sha256" \
+            --clobber
 
   # Publish release (remove draft status)
   publish-release:
@@ -231,27 +237,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download all artifacts info and create checksums
-        run: |
-          VERSION="${{ needs.create-release.outputs.version }}"
-          echo "# SHA256 Checksums for Sage ${VERSION}" > checksums.txt
-          echo "" >> checksums.txt
-          # Note: In a real scenario, you'd download and checksum each file
-          # For now, the checksums are embedded in the build job
-
       - name: Publish release
-        uses: eregon/publish-release@v1
+        shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          release_id: ${{ needs.create-release.outputs.release_id }}
+        run: gh release edit "${{ needs.create-release.outputs.version }}" --draft=false
 
   # Publish the public Cargo install target. The root "sage" package is private
   # because that crates.io name belongs to another package; users install Sage
   # through the "sage-cli" crate, which exposes the "sage" binary.
   publish-sage-cli:
     name: Publish sage-cli to crates.io
-    needs: create-release
+    needs: publish-release
     runs-on: ubuntu-latest
     if: ${{ !contains(github.ref_name, '-') }}  # Skip for pre-releases
     steps:
