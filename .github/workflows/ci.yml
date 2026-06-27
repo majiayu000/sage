@@ -89,8 +89,14 @@ jobs:
           chmod +x "$fake_bin/sage"
 
           PATH="$fake_bin:$PATH" bash benchmarks/startup.sh --help
+          cat > "$fake_bin/continue" <<'EOF'
+          #!/usr/bin/env bash
+          echo "continue 0.0.0"
+          EOF
+          chmod +x "$fake_bin/continue"
+
           PATH="$fake_bin:$PATH" bash benchmarks/startup.sh --iterations 1 --json \
-            | python3 -m json.tool >/dev/null
+            | python3 -c 'import json, sys; payload=json.load(sys.stdin); assert any(result["name"] == "continue" for result in payload["results"])'
 
           cat > "$fake_bin/date" <<'EOF'
           #!/usr/bin/env bash
@@ -142,7 +148,12 @@ jobs:
           chmod +x target/release/sage.exe
           EOF
 
-          chmod +x "$fake_bin/uname" "$fake_bin/git" "$fake_bin/cargo"
+          cat > "$fake_bin/curl" <<'EOF'
+          #!/usr/bin/env bash
+          echo '{"tag_name":"v0.13.58"}'
+          EOF
+
+          chmod +x "$fake_bin/uname" "$fake_bin/git" "$fake_bin/cargo" "$fake_bin/curl"
 
           GIT_ARGS="$git_args" \
           HOME="$fake_home" \
@@ -153,6 +164,16 @@ jobs:
 
           test -x "$install_dir/sage.exe"
           grep -q -- "--branch v0.13.57" "$git_args"
+
+          : > "$git_args"
+          GIT_ARGS="$git_args" \
+          HOME="$fake_home" \
+          PATH="$fake_bin:$install_dir:$PATH" \
+          SAGE_INSTALL_DIR="$install_dir" \
+          SAGE_VERSION="latest" \
+            bash install.sh --source >/dev/null
+
+          grep -q -- "--branch v0.13.58" "$git_args"
 
   clippy:
     name: Clippy

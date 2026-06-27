@@ -198,8 +198,12 @@ benchmark_command() {
 
 has_executable() {
     local path
-    path="$(command -v "$1" 2>/dev/null || true)"
+    path="$(type -P "$1" 2>/dev/null || true)"
     [[ -n "$path" && -f "$path" && -x "$path" ]]
+}
+
+executable_path() {
+    type -P "$1" 2>/dev/null || true
 }
 
 # Print header
@@ -394,12 +398,14 @@ main() {
     fi
 
     # Continue
-    if has_executable continue; then
+    local continue_path
+    continue_path="$(executable_path continue)"
+    if [ -n "$continue_path" ]; then
         if [ "$OUTPUT_FORMAT" = "text" ]; then
             echo -e "  Benchmarking continue..."
         fi
-        continue --version > /dev/null 2>&1 || true
-        result=$(benchmark_command "continue" "continue --version" "$ITERATIONS")
+        "$continue_path" --version > /dev/null 2>&1 || true
+        result=$(benchmark_command "continue" "\"$continue_path\" --version" "$ITERATIONS")
         results+=("$result")
         tools_found=$((tools_found + 1))
     fi

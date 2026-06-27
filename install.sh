@@ -147,7 +147,7 @@ get_latest_version() {
 
 resolve_source_version() {
     if [ "$VERSION" = "latest" ]; then
-        info "Fetching latest version..."
+        info "Fetching latest version..." >&2
         get_latest_version
     else
         echo "$VERSION"
