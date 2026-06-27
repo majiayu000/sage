@@ -119,9 +119,10 @@ get_time_ms() {
             echo $(($(date +%s%N) / 1000000))
             ;;
         bash_epoch)
-            local seconds fraction millis
-            seconds="${EPOCHREALTIME%.*}"
-            fraction="${EPOCHREALTIME#*.}"
+            local epoch_realtime seconds fraction millis
+            epoch_realtime="$EPOCHREALTIME"
+            seconds="${epoch_realtime%.*}"
+            fraction="${epoch_realtime#*.}"
             millis="${fraction:0:3}"
             while [ "${#millis}" -lt 3 ]; do
                 millis="${millis}0"
