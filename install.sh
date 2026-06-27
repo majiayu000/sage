@@ -84,9 +84,6 @@ detect_platform() {
                 aarch64|arm64)
                     echo "aarch64-unknown-linux-gnu"
                     ;;
-                armv7l)
-                    echo "armv7-unknown-linux-gnueabihf"
-                    ;;
                 *)
                     echo "unsupported"
                     ;;
@@ -106,17 +103,21 @@ detect_platform() {
             esac
             ;;
         mingw*|msys*|cygwin*)
-            case "$arch" in
-                x86_64|amd64)
-                    echo "x86_64-pc-windows-msvc"
-                    ;;
-                *)
-                    echo "unsupported"
-                    ;;
-            esac
+            echo "unsupported"
             ;;
         *)
             echo "unsupported"
+            ;;
+    esac
+}
+
+binary_filename() {
+    case "$(uname -s | tr '[:upper:]' '[:lower:]')" in
+        mingw*|msys*|cygwin*)
+            echo "${BINARY_NAME}.exe"
+            ;;
+        *)
+            echo "$BINARY_NAME"
             ;;
     esac
 }
@@ -142,6 +143,31 @@ get_latest_version() {
     fi
 
     echo "$version"
+}
+
+resolve_source_version() {
+    if [ "$VERSION" = "latest" ]; then
+        info "Fetching latest version..." >&2
+        get_latest_version
+    else
+        echo "$VERSION"
+    fi
+}
+
+clone_source_ref() {
+    local source_ref="$1"
+    local dest="$2"
+
+    if git clone --depth 1 --branch "$source_ref" "https://github.com/${REPO}.git" "$dest"; then
+        return 0
+    fi
+
+    if [[ "$source_ref" != v* ]]; then
+        rm -rf "$dest"
+        git clone --depth 1 --branch "v${source_ref}" "https://github.com/${REPO}.git" "$dest"
+    else
+        return 1
+    fi
 }
 
 # ============================================================
@@ -192,11 +218,21 @@ download_and_install() {
     tar -xzf "$download_path" -C "$tmp_dir" || error "Extraction failed"
 
     # Find binary (might be in subdirectory)
+    local install_name
+    install_name=$(binary_filename)
+
     local binary_path
-    binary_path=$(find "$tmp_dir" -name "$BINARY_NAME" -type f -perm -u+x 2>/dev/null | head -1)
+    binary_path=$(find "$tmp_dir" -name "$install_name" -type f -perm -u+x 2>/dev/null | head -1)
 
     if [ -z "$binary_path" ]; then
-        binary_path=$(find "$tmp_dir" -name "$BINARY_NAME" -type f 2>/dev/null | head -1)
+        binary_path=$(find "$tmp_dir" -name "$install_name" -type f 2>/dev/null | head -1)
+    fi
+
+    if [ -z "$binary_path" ] && [ "$install_name" != "$BINARY_NAME" ]; then
+        binary_path=$(find "$tmp_dir" -name "$BINARY_NAME" -type f -perm -u+x 2>/dev/null | head -1)
+        if [ -z "$binary_path" ]; then
+            binary_path=$(find "$tmp_dir" -name "$BINARY_NAME" -type f 2>/dev/null | head -1)
+        fi
     fi
 
     if [ -z "$binary_path" ]; then
@@ -206,8 +242,8 @@ download_and_install() {
     # Install
     info "Installing to ${INSTALL_DIR}..."
     mkdir -p "$INSTALL_DIR"
-    mv "$binary_path" "$INSTALL_DIR/$BINARY_NAME"
-    chmod +x "$INSTALL_DIR/$BINARY_NAME"
+    mv "$binary_path" "$INSTALL_DIR/$install_name"
+    chmod +x "$INSTALL_DIR/$install_name"
 
     success "Installed successfully!"
 }
@@ -267,7 +303,7 @@ setup_path() {
 # ============================================================
 
 verify_installation() {
-    local sage_path="$INSTALL_DIR/$BINARY_NAME"
+    local sage_path="$INSTALL_DIR/$(binary_filename)"
 
     if [ -x "$sage_path" ]; then
         echo ""
@@ -315,8 +351,11 @@ build_from_source() {
     tmp_dir=$(mktemp -d)
     trap "rm -rf '$tmp_dir'" EXIT
 
-    info "Cloning repository..."
-    git clone --depth 1 "https://github.com/${REPO}.git" "$tmp_dir/sage"
+    local source_ref
+    source_ref=$(resolve_source_version)
+
+    info "Cloning repository at ${source_ref}..."
+    clone_source_ref "$source_ref" "$tmp_dir/sage" || error "Failed to clone ${REPO} at ${source_ref}"
 
     info "Building (this may take a few minutes)..."
     cd "$tmp_dir/sage"
@@ -324,8 +363,13 @@ build_from_source() {
 
     info "Installing..."
     mkdir -p "$INSTALL_DIR"
-    cp "target/release/$BINARY_NAME" "$INSTALL_DIR/"
-    chmod +x "$INSTALL_DIR/$BINARY_NAME"
+    local source_binary
+    source_binary=$(binary_filename)
+    if [ ! -f "target/release/$source_binary" ]; then
+        error "Built binary not found at target/release/$source_binary"
+    fi
+    cp "target/release/$source_binary" "$INSTALL_DIR/"
+    chmod +x "$INSTALL_DIR/$source_binary"
 
     success "Built and installed successfully!"
 }

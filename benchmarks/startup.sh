@@ -14,8 +14,8 @@
 set -e
 
 # Configuration
-ITERATIONS="${1:-10}"
-OUTPUT_FORMAT="${2:-text}"  # text or json
+ITERATIONS=10
+OUTPUT_FORMAT="text"  # text or json
 
 # Colors
 RED='\033[0;31m'
@@ -30,6 +30,10 @@ NC='\033[0m'
 while [[ $# -gt 0 ]]; do
     case $1 in
         --iterations|-i)
+            if [[ $# -lt 2 || ! "$2" =~ ^[0-9]+$ || "$2" -lt 1 ]]; then
+                echo "Error: --iterations requires a positive integer" >&2
+                exit 1
+            fi
             ITERATIONS="$2"
             shift 2
             ;;
@@ -46,25 +50,120 @@ while [[ $# -gt 0 ]]; do
             echo "  -h, --help           Show this help"
             exit 0
             ;;
-        *)
+        [0-9]*)
+            if [[ ! "$1" =~ ^[0-9]+$ || "$1" -lt 1 ]]; then
+                echo "Error: iterations must be a positive integer" >&2
+                exit 1
+            fi
+            ITERATIONS="$1"
             shift
+            ;;
+        text|json)
+            OUTPUT_FORMAT="$1"
+            shift
+            ;;
+        *)
+            echo "Error: unknown option: $1" >&2
+            exit 1
             ;;
     esac
 done
 
+detect_timer() {
+    local timestamp_ns
+
+    if command -v gdate &> /dev/null; then
+        timestamp_ns="$(gdate +%s%N 2>/dev/null || true)"
+        if [[ "$timestamp_ns" =~ ^[0-9]+$ ]]; then
+            echo "gdate_ns"
+            return 0
+        fi
+    fi
+
+    if command -v date &> /dev/null; then
+        timestamp_ns="$(date +%s%N 2>/dev/null || true)"
+        if [[ "$timestamp_ns" =~ ^[0-9]+$ ]]; then
+            echo "date_ns"
+            return 0
+        fi
+    fi
+
+    if [ -n "${EPOCHREALTIME:-}" ]; then
+        echo "bash_epoch"
+        return 0
+    fi
+
+    if command -v perl &> /dev/null; then
+        echo "perl"
+        return 0
+    fi
+
+    if command -v python3 &> /dev/null; then
+        echo "python3"
+        return 0
+    fi
+
+    echo "date_s"
+}
+
+TIMER_MODE="$(detect_timer)"
+TIMER_OVERHEAD_MS=0
+
 # Get high-resolution timestamp (milliseconds)
 get_time_ms() {
-    if command -v gdate &> /dev/null; then
-        # macOS with coreutils
-        echo $(($(gdate +%s%N) / 1000000))
-    elif command -v date &> /dev/null && date +%N &> /dev/null 2>&1; then
-        # Linux
-        echo $(($(date +%s%N) / 1000000))
-    else
-        # Fallback: seconds only (less precise)
-        echo $(($(date +%s) * 1000))
-    fi
+    case "$TIMER_MODE" in
+        gdate_ns)
+            echo $(($(gdate +%s%N) / 1000000))
+            ;;
+        date_ns)
+            echo $(($(date +%s%N) / 1000000))
+            ;;
+        bash_epoch)
+            local epoch_realtime seconds fraction millis
+            epoch_realtime="$EPOCHREALTIME"
+            seconds="${epoch_realtime%.*}"
+            fraction="${epoch_realtime#*.}"
+            millis="${fraction:0:3}"
+            while [ "${#millis}" -lt 3 ]; do
+                millis="${millis}0"
+            done
+            echo $((seconds * 1000 + 10#$millis))
+            ;;
+        perl)
+            perl -MTime::HiRes=time -e 'printf "%d\n", time() * 1000'
+            ;;
+        python3)
+            python3 -c 'import time; print(int(time.time() * 1000))'
+            ;;
+        *)
+            echo $(($(date +%s) * 1000))
+            ;;
+    esac
 }
+
+calibrate_timer_overhead_ms() {
+    if [ "$TIMER_MODE" = "date_s" ]; then
+        echo 0
+        return 0
+    fi
+
+    local samples=7
+    local total=0
+    local start end elapsed
+
+    for ((i=1; i<=samples; i++)); do
+        start=$(get_time_ms)
+        end=$(get_time_ms)
+        elapsed=$((end - start))
+        if [ "$elapsed" -gt 0 ]; then
+            total=$((total + elapsed))
+        fi
+    done
+
+    echo $((total / samples))
+}
+
+TIMER_OVERHEAD_MS="$(calibrate_timer_overhead_ms)"
 
 # Benchmark a single command
 benchmark_command() {
@@ -81,7 +180,10 @@ benchmark_command() {
         local start=$(get_time_ms)
         eval "$cmd" > /dev/null 2>&1 || true
         local end=$(get_time_ms)
-        local elapsed=$((end - start))
+        local elapsed=$((end - start - TIMER_OVERHEAD_MS))
+        if [ "$elapsed" -lt 1 ]; then
+            elapsed=1
+        fi
 
         times+=($elapsed)
         total=$((total + elapsed))
@@ -93,6 +195,16 @@ benchmark_command() {
     local avg=$((total / iterations))
 
     echo "$name|$avg|$min|$max"
+}
+
+has_executable() {
+    local path
+    path="$(type -P "$1" 2>/dev/null || true)"
+    [[ -n "$path" && -f "$path" && -x "$path" ]]
+}
+
+executable_path() {
+    type -P "$1" 2>/dev/null || true
 }
 
 # Print header
@@ -156,6 +268,12 @@ print_chart() {
         IFS='|' read -r name avg min max <<< "$result"
         if [ $avg -gt $max_avg ]; then max_avg=$avg; fi
     done
+
+    if [ "$max_avg" -le 0 ]; then
+        echo -e "${YELLOW}Visual comparison skipped: timings were below timer resolution.${NC}"
+        echo ""
+        return 0
+    fi
 
     echo -e "${BOLD}Visual Comparison:${NC}"
     echo ""
@@ -223,7 +341,7 @@ main() {
     local tools_found=0
 
     # Sage (required)
-    if command -v sage &> /dev/null; then
+    if has_executable sage; then
         if [ "$OUTPUT_FORMAT" = "text" ]; then
             echo -e "  Benchmarking ${GREEN}sage${NC}..."
         fi
@@ -248,7 +366,7 @@ main() {
     fi
 
     # Claude Code
-    if command -v claude &> /dev/null; then
+    if has_executable claude; then
         if [ "$OUTPUT_FORMAT" = "text" ]; then
             echo -e "  Benchmarking claude..."
         fi
@@ -259,7 +377,7 @@ main() {
     fi
 
     # Aider
-    if command -v aider &> /dev/null; then
+    if has_executable aider; then
         if [ "$OUTPUT_FORMAT" = "text" ]; then
             echo -e "  Benchmarking aider..."
         fi
@@ -270,7 +388,7 @@ main() {
     fi
 
     # Codex CLI
-    if command -v codex &> /dev/null; then
+    if has_executable codex; then
         if [ "$OUTPUT_FORMAT" = "text" ]; then
             echo -e "  Benchmarking codex..."
         fi
@@ -281,18 +399,20 @@ main() {
     fi
 
     # Continue
-    if command -v continue &> /dev/null; then
+    local continue_path
+    continue_path="$(executable_path continue)"
+    if [ -n "$continue_path" ]; then
         if [ "$OUTPUT_FORMAT" = "text" ]; then
             echo -e "  Benchmarking continue..."
         fi
-        continue --version > /dev/null 2>&1 || true
-        result=$(benchmark_command "continue" "continue --version" "$ITERATIONS")
+        "$continue_path" --version > /dev/null 2>&1 || true
+        result=$(benchmark_command "continue" "\"$continue_path\" --version" "$ITERATIONS")
         results+=("$result")
         tools_found=$((tools_found + 1))
     fi
 
     # Node.js (reference)
-    if command -v node &> /dev/null; then
+    if has_executable node; then
         if [ "$OUTPUT_FORMAT" = "text" ]; then
             echo -e "  Benchmarking node (reference)..."
         fi
@@ -302,7 +422,7 @@ main() {
     fi
 
     # Python (reference)
-    if command -v python3 &> /dev/null; then
+    if has_executable python3; then
         if [ "$OUTPUT_FORMAT" = "text" ]; then
             echo -e "  Benchmarking python3 (reference)..."
         fi
