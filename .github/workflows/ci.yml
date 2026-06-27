@@ -104,6 +104,56 @@ jobs:
 
           PATH="$fake_bin:$PATH" bash benchmarks/startup.sh --iterations 1 >/dev/null
 
+      - name: Smoke test installer source fallback
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          fake_bin="$(mktemp -d)"
+          fake_home="$(mktemp -d)"
+          install_dir="$(mktemp -d)"
+          git_args="$fake_bin/git-args.txt"
+          trap 'rm -rf "$fake_bin" "$fake_home" "$install_dir"' EXIT
+
+          cat > "$fake_bin/uname" <<'EOF'
+          #!/usr/bin/env bash
+          case "$1" in
+            -s) echo "MSYS_NT-10.0" ;;
+            -m) echo "x86_64" ;;
+            *) /usr/bin/uname "$@" ;;
+          esac
+          EOF
+
+          cat > "$fake_bin/git" <<'EOF'
+          #!/usr/bin/env bash
+          echo "$*" >> "$GIT_ARGS"
+          dest="${@: -1}"
+          mkdir -p "$dest"
+          EOF
+
+          cat > "$fake_bin/cargo" <<'EOF'
+          #!/usr/bin/env bash
+          [ "$1" = "build" ] && [ "$2" = "--release" ]
+          mkdir -p target/release
+          cat > target/release/sage.exe <<'BIN'
+          #!/usr/bin/env bash
+          echo "sage 0.0.0"
+          BIN
+          chmod +x target/release/sage.exe
+          EOF
+
+          chmod +x "$fake_bin/uname" "$fake_bin/git" "$fake_bin/cargo"
+
+          GIT_ARGS="$git_args" \
+          HOME="$fake_home" \
+          PATH="$fake_bin:$install_dir:$PATH" \
+          SAGE_INSTALL_DIR="$install_dir" \
+          SAGE_VERSION="v0.13.57" \
+            bash install.sh --source >/dev/null
+
+          test -x "$install_dir/sage.exe"
+          grep -q -- "--branch v0.13.57" "$git_args"
+
   clippy:
     name: Clippy
     runs-on: ubuntu-latest

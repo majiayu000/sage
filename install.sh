@@ -145,6 +145,31 @@ get_latest_version() {
     echo "$version"
 }
 
+resolve_source_version() {
+    if [ "$VERSION" = "latest" ]; then
+        info "Fetching latest version..."
+        get_latest_version
+    else
+        echo "$VERSION"
+    fi
+}
+
+clone_source_ref() {
+    local source_ref="$1"
+    local dest="$2"
+
+    if git clone --depth 1 --branch "$source_ref" "https://github.com/${REPO}.git" "$dest"; then
+        return 0
+    fi
+
+    if [[ "$source_ref" != v* ]]; then
+        rm -rf "$dest"
+        git clone --depth 1 --branch "v${source_ref}" "https://github.com/${REPO}.git" "$dest"
+    else
+        return 1
+    fi
+}
+
 # ============================================================
 # Download and Install
 # ============================================================
@@ -326,8 +351,11 @@ build_from_source() {
     tmp_dir=$(mktemp -d)
     trap "rm -rf '$tmp_dir'" EXIT
 
-    info "Cloning repository..."
-    git clone --depth 1 "https://github.com/${REPO}.git" "$tmp_dir/sage"
+    local source_ref
+    source_ref=$(resolve_source_version)
+
+    info "Cloning repository at ${source_ref}..."
+    clone_source_ref "$source_ref" "$tmp_dir/sage" || error "Failed to clone ${REPO} at ${source_ref}"
 
     info "Building (this may take a few minutes)..."
     cd "$tmp_dir/sage"
