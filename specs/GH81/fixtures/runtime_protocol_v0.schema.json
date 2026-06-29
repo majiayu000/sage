@@ -45,6 +45,513 @@
       "type": "object",
       "additionalProperties": true
     },
+    "rule": {
+      "type": "object",
+      "required": [
+        "behavior",
+        "source"
+      ],
+      "properties": {
+        "behavior": {
+          "type": "string",
+          "enum": [
+            "allow",
+            "deny",
+            "ask",
+            "passthrough"
+          ]
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "project_settings",
+            "local_settings",
+            "user_settings",
+            "session_settings",
+            "cli_arg",
+            "builtin"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "request_payload": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/thread_start_payload"
+        },
+        {
+          "$ref": "#/$defs/thread_resume_payload"
+        },
+        {
+          "$ref": "#/$defs/thread_fork_payload"
+        },
+        {
+          "$ref": "#/$defs/turn_start_payload"
+        },
+        {
+          "$ref": "#/$defs/turn_steer_payload"
+        },
+        {
+          "$ref": "#/$defs/turn_interrupt_payload"
+        },
+        {
+          "$ref": "#/$defs/permission_respond_payload"
+        },
+        {
+          "$ref": "#/$defs/input_respond_payload"
+        }
+      ]
+    },
+    "thread_start_payload": {
+      "type": "object",
+      "properties": {
+        "cwd": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "interactive",
+            "non_interactive"
+          ]
+        },
+        "model": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "thread_resume_payload": {
+      "type": "object",
+      "required": [
+        "thread_id"
+      ],
+      "properties": {
+        "thread_id": {
+          "$ref": "#/$defs/message_id"
+        },
+        "restore_latest": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "thread_fork_payload": {
+      "type": "object",
+      "required": [
+        "parent_thread_id"
+      ],
+      "properties": {
+        "parent_thread_id": {
+          "$ref": "#/$defs/message_id"
+        },
+        "parent_turn_id": {
+          "$ref": "#/$defs/message_id"
+        },
+        "parent_item_id": {
+          "$ref": "#/$defs/message_id"
+        },
+        "fork_mode": {
+          "type": "string",
+          "enum": [
+            "full_context",
+            "summary",
+            "selected_items"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "turn_start_payload": {
+      "type": "object",
+      "required": [
+        "input"
+      ],
+      "properties": {
+        "input": {
+          "type": "string"
+        },
+        "input_item_id": {
+          "$ref": "#/$defs/message_id"
+        }
+      },
+      "additionalProperties": false
+    },
+    "turn_steer_payload": {
+      "type": "object",
+      "required": [
+        "instructions"
+      ],
+      "properties": {
+        "instructions": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "turn_interrupt_payload": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "permission_respond_payload": {
+      "type": "object",
+      "required": [
+        "decision"
+      ],
+      "properties": {
+        "decision": {
+          "type": "string",
+          "enum": [
+            "allow",
+            "deny"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "modified_input": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/rule"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "input_respond_payload": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "answers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "cancelled": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "notification_payload": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/thread_lifecycle_payload"
+        },
+        {
+          "$ref": "#/$defs/turn_started_payload"
+        },
+        {
+          "$ref": "#/$defs/turn_terminal_payload"
+        },
+        {
+          "$ref": "#/$defs/item_payload"
+        },
+        {
+          "$ref": "#/$defs/permission_requested_payload"
+        },
+        {
+          "$ref": "#/$defs/permission_resolved_payload"
+        },
+        {
+          "$ref": "#/$defs/error_reported_payload"
+        }
+      ]
+    },
+    "thread_lifecycle_payload": {
+      "type": "object",
+      "properties": {
+        "persistent": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "legacy_session_id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "turn_started_payload": {
+      "type": "object",
+      "required": [
+        "input_item_id"
+      ],
+      "properties": {
+        "input_item_id": {
+          "$ref": "#/$defs/message_id"
+        }
+      },
+      "additionalProperties": false
+    },
+    "turn_terminal_payload": {
+      "type": "object",
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "completed",
+            "failed",
+            "interrupted"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "result": {
+          "type": "string"
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "item_payload": {
+      "type": "object",
+      "required": [
+        "item_type"
+      ],
+      "properties": {
+        "item_type": {
+          "type": "string",
+          "enum": [
+            "message",
+            "system_message",
+            "assistant_message",
+            "user_message",
+            "tool_call",
+            "permission",
+            "error",
+            "result"
+          ]
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "system",
+            "user",
+            "assistant",
+            "tool"
+          ]
+        },
+        "content": {
+          "type": "string"
+        },
+        "tool_name": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "arguments": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "success": {
+          "type": "boolean"
+        },
+        "output_preview": {
+          "type": "string"
+        },
+        "result": {
+          "type": "string"
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "legacy_type": {
+          "type": "string"
+        },
+        "redacted": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "permission_requested_payload": {
+      "type": "object",
+      "required": [
+        "tool_name",
+        "risk",
+        "reason",
+        "input_redacted"
+      ],
+      "properties": {
+        "tool_name": {
+          "type": "string"
+        },
+        "risk": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "input_redacted": {
+          "type": "boolean"
+        },
+        "input": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "suggestions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/rule"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "permission_resolved_payload": {
+      "type": "object",
+      "required": [
+        "decision"
+      ],
+      "properties": {
+        "decision": {
+          "type": "string",
+          "enum": [
+            "allow",
+            "deny"
+          ]
+        },
+        "rule_source": {
+          "type": "string"
+        },
+        "modified_input_applied": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "error_reported_payload": {
+      "type": "object",
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "legacy_type": {
+          "type": "string"
+        },
+        "redacted": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "response_payload": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ack_response_payload"
+        },
+        {
+          "$ref": "#/$defs/thread_response_payload"
+        },
+        {
+          "$ref": "#/$defs/turn_response_payload"
+        }
+      ]
+    },
+    "ack_response_payload": {
+      "type": "object",
+      "required": [
+        "accepted"
+      ],
+      "properties": {
+        "accepted": {
+          "type": "boolean"
+        },
+        "applied_rules": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "thread_response_payload": {
+      "type": "object",
+      "required": [
+        "thread_id"
+      ],
+      "properties": {
+        "thread_id": {
+          "$ref": "#/$defs/message_id"
+        },
+        "resumed": {
+          "type": "boolean"
+        },
+        "forked_from": {
+          "$ref": "#/$defs/message_id"
+        }
+      },
+      "additionalProperties": false
+    },
+    "turn_response_payload": {
+      "type": "object",
+      "required": [
+        "turn_id"
+      ],
+      "properties": {
+        "turn_id": {
+          "$ref": "#/$defs/message_id"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
     "request_envelope": {
       "type": "object",
       "required": [
@@ -99,8 +606,7 @@
           "$ref": "#/$defs/source"
         },
         "payload": {
-          "type": "object",
-          "additionalProperties": true
+          "$ref": "#/$defs/request_payload"
         },
         "metadata": {
           "$ref": "#/$defs/metadata"
@@ -170,8 +676,7 @@
           "$ref": "#/$defs/source"
         },
         "payload": {
-          "type": "object",
-          "additionalProperties": true
+          "$ref": "#/$defs/notification_payload"
         },
         "metadata": {
           "$ref": "#/$defs/metadata"
@@ -234,8 +739,7 @@
           "$ref": "#/$defs/source"
         },
         "payload": {
-          "type": "object",
-          "additionalProperties": true
+          "$ref": "#/$defs/response_payload"
         },
         "metadata": {
           "$ref": "#/$defs/metadata"
