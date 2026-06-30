@@ -42,7 +42,7 @@ impl ToolOrchestrator {
                 let completed_tool_result = completed_tool_result.clone();
                 async move {
                     let result = executor.execute_tool_with_context(&call, &context).await;
-                    if result.success {
+                    if result.success || !should_supervise_failed_result(&result) {
                         if let Ok(mut slot) = completed_tool_result.lock() {
                             *slot = Some(result.clone());
                         }
@@ -208,6 +208,14 @@ impl ToolOrchestrator {
     }
 }
 
+fn should_supervise_failed_result(result: &ToolResult) -> bool {
+    result
+        .metadata
+        .get("retryable")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(true)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -257,6 +265,33 @@ mod tests {
         }
     }
 
+    struct NonRetryableFailureTool {
+        calls: Arc<AtomicUsize>,
+    }
+
+    #[async_trait]
+    impl Tool for NonRetryableFailureTool {
+        fn name(&self) -> &str {
+            "non_retryable_failure"
+        }
+
+        fn description(&self) -> &str {
+            "Returns a non-retryable failure result"
+        }
+
+        fn schema(&self) -> ToolSchema {
+            ToolSchema::new(self.name(), self.description(), vec![])
+        }
+
+        async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            let mut result = ToolResult::success(&call.id, self.name(), "expected failure");
+            (result.success, result.error, result.exit_code) =
+                (false, result.output.clone(), Some(1));
+            Ok(result.with_metadata("retryable", serde_json::json!(false)))
+        }
+    }
+
     #[tokio::test]
     async fn supervision_success_returns_result_without_second_tool_execution() {
         let calls = Arc::new(AtomicUsize::new(0));
@@ -276,6 +311,28 @@ mod tests {
 
         assert!(result.success);
         assert_eq!(result.output.as_deref(), Some("parent-thread"));
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn supervision_preserves_non_retryable_failure_without_restart() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mut tool_executor = ToolExecutor::new();
+        tool_executor.register_tool(Arc::new(NonRetryableFailureTool {
+            calls: calls.clone(),
+        }));
+        let orchestrator =
+            ToolOrchestrator::new(tool_executor, HookExecutor::new(HookRegistry::new()));
+        let context =
+            ToolExecutionContext::new("parent-thread", std::env::current_dir().unwrap_or_default());
+        let call = ToolCall::new("call-1", "non_retryable_failure", HashMap::new());
+
+        let result = orchestrator
+            .execution_phase(&call, &context, CancellationToken::new())
+            .await;
+
+        assert!(!result.success);
+        assert_eq!(result.output.as_deref(), Some("expected failure"));
         assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
 }

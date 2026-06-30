@@ -1,8 +1,10 @@
 use sage_core::agent::subagent::{AgentPath, ChildAgentSpawnRecord, SubAgentGraph};
 use sage_core::skills::SkillRegistry;
 use sage_core::thread_store::{SqliteThreadStore, ThreadRecord, ThreadStore};
+use sage_core::tools::base::Tool;
 use sage_core::tools::permission::ToolContext;
 use sage_core::tools::types::ToolCall;
+use sage_tools::tools::AgentLifecycleTool;
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -31,35 +33,27 @@ async fn default_tools_share_graph_backed_task_registry() -> Result<(), Box<dyn 
     store
         .create_thread(ThreadRecord::new("parent-thread"))
         .await?;
-    let thread_store: Arc<dyn ThreadStore> = store.clone();
     let mut skill_registry = SkillRegistry::new(workspace.path());
     skill_registry.register_builtins();
     let skill_registry = Arc::new(RwLock::new(skill_registry));
 
+    let thread_store: Arc<dyn ThreadStore> = store.clone();
     let tools = sage_tools::get_default_tools_with_context_and_thread_store(
         workspace.path(),
         skill_registry,
-        thread_store,
+        thread_store.clone(),
     );
-    let task = tools
-        .iter()
-        .find(|tool| tool.name() == "Task")
-        .ok_or("Task tool should be registered")?;
-    let task_output = tools
-        .iter()
-        .find(|tool| tool.name() == "TaskOutput")
-        .ok_or("TaskOutput tool should be registered")?;
-    let agent_lifecycle = tools
-        .iter()
-        .find(|tool| tool.name() == "AgentLifecycle")
-        .ok_or("AgentLifecycle tool should be registered")?;
-    assert!(task.include_in_subagent_runner());
-    assert!(!task_output.include_in_subagent_runner());
-    assert!(agent_lifecycle.is_read_only());
+    assert!(tools.iter().any(|tool| tool.name() == "TaskOutput"));
+    assert!(tools.iter().any(|tool| tool.name() == "AgentLifecycle"));
     let context = ToolContext::new(workspace.path().to_path_buf()).with_session_id("parent-thread");
 
-    let spawn = task
-        .execute_with_context(
+    let spawn = {
+        let task = tools
+            .iter()
+            .find(|tool| tool.name() == "Task")
+            .ok_or("Task tool should be registered")?;
+        assert!(task.include_in_subagent_runner());
+        task.execute_with_context(
             &graph_default_tool_call(
                 "spawn-item",
                 "Task",
@@ -73,22 +67,41 @@ async fn default_tools_share_graph_backed_task_registry() -> Result<(), Box<dyn 
             ),
             &context,
         )
-        .await?;
+        .await?
+    };
     assert!(spawn.success);
     let agent_path = spawn
         .metadata
         .get("agent_path")
         .and_then(|value| value.as_str())
-        .ok_or("expected graph-backed agent_path metadata")?;
+        .ok_or("expected graph-backed agent_path metadata")?
+        .to_string();
     assert_eq!(agent_path, "agent://task_graph_default");
+    drop(tools);
 
     let graph_store: Arc<dyn ThreadStore> = store.clone();
     let graph = SubAgentGraph::new(graph_store);
     let summary = graph
-        .read_child(&AgentPath::from_raw_path(agent_path)?)
+        .read_child(&AgentPath::from_raw_path(agent_path.as_str())?)
         .await?;
     assert_eq!(summary.parent_thread_id, "parent-thread");
     assert_eq!(summary.spawn_item_id, "spawn-item");
+
+    let tools_after_drop = sage_tools::get_default_tools_with_context_and_thread_store(
+        workspace.path(),
+        Arc::new(RwLock::new(SkillRegistry::new(workspace.path()))),
+        thread_store,
+    );
+    let task_output = tools_after_drop
+        .iter()
+        .find(|tool| tool.name() == "TaskOutput")
+        .ok_or("TaskOutput tool should be registered")?;
+    assert!(!task_output.include_in_subagent_runner());
+    let agent_lifecycle = tools_after_drop
+        .iter()
+        .find(|tool| tool.name() == "AgentLifecycle")
+        .ok_or("AgentLifecycle tool should be registered")?;
+    assert!(agent_lifecycle.is_read_only());
 
     let output = task_output
         .execute(&graph_default_tool_call(
@@ -201,5 +214,39 @@ async fn graph_default_toolsets_do_not_share_task_registries()
         .await
         .expect_err("second configured toolset must not read first toolset task registry");
     assert!(err.to_string().contains("shared_task_id"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn agent_lifecycle_wait_surfaces_non_child_graph_errors()
+-> Result<(), Box<dyn std::error::Error>> {
+    let store = Arc::new(SqliteThreadStore::in_memory()?);
+    store
+        .create_thread(ThreadRecord::new("parent-thread"))
+        .await?;
+    store
+        .create_thread(ThreadRecord::new("orphan-child"))
+        .await?;
+    let graph_store: Arc<dyn ThreadStore> = store;
+    let tool = AgentLifecycleTool::with_graph(Arc::new(SubAgentGraph::new(graph_store)));
+
+    let err = tool
+        .execute(&graph_default_tool_call(
+            "wait-orphan",
+            "AgentLifecycle",
+            json!({
+                "operation": "wait",
+                "agent_path": "agent://orphan-child",
+                "timeout": 1
+            }),
+        ))
+        .await
+        .expect_err("non-child graph errors should not be reported as missing agents");
+
+    assert!(
+        err.to_string()
+            .contains("failed to read agent agent://orphan-child")
+    );
+    assert!(err.to_string().contains("invalid agent path"));
     Ok(())
 }

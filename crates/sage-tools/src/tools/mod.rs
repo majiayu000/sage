@@ -91,10 +91,13 @@ pub use crate::mcp_tools::{
     get_global_mcp_registry, get_mcp_tools, init_global_mcp_registry,
 };
 
+use once_cell::sync::Lazy;
+use parking_lot::Mutex;
 use sage_core::agent::subagent::SubAgentGraph;
 use sage_core::skills::SkillRegistry;
 use sage_core::thread_store::ThreadStore;
 use sage_core::tools::Tool;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -146,6 +149,9 @@ const DEFAULT_TOOL_NAMES: &[&str] = &[
     "SendMessageTool",
 ];
 
+static GRAPH_TASK_REGISTRIES: Lazy<Mutex<HashMap<usize, Arc<process::task::TaskRegistry>>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+
 struct DefaultToolConfig {
     working_directory: PathBuf,
     skill_registry: Arc<RwLock<SkillRegistry>>,
@@ -182,14 +188,13 @@ impl DefaultToolConfig {
 fn build_default_tools(config: DefaultToolConfig) -> Vec<Arc<dyn Tool>> {
     let working_directory = config.working_directory;
     let file_access_tracker = config.file_access_tracker;
-    let subagent_graph = config
-        .thread_store
-        .map(|thread_store| Arc::new(SubAgentGraph::new(thread_store)));
-    let task_registry = if subagent_graph.is_some() {
-        Arc::new(process::task::TaskRegistry::new())
-    } else {
-        process::task::GLOBAL_TASK_REGISTRY.clone()
-    };
+    let thread_store = config.thread_store;
+    let task_registry = thread_store
+        .as_ref()
+        .map(graph_task_registry)
+        .unwrap_or_else(|| process::task::GLOBAL_TASK_REGISTRY.clone());
+    let subagent_graph =
+        thread_store.map(|thread_store| Arc::new(SubAgentGraph::new(thread_store)));
     let mut tools: Vec<Arc<dyn Tool>> = vec![
         // File operations
         Arc::new(EditTool::with_working_directory_and_tracker(
@@ -303,6 +308,16 @@ fn build_default_tools(config: DefaultToolConfig) -> Vec<Arc<dyn Tool>> {
     }
 
     tools
+}
+
+fn graph_task_registry(thread_store: &Arc<dyn ThreadStore>) -> Arc<process::task::TaskRegistry> {
+    let raw: *const dyn ThreadStore = Arc::as_ptr(thread_store);
+    let key = raw as *const () as usize;
+    GRAPH_TASK_REGISTRIES
+        .lock()
+        .entry(key)
+        .or_insert_with(|| Arc::new(process::task::TaskRegistry::new()))
+        .clone()
 }
 
 /// Get all default tools organized by category

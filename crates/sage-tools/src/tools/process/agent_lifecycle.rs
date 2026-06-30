@@ -2,8 +2,9 @@
 use async_trait::async_trait;
 use sage_core::agent::subagent::{
     AgentGraphDepth, AgentGraphListQuery, AgentPath, ChildAgentSummary, SubAgentGraph,
+    SubAgentGraphError,
 };
-use sage_core::thread_store::ThreadStatus;
+use sage_core::thread_store::{ThreadStatus, ThreadStoreError};
 use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::permission::ToolContext;
 use sage_core::tools::types::{ToolCall, ToolResult, ToolSchema};
@@ -61,13 +62,8 @@ impl Tool for AgentLifecycleTool {
     }
 
     fn description(&self) -> &str {
-        r#"List and wait for graph-backed sub-agent tasks.
-
-Operations:
-- list: list direct child agents or descendants for a parent thread.
-- wait: wait for an agent_path to reach a terminal status.
-
-This tool requires a runtime ThreadStore-backed SubAgentGraph."#
+        r#"List direct child agents or descendants and wait for graph-backed sub-agent tasks.
+Requires a runtime ThreadStore-backed SubAgentGraph."#
     }
 
     fn schema(&self) -> ToolSchema {
@@ -227,7 +223,7 @@ impl AgentLifecycleTool {
             self.task_registry.reconcile_finished_tasks().await;
             let summary = match graph.read_child(&agent_path).await {
                 Ok(summary) => summary,
-                Err(err) => {
+                Err(SubAgentGraphError::ThreadStore(ThreadStoreError::ThreadNotFound(err))) => {
                     let message =
                         format!("Agent {} was not found: {err}.", agent_path.as_path_str());
                     return Ok(
@@ -237,6 +233,12 @@ impl AgentLifecycleTool {
                             .with_metadata("agent_path", json!(agent_path.as_path_str()))
                             .with_metadata("timeout_ms", json!(timeout_raw)),
                     );
+                }
+                Err(err) => {
+                    return Err(ToolError::ExecutionFailed(format!(
+                        "failed to read agent {}: {err}",
+                        agent_path.as_path_str()
+                    )));
                 }
             };
             let task = self.task_registry.get_task(&summary.child_thread_id);
@@ -356,13 +358,9 @@ fn required_string(call: &ToolCall, name: &str) -> Result<String, ToolError> {
 }
 
 fn validate_non_empty(name: &str, value: &str) -> Result<(), ToolError> {
-    if value.trim().is_empty() {
-        Err(ToolError::InvalidArguments(format!(
-            "{name} cannot be empty"
-        )))
-    } else {
-        Ok(())
-    }
+    (!value.trim().is_empty())
+        .then_some(())
+        .ok_or_else(|| ToolError::InvalidArguments(format!("{name} cannot be empty")))
 }
 
 fn validate_timeout(call: &ToolCall) -> Result<(), ToolError> {
@@ -408,6 +406,7 @@ fn depth_label(depth: AgentGraphDepth) -> &'static str {
 
 fn error_result(mut result: ToolResult) -> ToolResult {
     (result.success, result.error, result.exit_code) = (false, result.output.clone(), Some(1));
+    result.metadata.insert("retryable".into(), json!(false));
     result
 }
 
