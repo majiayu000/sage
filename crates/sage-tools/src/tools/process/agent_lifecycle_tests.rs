@@ -239,6 +239,91 @@ async fn agent_lifecycle_wait_uses_shared_registry_terminal_status()
 }
 
 #[tokio::test]
+async fn agent_lifecycle_wait_returns_structured_failure() -> Result<(), Box<dyn std::error::Error>>
+{
+    let (_store, graph) = graph_with_parent().await?;
+    graph
+        .record_child(ChildAgentSpawnRecord::new(
+            "parent-thread",
+            "child-registry-failed",
+            "spawn-registry-failed",
+        ))
+        .await?;
+    let registry = Arc::new(TaskRegistry::new());
+    registry.add_task(TaskRequest {
+        id: "child-registry-failed".to_string(),
+        description: "Failed child".to_string(),
+        prompt: "Return".to_string(),
+        subagent_type: "Plan".to_string(),
+        model: None,
+        run_in_background: true,
+        resume: None,
+        status: TaskStatus::Failed,
+        result: Some("registry failure".to_string()),
+    });
+    let tool = AgentLifecycleTool::with_task_registry_and_graph(registry, graph);
+
+    let result = tool
+        .execute(&create_tool_call(
+            "wait-registry-failed",
+            json!({
+                "operation": "wait",
+                "agent_path": "agent://child-registry-failed",
+                "timeout": 1
+            }),
+        ))
+        .await?;
+    assert!(!result.success);
+    assert_eq!(
+        result.metadata.get("error_code"),
+        Some(&json!("agent_failed"))
+    );
+    assert_eq!(result.metadata.get("status"), Some(&json!("failed")));
+    assert_eq!(result.metadata.get("graph_status"), Some(&json!("active")));
+    assert_eq!(result.metadata.get("task_status"), Some(&json!("failed")));
+    assert_eq!(
+        result
+            .metadata
+            .get("agent")
+            .and_then(|agent| agent.get("error")),
+        Some(&json!("registry failure"))
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn agent_lifecycle_wait_returns_structured_interruption()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (_store, graph) = graph_with_parent().await?;
+    let mut spawn = ChildAgentSpawnRecord::new("parent-thread", "child-interrupted", "spawn-stop");
+    spawn.status = ThreadStatus::Interrupted;
+    graph.record_child(spawn).await?;
+    let tool = AgentLifecycleTool::with_graph(graph);
+
+    let result = tool
+        .execute(&create_tool_call(
+            "wait-interrupted",
+            json!({
+                "operation": "wait",
+                "agent_path": "agent://child-interrupted",
+                "timeout": 1
+            }),
+        ))
+        .await?;
+    assert!(!result.success);
+    assert_eq!(
+        result.metadata.get("error_code"),
+        Some(&json!("agent_interrupted"))
+    );
+    assert_eq!(result.metadata.get("status"), Some(&json!("interrupted")));
+    assert_eq!(
+        result.metadata.get("graph_status"),
+        Some(&json!("interrupted"))
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn agent_lifecycle_wait_times_out_for_active_child() -> Result<(), Box<dyn std::error::Error>>
 {
     let (_store, graph) = graph_with_parent().await?;

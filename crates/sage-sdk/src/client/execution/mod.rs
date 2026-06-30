@@ -3,7 +3,9 @@
 mod run;
 mod unified;
 
-use sage_core::{config::model::Config, skills::SkillRegistry, tools::Tool};
+use sage_core::{
+    config::model::Config, skills::SkillRegistry, thread_store::ThreadStore, tools::Tool,
+};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -18,14 +20,23 @@ pub(super) fn resolve_working_directory(requested: Option<PathBuf>, config: &Con
 pub(super) fn default_tools(
     working_directory: impl Into<PathBuf>,
     skill_registry: Arc<RwLock<SkillRegistry>>,
+    thread_store: Option<Arc<dyn ThreadStore>>,
 ) -> Vec<Arc<dyn Tool>> {
-    sage_tools::get_default_tools_with_context(working_directory, skill_registry)
+    match thread_store {
+        Some(store) => sage_tools::get_default_tools_with_context_and_thread_store(
+            working_directory,
+            skill_registry,
+            store,
+        ),
+        None => sage_tools::get_default_tools_with_context(working_directory, skill_registry),
+    }
 }
 
 #[cfg(not(feature = "default-tools"))]
 pub(super) fn default_tools(
     _working_directory: impl Into<PathBuf>,
     _skill_registry: Arc<RwLock<SkillRegistry>>,
+    _thread_store: Option<Arc<dyn ThreadStore>>,
 ) -> Vec<Arc<dyn Tool>> {
     Vec::new()
 }
@@ -93,7 +104,7 @@ mod tests {
         registry.register_builtins();
         let registry = Arc::new(RwLock::new(registry));
 
-        let tools = default_tools(working_directory.clone(), registry);
+        let tools = default_tools(working_directory.clone(), registry, None);
         let bash = tools
             .iter()
             .find(|tool| tool.name() == "Bash")
@@ -120,6 +131,23 @@ mod tests {
                 .unwrap_or_default()
                 .contains(&working_directory.to_string_lossy().to_string())
         );
+        Ok(())
+    }
+
+    #[cfg(feature = "default-tools")]
+    #[test]
+    fn default_tools_register_agent_lifecycle_with_thread_store()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let workspace = tempfile::tempdir()?;
+        let mut registry = SkillRegistry::new(workspace.path());
+        registry.register_builtins();
+        let registry = Arc::new(RwLock::new(registry));
+        let store: Arc<dyn ThreadStore> =
+            Arc::new(sage_core::thread_store::SqliteThreadStore::in_memory()?);
+
+        let tools = default_tools(workspace.path(), registry, Some(store));
+
+        assert!(tools.iter().any(|tool| tool.name() == "AgentLifecycle"));
         Ok(())
     }
 }

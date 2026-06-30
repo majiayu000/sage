@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::agent::{ExecutionOptions, UnifiedExecutor};
-use crate::config::Config;
+use crate::config::{Config, default_data_dir};
 use crate::error::{SageError, SageResult};
 use crate::input::InputChannel;
 use crate::llm::messages::LlmMessage;
@@ -14,11 +14,59 @@ use crate::runtime::{
 use crate::runtime_protocol::{RuntimeResponse, RuntimeSource};
 use crate::session::{JsonlSessionStorage, SessionMetadata};
 use crate::skills::SkillRegistry;
-use crate::thread_store::{ThreadRecord, ThreadStore, ThreadStoreError};
+use crate::thread_store::{SqliteThreadStore, ThreadRecord, ThreadStore, ThreadStoreError};
 use crate::tools::Tool;
 use crate::trajectory::SessionRecorder;
 use crate::types::TaskMetadata;
 use tokio::sync::{Mutex, RwLock};
+
+pub fn default_thread_store_path() -> SageResult<std::path::PathBuf> {
+    if let Some(path) = std::env::var_os("SAGE_THREAD_STORE_PATH") {
+        return Ok(path.into());
+    }
+    Ok(default_data_dir()?
+        .join("thread_store")
+        .join("threads.sqlite"))
+}
+
+pub fn default_thread_store() -> SageResult<Arc<dyn ThreadStore>> {
+    let store = SqliteThreadStore::open(default_thread_store_path()?)
+        .map_err(|err| SageError::storage(format!("failed to open default ThreadStore: {err}")))?;
+    Ok(Arc::new(store))
+}
+
+pub async fn ensure_thread_store_thread(
+    store: &dyn ThreadStore,
+    thread_id: &str,
+    cwd: std::path::PathBuf,
+    title: Option<String>,
+) -> SageResult<()> {
+    match store.read_thread(thread_id).await {
+        Ok(_) => Ok(()),
+        Err(ThreadStoreError::ThreadNotFound(_)) => {
+            let mut record = ThreadRecord::new(thread_id);
+            record.title = title;
+            record.cwd = Some(cwd);
+            match store.create_thread(record).await {
+                Ok(_) => Ok(()),
+                Err(ThreadStoreError::ThreadAlreadyExists(_)) => {
+                    match store.read_thread(thread_id).await {
+                        Ok(_) => Ok(()),
+                        Err(err) => Err(SageError::storage(format!(
+                            "thread '{thread_id}' already exists but is not readable: {err}"
+                        ))),
+                    }
+                }
+                Err(err) => Err(SageError::storage(format!(
+                    "failed to create thread '{thread_id}': {err}"
+                ))),
+            }
+        }
+        Err(err) => Err(SageError::storage(format!(
+            "failed to read thread '{thread_id}': {err}"
+        ))),
+    }
+}
 
 pub struct Runtime {
     config: Config,
@@ -256,31 +304,13 @@ async fn ensure_runtime_parent_thread(
     thread_id: &str,
     request: &RuntimeStartRequest,
 ) -> SageResult<()> {
-    match store.read_thread(thread_id).await {
-        Ok(_) => Ok(()),
-        Err(ThreadStoreError::ThreadNotFound(_)) => {
-            let mut record = ThreadRecord::new(thread_id);
-            record.title = Some(request.task.description.clone());
-            record.cwd = Some(std::path::PathBuf::from(&request.task.working_dir));
-            match store.create_thread(record).await {
-                Ok(_) => Ok(()),
-                Err(ThreadStoreError::ThreadAlreadyExists(_)) => {
-                    match store.read_thread(thread_id).await {
-                        Ok(_) => Ok(()),
-                        Err(err) => Err(SageError::storage(format!(
-                            "runtime parent thread '{thread_id}' already exists but is not readable: {err}"
-                        ))),
-                    }
-                }
-                Err(err) => Err(SageError::storage(format!(
-                    "failed to create runtime parent thread '{thread_id}': {err}"
-                ))),
-            }
-        }
-        Err(err) => Err(SageError::storage(format!(
-            "failed to read runtime parent thread '{thread_id}': {err}"
-        ))),
-    }
+    ensure_thread_store_thread(
+        store,
+        thread_id,
+        std::path::PathBuf::from(&request.task.working_dir),
+        Some(request.task.description.clone()),
+    )
+    .await
 }
 
 #[cfg(test)]

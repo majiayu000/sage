@@ -5,6 +5,7 @@ use sage_core::agent::{ExecutionMode, ExecutionOptions};
 use sage_core::error::SageResult;
 use sage_core::mcp::{clear_active_mcp_registry, set_active_mcp_registry};
 use sage_core::output::{OutputMode, UiEventOutput};
+use sage_core::runtime::{default_thread_store, ensure_thread_store_thread};
 use sage_core::ui::traits::UiContext;
 use std::sync::Arc;
 
@@ -36,6 +37,15 @@ pub async fn create_executor(
     }
 
     let mut executor = UnifiedExecutor::with_options(config.clone(), options)?;
+    let thread_store = default_thread_store()?;
+    let executor_thread_id = executor.id().to_string();
+    ensure_thread_store_thread(
+        thread_store.as_ref(),
+        &executor_thread_id,
+        resolved_working_dir.clone(),
+        None,
+    )
+    .await?;
 
     if let Some(ctx) = ui_context {
         executor.set_ui_context(ctx.clone());
@@ -45,9 +55,10 @@ pub async fn create_executor(
     }
 
     // Register default tools
-    let mut all_tools = sage_tools::get_default_tools_with_context(
+    let mut all_tools = sage_tools::get_default_tools_with_context_and_thread_store(
         resolved_working_dir.clone(),
         executor.skill_registry(),
+        Arc::clone(&thread_store),
     );
 
     // Load MCP tools if MCP is enabled
@@ -81,8 +92,21 @@ pub async fn create_executor(
     executor.set_jsonl_storage(std::sync::Arc::new(jsonl_storage));
 
     // Enable JSONL session recording
-    if let Err(e) = executor.enable_session_recording().await {
-        tracing::warn!("Failed to enable session recording: {}", e);
+    match executor.enable_session_recording().await {
+        Ok(_) => {
+            if let Some(session_id) = executor.current_session_id().map(str::to_string) {
+                ensure_thread_store_thread(
+                    thread_store.as_ref(),
+                    &session_id,
+                    resolved_working_dir.clone(),
+                    None,
+                )
+                .await?;
+            }
+        }
+        Err(e) => {
+            tracing::warn!("Failed to enable session recording: {}", e);
+        }
     }
 
     Ok(executor)

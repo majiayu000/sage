@@ -240,15 +240,22 @@ impl AgentLifecycleTool {
                     summary.agent_path.as_path_str(),
                     status
                 );
-                return Ok(timed_result(call, self.name(), output, start_time)
+                let result = timed_result(call, self.name(), output, start_time)
                     .with_metadata("operation", json!("wait"))
                     .with_metadata("agent", summary_to_json(&summary, task.as_ref()))
-                    .with_metadata("status", json!(status))
+                    .with_metadata("status", json!(&status))
                     .with_metadata("graph_status", json!(summary.status.as_str()))
                     .with_metadata(
                         "task_status",
                         json!(task.as_ref().map(|task| task.status.to_string())),
-                    ));
+                    );
+                return if status == "completed" {
+                    Ok(result)
+                } else {
+                    Ok(result
+                        .into_error_result()
+                        .with_metadata("error_code", json!(terminal_error_code(&status))))
+                };
             }
             if start_time.elapsed() >= timeout {
                 let last_status = status_label(summary.status, task.as_ref());
@@ -388,6 +395,14 @@ fn status_label(graph_status: ThreadStatus, task: Option<&TaskRequest>) -> Strin
         task.map(|task| task.status.to_string())
             .unwrap_or_else(|| graph_status.as_str().to_string())
     })
+}
+
+fn terminal_error_code(status: &str) -> &'static str {
+    match status {
+        "failed" => "agent_failed",
+        "interrupted" => "agent_interrupted",
+        _ => "agent_terminal_error",
+    }
 }
 
 fn summaries_to_json(children: &[ChildAgentSummary], registry: &TaskRegistry) -> Vec<Value> {

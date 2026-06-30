@@ -7,7 +7,7 @@ use sage_core::{
     error::SageResult,
     input::{InputChannel, InputChannelHandle},
     mcp::{build_mcp_registry_from_config, clear_active_mcp_registry, set_active_mcp_registry},
-    runtime::Runtime,
+    runtime::{Runtime, default_thread_store},
     runtime_protocol::RuntimeSource,
     types::TaskMetadata,
 };
@@ -64,14 +64,17 @@ impl SageAgentSdk {
             .with_working_directory(&working_dir);
 
         // Create the runtime facade executor
-        let runtime =
-            Runtime::new(self.config.clone(), exec_options).with_source(RuntimeSource::Sdk);
+        let thread_store = default_thread_store()?;
+        let runtime = Runtime::new(self.config.clone(), exec_options)
+            .with_source(RuntimeSource::Sdk)
+            .with_thread_store(Arc::clone(&thread_store));
         let mut executor = runtime.build_executor()?;
 
         // Register default tools
         executor.register_tools(default_tools(
             working_dir.clone(),
             executor.skill_registry(),
+            executor.thread_store(),
         ));
 
         // Set up input channel if interactive
