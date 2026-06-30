@@ -2,12 +2,14 @@
 
 use crate::console::CliConsole;
 use crate::signal_handler::start_global_signal_handling;
-use sage_core::agent::{ExecutionMode, ExecutionOptions, UnifiedExecutor};
+use sage_core::agent::{ExecutionMode, ExecutionOptions};
 use sage_core::config::load_config_from_file;
 use sage_core::error::SageResult;
 use sage_core::input::InputChannel;
 use sage_core::mcp::{clear_active_mcp_registry, set_active_mcp_registry};
 use sage_core::output::OutputMode;
+use sage_core::runtime::Runtime;
+use sage_core::runtime_protocol::RuntimeSource;
 use sage_tools::get_default_tools_with_context;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -63,8 +65,9 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
     }
     options = options.with_working_directory(&working_dir);
 
-    // Create the unified executor
-    let mut executor = UnifiedExecutor::with_options(config.clone(), options)?;
+    // Create the runtime facade executor
+    let runtime = Runtime::new(config.clone(), options).with_source(RuntimeSource::Cli);
+    let mut executor = runtime.build_executor()?;
 
     // Set output mode based on args
     let output_mode = match args.output_mode {

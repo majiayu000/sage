@@ -1,9 +1,10 @@
 //! Stream JSON output for the unified command
 
-use sage_core::agent::{ExecutionOutcome, UnifiedExecutor};
+use sage_core::agent::ExecutionOutcome;
 use sage_core::config::Config;
 use sage_core::error::{SageError, SageResult};
 use sage_core::output::{CostInfo, OutputEvent, OutputFormat, OutputWriter};
+use sage_core::runtime::RuntimeExecutor;
 use sage_core::types::TaskMetadata;
 use std::io::stdout;
 use std::path::PathBuf;
@@ -13,7 +14,7 @@ use super::args::UnifiedArgs;
 /// Execute task with streaming JSON output (for SDK/programmatic use)
 pub async fn execute_stream_json(
     args: UnifiedArgs,
-    mut executor: UnifiedExecutor,
+    mut executor: RuntimeExecutor,
     config: Config,
     working_dir: PathBuf,
 ) -> SageResult<()> {
@@ -80,7 +81,7 @@ pub async fn execute_stream_json(
 
     // Execute the task
     let start_time = std::time::Instant::now();
-    let outcome = executor.execute(task).await;
+    let outcome = executor.start_task(task).await.map(|result| result.outcome);
     let duration = start_time.elapsed();
 
     // Get session ID if available

@@ -3,10 +3,12 @@
 use super::{default_tools, resolve_working_directory};
 use crate::client::{ExecutionResult, SageAgentSdk, UnifiedRunOptions};
 use sage_core::{
-    agent::{ExecutionMode, ExecutionOptions, UnifiedExecutor},
+    agent::{ExecutionMode, ExecutionOptions},
     error::SageResult,
     input::{InputChannel, InputChannelHandle},
     mcp::{build_mcp_registry_from_config, clear_active_mcp_registry, set_active_mcp_registry},
+    runtime::Runtime,
+    runtime_protocol::RuntimeSource,
     types::TaskMetadata,
 };
 use std::sync::Arc;
@@ -61,8 +63,10 @@ impl SageAgentSdk {
             .with_max_steps(max_steps)
             .with_working_directory(&working_dir);
 
-        // Create the unified executor
-        let mut executor = UnifiedExecutor::with_options(self.config.clone(), exec_options)?;
+        // Create the runtime facade executor
+        let runtime =
+            Runtime::new(self.config.clone(), exec_options).with_source(RuntimeSource::Sdk);
+        let mut executor = runtime.build_executor()?;
 
         // Register default tools
         executor.register_tools(default_tools(
@@ -128,8 +132,8 @@ impl SageAgentSdk {
                 tracing::warn!("Failed to initialize sub-agent support: {}", e);
             }
 
-            let outcome = executor.execute(task).await?;
-            Ok(ExecutionResult::new(outcome, config_used))
+            let result = executor.start_task(task).await?;
+            Ok(ExecutionResult::new(result.outcome, config_used))
         };
 
         Ok((execution_future, input_handle))
@@ -174,5 +178,45 @@ impl SageAgentSdk {
         };
         let (future, _) = self.execute_unified(task_description, opts)?;
         future.await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sage_core::config::model::Config;
+
+    fn sdk_with_dummy_provider() -> Result<SageAgentSdk, Box<dyn std::error::Error>> {
+        Ok(
+            SageAgentSdk::with_config(Config::default()).with_provider_and_model(
+                "anthropic",
+                "claude-3-5-sonnet-20241022",
+                Some("test-api-key"),
+            )?,
+        )
+    }
+
+    #[test]
+    fn execute_unified_interactive_returns_input_handle() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let sdk = sdk_with_dummy_provider()?;
+        let (_future, input_handle) =
+            sdk.execute_unified("collect context", UnifiedRunOptions::default())?;
+
+        assert!(input_handle.is_some());
+        Ok(())
+    }
+
+    #[test]
+    fn execute_unified_non_interactive_returns_no_input_handle()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let sdk = sdk_with_dummy_provider()?;
+        let (_future, input_handle) = sdk.execute_unified(
+            "collect context",
+            UnifiedRunOptions::default().with_non_interactive(true),
+        )?;
+
+        assert!(input_handle.is_none());
+        Ok(())
     }
 }

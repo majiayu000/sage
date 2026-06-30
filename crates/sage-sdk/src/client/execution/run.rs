@@ -3,10 +3,12 @@
 use super::{default_tools, resolve_working_directory};
 use crate::client::{ExecutionResult, RunOptions, SageAgentSdk};
 use sage_core::{
-    agent::{ExecutionMode, ExecutionOptions, UnifiedExecutor},
+    agent::{ExecutionMode, ExecutionOptions},
     error::SageResult,
     input::{InputChannel, InputResponse},
     mcp::{clear_active_mcp_registry, set_active_mcp_registry},
+    runtime::Runtime,
+    runtime_protocol::RuntimeSource,
     types::TaskMetadata,
 };
 use std::sync::Arc;
@@ -94,8 +96,10 @@ impl SageAgentSdk {
             .with_max_steps(max_steps)
             .with_working_directory(&working_dir);
 
-        // Create unified executor
-        let mut executor = UnifiedExecutor::with_options(self.config.clone(), exec_options)?;
+        // Create runtime facade executor
+        let runtime =
+            Runtime::new(self.config.clone(), exec_options).with_source(RuntimeSource::Sdk);
+        let mut executor = runtime.build_executor()?;
 
         // Register default tools
         let mut all_tools = default_tools(working_dir.clone(), executor.skill_registry());
@@ -190,7 +194,7 @@ impl SageAgentSdk {
         }
 
         // Execute the task
-        let outcome = executor.execute(task).await?;
+        let outcome = executor.start_task(task).await?.outcome;
 
         // Clean up input task
         input_task.abort();

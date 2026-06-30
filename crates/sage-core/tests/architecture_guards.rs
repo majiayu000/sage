@@ -445,3 +445,119 @@ fn test_no_bare_generic_type_names() {
         panic!("{msg}");
     }
 }
+
+// ---------------------------------------------------------------------------
+// RUNTIME-01: CLI/SDK execution adapters must enter through runtime facade
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_cli_sdk_execution_uses_runtime_facade_boundary() {
+    let root = workspace_root();
+    let adapter_files = [
+        "crates/sage-cli/src/commands/unified/execute.rs",
+        "crates/sage-cli/src/commands/unified/session.rs",
+        "crates/sage-cli/src/commands/unified/stream.rs",
+        "crates/sage-sdk/src/client/execution/unified.rs",
+        "crates/sage-sdk/src/client/execution/run.rs",
+    ];
+
+    let mut violations = Vec::new();
+    for relative in adapter_files {
+        let path = root.join(relative);
+        let content = fs::read_to_string(&path).unwrap_or_else(|err| {
+            panic!("failed to read {relative}: {err}");
+        });
+        if content.contains("UnifiedExecutor::with_options") {
+            violations.push(format!(
+                "{relative} directly constructs UnifiedExecutor instead of Runtime"
+            ));
+        }
+    }
+
+    for relative in [
+        "crates/sage-cli/src/commands/unified/execute.rs",
+        "crates/sage-sdk/src/client/execution/unified.rs",
+        "crates/sage-sdk/src/client/execution/run.rs",
+    ] {
+        let content = fs::read_to_string(root.join(relative)).unwrap_or_else(|err| {
+            panic!("failed to read {relative}: {err}");
+        });
+        if !content.contains("Runtime::new") {
+            violations.push(format!("{relative} does not enter through Runtime::new"));
+        }
+    }
+
+    if !violations.is_empty() {
+        panic!(
+            "\n[RUNTIME-01] Runtime facade boundary violations:\n  {}\n",
+            violations.join("\n  ")
+        );
+    }
+}
+
+#[test]
+fn test_cli_sdk_runtime_setup_seams_are_bounded() {
+    let root = workspace_root();
+    let search_dirs = [
+        root.join("crates/sage-cli/src/commands/unified"),
+        root.join("crates/sage-sdk/src/client/execution"),
+    ];
+    let allowed_setup_files: HashSet<&str> = [
+        "crates/sage-cli/src/commands/unified/execute.rs",
+        "crates/sage-cli/src/commands/unified/session.rs",
+        "crates/sage-cli/src/commands/unified/stream.rs",
+        "crates/sage-sdk/src/client/execution/unified.rs",
+        "crates/sage-sdk/src/client/execution/run.rs",
+    ]
+    .into_iter()
+    .collect();
+    let setup_markers = [
+        ".build_executor()",
+        ".register_tools(",
+        ".set_output_mode(",
+        ".set_input_channel(",
+        ".set_session_recorder(",
+        ".set_jsonl_storage(",
+        ".enable_session_recording()",
+        ".init_subagent_support()",
+    ];
+
+    let mut violations = Vec::new();
+    for dir in search_dirs {
+        for file in collect_rs_files(&dir, &|p| !is_test_file(p) && !is_example_file(p)) {
+            let relative = rel(&file, &root);
+            let content = fs::read_to_string(&file).unwrap_or_else(|err| {
+                panic!("failed to read {relative}: {err}");
+            });
+            for marker in setup_markers {
+                if content.contains(marker) && !allowed_setup_files.contains(relative.as_str()) {
+                    violations.push(format!(
+                        "{relative} uses runtime setup marker `{marker}` outside the bounded adapter seam"
+                    ));
+                }
+            }
+        }
+    }
+
+    for relative in [
+        "crates/sage-cli/src/commands/unified/execute.rs",
+        "crates/sage-sdk/src/client/execution/unified.rs",
+        "crates/sage-sdk/src/client/execution/run.rs",
+    ] {
+        let content = fs::read_to_string(root.join(relative)).unwrap_or_else(|err| {
+            panic!("failed to read {relative}: {err}");
+        });
+        if !content.contains("Runtime::new") || !content.contains(".build_executor()?") {
+            violations.push(format!(
+                "{relative} does not construct execution through the Runtime facade"
+            ));
+        }
+    }
+
+    if !violations.is_empty() {
+        panic!(
+            "\n[RUNTIME-02] Unbounded runtime setup seam:\n  {}\n",
+            violations.join("\n  ")
+        );
+    }
+}

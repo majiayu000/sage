@@ -149,3 +149,55 @@ pub enum ConfigAction {
         force: bool,
     },
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    fn parse_ok(args: [&str; 3]) -> Cli {
+        match Cli::try_parse_from(args) {
+            Ok(cli) => cli,
+            Err(err) => panic!("expected CLI args to parse: {err}"),
+        }
+    }
+
+    #[test]
+    fn cli_contract_parses_print_mode() {
+        let cli = parse_ok(["sage", "-p", "summarize"]);
+
+        assert!(cli.print_mode);
+        assert_eq!(cli.task.as_deref(), Some("summarize"));
+        assert!(!cli.continue_session);
+        assert!(cli.resume_session.is_none());
+        assert!(!cli.stream_json);
+    }
+
+    #[test]
+    fn cli_contract_parses_continue_resume_and_stream_json() {
+        let continue_cli = match Cli::try_parse_from(["sage", "-c"]) {
+            Ok(cli) => cli,
+            Err(err) => panic!("expected -c to parse: {err}"),
+        };
+        assert!(continue_cli.continue_session);
+        assert!(continue_cli.resume_session.is_none());
+
+        let resume_cli = parse_ok(["sage", "-r", "session-123"]);
+        assert_eq!(resume_cli.resume_session.as_deref(), Some("session-123"));
+        assert!(!resume_cli.continue_session);
+
+        let stream_cli = parse_ok(["sage", "--stream-json", "summarize"]);
+        assert!(stream_cli.stream_json);
+        assert_eq!(stream_cli.task.as_deref(), Some("summarize"));
+    }
+
+    #[test]
+    fn cli_contract_rejects_conflicting_resume_flags() {
+        let err = match Cli::try_parse_from(["sage", "-c", "-r", "session-123"]) {
+            Ok(_) => panic!("expected -c and -r to conflict"),
+            Err(err) => err,
+        };
+
+        assert_eq!(err.kind(), clap::error::ErrorKind::ArgumentConflict);
+    }
+}
