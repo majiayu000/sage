@@ -3,6 +3,7 @@
 use crate::error::{SageError, SageResult};
 use crate::telemetry::{global_metrics, global_telemetry};
 use crate::tools::base::Tool;
+use crate::tools::permission::ToolContext;
 use crate::tools::types::{ToolCall, ToolResult};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -81,6 +82,24 @@ impl ToolExecutor {
     /// Execute a single tool call
     #[instrument(skip(self), fields(tool_name = %call.name, call_id = %call.id))]
     pub async fn execute_tool(&self, call: &ToolCall) -> ToolResult {
+        self.execute_tool_inner(call, None).await
+    }
+
+    /// Execute a single tool call with runtime context.
+    #[instrument(skip(self, context), fields(tool_name = %call.name, call_id = %call.id))]
+    pub async fn execute_tool_with_context(
+        &self,
+        call: &ToolCall,
+        context: &ToolContext,
+    ) -> ToolResult {
+        self.execute_tool_inner(call, Some(context)).await
+    }
+
+    async fn execute_tool_inner(
+        &self,
+        call: &ToolCall,
+        context: Option<&ToolContext>,
+    ) -> ToolResult {
         // Case-insensitive tool lookup
         let tool = match self.tools.get(&call.name.to_lowercase()) {
             Some(tool) => tool,
@@ -110,22 +129,20 @@ impl ToolExecutor {
         let start = Instant::now();
 
         // Execute with timeout
-        let result = match timeout(execution_timeout, tool.execute_with_timing(call)).await {
-            Ok(result) => result,
-            Err(_) => {
-                let elapsed = start.elapsed();
-                global_telemetry().record_tool_usage(
-                    &call.name,
-                    elapsed,
-                    false,
-                    Some(format!("Timed out after {:?}", execution_timeout)),
-                    None,
-                );
-                return ToolResult::error(
-                    &call.id,
-                    &call.name,
-                    format!("Tool execution timed out after {:?}", execution_timeout),
-                );
+        let result = if let Some(context) = context {
+            match timeout(
+                execution_timeout,
+                tool.execute_with_timing_and_context(call, context),
+            )
+            .await
+            {
+                Ok(result) => result,
+                Err(_) => return timeout_result(call, execution_timeout, start.elapsed()),
+            }
+        } else {
+            match timeout(execution_timeout, tool.execute_with_timing(call)).await {
+                Ok(result) => result,
+                Err(_) => return timeout_result(call, execution_timeout, start.elapsed()),
             }
         };
 
@@ -250,6 +267,21 @@ impl ToolExecutor {
             allow_parallel_execution: self.allow_parallel_execution,
         }
     }
+}
+
+fn timeout_result(call: &ToolCall, execution_timeout: Duration, elapsed: Duration) -> ToolResult {
+    global_telemetry().record_tool_usage(
+        &call.name,
+        elapsed,
+        false,
+        Some(format!("Timed out after {:?}", execution_timeout)),
+        None,
+    );
+    ToolResult::error(
+        &call.id,
+        &call.name,
+        format!("Tool execution timed out after {:?}", execution_timeout),
+    )
 }
 
 impl Default for ToolExecutor {

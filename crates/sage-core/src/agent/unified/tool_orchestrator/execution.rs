@@ -14,11 +14,14 @@ impl ToolOrchestrator {
     pub async fn execution_phase(
         &self,
         tool_call: &ToolCall,
+        context: &ToolExecutionContext,
         cancel_token: CancellationToken,
     ) -> ToolResult {
         // If supervision is disabled, execute directly
         if !self.supervision_config.enabled {
-            return self.execute_tool_direct(tool_call, cancel_token).await;
+            return self
+                .execute_tool_direct(tool_call, context, cancel_token)
+                .await;
         }
 
         // Create a supervisor for this tool execution
@@ -28,12 +31,14 @@ impl ToolOrchestrator {
 
         let tool_call_clone = tool_call.clone();
         let executor = &self.tool_executor;
+        let tool_context = context.to_tool_context();
 
         let supervision_result = supervisor
             .supervise(|| {
                 let call = tool_call_clone.clone();
+                let context = tool_context.clone();
                 async move {
-                    let result = executor.execute_tool(&call).await;
+                    let result = executor.execute_tool_with_context(&call, &context).await;
                     if result.success {
                         Ok(result)
                     } else {
@@ -51,14 +56,18 @@ impl ToolOrchestrator {
 
         // Convert supervision result back to ToolResult
         match supervision_result {
-            SupervisionResult::Completed => self.execute_tool_direct(tool_call, cancel_token).await,
+            SupervisionResult::Completed => {
+                self.execute_tool_direct(tool_call, context, cancel_token)
+                    .await
+            }
             SupervisionResult::Restarted { attempt } => {
                 tracing::info!(
                     tool = %tool_call.name,
                     attempt = attempt,
                     "Tool execution restarted, attempting again"
                 );
-                self.execute_tool_direct(tool_call, cancel_token).await
+                self.execute_tool_direct(tool_call, context, cancel_token)
+                    .await
             }
             SupervisionResult::Resumed { error } => {
                 tracing::warn!(
@@ -95,10 +104,12 @@ impl ToolOrchestrator {
     async fn execute_tool_direct(
         &self,
         tool_call: &ToolCall,
+        context: &ToolExecutionContext,
         cancel_token: CancellationToken,
     ) -> ToolResult {
+        let tool_context = context.to_tool_context();
         tokio::select! {
-            result = self.tool_executor.execute_tool(tool_call) => {
+            result = self.tool_executor.execute_tool_with_context(tool_call, &tool_context) => {
                 result
             }
             _ = cancel_token.cancelled() => {

@@ -152,7 +152,9 @@ impl ToolOrchestrator {
         }
 
         // Execution phase (with cancellation support)
-        let tool_result = self.execution_phase(tool_call, cancel_token.clone()).await;
+        let tool_result = self
+            .execution_phase(tool_call, context, cancel_token.clone())
+            .await;
 
         // Post-execution phase
         self.post_execution_phase(tool_call, &tool_result, context, cancel_token)
