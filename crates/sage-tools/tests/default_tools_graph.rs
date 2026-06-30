@@ -53,7 +53,7 @@ async fn default_tools_share_graph_backed_task_registry() -> Result<(), Box<dyn 
         .iter()
         .find(|tool| tool.name() == "AgentLifecycle")
         .ok_or("AgentLifecycle tool should be registered")?;
-    assert!(!task.include_in_subagent_runner());
+    assert!(task.include_in_subagent_runner());
     assert!(!task_output.include_in_subagent_runner());
     assert!(agent_lifecycle.is_read_only());
     let context = ToolContext::new(workspace.path().to_path_buf()).with_session_id("parent-thread");

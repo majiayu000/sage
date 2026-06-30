@@ -1,5 +1,4 @@
 //! Agent lifecycle tool for graph-backed sub-agent tasks.
-
 use async_trait::async_trait;
 use sage_core::agent::subagent::{
     AgentGraphDepth, AgentGraphListQuery, AgentPath, ChildAgentSummary, SubAgentGraph,
@@ -414,9 +413,10 @@ fn error_result(mut result: ToolResult) -> ToolResult {
 
 fn terminal_status(graph_status: ThreadStatus, task: Option<&TaskRequest>) -> Option<String> {
     if let Some(task) = task {
-        if matches!(task.status, TaskStatus::Completed | TaskStatus::Failed) {
-            return Some(task.status.to_string());
+        if matches!(task.status, TaskStatus::Pending | TaskStatus::Running) {
+            return None;
         }
+        return Some(task.status.to_string());
     }
     if matches!(
         graph_status,

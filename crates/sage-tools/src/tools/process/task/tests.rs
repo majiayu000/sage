@@ -231,7 +231,7 @@ mod suite {
         let registry = Arc::new(TaskRegistry::new());
         let (_store, graph) = graph_with_parent("parent-thread").await?;
         let tool = TaskTool::with_registry_and_graph(registry.clone(), graph.clone());
-        assert!(!tool.include_in_subagent_runner());
+        assert!(tool.include_in_subagent_runner());
         assert!(
             TaskTool::with_registry(Arc::new(TaskRegistry::new())).include_in_subagent_runner()
         );

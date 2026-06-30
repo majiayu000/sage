@@ -1,13 +1,13 @@
 //! Basic run execution methods
 
-use super::{default_tools, resolve_working_directory};
+use super::{default_thread_store_for_tools, default_tools, resolve_working_directory};
 use crate::client::{ExecutionResult, RunOptions, SageAgentSdk};
 use sage_core::{
     agent::{ExecutionMode, ExecutionOptions},
     error::SageResult,
     input::{InputChannel, InputResponse},
     mcp::{clear_active_mcp_registry, set_active_mcp_registry},
-    runtime::{Runtime, default_thread_store},
+    runtime::Runtime,
     runtime_protocol::RuntimeSource,
     types::TaskMetadata,
 };
@@ -97,10 +97,12 @@ impl SageAgentSdk {
             .with_working_directory(&working_dir);
 
         // Create runtime facade executor
-        let thread_store = default_thread_store()?;
-        let runtime = Runtime::new(self.config.clone(), exec_options)
-            .with_source(RuntimeSource::Sdk)
-            .with_thread_store(Arc::clone(&thread_store));
+        let thread_store = default_thread_store_for_tools()?;
+        let mut runtime =
+            Runtime::new(self.config.clone(), exec_options).with_source(RuntimeSource::Sdk);
+        if let Some(store) = thread_store {
+            runtime = runtime.with_thread_store(store);
+        }
         let mut executor = runtime.build_executor()?;
 
         // Register default tools

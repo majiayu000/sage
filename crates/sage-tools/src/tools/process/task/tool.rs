@@ -78,7 +78,7 @@ impl Tool for TaskTool {
     }
 
     fn include_in_subagent_runner(&self) -> bool {
-        self.subagent_graph.is_none()
+        true
     }
 }
 

@@ -1,13 +1,12 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Duration;
-
 use sage_core::agent::subagent::{ChildAgentSpawnRecord, SubAgentGraph};
 use sage_core::thread_store::{SqliteThreadStore, ThreadRecord, ThreadStatus, ThreadStore};
 use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::permission::ToolContext;
 use sage_core::tools::types::ToolCall;
 use serde_json::json;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Duration;
 
 use super::{
     super::task::{TaskRegistry, TaskRequest, TaskStatus},
@@ -368,6 +367,49 @@ async fn agent_lifecycle_wait_returns_structured_interruption()
         result.metadata.get("graph_status"),
         Some(&json!("interrupted"))
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn agent_lifecycle_wait_prefers_running_registry_over_stale_graph_terminal()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (_store, graph) = graph_with_parent().await?;
+    let mut spawn = ChildAgentSpawnRecord::new("parent-thread", "child-resumed", "spawn-resumed");
+    spawn.status = ThreadStatus::Completed;
+    graph.record_child(spawn).await?;
+    let registry = Arc::new(TaskRegistry::new());
+    registry.add_task(TaskRequest {
+        id: "child-resumed".to_string(),
+        description: "Resumed child".to_string(),
+        prompt: "Return".to_string(),
+        subagent_type: "Plan".to_string(),
+        model: None,
+        run_in_background: true,
+        resume: Some("child-resumed".to_string()),
+        status: TaskStatus::Running,
+        result: None,
+    });
+    let tool = AgentLifecycleTool::with_task_registry_and_graph(registry, graph);
+
+    let result = tool
+        .execute(&create_tool_call(
+            "wait-resumed",
+            json!({
+                "operation": "wait",
+                "agent_path": "agent://child-resumed",
+                "timeout": 1
+            }),
+        ))
+        .await?;
+
+    assert!(!result.success);
+    assert_eq!(result.metadata.get("error_code"), Some(&json!("timeout")));
+    assert_eq!(result.metadata.get("last_status"), Some(&json!("running")));
+    assert_eq!(
+        result.metadata.get("graph_status"),
+        Some(&json!("completed"))
+    );
+    assert_eq!(result.metadata.get("task_status"), Some(&json!("running")));
     Ok(())
 }
 

@@ -5,10 +5,12 @@ use super::creation::create_executor;
 use crate::commands::unified::slash_commands::{SlashCommandAction, process_slash_command};
 use crate::console::CliConsole;
 use rnk::prelude::*;
+use sage_core::error::SageResult;
 use sage_core::input::InputChannel;
 use sage_core::interrupt::{
     InterruptReason, interrupt_current_task, reset_global_interrupt_manager,
 };
+use sage_core::runtime::{default_thread_store, ensure_thread_store_thread};
 use sage_core::types::TaskMetadata;
 use sage_core::ui::bridge::AgentEvent;
 use sage_core::ui::traits::UiContext;
@@ -193,16 +195,15 @@ async fn handle_resume(
     rnk::request_render();
 
     let resume_result = if let Some(id) = session_id {
-        executor
-            .restore_session(&id)
+        restore_rnk_session(executor, &id)
             .await
-            .map(|msgs| format!("Session {} restored ({} messages)", id, msgs.len()))
+            .map(|count| format!("Session {} restored ({} messages)", id, count))
     } else {
         match executor.get_most_recent_session().await {
             Ok(Some(metadata)) => {
                 let id = metadata.id;
-                match executor.restore_session(&id).await {
-                    Ok(msgs) => Ok(format!("Session {} restored ({} messages)", id, msgs.len())),
+                match restore_rnk_session(executor, &id).await {
+                    Ok(count) => Ok(format!("Session {} restored ({} messages)", id, count)),
                     Err(e) => Err(e),
                 }
             }
@@ -232,6 +233,21 @@ async fn handle_resume(
         }
     }
     rnk::request_render();
+}
+
+async fn restore_rnk_session(
+    executor: &mut sage_core::agent::UnifiedExecutor,
+    session_id: &str,
+) -> SageResult<usize> {
+    let messages = executor.restore_session(session_id).await?;
+    let thread_store = default_thread_store()?;
+    let working_dir = executor
+        .options()
+        .working_directory
+        .clone()
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+    ensure_thread_store_thread(thread_store.as_ref(), session_id, working_dir, None).await?;
+    Ok(messages.len())
 }
 
 fn handle_switch_model(

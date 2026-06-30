@@ -4,7 +4,8 @@ mod run;
 mod unified;
 
 use sage_core::{
-    config::model::Config, skills::SkillRegistry, thread_store::ThreadStore, tools::Tool,
+    config::model::Config, error::SageResult, skills::SkillRegistry, thread_store::ThreadStore,
+    tools::Tool,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -41,13 +42,27 @@ pub(super) fn default_tools(
     Vec::new()
 }
 
+#[cfg(feature = "default-tools")]
+pub(super) fn default_thread_store_for_tools() -> SageResult<Option<Arc<dyn ThreadStore>>> {
+    Ok(Some(sage_core::runtime::default_thread_store()?))
+}
+
+#[cfg(not(feature = "default-tools"))]
+pub(super) fn default_thread_store_for_tools() -> SageResult<Option<Arc<dyn ThreadStore>>> {
+    Ok(None)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "default-tools")]
     use sage_core::tools::types::ToolCall;
+    #[cfg(feature = "default-tools")]
     use serde_json::json;
+    #[cfg(feature = "default-tools")]
     use std::collections::HashMap;
 
+    #[cfg(feature = "default-tools")]
     fn create_tool_call(id: &str, name: &str, params: serde_json::Value) -> ToolCall {
         let mut arguments = HashMap::new();
         if let Some(obj) = params.as_object() {
