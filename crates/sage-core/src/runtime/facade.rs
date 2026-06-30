@@ -190,6 +190,13 @@ impl RuntimeExecutor {
         self.thread_store.clone()
     }
 
+    pub fn thread_id(&self) -> String {
+        self.inner
+            .current_session_id()
+            .map(str::to_string)
+            .unwrap_or_else(|| self.inner.id().to_string())
+    }
+
     pub fn set_output_mode(&mut self, mode: OutputMode) {
         self.inner.set_output_mode(mode);
     }
@@ -239,11 +246,7 @@ impl RuntimeExecutor {
             return Ok(());
         };
 
-        let thread_id = self
-            .inner
-            .current_session_id()
-            .map(str::to_string)
-            .unwrap_or_else(|| self.inner.id().to_string());
+        let thread_id = self.thread_id();
         ensure_runtime_parent_thread(store.as_ref(), &thread_id, request).await
     }
 }
@@ -260,7 +263,15 @@ async fn ensure_runtime_parent_thread(
             record.title = Some(request.task.description.clone());
             record.cwd = Some(std::path::PathBuf::from(&request.task.working_dir));
             match store.create_thread(record).await {
-                Ok(_) | Err(ThreadStoreError::ThreadAlreadyExists(_)) => Ok(()),
+                Ok(_) => Ok(()),
+                Err(ThreadStoreError::ThreadAlreadyExists(_)) => {
+                    match store.read_thread(thread_id).await {
+                        Ok(_) => Ok(()),
+                        Err(err) => Err(SageError::storage(format!(
+                            "runtime parent thread '{thread_id}' already exists but is not readable: {err}"
+                        ))),
+                    }
+                }
                 Err(err) => Err(SageError::storage(format!(
                     "failed to create runtime parent thread '{thread_id}': {err}"
                 ))),
@@ -275,7 +286,7 @@ async fn ensure_runtime_parent_thread(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::thread_store::{SqliteThreadStore, ThreadStore};
+    use crate::thread_store::{DeleteMode, SqliteThreadStore, ThreadStore};
 
     #[tokio::test]
     async fn runtime_parent_helper_creates_parent_thread_when_store_is_configured()
@@ -307,6 +318,30 @@ mod tests {
         ensure_runtime_parent_thread(store.as_ref(), "parent-thread", &request).await?;
 
         assert!(store.read_thread("parent-thread").await.is_ok());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn runtime_parent_helper_rejects_unreadable_existing_parent_thread()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let store = Arc::new(SqliteThreadStore::in_memory()?);
+        let runtime = Runtime::new(Config::default(), ExecutionOptions::default());
+        let request = runtime.start_request("graph parent", "/tmp/sage-parent");
+
+        store
+            .create_thread(ThreadRecord::new("parent-thread"))
+            .await?;
+        store
+            .delete_thread("parent-thread", DeleteMode::MetadataOnly)
+            .await?;
+
+        let err = ensure_runtime_parent_thread(store.as_ref(), "parent-thread", &request)
+            .await
+            .expect_err("soft-deleted parent thread must not be treated as readable");
+        assert!(
+            err.to_string()
+                .contains("already exists but is not readable")
+        );
         Ok(())
     }
 }

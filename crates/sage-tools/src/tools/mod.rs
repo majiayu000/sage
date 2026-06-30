@@ -182,10 +182,14 @@ impl DefaultToolConfig {
 fn build_default_tools(config: DefaultToolConfig) -> Vec<Arc<dyn Tool>> {
     let working_directory = config.working_directory;
     let file_access_tracker = config.file_access_tracker;
-    let task_registry = process::task::GLOBAL_TASK_REGISTRY.clone();
     let subagent_graph = config
         .thread_store
         .map(|thread_store| Arc::new(SubAgentGraph::new(thread_store)));
+    let task_registry = if subagent_graph.is_some() {
+        Arc::new(process::task::TaskRegistry::new())
+    } else {
+        process::task::GLOBAL_TASK_REGISTRY.clone()
+    };
     vec![
         // File operations
         Arc::new(EditTool::with_working_directory_and_tracker(

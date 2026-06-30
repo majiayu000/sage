@@ -226,6 +226,51 @@ mod suite {
     }
 
     #[tokio::test]
+    async fn test_task_tool_background_with_graph_without_context_uses_task_registry()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let registry = Arc::new(TaskRegistry::new());
+        let (_store, graph) = graph_with_parent("parent-thread").await?;
+        let tool = TaskTool::with_registry_and_graph(registry.clone(), graph.clone());
+
+        let call = ToolCall {
+            id: "spawn-item".to_string(),
+            name: "Task".to_string(),
+            arguments: json!({
+                "description": "Plan implementation",
+                "prompt": "Design authentication system",
+                "subagent_type": "Plan",
+                "run_in_background": true,
+                "resume": "task_without_context"
+            })
+            .as_object()
+            .unwrap()
+            .clone()
+            .into_iter()
+            .collect(),
+            call_id: None,
+        };
+
+        let result = tool.execute(&call).await?;
+        assert!(result.success);
+        assert_eq!(
+            result
+                .metadata
+                .get("task_id")
+                .and_then(|value| value.as_str()),
+            Some("task_without_context")
+        );
+        assert!(!result.metadata.contains_key("agent_path"));
+        assert!(registry.get_task("task_without_context").is_some());
+        assert!(
+            graph
+                .read_child(&AgentPath::from_raw_path("agent://task_without_context")?)
+                .await
+                .is_err()
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_task_tool_background_with_graph_reuses_resume_edge()
     -> Result<(), Box<dyn std::error::Error>> {
         let registry = Arc::new(TaskRegistry::new());

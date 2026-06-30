@@ -92,25 +92,20 @@ impl TaskTool {
             .unwrap_or(false);
 
         if run_in_background {
-            if let Some(graph) = &self.subagent_graph {
-                let context = context.ok_or_else(|| {
-                    ToolError::InvalidArguments(
-                        "Task background graph spawn requires execution context".to_string(),
-                    )
-                })?;
-                execute_task_background_with_graph(
+            if let (Some(graph), Some(context)) = (&self.subagent_graph, context) {
+                return execute_task_background_with_graph(
                     call,
                     self.registry.clone(),
                     graph.clone(),
                     context,
                 )
                 .await
-                .map_err(|e| ToolError::InvalidArguments(e.to_string()))
-            } else {
-                execute_task_background(call, self.registry.clone())
-                    .await
-                    .map_err(|e| ToolError::InvalidArguments(e.to_string()))
+                .map_err(|e| ToolError::InvalidArguments(e.to_string()));
             }
+
+            execute_task_background(call, self.registry.clone())
+                .await
+                .map_err(|e| ToolError::InvalidArguments(e.to_string()))
         } else {
             execute_task_sync(call, self.registry.clone())
                 .await
