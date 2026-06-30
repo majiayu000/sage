@@ -134,6 +134,7 @@ pub mod output;
 pub mod plugins;
 pub mod prompts;
 pub(crate) mod recovery;
+pub mod runtime_protocol;
 pub mod sandbox;
 pub mod session;
 pub(crate) mod settings;
