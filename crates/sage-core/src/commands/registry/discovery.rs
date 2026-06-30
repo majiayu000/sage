@@ -35,12 +35,10 @@ impl CommandRegistry {
             // Only process .md files
             if path.extension().map_or(false, |ext| ext == "md") {
                 if let Some(command) = self.load_command_from_file(&path).await? {
-                    // Don't override builtins
-                    if !self
-                        .commands
-                        .get(&command.name)
-                        .map_or(false, |(_, src)| *src == CommandSource::Builtin)
-                    {
+                    // Filesystem discovery must not override runtime-owned commands.
+                    if !self.commands.get(&command.name).map_or(false, |(_, src)| {
+                        matches!(src, CommandSource::Builtin | CommandSource::Package { .. })
+                    }) {
                         // Project commands override user commands
                         let should_register = match source {
                             CommandSource::Project => true,

@@ -167,7 +167,14 @@ async fn test_reload() {
 
 #[tokio::test]
 async fn test_reload_preserves_package_commands() {
-    let executor = create_test_executor().await;
+    let temp_dir = tempfile::tempdir().unwrap();
+    let project_commands = temp_dir.path().join(".sage").join("commands");
+    tokio::fs::create_dir_all(&project_commands).await.unwrap();
+    tokio::fs::write(project_commands.join("pkg.md"), "Project replacement")
+        .await
+        .unwrap();
+
+    let executor = create_test_executor_with_project_root(temp_dir.path()).await;
     {
         let mut registry = executor.registry.write().await;
         registry.register(
