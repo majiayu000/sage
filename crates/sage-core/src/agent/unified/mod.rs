@@ -156,7 +156,10 @@ impl UnifiedExecutor {
         let tools: Vec<Arc<dyn crate::tools::base::Tool>> = tool_names
             .iter()
             .filter_map(|name| tool_executor.get_tool(name).cloned())
-            .filter(|tool| tool.include_in_subagent_runner())
+            .filter_map(|tool| {
+                tool.subagent_runner_tool()
+                    .or_else(|| tool.include_in_subagent_runner().then_some(tool))
+            })
             .collect();
 
         tracing::info!("Initializing sub-agent support with {} tools", tools.len());

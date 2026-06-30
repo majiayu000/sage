@@ -2,16 +2,8 @@ mod integers;
 mod migrations;
 mod payload;
 mod queries;
+mod registry_key;
 mod thread_rows;
-
-use async_trait::async_trait;
-use chrono::Utc;
-use parking_lot::Mutex;
-use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::time::Duration;
-
 use super::backfill::backfill_legacy_path;
 use super::error::{ThreadStoreError, ThreadStoreResult};
 use super::recovery::detect_startup_issues;
@@ -21,19 +13,25 @@ use super::types::{
     SearchHit, SearchQuery, ThreadItemInput, ThreadLineage, ThreadListQuery, ThreadRecord,
     ThreadSnapshot, ThreadStatus,
 };
+use async_trait::async_trait;
+use chrono::Utc;
+use parking_lot::Mutex;
 use payload::{delete_payload_refs, validate_relative_payload_path};
 use queries::{
     existing_item_identity, list_threads, payload_refs, row_to_lineage, row_to_thread,
     rows_to_items, rows_to_turns, search_threads,
 };
+use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::time::Duration;
 use thread_rows::{insert_thread, upsert_thread};
-
 #[derive(Clone)]
 pub struct SqliteThreadStore {
     conn: Arc<Mutex<Connection>>,
     payload_root: Option<PathBuf>,
+    registry_key: String,
 }
-
 impl SqliteThreadStore {
     pub fn open(path: impl AsRef<Path>) -> ThreadStoreResult<Self> {
         let path = path.as_ref();
@@ -58,17 +56,16 @@ impl SqliteThreadStore {
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
             payload_root,
+            registry_key: registry_key::sqlite_registry_key(path),
         })
     }
 
     pub fn in_memory() -> ThreadStoreResult<Self> {
         Self::open(":memory:")
     }
-
     pub fn payload_root(&self) -> Option<&Path> {
         self.payload_root.as_deref()
     }
-
     pub fn payload_file_ref(&self, path: impl AsRef<Path>) -> ThreadStoreResult<String> {
         let root = self.payload_root().ok_or_else(|| {
             ThreadStoreError::InvalidInput("payload root is not configured".into())
@@ -183,9 +180,12 @@ impl SqliteThreadStore {
         })
     }
 }
-
 #[async_trait]
 impl ThreadStore for SqliteThreadStore {
+    fn registry_key(&self) -> Option<String> {
+        Some(self.registry_key.clone())
+    }
+
     async fn create_thread(&self, record: ThreadRecord) -> ThreadStoreResult<ThreadRecord> {
         self.with_conn(|conn| {
             insert_thread(conn, &record)?;
@@ -428,7 +428,6 @@ fn ensure_thread_exists(conn: &Connection, thread_id: &str) -> ThreadStoreResult
     }
     Ok(())
 }
-
 fn next_sequence(conn: &Connection, thread_id: &str) -> ThreadStoreResult<u64> {
     let next: i64 = conn.query_row(
         "SELECT COALESCE(MAX(sequence), -1) + 1 FROM items WHERE thread_id = ?1",
@@ -437,7 +436,6 @@ fn next_sequence(conn: &Connection, thread_id: &str) -> ThreadStoreResult<u64> {
     )?;
     integers::stored_i64_to_u64("items", "sequence", thread_id, next)
 }
-
 fn upsert_turn(
     conn: &Connection,
     thread_id: &str,

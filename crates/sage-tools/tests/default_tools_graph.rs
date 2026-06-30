@@ -29,7 +29,8 @@ fn graph_default_tool_call(id: &str, name: &str, args: serde_json::Value) -> Too
 async fn default_tools_share_graph_backed_task_registry() -> Result<(), Box<dyn std::error::Error>>
 {
     let workspace = tempfile::tempdir()?;
-    let store = Arc::new(SqliteThreadStore::in_memory()?);
+    let db_path = workspace.path().join("threads.sqlite");
+    let store = Arc::new(SqliteThreadStore::open(&db_path)?);
     store
         .create_thread(ThreadRecord::new("parent-thread"))
         .await?;
@@ -52,7 +53,12 @@ async fn default_tools_share_graph_backed_task_registry() -> Result<(), Box<dyn 
             .iter()
             .find(|tool| tool.name() == "Task")
             .ok_or("Task tool should be registered")?;
-        assert!(task.include_in_subagent_runner());
+        assert!(!task.include_in_subagent_runner());
+        let runner_task = task
+            .subagent_runner_tool()
+            .ok_or("graph Task should provide runner fallback")?;
+        assert_eq!(runner_task.name(), "Task");
+        assert!(runner_task.include_in_subagent_runner());
         task.execute_with_context(
             &graph_default_tool_call(
                 "spawn-item",
@@ -87,10 +93,12 @@ async fn default_tools_share_graph_backed_task_registry() -> Result<(), Box<dyn 
     assert_eq!(summary.parent_thread_id, "parent-thread");
     assert_eq!(summary.spawn_item_id, "spawn-item");
 
+    let reopened_store = Arc::new(SqliteThreadStore::open(&db_path)?);
+    let reopened_thread_store: Arc<dyn ThreadStore> = reopened_store;
     let tools_after_drop = sage_tools::get_default_tools_with_context_and_thread_store(
         workspace.path(),
         Arc::new(RwLock::new(SkillRegistry::new(workspace.path()))),
-        thread_store,
+        reopened_thread_store,
     );
     let task_output = tools_after_drop
         .iter()

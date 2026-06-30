@@ -149,7 +149,7 @@ const DEFAULT_TOOL_NAMES: &[&str] = &[
     "SendMessageTool",
 ];
 
-static GRAPH_TASK_REGISTRIES: Lazy<Mutex<HashMap<usize, Arc<process::task::TaskRegistry>>>> =
+static GRAPH_TASK_REGISTRIES: Lazy<Mutex<HashMap<String, Arc<process::task::TaskRegistry>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 
 struct DefaultToolConfig {
@@ -311,8 +311,10 @@ fn build_default_tools(config: DefaultToolConfig) -> Vec<Arc<dyn Tool>> {
 }
 
 fn graph_task_registry(thread_store: &Arc<dyn ThreadStore>) -> Arc<process::task::TaskRegistry> {
-    let raw: *const dyn ThreadStore = Arc::as_ptr(thread_store);
-    let key = raw as *const () as usize;
+    let key = thread_store.registry_key().unwrap_or_else(|| {
+        let raw: *const dyn ThreadStore = Arc::as_ptr(thread_store);
+        format!("thread-store:{:p}", raw as *const ())
+    });
     GRAPH_TASK_REGISTRIES
         .lock()
         .entry(key)
