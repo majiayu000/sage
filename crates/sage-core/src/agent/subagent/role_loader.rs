@@ -199,17 +199,17 @@ unexpected = true
     }
 
     #[test]
-    fn subagent_role_loader_rejects_unknown_model() {
+    fn subagent_role_loader_rejects_invalid_model_token() {
         let (_temp, root) = role_root();
         fs::write(
             root.join("bad_model.toml"),
-            "name='x'\nprompt='x'\nmodel='unknown-model'\n",
+            "name='x'\nprompt='x'\nmodel='bad model'\n",
         )
         .expect("write role");
         let error = SubAgentRoleLoader::new(&root)
             .expect("loader")
             .load("bad_model.toml")
             .expect_err("bad model must fail");
-        assert!(error.to_string().contains("unsupported model"));
+        assert!(error.to_string().contains("unsupported characters"));
     }
 }
