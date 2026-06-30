@@ -28,10 +28,13 @@
 
 pub mod builtin;
 pub mod executor;
+pub mod graph;
 pub mod registry;
 pub mod runner;
 pub mod types;
 
+#[cfg(test)]
+mod graph_tests;
 #[cfg(test)]
 mod runner_tests;
 
@@ -39,6 +42,10 @@ pub use builtin::{
     explore_agent, general_purpose_agent, get_builtin_agents, plan_agent, register_builtin_agents,
 };
 pub use executor::{ExecutorMessage, SubAgentExecutor};
+pub use graph::{
+    AgentGraphDepth, AgentGraphListQuery, AgentPath, ChildAgentSpawnRecord, ChildAgentSummary,
+    SubAgentGraph, SubAgentGraphError, SubAgentGraphResult,
+};
 pub use registry::AgentRegistry;
 pub use runner::{
     SubAgentRunner, execute_subagent, get_global_runner, get_global_runner_cwd, init_global_runner,
