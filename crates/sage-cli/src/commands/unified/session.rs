@@ -1,9 +1,9 @@
 //! Session management for the unified command
 
 use crate::console::CliConsole;
-use sage_core::agent::UnifiedExecutor;
 use sage_core::config::Config;
 use sage_core::error::{SageError, SageResult};
+use sage_core::runtime::RuntimeExecutor;
 use sage_core::session::JsonlSessionStorage;
 use sage_core::trajectory::SessionRecorder;
 use sage_core::types::TaskMetadata;
@@ -20,7 +20,7 @@ use sage_core::input::InputChannel;
 
 /// Execute a single task (one-shot mode)
 pub async fn execute_single_task(
-    executor: &mut UnifiedExecutor,
+    executor: &mut RuntimeExecutor,
     console: &CliConsole,
     working_dir: &std::path::Path,
     _jsonl_storage: &Arc<JsonlSessionStorage>,
@@ -100,7 +100,7 @@ pub async fn execute_single_task(
     // Execute the task
     let task = TaskMetadata::new(&task_description, &working_dir.display().to_string());
     let start_time = std::time::Instant::now();
-    let outcome = executor.execute(task).await?;
+    let outcome = executor.start_task(task).await?.outcome;
     let duration = start_time.elapsed();
 
     // Display results
@@ -118,7 +118,7 @@ pub async fn execute_single_task(
 /// Execute session resume (-c or -r flags)
 pub async fn execute_session_resume(
     args: UnifiedArgs,
-    mut executor: UnifiedExecutor,
+    mut executor: RuntimeExecutor,
     console: CliConsole,
     config: Config,
     working_dir: PathBuf,
@@ -284,7 +284,7 @@ pub async fn execute_session_resume(
 
     // Execute the task
     let start_time = std::time::Instant::now();
-    let outcome = executor.execute(task).await?;
+    let outcome = executor.start_task(task).await?.outcome;
     let duration = start_time.elapsed();
 
     // Display results
