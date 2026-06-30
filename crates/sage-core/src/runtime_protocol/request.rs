@@ -57,6 +57,7 @@ impl<'de> Deserialize<'de> for RuntimeRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(untagged)]
 pub enum RuntimeRequestPayload {
     ThreadStart(RuntimeThreadStartPayload),
     ThreadResume(RuntimeThreadResumePayload),

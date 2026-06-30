@@ -55,6 +55,7 @@ impl<'de> Deserialize<'de> for RuntimeResponse {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(untagged)]
 pub enum RuntimeResponsePayload {
     Ack(RuntimeAckResponsePayload),
     Thread(RuntimeThreadResponsePayload),

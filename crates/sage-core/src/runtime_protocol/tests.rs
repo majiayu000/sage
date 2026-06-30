@@ -30,9 +30,10 @@ fn runtime_protocol_fixtures_deserialize() {
         .chain(PERMISSION_FIXTURE.lines())
         .chain(STRUCTURED_ERROR_FIXTURE.lines())
     {
+        let raw: serde_json::Value = serde_json::from_str(line).expect("valid runtime JSON");
         let message: RuntimeMessage = serde_json::from_str(line).expect("valid runtime message");
-        let encoded = serde_json::to_string(&message).expect("runtime message serializes");
-        assert!(encoded.contains(RUNTIME_PROTOCOL_VERSION));
+        let encoded = serde_json::to_value(&message).expect("runtime message serializes");
+        assert_eq!(encoded, raw);
     }
 }
 
@@ -130,6 +131,16 @@ fn runtime_protocol_rejects_type_payload_mismatches() {
         }),
     );
     assert!(serde_json::from_value::<RuntimeMessage>(wrong_request).is_err());
+
+    let wrong_error = runtime_message_json(
+        "error",
+        "error.unknown",
+        serde_json::json!({
+            "code": "unknown",
+            "message": "Unsupported error type"
+        }),
+    );
+    assert!(serde_json::from_value::<RuntimeMessage>(wrong_error).is_err());
 }
 
 #[test]
@@ -141,6 +152,10 @@ fn legacy_stream_mapping_fixture_matches_output_event_mapper() {
         let row: serde_json::Value = serde_json::from_str(line).expect("valid mapping row");
         let expected: RuntimeNotification =
             serde_json::from_value(row["protocol_notification"].clone()).expect("notification");
+        assert_eq!(
+            serde_json::to_value(&expected).expect("expected notification JSON"),
+            row["protocol_notification"]
+        );
         let key = serde_json::to_string(&row["legacy_output_event"]).expect("legacy key");
         grouped
             .entry(key)

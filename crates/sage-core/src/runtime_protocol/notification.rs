@@ -70,6 +70,7 @@ impl<'de> Deserialize<'de> for RuntimeNotification {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(untagged)]
 pub enum RuntimeNotificationPayload {
     TurnStarted(RuntimeTurnStartedPayload),
     TurnTerminal(RuntimeTurnTerminalPayload),
