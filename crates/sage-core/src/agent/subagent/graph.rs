@@ -358,11 +358,8 @@ fn fork_context_message_from_item(item: &ThreadItemRecord) -> Option<ForkContext
 
 fn message_role_from_store(role: &str) -> Option<MessageRole> {
     match role {
-        "system" => Some(MessageRole::System),
         "user" => Some(MessageRole::User),
         "assistant" => Some(MessageRole::Assistant),
-        "tool" => Some(MessageRole::Tool),
-        "error" => Some(MessageRole::Error),
         _ => None,
     }
 }

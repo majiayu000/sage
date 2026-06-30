@@ -26,6 +26,7 @@ use crate::error::{SageError, SageResult};
 use crate::llm::client::LlmClient;
 use crate::llm::messages::{LlmMessage, MessageRole};
 use crate::tools::base::Tool;
+use crate::tools::permission::ToolContext;
 use crate::tools::types::{ToolCall, ToolResult, ToolSchema};
 pub use runner_global::{
     execute_subagent, get_global_runner, get_global_runner_cwd, init_global_runner,
@@ -408,8 +409,10 @@ impl SubAgentRunner {
             return blocked;
         }
 
-        // Execute the tool
-        tool.execute_with_timing(call).await
+        // Execute the tool with the current child tool scope so nested Task
+        // calls cannot expand back to the global runner tool list.
+        let context = tool_context_for_child_tool_call(working_dir, tools);
+        tool.execute_with_timing_and_context(call, &context).await
     }
 
     pub(super) fn settings_permission_block(
@@ -425,6 +428,28 @@ impl SubAgentRunner {
             )),
         }
     }
+}
+
+pub(super) fn tool_context_for_child_tool_call(
+    working_dir: &Path,
+    tools: &[Arc<dyn Tool>],
+) -> ToolContext {
+    let mut context = ToolContext::new(working_dir.to_path_buf());
+    context.metadata.insert(
+        "parent_tools".to_string(),
+        serde_json::json!(current_tool_names(tools)),
+    );
+    context
+}
+
+fn current_tool_names(tools: &[Arc<dyn Tool>]) -> Vec<String> {
+    let mut names = tools
+        .iter()
+        .map(|tool| tool.name().to_string())
+        .collect::<Vec<_>>();
+    names.sort();
+    names.dedup();
+    names
 }
 
 /// Result of a single step execution

@@ -8,6 +8,7 @@ use crate::agent::subagent::types::{
     ToolAccessControl, profile_tool_access, validate_model_override, validate_profile_override,
     validate_reasoning_override,
 };
+use crate::config::ProviderRegistry;
 use crate::error::{SageError, SageResult};
 use crate::llm::client::LlmClient;
 use crate::llm::messages::LlmMessage;
@@ -164,7 +165,32 @@ impl SubAgentRunner {
             }
             _ => model,
         };
+        self.ensure_model_allowed_by_provider(resolved)?;
         Ok(resolved.to_string())
+    }
+
+    fn ensure_model_allowed_by_provider(&self, model: &str) -> SageResult<()> {
+        let provider_name = self.llm_client.provider().name();
+        let registry = ProviderRegistry::with_defaults();
+        let Some(provider) = registry
+            .embedded_providers()
+            .into_iter()
+            .find(|provider| provider.id == provider_name)
+        else {
+            return Ok(());
+        };
+        if provider.models.is_empty()
+            || provider
+                .models
+                .iter()
+                .any(|candidate| candidate.id == model)
+        {
+            return Ok(());
+        }
+        Err(SageError::config(format!(
+            "model override '{model}' is unsupported for provider '{}'",
+            self.llm_client.provider()
+        )))
     }
 
     pub(super) fn initial_messages(
@@ -408,6 +434,37 @@ profile = "review"
         assert_eq!(
             override_client.model_params().reasoning_effort.as_deref(),
             Some("high")
+        );
+    }
+
+    #[test]
+    fn subagent_role_resolution_rejects_model_from_other_provider() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let root = workspace.path().join(".sage").join("agents");
+        fs::create_dir_all(&root).expect("role root");
+        fs::write(
+            root.join("claude.toml"),
+            r#"
+name = "claude"
+prompt = "review"
+tools = ["Read"]
+model = "claude-opus-4-7"
+"#,
+        )
+        .expect("role file");
+
+        let mut config = SubAgentConfig::new(AgentType::Custom, "task")
+            .with_role_path("claude.toml")
+            .with_parent_cwd(workspace.path().to_path_buf())
+            .with_parent_tools(vec!["Read".to_string()]);
+
+        let error = runner()
+            .resolve_agent_role(&mut config)
+            .expect_err("cross-provider model must fail");
+        assert!(
+            error
+                .to_string()
+                .contains("unsupported for provider 'openai'")
         );
     }
 }

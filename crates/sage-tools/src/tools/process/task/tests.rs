@@ -218,7 +218,7 @@ profile = "review"
         );
         assert_eq!(
             result.metadata.get("fork_context"),
-            Some(&json!({"last_n": {"turns": 1}}))
+            Some(&json!({"mode": "last_n", "turns": 1}))
         );
         Ok(())
     }

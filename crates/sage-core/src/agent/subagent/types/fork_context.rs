@@ -3,7 +3,8 @@
 use crate::error::{SageError, SageResult};
 use crate::llm::messages::LlmMessage;
 use crate::types::MessageRole;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::ser::SerializeStruct;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// Parent conversation message available to a child agent.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -22,22 +23,17 @@ impl ForkContextMessage {
         Ok(Self { role, content })
     }
 
-    pub fn to_llm_message(&self) -> LlmMessage {
-        LlmMessage {
-            role: self.role,
-            content: self.content.clone(),
-            tool_calls: None,
-            tool_call_id: None,
-            name: None,
-            cache_control: None,
-            metadata: Default::default(),
+    pub fn to_llm_message(&self) -> Option<LlmMessage> {
+        match self.role {
+            MessageRole::User => Some(LlmMessage::user(&self.content)),
+            MessageRole::Assistant => Some(LlmMessage::assistant(&self.content)),
+            MessageRole::System | MessageRole::Tool | MessageRole::Error => None,
         }
     }
 }
 
 /// Controls how much parent context a child agent receives.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ForkContextPolicy {
     None,
     All,
@@ -77,14 +73,32 @@ impl ForkContextPolicy {
             Self::None => Vec::new(),
             Self::All => parent_context
                 .iter()
-                .map(ForkContextMessage::to_llm_message)
+                .filter_map(ForkContextMessage::to_llm_message)
                 .collect(),
             Self::LastN { turns } => parent_context[last_n_start(parent_context, *turns)..]
                 .iter()
-                .map(ForkContextMessage::to_llm_message)
+                .filter_map(ForkContextMessage::to_llm_message)
                 .collect(),
         };
         Ok(selected)
+    }
+}
+
+impl Serialize for ForkContextPolicy {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::None => serializer.serialize_str("none"),
+            Self::All => serializer.serialize_str("all"),
+            Self::LastN { turns } => {
+                let mut state = serializer.serialize_struct("ForkContextPolicy", 2)?;
+                state.serialize_field("mode", "last_n")?;
+                state.serialize_field("turns", turns)?;
+                state.end()
+            }
+        }
     }
 }
 
@@ -179,7 +193,10 @@ mod tests {
     fn subagent_fork_context_all_selects_every_message() {
         let parent = vec![
             msg(MessageRole::User, "one"),
+            msg(MessageRole::System, "parent system"),
             msg(MessageRole::Assistant, "two"),
+            msg(MessageRole::Tool, "tool result"),
+            msg(MessageRole::Error, "error result"),
         ];
         let selected = ForkContextPolicy::All
             .select_messages(&parent)
@@ -216,5 +233,14 @@ mod tests {
         }))
         .expect_err("last_n zero must fail");
         assert!(error.to_string().contains("greater than zero"));
+    }
+
+    #[test]
+    fn subagent_fork_context_round_trips_last_n() {
+        let policy = ForkContextPolicy::LastN { turns: 3 };
+        let value = serde_json::to_value(&policy).expect("serialize");
+        assert_eq!(value, serde_json::json!({"mode": "last_n", "turns": 3}));
+        let parsed: ForkContextPolicy = serde_json::from_value(value).expect("deserialize");
+        assert_eq!(parsed, policy);
     }
 }
