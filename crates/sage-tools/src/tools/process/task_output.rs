@@ -3,6 +3,9 @@
 //! This tool allows retrieving stdout/stderr from background shell tasks and
 //! structured status/results from sub-agent tasks started by the Task tool.
 
+#[path = "task_output_durable.rs"]
+mod task_output_durable;
+
 use async_trait::async_trait;
 use sage_core::agent::subagent::{AgentPath, ChildAgentSummary, SubAgentGraph};
 use sage_core::tools::BACKGROUND_REGISTRY;
@@ -135,7 +138,7 @@ Example: task_output(task_id="task_...", block=true)"#
 
         if let Some(task_id) = subagent_task_id(call) {
             return self
-                .execute_subagent_task_output(call, &task_id, None, block, timeout, start_time)
+                .execute_subagent_task_id_output(call, &task_id, block, timeout, start_time)
                 .await;
         }
 
@@ -273,7 +276,7 @@ impl TaskOutputTool {
     ) -> Result<ToolResult, ToolError> {
         let task = self.read_subagent_task(task_id, block, timeout).await?;
         let event_summary = format!("Sub-agent task '{}' is {}.", task.description, task.status);
-        let error = if task.status == TaskStatus::Failed {
+        let error = if matches!(task.status, TaskStatus::Failed | TaskStatus::Interrupted) {
             task.result.clone()
         } else {
             None
@@ -315,33 +318,6 @@ impl TaskOutputTool {
         result.execution_time_ms =
             Some(u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX));
         Ok(result)
-    }
-
-    async fn execute_subagent_agent_path_output(
-        &self,
-        call: &ToolCall,
-        agent_path_raw: &str,
-        block: bool,
-        timeout: Duration,
-        start_time: Instant,
-    ) -> Result<ToolResult, ToolError> {
-        let graph = self.subagent_graph.as_ref().ok_or_else(|| {
-            ToolError::InvalidArguments(
-                "agent_path requires TaskOutputTool configured with a SubAgentGraph".to_string(),
-            )
-        })?;
-        let agent_path = parse_agent_path(agent_path_raw)?;
-        let summary = graph.read_child(&agent_path).await.map_err(|err| {
-            ToolError::NotFound(format!(
-                "Sub-agent '{}' not found in graph: {}",
-                agent_path.as_path_str(),
-                err
-            ))
-        })?;
-        let task_id = summary.child_thread_id.clone();
-
-        self.execute_subagent_task_output(call, &task_id, Some(summary), block, timeout, start_time)
-            .await
     }
 
     async fn read_subagent_task(
@@ -409,7 +385,6 @@ fn subagent_agent_path(call: &ToolCall) -> Result<Option<String>, ToolError> {
 fn subagent_task_id(call: &ToolCall) -> Option<String> {
     call.get_string("task_id")
 }
-
 #[cfg(test)]
 #[path = "task_output_tests.rs"]
 mod tests;

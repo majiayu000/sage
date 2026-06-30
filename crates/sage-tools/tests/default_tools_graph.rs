@@ -1,7 +1,7 @@
 use sage_core::agent::subagent::{AgentPath, ChildAgentSpawnRecord, SubAgentGraph};
 use sage_core::skills::SkillRegistry;
 use sage_core::thread_store::{SqliteThreadStore, ThreadRecord, ThreadStore};
-use sage_core::tools::base::Tool;
+use sage_core::tools::base::{ConcurrencyMode, Tool};
 use sage_core::tools::permission::ToolContext;
 use sage_core::tools::types::ToolCall;
 use sage_tools::tools::AgentLifecycleTool;
@@ -46,6 +46,7 @@ async fn default_tools_share_graph_backed_task_registry() -> Result<(), Box<dyn 
     );
     assert!(tools.iter().any(|tool| tool.name() == "TaskOutput"));
     assert!(tools.iter().any(|tool| tool.name() == "AgentLifecycle"));
+    assert!(tools.iter().any(|tool| tool.name() == "AgentMessaging"));
     let context = ToolContext::new(workspace.path().to_path_buf()).with_session_id("parent-thread");
 
     let spawn = {
@@ -110,6 +111,16 @@ async fn default_tools_share_graph_backed_task_registry() -> Result<(), Box<dyn 
         .find(|tool| tool.name() == "AgentLifecycle")
         .ok_or("AgentLifecycle tool should be registered")?;
     assert!(agent_lifecycle.is_read_only());
+    let agent_messaging = tools_after_drop
+        .iter()
+        .find(|tool| tool.name() == "AgentMessaging")
+        .ok_or("AgentMessaging tool should be registered")?;
+    assert!(!agent_messaging.is_read_only());
+    assert!(!agent_messaging.include_in_subagent_runner());
+    assert_eq!(
+        agent_messaging.concurrency_mode(),
+        ConcurrencyMode::Sequential
+    );
 
     let output = task_output
         .execute(&graph_default_tool_call(
@@ -213,15 +224,20 @@ async fn graph_default_toolsets_do_not_share_task_registries()
         ))
         .await?;
 
-    let err = task_output_b
+    let output_b = task_output_b
         .execute(&graph_default_tool_call(
             "task-output-b",
             "TaskOutput",
             json!({ "agent_path": "agent://shared_task_id" }),
         ))
-        .await
-        .expect_err("second configured toolset must not read first toolset task registry");
-    assert!(err.to_string().contains("shared_task_id"));
+        .await?;
+    assert!(output_b.success);
+    assert_eq!(output_b.metadata.get("status"), Some(&json!("active")));
+    assert_eq!(
+        output_b.metadata.get("spawn_item_id"),
+        Some(&json!("spawn-b"))
+    );
+    assert_eq!(output_b.metadata.get("final_result"), Some(&json!(null)));
     Ok(())
 }
 

@@ -29,12 +29,15 @@
 pub mod builtin;
 pub mod executor;
 pub mod graph;
+pub mod mailbox;
 pub mod registry;
 pub mod runner;
 pub mod types;
 
 #[cfg(test)]
 mod graph_tests;
+#[cfg(test)]
+mod mailbox_tests;
 #[cfg(test)]
 mod runner_tests;
 
@@ -46,10 +49,12 @@ pub use graph::{
     AgentGraphDepth, AgentGraphListQuery, AgentPath, ChildAgentSpawnRecord, ChildAgentSummary,
     SubAgentGraph, SubAgentGraphError, SubAgentGraphResult,
 };
+pub use mailbox::{AgentFollowUpMessage, AgentMailboxReceipt, AgentTerminalState};
 pub use registry::AgentRegistry;
 pub use runner::{
-    SubAgentRunner, execute_subagent, get_global_runner, get_global_runner_cwd, init_global_runner,
-    init_global_runner_from_config, update_global_runner_cwd, update_global_runner_tools,
+    SubAgentRunner, execute_subagent, execute_subagent_with_mailbox, get_global_runner,
+    get_global_runner_cwd, init_global_runner, init_global_runner_from_config,
+    update_global_runner_cwd, update_global_runner_tools,
 };
 pub use types::{
     AgentDefinition, AgentProgress, AgentStatus, AgentType, ExecutionMetadata, RunningAgent,

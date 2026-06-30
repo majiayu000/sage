@@ -289,6 +289,115 @@ async fn test_task_output_agent_path_reads_graph_summary() -> Result<(), Box<dyn
 }
 
 #[tokio::test]
+async fn test_task_output_agent_path_reads_durable_terminal_state()
+-> Result<(), Box<dyn std::error::Error>> {
+    let registry = Arc::new(TaskRegistry::new());
+    let graph = graph_with_child("parent-thread", "task_graph", "spawn-item").await?;
+    graph
+        .record_terminal_state(
+            &sage_core::agent::subagent::AgentPath::for_child_thread("task_graph"),
+            sage_core::thread_store::ThreadStatus::Completed,
+            Some("persisted answer"),
+        )
+        .await?;
+    let tool = TaskOutputTool::with_task_registry_and_graph(registry, graph);
+    let call = create_tool_call(
+        "test-agent-path-durable",
+        "TaskOutput",
+        json!({
+            "agent_path": "agent://task_graph"
+        }),
+    );
+
+    let result = tool.execute(&call).await?;
+    assert!(result.success);
+    assert_eq!(result.metadata.get("status"), Some(&json!("completed")));
+    assert_eq!(
+        result.metadata.get("final_result"),
+        Some(&json!("persisted answer"))
+    );
+    assert_eq!(result.metadata.get("task_id"), Some(&json!("task_graph")));
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_task_output_task_id_reads_durable_terminal_state()
+-> Result<(), Box<dyn std::error::Error>> {
+    let registry = Arc::new(TaskRegistry::new());
+    let graph = graph_with_child("parent-thread", "task_graph", "spawn-item").await?;
+    graph
+        .record_terminal_state(
+            &sage_core::agent::subagent::AgentPath::for_child_thread("task_graph"),
+            sage_core::thread_store::ThreadStatus::Completed,
+            Some("persisted answer"),
+        )
+        .await?;
+    let tool = TaskOutputTool::with_task_registry_and_graph(registry, graph);
+    let call = create_tool_call(
+        "test-task-id-durable",
+        "TaskOutput",
+        json!({
+            "task_id": "task_graph"
+        }),
+    );
+
+    let result = tool.execute(&call).await?;
+
+    assert!(result.success);
+    assert_eq!(result.metadata.get("status"), Some(&json!("completed")));
+    assert_eq!(
+        result.metadata.get("final_result"),
+        Some(&json!("persisted answer"))
+    );
+    assert_eq!(
+        result.metadata.get("agent_path"),
+        Some(&json!("agent://task_graph"))
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_task_output_task_id_block_waits_for_durable_terminal_state()
+-> Result<(), Box<dyn std::error::Error>> {
+    let registry = Arc::new(TaskRegistry::new());
+    let graph = graph_with_child("parent-thread", "task_graph", "spawn-item").await?;
+    let writer_graph = graph.clone();
+    let writer = tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        writer_graph
+            .record_terminal_state(
+                &sage_core::agent::subagent::AgentPath::for_child_thread("task_graph"),
+                sage_core::thread_store::ThreadStatus::Completed,
+                Some("delayed answer"),
+            )
+            .await
+            .map(|_| ())
+            .map_err(|err| err.to_string())
+    });
+    let tool = TaskOutputTool::with_task_registry_and_graph(registry, graph);
+    let call = create_tool_call(
+        "test-task-id-durable-block",
+        "TaskOutput",
+        json!({
+            "task_id": "task_graph",
+            "block": true,
+            "timeout": 1000.0
+        }),
+    );
+
+    let result = tool.execute(&call).await?;
+
+    assert!(result.success);
+    assert_eq!(result.metadata.get("status"), Some(&json!("completed")));
+    assert_eq!(
+        result.metadata.get("final_result"),
+        Some(&json!("delayed answer"))
+    );
+    assert_eq!(writer.await?, Ok(()));
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_task_output_agent_path_requires_graph() {
     let registry = Arc::new(TaskRegistry::new());
     let tool = TaskOutputTool::with_task_registry(registry);

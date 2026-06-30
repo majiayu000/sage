@@ -4,7 +4,7 @@ use super::error::ThreadStoreResult;
 use super::types::{
     AppendResult, BackfillOptions, BackfillReport, DeleteMode, DeleteResult, Page, RecoveryReport,
     SearchHit, SearchQuery, ThreadItemInput, ThreadLineage, ThreadListQuery, ThreadRecord,
-    ThreadSnapshot,
+    ThreadSnapshot, ThreadStatus,
 };
 
 #[async_trait]
@@ -16,6 +16,12 @@ pub trait ThreadStore: Send + Sync {
     async fn create_thread(&self, record: ThreadRecord) -> ThreadStoreResult<ThreadRecord>;
 
     async fn set_lineage(&self, lineage: ThreadLineage) -> ThreadStoreResult<ThreadLineage>;
+
+    async fn set_thread_status(
+        &self,
+        thread_id: &str,
+        status: ThreadStatus,
+    ) -> ThreadStoreResult<()>;
 
     async fn resume_thread(&self, thread_id: &str) -> ThreadStoreResult<ThreadSnapshot>;
 

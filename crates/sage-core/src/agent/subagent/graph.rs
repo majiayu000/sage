@@ -24,6 +24,14 @@ pub enum SubAgentGraphError {
     ParentArchived(String),
     #[error("child thread is already linked to a different graph edge: {0}")]
     ConflictingChildEdge(String),
+    #[error("agent {agent_path} is in invalid state {status} for {operation}")]
+    InvalidAgentState {
+        agent_path: String,
+        status: String,
+        operation: String,
+    },
+    #[error("agent message cannot be empty")]
+    EmptyAgentMessage,
     #[error(transparent)]
     ThreadStore(#[from] ThreadStoreError),
 }
@@ -142,7 +150,7 @@ pub struct ChildAgentSummary {
 }
 
 pub struct SubAgentGraph {
-    store: Arc<dyn ThreadStore>,
+    pub(in crate::agent::subagent) store: Arc<dyn ThreadStore>,
 }
 
 impl SubAgentGraph {

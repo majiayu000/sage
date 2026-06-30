@@ -1,6 +1,7 @@
 //! Process and terminal tools
 
 pub mod agent_lifecycle;
+pub mod agent_messaging;
 pub mod bash;
 pub mod kill_shell;
 pub mod task;
@@ -8,6 +9,7 @@ pub mod task_output;
 
 // Re-export tools
 pub use agent_lifecycle::AgentLifecycleTool;
+pub use agent_messaging::AgentMessagingTool;
 pub use bash::{
     BashTool, requires_user_confirmation, validate_command_comprehensive,
     validate_command_security, validate_command_with_strictness,
