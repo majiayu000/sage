@@ -76,6 +76,10 @@ impl Tool for TaskTool {
     ) -> Result<ToolResult, ToolError> {
         self.execute_task(call, Some(context)).await
     }
+
+    fn include_in_subagent_runner(&self) -> bool {
+        self.subagent_graph.is_none()
+    }
 }
 
 impl TaskTool {
@@ -109,11 +113,9 @@ impl TaskTool {
                     .get("resume")
                     .and_then(|value| value.as_str())
                 {
-                    if self.registry.get_task(resume).is_some() {
-                        return Err(ToolError::InvalidArguments(format!(
-                            "Task resume '{resume}' already exists and graph-backed resume requires execution context"
-                        )));
-                    }
+                    return Err(ToolError::InvalidArguments(format!(
+                        "Task resume '{resume}' requires execution context for graph-backed Task tools"
+                    )));
                 }
             }
 

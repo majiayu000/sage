@@ -231,6 +231,10 @@ mod suite {
         let registry = Arc::new(TaskRegistry::new());
         let (_store, graph) = graph_with_parent("parent-thread").await?;
         let tool = TaskTool::with_registry_and_graph(registry.clone(), graph.clone());
+        assert!(!tool.include_in_subagent_runner());
+        assert!(
+            TaskTool::with_registry(Arc::new(TaskRegistry::new())).include_in_subagent_runner()
+        );
 
         let call = ToolCall {
             id: "spawn-item".to_string(),
@@ -239,8 +243,7 @@ mod suite {
                 "description": "Plan implementation",
                 "prompt": "Design authentication system",
                 "subagent_type": "Plan",
-                "run_in_background": true,
-                "resume": "task_without_context"
+                "run_in_background": true
             })
             .as_object()
             .unwrap()
@@ -252,18 +255,23 @@ mod suite {
 
         let result = tool.execute(&call).await?;
         assert!(result.success);
+        let task_id = result
+            .metadata
+            .get("task_id")
+            .and_then(|value| value.as_str())
+            .expect("expected task id");
         assert_eq!(
             result
                 .metadata
                 .get("task_id")
                 .and_then(|value| value.as_str()),
-            Some("task_without_context")
+            Some(task_id)
         );
         assert!(!result.metadata.contains_key("agent_path"));
-        assert!(registry.get_task("task_without_context").is_some());
+        assert!(registry.get_task(task_id).is_some());
         assert!(
             graph
-                .read_child(&AgentPath::from_raw_path("agent://task_without_context")?)
+                .read_child(&AgentPath::try_for_child_thread(task_id)?)
                 .await
                 .is_err()
         );
@@ -309,7 +317,7 @@ mod suite {
         let err = tool
             .execute(&call)
             .await
-            .expect_err("duplicate no-context resume must not overwrite task registry");
+            .expect_err("no-context resume must not overwrite task registry or graph edge");
         assert!(err.to_string().contains("task_without_context"));
         let task = registry
             .get_task("task_without_context")
@@ -333,8 +341,7 @@ mod suite {
                 "description": "Plan implementation",
                 "prompt": "Design authentication system",
                 "subagent_type": "Plan",
-                "run_in_background": true,
-                "resume": "task_weak_registry"
+                "run_in_background": true
             })
             .as_object()
             .unwrap()
@@ -346,12 +353,17 @@ mod suite {
 
         let result = tool.execute(&call).await?;
         assert!(result.success);
+        let task_id = result
+            .metadata
+            .get("task_id")
+            .and_then(|value| value.as_str())
+            .expect("expected task id");
         assert_eq!(
             result
                 .metadata
                 .get("task_id")
                 .and_then(|value| value.as_str()),
-            Some("task_weak_registry")
+            Some(task_id)
         );
         assert_eq!(Arc::strong_count(&registry), 2);
         drop(tool);
