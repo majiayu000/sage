@@ -8,10 +8,29 @@
 
 mod lifecycle;
 mod manifest;
+mod package_error;
+mod package_lifecycle;
+mod package_manifest;
+mod package_registry_bridge;
+mod package_store;
 mod registry;
 
 pub use lifecycle::{PluginLifecycle, PluginState};
 pub use manifest::{ManifestValidationError, PluginDependency, PluginManifest, PluginPermission};
+pub use package_error::{PackageError, PackageResult};
+pub use package_lifecycle::ExtensionPackageManager;
+pub use package_manifest::{
+    EXTENSION_MANIFEST_FILE, EXTENSION_MANIFEST_SCHEMA_VERSION, ExtensionPackageManifest,
+    PackageAssetKind, PackageAssetPath, PackageAssets, PackageDependency, PackageFileAsset,
+    PackageHookAsset, PackageManifestError, PackageMcpServerAsset, validate_relative_asset_path,
+};
+pub use package_registry_bridge::{
+    PackageMcpServerRegistration, PackageRegistryBridge, RegisteredPackageAssets,
+};
+pub use package_store::{
+    DiscoveredExtensionPackage, ExtensionPackageStore, InstalledPackageRecord,
+    InstalledPackageState, validate_manifest_assets_under_root,
+};
 pub use registry::{PluginEntry, PluginRegistry};
 
 use crate::error::SageError;

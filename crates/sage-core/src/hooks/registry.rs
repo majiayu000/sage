@@ -1,17 +1,40 @@
 //! Hook registry for managing hooks
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
 use super::events::HookEvent;
 use super::types::{HookConfig, HookMatcher};
 use crate::error::{SageError, SageResult};
 
+/// Source metadata for a registered hook matcher.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HookSource {
+    /// Hook loaded from ordinary hook configuration.
+    Config,
+    /// Hook provided by an extension package.
+    Package {
+        /// Package id that owns this hook.
+        package_id: String,
+        /// Asset id inside the package.
+        asset_id: String,
+        /// Installed package root.
+        package_root: PathBuf,
+    },
+}
+
+#[derive(Debug, Clone)]
+struct HookRegistration {
+    matcher: HookMatcher,
+    source: HookSource,
+}
+
 /// Registry for managing hooks with event-based organization
 #[derive(Debug, Clone)]
 pub struct HookRegistry {
     /// Hooks organized by HookEvent with matchers
-    event_hooks: Arc<RwLock<HashMap<HookEvent, Vec<HookMatcher>>>>,
+    event_hooks: Arc<RwLock<HashMap<HookEvent, Vec<HookRegistration>>>>,
 }
 
 impl HookRegistry {
@@ -26,6 +49,16 @@ impl HookRegistry {
 
     /// Register a hook matcher for an event
     pub fn register(&self, event: HookEvent, matcher: HookMatcher) -> SageResult<()> {
+        self.register_with_source(event, matcher, HookSource::Config)
+    }
+
+    /// Register a hook matcher with source metadata.
+    pub fn register_with_source(
+        &self,
+        event: HookEvent,
+        matcher: HookMatcher,
+        source: HookSource,
+    ) -> SageResult<()> {
         if !matcher.hook.enabled {
             tracing::debug!("Skipping disabled hook: {}", matcher.hook);
             return Ok(());
@@ -36,7 +69,7 @@ impl HookRegistry {
             .write()
             .map_err(|e| SageError::other(format!("Hook registry lock poisoned: {}", e)))?;
         let hook_list = event_hooks.entry(event).or_insert_with(Vec::new);
-        hook_list.push(matcher);
+        hook_list.push(HookRegistration { matcher, source });
         Ok(())
     }
 
@@ -51,9 +84,10 @@ impl HookRegistry {
             .cloned()
             .unwrap_or_default()
             .into_iter()
-            .filter(|matcher| matcher.hook.enabled)
-            .filter_map(|matcher| {
+            .filter(|registration| registration.matcher.hook.enabled)
+            .filter_map(|registration| {
                 // Check if pattern matches
+                let matcher = registration.matcher;
                 let matches = super::matcher::matches(matcher.pattern.as_deref(), query);
                 if matches {
                     // Return the hook from this matcher
@@ -100,6 +134,45 @@ impl HookRegistry {
             .map_err(|e| SageError::other(format!("Hook registry lock poisoned: {}", e)))?;
         event_hooks.clear();
         Ok(())
+    }
+
+    /// Remove all hook registrations owned by a package.
+    pub fn remove_package_hooks(&self, package_id: &str) -> SageResult<Vec<String>> {
+        let mut removed = Vec::new();
+        let mut event_hooks = self
+            .event_hooks
+            .write()
+            .map_err(|e| SageError::other(format!("Hook registry lock poisoned: {}", e)))?;
+
+        for registrations in event_hooks.values_mut() {
+            let mut retained = Vec::with_capacity(registrations.len());
+            for registration in registrations.drain(..) {
+                match &registration.source {
+                    HookSource::Package {
+                        package_id: source_package_id,
+                        asset_id,
+                        ..
+                    } if source_package_id == package_id => removed.push(asset_id.clone()),
+                    _ => retained.push(registration),
+                }
+            }
+            *registrations = retained;
+        }
+        event_hooks.retain(|_, registrations| !registrations.is_empty());
+        Ok(removed)
+    }
+
+    /// Return whether any registered hook has the given runtime hook name.
+    pub fn contains_hook_name(&self, name: &str) -> bool {
+        self.event_hooks
+            .read()
+            .unwrap_or_else(|e| {
+                tracing::warn!("hooks registry lock poisoned, recovering");
+                e.into_inner()
+            })
+            .values()
+            .flatten()
+            .any(|registration| registration.matcher.hook.name == name)
     }
 
     /// Get the number of registered hook matchers

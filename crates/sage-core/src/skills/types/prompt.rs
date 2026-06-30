@@ -79,6 +79,7 @@ impl Skill {
             SkillSourceType::Project(_) => "project",
             SkillSourceType::User(_) => "user",
             SkillSourceType::Mcp(_) => "mcp",
+            SkillSourceType::Package { .. } => "package",
             SkillSourceType::Builtin => "builtin",
         };
 

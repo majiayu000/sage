@@ -49,6 +49,7 @@ impl CommandRegistry {
                                 .get(&command.name)
                                 .map_or(false, |(_, src)| *src == CommandSource::Project),
                             CommandSource::Builtin => true,
+                            CommandSource::Package { .. } => false,
                         };
 
                         if should_register {

@@ -1,6 +1,6 @@
 //! Command registry types and core implementation
 
-use crate::error::SageResult;
+use crate::error::{SageError, SageResult};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -42,6 +42,19 @@ impl CommandRegistry {
             .insert(command.name.clone(), (command, source));
     }
 
+    /// Register a command without overwriting an existing entry.
+    pub fn try_register(&mut self, command: SlashCommand, source: CommandSource) -> SageResult<()> {
+        if self.commands.contains_key(&command.name) {
+            return Err(SageError::invalid_input(format!(
+                "command '{}' is already registered",
+                command.name
+            )));
+        }
+        self.commands
+            .insert(command.name.clone(), (command, source));
+        Ok(())
+    }
+
     /// Get a command by name
     pub fn get(&self, name: &str) -> Option<&SlashCommand> {
         self.commands.get(name).map(|(cmd, _)| cmd)
@@ -77,6 +90,35 @@ impl CommandRegistry {
     /// Remove a command
     pub fn remove(&mut self, name: &str) -> Option<SlashCommand> {
         self.commands.remove(name).map(|(cmd, _)| cmd)
+    }
+
+    /// Remove a package-provided command only when owned by the expected package.
+    pub fn remove_package_command(&mut self, name: &str, package_id: &str) -> Option<SlashCommand> {
+        if self
+            .commands
+            .get(name)
+            .map(|(_, source)| package_source_matches(source, package_id))
+            .unwrap_or(false)
+        {
+            self.commands.remove(name).map(|(cmd, _)| cmd)
+        } else {
+            None
+        }
+    }
+
+    /// Remove all commands provided by a package.
+    pub fn remove_package_commands(&mut self, package_id: &str) -> Vec<SlashCommand> {
+        let names: Vec<String> = self
+            .commands
+            .iter()
+            .filter(|(_, (_, source))| package_source_matches(source, package_id))
+            .map(|(name, _)| name.clone())
+            .collect();
+
+        names
+            .into_iter()
+            .filter_map(|name| self.commands.remove(&name).map(|(cmd, _)| cmd))
+            .collect()
     }
 
     /// Clear all commands
@@ -136,4 +178,14 @@ impl Default for CommandRegistry {
     fn default() -> Self {
         Self::new(".")
     }
+}
+
+fn package_source_matches(source: &CommandSource, package_id: &str) -> bool {
+    matches!(
+        source,
+        CommandSource::Package {
+            package_id: source_package_id,
+            ..
+        } if source_package_id == package_id
+    )
 }

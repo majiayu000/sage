@@ -61,6 +61,15 @@ pub enum CommandSource {
     Project,
     /// User-level command (~/.config/sage/commands/)
     User,
+    /// Extension package-provided command
+    Package {
+        /// Package id that owns this command.
+        package_id: String,
+        /// Asset id inside the package.
+        asset_id: String,
+        /// Installed package root.
+        package_root: std::path::PathBuf,
+    },
 }
 
 impl std::fmt::Display for CommandSource {
@@ -69,6 +78,11 @@ impl std::fmt::Display for CommandSource {
             Self::Builtin => write!(f, "builtin"),
             Self::Project => write!(f, "project"),
             Self::User => write!(f, "user"),
+            Self::Package {
+                package_id,
+                asset_id,
+                ..
+            } => write!(f, "package:{package_id}:{asset_id}"),
         }
     }
 }
