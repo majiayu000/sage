@@ -103,6 +103,20 @@ impl TaskTool {
                 .map_err(|e| ToolError::InvalidArguments(e.to_string()));
             }
 
+            if self.subagent_graph.is_some() && context.is_none() {
+                if let Some(resume) = call
+                    .arguments
+                    .get("resume")
+                    .and_then(|value| value.as_str())
+                {
+                    if self.registry.get_task(resume).is_some() {
+                        return Err(ToolError::InvalidArguments(format!(
+                            "Task resume '{resume}' already exists and graph-backed resume requires execution context"
+                        )));
+                    }
+                }
+            }
+
             execute_task_background(call, self.registry.clone())
                 .await
                 .map_err(|e| ToolError::InvalidArguments(e.to_string()))
