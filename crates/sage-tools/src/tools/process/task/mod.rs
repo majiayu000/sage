@@ -5,6 +5,8 @@
 
 mod executor;
 mod schema;
+mod spawn_context;
+mod spawn_params;
 mod tool;
 mod types;
 

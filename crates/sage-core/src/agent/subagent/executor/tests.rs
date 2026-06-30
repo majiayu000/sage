@@ -67,6 +67,8 @@ mod tests {
             description: "General purpose agent".to_string(),
             available_tools: ToolAccessControl::All,
             model: None,
+            reasoning: None,
+            profile: None,
             system_prompt: "You are a helpful assistant.".to_string(),
         });
 
@@ -79,6 +81,8 @@ mod tests {
                 "glob".to_string(),
             ]),
             model: None,
+            reasoning: None,
+            profile: None,
             system_prompt: "You are a code explorer.".to_string(),
         });
 

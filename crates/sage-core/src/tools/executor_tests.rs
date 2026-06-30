@@ -20,6 +20,7 @@ mod tests {
     }
 
     struct ContextEchoTool;
+    struct ParentToolsEchoTool;
 
     #[async_trait]
     impl Tool for ContextEchoTool {
@@ -46,6 +47,47 @@ mod tests {
         ) -> Result<ToolResult, ToolError> {
             let session_id = context.session_id.as_deref().unwrap_or("missing-session");
             Ok(ToolResult::success(&call.id, self.name(), session_id))
+        }
+    }
+
+    #[async_trait]
+    impl Tool for ParentToolsEchoTool {
+        fn name(&self) -> &str {
+            "parent_tools_echo"
+        }
+
+        fn description(&self) -> &str {
+            "Echoes the parent tool scope from tool context"
+        }
+
+        fn schema(&self) -> ToolSchema {
+            ToolSchema::new(self.name(), self.description(), vec![])
+        }
+
+        async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
+            Ok(ToolResult::success(&call.id, self.name(), "missing"))
+        }
+
+        async fn execute_with_context(
+            &self,
+            call: &ToolCall,
+            context: &ToolContext,
+        ) -> Result<ToolResult, ToolError> {
+            let tools = context
+                .metadata
+                .get("parent_tools")
+                .and_then(|value| value.as_array())
+                .map(|items| {
+                    let mut names = items
+                        .iter()
+                        .filter_map(|item| item.as_str())
+                        .map(str::to_string)
+                        .collect::<Vec<_>>();
+                    names.sort();
+                    names.join(",")
+                })
+                .unwrap_or_else(|| "missing".to_string());
+            Ok(ToolResult::success(&call.id, self.name(), tools))
         }
     }
 
@@ -206,6 +248,39 @@ mod tests {
         let legacy_result = executor.execute_tool(&call).await;
         assert!(legacy_result.success);
         assert_eq!(legacy_result.output.as_deref(), Some("no-context"));
+    }
+
+    #[tokio::test]
+    async fn test_execute_tool_with_context_injects_parent_tool_scope() {
+        let mut executor = ToolExecutor::new();
+        executor.register_tool(Arc::new(ParentToolsEchoTool));
+        executor.register_tool(Arc::new(MockTool::new("Read")));
+        let call = ToolCall::new("call_parent_tools", "parent_tools_echo", HashMap::new());
+        let context = ToolContext::new(std::env::current_dir().unwrap_or_default());
+
+        let result = executor.execute_tool_with_context(&call, &context).await;
+
+        assert!(result.success);
+        let output = result.output.expect("parent tools output");
+        assert!(output.contains("Read"));
+        assert!(output.contains("parent_tools_echo"));
+    }
+
+    #[tokio::test]
+    async fn test_execute_tool_with_context_preserves_restricted_parent_tool_scope() {
+        let mut executor = ToolExecutor::new();
+        executor.register_tool(Arc::new(ParentToolsEchoTool));
+        executor.register_tool(Arc::new(MockTool::new("Write")));
+        let call = ToolCall::new("call_parent_tools", "parent_tools_echo", HashMap::new());
+        let mut context = ToolContext::new(std::env::current_dir().unwrap_or_default());
+        context
+            .metadata
+            .insert("parent_tools".to_string(), serde_json::json!(["Read"]));
+
+        let result = executor.execute_tool_with_context(&call, &context).await;
+
+        assert!(result.success);
+        assert_eq!(result.output.as_deref(), Some("Read"));
     }
 
     #[tokio::test]

@@ -125,13 +125,18 @@ impl TaskTool {
                 }
             }
 
-            execute_task_background(call, self.registry.clone())
+            execute_task_background(call, self.registry.clone(), context)
                 .await
                 .map_err(|e| ToolError::InvalidArguments(e.to_string()))
         } else {
-            execute_task_sync(call, self.registry.clone())
-                .await
-                .map_err(|e| ToolError::InvalidArguments(e.to_string()))
+            execute_task_sync(
+                call,
+                self.registry.clone(),
+                self.subagent_graph.clone(),
+                context,
+            )
+            .await
+            .map_err(|e| ToolError::InvalidArguments(e.to_string()))
         }
     }
 }

@@ -28,6 +28,36 @@ pub fn task_tool_schema() -> ToolSchema {
                     "description": "Optional model to use (sonnet, opus, haiku). Defaults to inherit from parent.",
                     "enum": ["sonnet", "opus", "haiku"]
                 },
+                "reasoning": {
+                    "type": "string",
+                    "description": "Optional reasoning override for supported runtimes.",
+                    "enum": ["low", "medium", "high", "xhigh"]
+                },
+                "profile": {
+                    "type": "string",
+                    "description": "Optional permission profile override. Unsupported profiles fail closed during role resolution."
+                },
+                "role_path": {
+                    "type": "string",
+                    "description": "Optional custom role config path. Relative paths resolve under .sage/agents in the parent working directory."
+                },
+                "fork_context": {
+                    "type": ["string", "object"],
+                    "description": "Parent context fork policy: none, all, or {mode: last_n, turns: N}. last_n requires turns > 0.",
+                    "oneOf": [
+                        {"type": "string", "enum": ["none", "all"]},
+                        {
+                            "type": "object",
+                            "properties": {
+                                "mode": {"type": "string", "enum": ["last_n"]},
+                                "turns": {"type": "integer", "minimum": 1}
+                            },
+                            "required": ["mode", "turns"],
+                            "additionalProperties": false
+                        }
+                    ],
+                    "default": "none"
+                },
                 "run_in_background": {
                     "type": "boolean",
                     "description": "Set to true to run this agent in the background. Use TaskOutput to read output later.",
@@ -59,6 +89,7 @@ Available agent types:
 - general-purpose: General-purpose agent with access to all tools. Use for complex multi-step tasks that require writing code or making changes.
 - Explore: Fast agent for codebase exploration. Use for finding files, searching code, or answering questions about the codebase. (Tools: Glob, Grep, Read, Bash). Supports thoroughness levels: "quick", "medium", "very_thorough".
 - Plan: Software architect agent for designing implementation plans. Returns step-by-step plans and identifies critical files. (Tools: All)
+- custom role files: pass `role_path` for a declarative role file under `.sage/agents`. Role files can declare prompt, tools, model, reasoning/profile, and fork_context.
 
 When NOT to use the Task tool:
 - If you want to read a specific file path, use Read or Glob instead
@@ -71,6 +102,7 @@ Usage notes:
 - When the agent is done, it will return a single message back to you. The result returned by the agent is not visible to the user. To show the user the result, you should send a text message back to the user with a concise summary of the result.
 - You can optionally run agents in the background using the run_in_background parameter. When an agent runs in the background, you will need to use TaskOutput to retrieve its results once it's done.
 - Agents can be resumed using the `resume` parameter by passing the agent ID from a previous invocation. When resumed, the agent continues with its full previous context preserved.
+- Use `fork_context` to control parent context inheritance. `none` sends no parent conversation, `all` sends available parent context, and `last_n` sends only the most recent N user turns plus following messages.
 - Provide clear, detailed prompts so the agent can work autonomously and return exactly the information you need.
 - The agent's outputs should generally be trusted
 - Clearly tell the agent whether you expect it to write code or just to do research (search, file reads, web fetches, etc.), since it is not aware of the user's intent

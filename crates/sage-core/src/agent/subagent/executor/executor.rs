@@ -184,6 +184,7 @@ impl SubAgentExecutor {
                 0
             },
             tools_used: Vec::new(),
+            ..Default::default()
         }
     }
 }

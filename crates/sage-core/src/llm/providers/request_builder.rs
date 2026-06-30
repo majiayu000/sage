@@ -44,6 +44,9 @@ pub fn build_openai_request_body(
     if let Some(top_p) = params.top_p {
         body["top_p"] = json!(top_p);
     }
+    if let Some(reasoning_effort) = &params.reasoning_effort {
+        body["reasoning_effort"] = json!(reasoning_effort);
+    }
 
     if let Some(tools) = tools {
         if !tools.is_empty() {
@@ -52,4 +55,28 @@ pub fn build_openai_request_body(
     }
 
     Ok(body)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn request_builder_includes_reasoning_effort_when_set() {
+        let params = LlmRequestParams {
+            reasoning_effort: Some("high".to_string()),
+            ..Default::default()
+        };
+        let body = build_openai_request_body(
+            "gpt-5.4",
+            &[LlmMessage::user("hello")],
+            None,
+            &params,
+            true,
+            false,
+        )
+        .expect("request body");
+
+        assert_eq!(body["reasoning_effort"], json!("high"));
+    }
 }

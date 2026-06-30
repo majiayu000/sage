@@ -2,7 +2,7 @@
 
 use super::types::LlmClient;
 use crate::config::provider::ProviderConfig;
-use crate::llm::provider_types::LlmProvider;
+use crate::llm::provider_types::{LlmProvider, LlmRequestParams};
 use crate::recovery::circuit_breaker::{CircuitBreakerStats, CircuitState};
 
 impl LlmClient {
@@ -59,6 +59,11 @@ impl LlmClient {
     /// ```
     pub fn model(&self) -> &str {
         &self.model_params.model
+    }
+
+    /// Get model request parameters configured for this client.
+    pub fn model_params(&self) -> &LlmRequestParams {
+        &self.model_params
     }
 
     /// Get the provider configuration.

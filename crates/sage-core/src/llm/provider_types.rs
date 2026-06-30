@@ -27,6 +27,8 @@ pub struct LlmRequestParams {
     pub stop: Option<Vec<String>>,
     /// Whether to enable parallel tool calls
     pub parallel_tool_calls: Option<bool>,
+    /// Provider-specific reasoning effort override for supported runtimes
+    pub reasoning_effort: Option<String>,
     /// Frequency penalty
     pub frequency_penalty: Option<f32>,
     /// Presence penalty
@@ -58,6 +60,7 @@ impl Default for LlmRequestParams {
             top_k: None,
             stop: None,
             parallel_tool_calls: Some(true),
+            reasoning_effort: None,
             frequency_penalty: None,
             presence_penalty: None,
             seed: None,
@@ -77,6 +80,7 @@ impl LlmRequestParams {
             top_k: None,
             stop: None,
             parallel_tool_calls: None,
+            reasoning_effort: None,
             frequency_penalty: None,
             presence_penalty: None,
             seed: None,

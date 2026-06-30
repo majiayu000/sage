@@ -16,6 +16,10 @@ pub struct AgentDefinition {
     pub available_tools: ToolAccessControl,
     /// Optional model override
     pub model: Option<String>,
+    /// Optional reasoning override
+    pub reasoning: Option<String>,
+    /// Optional permission/profile override
+    pub profile: Option<String>,
     /// System prompt for this agent
     pub system_prompt: String,
 }
@@ -44,6 +48,8 @@ impl AgentDefinition {
             description,
             available_tools,
             model: None,
+            reasoning: None,
+            profile: None,
             system_prompt,
         }
     }

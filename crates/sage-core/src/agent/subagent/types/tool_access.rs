@@ -5,6 +5,8 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
+use crate::agent::subagent::tool_scope;
+
 /// Tool access control for agents
 ///
 /// Controls which tools a sub-agent can use. Supports inheritance from parent
@@ -81,27 +83,7 @@ impl ToolAccessControl {
     /// # Returns
     /// `true` if the tool is allowed given the parent context
     pub fn resolve_allows_tool(&self, tool_name: &str, parent_tools: Option<&[String]>) -> bool {
-        match self {
-            ToolAccessControl::All => true,
-            ToolAccessControl::Specific(tools) => tools.iter().any(|t| t == tool_name),
-            ToolAccessControl::None => false,
-            ToolAccessControl::Inherited => {
-                // If inherited, check if tool exists in parent's tools
-                match parent_tools {
-                    Some(tools) => tools.iter().any(|t| t == tool_name),
-                    None => true, // No parent context, allow all
-                }
-            }
-            ToolAccessControl::InheritedRestricted(restricted) => {
-                // Must be in both restriction list AND parent tools
-                let in_restriction = restricted.iter().any(|t| t == tool_name);
-                let in_parent = match parent_tools {
-                    Some(tools) => tools.iter().any(|t| t == tool_name),
-                    None => true, // No parent context, only check restriction
-                };
-                in_restriction && in_parent
-            }
-        }
+        tool_scope::resolve_tool_access(self, tool_name, parent_tools)
     }
 
     /// Get the list of allowed tools (if specific)

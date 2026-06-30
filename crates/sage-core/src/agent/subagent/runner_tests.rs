@@ -1,7 +1,11 @@
-use super::runner::{StepResult, SubAgentRunner};
-use crate::tools::types::ToolCall;
+use super::runner::{StepResult, SubAgentRunner, tool_context_for_child_tool_call};
+use crate::llm::messages::LlmMessage;
+use crate::tools::base::{Tool, ToolError};
+use crate::tools::types::{ToolCall, ToolResult, ToolSchema};
+use async_trait::async_trait;
 use std::collections::HashMap;
 use std::fs;
+use std::sync::Arc;
 use tempfile::TempDir;
 
 fn write_settings(temp_dir: &TempDir, content: &str) {
@@ -19,6 +23,27 @@ fn tool_call(name: &str, key: &str, value: &str) -> ToolCall {
     ToolCall::new("call-1", name, arguments)
 }
 
+struct NamedTool(&'static str);
+
+#[async_trait]
+impl Tool for NamedTool {
+    fn name(&self) -> &str {
+        self.0
+    }
+
+    fn description(&self) -> &str {
+        "named test tool"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema::new(self.name(), self.description(), vec![])
+    }
+
+    async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
+        Ok(ToolResult::success(&call.id, self.name(), "ok"))
+    }
+}
+
 #[test]
 fn test_step_result() {
     let continue_result = StepResult::Continue;
@@ -33,6 +58,57 @@ fn test_step_result() {
         StepResult::Completed(output) => assert_eq!(output, "Done"),
         _ => panic!("Expected Completed"),
     }
+}
+
+#[test]
+fn test_child_tool_context_carries_current_tool_scope() {
+    let temp_dir = TempDir::new().expect("temp dir");
+    let tools: Vec<Arc<dyn Tool>> = vec![
+        Arc::new(NamedTool("Task")),
+        Arc::new(NamedTool("Read")),
+        Arc::new(NamedTool("Task")),
+    ];
+
+    let context = tool_context_for_child_tool_call(temp_dir.path(), &tools, &[]);
+
+    assert_eq!(context.working_directory, temp_dir.path());
+    let parent_tools = context
+        .metadata
+        .get("parent_tools")
+        .and_then(|value| value.as_array())
+        .expect("parent_tools metadata");
+    let names = parent_tools
+        .iter()
+        .map(|value| value.as_str().expect("tool name"))
+        .collect::<Vec<_>>();
+    assert_eq!(names, vec!["Read", "Task"]);
+}
+
+#[test]
+fn test_child_tool_context_carries_nested_fork_context_messages()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp_dir = TempDir::new()?;
+    let tools: Vec<Arc<dyn Tool>> = vec![Arc::new(NamedTool("Task"))];
+    let messages = vec![
+        LlmMessage::system("child role prompt"),
+        LlmMessage::user("Parent subagent request"),
+        LlmMessage::assistant("Parent subagent answer"),
+        LlmMessage::tool("tool output", "tool-call", Some("Read")),
+    ];
+
+    let context = tool_context_for_child_tool_call(temp_dir.path(), &tools, &messages);
+
+    let parent_context = context
+        .metadata
+        .get("parent_context")
+        .and_then(|value| value.as_array())
+        .ok_or("parent_context metadata")?;
+    assert_eq!(parent_context.len(), 2);
+    assert_eq!(parent_context[0]["role"], "user");
+    assert_eq!(parent_context[0]["content"], "Parent subagent request");
+    assert_eq!(parent_context[1]["role"], "assistant");
+    assert_eq!(parent_context[1]["content"], "Parent subagent answer");
+    Ok(())
 }
 
 #[test]
