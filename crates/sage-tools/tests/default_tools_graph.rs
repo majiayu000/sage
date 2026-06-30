@@ -96,7 +96,7 @@ async fn default_tools_share_graph_backed_task_registry() -> Result<(), Box<dyn 
         .iter()
         .find(|tool| tool.name() == "TaskOutput")
         .ok_or("TaskOutput tool should be registered")?;
-    assert!(!task_output.include_in_subagent_runner());
+    assert!(task_output.include_in_subagent_runner());
     let agent_lifecycle = tools_after_drop
         .iter()
         .find(|tool| tool.name() == "AgentLifecycle")
