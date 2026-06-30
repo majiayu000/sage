@@ -359,6 +359,7 @@ pub(super) async fn execute_commands(executor: &CommandExecutor) -> SageResult<C
             crate::commands::types::CommandSource::Builtin => builtins.push(cmd),
             crate::commands::types::CommandSource::Project => project.push(cmd),
             crate::commands::types::CommandSource::User => user.push(cmd),
+            crate::commands::types::CommandSource::Package { .. } => user.push(cmd),
         }
     }
 

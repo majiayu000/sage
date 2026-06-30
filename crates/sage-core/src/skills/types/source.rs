@@ -33,6 +33,15 @@ pub enum SkillSourceType {
     User(PathBuf),
     /// MCP-provided skill
     Mcp(String),
+    /// Extension package-provided skill
+    Package {
+        /// Package id that owns this skill.
+        package_id: String,
+        /// Asset id inside the package.
+        asset_id: String,
+        /// Installed package root.
+        package_root: PathBuf,
+    },
 }
 
 impl Default for SkillSourceType {

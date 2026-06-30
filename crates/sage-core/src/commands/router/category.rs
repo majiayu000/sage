@@ -27,7 +27,9 @@ impl From<&CommandSource> for CommandCategory {
     fn from(source: &CommandSource) -> Self {
         match source {
             CommandSource::Builtin => CommandCategory::System,
-            CommandSource::Project | CommandSource::User => CommandCategory::User,
+            CommandSource::Project | CommandSource::User | CommandSource::Package { .. } => {
+                CommandCategory::User
+            }
         }
     }
 }

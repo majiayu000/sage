@@ -91,7 +91,9 @@ impl CommandRouter {
             };
             match source {
                 CommandSource::Builtin => system.push(info),
-                CommandSource::Project | CommandSource::User => user.push(info),
+                CommandSource::Project | CommandSource::User | CommandSource::Package { .. } => {
+                    user.push(info)
+                }
             }
         }
 

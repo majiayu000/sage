@@ -71,18 +71,24 @@ pub(super) async fn execute_command(
 /// Reload commands from disk
 pub(super) async fn reload_commands(executor: &CommandExecutor) -> SageResult<usize> {
     let mut registry = executor.registry.write().await;
-    // Keep builtins, clear others
-    let builtins: Vec<_> = registry
+    // Keep runtime-owned commands, clear filesystem-discovered commands.
+    let preserved: Vec<_> = registry
         .list()
         .into_iter()
-        .filter(|(_, src)| **src == crate::commands::types::CommandSource::Builtin)
-        .map(|(cmd, _)| cmd.clone())
+        .filter(|(_, src)| {
+            matches!(
+                *src,
+                crate::commands::types::CommandSource::Builtin
+                    | crate::commands::types::CommandSource::Package { .. }
+            )
+        })
+        .map(|(cmd, src)| (cmd.clone(), src.clone()))
         .collect();
 
     registry.clear();
 
-    for cmd in builtins {
-        registry.register(cmd, crate::commands::types::CommandSource::Builtin);
+    for (cmd, source) in preserved {
+        registry.register(cmd, source);
     }
 
     registry.discover().await

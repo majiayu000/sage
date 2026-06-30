@@ -1,10 +1,10 @@
 //! Skill registry types and core implementation
 
-use crate::error::SageResult;
+use crate::error::{SageError, SageResult};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use super::super::types::{Skill, SkillSource};
+use super::super::types::{Skill, SkillSource, SkillSourceType};
 
 /// Skill registry for managing skills
 pub struct SkillRegistry {
@@ -41,6 +41,18 @@ impl SkillRegistry {
         self.skills.insert(skill.name().to_string(), skill);
     }
 
+    /// Register a skill without overwriting an existing entry.
+    pub fn try_register(&mut self, skill: Skill) -> SageResult<()> {
+        let name = skill.name().to_string();
+        if self.skills.contains_key(&name) {
+            return Err(SageError::invalid_input(format!(
+                "skill '{name}' is already registered"
+            )));
+        }
+        self.skills.insert(name, skill);
+        Ok(())
+    }
+
     /// Get a skill by name
     pub fn get(&self, name: &str) -> Option<&Skill> {
         self.skills.get(name)
@@ -64,6 +76,35 @@ impl SkillRegistry {
     /// Remove a skill
     pub fn remove(&mut self, name: &str) -> Option<Skill> {
         self.skills.remove(name)
+    }
+
+    /// Remove a package-provided skill only when owned by the expected package.
+    pub fn remove_package_skill(&mut self, name: &str, package_id: &str) -> Option<Skill> {
+        if self
+            .skills
+            .get(name)
+            .map(|skill| package_source_matches(skill.source(), package_id))
+            .unwrap_or(false)
+        {
+            self.skills.remove(name)
+        } else {
+            None
+        }
+    }
+
+    /// Remove all skills provided by a package.
+    pub fn remove_package_skills(&mut self, package_id: &str) -> Vec<Skill> {
+        let names: Vec<String> = self
+            .skills
+            .iter()
+            .filter(|(_, skill)| package_source_matches(skill.source(), package_id))
+            .map(|(name, _)| name.clone())
+            .collect();
+
+        names
+            .into_iter()
+            .filter_map(|name| self.skills.remove(&name))
+            .collect()
     }
 
     /// Enable a skill
@@ -209,4 +250,14 @@ impl Default for SkillRegistry {
     fn default() -> Self {
         Self::new(".")
     }
+}
+
+fn package_source_matches(source: &SkillSourceType, package_id: &str) -> bool {
+    matches!(
+        source,
+        SkillSourceType::Package {
+            package_id: source_package_id,
+            ..
+        } if source_package_id == package_id
+    )
 }

@@ -277,25 +277,39 @@ impl SkillRegistry {
             .await
             .map_err(|e| SageError::storage(format!("Failed to read skill file: {}", e)))?;
 
-        let (frontmatter, prompt) = SkillFrontmatter::parse(&content);
-
         let source = if is_project {
             SkillSourceType::Project(path.to_path_buf())
         } else {
             SkillSourceType::User(path.to_path_buf())
         };
+        Ok(Some(Self::skill_from_content(
+            name,
+            &content,
+            source,
+            base_dir,
+            format!("{} skill", name),
+        )))
+    }
 
+    /// Build a skill from markdown content using the same frontmatter parser as discovery.
+    pub(crate) fn skill_from_content(
+        name: &str,
+        content: &str,
+        source: SkillSourceType,
+        base_dir: Option<&Path>,
+        fallback_description: String,
+    ) -> Skill {
+        let (frontmatter, prompt) = SkillFrontmatter::parse(content);
         let mut skill = Skill::new(
             name.to_string(),
             frontmatter
                 .description
                 .clone()
-                .unwrap_or_else(|| format!("{} skill", name)),
+                .unwrap_or(fallback_description),
         )
         .with_prompt(prompt)
         .with_source(source);
 
-        // Apply frontmatter fields
         if let Some(display_name) = frontmatter.display_name {
             skill = skill.with_display_name(display_name);
         }
@@ -332,7 +346,6 @@ impl SkillRegistry {
             skill = skill.with_base_dir(base_dir.to_path_buf());
         }
 
-        // Parse allowed tools
         if !frontmatter.allowed_tools.is_empty() {
             let tool_access = if frontmatter.allowed_tools.len() == 1 {
                 match frontmatter.allowed_tools[0].to_lowercase().as_str() {
@@ -346,7 +359,6 @@ impl SkillRegistry {
             skill = skill.with_tools(tool_access);
         }
 
-        // Parse triggers
         for trigger_str in &frontmatter.triggers {
             let trigger_str = trigger_str.trim();
             if let Some(keyword) = trigger_str.strip_prefix("keyword:") {
@@ -358,12 +370,11 @@ impl SkillRegistry {
             } else if let Some(tool) = trigger_str.strip_prefix("tool:") {
                 skill = skill.with_trigger(SkillTrigger::ToolUsage(tool.to_string()));
             } else {
-                // Default to keyword trigger
                 skill = skill.with_trigger(SkillTrigger::Keyword(trigger_str.to_string()));
             }
         }
 
-        Ok(Some(skill))
+        skill
     }
 
     /// Parse skill file with YAML frontmatter (legacy method for compatibility)

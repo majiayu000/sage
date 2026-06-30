@@ -2,7 +2,7 @@
 
 use super::types::CommandExecutor;
 use crate::commands::registry::CommandRegistry;
-use crate::commands::types::SlashCommand;
+use crate::commands::types::{CommandSource, SlashCommand};
 use std::path::Path;
 use std::process::Command;
 use std::sync::Arc;
@@ -163,4 +163,32 @@ async fn test_reload() {
 
     let result = executor.process("/help").await.unwrap();
     assert!(result.is_some()); // Builtins still work
+}
+
+#[tokio::test]
+async fn test_reload_preserves_package_commands() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let project_commands = temp_dir.path().join(".sage").join("commands");
+    tokio::fs::create_dir_all(&project_commands).await.unwrap();
+    tokio::fs::write(project_commands.join("pkg.md"), "Project replacement")
+        .await
+        .unwrap();
+
+    let executor = create_test_executor_with_project_root(temp_dir.path()).await;
+    {
+        let mut registry = executor.registry.write().await;
+        registry.register(
+            SlashCommand::new("pkg", "Package says $ARGUMENTS"),
+            CommandSource::Package {
+                package_id: "acme.review".to_string(),
+                asset_id: "pkg".to_string(),
+                package_root: std::path::PathBuf::from("/tmp/acme.review"),
+            },
+        );
+    }
+
+    executor.reload().await.unwrap();
+
+    let result = executor.process("/pkg hello").await.unwrap().unwrap();
+    assert_eq!(result.expanded_prompt, "Package says hello");
 }
