@@ -5,7 +5,7 @@ mod suite {
     use serde_json::json;
     use std::sync::Arc;
 
-    use sage_core::agent::subagent::{AgentPath, SubAgentGraph};
+    use sage_core::agent::subagent::{AgentPath, ChildAgentSpawnRecord, SubAgentGraph};
     use sage_core::thread_store::{SqliteThreadStore, ThreadRecord, ThreadStore};
     use sage_core::tools::base::Tool;
     use sage_core::tools::permission::ToolContext;
@@ -222,6 +222,65 @@ mod suite {
             .expect_err("missing parent must fail");
         assert!(err.to_string().contains("missing-parent"));
         assert!(registry.get_task("task_missing_parent").is_none());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_task_tool_background_with_graph_reuses_resume_edge()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let registry = Arc::new(TaskRegistry::new());
+        let (_store, graph) = graph_with_parent("parent-thread").await?;
+        graph
+            .record_child(ChildAgentSpawnRecord::new(
+                "parent-thread",
+                "task_existing",
+                "original-spawn",
+            ))
+            .await?;
+        let tool = TaskTool::with_registry_and_graph(registry.clone(), graph.clone());
+        let context = ToolContext::new(std::env::current_dir().unwrap_or_default())
+            .with_session_id("parent-thread");
+
+        let call = ToolCall {
+            id: "new-spawn".to_string(),
+            name: "Task".to_string(),
+            arguments: json!({
+                "description": "Plan implementation",
+                "prompt": "Design authentication system",
+                "subagent_type": "Plan",
+                "run_in_background": true,
+                "resume": "task_existing"
+            })
+            .as_object()
+            .unwrap()
+            .clone()
+            .into_iter()
+            .collect(),
+            call_id: None,
+        };
+
+        let result = tool.execute_with_context(&call, &context).await?;
+        assert!(result.success);
+        assert_eq!(
+            result
+                .metadata
+                .get("task_id")
+                .and_then(|value| value.as_str()),
+            Some("task_existing")
+        );
+        assert_eq!(
+            result
+                .metadata
+                .get("spawn_item_id")
+                .and_then(|value| value.as_str()),
+            Some("original-spawn")
+        );
+
+        let summary = graph
+            .read_child(&AgentPath::from_raw_path("agent://task_existing")?)
+            .await?;
+        assert_eq!(summary.spawn_item_id, "original-spawn");
+        assert!(registry.get_task("task_existing").is_some());
         Ok(())
     }
 

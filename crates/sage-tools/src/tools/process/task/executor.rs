@@ -1,9 +1,11 @@
 //! Task execution logic for running subagents
 
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 use sage_core::agent::subagent::{
-    AgentType, ChildAgentSpawnRecord, SubAgentConfig, SubAgentGraph, Thoroughness, execute_subagent,
+    AgentPath, AgentType, ChildAgentSpawnRecord, ChildAgentSummary, SubAgentConfig, SubAgentGraph,
+    SubAgentGraphError, Thoroughness, execute_subagent,
 };
+use sage_core::thread_store::ThreadStoreError;
 use sage_core::tools::permission::ToolContext;
 use sage_core::tools::types::{ToolCall, ToolResult};
 use serde_json::json;
@@ -188,9 +190,15 @@ pub async fn execute_task_background_with_graph(
         .clone()
         .unwrap_or_else(|| format!("task_{}", Uuid::new_v4()));
 
-    let mut spawn = ChildAgentSpawnRecord::new(parent_thread_id, task_id.clone(), call.id.clone());
-    spawn.title = Some(task_params.description.clone());
-    let summary = graph.record_child(spawn).await?;
+    let summary = record_or_reuse_graph_child(
+        &graph,
+        parent_thread_id,
+        &task_id,
+        &call.id,
+        &task_params.description,
+        task_params.resume.is_some(),
+    )
+    .await?;
 
     // Create and register task only after the graph edge is durable.
     let task = TaskRequest {
@@ -255,6 +263,38 @@ pub async fn execute_task_background_with_graph(
         .with_metadata("spawn_item_id", json!(summary.spawn_item_id))
         .with_metadata("subagent_type", json!(task_params.subagent_type))
         .with_metadata("run_in_background", json!(true)))
+}
+
+async fn record_or_reuse_graph_child(
+    graph: &SubAgentGraph,
+    parent_thread_id: &str,
+    task_id: &str,
+    spawn_item_id: &str,
+    title: &str,
+    resume_existing: bool,
+) -> anyhow::Result<ChildAgentSummary> {
+    if resume_existing {
+        let agent_path = AgentPath::try_for_child_thread(task_id)?;
+        match graph.read_child(&agent_path).await {
+            Ok(summary) => {
+                if summary.parent_thread_id != parent_thread_id {
+                    bail!(
+                        "Task resume '{}' is linked to parent thread '{}' not '{}'",
+                        task_id,
+                        summary.parent_thread_id,
+                        parent_thread_id
+                    );
+                }
+                return Ok(summary);
+            }
+            Err(SubAgentGraphError::ThreadStore(ThreadStoreError::ThreadNotFound(_))) => {}
+            Err(err) => return Err(err.into()),
+        }
+    }
+
+    let mut spawn = ChildAgentSpawnRecord::new(parent_thread_id, task_id, spawn_item_id);
+    spawn.title = Some(title.to_string());
+    Ok(graph.record_child(spawn).await?)
 }
 
 /// Task parameters parsed from tool call
