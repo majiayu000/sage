@@ -117,6 +117,8 @@ mod tests {
             description: "Fast explorer".to_string(),
             available_tools: ToolAccessControl::Specific(vec!["glob".to_string()]),
             model: Some("haiku".to_string()),
+            reasoning: None,
+            profile: None,
             system_prompt: "Explore!".to_string(),
         };
 
@@ -132,6 +134,8 @@ mod tests {
             description: "Fast exploration agent".to_string(),
             available_tools: ToolAccessControl::Specific(vec!["Read".to_string()]),
             model: Some("gpt-3.5-turbo".to_string()),
+            reasoning: None,
+            profile: None,
             system_prompt: "You are an explorer".to_string(),
         };
 
@@ -431,7 +435,15 @@ mod tests {
             resume_id: Some("resume-123".to_string()),
             run_in_background: true,
             model_override: Some("gpt-4".to_string()),
+            reasoning_override: None,
+            profile_override: None,
             thoroughness: Thoroughness::VeryThorough,
+            role_path: None,
+            role_root: None,
+            fork_context: ForkContextPolicy::None,
+            fork_context_explicit: false,
+            parent_context: Vec::new(),
+            parent_context_available: false,
             working_directory: WorkingDirectoryConfig::Inherited,
             tool_access: ToolAccessControl::All,
             context: None,
@@ -478,6 +490,7 @@ mod tests {
                 total_tool_uses: 8,
                 execution_time_ms: 15000,
                 tools_used: vec!["Read".to_string(), "Write".to_string()],
+                ..Default::default()
             },
         };
 

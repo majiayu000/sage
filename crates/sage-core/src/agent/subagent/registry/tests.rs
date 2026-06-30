@@ -13,6 +13,8 @@ fn create_test_agent(agent_type: AgentType, name: &str) -> AgentDefinition {
         description: format!("{} agent", name),
         available_tools: ToolAccessControl::All,
         model: None,
+        reasoning: None,
+        profile: None,
         system_prompt: format!("Prompt for {}", name),
     }
 }

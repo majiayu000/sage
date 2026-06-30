@@ -69,6 +69,29 @@ pub struct ExecutionMetadata {
     pub execution_time_ms: u64,
     /// List of tools used during execution
     pub tools_used: Vec<String>,
+    /// Resolved role audit metadata
+    pub role_resolution: Option<Box<RoleResolutionMetadata>>,
+}
+
+/// Auditable role resolution details for a sub-agent run.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RoleResolutionMetadata {
+    /// Resolved role name used for this execution
+    pub role_name: Option<String>,
+    /// Source of the resolved role definition
+    pub role_source: Option<String>,
+    /// Effective model for this execution
+    pub model: Option<String>,
+    /// Effective reasoning override, if any
+    pub reasoning: Option<String>,
+    /// Effective profile override, if any
+    pub profile: Option<String>,
+    /// Fork context policy used for this execution
+    pub fork_context: Option<String>,
+    /// Number of parent context messages included
+    pub forked_messages: usize,
+    /// Tools available to the child after scope intersection
+    pub available_tools: Vec<String>,
 }
 
 impl fmt::Display for ExecutionMetadata {
@@ -89,6 +112,7 @@ impl ExecutionMetadata {
             total_tool_uses: progress.tool_use_count,
             execution_time_ms: elapsed_ms,
             tools_used: Vec::new(),
+            ..Default::default()
         }
     }
 

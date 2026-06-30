@@ -220,6 +220,7 @@ impl ModelParameters {
             top_k: self.top_k,
             stop: self.stop_sequences.clone(),
             parallel_tool_calls: self.parallel_tool_calls,
+            reasoning_effort: None,
             frequency_penalty: None,
             presence_penalty: None,
             seed: None,

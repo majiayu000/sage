@@ -2,8 +2,8 @@
 
 use anyhow::{anyhow, bail};
 use sage_core::agent::subagent::{
-    AgentPath, AgentType, ChildAgentSpawnRecord, ChildAgentSummary, SubAgentConfig, SubAgentGraph,
-    SubAgentGraphError, Thoroughness, execute_subagent, execute_subagent_with_mailbox,
+    AgentPath, ChildAgentSpawnRecord, ChildAgentSummary, SubAgentGraph, SubAgentGraphError,
+    execute_subagent, execute_subagent_with_mailbox,
 };
 use sage_core::thread_store::{ThreadStatus, ThreadStoreError};
 use sage_core::tools::permission::ToolContext;
@@ -12,14 +12,26 @@ use serde_json::json;
 use std::sync::{Arc, Weak};
 use uuid::Uuid;
 
+use super::spawn_context::{prepare_subagent_config, resolve_parent_context};
+use super::spawn_params::parse_task_parameters;
 use super::types::{TaskRegistry, TaskRequest, TaskStatus};
 
 /// Execute a task synchronously
 pub async fn execute_task_sync(
     call: &ToolCall,
     registry: Arc<TaskRegistry>,
+    graph: Option<Arc<SubAgentGraph>>,
+    context: Option<&ToolContext>,
 ) -> anyhow::Result<ToolResult> {
     let (task_params, agent_type, thoroughness) = parse_task_parameters(call)?;
+    let parent_context = resolve_parent_context(graph.as_deref(), context).await?;
+    let config = prepare_subagent_config(
+        &task_params,
+        agent_type,
+        thoroughness,
+        parent_context.messages.clone(),
+        context,
+    )?;
 
     // Generate task ID
     let task_id = task_params
@@ -42,14 +54,11 @@ pub async fn execute_task_sync(
 
     registry.add_task(task);
 
-    // Execute subagent
-    let config =
-        SubAgentConfig::new(agent_type, task_params.prompt.clone()).with_thoroughness(thoroughness);
-
     let result = execute_subagent(config).await;
 
     match result {
         Ok(result) => {
+            let role_resolution = result.metadata.role_resolution.as_deref();
             // Update task status
             registry.update_status(
                 &task_id,
@@ -78,6 +87,38 @@ pub async fn execute_task_sync(
                 .with_metadata("task_id", json!(task_id))
                 .with_metadata("agent_id", json!(result.agent_id))
                 .with_metadata("subagent_type", json!(task_params.subagent_type))
+                .with_metadata(
+                    "role_name",
+                    json!(role_resolution.and_then(|role| role.role_name.as_deref())),
+                )
+                .with_metadata(
+                    "role_source",
+                    json!(role_resolution.and_then(|role| role.role_source.as_deref())),
+                )
+                .with_metadata(
+                    "model",
+                    json!(role_resolution.and_then(|role| role.model.as_deref())),
+                )
+                .with_metadata(
+                    "reasoning",
+                    json!(role_resolution.and_then(|role| role.reasoning.as_deref())),
+                )
+                .with_metadata(
+                    "profile",
+                    json!(role_resolution.and_then(|role| role.profile.as_deref())),
+                )
+                .with_metadata(
+                    "fork_context",
+                    json!(role_resolution.and_then(|role| role.fork_context.as_deref())),
+                )
+                .with_metadata(
+                    "forked_messages",
+                    json!(role_resolution.map(|role| role.forked_messages)),
+                )
+                .with_metadata(
+                    "available_tools",
+                    json!(role_resolution.map(|role| &role.available_tools)),
+                )
                 .with_metadata("tools_used", json!(result.metadata.tools_used))
                 .with_metadata("total_tool_uses", json!(result.metadata.total_tool_uses)))
         }
@@ -108,8 +149,17 @@ pub async fn execute_task_sync(
 pub async fn execute_task_background(
     call: &ToolCall,
     registry: Arc<TaskRegistry>,
+    context: Option<&ToolContext>,
 ) -> anyhow::Result<ToolResult> {
     let (task_params, agent_type, thoroughness) = parse_task_parameters(call)?;
+    let parent_context = resolve_parent_context(None, context).await?;
+    let config = prepare_subagent_config(
+        &task_params,
+        agent_type,
+        thoroughness,
+        parent_context.messages.clone(),
+        context,
+    )?;
 
     // Generate task ID
     let task_id = task_params
@@ -132,8 +182,6 @@ pub async fn execute_task_background(
 
     registry.add_task(task);
 
-    let config =
-        SubAgentConfig::new(agent_type, task_params.prompt.clone()).with_thoroughness(thoroughness);
     let background_task_id = task_id.clone();
     let background_registry = Arc::downgrade(&registry);
     let handle = tokio::spawn(async move {
@@ -170,6 +218,10 @@ pub async fn execute_task_background(
     Ok(ToolResult::success(&call.id, "Task", response)
         .with_metadata("task_id", json!(task_id))
         .with_metadata("subagent_type", json!(task_params.subagent_type))
+        .with_metadata("role_path", json!(task_params.role_path))
+        .with_metadata("fork_context", json!(task_params.fork_context))
+        .with_metadata("parent_context_source", json!(parent_context.source))
+        .with_metadata("parent_context_messages", json!(parent_context.count()))
         .with_metadata("run_in_background", json!(true)))
 }
 
@@ -185,6 +237,14 @@ pub async fn execute_task_background_with_graph(
         .session_id
         .as_deref()
         .ok_or_else(|| anyhow!("Task background graph spawn requires session_id context"))?;
+    let parent_context = resolve_parent_context(Some(graph.as_ref()), Some(context)).await?;
+    let config = prepare_subagent_config(
+        &task_params,
+        agent_type,
+        thoroughness,
+        parent_context.messages.clone(),
+        Some(context),
+    )?;
 
     // Generate task ID
     let task_id = task_params
@@ -217,8 +277,6 @@ pub async fn execute_task_background_with_graph(
 
     registry.add_task(task);
 
-    let config =
-        SubAgentConfig::new(agent_type, task_params.prompt.clone()).with_thoroughness(thoroughness);
     let background_task_id = task_id.clone();
     let background_agent_path = summary.agent_path.clone();
     let background_graph = graph.clone();
@@ -292,6 +350,10 @@ pub async fn execute_task_background_with_graph(
         .with_metadata("child_thread_id", json!(summary.child_thread_id))
         .with_metadata("spawn_item_id", json!(summary.spawn_item_id))
         .with_metadata("subagent_type", json!(task_params.subagent_type))
+        .with_metadata("role_path", json!(task_params.role_path))
+        .with_metadata("fork_context", json!(task_params.fork_context))
+        .with_metadata("parent_context_source", json!(parent_context.source))
+        .with_metadata("parent_context_messages", json!(parent_context.count()))
         .with_metadata("run_in_background", json!(true)))
 }
 
@@ -356,81 +418,4 @@ async fn record_or_reuse_graph_child(
     let mut spawn = ChildAgentSpawnRecord::new(parent_thread_id, task_id, spawn_item_id);
     spawn.title = Some(title.to_string());
     Ok(graph.record_child(spawn).await?)
-}
-
-/// Task parameters parsed from tool call
-struct TaskParameters {
-    description: String,
-    prompt: String,
-    subagent_type: String,
-    model: Option<String>,
-    resume: Option<String>,
-}
-
-/// Parse task parameters from tool call
-fn parse_task_parameters(
-    call: &ToolCall,
-) -> anyhow::Result<(TaskParameters, AgentType, Thoroughness)> {
-    let description = call
-        .arguments
-        .get("description")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow!("Missing 'description' parameter"))?
-        .to_string();
-
-    let prompt = call
-        .arguments
-        .get("prompt")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow!("Missing 'prompt' parameter"))?
-        .to_string();
-
-    let subagent_type = call
-        .arguments
-        .get("subagent_type")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow!("Missing 'subagent_type' parameter"))?
-        .to_string();
-
-    let model = call
-        .arguments
-        .get("model")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
-
-    let resume = call
-        .arguments
-        .get("resume")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
-
-    // Parse thoroughness level
-    let thoroughness = call
-        .arguments
-        .get("thoroughness")
-        .and_then(|v| v.as_str())
-        .map(|s| match s.to_lowercase().as_str() {
-            "quick" => Thoroughness::Quick,
-            "very_thorough" | "very-thorough" | "thorough" => Thoroughness::VeryThorough,
-            _ => Thoroughness::Medium,
-        })
-        .unwrap_or(Thoroughness::Medium);
-
-    // Parse agent type
-    let agent_type = match subagent_type.to_lowercase().as_str() {
-        "explore" => AgentType::Explore,
-        "plan" => AgentType::Plan,
-        "general-purpose" | "general_purpose" | "general" => AgentType::GeneralPurpose,
-        _ => AgentType::GeneralPurpose,
-    };
-
-    let params = TaskParameters {
-        description,
-        prompt,
-        subagent_type,
-        model,
-        resume,
-    };
-
-    Ok((params, agent_type, thoroughness))
 }

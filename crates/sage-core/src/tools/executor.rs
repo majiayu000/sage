@@ -5,6 +5,7 @@ use crate::telemetry::{global_metrics, global_telemetry};
 use crate::tools::base::Tool;
 use crate::tools::permission::ToolContext;
 use crate::tools::types::{ToolCall, ToolResult};
+use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -74,6 +75,24 @@ impl ToolExecutor {
         self.tools.keys().cloned().collect()
     }
 
+    fn context_with_parent_tool_scope(&self, context: &ToolContext) -> ToolContext {
+        let mut context = context.clone();
+        context
+            .metadata
+            .entry("parent_tools".to_string())
+            .or_insert_with(|| {
+                let mut tool_names = self
+                    .tools
+                    .values()
+                    .map(|tool| tool.name().to_string())
+                    .collect::<Vec<_>>();
+                tool_names.sort();
+                tool_names.dedup();
+                json!(tool_names)
+            });
+        context
+    }
+
     /// Check if a tool is registered (case-insensitive)
     pub fn has_tool(&self, name: &str) -> bool {
         self.tools.contains_key(&name.to_lowercase())
@@ -130,9 +149,10 @@ impl ToolExecutor {
 
         // Execute with timeout
         let result = if let Some(context) = context {
+            let context = self.context_with_parent_tool_scope(context);
             match timeout(
                 execution_timeout,
-                tool.execute_with_timing_and_context(call, context),
+                tool.execute_with_timing_and_context(call, &context),
             )
             .await
             {

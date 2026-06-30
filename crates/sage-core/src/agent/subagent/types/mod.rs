@@ -13,7 +13,9 @@
 mod agent_definition;
 mod agent_type;
 mod config;
+mod fork_context;
 mod progress;
+mod role;
 mod running_agent;
 mod status;
 mod thoroughness;
@@ -27,7 +29,12 @@ mod tests;
 pub use agent_definition::AgentDefinition;
 pub use agent_type::AgentType;
 pub use config::SubAgentConfig;
-pub use progress::{AgentProgress, ExecutionMetadata};
+pub use fork_context::{ForkContextMessage, ForkContextPolicy};
+pub use progress::{AgentProgress, ExecutionMetadata, RoleResolutionMetadata};
+pub use role::{
+    SubAgentRoleConfig, profile_tool_access, validate_model_override, validate_profile_override,
+    validate_reasoning_override, validate_tool_names,
+};
 pub use running_agent::RunningAgent;
 pub use status::{AgentStatus, SubAgentResult};
 pub use thoroughness::Thoroughness;

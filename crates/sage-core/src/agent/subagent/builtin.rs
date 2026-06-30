@@ -23,6 +23,8 @@ pub fn general_purpose_agent() -> AgentDefinition {
         description: "General-purpose agent for researching complex questions, searching for code, and executing multi-step tasks.".to_string(),
         available_tools: ToolAccessControl::All,
         model: None, // Inherit from parent
+        reasoning: None,
+        profile: None,
         system_prompt: AgentPrompts::GENERAL_PURPOSE.to_string(),
     }
 }
@@ -46,6 +48,8 @@ pub fn explore_agent() -> AgentDefinition {
             "Bash".to_string(), // Read-only commands only
         ]),
         model: Some("haiku".to_string()), // Use faster model
+        reasoning: None,
+        profile: None,
         system_prompt: AgentPrompts::EXPLORE.to_string(),
     }
 }
@@ -64,6 +68,8 @@ pub fn plan_agent() -> AgentDefinition {
         description: "Software architect agent for designing implementation plans. Returns step-by-step plans, identifies critical files, and considers architectural trade-offs.".to_string(),
         available_tools: ToolAccessControl::All,
         model: None, // Inherit from parent
+        reasoning: None,
+        profile: None,
         system_prompt: AgentPrompts::PLAN.to_string(),
     }
 }

@@ -31,7 +31,9 @@ pub mod executor;
 pub mod graph;
 pub mod mailbox;
 pub mod registry;
+pub mod role_loader;
 pub mod runner;
+pub mod tool_scope;
 pub mod types;
 
 #[cfg(test)]
@@ -51,12 +53,14 @@ pub use graph::{
 };
 pub use mailbox::{AgentFollowUpMessage, AgentMailboxReceipt, AgentTerminalState};
 pub use registry::AgentRegistry;
+pub use role_loader::{SubAgentRoleLoader, load_custom_role_for_config};
 pub use runner::{
     SubAgentRunner, execute_subagent, execute_subagent_with_mailbox, get_global_runner,
     get_global_runner_cwd, init_global_runner, init_global_runner_from_config,
     update_global_runner_cwd, update_global_runner_tools,
 };
 pub use types::{
-    AgentDefinition, AgentProgress, AgentStatus, AgentType, ExecutionMetadata, RunningAgent,
-    SubAgentConfig, SubAgentResult, Thoroughness, ToolAccessControl, WorkingDirectoryConfig,
+    AgentDefinition, AgentProgress, AgentStatus, AgentType, ExecutionMetadata, ForkContextMessage,
+    ForkContextPolicy, RoleResolutionMetadata, RunningAgent, SubAgentConfig, SubAgentResult,
+    SubAgentRoleConfig, Thoroughness, ToolAccessControl, WorkingDirectoryConfig,
 };

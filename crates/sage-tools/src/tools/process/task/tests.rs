@@ -3,16 +3,39 @@
 #[cfg(test)]
 mod suite {
     use serde_json::json;
+    use std::fs;
     use std::sync::Arc;
 
     use sage_core::agent::subagent::{AgentPath, ChildAgentSpawnRecord, SubAgentGraph};
-    use sage_core::thread_store::{SqliteThreadStore, ThreadRecord, ThreadStore};
-    use sage_core::tools::base::Tool;
+    use sage_core::thread_store::{SqliteThreadStore, ThreadItemInput, ThreadRecord, ThreadStore};
+    use sage_core::tools::base::{Tool, ToolError};
+    use sage_core::tools::executor::ToolExecutor;
     use sage_core::tools::permission::ToolContext;
-    use sage_core::tools::types::ToolCall;
+    use sage_core::tools::types::{ToolCall, ToolResult, ToolSchema};
 
     use super::super::tool::TaskTool;
     use super::super::types::{TaskRegistry, TaskRequest, TaskStatus};
+
+    struct NamedTool(&'static str);
+
+    #[async_trait::async_trait]
+    impl Tool for NamedTool {
+        fn name(&self) -> &str {
+            self.0
+        }
+
+        fn description(&self) -> &str {
+            "Named test tool"
+        }
+
+        fn schema(&self) -> ToolSchema {
+            ToolSchema::new(self.name(), self.description(), vec![])
+        }
+
+        async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
+            Ok(ToolResult::success(&call.id, self.name(), "ok"))
+        }
+    }
 
     async fn graph_with_parent(
         parent_thread_id: &str,
@@ -117,6 +140,189 @@ mod suite {
     }
 
     #[tokio::test]
+    async fn test_task_tool_unknown_subagent_type_fails_closed() {
+        let registry = Arc::new(TaskRegistry::new());
+        let tool = TaskTool::with_registry(registry);
+
+        let call = ToolCall {
+            id: "test-unknown-role".to_string(),
+            name: "Task".to_string(),
+            arguments: json!({
+                "description": "Unknown role",
+                "prompt": "Do something",
+                "subagent_type": "mystery"
+            })
+            .as_object()
+            .unwrap()
+            .clone()
+            .into_iter()
+            .collect(),
+            call_id: None,
+        };
+
+        let error = tool
+            .execute(&call)
+            .await
+            .expect_err("unknown subagent type must fail closed");
+        assert!(error.to_string().contains("unsupported subagent_type"));
+    }
+
+    #[tokio::test]
+    async fn test_task_tool_background_custom_role_surfaces_metadata()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let registry = Arc::new(TaskRegistry::new());
+        let tool = TaskTool::with_registry(registry.clone());
+        let workspace = tempfile::tempdir()?;
+        let role_root = workspace.path().join(".sage").join("agents");
+        fs::create_dir_all(&role_root)?;
+        fs::write(
+            role_root.join("reviewer.toml"),
+            r#"
+name = "reviewer"
+description = "Review code"
+prompt = "Review carefully"
+tools = ["Read", "Grep"]
+profile = "review"
+"#,
+        )?;
+        let mut context = ToolContext::new(workspace.path().to_path_buf());
+        context
+            .metadata
+            .insert("parent_tools".to_string(), json!(["Read", "Grep", "Glob"]));
+
+        let call = ToolCall {
+            id: "test-custom-role".to_string(),
+            name: "Task".to_string(),
+            arguments: json!({
+                "description": "Review code",
+                "prompt": "Review this change",
+                "subagent_type": "custom",
+                "role_path": "reviewer.toml",
+                "fork_context": {"mode": "last_n", "turns": 1},
+                "run_in_background": true
+            })
+            .as_object()
+            .unwrap()
+            .clone()
+            .into_iter()
+            .collect(),
+            call_id: None,
+        };
+
+        let result = tool.execute_with_context(&call, &context).await?;
+        assert!(result.success);
+        assert_eq!(result.metadata.get("subagent_type"), Some(&json!("custom")));
+        assert_eq!(
+            result.metadata.get("role_path"),
+            Some(&json!("reviewer.toml"))
+        );
+        assert_eq!(
+            result.metadata.get("fork_context"),
+            Some(&json!({"last_n": {"turns": 1}}))
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_task_tool_custom_role_uses_executor_parent_tool_scope()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let registry = Arc::new(TaskRegistry::new());
+        let mut executor = ToolExecutor::new();
+        executor.register_tool(Arc::new(TaskTool::with_registry(registry.clone())));
+        executor.register_tool(Arc::new(NamedTool("Read")));
+        executor.register_tool(Arc::new(NamedTool("Grep")));
+        executor.register_tool(Arc::new(NamedTool("Glob")));
+        let workspace = tempfile::tempdir()?;
+        let role_root = workspace.path().join(".sage").join("agents");
+        fs::create_dir_all(&role_root)?;
+        fs::write(
+            role_root.join("reviewer.toml"),
+            r#"
+name = "reviewer"
+description = "Review code"
+prompt = "Review carefully"
+tools = ["Read", "Grep"]
+profile = "review"
+"#,
+        )?;
+        let context = ToolContext::new(workspace.path().to_path_buf());
+
+        let call = ToolCall {
+            id: "test-custom-role-via-executor".to_string(),
+            name: "Task".to_string(),
+            arguments: json!({
+                "description": "Review code",
+                "prompt": "Review this change",
+                "subagent_type": "custom",
+                "role_path": "reviewer.toml",
+                "run_in_background": true
+            })
+            .as_object()
+            .unwrap()
+            .clone()
+            .into_iter()
+            .collect(),
+            call_id: None,
+        };
+
+        let result = executor.execute_tool_with_context(&call, &context).await;
+
+        assert!(result.success, "expected success: {:?}", result.error);
+        assert_eq!(result.metadata.get("subagent_type"), Some(&json!("custom")));
+        assert_eq!(
+            result.metadata.get("role_path"),
+            Some(&json!("reviewer.toml"))
+        );
+        let task_id = result
+            .metadata
+            .get("task_id")
+            .and_then(|value| value.as_str())
+            .expect("task id metadata");
+        assert!(registry.get_task(task_id).is_some());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_task_tool_background_custom_role_missing_fails_before_registering()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let registry = Arc::new(TaskRegistry::new());
+        let tool = TaskTool::with_registry(registry.clone());
+        let workspace = tempfile::tempdir()?;
+        fs::create_dir_all(workspace.path().join(".sage").join("agents"))?;
+        let mut context = ToolContext::new(workspace.path().to_path_buf());
+        context
+            .metadata
+            .insert("parent_tools".to_string(), json!(["Read", "Grep", "Glob"]));
+
+        let call = ToolCall {
+            id: "test-missing-role".to_string(),
+            name: "Task".to_string(),
+            arguments: json!({
+                "description": "Review code",
+                "prompt": "Review this change",
+                "subagent_type": "custom",
+                "role_path": "missing.toml",
+                "run_in_background": true,
+                "resume": "missing_role_task"
+            })
+            .as_object()
+            .unwrap()
+            .clone()
+            .into_iter()
+            .collect(),
+            call_id: None,
+        };
+
+        let err = tool
+            .execute_with_context(&call, &context)
+            .await
+            .expect_err("missing custom role must fail before background start");
+        assert!(err.to_string().contains("failed to resolve role"));
+        assert!(registry.get_task("missing_role_task").is_none());
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_task_tool_background_with_graph_records_child_edge()
     -> Result<(), Box<dyn std::error::Error>> {
         let registry = Arc::new(TaskRegistry::new());
@@ -184,6 +390,63 @@ mod suite {
         assert_eq!(summary.child_thread_id, task_id);
         assert_eq!(summary.spawn_item_id, "spawn-item");
         assert!(registry.get_task(task_id).is_some());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_task_tool_background_with_graph_forks_thread_store_context()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let registry = Arc::new(TaskRegistry::new());
+        let (store, graph) = graph_with_parent("parent-thread").await?;
+        let mut user_item = ThreadItemInput::new("message");
+        user_item.role = Some("user".to_string());
+        user_item.search_text = Some("Parent request".to_string());
+        store.append_event("parent-thread", None, user_item).await?;
+        let mut assistant_item = ThreadItemInput::new("message");
+        assistant_item.role = Some("assistant".to_string());
+        assistant_item.search_text = Some("Parent answer".to_string());
+        store
+            .append_event("parent-thread", None, assistant_item)
+            .await?;
+
+        let tool = TaskTool::with_registry_and_graph(registry, graph);
+        let context = ToolContext::new(std::env::current_dir().unwrap_or_default())
+            .with_session_id("parent-thread");
+
+        let call = ToolCall {
+            id: "spawn-item".to_string(),
+            name: "Task".to_string(),
+            arguments: json!({
+                "description": "Plan implementation",
+                "prompt": "Design authentication system",
+                "subagent_type": "Plan",
+                "run_in_background": true,
+                "fork_context": "all"
+            })
+            .as_object()
+            .unwrap()
+            .clone()
+            .into_iter()
+            .collect(),
+            call_id: None,
+        };
+
+        let result = tool.execute_with_context(&call, &context).await?;
+        assert!(result.success);
+        assert_eq!(
+            result
+                .metadata
+                .get("parent_context_source")
+                .and_then(|value| value.as_str()),
+            Some("thread_store")
+        );
+        assert_eq!(
+            result
+                .metadata
+                .get("parent_context_messages")
+                .and_then(|value| value.as_u64()),
+            Some(2)
+        );
         Ok(())
     }
 

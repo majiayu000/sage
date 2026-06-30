@@ -2,16 +2,19 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt;
 use std::sync::Arc;
 use thiserror::Error;
 
 use crate::thread_store::{
-    Page, ThreadId, ThreadLineage, ThreadListQuery, ThreadSnapshot, ThreadStatus, ThreadStore,
-    ThreadStoreError,
+    Page, ThreadId, ThreadItemRecord, ThreadLineage, ThreadListQuery, ThreadSnapshot, ThreadStatus,
+    ThreadStore, ThreadStoreError,
 };
+use crate::types::MessageRole;
+
+use super::types::ForkContextMessage;
 
 const AGENT_PATH_PREFIX: &str = "agent://";
 const GRAPH_FORK_MODE: &str = "subagent";
@@ -216,6 +219,14 @@ impl SubAgentGraph {
         })
     }
 
+    pub async fn fork_context_messages(
+        &self,
+        thread_id: &str,
+    ) -> SubAgentGraphResult<Vec<ForkContextMessage>> {
+        let snapshot = self.store.read_thread(thread_id).await?;
+        Ok(fork_context_messages_from_snapshot(&snapshot))
+    }
+
     pub async fn list_children(
         &self,
         parent_thread_id: &str,
@@ -326,6 +337,44 @@ fn summary_from_snapshot(snapshot: ThreadSnapshot) -> Option<ChildAgentSummary> 
         created_at: snapshot.thread.created_at,
         updated_at: snapshot.thread.updated_at,
     })
+}
+
+fn fork_context_messages_from_snapshot(snapshot: &ThreadSnapshot) -> Vec<ForkContextMessage> {
+    snapshot
+        .items
+        .iter()
+        .filter_map(fork_context_message_from_item)
+        .collect()
+}
+
+fn fork_context_message_from_item(item: &ThreadItemRecord) -> Option<ForkContextMessage> {
+    let role = item.role.as_deref().and_then(message_role_from_store)?;
+    let content = item
+        .search_text
+        .clone()
+        .or_else(|| item.payload_json.as_ref().and_then(payload_content))?;
+    ForkContextMessage::new(role, content).ok()
+}
+
+fn message_role_from_store(role: &str) -> Option<MessageRole> {
+    match role {
+        "system" => Some(MessageRole::System),
+        "user" => Some(MessageRole::User),
+        "assistant" => Some(MessageRole::Assistant),
+        "tool" => Some(MessageRole::Tool),
+        "error" => Some(MessageRole::Error),
+        _ => None,
+    }
+}
+
+fn payload_content(value: &Value) -> Option<String> {
+    let payload = value.get("payload").unwrap_or(value);
+    for key in ["content", "message", "result"] {
+        if let Some(text) = payload.get(key).and_then(Value::as_str) {
+            return Some(text.to_string());
+        }
+    }
+    None
 }
 
 fn descendants(

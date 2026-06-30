@@ -3,7 +3,10 @@
 //! Provides configuration options for sub-agent execution, including
 //! working directory inheritance and tool access control.
 
-use super::{AgentType, Thoroughness, ToolAccessControl, WorkingDirectoryConfig};
+use super::{
+    AgentType, ForkContextMessage, ForkContextPolicy, Thoroughness, ToolAccessControl,
+    WorkingDirectoryConfig,
+};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::path::PathBuf;
@@ -37,9 +40,33 @@ pub struct SubAgentConfig {
     /// Optional model override
     #[serde(default)]
     pub model_override: Option<String>,
+    /// Optional reasoning override
+    #[serde(default)]
+    pub reasoning_override: Option<String>,
+    /// Optional permission/profile override
+    #[serde(default)]
+    pub profile_override: Option<String>,
     /// Thoroughness level for exploration tasks
     #[serde(default)]
     pub thoroughness: Thoroughness,
+    /// Optional role config file path. Relative paths resolve under `role_root`.
+    #[serde(default)]
+    pub role_path: Option<PathBuf>,
+    /// Optional role root. Defaults to `<parent_cwd>/.sage/agents`.
+    #[serde(default)]
+    pub role_root: Option<PathBuf>,
+    /// Parent context fork policy
+    #[serde(default)]
+    pub fork_context: ForkContextPolicy,
+    /// Whether fork_context was set explicitly by the spawn request
+    #[serde(skip)]
+    pub fork_context_explicit: bool,
+    /// Parent messages available for fork_context selection
+    #[serde(default)]
+    pub parent_context: Vec<ForkContextMessage>,
+    /// Whether parent context was explicitly available, even if empty
+    #[serde(default)]
+    pub parent_context_available: bool,
     /// Working directory configuration
     ///
     /// Controls how the sub-agent determines its working directory.
@@ -106,7 +133,15 @@ impl SubAgentConfig {
             resume_id: None,
             run_in_background: false,
             model_override: None,
+            reasoning_override: None,
+            profile_override: None,
             thoroughness: Thoroughness::default(),
+            role_path: None,
+            role_root: None,
+            fork_context: ForkContextPolicy::default(),
+            fork_context_explicit: false,
+            parent_context: Vec::new(),
+            parent_context_available: false,
             working_directory: WorkingDirectoryConfig::default(),
             tool_access: default_tool_access(),
             context: None,
@@ -135,9 +170,48 @@ impl SubAgentConfig {
         self
     }
 
+    /// Set reasoning override
+    pub fn with_reasoning(mut self, reasoning: String) -> Self {
+        self.reasoning_override = Some(reasoning);
+        self
+    }
+
+    /// Set profile override
+    pub fn with_profile(mut self, profile: String) -> Self {
+        self.profile_override = Some(profile);
+        self
+    }
+
     /// Set thoroughness level for exploration
     pub fn with_thoroughness(mut self, thoroughness: Thoroughness) -> Self {
         self.thoroughness = thoroughness;
+        self
+    }
+
+    /// Set custom role config path
+    pub fn with_role_path(mut self, path: impl Into<PathBuf>) -> Self {
+        self.role_path = Some(path.into());
+        self.agent_type = AgentType::Custom;
+        self
+    }
+
+    /// Set custom role config root
+    pub fn with_role_root(mut self, root: impl Into<PathBuf>) -> Self {
+        self.role_root = Some(root.into());
+        self
+    }
+
+    /// Set parent context fork policy
+    pub fn with_fork_context(mut self, policy: ForkContextPolicy) -> Self {
+        self.fork_context = policy;
+        self.fork_context_explicit = true;
+        self
+    }
+
+    /// Set parent context messages available for fork policies
+    pub fn with_forked_parent_context(mut self, context: Vec<ForkContextMessage>) -> Self {
+        self.parent_context = context;
+        self.parent_context_available = true;
         self
     }
 

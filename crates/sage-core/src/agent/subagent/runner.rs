@@ -3,17 +3,19 @@
 //! This module provides the actual execution logic for sub-agents, replacing
 //! the placeholder implementation in the Task tool.
 
+#[path = "runner_global.rs"]
+mod runner_global;
 #[path = "runner_mailbox.rs"]
 mod runner_mailbox;
+#[path = "runner_roles.rs"]
+mod runner_roles;
 
 use std::sync::Arc;
 use std::time::Instant;
-use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 
 use std::path::{Path, PathBuf};
 
-use super::builtin::{explore_agent, general_purpose_agent, plan_agent};
 use super::types::{
     AgentDefinition, AgentProgress, AgentType, ExecutionMetadata, SubAgentConfig, SubAgentResult,
 };
@@ -25,6 +27,10 @@ use crate::llm::client::LlmClient;
 use crate::llm::messages::{LlmMessage, MessageRole};
 use crate::tools::base::Tool;
 use crate::tools::types::{ToolCall, ToolResult, ToolSchema};
+pub use runner_global::{
+    execute_subagent, get_global_runner, get_global_runner_cwd, init_global_runner,
+    init_global_runner_from_config, update_global_runner_cwd, update_global_runner_tools,
+};
 use runner_mailbox::MailboxRuntime;
 pub use runner_mailbox::execute_subagent_with_mailbox;
 
@@ -132,9 +138,18 @@ impl SubAgentRunner {
         if config.parent_cwd.is_none() {
             config.parent_cwd = Some(self.working_directory.clone());
         }
+        if config.parent_tools.is_none() && config.agent_type == AgentType::Custom {
+            return Err(SageError::config(
+                "custom subagent roles require explicit parent tool scope",
+            ));
+        }
         if config.parent_tools.is_none() {
             config.parent_tools = Some(self.tool_names());
         }
+
+        // Resolve the agent role before cwd/tool/message construction so custom
+        // roles can safely contribute declarative defaults.
+        let resolved_role = self.resolve_agent_role(&mut config)?;
 
         // Resolve the effective working directory for this sub-agent
         let effective_cwd = config
@@ -147,45 +162,59 @@ impl SubAgentRunner {
             config.working_directory
         );
 
-        // Get agent definition based on type
-        let definition = self.get_agent_definition(&config.agent_type);
+        let definition = resolved_role.definition.clone();
 
-        // Filter tools based on agent's allowed tools AND config's tool access
-        let tools = self.filter_tools_with_config(&definition, &config);
+        if !matches!(
+            config.fork_context,
+            crate::agent::subagent::types::ForkContextPolicy::None
+        ) && !config.parent_context_available
+        {
+            return Err(SageError::config(
+                "fork_context all/last_n requires available parent context",
+            ));
+        }
+
+        // Filter tools based on agent, parent/config and profile scopes.
+        let tools = self.filter_tools_with_config(
+            &definition,
+            &config,
+            resolved_role.profile_tool_access.as_ref(),
+        );
+        let tool_names = tools
+            .iter()
+            .map(|tool| tool.name().to_string())
+            .collect::<Vec<_>>();
+        let forked_messages = config
+            .fork_context
+            .select_messages(&config.parent_context)
+            .map_err(|err| SageError::agent(format!("Failed to fork parent context: {}", err)))?;
+        let forked_message_count = forked_messages.len();
+        let llm_override = self.llm_client_for_role(
+            resolved_role.model.as_deref(),
+            resolved_role.reasoning.as_deref(),
+        )?;
+        let llm_client = llm_override.as_ref().unwrap_or(&self.llm_client);
 
         tracing::info!(
-            "Starting sub-agent execution: type={}, tools={}, cwd={:?}, prompt_len={}",
+            "Starting sub-agent execution: type={}, role={}, tools={}, cwd={:?}, prompt_len={}",
             config.agent_type,
+            definition.name,
             tools.len(),
             effective_cwd,
             config.prompt.len()
         );
 
-        // Build messages
-        let mut messages = Vec::new();
-
-        // Add system prompt
-        if !definition.system_prompt.is_empty() {
-            messages.push(LlmMessage::system(&definition.system_prompt));
-        }
-
-        // Add user task with thoroughness context for Explore agents
-        let user_message = if config.agent_type == AgentType::Explore {
-            format!(
-                "{}\n\n**Thoroughness Level**: {}\n{}\n\nTask: {}",
-                definition.description,
-                config.thoroughness,
-                config.thoroughness.description(),
-                config.prompt
-            )
-        } else {
-            format!("{}\n\nTask: {}", definition.description, config.prompt)
-        };
-        messages.push(LlmMessage::user(user_message));
+        let mut messages = self.initial_messages(&definition, &config, forked_messages);
 
         // Track execution
         let mut progress = AgentProgress::new();
-        let mut metadata = ExecutionMetadata::default();
+        let mut metadata = self.role_metadata(
+            &definition,
+            &resolved_role,
+            &config,
+            forked_message_count,
+            tool_names,
+        );
 
         // Calculate effective max steps based on agent type and thoroughness
         let effective_max_steps = if config.agent_type == AgentType::Explore {
@@ -227,6 +256,7 @@ impl SubAgentRunner {
             // Execute one step
             match self
                 .execute_step(
+                    llm_client,
                     &mut messages,
                     &tools,
                     &effective_cwd,
@@ -259,19 +289,6 @@ impl SubAgentRunner {
         }
     }
 
-    /// Get agent definition for a given type
-    fn get_agent_definition(&self, agent_type: &AgentType) -> AgentDefinition {
-        match agent_type {
-            AgentType::GeneralPurpose => general_purpose_agent(),
-            AgentType::Explore => explore_agent(),
-            AgentType::Plan => plan_agent(),
-            AgentType::Custom => {
-                // Default to general purpose for custom
-                general_purpose_agent()
-            }
-        }
-    }
-
     /// Filter tools based on both agent definition and config's tool access control
     ///
     /// This method considers:
@@ -281,6 +298,7 @@ impl SubAgentRunner {
         &self,
         definition: &AgentDefinition,
         config: &SubAgentConfig,
+        profile_access: Option<&crate::agent::subagent::types::ToolAccessControl>,
     ) -> Vec<Arc<dyn Tool>> {
         self.all_tools
             .iter()
@@ -290,7 +308,10 @@ impl SubAgentRunner {
                 let allowed_by_definition = definition.can_use_tool(name);
                 // Must be allowed by config's tool access
                 let allowed_by_config = config.allows_tool(name);
-                allowed_by_definition && allowed_by_config
+                let allowed_by_profile = profile_access
+                    .map(|profile| profile.allows_tool(name))
+                    .unwrap_or(true);
+                allowed_by_definition && allowed_by_config && allowed_by_profile
             })
             .cloned()
             .collect()
@@ -299,6 +320,7 @@ impl SubAgentRunner {
     /// Execute a single step
     async fn execute_step(
         &self,
+        llm_client: &LlmClient,
         messages: &mut Vec<LlmMessage>,
         tools: &[Arc<dyn Tool>],
         _working_dir: &Path,
@@ -310,7 +332,7 @@ impl SubAgentRunner {
         let tool_schemas: Vec<ToolSchema> = tools.iter().map(|t| t.schema()).collect();
 
         // Call LLM
-        let response = self.llm_client.chat(messages, Some(&tool_schemas)).await?;
+        let response = llm_client.chat(messages, Some(&tool_schemas)).await?;
 
         // Update token usage
         if let Some(usage) = &response.usage {
@@ -411,90 +433,4 @@ pub(crate) enum StepResult {
     Continue,
     /// Task completed with final output
     Completed(String),
-}
-
-/// Global sub-agent runner instance (set by the main agent)
-static GLOBAL_RUNNER: std::sync::OnceLock<Arc<RwLock<Option<SubAgentRunner>>>> =
-    std::sync::OnceLock::new();
-
-/// Initialize the global sub-agent runner from configuration
-///
-/// # Arguments
-/// * `config` - The main configuration
-/// * `tools` - Available tools for sub-agents
-/// * `working_directory` - The working directory for file operations (optional)
-pub fn init_global_runner_from_config(
-    config: &Config,
-    tools: Vec<Arc<dyn Tool>>,
-    working_directory: Option<PathBuf>,
-) -> SageResult<()> {
-    let runner = SubAgentRunner::from_config(config, tools, working_directory)?;
-    init_global_runner(runner);
-    Ok(())
-}
-
-/// Initialize the global sub-agent runner
-pub fn init_global_runner(runner: SubAgentRunner) {
-    let lock = GLOBAL_RUNNER.get_or_init(|| Arc::new(RwLock::new(None)));
-    if let Ok(mut guard) = lock.try_write() {
-        *guard = Some(runner);
-        tracing::info!("Global sub-agent runner initialized");
-    }
-}
-
-/// Update tools in the global runner
-pub async fn update_global_runner_tools(tools: Vec<Arc<dyn Tool>>) {
-    if let Some(lock) = GLOBAL_RUNNER.get() {
-        let mut guard = lock.write().await;
-        if let Some(runner) = guard.as_mut() {
-            runner.update_tools(tools);
-            tracing::debug!("Updated global sub-agent runner tools");
-        }
-    }
-}
-
-/// Update working directory in the global runner
-pub async fn update_global_runner_cwd(cwd: PathBuf) {
-    if let Some(lock) = GLOBAL_RUNNER.get() {
-        let mut guard = lock.write().await;
-        if let Some(runner) = guard.as_mut() {
-            runner.set_working_directory(cwd.clone());
-            tracing::debug!(
-                "Updated global sub-agent runner working directory: {:?}",
-                cwd
-            );
-        }
-    }
-}
-
-/// Get the current working directory from the global runner
-pub async fn get_global_runner_cwd() -> Option<PathBuf> {
-    if let Some(lock) = GLOBAL_RUNNER.get() {
-        let guard = lock.read().await;
-        guard.as_ref().map(|r| r.working_directory().clone())
-    } else {
-        None
-    }
-}
-
-/// Get the global sub-agent runner
-pub fn get_global_runner() -> Option<Arc<RwLock<Option<SubAgentRunner>>>> {
-    GLOBAL_RUNNER.get().cloned()
-}
-
-/// Execute a sub-agent using the global runner
-pub async fn execute_subagent(config: SubAgentConfig) -> SageResult<SubAgentResult> {
-    let runner_lock = get_global_runner().ok_or_else(|| {
-        SageError::agent(
-            "Sub-agent runner not initialized. Call init_global_runner_from_config first.",
-        )
-    })?;
-
-    let guard = runner_lock.read().await;
-    let runner = guard
-        .as_ref()
-        .ok_or_else(|| SageError::agent("Sub-agent runner not available"))?;
-
-    let cancel = CancellationToken::new();
-    runner.execute(config, cancel).await
 }
