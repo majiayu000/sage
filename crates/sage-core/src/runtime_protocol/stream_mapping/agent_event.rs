@@ -4,9 +4,10 @@ use crate::ui::AgentEvent;
 
 use super::RuntimeCorrelation;
 use super::helpers::{
-    assistant_message_notification, id_fragment, item_notification, legacy_item_id,
-    system_message_notification, tool_item_id, user_message_notification,
+    assistant_message_notification, item_notification, system_message_notification,
+    user_message_notification,
 };
+use super::ids::{id_fragment, tool_item_id};
 use crate::runtime_protocol::envelope::{RuntimeEnvelope, RuntimeKind, RuntimeSource};
 use crate::runtime_protocol::notification::{
     RuntimeErrorReportedPayload, RuntimeItemPayload, RuntimeItemStatus, RuntimeItemType,
@@ -164,8 +165,4 @@ fn agent_event_summary(event: &AgentEvent) -> String {
         | AgentEvent::ErrorOccurred { .. }
         | AgentEvent::UserInputReceived { .. } => "agent event".to_string(),
     }
-}
-
-fn _legacy_item_id_example(sequence: u64) -> String {
-    legacy_item_id("agent", sequence)
 }

@@ -2,9 +2,10 @@ use crate::output::OutputEvent;
 
 use super::RuntimeCorrelation;
 use super::helpers::{
-    error_reported_notification, item_notification, legacy_item_id, object_value, tool_item_id,
-    turn_completed_notification, with_legacy_session,
+    error_reported_notification, item_notification, turn_completed_notification,
+    with_legacy_session,
 };
+use super::ids::{legacy_item_id, tool_item_id};
 use crate::runtime_protocol::envelope::RuntimeSource;
 use crate::runtime_protocol::notification::{
     RuntimeItemPayload, RuntimeItemStatus, RuntimeItemType, RuntimeMessageRole, RuntimeNotification,
@@ -56,7 +57,8 @@ pub fn notifications_from_output_event(
                 item_type: RuntimeItemType::ToolCall,
                 tool_name: Some(tool.tool_name.clone()),
                 status: Some(RuntimeItemStatus::Started),
-                arguments: Some(object_value(tool.arguments.clone())),
+                arguments: None,
+                redacted: Some(true),
                 legacy_type: Some("tool_call_start".to_string()),
                 ..RuntimeItemPayload::new(RuntimeItemType::ToolCall)
             },
@@ -79,7 +81,9 @@ pub fn notifications_from_output_event(
                 }),
                 success: Some(tool.success),
                 duration_ms: Some(tool.duration_ms),
-                output_preview: tool.output.clone().or_else(|| tool.error.clone()),
+                output_preview: None,
+                truncated: Some(tool.output.is_some() || tool.error.is_some()),
+                redacted: Some(true),
                 legacy_type: Some("tool_call_result".to_string()),
                 ..RuntimeItemPayload::new(RuntimeItemType::ToolCall)
             },

@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 
 use super::*;
@@ -47,28 +48,71 @@ fn schema_fixture_declares_runtime_protocol_v0() {
 }
 
 #[test]
-fn legacy_stream_mapping_fixture_covers_every_output_event() {
+fn runtime_fixture_payload_keys_match_schema() {
+    let schema: serde_json::Value =
+        serde_json::from_str(SCHEMA_FIXTURE).expect("schema fixture is valid JSON");
+    let mut messages = STREAM_FIXTURE
+        .lines()
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    messages.extend(LEGACY_MAPPING_FIXTURE.lines().map(|line| {
+        serde_json::from_str::<serde_json::Value>(line)
+            .expect("mapping row")["protocol_notification"]
+            .to_string()
+    }));
+    messages.extend(PERMISSION_FIXTURE.lines().map(str::to_string));
+    messages.extend(STRUCTURED_ERROR_FIXTURE.lines().map(str::to_string));
+
+    for line in messages {
+        let message: serde_json::Value = serde_json::from_str(&line).expect("runtime JSON");
+        let payload = message["payload"].as_object().expect("payload object");
+        let allowed = payload_schema_keys(&schema, &message);
+        for key in payload.keys() {
+            assert!(
+                allowed.contains_key(key),
+                "schema for {} {} does not declare payload key {}",
+                message["kind"],
+                message["type"],
+                key
+            );
+        }
+    }
+}
+
+#[test]
+fn legacy_stream_mapping_fixture_matches_output_event_mapper() {
     let mut seen = Vec::new();
+    let mut grouped = BTreeMap::<String, (serde_json::Value, Vec<RuntimeNotification>)>::new();
 
     for line in LEGACY_MAPPING_FIXTURE.lines() {
         let row: serde_json::Value = serde_json::from_str(line).expect("valid mapping row");
-        let legacy: OutputEvent =
-            serde_json::from_value(row["legacy_output_event"].clone()).expect("legacy event");
         let expected: RuntimeNotification =
             serde_json::from_value(row["protocol_notification"].clone()).expect("notification");
+        let key = serde_json::to_string(&row["legacy_output_event"]).expect("legacy key");
+        grouped
+            .entry(key)
+            .or_insert_with(|| (row["legacy_output_event"].clone(), Vec::new()))
+            .1
+            .push(expected);
+    }
+
+    for (_, (legacy_value, expected)) in grouped {
+        let legacy: OutputEvent = serde_json::from_value(legacy_value).expect("legacy event");
+        let first_sequence = expected
+            .iter()
+            .filter_map(|message| message.sequence)
+            .min()
+            .expect("expected sequence");
         let correlation = RuntimeCorrelation::new(
-            expected.thread_id.clone().expect("thread id"),
-            expected.turn_id.clone().expect("turn id"),
-            expected.sequence.expect("sequence"),
+            expected[0].thread_id.clone().expect("thread id"),
+            expected[0].turn_id.clone().expect("turn id"),
+            first_sequence,
         );
 
         let actual = notifications_from_output_event(&legacy, &correlation);
-        assert!(
-            actual
-                .iter()
-                .any(|message| message.message_type == expected.message_type),
-            "missing mapped message type {}",
-            expected.message_type
+        assert_eq!(
+            serde_json::to_value(&actual).expect("actual JSON"),
+            serde_json::to_value(&expected).expect("expected JSON")
         );
         seen.push(legacy.event_type());
     }
@@ -151,6 +195,15 @@ fn input_request_and_response_dtos_map_to_protocol_messages() {
         notification_from_input_request_dto(&permission_request, &correlation).message_type,
         "permission.requested"
     );
+    let permission_notification =
+        notification_from_input_request_dto(&permission_request, &correlation);
+    match permission_notification.payload {
+        RuntimeNotificationPayload::PermissionRequested(payload) => {
+            assert!(payload.input_redacted);
+            assert!(payload.input.is_none());
+        }
+        other => panic!("unexpected permission payload: {other:?}"),
+    }
 
     let question_request = InputRequestDto {
         id: "req_questions_001".to_string(),
@@ -311,4 +364,49 @@ fn structured_error_fixture_uses_stable_codes_and_redaction_flags() {
             other => panic!("expected error message, got {other:?}"),
         }
     }
+}
+
+fn payload_schema_keys<'a>(
+    schema: &'a serde_json::Value,
+    message: &serde_json::Value,
+) -> &'a serde_json::Map<String, serde_json::Value> {
+    let defs = &schema["$defs"];
+    let kind = message["kind"].as_str().expect("kind");
+    let message_type = message["type"].as_str().expect("type");
+    let payload_def = match (kind, message_type) {
+        ("request", "thread.start") => "thread_start_payload",
+        ("request", "thread.resume") => "thread_resume_payload",
+        ("request", "thread.fork") => "thread_fork_payload",
+        ("request", "turn.start") => "turn_start_payload",
+        ("request", "turn.steer") => "turn_steer_payload",
+        ("request", "turn.interrupt") => "turn_interrupt_payload",
+        ("request", "permission.respond") => "permission_respond_payload",
+        ("request", "input.respond") => "input_respond_payload",
+        ("notification", "thread.started" | "thread.ended") => "thread_lifecycle_payload",
+        ("notification", "turn.started") => "turn_started_payload",
+        ("notification", "turn.completed" | "turn.interrupted") => "turn_terminal_payload",
+        ("notification", "item.created" | "item.updated" | "item.completed") => "item_payload",
+        ("notification", "permission.requested") => "permission_requested_payload",
+        ("notification", "permission.resolved") => "permission_resolved_payload",
+        ("notification", "error.reported") => "error_reported_payload",
+        ("response", "thread.start.result" | "thread.resume.result" | "thread.fork.result") => {
+            "thread_response_payload"
+        }
+        ("response", "turn.start.result" | "turn.steer.result" | "turn.interrupt.result") => {
+            "turn_response_payload"
+        }
+        ("response", "permission.respond.result" | "input.respond.result") => {
+            "ack_response_payload"
+        }
+        ("error", _) => {
+            return defs["error_envelope"]["properties"]["payload"]["properties"]
+                .as_object()
+                .expect("error payload properties");
+        }
+        _ => panic!("unmapped runtime message type {kind} {message_type}"),
+    };
+
+    defs[payload_def]["properties"]
+        .as_object()
+        .expect("payload properties")
 }

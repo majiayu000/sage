@@ -1,15 +1,13 @@
-use serde_json::{Map, Value};
-
-use crate::input::{PermissionSuggestion, RuleDestination};
-use crate::tools::permission::PermissionBehavior;
+use serde_json::Value;
 
 use super::RuntimeCorrelation;
+use super::ids::{id_fragment, legacy_item_id};
+use super::rules::object_value;
 use crate::runtime_protocol::envelope::{RuntimeEnvelope, RuntimeKind, RuntimeSource};
 use crate::runtime_protocol::notification::{
     RuntimeErrorReportedPayload, RuntimeItemPayload, RuntimeItemType, RuntimeMessageRole,
     RuntimeNotification, RuntimeNotificationPayload, RuntimeTurnStatus, RuntimeTurnTerminalPayload,
 };
-use crate::runtime_protocol::permission::{RuntimeRule, RuntimeRuleBehavior, RuntimeRuleSource};
 
 pub(super) fn item_notification(
     message_type: &str,
@@ -197,56 +195,4 @@ pub(super) fn with_legacy_session(
         }
         None => notification,
     }
-}
-
-pub(super) fn object_value(value: Value) -> Value {
-    if value.is_object() {
-        value
-    } else {
-        let mut map = Map::new();
-        map.insert("value".to_string(), value);
-        Value::Object(map)
-    }
-}
-
-pub(super) fn rule_from_suggestion(suggestion: &PermissionSuggestion) -> RuntimeRule {
-    RuntimeRule {
-        behavior: match suggestion.behavior {
-            PermissionBehavior::Allow => RuntimeRuleBehavior::Allow,
-            PermissionBehavior::Deny => RuntimeRuleBehavior::Deny,
-            PermissionBehavior::Ask => RuntimeRuleBehavior::Ask,
-            PermissionBehavior::Passthrough => RuntimeRuleBehavior::Passthrough,
-        },
-        source: match suggestion.destination {
-            RuleDestination::Session => RuntimeRuleSource::SessionSettings,
-            RuleDestination::LocalSettings => RuntimeRuleSource::LocalSettings,
-            RuleDestination::UserSettings => RuntimeRuleSource::UserSettings,
-            RuleDestination::ProjectSettings => RuntimeRuleSource::ProjectSettings,
-        },
-    }
-}
-
-pub(super) fn legacy_item_id(kind: &str, sequence: u64) -> String {
-    format!("item_legacy_{}_{:03}", kind, sequence.saturating_add(1))
-}
-
-pub(super) fn tool_item_id(call_id: &str) -> String {
-    if call_id.starts_with("item_") {
-        call_id.to_string()
-    } else {
-        format!("item_{}", id_fragment(call_id))
-    }
-}
-
-pub(super) fn id_fragment(input: &str) -> String {
-    input
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.') {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect()
 }

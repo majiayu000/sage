@@ -3,7 +3,9 @@ use serde_json::Value;
 use crate::input::{InputRequestDto, InputRequestKindDto, InputResponseDto, InputResponseKindDto};
 
 use super::RuntimeCorrelation;
-use super::helpers::{id_fragment, input_item_notification, object_value, rule_from_suggestion};
+use super::helpers::input_item_notification;
+use super::ids::id_fragment;
+use super::rules::rule_from_suggestion;
 use crate::runtime_protocol::envelope::{RuntimeEnvelope, RuntimeKind, RuntimeSource};
 use crate::runtime_protocol::notification::{RuntimeNotification, RuntimeNotificationPayload};
 use crate::runtime_protocol::permission::{
@@ -23,7 +25,7 @@ pub fn notification_from_input_request_dto(
         InputRequestKindDto::Permission {
             tool_name,
             description,
-            input,
+            input: _,
             suggestions,
         } => RuntimeEnvelope::new(
             RuntimeKind::Notification,
@@ -35,8 +37,8 @@ pub fn notification_from_input_request_dto(
                 tool_name: tool_name.clone(),
                 risk: RuntimePermissionRisk::High,
                 reason: description.clone(),
-                input_redacted: false,
-                input: Some(object_value(input.clone())),
+                input_redacted: true,
+                input: None,
                 suggestions: suggestions.iter().map(rule_from_suggestion).collect(),
             }),
         )
@@ -83,17 +85,19 @@ pub fn request_from_input_response_dto(
             None,
             Vec::new(),
         ),
-        other => RuntimeEnvelope::new(
-            RuntimeKind::Request,
-            "input.respond",
-            format!("req_input_respond_{}", id_fragment(&response.request_id)),
-            chrono::Utc::now(),
-            RuntimeSource::Cli,
-            RuntimeRequestPayload::InputRespond(input_response_payload(other)),
-        )
-        .with_thread_id(correlation.thread_id.clone())
-        .with_turn_id(correlation.turn_id.clone())
-        .with_request_id(response.request_id.clone()),
+        other => RuntimeRequest::from(
+            RuntimeEnvelope::new(
+                RuntimeKind::Request,
+                "input.respond",
+                format!("req_input_respond_{}", id_fragment(&response.request_id)),
+                chrono::Utc::now(),
+                RuntimeSource::Cli,
+                RuntimeRequestPayload::InputRespond(input_response_payload(other)),
+            )
+            .with_thread_id(correlation.thread_id.clone())
+            .with_turn_id(correlation.turn_id.clone())
+            .with_request_id(response.request_id.clone()),
+        ),
     }
 }
 
@@ -105,25 +109,27 @@ fn permission_response_request(
     modified_input: Option<Value>,
     rules: Vec<RuntimeRule>,
 ) -> RuntimeRequest {
-    RuntimeEnvelope::new(
-        RuntimeKind::Request,
-        "permission.respond",
-        format!(
-            "req_permission_respond_{}",
-            id_fragment(&response.request_id)
-        ),
-        chrono::Utc::now(),
-        RuntimeSource::Cli,
-        RuntimeRequestPayload::PermissionRespond(RuntimePermissionRespondPayload {
-            decision,
-            reason,
-            modified_input,
-            rules,
-        }),
+    RuntimeRequest::from(
+        RuntimeEnvelope::new(
+            RuntimeKind::Request,
+            "permission.respond",
+            format!(
+                "req_permission_respond_{}",
+                id_fragment(&response.request_id)
+            ),
+            chrono::Utc::now(),
+            RuntimeSource::Cli,
+            RuntimeRequestPayload::PermissionRespond(RuntimePermissionRespondPayload {
+                decision,
+                reason,
+                modified_input,
+                rules,
+            }),
+        )
+        .with_thread_id(correlation.thread_id.clone())
+        .with_turn_id(correlation.turn_id.clone())
+        .with_request_id(response.request_id.clone()),
     )
-    .with_thread_id(correlation.thread_id.clone())
-    .with_turn_id(correlation.turn_id.clone())
-    .with_request_id(response.request_id.clone())
 }
 
 fn input_response_payload(response: &InputResponseKindDto) -> RuntimeInputRespondPayload {
