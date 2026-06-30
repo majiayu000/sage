@@ -120,6 +120,9 @@ nix = { version = "0.29", features = ["signal", "process"] }
 # Static initialization
 once_cell = "1.19"
 
+# SQLite persistence
+rusqlite = { version = "0.32", features = ["bundled"] }
+
 # Synchronization primitives (faster, no-poison alternative to std::sync::Mutex)
 parking_lot = "0.12"
 
