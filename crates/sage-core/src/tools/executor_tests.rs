@@ -4,6 +4,7 @@
 mod tests {
     use crate::tools::base::{Tool, ToolError};
     use crate::tools::executor::{ToolExecutor, ToolExecutorBuilder};
+    use crate::tools::permission::ToolContext;
     use crate::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
     use async_trait::async_trait;
     use std::collections::HashMap;
@@ -16,6 +17,36 @@ mod tests {
         should_succeed: bool,
         execution_delay: Option<Duration>,
         supports_parallel: bool,
+    }
+
+    struct ContextEchoTool;
+
+    #[async_trait]
+    impl Tool for ContextEchoTool {
+        fn name(&self) -> &str {
+            "context_echo"
+        }
+
+        fn description(&self) -> &str {
+            "Echoes the session id from tool context"
+        }
+
+        fn schema(&self) -> ToolSchema {
+            ToolSchema::new(self.name(), self.description(), vec![])
+        }
+
+        async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
+            Ok(ToolResult::success(&call.id, self.name(), "no-context"))
+        }
+
+        async fn execute_with_context(
+            &self,
+            call: &ToolCall,
+            context: &ToolContext,
+        ) -> Result<ToolResult, ToolError> {
+            let session_id = context.session_id.as_deref().unwrap_or("missing-session");
+            Ok(ToolResult::success(&call.id, self.name(), session_id))
+        }
     }
 
     impl MockTool {
@@ -158,6 +189,23 @@ mod tests {
         assert!(result.success);
         assert_eq!(result.tool_name, "test_tool");
         assert!(result.output.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_execute_tool_with_context_passes_session_id() {
+        let mut executor = ToolExecutor::new();
+        executor.register_tool(Arc::new(ContextEchoTool));
+        let call = ToolCall::new("call_context", "context_echo", HashMap::new());
+        let context = ToolContext::new(std::env::current_dir().unwrap_or_default())
+            .with_session_id("parent-thread");
+
+        let context_result = executor.execute_tool_with_context(&call, &context).await;
+        assert!(context_result.success);
+        assert_eq!(context_result.output.as_deref(), Some("parent-thread"));
+
+        let legacy_result = executor.execute_tool(&call).await;
+        assert!(legacy_result.success);
+        assert_eq!(legacy_result.output.as_deref(), Some("no-context"));
     }
 
     #[tokio::test]

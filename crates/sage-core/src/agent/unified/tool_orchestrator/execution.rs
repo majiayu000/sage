@@ -7,6 +7,7 @@ use crate::error::{SageError, SageResult};
 use crate::hooks::{HookEvent, HookInput};
 use crate::recovery::supervisor::{SupervisionResult, TaskSupervisor};
 use crate::tools::types::{ToolCall, ToolResult};
+use std::sync::{Arc, Mutex};
 use tokio_util::sync::CancellationToken;
 
 impl ToolOrchestrator {
@@ -14,11 +15,14 @@ impl ToolOrchestrator {
     pub async fn execution_phase(
         &self,
         tool_call: &ToolCall,
+        context: &ToolExecutionContext,
         cancel_token: CancellationToken,
     ) -> ToolResult {
         // If supervision is disabled, execute directly
         if !self.supervision_config.enabled {
-            return self.execute_tool_direct(tool_call, cancel_token).await;
+            return self
+                .execute_tool_direct(tool_call, context, cancel_token)
+                .await;
         }
 
         // Create a supervisor for this tool execution
@@ -28,13 +32,20 @@ impl ToolOrchestrator {
 
         let tool_call_clone = tool_call.clone();
         let executor = &self.tool_executor;
+        let tool_context = context.to_tool_context();
+        let completed_tool_result: Arc<Mutex<Option<ToolResult>>> = Arc::new(Mutex::new(None));
 
         let supervision_result = supervisor
             .supervise(|| {
                 let call = tool_call_clone.clone();
+                let context = tool_context.clone();
+                let completed_tool_result = completed_tool_result.clone();
                 async move {
-                    let result = executor.execute_tool(&call).await;
+                    let result = executor.execute_tool_with_context(&call, &context).await;
                     if result.success {
+                        if let Ok(mut slot) = completed_tool_result.lock() {
+                            *slot = Some(result.clone());
+                        }
                         Ok(result)
                     } else {
                         Err(SageError::tool(
@@ -51,14 +62,25 @@ impl ToolOrchestrator {
 
         // Convert supervision result back to ToolResult
         match supervision_result {
-            SupervisionResult::Completed => self.execute_tool_direct(tool_call, cancel_token).await,
+            SupervisionResult::Completed => completed_tool_result
+                .lock()
+                .ok()
+                .and_then(|mut slot| slot.take())
+                .unwrap_or_else(|| {
+                    ToolResult::error(
+                        &tool_call.id,
+                        &tool_call.name,
+                        "Tool supervision completed without a result",
+                    )
+                }),
             SupervisionResult::Restarted { attempt } => {
                 tracing::info!(
                     tool = %tool_call.name,
                     attempt = attempt,
                     "Tool execution restarted, attempting again"
                 );
-                self.execute_tool_direct(tool_call, cancel_token).await
+                self.execute_tool_direct(tool_call, context, cancel_token)
+                    .await
             }
             SupervisionResult::Resumed { error } => {
                 tracing::warn!(
@@ -95,10 +117,12 @@ impl ToolOrchestrator {
     async fn execute_tool_direct(
         &self,
         tool_call: &ToolCall,
+        context: &ToolExecutionContext,
         cancel_token: CancellationToken,
     ) -> ToolResult {
+        let tool_context = context.to_tool_context();
         tokio::select! {
-            result = self.tool_executor.execute_tool(tool_call) => {
+            result = self.tool_executor.execute_tool_with_context(tool_call, &tool_context) => {
                 result
             }
             _ = cancel_token.cancelled() => {
@@ -181,5 +205,77 @@ impl ToolOrchestrator {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::hooks::{HookExecutor, HookRegistry};
+    use crate::tools::base::{Tool, ToolError};
+    use crate::tools::executor::ToolExecutor;
+    use crate::tools::permission::ToolContext;
+    use crate::tools::types::{ToolCall, ToolSchema};
+    use async_trait::async_trait;
+    use std::collections::HashMap;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct CountingContextTool {
+        calls: Arc<AtomicUsize>,
+    }
+
+    #[async_trait]
+    impl Tool for CountingContextTool {
+        fn name(&self) -> &str {
+            "counting_context"
+        }
+
+        fn description(&self) -> &str {
+            "Counts context-aware executions"
+        }
+
+        fn schema(&self) -> ToolSchema {
+            ToolSchema::new(self.name(), self.description(), vec![])
+        }
+
+        async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Ok(ToolResult::success(&call.id, self.name(), "no-context"))
+        }
+
+        async fn execute_with_context(
+            &self,
+            call: &ToolCall,
+            context: &ToolContext,
+        ) -> Result<ToolResult, ToolError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Ok(ToolResult::success(
+                &call.id,
+                self.name(),
+                context.session_id.as_deref().unwrap_or("missing-session"),
+            ))
+        }
+    }
+
+    #[tokio::test]
+    async fn supervision_success_returns_result_without_second_tool_execution() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mut tool_executor = ToolExecutor::new();
+        tool_executor.register_tool(Arc::new(CountingContextTool {
+            calls: calls.clone(),
+        }));
+        let orchestrator =
+            ToolOrchestrator::new(tool_executor, HookExecutor::new(HookRegistry::new()));
+        let context =
+            ToolExecutionContext::new("parent-thread", std::env::current_dir().unwrap_or_default());
+        let call = ToolCall::new("call-1", "counting_context", HashMap::new());
+
+        let result = orchestrator
+            .execution_phase(&call, &context, CancellationToken::new())
+            .await;
+
+        assert!(result.success);
+        assert_eq!(result.output.as_deref(), Some("parent-thread"));
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
 }

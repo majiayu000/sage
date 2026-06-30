@@ -26,7 +26,7 @@ impl UnifiedExecutor {
         loop {
             let first_result = self
                 .tool_orchestrator
-                .execution_phase(&current_call, cancel_token.clone())
+                .execution_phase(&current_call, context, cancel_token.clone())
                 .await;
 
             if !Self::requires_destructive_confirmation(&first_result) {
@@ -88,7 +88,7 @@ impl UnifiedExecutor {
                         Ok(SettingsRecheckAfterDestructiveConfirmation::Ready(confirmed_call)) => {
                             return self
                                 .tool_orchestrator
-                                .execution_phase(&confirmed_call, cancel_token)
+                                .execution_phase(&confirmed_call, context, cancel_token)
                                 .await;
                         }
                         Ok(

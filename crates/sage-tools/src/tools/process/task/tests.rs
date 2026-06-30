@@ -5,11 +5,25 @@ mod suite {
     use serde_json::json;
     use std::sync::Arc;
 
+    use sage_core::agent::subagent::{AgentPath, ChildAgentSpawnRecord, SubAgentGraph};
+    use sage_core::thread_store::{SqliteThreadStore, ThreadRecord, ThreadStore};
     use sage_core::tools::base::Tool;
+    use sage_core::tools::permission::ToolContext;
     use sage_core::tools::types::ToolCall;
 
     use super::super::tool::TaskTool;
     use super::super::types::{TaskRegistry, TaskStatus};
+
+    async fn graph_with_parent(
+        parent_thread_id: &str,
+    ) -> Result<(Arc<SqliteThreadStore>, Arc<SubAgentGraph>), Box<dyn std::error::Error>> {
+        let store = Arc::new(SqliteThreadStore::in_memory()?);
+        store
+            .create_thread(ThreadRecord::new(parent_thread_id))
+            .await?;
+        let graph_store: Arc<dyn ThreadStore> = store.clone();
+        Ok((store, Arc::new(SubAgentGraph::new(graph_store))))
+    }
 
     #[tokio::test]
     async fn test_task_tool_basic() {
@@ -100,6 +114,174 @@ mod suite {
         };
         assert_ne!(task.status, TaskStatus::Pending);
         assert!(task.run_in_background);
+    }
+
+    #[tokio::test]
+    async fn test_task_tool_background_with_graph_records_child_edge()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let registry = Arc::new(TaskRegistry::new());
+        let (_store, graph) = graph_with_parent("parent-thread").await?;
+        let tool = TaskTool::with_registry_and_graph(registry.clone(), graph.clone());
+        let context = ToolContext::new(std::env::current_dir().unwrap_or_default())
+            .with_session_id("parent-thread");
+
+        let call = ToolCall {
+            id: "spawn-item".to_string(),
+            name: "Task".to_string(),
+            arguments: json!({
+                "description": "Plan implementation",
+                "prompt": "Design authentication system",
+                "subagent_type": "Plan",
+                "run_in_background": true,
+                "model": "opus"
+            })
+            .as_object()
+            .unwrap()
+            .clone()
+            .into_iter()
+            .collect(),
+            call_id: None,
+        };
+
+        let result = tool.execute_with_context(&call, &context).await?;
+        assert!(result.success);
+        let task_id = result
+            .metadata
+            .get("task_id")
+            .and_then(|value| value.as_str())
+            .expect("expected task id");
+        let agent_path = result
+            .metadata
+            .get("agent_path")
+            .and_then(|value| value.as_str())
+            .expect("expected agent path");
+        assert_eq!(
+            result
+                .metadata
+                .get("parent_thread_id")
+                .and_then(|value| value.as_str()),
+            Some("parent-thread")
+        );
+        assert_eq!(
+            result
+                .metadata
+                .get("child_thread_id")
+                .and_then(|value| value.as_str()),
+            Some(task_id)
+        );
+        assert_eq!(
+            result
+                .metadata
+                .get("spawn_item_id")
+                .and_then(|value| value.as_str()),
+            Some("spawn-item")
+        );
+
+        let summary = graph
+            .read_child(&AgentPath::from_raw_path(agent_path)?)
+            .await?;
+        assert_eq!(summary.parent_thread_id, "parent-thread");
+        assert_eq!(summary.child_thread_id, task_id);
+        assert_eq!(summary.spawn_item_id, "spawn-item");
+        assert!(registry.get_task(task_id).is_some());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_task_tool_background_graph_missing_parent_fails_before_registering()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let registry = Arc::new(TaskRegistry::new());
+        let store = Arc::new(SqliteThreadStore::in_memory()?);
+        let graph_store: Arc<dyn ThreadStore> = store;
+        let graph = Arc::new(SubAgentGraph::new(graph_store));
+        let tool = TaskTool::with_registry_and_graph(registry.clone(), graph);
+        let context = ToolContext::new(std::env::current_dir().unwrap_or_default())
+            .with_session_id("missing-parent");
+
+        let call = ToolCall {
+            id: "spawn-item".to_string(),
+            name: "Task".to_string(),
+            arguments: json!({
+                "description": "Plan implementation",
+                "prompt": "Design authentication system",
+                "subagent_type": "Plan",
+                "run_in_background": true,
+                "resume": "task_missing_parent"
+            })
+            .as_object()
+            .unwrap()
+            .clone()
+            .into_iter()
+            .collect(),
+            call_id: None,
+        };
+
+        let err = tool
+            .execute_with_context(&call, &context)
+            .await
+            .expect_err("missing parent must fail");
+        assert!(err.to_string().contains("missing-parent"));
+        assert!(registry.get_task("task_missing_parent").is_none());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_task_tool_background_with_graph_reuses_resume_edge()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let registry = Arc::new(TaskRegistry::new());
+        let (_store, graph) = graph_with_parent("parent-thread").await?;
+        graph
+            .record_child(ChildAgentSpawnRecord::new(
+                "parent-thread",
+                "task_existing",
+                "original-spawn",
+            ))
+            .await?;
+        let tool = TaskTool::with_registry_and_graph(registry.clone(), graph.clone());
+        let context = ToolContext::new(std::env::current_dir().unwrap_or_default())
+            .with_session_id("parent-thread");
+
+        let call = ToolCall {
+            id: "new-spawn".to_string(),
+            name: "Task".to_string(),
+            arguments: json!({
+                "description": "Plan implementation",
+                "prompt": "Design authentication system",
+                "subagent_type": "Plan",
+                "run_in_background": true,
+                "resume": "task_existing"
+            })
+            .as_object()
+            .unwrap()
+            .clone()
+            .into_iter()
+            .collect(),
+            call_id: None,
+        };
+
+        let result = tool.execute_with_context(&call, &context).await?;
+        assert!(result.success);
+        assert_eq!(
+            result
+                .metadata
+                .get("task_id")
+                .and_then(|value| value.as_str()),
+            Some("task_existing")
+        );
+        assert_eq!(
+            result
+                .metadata
+                .get("spawn_item_id")
+                .and_then(|value| value.as_str()),
+            Some("original-spawn")
+        );
+
+        let summary = graph
+            .read_child(&AgentPath::from_raw_path("agent://task_existing")?)
+            .await?;
+        assert_eq!(summary.spawn_item_id, "original-spawn");
+        assert!(registry.get_task("task_existing").is_some());
+        Ok(())
     }
 
     #[tokio::test]

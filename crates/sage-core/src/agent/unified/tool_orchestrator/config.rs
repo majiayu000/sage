@@ -1,6 +1,7 @@
 //! Configuration types for tool orchestration
 
 use crate::recovery::supervisor::SupervisionPolicy;
+use crate::tools::permission::ToolContext;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -20,6 +21,11 @@ impl ToolExecutionContext {
             session_id: session_id.into(),
             working_dir,
         }
+    }
+
+    /// Convert to the permission-layer tool context used by context-aware tools.
+    pub fn to_tool_context(&self) -> ToolContext {
+        ToolContext::new(self.working_dir.clone()).with_session_id(self.session_id.clone())
     }
 }
 

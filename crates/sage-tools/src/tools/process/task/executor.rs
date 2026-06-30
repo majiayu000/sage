@@ -1,7 +1,12 @@
 //! Task execution logic for running subagents
 
-use anyhow::anyhow;
-use sage_core::agent::subagent::{AgentType, SubAgentConfig, Thoroughness, execute_subagent};
+use anyhow::{anyhow, bail};
+use sage_core::agent::subagent::{
+    AgentPath, AgentType, ChildAgentSpawnRecord, ChildAgentSummary, SubAgentConfig, SubAgentGraph,
+    SubAgentGraphError, Thoroughness, execute_subagent,
+};
+use sage_core::thread_store::ThreadStoreError;
+use sage_core::tools::permission::ToolContext;
 use sage_core::tools::types::{ToolCall, ToolResult};
 use serde_json::json;
 use std::sync::Arc;
@@ -164,6 +169,132 @@ pub async fn execute_task_background(
         .with_metadata("task_id", json!(task_id))
         .with_metadata("subagent_type", json!(task_params.subagent_type))
         .with_metadata("run_in_background", json!(true)))
+}
+
+/// Execute a task in background and persist the sub-agent edge in the graph.
+pub async fn execute_task_background_with_graph(
+    call: &ToolCall,
+    registry: Arc<TaskRegistry>,
+    graph: Arc<SubAgentGraph>,
+    context: &ToolContext,
+) -> anyhow::Result<ToolResult> {
+    let (task_params, agent_type, thoroughness) = parse_task_parameters(call)?;
+    let parent_thread_id = context
+        .session_id
+        .as_deref()
+        .ok_or_else(|| anyhow!("Task background graph spawn requires session_id context"))?;
+
+    // Generate task ID
+    let task_id = task_params
+        .resume
+        .clone()
+        .unwrap_or_else(|| format!("task_{}", Uuid::new_v4()));
+
+    let summary = record_or_reuse_graph_child(
+        &graph,
+        parent_thread_id,
+        &task_id,
+        &call.id,
+        &task_params.description,
+        task_params.resume.is_some(),
+    )
+    .await?;
+
+    // Create and register task only after the graph edge is durable.
+    let task = TaskRequest {
+        id: task_id.clone(),
+        description: task_params.description.clone(),
+        prompt: task_params.prompt.clone(),
+        subagent_type: task_params.subagent_type.clone(),
+        model: task_params.model.clone(),
+        run_in_background: true,
+        resume: task_params.resume.clone(),
+        status: TaskStatus::Running,
+        result: None,
+    };
+
+    registry.add_task(task);
+
+    let config =
+        SubAgentConfig::new(agent_type, task_params.prompt.clone()).with_thoroughness(thoroughness);
+    let background_task_id = task_id.clone();
+    let background_registry = registry.clone();
+    let handle = tokio::spawn(async move {
+        let result = execute_subagent(config.with_background(true)).await;
+        match result {
+            Ok(result) => {
+                background_registry.update_status(
+                    &background_task_id,
+                    TaskStatus::Completed,
+                    Some(result.content),
+                );
+            }
+            Err(err) => {
+                background_registry.update_status(
+                    &background_task_id,
+                    TaskStatus::Failed,
+                    Some(err.to_string()),
+                );
+            }
+        }
+    });
+    registry.register_handle(task_id.clone(), handle);
+
+    let response = format!(
+        "Task '{}' ({}) started in background.\n\
+         Agent type: {}\n\
+         Task ID: {}\n\
+         Agent path: {}\n\n\
+         Use TaskOutput with task_id=\"{}\" or agent_path=\"{}\" to retrieve results when ready.",
+        task_params.description,
+        task_id,
+        task_params.subagent_type,
+        task_id,
+        summary.agent_path,
+        task_id,
+        summary.agent_path
+    );
+
+    Ok(ToolResult::success(&call.id, "Task", response)
+        .with_metadata("task_id", json!(task_id))
+        .with_metadata("agent_path", json!(summary.agent_path.as_path_str()))
+        .with_metadata("parent_thread_id", json!(summary.parent_thread_id))
+        .with_metadata("child_thread_id", json!(summary.child_thread_id))
+        .with_metadata("spawn_item_id", json!(summary.spawn_item_id))
+        .with_metadata("subagent_type", json!(task_params.subagent_type))
+        .with_metadata("run_in_background", json!(true)))
+}
+
+async fn record_or_reuse_graph_child(
+    graph: &SubAgentGraph,
+    parent_thread_id: &str,
+    task_id: &str,
+    spawn_item_id: &str,
+    title: &str,
+    resume_existing: bool,
+) -> anyhow::Result<ChildAgentSummary> {
+    if resume_existing {
+        let agent_path = AgentPath::try_for_child_thread(task_id)?;
+        match graph.read_child(&agent_path).await {
+            Ok(summary) => {
+                if summary.parent_thread_id != parent_thread_id {
+                    bail!(
+                        "Task resume '{}' is linked to parent thread '{}' not '{}'",
+                        task_id,
+                        summary.parent_thread_id,
+                        parent_thread_id
+                    );
+                }
+                return Ok(summary);
+            }
+            Err(SubAgentGraphError::ThreadStore(ThreadStoreError::ThreadNotFound(_))) => {}
+            Err(err) => return Err(err.into()),
+        }
+    }
+
+    let mut spawn = ChildAgentSpawnRecord::new(parent_thread_id, task_id, spawn_item_id);
+    spawn.title = Some(title.to_string());
+    Ok(graph.record_child(spawn).await?)
 }
 
 /// Task parameters parsed from tool call

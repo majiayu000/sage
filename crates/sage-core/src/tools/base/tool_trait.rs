@@ -61,6 +61,18 @@ pub trait Tool: Send + Sync {
     /// resources are unavailable, or permissions are denied.
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError>;
 
+    /// Execute the tool with permission/session context.
+    ///
+    /// Most tools do not need runtime context, so the default implementation
+    /// preserves the existing `execute()` behavior.
+    async fn execute_with_context(
+        &self,
+        call: &ToolCall,
+        _context: &ToolContext,
+    ) -> Result<ToolResult, ToolError> {
+        self.execute(call).await
+    }
+
     // ========================================================================
     // Validation
     // ========================================================================
@@ -188,6 +200,35 @@ pub trait Tool: Send + Sync {
 
         // Execute the tool
         match self.execute(call).await {
+            Ok(mut result) => {
+                result.execution_time_ms =
+                    Some(u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX));
+                result
+            }
+            Err(err) => ToolResult::error(&call.id, self.name(), err.to_string())
+                .with_execution_time(
+                    u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX),
+                ),
+        }
+    }
+
+    /// Execute the tool with timing, error handling, and runtime context.
+    async fn execute_with_timing_and_context(
+        &self,
+        call: &ToolCall,
+        context: &ToolContext,
+    ) -> ToolResult {
+        let start_time = Instant::now();
+
+        // Validate arguments first
+        if let Err(err) = self.validate(call) {
+            return ToolResult::error(&call.id, self.name(), err.to_string()).with_execution_time(
+                u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX),
+            );
+        }
+
+        // Execute the tool
+        match self.execute_with_context(call, context).await {
             Ok(mut result) => {
                 result.execution_time_ms =
                     Some(u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX));

@@ -4,6 +4,7 @@
 //! structured status/results from sub-agent tasks started by the Task tool.
 
 use async_trait::async_trait;
+use sage_core::agent::subagent::{AgentPath, ChildAgentSummary, SubAgentGraph};
 use sage_core::tools::BACKGROUND_REGISTRY;
 use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
@@ -16,6 +17,7 @@ use super::task::{GLOBAL_TASK_REGISTRY, TaskRegistry, TaskRequest, TaskStatus};
 /// Tool for retrieving output from background shell tasks
 pub struct TaskOutputTool {
     task_registry: Arc<TaskRegistry>,
+    subagent_graph: Option<Arc<SubAgentGraph>>,
 }
 
 impl TaskOutputTool {
@@ -23,12 +25,27 @@ impl TaskOutputTool {
     pub fn new() -> Self {
         Self {
             task_registry: GLOBAL_TASK_REGISTRY.clone(),
+            subagent_graph: None,
         }
     }
 
     /// Create a TaskOutput tool with an explicit task registry, useful for tests.
     pub fn with_task_registry(task_registry: Arc<TaskRegistry>) -> Self {
-        Self { task_registry }
+        Self {
+            task_registry,
+            subagent_graph: None,
+        }
+    }
+
+    /// Create a TaskOutput tool with explicit task registry and sub-agent graph.
+    pub fn with_task_registry_and_graph(
+        task_registry: Arc<TaskRegistry>,
+        subagent_graph: Arc<SubAgentGraph>,
+    ) -> Self {
+        Self {
+            task_registry,
+            subagent_graph: Some(subagent_graph),
+        }
     }
 }
 
@@ -54,6 +71,7 @@ error, and final result for Task sub-agents started with run_in_background=true.
 Parameters:
 - shell_id: The ID of the background shell task (e.g., "shell_1")
 - task_id: The ID of the background sub-agent task (e.g., "task_...")
+- agent_path: The stable sub-agent path (e.g., "agent://task_...")
 - incremental: If true, only return output since last read (default: false)
 - block: If true, wait for task completion (default: false)
 - timeout: Max wait time in ms when blocking (default: 30000, max: 600000)
@@ -76,6 +94,8 @@ Example: task_output(task_id="task_...", block=true)"#
                     "The ID of the background sub-agent task to get output from",
                 )
                 .optional(),
+                ToolParameter::string("agent_path", "The stable sub-agent path to get output from")
+                    .optional(),
                 ToolParameter::boolean(
                     "incremental",
                     "If true, only return output since last read (default: false)",
@@ -107,9 +127,15 @@ Example: task_output(task_id="task_...", block=true)"#
         let timeout_raw = call.get_number("timeout").unwrap_or(30000.0);
         let timeout = timeout_duration(timeout_raw);
 
-        if let Some(task_id) = subagent_task_id(call)? {
+        if let Some(agent_path) = subagent_agent_path(call)? {
             return self
-                .execute_subagent_task_output(call, &task_id, block, timeout, start_time)
+                .execute_subagent_agent_path_output(call, &agent_path, block, timeout, start_time)
+                .await;
+        }
+
+        if let Some(task_id) = subagent_task_id(call) {
+            return self
+                .execute_subagent_task_output(call, &task_id, None, block, timeout, start_time)
                 .await;
         }
 
@@ -171,21 +197,22 @@ Example: task_output(task_id="task_...", block=true)"#
     fn validate(&self, call: &ToolCall) -> Result<(), ToolError> {
         let shell_id = call.get_string("shell_id");
         let task_id = call.get_string("task_id");
+        let agent_path = call.get_string("agent_path");
 
-        let provided_count = [shell_id.is_some(), task_id.is_some()]
+        let provided_count = [shell_id.is_some(), task_id.is_some(), agent_path.is_some()]
             .into_iter()
             .filter(|provided| *provided)
             .count();
         match provided_count {
             0 => {
                 return Err(ToolError::InvalidArguments(
-                    "Missing 'shell_id' or 'task_id' parameter".to_string(),
+                    "Missing 'shell_id', 'task_id', or 'agent_path' parameter".to_string(),
                 ));
             }
             1 => {}
             _ => {
                 return Err(ToolError::InvalidArguments(
-                    "Provide only one of 'shell_id' or 'task_id'".to_string(),
+                    "Provide only one of 'shell_id', 'task_id', or 'agent_path'".to_string(),
                 ));
             }
         }
@@ -195,6 +222,9 @@ Example: task_output(task_id="task_...", block=true)"#
         }
         if let Some(task_id) = task_id {
             validate_identifier("task_id", &task_id)?;
+        }
+        if let Some(agent_path) = agent_path {
+            validate_agent_path(&agent_path)?;
         }
 
         // Validate timeout if provided
@@ -232,6 +262,7 @@ impl TaskOutputTool {
         &self,
         call: &ToolCall,
         task_id: &str,
+        graph_summary: Option<ChildAgentSummary>,
         block: bool,
         timeout: Duration,
         start_time: Instant,
@@ -269,9 +300,44 @@ impl TaskOutputTool {
             .with_metadata("stderr_preview", json!(""))
             .with_metadata("error", json!(error))
             .with_metadata("final_result", json!(final_result));
+        if let Some(summary) = graph_summary {
+            result = result
+                .with_metadata("agent_path", json!(summary.agent_path.as_path_str()))
+                .with_metadata("parent_thread_id", json!(summary.parent_thread_id))
+                .with_metadata("child_thread_id", json!(summary.child_thread_id))
+                .with_metadata("spawn_item_id", json!(summary.spawn_item_id))
+                .with_metadata("graph_status", json!(summary.status));
+        }
         result.execution_time_ms =
             Some(u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX));
         Ok(result)
+    }
+
+    async fn execute_subagent_agent_path_output(
+        &self,
+        call: &ToolCall,
+        agent_path_raw: &str,
+        block: bool,
+        timeout: Duration,
+        start_time: Instant,
+    ) -> Result<ToolResult, ToolError> {
+        let graph = self.subagent_graph.as_ref().ok_or_else(|| {
+            ToolError::InvalidArguments(
+                "agent_path requires TaskOutputTool configured with a SubAgentGraph".to_string(),
+            )
+        })?;
+        let agent_path = parse_agent_path(agent_path_raw)?;
+        let summary = graph.read_child(&agent_path).await.map_err(|err| {
+            ToolError::NotFound(format!(
+                "Sub-agent '{}' not found in graph: {}",
+                agent_path.as_path_str(),
+                err
+            ))
+        })?;
+        let task_id = summary.child_thread_id.clone();
+
+        self.execute_subagent_task_output(call, &task_id, Some(summary), block, timeout, start_time)
+            .await
     }
 
     async fn read_subagent_task(
@@ -322,8 +388,22 @@ fn validate_identifier(name: &str, value: &str) -> Result<(), ToolError> {
     Ok(())
 }
 
-fn subagent_task_id(call: &ToolCall) -> Result<Option<String>, ToolError> {
-    Ok(call.get_string("task_id"))
+fn parse_agent_path(value: &str) -> Result<AgentPath, ToolError> {
+    AgentPath::from_raw_path(value).map_err(|err| ToolError::InvalidArguments(err.to_string()))
+}
+
+fn validate_agent_path(value: &str) -> Result<(), ToolError> {
+    parse_agent_path(value).map(|_| ())
+}
+
+fn subagent_agent_path(call: &ToolCall) -> Result<Option<String>, ToolError> {
+    call.get_string("agent_path")
+        .map(|path| validate_agent_path(&path).map(|_| path))
+        .transpose()
+}
+
+fn subagent_task_id(call: &ToolCall) -> Option<String> {
+    call.get_string("task_id")
 }
 
 #[cfg(test)]

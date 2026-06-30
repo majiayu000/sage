@@ -318,7 +318,7 @@ impl UnifiedExecutor {
         } else if requires_interaction {
             Ok(self
                 .tool_orchestrator
-                .execution_phase(tool_call, cancel_token)
+                .execution_phase(tool_call, context, cancel_token)
                 .await)
         } else {
             Ok(self

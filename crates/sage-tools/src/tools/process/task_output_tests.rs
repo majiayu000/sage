@@ -1,5 +1,7 @@
 use super::super::task::{TaskRegistry, TaskRequest, TaskStatus};
 use super::*;
+use sage_core::agent::subagent::{ChildAgentSpawnRecord, SubAgentGraph};
+use sage_core::thread_store::{SqliteThreadStore, ThreadRecord, ThreadStore};
 use sage_core::tools::BackgroundShellTask;
 use serde_json::json;
 use std::collections::HashMap;
@@ -21,6 +23,27 @@ fn create_tool_call(id: &str, name: &str, args: serde_json::Value) -> ToolCall {
         arguments,
         call_id: None,
     }
+}
+
+async fn graph_with_child(
+    parent_thread_id: &str,
+    task_id: &str,
+    spawn_item_id: &str,
+) -> Result<Arc<SubAgentGraph>, Box<dyn std::error::Error>> {
+    let store = Arc::new(SqliteThreadStore::in_memory()?);
+    store
+        .create_thread(ThreadRecord::new(parent_thread_id))
+        .await?;
+    let graph_store: Arc<dyn ThreadStore> = store;
+    let graph = Arc::new(SubAgentGraph::new(graph_store));
+    graph
+        .record_child(ChildAgentSpawnRecord::new(
+            parent_thread_id,
+            task_id,
+            spawn_item_id,
+        ))
+        .await?;
+    Ok(graph)
 }
 
 #[test]
@@ -212,6 +235,111 @@ async fn test_task_output_failed_subagent_task() {
         Some(&json!("runner unavailable"))
     );
     assert_eq!(result.metadata.get("final_result"), Some(&json!(null)));
+}
+
+#[tokio::test]
+async fn test_task_output_agent_path_reads_graph_summary() -> Result<(), Box<dyn std::error::Error>>
+{
+    let registry = Arc::new(TaskRegistry::new());
+    registry.add_task(TaskRequest {
+        id: "task_graph".to_string(),
+        description: "Explore code".to_string(),
+        prompt: "Find files".to_string(),
+        subagent_type: "Explore".to_string(),
+        model: None,
+        run_in_background: true,
+        resume: None,
+        status: TaskStatus::Completed,
+        result: Some("final answer".to_string()),
+    });
+    let graph = graph_with_child("parent-thread", "task_graph", "spawn-item").await?;
+    let tool = TaskOutputTool::with_task_registry_and_graph(registry, graph);
+    let call = create_tool_call(
+        "test-agent-path",
+        "TaskOutput",
+        json!({
+            "agent_path": "agent://task_graph"
+        }),
+    );
+
+    let result = tool.execute(&call).await?;
+    assert!(result.success);
+    assert_eq!(result.metadata.get("task_id"), Some(&json!("task_graph")));
+    assert_eq!(
+        result.metadata.get("agent_path"),
+        Some(&json!("agent://task_graph"))
+    );
+    assert_eq!(
+        result.metadata.get("parent_thread_id"),
+        Some(&json!("parent-thread"))
+    );
+    assert_eq!(
+        result.metadata.get("child_thread_id"),
+        Some(&json!("task_graph"))
+    );
+    assert_eq!(
+        result.metadata.get("spawn_item_id"),
+        Some(&json!("spawn-item"))
+    );
+    assert_eq!(
+        result.metadata.get("final_result"),
+        Some(&json!("final answer"))
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_task_output_agent_path_requires_graph() {
+    let registry = Arc::new(TaskRegistry::new());
+    let tool = TaskOutputTool::with_task_registry(registry);
+    let call = create_tool_call(
+        "test-agent-path-no-graph",
+        "TaskOutput",
+        json!({
+            "agent_path": "agent://task_graph"
+        }),
+    );
+
+    let result = tool.execute(&call).await;
+    assert!(matches!(result, Err(ToolError::InvalidArguments(_))));
+}
+
+#[tokio::test]
+async fn test_task_output_rejects_task_id_and_agent_path_together() {
+    let tool = TaskOutputTool::new();
+    let call = create_tool_call(
+        "test-agent-path-exclusive",
+        "TaskOutput",
+        json!({
+            "task_id": "task_graph",
+            "agent_path": "agent://task_graph"
+        }),
+    );
+
+    let result = tool.validate(&call);
+    assert!(result.is_err());
+    match result {
+        Err(ToolError::InvalidArguments(msg)) => {
+            assert!(msg.contains("only one"));
+            assert!(msg.contains("agent_path"));
+        }
+        _ => panic!("Expected InvalidArguments error"),
+    }
+}
+
+#[tokio::test]
+async fn test_task_output_rejects_invalid_agent_path() {
+    let tool = TaskOutputTool::new();
+    let call = create_tool_call(
+        "test-agent-path-invalid",
+        "TaskOutput",
+        json!({
+            "agent_path": "task_graph"
+        }),
+    );
+
+    let result = tool.validate(&call);
+    assert!(matches!(result, Err(ToolError::InvalidArguments(_))));
 }
 
 #[tokio::test]
