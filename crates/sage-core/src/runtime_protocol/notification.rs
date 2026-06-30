@@ -1,15 +1,75 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::ops::Deref;
+use thiserror::Error;
 
-use super::envelope::RuntimeEnvelope;
+use super::envelope::{RuntimeEnvelope, RuntimeKind};
 use super::permission::{
     RuntimePermissionDecision, RuntimePermissionRequestedPayload, RuntimePermissionResolvedPayload,
 };
 
-pub type RuntimeNotification = RuntimeEnvelope<RuntimeNotificationPayload>;
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(transparent)]
+pub struct RuntimeNotification(pub RuntimeEnvelope<RuntimeNotificationPayload>);
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(untagged)]
+impl From<RuntimeEnvelope<RuntimeNotificationPayload>> for RuntimeNotification {
+    fn from(envelope: RuntimeEnvelope<RuntimeNotificationPayload>) -> Self {
+        Self(envelope)
+    }
+}
+
+impl Deref for RuntimeNotification {
+    type Target = RuntimeEnvelope<RuntimeNotificationPayload>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl RuntimeNotification {
+    pub fn with_metadata(self, key: impl Into<String>, value: Value) -> Self {
+        self.0.with_metadata(key, value).into()
+    }
+
+    pub fn with_request_id(self, request_id: impl Into<String>) -> Self {
+        self.0.with_request_id(request_id).into()
+    }
+}
+
+impl<'de> Deserialize<'de> for RuntimeNotification {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = RuntimeEnvelope::<Value>::deserialize(deserializer)?;
+        if raw.kind != RuntimeKind::Notification {
+            return Err(serde::de::Error::custom(
+                "runtime notification kind mismatch",
+            ));
+        }
+
+        let payload = notification_payload_from_type(&raw.message_type, raw.payload)
+            .map_err(serde::de::Error::custom)?;
+
+        Ok(RuntimeNotification(RuntimeEnvelope {
+            protocol_version: raw.protocol_version,
+            kind: raw.kind,
+            message_type: raw.message_type,
+            id: raw.id,
+            thread_id: raw.thread_id,
+            turn_id: raw.turn_id,
+            item_id: raw.item_id,
+            request_id: raw.request_id,
+            timestamp: raw.timestamp,
+            sequence: raw.sequence,
+            source: raw.source,
+            payload,
+            metadata: raw.metadata,
+        }))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum RuntimeNotificationPayload {
     TurnStarted(RuntimeTurnStartedPayload),
     TurnTerminal(RuntimeTurnTerminalPayload),
@@ -18,6 +78,54 @@ pub enum RuntimeNotificationPayload {
     PermissionResolved(RuntimePermissionResolvedPayload),
     ErrorReported(RuntimeErrorReportedPayload),
     ThreadLifecycle(RuntimeThreadLifecyclePayload),
+}
+
+#[derive(Debug, Error)]
+enum RuntimeNotificationPayloadDecodeError {
+    #[error("unsupported runtime notification type {0}")]
+    UnsupportedType(String),
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
+}
+
+fn notification_payload_from_type(
+    message_type: &str,
+    payload: Value,
+) -> Result<RuntimeNotificationPayload, RuntimeNotificationPayloadDecodeError> {
+    match message_type {
+        "thread.started" | "thread.ended" => {
+            decode_payload(payload, RuntimeNotificationPayload::ThreadLifecycle)
+        }
+        "turn.started" => decode_payload(payload, RuntimeNotificationPayload::TurnStarted),
+        "turn.completed" | "turn.interrupted" => {
+            decode_payload(payload, RuntimeNotificationPayload::TurnTerminal)
+        }
+        "item.created" | "item.updated" | "item.completed" => {
+            decode_payload(payload, RuntimeNotificationPayload::Item)
+        }
+        "permission.requested" => {
+            decode_payload(payload, RuntimeNotificationPayload::PermissionRequested)
+        }
+        "permission.resolved" => {
+            decode_payload(payload, RuntimeNotificationPayload::PermissionResolved)
+        }
+        "error.reported" => decode_payload(payload, RuntimeNotificationPayload::ErrorReported),
+        _ => Err(RuntimeNotificationPayloadDecodeError::UnsupportedType(
+            message_type.to_string(),
+        )),
+    }
+}
+
+fn decode_payload<T>(
+    payload: Value,
+    wrap: impl FnOnce(T) -> RuntimeNotificationPayload,
+) -> Result<RuntimeNotificationPayload, RuntimeNotificationPayloadDecodeError>
+where
+    T: for<'de> Deserialize<'de>,
+{
+    serde_json::from_value(payload)
+        .map(wrap)
+        .map_err(Into::into)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

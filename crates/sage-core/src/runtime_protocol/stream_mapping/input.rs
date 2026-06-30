@@ -5,7 +5,7 @@ use crate::input::{InputRequestDto, InputRequestKindDto, InputResponseDto, Input
 use super::RuntimeCorrelation;
 use super::helpers::input_item_notification;
 use super::ids::id_fragment;
-use super::rules::rule_from_suggestion;
+use super::rules::{object_map, rule_from_suggestion};
 use crate::runtime_protocol::envelope::{RuntimeEnvelope, RuntimeKind, RuntimeSource};
 use crate::runtime_protocol::notification::{RuntimeNotification, RuntimeNotificationPayload};
 use crate::runtime_protocol::permission::{
@@ -46,7 +46,8 @@ pub fn notification_from_input_request_dto(
         .with_turn_id(correlation.turn_id.clone())
         .with_item_id(format!("item_permission_{}", id_fragment(&request.id)))
         .with_request_id(request.id.clone())
-        .with_sequence(correlation.sequence),
+        .with_sequence(correlation.sequence)
+        .into(),
         InputRequestKindDto::Questions { questions } => input_item_notification(
             &request.id,
             correlation,
@@ -122,7 +123,7 @@ fn permission_response_request(
             RuntimeRequestPayload::PermissionRespond(RuntimePermissionRespondPayload {
                 decision,
                 reason,
-                modified_input,
+                modified_input: modified_input.map(object_map),
                 rules,
             }),
         )

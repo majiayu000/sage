@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use serde_json::{Map, Value};
 
 use crate::input::{PermissionSuggestion, RuleDestination};
@@ -12,6 +14,17 @@ pub(super) fn object_value(value: Value) -> Value {
         let mut map = Map::new();
         map.insert("value".to_string(), value);
         Value::Object(map)
+    }
+}
+
+pub(super) fn object_map(value: Value) -> BTreeMap<String, Value> {
+    match value {
+        Value::Object(map) => map.into_iter().collect(),
+        other => {
+            let mut map = BTreeMap::new();
+            map.insert("value".to_string(), other);
+            map
+        }
     }
 }
 

@@ -38,7 +38,8 @@ pub fn notification_from_agent_event(
         .with_thread_id(session_id.clone())
         .with_sequence(correlation.sequence)
         .with_metadata("model", Value::String(model.clone()))
-        .with_metadata("provider", Value::String(provider.clone())),
+        .with_metadata("provider", Value::String(provider.clone()))
+        .into(),
         AgentEvent::SessionEnded { session_id } => RuntimeEnvelope::new(
             RuntimeKind::Notification,
             "thread.ended",
@@ -52,11 +53,12 @@ pub fn notification_from_agent_event(
             }),
         )
         .with_thread_id(session_id.clone())
-        .with_sequence(correlation.sequence),
+        .with_sequence(correlation.sequence)
+        .into(),
         AgentEvent::ToolExecutionStarted {
             tool_name,
             tool_id,
-            description,
+            description: _,
         } => item_notification(
             "item.created",
             "evt_agent_tool_started",
@@ -68,7 +70,7 @@ pub fn notification_from_agent_event(
                 item_type: RuntimeItemType::ToolCall,
                 tool_name: Some(tool_name.clone()),
                 status: Some(RuntimeItemStatus::Started),
-                content: Some(description.clone()),
+                redacted: Some(true),
                 legacy_type: Some("agent_tool_execution_started".to_string()),
                 ..RuntimeItemPayload::new(RuntimeItemType::ToolCall)
             },
@@ -97,7 +99,9 @@ pub fn notification_from_agent_event(
                 }),
                 success: Some(*success),
                 duration_ms: Some(*duration_ms),
-                output_preview: result_preview.clone(),
+                output_preview: None,
+                truncated: Some(result_preview.is_some()),
+                redacted: Some(true),
                 legacy_type: Some("agent_tool_execution_completed".to_string()),
                 ..RuntimeItemPayload::new(RuntimeItemType::ToolCall)
             },
@@ -125,7 +129,8 @@ pub fn notification_from_agent_event(
         )
         .with_thread_id(correlation.thread_id.clone())
         .with_turn_id(correlation.turn_id.clone())
-        .with_sequence(correlation.sequence),
+        .with_sequence(correlation.sequence)
+        .into(),
         AgentEvent::UserInputReceived { input } => {
             user_message_notification(input.clone(), "agent_user_input_received", correlation)
         }

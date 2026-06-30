@@ -35,6 +35,7 @@ pub(super) fn item_notification(
     .with_turn_id(correlation.turn_id.clone())
     .with_item_id(item_id)
     .with_sequence(correlation.sequence_at(sequence_offset))
+    .into()
 }
 
 pub(super) fn input_item_notification(
@@ -86,6 +87,7 @@ pub(super) fn error_reported_notification(
     .with_turn_id(correlation.turn_id.clone())
     .with_item_id(legacy_item_id("error", correlation.sequence))
     .with_sequence(correlation.sequence)
+    .into()
 }
 
 pub(super) fn turn_completed_notification(
@@ -114,7 +116,7 @@ pub(super) fn turn_completed_notification(
     .with_turn_id(correlation.turn_id.clone())
     .with_sequence(correlation.sequence_at(sequence_offset));
 
-    with_legacy_session(notification, result.session_id.as_deref())
+    with_legacy_session(notification.into(), result.session_id.as_deref())
 }
 
 pub(super) fn user_message_notification(

@@ -66,7 +66,22 @@ fn runtime_fixture_payload_keys_match_schema() {
     for line in messages {
         let message: serde_json::Value = serde_json::from_str(&line).expect("runtime JSON");
         let payload = message["payload"].as_object().expect("payload object");
+        let payload_schema = payload_schema_def(&schema, &message);
         let allowed = payload_schema_keys(&schema, &message);
+
+        if let Some(required) = payload_schema["required"].as_array() {
+            for field in required {
+                let field_name = field.as_str().expect("required field name");
+                assert!(
+                    payload.contains_key(field_name),
+                    "fixture for {} {} misses required payload key {}",
+                    message["kind"],
+                    message["type"],
+                    field_name
+                );
+            }
+        }
+
         for key in payload.keys() {
             assert!(
                 allowed.contains_key(key),
@@ -75,8 +90,46 @@ fn runtime_fixture_payload_keys_match_schema() {
                 message["type"],
                 key
             );
+            assert_schema_value_type(
+                &schema,
+                &allowed[key],
+                &payload[key],
+                &format!("{} {} payload.{key}", message["kind"], message["type"]),
+            );
         }
     }
+}
+
+#[test]
+fn runtime_protocol_rejects_type_payload_mismatches() {
+    let wrong_notification = runtime_message_json(
+        "notification",
+        "permission.requested",
+        serde_json::json!({
+            "status": "completed",
+            "reason": "done"
+        }),
+    );
+    assert!(serde_json::from_value::<RuntimeMessage>(wrong_notification).is_err());
+
+    let wrong_response = runtime_message_json(
+        "response",
+        "thread.start.result",
+        serde_json::json!({
+            "accepted": true
+        }),
+    );
+    assert!(serde_json::from_value::<RuntimeMessage>(wrong_response).is_err());
+
+    let wrong_request = runtime_message_json(
+        "request",
+        "permission.respond",
+        serde_json::json!({
+            "decision": "allow",
+            "modified_input": "raw command"
+        }),
+    );
+    assert!(serde_json::from_value::<RuntimeMessage>(wrong_request).is_err());
 }
 
 #[test]
@@ -197,7 +250,7 @@ fn input_request_and_response_dtos_map_to_protocol_messages() {
     );
     let permission_notification =
         notification_from_input_request_dto(&permission_request, &correlation);
-    match permission_notification.payload {
+    match &permission_notification.payload {
         RuntimeNotificationPayload::PermissionRequested(payload) => {
             assert!(payload.input_redacted);
             assert!(payload.input.is_none());
@@ -366,10 +419,37 @@ fn structured_error_fixture_uses_stable_codes_and_redaction_flags() {
     }
 }
 
+fn runtime_message_json(
+    kind: &str,
+    message_type: &str,
+    payload: serde_json::Value,
+) -> serde_json::Value {
+    serde_json::json!({
+        "protocol_version": RUNTIME_PROTOCOL_VERSION,
+        "kind": kind,
+        "type": message_type,
+        "id": "evt_test_001",
+        "thread_id": "thread_test",
+        "turn_id": "turn_test",
+        "timestamp": "2026-01-01T00:00:00Z",
+        "source": "runtime",
+        "payload": payload
+    })
+}
+
 fn payload_schema_keys<'a>(
     schema: &'a serde_json::Value,
     message: &serde_json::Value,
 ) -> &'a serde_json::Map<String, serde_json::Value> {
+    payload_schema_def(schema, message)["properties"]
+        .as_object()
+        .expect("payload properties")
+}
+
+fn payload_schema_def<'a>(
+    schema: &'a serde_json::Value,
+    message: &serde_json::Value,
+) -> &'a serde_json::Value {
     let defs = &schema["$defs"];
     let kind = message["kind"].as_str().expect("kind");
     let message_type = message["type"].as_str().expect("type");
@@ -399,14 +479,41 @@ fn payload_schema_keys<'a>(
             "ack_response_payload"
         }
         ("error", _) => {
-            return defs["error_envelope"]["properties"]["payload"]["properties"]
-                .as_object()
-                .expect("error payload properties");
+            return &defs["error_envelope"]["properties"]["payload"];
         }
         _ => panic!("unmapped runtime message type {kind} {message_type}"),
     };
 
-    defs[payload_def]["properties"]
-        .as_object()
-        .expect("payload properties")
+    &defs[payload_def]
+}
+
+fn assert_schema_value_type(
+    schema: &serde_json::Value,
+    property_schema: &serde_json::Value,
+    value: &serde_json::Value,
+    context: &str,
+) {
+    if let Some(ref_name) = property_schema["$ref"].as_str() {
+        let def_name = ref_name.trim_start_matches("#/$defs/");
+        assert_schema_value_type(schema, &schema["$defs"][def_name], value, context);
+        return;
+    }
+
+    let Some(expected_type) = property_schema["type"].as_str() else {
+        return;
+    };
+    let matches = match expected_type {
+        "array" => value.is_array(),
+        "boolean" => value.is_boolean(),
+        "integer" => value.as_i64().is_some() || value.as_u64().is_some(),
+        "number" => value.is_number(),
+        "object" => value.is_object(),
+        "string" => value.is_string(),
+        _ => true,
+    };
+
+    assert!(
+        matches,
+        "{context} has JSON value {value:?} that does not match schema type {expected_type}"
+    );
 }
