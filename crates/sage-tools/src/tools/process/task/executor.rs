@@ -100,11 +100,11 @@ pub async fn execute_task_sync(
 }
 
 /// Execute a task in background
-pub fn execute_task_background(
+pub async fn execute_task_background(
     call: &ToolCall,
     registry: Arc<TaskRegistry>,
 ) -> anyhow::Result<ToolResult> {
-    let (task_params, _agent_type, _thoroughness) = parse_task_parameters(call)?;
+    let (task_params, agent_type, thoroughness) = parse_task_parameters(call)?;
 
     // Generate task ID
     let task_id = task_params
@@ -121,14 +121,39 @@ pub fn execute_task_background(
         model: task_params.model.clone(),
         run_in_background: true,
         resume: task_params.resume.clone(),
-        status: TaskStatus::Pending,
+        status: TaskStatus::Running,
         result: None,
     };
 
     registry.add_task(task);
 
+    let config =
+        SubAgentConfig::new(agent_type, task_params.prompt.clone()).with_thoroughness(thoroughness);
+    let background_task_id = task_id.clone();
+    let background_registry = registry.clone();
+    let handle = tokio::spawn(async move {
+        let result = execute_subagent(config.with_background(true)).await;
+        match result {
+            Ok(result) => {
+                background_registry.update_status(
+                    &background_task_id,
+                    TaskStatus::Completed,
+                    Some(result.content),
+                );
+            }
+            Err(err) => {
+                background_registry.update_status(
+                    &background_task_id,
+                    TaskStatus::Failed,
+                    Some(err.to_string()),
+                );
+            }
+        }
+    });
+    registry.register_handle(task_id.clone(), handle);
+
     let response = format!(
-        "Task '{}' ({}) queued for background execution.\n\
+        "Task '{}' ({}) started in background.\n\
          Agent type: {}\n\
          Task ID: {}\n\n\
          Use TaskOutput with task_id=\"{}\" to retrieve results when ready.",

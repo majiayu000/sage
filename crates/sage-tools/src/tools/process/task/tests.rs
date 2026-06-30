@@ -87,6 +87,19 @@ mod suite {
         let output = result.output.unwrap();
         assert!(output.contains("background"));
         assert!(output.contains("TaskOutput"));
+
+        let Some(task_id) = result
+            .metadata
+            .get("task_id")
+            .and_then(|value| value.as_str())
+        else {
+            panic!("expected background task id");
+        };
+        let Some(task) = registry.get_task(task_id) else {
+            panic!("expected registered background task");
+        };
+        assert_ne!(task.status, TaskStatus::Pending);
+        assert!(task.run_in_background);
     }
 
     #[tokio::test]

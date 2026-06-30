@@ -5,6 +5,7 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
+use tokio::task::JoinHandle;
 
 /// Task request for subagent execution
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,12 +55,14 @@ impl std::fmt::Display for TaskStatus {
 #[derive(Debug, Default)]
 pub struct TaskRegistry {
     tasks: RwLock<HashMap<String, TaskRequest>>,
+    handles: RwLock<HashMap<String, JoinHandle<()>>>,
 }
 
 impl TaskRegistry {
     pub fn new() -> Self {
         Self {
             tasks: RwLock::new(HashMap::new()),
+            handles: RwLock::new(HashMap::new()),
         }
     }
 
@@ -100,6 +103,47 @@ impl TaskRegistry {
     pub fn get_result(&self, id: &str) -> Option<String> {
         let tasks = self.tasks.read();
         tasks.get(id).and_then(|t| t.result.clone())
+    }
+
+    /// Store the JoinHandle for a background task so panics/cancellation are not detached.
+    pub fn register_handle(&self, id: String, handle: JoinHandle<()>) {
+        let mut handles = self.handles.write();
+        handles.insert(id, handle);
+    }
+
+    /// Await finished task handles and reflect join failures into task status.
+    pub async fn reconcile_finished_tasks(&self) {
+        let finished_handles = {
+            let mut handles = self.handles.write();
+            let finished_ids = handles
+                .iter()
+                .filter(|(_, handle)| handle.is_finished())
+                .map(|(id, _)| id.clone())
+                .collect::<Vec<_>>();
+
+            finished_ids
+                .into_iter()
+                .filter_map(|id| handles.remove(&id).map(|handle| (id, handle)))
+                .collect::<Vec<_>>()
+        };
+
+        for (id, handle) in finished_handles {
+            if let Err(err) = handle.await {
+                self.update_status(
+                    &id,
+                    TaskStatus::Failed,
+                    Some(format!("Background task join failed: {err}")),
+                );
+            }
+        }
+    }
+}
+
+impl Drop for TaskRegistry {
+    fn drop(&mut self) {
+        for (_, handle) in self.handles.get_mut().drain() {
+            handle.abort();
+        }
     }
 }
 
