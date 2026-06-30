@@ -18,7 +18,10 @@ pub use error::{
     RuntimeControlResult, RuntimeOperation, boxed_runtime_unsupported_error,
     boxed_runtime_validation_error, runtime_unsupported_error,
 };
-pub use facade::{Runtime, RuntimeExecutor};
+pub use facade::{
+    Runtime, RuntimeExecutor, default_thread_store, default_thread_store_path,
+    ensure_thread_store_thread,
+};
 pub use request::{
     RuntimeForkRequest, RuntimeInterruptRequest, RuntimeResumeRequest, RuntimeStartRequest,
 };

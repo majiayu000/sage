@@ -195,7 +195,7 @@ Example: task_output(task_id="task_...", block=true)"#
     }
 
     fn include_in_subagent_runner(&self) -> bool {
-        self.subagent_graph.is_none()
+        true
     }
 
     fn validate(&self, call: &ToolCall) -> Result<(), ToolError> {

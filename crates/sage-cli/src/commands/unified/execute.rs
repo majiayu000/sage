@@ -8,9 +8,9 @@ use sage_core::error::SageResult;
 use sage_core::input::InputChannel;
 use sage_core::mcp::{clear_active_mcp_registry, set_active_mcp_registry};
 use sage_core::output::OutputMode;
-use sage_core::runtime::Runtime;
+use sage_core::runtime::{Runtime, default_thread_store};
 use sage_core::runtime_protocol::RuntimeSource;
-use sage_tools::get_default_tools_with_context;
+use sage_tools::get_default_tools_with_context_and_thread_store;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::task::JoinHandle;
@@ -66,7 +66,10 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
     options = options.with_working_directory(&working_dir);
 
     // Create the runtime facade executor
-    let runtime = Runtime::new(config.clone(), options).with_source(RuntimeSource::Cli);
+    let thread_store = default_thread_store()?;
+    let runtime = Runtime::new(config.clone(), options)
+        .with_source(RuntimeSource::Cli)
+        .with_thread_store(Arc::clone(&thread_store));
     let mut executor = runtime.build_executor()?;
 
     // Set output mode based on args
@@ -78,8 +81,11 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
     executor.set_output_mode(output_mode);
 
     // Register default tools
-    let mut all_tools =
-        get_default_tools_with_context(working_dir.clone(), executor.skill_registry());
+    let mut all_tools = get_default_tools_with_context_and_thread_store(
+        working_dir.clone(),
+        executor.skill_registry(),
+        thread_store,
+    );
 
     // Load MCP tools if MCP is enabled
     if config.mcp.enabled {

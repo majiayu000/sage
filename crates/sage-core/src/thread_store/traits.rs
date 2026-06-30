@@ -9,6 +9,10 @@ use super::types::{
 
 #[async_trait]
 pub trait ThreadStore: Send + Sync {
+    fn registry_key(&self) -> Option<String> {
+        None
+    }
+
     async fn create_thread(&self, record: ThreadRecord) -> ThreadStoreResult<ThreadRecord>;
 
     async fn set_lineage(&self, lineage: ThreadLineage) -> ThreadStoreResult<ThreadLineage>;

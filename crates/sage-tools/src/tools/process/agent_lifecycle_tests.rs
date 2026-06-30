@@ -1,0 +1,500 @@
+use sage_core::agent::subagent::{ChildAgentSpawnRecord, SubAgentGraph};
+use sage_core::thread_store::{SqliteThreadStore, ThreadRecord, ThreadStatus, ThreadStore};
+use sage_core::tools::base::{Tool, ToolError};
+use sage_core::tools::permission::ToolContext;
+use sage_core::tools::types::ToolCall;
+use serde_json::json;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Duration;
+
+use super::{
+    super::task::{TaskRegistry, TaskRequest, TaskStatus},
+    AgentLifecycleTool,
+};
+
+fn create_tool_call(id: &str, args: serde_json::Value) -> ToolCall {
+    let arguments = if let serde_json::Value::Object(map) = args {
+        map.into_iter().collect()
+    } else {
+        HashMap::new()
+    };
+
+    ToolCall {
+        id: id.to_string(),
+        name: "AgentLifecycle".to_string(),
+        arguments,
+        call_id: None,
+    }
+}
+
+async fn graph_with_parent()
+-> Result<(Arc<SqliteThreadStore>, Arc<SubAgentGraph>), Box<dyn std::error::Error>> {
+    let store = Arc::new(SqliteThreadStore::in_memory()?);
+    store
+        .create_thread(ThreadRecord::new("parent-thread"))
+        .await?;
+    let graph_store: Arc<dyn ThreadStore> = store.clone();
+    Ok((store, Arc::new(SubAgentGraph::new(graph_store))))
+}
+
+#[test]
+fn agent_lifecycle_schema_declares_operations() {
+    let tool = AgentLifecycleTool::new();
+    let schema = tool.schema();
+    assert_eq!(schema.name, "AgentLifecycle");
+    let operation = &schema.parameters["properties"]["operation"];
+    assert_eq!(operation["enum"], json!(["list", "wait"]));
+}
+
+#[tokio::test]
+async fn agent_lifecycle_requires_graph() {
+    let tool = AgentLifecycleTool::new();
+    let err = tool
+        .execute(&create_tool_call(
+            "list",
+            json!({
+                "operation": "list",
+                "parent_thread_id": "parent-thread"
+            }),
+        ))
+        .await
+        .expect_err("graph is required");
+    assert!(matches!(err, ToolError::InvalidArguments(_)));
+    assert!(err.to_string().contains("SubAgentGraph"));
+}
+
+#[tokio::test]
+async fn agent_lifecycle_lists_direct_children_and_descendants()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (_store, graph) = graph_with_parent().await?;
+    graph
+        .record_child(ChildAgentSpawnRecord::new(
+            "parent-thread",
+            "child-a",
+            "spawn-a",
+        ))
+        .await?;
+    graph
+        .record_child(ChildAgentSpawnRecord::new(
+            "parent-thread",
+            "child-b",
+            "spawn-b",
+        ))
+        .await?;
+    graph
+        .record_child(ChildAgentSpawnRecord::new(
+            "child-a",
+            "grandchild-a",
+            "spawn-grandchild",
+        ))
+        .await?;
+    let registry = Arc::new(TaskRegistry::new());
+    registry.add_task(TaskRequest {
+        id: "child-a".to_string(),
+        description: "Listed child".to_string(),
+        prompt: "Return".to_string(),
+        subagent_type: "Plan".to_string(),
+        model: None,
+        run_in_background: true,
+        resume: None,
+        status: TaskStatus::Completed,
+        result: Some("listed final result".to_string()),
+    });
+    let tool = AgentLifecycleTool::with_task_registry_and_graph(registry, graph);
+
+    let direct = tool
+        .execute(&create_tool_call(
+            "list-direct",
+            json!({
+                "operation": "list",
+                "parent_thread_id": "parent-thread"
+            }),
+        ))
+        .await?;
+    assert!(direct.success);
+    assert_eq!(direct.metadata.get("operation"), Some(&json!("list")));
+    let direct_children = direct
+        .metadata
+        .get("children")
+        .and_then(|value| value.as_array())
+        .expect("children metadata");
+    assert_eq!(direct_children.len(), 2);
+    assert_eq!(direct_children[0]["child_thread_id"], json!("child-a"));
+    assert_eq!(direct_children[0]["status"], json!("completed"));
+    assert_eq!(direct_children[0]["graph_status"], json!("active"));
+    assert_eq!(
+        direct_children[0]["final_result"],
+        json!("listed final result")
+    );
+    assert_eq!(direct_children[1]["child_thread_id"], json!("child-b"));
+
+    let descendants = tool
+        .execute(&create_tool_call(
+            "list-descendants",
+            json!({
+                "operation": "list",
+                "parent_thread_id": "parent-thread",
+                "depth": "descendants"
+            }),
+        ))
+        .await?;
+    let descendant_children = descendants
+        .metadata
+        .get("children")
+        .and_then(|value| value.as_array())
+        .expect("children metadata");
+    assert_eq!(descendant_children.len(), 3);
+    assert_eq!(
+        descendant_children
+            .iter()
+            .map(|child| child["child_thread_id"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        vec!["child-a", "child-b", "grandchild-a"]
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn agent_lifecycle_list_defaults_to_context_session() -> Result<(), Box<dyn std::error::Error>>
+{
+    let (_store, graph) = graph_with_parent().await?;
+    graph
+        .record_child(ChildAgentSpawnRecord::new(
+            "parent-thread",
+            "child-context",
+            "spawn-context",
+        ))
+        .await?;
+    let tool = AgentLifecycleTool::with_graph(graph);
+    let context = ToolContext::new(std::env::current_dir().unwrap_or_default())
+        .with_session_id("parent-thread");
+
+    let result = tool
+        .execute_with_context(
+            &create_tool_call(
+                "list-context",
+                json!({
+                    "operation": "list"
+                }),
+            ),
+            &context,
+        )
+        .await?;
+
+    assert!(result.success);
+    assert_eq!(
+        result.metadata.get("parent_thread_id"),
+        Some(&json!("parent-thread"))
+    );
+    let children = result
+        .metadata
+        .get("children")
+        .and_then(|value| value.as_array());
+    assert!(matches!(
+        children,
+        Some(children)
+            if children
+                .first()
+                .and_then(|child| child.get("child_thread_id"))
+                == Some(&json!("child-context"))
+    ));
+    Ok(())
+}
+
+#[tokio::test]
+async fn agent_lifecycle_wait_returns_terminal_status() -> Result<(), Box<dyn std::error::Error>> {
+    let (_store, graph) = graph_with_parent().await?;
+    let mut spawn = ChildAgentSpawnRecord::new("parent-thread", "child-done", "spawn-done");
+    spawn.status = ThreadStatus::Completed;
+    graph.record_child(spawn).await?;
+    let tool = AgentLifecycleTool::with_graph(graph);
+
+    let result = tool
+        .execute(&create_tool_call(
+            "wait-done",
+            json!({
+                "operation": "wait",
+                "agent_path": "agent://child-done",
+                "timeout": 1
+            }),
+        ))
+        .await?;
+    assert!(result.success);
+    assert_eq!(result.metadata.get("operation"), Some(&json!("wait")));
+    assert_eq!(result.metadata.get("status"), Some(&json!("completed")));
+    assert_eq!(
+        result
+            .metadata
+            .get("agent")
+            .and_then(|agent| agent.get("agent_path")),
+        Some(&json!("agent://child-done"))
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn agent_lifecycle_wait_uses_shared_registry_terminal_status()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (_store, graph) = graph_with_parent().await?;
+    graph
+        .record_child(ChildAgentSpawnRecord::new(
+            "parent-thread",
+            "child-registry-done",
+            "spawn-registry-done",
+        ))
+        .await?;
+    let registry = Arc::new(TaskRegistry::new());
+    registry.add_task(TaskRequest {
+        id: "child-registry-done".to_string(),
+        description: "Done child".to_string(),
+        prompt: "Return".to_string(),
+        subagent_type: "Plan".to_string(),
+        model: None,
+        run_in_background: true,
+        resume: None,
+        status: TaskStatus::Completed,
+        result: Some("registry final result".to_string()),
+    });
+    let tool = AgentLifecycleTool::with_task_registry_and_graph(registry, graph);
+
+    let result = tool
+        .execute(&create_tool_call(
+            "wait-registry-done",
+            json!({
+                "operation": "wait",
+                "agent_path": "agent://child-registry-done",
+                "timeout": 1
+            }),
+        ))
+        .await?;
+    assert!(result.success);
+    assert_eq!(result.metadata.get("status"), Some(&json!("completed")));
+    assert_eq!(result.metadata.get("graph_status"), Some(&json!("active")));
+    assert_eq!(
+        result.metadata.get("task_status"),
+        Some(&json!("completed"))
+    );
+    assert_eq!(
+        result
+            .metadata
+            .get("agent")
+            .and_then(|agent| agent.get("final_result")),
+        Some(&json!("registry final result"))
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn agent_lifecycle_wait_returns_structured_failure() -> Result<(), Box<dyn std::error::Error>>
+{
+    let (_store, graph) = graph_with_parent().await?;
+    graph
+        .record_child(ChildAgentSpawnRecord::new(
+            "parent-thread",
+            "child-registry-failed",
+            "spawn-registry-failed",
+        ))
+        .await?;
+    let registry = Arc::new(TaskRegistry::new());
+    registry.add_task(TaskRequest {
+        id: "child-registry-failed".to_string(),
+        description: "Failed child".to_string(),
+        prompt: "Return".to_string(),
+        subagent_type: "Plan".to_string(),
+        model: None,
+        run_in_background: true,
+        resume: None,
+        status: TaskStatus::Failed,
+        result: Some("registry failure".to_string()),
+    });
+    let tool = AgentLifecycleTool::with_task_registry_and_graph(registry, graph);
+
+    let result = tool
+        .execute(&create_tool_call(
+            "wait-registry-failed",
+            json!({
+                "operation": "wait",
+                "agent_path": "agent://child-registry-failed",
+                "timeout": 1
+            }),
+        ))
+        .await?;
+    assert!(!result.success);
+    assert_eq!(
+        result.metadata.get("error_code"),
+        Some(&json!("agent_failed"))
+    );
+    assert_eq!(result.metadata.get("status"), Some(&json!("failed")));
+    assert_eq!(result.metadata.get("graph_status"), Some(&json!("active")));
+    assert_eq!(result.metadata.get("task_status"), Some(&json!("failed")));
+    assert_eq!(
+        result
+            .metadata
+            .get("agent")
+            .and_then(|agent| agent.get("error")),
+        Some(&json!("registry failure"))
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn agent_lifecycle_wait_returns_structured_interruption()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (_store, graph) = graph_with_parent().await?;
+    let mut spawn = ChildAgentSpawnRecord::new("parent-thread", "child-interrupted", "spawn-stop");
+    spawn.status = ThreadStatus::Interrupted;
+    graph.record_child(spawn).await?;
+    let tool = AgentLifecycleTool::with_graph(graph);
+
+    let result = tool
+        .execute(&create_tool_call(
+            "wait-interrupted",
+            json!({
+                "operation": "wait",
+                "agent_path": "agent://child-interrupted",
+                "timeout": 1
+            }),
+        ))
+        .await?;
+    assert!(!result.success);
+    assert_eq!(
+        result.metadata.get("error_code"),
+        Some(&json!("agent_interrupted"))
+    );
+    assert_eq!(result.metadata.get("status"), Some(&json!("interrupted")));
+    assert_eq!(
+        result.metadata.get("graph_status"),
+        Some(&json!("interrupted"))
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn agent_lifecycle_wait_prefers_running_registry_over_stale_graph_terminal()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (_store, graph) = graph_with_parent().await?;
+    let mut spawn = ChildAgentSpawnRecord::new("parent-thread", "child-resumed", "spawn-resumed");
+    spawn.status = ThreadStatus::Completed;
+    graph.record_child(spawn).await?;
+    let registry = Arc::new(TaskRegistry::new());
+    registry.add_task(TaskRequest {
+        id: "child-resumed".to_string(),
+        description: "Resumed child".to_string(),
+        prompt: "Return".to_string(),
+        subagent_type: "Plan".to_string(),
+        model: None,
+        run_in_background: true,
+        resume: Some("child-resumed".to_string()),
+        status: TaskStatus::Running,
+        result: None,
+    });
+    let tool = AgentLifecycleTool::with_task_registry_and_graph(registry, graph);
+
+    let result = tool
+        .execute(&create_tool_call(
+            "wait-resumed",
+            json!({
+                "operation": "wait",
+                "agent_path": "agent://child-resumed",
+                "timeout": 1
+            }),
+        ))
+        .await?;
+
+    assert!(!result.success);
+    assert_eq!(result.metadata.get("error_code"), Some(&json!("timeout")));
+    assert_eq!(result.metadata.get("last_status"), Some(&json!("running")));
+    assert_eq!(
+        result.metadata.get("graph_status"),
+        Some(&json!("completed"))
+    );
+    assert_eq!(result.metadata.get("task_status"), Some(&json!("running")));
+    Ok(())
+}
+
+#[tokio::test]
+async fn agent_lifecycle_wait_times_out_for_active_child() -> Result<(), Box<dyn std::error::Error>>
+{
+    let (_store, graph) = graph_with_parent().await?;
+    graph
+        .record_child(ChildAgentSpawnRecord::new(
+            "parent-thread",
+            "child-active",
+            "spawn-active",
+        ))
+        .await?;
+    let tool = AgentLifecycleTool::with_graph(graph);
+
+    let result = tool
+        .execute(&create_tool_call(
+            "wait-active",
+            json!({
+                "operation": "wait",
+                "agent_path": "agent://child-active",
+                "timeout": 1
+            }),
+        ))
+        .await?;
+    assert!(!result.success);
+    assert_eq!(result.metadata.get("error_code"), Some(&json!("timeout")));
+    assert_eq!(
+        result.metadata.get("agent_path"),
+        Some(&json!("agent://child-active"))
+    );
+    assert_eq!(result.metadata.get("last_status"), Some(&json!("active")));
+    assert!(matches!(
+        result.output.as_deref(),
+        Some(output) if output.contains("Timed out waiting for agent agent://child-active")
+    ));
+    assert_eq!(result.output, result.error);
+    Ok(())
+}
+
+#[tokio::test]
+async fn agent_lifecycle_wait_returns_structured_missing_agent()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (_store, graph) = graph_with_parent().await?;
+    let tool = AgentLifecycleTool::with_graph(graph);
+
+    let result = tool
+        .execute(&create_tool_call(
+            "wait-missing",
+            json!({
+                "operation": "wait",
+                "agent_path": "agent://missing-child",
+                "timeout": 1
+            }),
+        ))
+        .await?;
+
+    assert!(!result.success);
+    assert_eq!(
+        result.metadata.get("error_code"),
+        Some(&json!("agent_not_found"))
+    );
+    assert_eq!(
+        result.metadata.get("agent_path"),
+        Some(&json!("agent://missing-child"))
+    );
+    assert!(matches!(
+        result.output.as_deref(),
+        Some(output) if output.contains("Agent agent://missing-child was not found")
+    ));
+    assert_eq!(result.output, result.error);
+    Ok(())
+}
+
+#[test]
+fn agent_lifecycle_does_not_inherit_into_subagent_runner() {
+    assert!(!AgentLifecycleTool::new().include_in_subagent_runner());
+}
+
+#[test]
+fn agent_lifecycle_max_execution_has_timeout_headroom() {
+    let max_execution_duration = AgentLifecycleTool::new().max_execution_duration();
+    assert!(matches!(
+        max_execution_duration,
+        Some(duration) if duration > Duration::from_secs(600)
+    ));
+}

@@ -80,6 +80,12 @@ impl Tool for TaskTool {
     fn include_in_subagent_runner(&self) -> bool {
         self.subagent_graph.is_none()
     }
+
+    fn subagent_runner_tool(&self) -> Option<Arc<dyn Tool>> {
+        self.subagent_graph
+            .as_ref()
+            .map(|_| Arc::new(TaskTool::with_registry(self.registry.clone())) as Arc<dyn Tool>)
+    }
 }
 
 impl TaskTool {

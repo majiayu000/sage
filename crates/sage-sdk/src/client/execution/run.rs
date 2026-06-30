@@ -1,6 +1,6 @@
 //! Basic run execution methods
 
-use super::{default_tools, resolve_working_directory};
+use super::{default_thread_store_for_tools, default_tools, resolve_working_directory};
 use crate::client::{ExecutionResult, RunOptions, SageAgentSdk};
 use sage_core::{
     agent::{ExecutionMode, ExecutionOptions},
@@ -97,12 +97,20 @@ impl SageAgentSdk {
             .with_working_directory(&working_dir);
 
         // Create runtime facade executor
-        let runtime =
+        let thread_store = default_thread_store_for_tools()?;
+        let mut runtime =
             Runtime::new(self.config.clone(), exec_options).with_source(RuntimeSource::Sdk);
+        if let Some(store) = thread_store {
+            runtime = runtime.with_thread_store(store);
+        }
         let mut executor = runtime.build_executor()?;
 
         // Register default tools
-        let mut all_tools = default_tools(working_dir.clone(), executor.skill_registry());
+        let mut all_tools = default_tools(
+            working_dir.clone(),
+            executor.skill_registry(),
+            executor.thread_store(),
+        );
 
         // Load MCP tools if MCP is enabled
         if self.config.mcp.enabled {

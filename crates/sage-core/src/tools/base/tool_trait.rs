@@ -9,6 +9,7 @@ use super::error::ToolError;
 use crate::tools::permission::{RiskLevel, ToolContext, ToolPermissionResult};
 use crate::tools::types::{ToolCall, ToolResult, ToolSchema};
 use async_trait::async_trait;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 // ============================================================================
@@ -177,6 +178,11 @@ pub trait Tool: Send + Sync {
     /// Whether this tool can be inherited by the process-global sub-agent runner.
     fn include_in_subagent_runner(&self) -> bool {
         true
+    }
+
+    /// Optional replacement to register in the sub-agent runner instead of this tool.
+    fn subagent_runner_tool(&self) -> Option<Arc<dyn Tool>> {
+        None
     }
 
     // ========================================================================
