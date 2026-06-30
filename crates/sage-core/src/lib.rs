@@ -141,6 +141,7 @@ pub(crate) mod settings;
 pub mod skills;
 pub mod storage;
 pub mod telemetry;
+pub mod thread_store;
 pub mod tools;
 pub mod trajectory;
 pub mod types;
