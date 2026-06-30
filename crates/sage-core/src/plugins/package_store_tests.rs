@@ -122,7 +122,12 @@ fn public_package_id_path_escape_fails_closed() {
             PackageManifestError::InvalidField { .. }
         ))
     ));
-    assert!(!store.is_installed("../outside"));
+    assert!(matches!(
+        store.is_installed("../outside"),
+        Err(PackageError::Manifest(
+            PackageManifestError::InvalidField { .. }
+        ))
+    ));
 }
 
 #[test]
@@ -136,5 +141,10 @@ fn dot_only_public_package_id_fails_closed() {
             PackageManifestError::InvalidField { .. }
         ))
     ));
-    assert!(!store.is_installed("."));
+    assert!(matches!(
+        store.is_installed("."),
+        Err(PackageError::Manifest(
+            PackageManifestError::InvalidField { .. }
+        ))
+    ));
 }

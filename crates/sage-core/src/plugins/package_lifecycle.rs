@@ -173,7 +173,7 @@ impl ExtensionPackageManager {
             .iter()
             .filter(|dep| !dep.optional)
         {
-            if !self.store.is_installed(&dependency.id) {
+            if !self.store.is_installed(&dependency.id)? {
                 return Err(PackageError::MissingDependency {
                     package_id: record.package_id.clone(),
                     dependency_id: dependency.id.clone(),

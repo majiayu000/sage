@@ -214,10 +214,9 @@ impl ExtensionPackageStore {
     }
 
     /// Returns whether a package id is installed.
-    pub fn is_installed(&self, package_id: &str) -> bool {
-        self.package_dir(package_id)
-            .map(|path| path.join(PACKAGE_RECORD_FILE).is_file())
-            .unwrap_or(false)
+    pub fn is_installed(&self, package_id: &str) -> PackageResult<bool> {
+        let package_dir = self.package_dir(package_id)?;
+        Ok(package_dir.join(PACKAGE_RECORD_FILE).is_file())
     }
 
     fn package_dir(&self, package_id: &str) -> PackageResult<PathBuf> {
