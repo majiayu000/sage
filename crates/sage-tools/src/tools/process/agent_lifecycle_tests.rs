@@ -7,7 +7,10 @@ use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::types::ToolCall;
 use serde_json::json;
 
-use super::AgentLifecycleTool;
+use super::{
+    super::task::{TaskRegistry, TaskRequest, TaskStatus},
+    AgentLifecycleTool,
+};
 
 fn create_tool_call(id: &str, args: serde_json::Value) -> ToolCall {
     let arguments = if let serde_json::Value::Object(map) = args {
@@ -165,6 +168,58 @@ async fn agent_lifecycle_wait_returns_terminal_status() -> Result<(), Box<dyn st
 }
 
 #[tokio::test]
+async fn agent_lifecycle_wait_uses_shared_registry_terminal_status()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (_store, graph) = graph_with_parent().await?;
+    graph
+        .record_child(ChildAgentSpawnRecord::new(
+            "parent-thread",
+            "child-registry-done",
+            "spawn-registry-done",
+        ))
+        .await?;
+    let registry = Arc::new(TaskRegistry::new());
+    registry.add_task(TaskRequest {
+        id: "child-registry-done".to_string(),
+        description: "Done child".to_string(),
+        prompt: "Return".to_string(),
+        subagent_type: "Plan".to_string(),
+        model: None,
+        run_in_background: true,
+        resume: None,
+        status: TaskStatus::Completed,
+        result: Some("registry final result".to_string()),
+    });
+    let tool = AgentLifecycleTool::with_task_registry_and_graph(registry, graph);
+
+    let result = tool
+        .execute(&create_tool_call(
+            "wait-registry-done",
+            json!({
+                "operation": "wait",
+                "agent_path": "agent://child-registry-done",
+                "timeout": 1
+            }),
+        ))
+        .await?;
+    assert!(result.success);
+    assert_eq!(result.metadata.get("status"), Some(&json!("completed")));
+    assert_eq!(result.metadata.get("graph_status"), Some(&json!("active")));
+    assert_eq!(
+        result.metadata.get("task_status"),
+        Some(&json!("completed"))
+    );
+    assert_eq!(
+        result
+            .metadata
+            .get("agent")
+            .and_then(|agent| agent.get("final_result")),
+        Some(&json!("registry final result"))
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn agent_lifecycle_wait_times_out_for_active_child() -> Result<(), Box<dyn std::error::Error>>
 {
     let (_store, graph) = graph_with_parent().await?;
@@ -177,7 +232,7 @@ async fn agent_lifecycle_wait_times_out_for_active_child() -> Result<(), Box<dyn
         .await?;
     let tool = AgentLifecycleTool::with_graph(graph);
 
-    let err = tool
+    let result = tool
         .execute(&create_tool_call(
             "wait-active",
             json!({
@@ -186,8 +241,18 @@ async fn agent_lifecycle_wait_times_out_for_active_child() -> Result<(), Box<dyn
                 "timeout": 1
             }),
         ))
-        .await
-        .expect_err("active child should time out");
-    assert!(matches!(err, ToolError::Timeout));
+        .await?;
+    assert!(!result.success);
+    assert_eq!(result.metadata.get("error_code"), Some(&json!("timeout")));
+    assert_eq!(
+        result.metadata.get("agent_path"),
+        Some(&json!("agent://child-active"))
+    );
+    assert_eq!(result.metadata.get("last_status"), Some(&json!("active")));
     Ok(())
+}
+
+#[test]
+fn agent_lifecycle_does_not_inherit_into_subagent_runner() {
+    assert!(!AgentLifecycleTool::new().include_in_subagent_runner());
 }

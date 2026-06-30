@@ -11,22 +11,37 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use super::task::{GLOBAL_TASK_REGISTRY, TaskRegistry, TaskRequest, TaskStatus};
+
 const MAX_TIMEOUT_MS: f64 = 600_000.0;
 
 /// Read-only lifecycle operations for graph-backed sub-agent tasks.
 pub struct AgentLifecycleTool {
+    task_registry: Arc<TaskRegistry>,
     subagent_graph: Option<Arc<SubAgentGraph>>,
 }
 
 impl AgentLifecycleTool {
     pub fn new() -> Self {
         Self {
+            task_registry: GLOBAL_TASK_REGISTRY.clone(),
             subagent_graph: None,
         }
     }
 
     pub fn with_graph(subagent_graph: Arc<SubAgentGraph>) -> Self {
         Self {
+            task_registry: GLOBAL_TASK_REGISTRY.clone(),
+            subagent_graph: Some(subagent_graph),
+        }
+    }
+
+    pub fn with_task_registry_and_graph(
+        task_registry: Arc<TaskRegistry>,
+        subagent_graph: Arc<SubAgentGraph>,
+    ) -> Self {
+        Self {
+            task_registry,
             subagent_graph: Some(subagent_graph),
         }
     }
@@ -140,6 +155,10 @@ This tool requires a runtime ThreadStore-backed SubAgentGraph."#
         Some(Duration::from_secs(600))
     }
 
+    fn include_in_subagent_runner(&self) -> bool {
+        false
+    }
+
     fn supports_parallel_execution(&self) -> bool {
         true
     }
@@ -185,7 +204,10 @@ impl AgentLifecycleTool {
             .with_metadata("operation", json!("list"))
             .with_metadata("parent_thread_id", json!(parent_thread_id))
             .with_metadata("depth", json!(depth_label(depth)))
-            .with_metadata("children", json!(summaries_to_json(&children))))
+            .with_metadata(
+                "children",
+                json!(summaries_to_json(&children, &self.task_registry)),
+            ))
     }
 
     async fn execute_wait(
@@ -196,26 +218,58 @@ impl AgentLifecycleTool {
     ) -> Result<ToolResult, ToolError> {
         let agent_path = AgentPath::from_raw_path(required_string(call, "agent_path")?)
             .map_err(|err| ToolError::InvalidArguments(err.to_string()))?;
-        let timeout = timeout_duration(call.get_number("timeout").unwrap_or(30_000.0));
+        let timeout_raw = call.get_number("timeout").unwrap_or(30_000.0);
+        let timeout = timeout_duration(timeout_raw);
 
         loop {
+            self.task_registry.reconcile_finished_tasks().await;
             let summary = graph
                 .read_child(&agent_path)
                 .await
                 .map_err(|err| ToolError::NotFound(err.to_string()))?;
-            if is_terminal(summary.status) {
+            let task = self.task_registry.get_task(&summary.child_thread_id);
+            if terminal_status(summary.status, task.as_ref()).is_some() {
+                let status = status_label(summary.status, task.as_ref());
                 let output = format!(
                     "Agent {} reached terminal status {}.",
                     summary.agent_path.as_path_str(),
-                    summary.status.as_str()
+                    status
                 );
                 return Ok(timed_result(call, self.name(), output, start_time)
                     .with_metadata("operation", json!("wait"))
-                    .with_metadata("agent", summary_to_json(&summary))
-                    .with_metadata("status", json!(summary.status.as_str())));
+                    .with_metadata("agent", summary_to_json(&summary, task.as_ref()))
+                    .with_metadata("status", json!(status))
+                    .with_metadata("graph_status", json!(summary.status.as_str()))
+                    .with_metadata(
+                        "task_status",
+                        json!(task.as_ref().map(|task| task.status.to_string())),
+                    ));
             }
             if start_time.elapsed() >= timeout {
-                return Err(ToolError::Timeout);
+                let last_status = status_label(summary.status, task.as_ref());
+                return Ok(timed_result(
+                    call,
+                    self.name(),
+                    format!(
+                        "Timed out waiting for agent {} after {}ms; last status was {}.",
+                        summary.agent_path.as_path_str(),
+                        timeout_raw,
+                        last_status
+                    ),
+                    start_time,
+                )
+                .as_error()
+                .with_metadata("operation", json!("wait"))
+                .with_metadata("error_code", json!("timeout"))
+                .with_metadata("agent_path", json!(summary.agent_path.as_path_str()))
+                .with_metadata("timeout_ms", json!(timeout_raw))
+                .with_metadata("last_status", json!(last_status))
+                .with_metadata("graph_status", json!(summary.status.as_str()))
+                .with_metadata(
+                    "task_status",
+                    json!(task.as_ref().map(|task| task.status.to_string())),
+                )
+                .with_metadata("agent", summary_to_json(&summary, task.as_ref())));
             }
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
@@ -295,18 +349,53 @@ fn depth_label(depth: AgentGraphDepth) -> &'static str {
     }
 }
 
-fn is_terminal(status: ThreadStatus) -> bool {
-    matches!(
-        status,
+trait AgentLifecycleResultExt {
+    fn as_error(self) -> Self;
+}
+
+impl AgentLifecycleResultExt for ToolResult {
+    fn as_error(mut self) -> Self {
+        self.success = false;
+        self.error = self.output.take();
+        self.exit_code = Some(1);
+        self
+    }
+}
+
+fn terminal_status(graph_status: ThreadStatus, task: Option<&TaskRequest>) -> Option<String> {
+    if let Some(task) = task {
+        if matches!(task.status, TaskStatus::Completed | TaskStatus::Failed) {
+            return Some(task.status.to_string());
+        }
+    }
+    if matches!(
+        graph_status,
         ThreadStatus::Completed | ThreadStatus::Failed | ThreadStatus::Interrupted
-    )
+    ) {
+        Some(graph_status.as_str().to_string())
+    } else {
+        None
+    }
 }
 
-fn summaries_to_json(children: &[ChildAgentSummary]) -> Vec<Value> {
-    children.iter().map(summary_to_json).collect()
+fn status_label(graph_status: ThreadStatus, task: Option<&TaskRequest>) -> String {
+    terminal_status(graph_status, task).unwrap_or_else(|| {
+        task.map(|task| task.status.to_string())
+            .unwrap_or_else(|| graph_status.as_str().to_string())
+    })
 }
 
-fn summary_to_json(summary: &ChildAgentSummary) -> Value {
+fn summaries_to_json(children: &[ChildAgentSummary], registry: &TaskRegistry) -> Vec<Value> {
+    children
+        .iter()
+        .map(|summary| {
+            let task = registry.get_task(&summary.child_thread_id);
+            summary_to_json(summary, task.as_ref())
+        })
+        .collect()
+}
+
+fn summary_to_json(summary: &ChildAgentSummary, task: Option<&TaskRequest>) -> Value {
     json!({
         "agent_path": summary.agent_path.as_path_str(),
         "parent_thread_id": summary.parent_thread_id,
@@ -318,6 +407,21 @@ fn summary_to_json(summary: &ChildAgentSummary) -> Value {
         "title": summary.title,
         "created_at": summary.created_at,
         "updated_at": summary.updated_at,
+        "task_status": task.map(|task| task.status.to_string()),
+        "final_result": task.and_then(|task| {
+            if task.status == TaskStatus::Completed {
+                task.result.clone()
+            } else {
+                None
+            }
+        }),
+        "error": task.and_then(|task| {
+            if task.status == TaskStatus::Failed {
+                task.result.clone()
+            } else {
+                None
+            }
+        }),
     })
 }
 

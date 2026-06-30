@@ -295,7 +295,10 @@ fn build_default_tools(config: DefaultToolConfig) -> Vec<Arc<dyn Tool>> {
             .unwrap_or(tools.len());
         tools.insert(
             insert_at,
-            Arc::new(AgentLifecycleTool::with_graph(Arc::clone(graph))),
+            Arc::new(AgentLifecycleTool::with_task_registry_and_graph(
+                Arc::clone(&task_registry),
+                Arc::clone(graph),
+            )),
         );
     }
 
