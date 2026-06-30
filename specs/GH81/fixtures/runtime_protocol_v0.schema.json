@@ -1,0 +1,1203 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sage-agent.dev/schemas/runtime_protocol_v0.schema.json",
+  "title": "Sage Runtime Protocol v0",
+  "description": "Contract fixture for Sage runtime thread, turn, item, permission, and error messages.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/request_envelope"
+    },
+    {
+      "$ref": "#/$defs/notification_envelope"
+    },
+    {
+      "$ref": "#/$defs/response_envelope"
+    },
+    {
+      "$ref": "#/$defs/error_envelope"
+    }
+  ],
+  "$defs": {
+    "message_id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z]+_[A-Za-z0-9._-]+$"
+    },
+    "protocol_version": {
+      "const": "sage.runtime.v0"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "cli",
+        "sdk",
+        "runtime",
+        "tool",
+        "permission",
+        "system"
+      ]
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "rule": {
+      "type": "object",
+      "required": [
+        "behavior",
+        "source"
+      ],
+      "properties": {
+        "behavior": {
+          "type": "string",
+          "enum": [
+            "allow",
+            "deny",
+            "ask",
+            "passthrough"
+          ]
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "project_settings",
+            "local_settings",
+            "user_settings",
+            "session_settings",
+            "cli_arg",
+            "builtin"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "request_payload": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/thread_start_payload"
+        },
+        {
+          "$ref": "#/$defs/thread_resume_payload"
+        },
+        {
+          "$ref": "#/$defs/thread_fork_payload"
+        },
+        {
+          "$ref": "#/$defs/turn_start_payload"
+        },
+        {
+          "$ref": "#/$defs/turn_steer_payload"
+        },
+        {
+          "$ref": "#/$defs/turn_interrupt_payload"
+        },
+        {
+          "$ref": "#/$defs/permission_respond_payload"
+        },
+        {
+          "$ref": "#/$defs/input_respond_payload"
+        }
+      ]
+    },
+    "thread_start_payload": {
+      "type": "object",
+      "properties": {
+        "cwd": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "interactive",
+            "non_interactive"
+          ]
+        },
+        "model": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "thread_resume_payload": {
+      "type": "object",
+      "required": [
+        "thread_id"
+      ],
+      "properties": {
+        "thread_id": {
+          "$ref": "#/$defs/message_id"
+        },
+        "restore_latest": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "thread_fork_payload": {
+      "type": "object",
+      "required": [
+        "parent_thread_id"
+      ],
+      "properties": {
+        "parent_thread_id": {
+          "$ref": "#/$defs/message_id"
+        },
+        "parent_turn_id": {
+          "$ref": "#/$defs/message_id"
+        },
+        "parent_item_id": {
+          "$ref": "#/$defs/message_id"
+        },
+        "fork_mode": {
+          "type": "string",
+          "enum": [
+            "full_context",
+            "summary",
+            "selected_items"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "turn_start_payload": {
+      "type": "object",
+      "required": [
+        "input"
+      ],
+      "properties": {
+        "input": {
+          "type": "string"
+        },
+        "input_item_id": {
+          "$ref": "#/$defs/message_id"
+        }
+      },
+      "additionalProperties": false
+    },
+    "turn_steer_payload": {
+      "type": "object",
+      "required": [
+        "instructions"
+      ],
+      "properties": {
+        "instructions": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "turn_interrupt_payload": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "permission_respond_payload": {
+      "type": "object",
+      "required": [
+        "decision"
+      ],
+      "properties": {
+        "decision": {
+          "type": "string",
+          "enum": [
+            "allow",
+            "deny"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "modified_input": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/rule"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "input_respond_payload": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "answers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "cancelled": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "notification_payload": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/thread_lifecycle_payload"
+        },
+        {
+          "$ref": "#/$defs/turn_started_payload"
+        },
+        {
+          "$ref": "#/$defs/turn_terminal_payload"
+        },
+        {
+          "$ref": "#/$defs/item_payload"
+        },
+        {
+          "$ref": "#/$defs/permission_requested_payload"
+        },
+        {
+          "$ref": "#/$defs/permission_resolved_payload"
+        },
+        {
+          "$ref": "#/$defs/error_reported_payload"
+        }
+      ]
+    },
+    "thread_lifecycle_payload": {
+      "type": "object",
+      "properties": {
+        "persistent": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "legacy_session_id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "turn_started_payload": {
+      "type": "object",
+      "required": [
+        "input_item_id"
+      ],
+      "properties": {
+        "input_item_id": {
+          "$ref": "#/$defs/message_id"
+        }
+      },
+      "additionalProperties": false
+    },
+    "turn_terminal_payload": {
+      "type": "object",
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "completed",
+            "failed",
+            "interrupted"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "result": {
+          "type": "string"
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "item_payload": {
+      "type": "object",
+      "required": [
+        "item_type"
+      ],
+      "properties": {
+        "item_type": {
+          "type": "string",
+          "enum": [
+            "message",
+            "system_message",
+            "assistant_message",
+            "user_message",
+            "tool_call",
+            "permission",
+            "error",
+            "result"
+          ]
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "system",
+            "user",
+            "assistant",
+            "tool"
+          ]
+        },
+        "content": {
+          "type": "string"
+        },
+        "tool_name": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "arguments": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "success": {
+          "type": "boolean"
+        },
+        "output_preview": {
+          "type": "string"
+        },
+        "result": {
+          "type": "string"
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "legacy_type": {
+          "type": "string"
+        },
+        "redacted": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "permission_requested_payload": {
+      "type": "object",
+      "required": [
+        "tool_name",
+        "risk",
+        "reason",
+        "input_redacted"
+      ],
+      "properties": {
+        "tool_name": {
+          "type": "string"
+        },
+        "risk": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "input_redacted": {
+          "type": "boolean"
+        },
+        "input": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "suggestions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/rule"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "permission_resolved_payload": {
+      "type": "object",
+      "required": [
+        "decision"
+      ],
+      "properties": {
+        "decision": {
+          "type": "string",
+          "enum": [
+            "allow",
+            "deny"
+          ]
+        },
+        "rule_source": {
+          "type": "string"
+        },
+        "modified_input_applied": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "error_reported_payload": {
+      "type": "object",
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "legacy_type": {
+          "type": "string"
+        },
+        "redacted": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "response_payload": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ack_response_payload"
+        },
+        {
+          "$ref": "#/$defs/thread_response_payload"
+        },
+        {
+          "$ref": "#/$defs/turn_response_payload"
+        }
+      ]
+    },
+    "ack_response_payload": {
+      "type": "object",
+      "required": [
+        "accepted"
+      ],
+      "properties": {
+        "accepted": {
+          "type": "boolean"
+        },
+        "applied_rules": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "thread_response_payload": {
+      "type": "object",
+      "required": [
+        "thread_id"
+      ],
+      "properties": {
+        "thread_id": {
+          "$ref": "#/$defs/message_id"
+        },
+        "resumed": {
+          "type": "boolean"
+        },
+        "forked_from": {
+          "$ref": "#/$defs/message_id"
+        }
+      },
+      "additionalProperties": false
+    },
+    "turn_response_payload": {
+      "type": "object",
+      "required": [
+        "turn_id"
+      ],
+      "properties": {
+        "turn_id": {
+          "$ref": "#/$defs/message_id"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "request_envelope": {
+      "type": "object",
+      "required": [
+        "protocol_version",
+        "kind",
+        "type",
+        "id",
+        "timestamp",
+        "source",
+        "payload"
+      ],
+      "properties": {
+        "protocol_version": {
+          "$ref": "#/$defs/protocol_version"
+        },
+        "kind": {
+          "const": "request"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "thread.start",
+            "thread.resume",
+            "thread.fork",
+            "turn.start",
+            "turn.steer",
+            "turn.interrupt",
+            "permission.respond",
+            "input.respond"
+          ]
+        },
+        "id": {
+          "$ref": "#/$defs/message_id"
+        },
+        "thread_id": {
+          "$ref": "#/$defs/message_id"
+        },
+        "turn_id": {
+          "$ref": "#/$defs/message_id"
+        },
+        "request_id": {
+          "$ref": "#/$defs/message_id"
+        },
+        "timestamp": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "payload": {
+          "$ref": "#/$defs/request_payload"
+        },
+        "metadata": {
+          "$ref": "#/$defs/metadata"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "thread.start"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/thread_start_payload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "thread.resume"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/thread_resume_payload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "thread.fork"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/thread_fork_payload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "turn.start"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/turn_start_payload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "turn.steer"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/turn_steer_payload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "turn.interrupt"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/turn_interrupt_payload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "permission.respond"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/permission_respond_payload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "input.respond"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/input_respond_payload"
+              }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "notification_envelope": {
+      "type": "object",
+      "required": [
+        "protocol_version",
+        "kind",
+        "type",
+        "id",
+        "thread_id",
+        "timestamp",
+        "sequence",
+        "source",
+        "payload"
+      ],
+      "properties": {
+        "protocol_version": {
+          "$ref": "#/$defs/protocol_version"
+        },
+        "kind": {
+          "const": "notification"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "thread.started",
+            "thread.ended",
+            "turn.started",
+            "turn.completed",
+            "turn.interrupted",
+            "item.created",
+            "item.updated",
+            "item.completed",
+            "permission.requested",
+            "permission.resolved",
+            "error.reported"
+          ]
+        },
+        "id": {
+          "$ref": "#/$defs/message_id"
+        },
+        "thread_id": {
+          "$ref": "#/$defs/message_id"
+        },
+        "turn_id": {
+          "$ref": "#/$defs/message_id"
+        },
+        "item_id": {
+          "$ref": "#/$defs/message_id"
+        },
+        "request_id": {
+          "$ref": "#/$defs/message_id"
+        },
+        "timestamp": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "payload": {
+          "$ref": "#/$defs/notification_payload"
+        },
+        "metadata": {
+          "$ref": "#/$defs/metadata"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "thread.started"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/thread_lifecycle_payload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "thread.ended"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/thread_lifecycle_payload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "turn.started"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/turn_started_payload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "turn.completed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/turn_terminal_payload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "turn.interrupted"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/turn_terminal_payload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "item.created"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/item_payload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "item.updated"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/item_payload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "item.completed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/item_payload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "permission.requested"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/permission_requested_payload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "permission.resolved"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/permission_resolved_payload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "error.reported"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/error_reported_payload"
+              }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "response_envelope": {
+      "type": "object",
+      "required": [
+        "protocol_version",
+        "kind",
+        "type",
+        "id",
+        "request_id",
+        "timestamp",
+        "source",
+        "payload"
+      ],
+      "properties": {
+        "protocol_version": {
+          "$ref": "#/$defs/protocol_version"
+        },
+        "kind": {
+          "const": "response"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "thread.start.result",
+            "thread.resume.result",
+            "thread.fork.result",
+            "turn.start.result",
+            "turn.steer.result",
+            "turn.interrupt.result",
+            "permission.respond.result",
+            "input.respond.result"
+          ]
+        },
+        "id": {
+          "$ref": "#/$defs/message_id"
+        },
+        "request_id": {
+          "$ref": "#/$defs/message_id"
+        },
+        "thread_id": {
+          "$ref": "#/$defs/message_id"
+        },
+        "turn_id": {
+          "$ref": "#/$defs/message_id"
+        },
+        "timestamp": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "payload": {
+          "$ref": "#/$defs/response_payload"
+        },
+        "metadata": {
+          "$ref": "#/$defs/metadata"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "thread.start.result",
+                  "thread.resume.result",
+                  "thread.fork.result"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/thread_response_payload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "turn.start.result",
+                  "turn.steer.result",
+                  "turn.interrupt.result"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/turn_response_payload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "permission.respond.result",
+                  "input.respond.result"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/ack_response_payload"
+              }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "error_envelope": {
+      "type": "object",
+      "required": [
+        "protocol_version",
+        "kind",
+        "type",
+        "id",
+        "timestamp",
+        "source",
+        "payload"
+      ],
+      "properties": {
+        "protocol_version": {
+          "$ref": "#/$defs/protocol_version"
+        },
+        "kind": {
+          "const": "error"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "error.validation",
+            "error.permission_denied",
+            "error.tool_failed",
+            "error.model_failed",
+            "error.interrupted",
+            "error.max_steps",
+            "error.internal"
+          ]
+        },
+        "id": {
+          "$ref": "#/$defs/message_id"
+        },
+        "thread_id": {
+          "$ref": "#/$defs/message_id"
+        },
+        "turn_id": {
+          "$ref": "#/$defs/message_id"
+        },
+        "request_id": {
+          "$ref": "#/$defs/message_id"
+        },
+        "timestamp": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "code",
+            "message"
+          ],
+          "properties": {
+            "code": {
+              "type": "string",
+              "minLength": 1
+            },
+            "message": {
+              "type": "string",
+              "minLength": 1
+            },
+            "details": {
+              "type": "object",
+              "additionalProperties": true
+            },
+            "redacted": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        "metadata": {
+          "$ref": "#/$defs/metadata"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
