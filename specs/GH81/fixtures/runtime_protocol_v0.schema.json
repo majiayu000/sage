@@ -324,6 +324,9 @@
         "duration_ms": {
           "type": "integer",
           "minimum": 0
+        },
+        "legacy_type": {
+          "type": "string"
         }
       },
       "additionalProperties": false
