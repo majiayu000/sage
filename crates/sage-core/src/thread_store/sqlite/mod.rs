@@ -4,6 +4,7 @@ mod payload;
 mod queries;
 mod registry_key;
 mod thread_rows;
+mod thread_status;
 use super::backfill::backfill_legacy_path;
 use super::error::{ThreadStoreError, ThreadStoreResult};
 use super::recovery::detect_startup_issues;
@@ -63,6 +64,7 @@ impl SqliteThreadStore {
     pub fn in_memory() -> ThreadStoreResult<Self> {
         Self::open(":memory:")
     }
+
     pub fn payload_root(&self) -> Option<&Path> {
         self.payload_root.as_deref()
     }
@@ -171,13 +173,7 @@ impl SqliteThreadStore {
         thread_id: &str,
         status: ThreadStatus,
     ) -> ThreadStoreResult<()> {
-        self.with_conn(|conn| {
-            conn.execute(
-                "UPDATE threads SET status = ?1, updated_at = ?2 WHERE thread_id = ?3",
-                params![status.as_str(), Utc::now().to_rfc3339(), thread_id],
-            )?;
-            Ok(())
-        })
+        thread_status::update_thread_status_row(self, thread_id, status)
     }
 }
 #[async_trait]
@@ -220,6 +216,13 @@ impl ThreadStore for SqliteThreadStore {
         })
     }
 
+    async fn set_thread_status(
+        &self,
+        thread_id: &str,
+        status: ThreadStatus,
+    ) -> ThreadStoreResult<()> {
+        SqliteThreadStore::set_thread_status(self, thread_id, status)
+    }
     async fn resume_thread(&self, thread_id: &str) -> ThreadStoreResult<ThreadSnapshot> {
         self.read_thread(thread_id).await
     }
@@ -414,7 +417,6 @@ impl ThreadStore for SqliteThreadStore {
         detect_startup_issues(self).await
     }
 }
-
 fn ensure_thread_exists(conn: &Connection, thread_id: &str) -> ThreadStoreResult<()> {
     let exists: Option<i64> = conn
         .query_row(
@@ -473,7 +475,6 @@ fn upsert_turn(
     )?;
     Ok(())
 }
-
 fn ensure_turn_ownership(
     conn: &Connection,
     thread_id: &str,

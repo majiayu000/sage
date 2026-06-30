@@ -38,6 +38,7 @@ pub enum TaskStatus {
     Running,
     Completed,
     Failed,
+    Interrupted,
 }
 
 impl std::fmt::Display for TaskStatus {
@@ -47,6 +48,7 @@ impl std::fmt::Display for TaskStatus {
             TaskStatus::Running => write!(f, "running"),
             TaskStatus::Completed => write!(f, "completed"),
             TaskStatus::Failed => write!(f, "failed"),
+            TaskStatus::Interrupted => write!(f, "interrupted"),
         }
     }
 }
@@ -86,6 +88,21 @@ impl TaskRegistry {
         if let Some(task) = tasks.get_mut(id) {
             task.status = status;
             task.result = result;
+        }
+    }
+
+    /// Interrupt a live background task and update its status.
+    pub fn interrupt_task(&self, id: &str, reason: Option<String>) -> bool {
+        if let Some(handle) = self.handles.write().remove(id) {
+            handle.abort();
+        }
+        let mut tasks = self.tasks.write();
+        if let Some(task) = tasks.get_mut(id) {
+            task.status = TaskStatus::Interrupted;
+            task.result = reason;
+            true
+        } else {
+            false
         }
     }
 

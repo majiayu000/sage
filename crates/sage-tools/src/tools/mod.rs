@@ -73,8 +73,8 @@ pub use monitoring::{LogAnalyzerTool, TestGeneratorTool};
 pub use network::{BrowserTool, HttpClientTool, WebFetchTool, WebSearchTool};
 pub use planning::{EnterPlanModeTool, ExitPlanModeTool};
 pub use process::{
-    AgentLifecycleTool, BashTool, KillShellTool, TaskOutputTool, TaskRequest, TaskStatus, TaskTool,
-    get_pending_tasks, get_task, update_task_status,
+    AgentLifecycleTool, AgentMessagingTool, BashTool, KillShellTool, TaskOutputTool, TaskRequest,
+    TaskStatus, TaskTool, get_pending_tasks, get_task, update_task_status,
 };
 pub use task_mgmt::{
     AddTasksTool, ReorganizeTasklistTool, TaskDoneTool, TodoItem, TodoReadTool, TodoStatus,
@@ -301,6 +301,13 @@ fn build_default_tools(config: DefaultToolConfig) -> Vec<Arc<dyn Tool>> {
         tools.insert(
             insert_at,
             Arc::new(AgentLifecycleTool::with_task_registry_and_graph(
+                Arc::clone(&task_registry),
+                Arc::clone(graph),
+            )),
+        );
+        tools.insert(
+            insert_at + 1,
+            Arc::new(AgentMessagingTool::with_task_registry_and_graph(
                 Arc::clone(&task_registry),
                 Arc::clone(graph),
             )),

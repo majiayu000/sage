@@ -3,6 +3,9 @@
 //! This module provides the actual execution logic for sub-agents, replacing
 //! the placeholder implementation in the Task tool.
 
+#[path = "runner_mailbox.rs"]
+mod runner_mailbox;
+
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::RwLock;
@@ -14,6 +17,7 @@ use super::builtin::{explore_agent, general_purpose_agent, plan_agent};
 use super::types::{
     AgentDefinition, AgentProgress, AgentType, ExecutionMetadata, SubAgentConfig, SubAgentResult,
 };
+use super::{AgentPath, SubAgentGraph};
 use crate::agent::unified::UnifiedExecutor;
 use crate::config::model::Config;
 use crate::error::{SageError, SageResult};
@@ -21,6 +25,8 @@ use crate::llm::client::LlmClient;
 use crate::llm::messages::{LlmMessage, MessageRole};
 use crate::tools::base::Tool;
 use crate::tools::types::{ToolCall, ToolResult, ToolSchema};
+use runner_mailbox::MailboxRuntime;
+pub use runner_mailbox::execute_subagent_with_mailbox;
 
 /// Sub-agent runner that executes agents with filtered tools
 pub struct SubAgentRunner {
@@ -95,8 +101,28 @@ impl SubAgentRunner {
     /// the config for inheritance resolution.
     pub async fn execute(
         &self,
+        config: SubAgentConfig,
+        cancel: CancellationToken,
+    ) -> SageResult<SubAgentResult> {
+        self.execute_inner(config, cancel, None).await
+    }
+
+    pub async fn execute_with_mailbox(
+        &self,
+        config: SubAgentConfig,
+        cancel: CancellationToken,
+        graph: Arc<SubAgentGraph>,
+        agent_path: AgentPath,
+    ) -> SageResult<SubAgentResult> {
+        self.execute_inner(config, cancel, Some(MailboxRuntime::new(graph, agent_path)))
+            .await
+    }
+
+    async fn execute_inner(
+        &self,
         mut config: SubAgentConfig,
         cancel: CancellationToken,
+        mut mailbox: Option<MailboxRuntime>,
     ) -> SageResult<SubAgentResult> {
         let start_time = Instant::now();
         let agent_id = uuid::Uuid::new_v4().to_string();
@@ -191,6 +217,11 @@ impl SubAgentRunner {
                 });
             }
 
+            if let Some(mailbox) = mailbox.as_mut() {
+                self.ingest_mailbox_follow_ups(&mut messages, mailbox)
+                    .await?;
+            }
+
             progress.next_step();
 
             // Execute one step
@@ -207,6 +238,13 @@ impl SubAgentRunner {
             {
                 StepResult::Continue => continue,
                 StepResult::Completed(output) => {
+                    if let Some(mailbox) = mailbox.as_mut()
+                        && self
+                            .ingest_mailbox_follow_ups(&mut messages, mailbox)
+                            .await?
+                    {
+                        continue;
+                    }
                     let elapsed_ms =
                         u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX);
                     metadata.execution_time_ms = elapsed_ms;

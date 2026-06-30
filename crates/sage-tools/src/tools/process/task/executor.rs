@@ -3,9 +3,9 @@
 use anyhow::{anyhow, bail};
 use sage_core::agent::subagent::{
     AgentPath, AgentType, ChildAgentSpawnRecord, ChildAgentSummary, SubAgentConfig, SubAgentGraph,
-    SubAgentGraphError, Thoroughness, execute_subagent,
+    SubAgentGraphError, Thoroughness, execute_subagent, execute_subagent_with_mailbox,
 };
-use sage_core::thread_store::ThreadStoreError;
+use sage_core::thread_store::{ThreadStatus, ThreadStoreError};
 use sage_core::tools::permission::ToolContext;
 use sage_core::tools::types::{ToolCall, ToolResult};
 use serde_json::json;
@@ -220,24 +220,50 @@ pub async fn execute_task_background_with_graph(
     let config =
         SubAgentConfig::new(agent_type, task_params.prompt.clone()).with_thoroughness(thoroughness);
     let background_task_id = task_id.clone();
+    let background_agent_path = summary.agent_path.clone();
+    let background_graph = graph.clone();
     let background_registry = Arc::downgrade(&registry);
     let handle = tokio::spawn(async move {
-        let result = execute_subagent(config.with_background(true)).await;
+        let result = execute_subagent_with_mailbox(
+            config.with_background(true),
+            background_graph.clone(),
+            background_agent_path.clone(),
+        )
+        .await;
         match result {
             Ok(result) => {
+                let content = result.content;
+                let graph_result = background_graph
+                    .record_terminal_state(
+                        &background_agent_path,
+                        ThreadStatus::Completed,
+                        Some(&content),
+                    )
+                    .await;
+                let (status, result) =
+                    graph_task_result(graph_result, TaskStatus::Completed, content);
                 update_background_status(
                     &background_registry,
                     &background_task_id,
-                    TaskStatus::Completed,
-                    Some(result.content),
+                    status,
+                    Some(result),
                 );
             }
             Err(err) => {
+                let message = err.to_string();
+                let graph_result = background_graph
+                    .record_terminal_state(
+                        &background_agent_path,
+                        ThreadStatus::Failed,
+                        Some(&message),
+                    )
+                    .await;
+                let (status, result) = graph_task_result(graph_result, TaskStatus::Failed, message);
                 update_background_status(
                     &background_registry,
                     &background_task_id,
-                    TaskStatus::Failed,
-                    Some(err.to_string()),
+                    status,
+                    Some(result),
                 );
             }
         }
@@ -276,7 +302,27 @@ fn update_background_status(
     result: Option<String>,
 ) {
     if let Some(registry) = registry.upgrade() {
+        if registry
+            .get_task(task_id)
+            .is_some_and(|task| task.status == TaskStatus::Interrupted)
+        {
+            return;
+        }
         registry.update_status(task_id, status, result);
+    }
+}
+
+fn graph_task_result(
+    result: Result<impl Sized, sage_core::agent::subagent::SubAgentGraphError>,
+    fallback: TaskStatus,
+    fallback_result: String,
+) -> (TaskStatus, String) {
+    match result {
+        Ok(_) => (fallback, fallback_result),
+        Err(err) => (
+            TaskStatus::Failed,
+            format!("failed to persist terminal graph status: {err}; result: {fallback_result}"),
+        ),
     }
 }
 
