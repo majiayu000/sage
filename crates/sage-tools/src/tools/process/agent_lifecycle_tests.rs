@@ -5,6 +5,7 @@ use std::time::Duration;
 use sage_core::agent::subagent::{ChildAgentSpawnRecord, SubAgentGraph};
 use sage_core::thread_store::{SqliteThreadStore, ThreadRecord, ThreadStatus, ThreadStore};
 use sage_core::tools::base::{Tool, ToolError};
+use sage_core::tools::permission::ToolContext;
 use sage_core::tools::types::ToolCall;
 use serde_json::json;
 
@@ -152,6 +153,53 @@ async fn agent_lifecycle_lists_direct_children_and_descendants()
             .collect::<Vec<_>>(),
         vec!["child-a", "child-b", "grandchild-a"]
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn agent_lifecycle_list_defaults_to_context_session() -> Result<(), Box<dyn std::error::Error>>
+{
+    let (_store, graph) = graph_with_parent().await?;
+    graph
+        .record_child(ChildAgentSpawnRecord::new(
+            "parent-thread",
+            "child-context",
+            "spawn-context",
+        ))
+        .await?;
+    let tool = AgentLifecycleTool::with_graph(graph);
+    let context = ToolContext::new(std::env::current_dir().unwrap_or_default())
+        .with_session_id("parent-thread");
+
+    let result = tool
+        .execute_with_context(
+            &create_tool_call(
+                "list-context",
+                json!({
+                    "operation": "list"
+                }),
+            ),
+            &context,
+        )
+        .await?;
+
+    assert!(result.success);
+    assert_eq!(
+        result.metadata.get("parent_thread_id"),
+        Some(&json!("parent-thread"))
+    );
+    let children = result
+        .metadata
+        .get("children")
+        .and_then(|value| value.as_array());
+    assert!(matches!(
+        children,
+        Some(children)
+            if children
+                .first()
+                .and_then(|child| child.get("child_thread_id"))
+                == Some(&json!("child-context"))
+    ));
     Ok(())
 }
 
@@ -353,6 +401,45 @@ async fn agent_lifecycle_wait_times_out_for_active_child() -> Result<(), Box<dyn
         Some(&json!("agent://child-active"))
     );
     assert_eq!(result.metadata.get("last_status"), Some(&json!("active")));
+    assert!(matches!(
+        result.output.as_deref(),
+        Some(output) if output.contains("Timed out waiting for agent agent://child-active")
+    ));
+    assert_eq!(result.output, result.error);
+    Ok(())
+}
+
+#[tokio::test]
+async fn agent_lifecycle_wait_returns_structured_missing_agent()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (_store, graph) = graph_with_parent().await?;
+    let tool = AgentLifecycleTool::with_graph(graph);
+
+    let result = tool
+        .execute(&create_tool_call(
+            "wait-missing",
+            json!({
+                "operation": "wait",
+                "agent_path": "agent://missing-child",
+                "timeout": 1
+            }),
+        ))
+        .await?;
+
+    assert!(!result.success);
+    assert_eq!(
+        result.metadata.get("error_code"),
+        Some(&json!("agent_not_found"))
+    );
+    assert_eq!(
+        result.metadata.get("agent_path"),
+        Some(&json!("agent://missing-child"))
+    );
+    assert!(matches!(
+        result.output.as_deref(),
+        Some(output) if output.contains("Agent agent://missing-child was not found")
+    ));
+    assert_eq!(result.output, result.error);
     Ok(())
 }
 

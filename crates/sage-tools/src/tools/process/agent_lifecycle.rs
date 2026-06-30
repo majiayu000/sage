@@ -6,6 +6,7 @@ use sage_core::agent::subagent::{
 };
 use sage_core::thread_store::ThreadStatus;
 use sage_core::tools::base::{Tool, ToolError};
+use sage_core::tools::permission::ToolContext;
 use sage_core::tools::types::{ToolCall, ToolResult, ToolSchema};
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -84,7 +85,7 @@ This tool requires a runtime ThreadStore-backed SubAgentGraph."#
                     },
                     "parent_thread_id": {
                         "type": "string",
-                        "description": "Parent thread id for operation=list."
+                        "description": "Parent thread id for operation=list; defaults to the current session id when runtime context is available."
                     },
                     "depth": {
                         "type": "string",
@@ -113,43 +114,19 @@ This tool requires a runtime ThreadStore-backed SubAgentGraph."#
     }
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
-        self.validate(call)?;
-        let graph = self.subagent_graph.as_ref().ok_or_else(|| {
-            ToolError::InvalidArguments(
-                "AgentLifecycle requires a ThreadStore-backed SubAgentGraph".to_string(),
-            )
-        })?;
-        let start_time = Instant::now();
+        self.execute_lifecycle(call, None).await
+    }
 
-        match operation(call)?.as_str() {
-            "list" => self.execute_list(call, graph, start_time).await,
-            "wait" => self.execute_wait(call, graph, start_time).await,
-            _ => unreachable!("operation is validated"),
-        }
+    async fn execute_with_context(
+        &self,
+        call: &ToolCall,
+        context: &ToolContext,
+    ) -> Result<ToolResult, ToolError> {
+        self.execute_lifecycle(call, Some(context)).await
     }
 
     fn validate(&self, call: &ToolCall) -> Result<(), ToolError> {
-        match operation(call)?.as_str() {
-            "list" => {
-                let parent_thread_id = required_string(call, "parent_thread_id")?;
-                validate_non_empty("parent_thread_id", &parent_thread_id)?;
-                if let Some(depth) = call.get_string("depth") {
-                    parse_depth(&depth)?;
-                }
-            }
-            "wait" => {
-                let agent_path = required_string(call, "agent_path")?;
-                AgentPath::from_raw_path(agent_path)
-                    .map_err(|err| ToolError::InvalidArguments(err.to_string()))?;
-                validate_timeout(call)?;
-            }
-            other => {
-                return Err(ToolError::InvalidArguments(format!(
-                    "unsupported operation '{other}'"
-                )));
-            }
-        }
-        Ok(())
+        validate_call(call)
     }
 
     fn max_execution_duration(&self) -> Option<Duration> {
@@ -170,13 +147,34 @@ This tool requires a runtime ThreadStore-backed SubAgentGraph."#
 }
 
 impl AgentLifecycleTool {
+    async fn execute_lifecycle(
+        &self,
+        call: &ToolCall,
+        context: Option<&ToolContext>,
+    ) -> Result<ToolResult, ToolError> {
+        self.validate(call)?;
+        let graph = self.subagent_graph.as_ref().ok_or_else(|| {
+            ToolError::InvalidArguments(
+                "AgentLifecycle requires a ThreadStore-backed SubAgentGraph".to_string(),
+            )
+        })?;
+        let start_time = Instant::now();
+
+        match operation(call)?.as_str() {
+            "list" => self.execute_list(call, graph, context, start_time).await,
+            "wait" => self.execute_wait(call, graph, start_time).await,
+            _ => unreachable!("operation is validated"),
+        }
+    }
+
     async fn execute_list(
         &self,
         call: &ToolCall,
         graph: &SubAgentGraph,
+        context: Option<&ToolContext>,
         start_time: Instant,
     ) -> Result<ToolResult, ToolError> {
-        let parent_thread_id = required_string(call, "parent_thread_id")?;
+        let parent_thread_id = parent_thread_id(call, context)?;
         let depth = parse_depth(call.get_string("depth").as_deref().unwrap_or("direct"))?;
         let query = AgentGraphListQuery {
             depth,
@@ -228,10 +226,20 @@ impl AgentLifecycleTool {
 
         loop {
             self.task_registry.reconcile_finished_tasks().await;
-            let summary = graph
-                .read_child(&agent_path)
-                .await
-                .map_err(|err| ToolError::NotFound(err.to_string()))?;
+            let summary = match graph.read_child(&agent_path).await {
+                Ok(summary) => summary,
+                Err(err) => {
+                    let message =
+                        format!("Agent {} was not found: {err}.", agent_path.as_path_str());
+                    return Ok(
+                        error_result(timed_result(call, self.name(), message, start_time))
+                            .with_metadata("operation", json!("wait"))
+                            .with_metadata("error_code", json!("agent_not_found"))
+                            .with_metadata("agent_path", json!(agent_path.as_path_str()))
+                            .with_metadata("timeout_ms", json!(timeout_raw)),
+                    );
+                }
+            };
             let task = self.task_registry.get_task(&summary.child_thread_id);
             if terminal_status(summary.status, task.as_ref()).is_some() {
                 let status = status_label(summary.status, task.as_ref());
@@ -252,36 +260,32 @@ impl AgentLifecycleTool {
                 return if status == "completed" {
                     Ok(result)
                 } else {
-                    Ok(result
-                        .into_error_result()
+                    Ok(error_result(result)
                         .with_metadata("error_code", json!(terminal_error_code(&status))))
                 };
             }
             if start_time.elapsed() >= timeout {
                 let last_status = status_label(summary.status, task.as_ref());
-                return Ok(timed_result(
-                    call,
-                    self.name(),
-                    format!(
-                        "Timed out waiting for agent {} after {}ms; last status was {}.",
-                        summary.agent_path.as_path_str(),
-                        timeout_raw,
-                        last_status
-                    ),
-                    start_time,
-                )
-                .into_error_result()
-                .with_metadata("operation", json!("wait"))
-                .with_metadata("error_code", json!("timeout"))
-                .with_metadata("agent_path", json!(summary.agent_path.as_path_str()))
-                .with_metadata("timeout_ms", json!(timeout_raw))
-                .with_metadata("last_status", json!(last_status))
-                .with_metadata("graph_status", json!(summary.status.as_str()))
-                .with_metadata(
-                    "task_status",
-                    json!(task.as_ref().map(|task| task.status.to_string())),
-                )
-                .with_metadata("agent", summary_to_json(&summary, task.as_ref())));
+                let output = format!(
+                    "Timed out waiting for agent {} after {}ms; last status was {}.",
+                    summary.agent_path.as_path_str(),
+                    timeout_raw,
+                    last_status
+                );
+                return Ok(
+                    error_result(timed_result(call, self.name(), output, start_time))
+                        .with_metadata("operation", json!("wait"))
+                        .with_metadata("error_code", json!("timeout"))
+                        .with_metadata("agent_path", json!(summary.agent_path.as_path_str()))
+                        .with_metadata("timeout_ms", json!(timeout_raw))
+                        .with_metadata("last_status", json!(last_status))
+                        .with_metadata("graph_status", json!(summary.status.as_str()))
+                        .with_metadata(
+                            "task_status",
+                            json!(task.as_ref().map(|task| task.status.to_string())),
+                        )
+                        .with_metadata("agent", summary_to_json(&summary, task.as_ref())),
+                );
             }
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
@@ -302,6 +306,48 @@ fn timed_result(
 
 fn operation(call: &ToolCall) -> Result<String, ToolError> {
     required_string(call, "operation")
+}
+
+fn validate_call(call: &ToolCall) -> Result<(), ToolError> {
+    match operation(call)?.as_str() {
+        "list" => {
+            if let Some(parent_thread_id) = call.get_string("parent_thread_id") {
+                validate_non_empty("parent_thread_id", &parent_thread_id)?;
+            }
+            if let Some(depth) = call.get_string("depth") {
+                parse_depth(&depth)?;
+            }
+        }
+        "wait" => {
+            let agent_path = required_string(call, "agent_path")?;
+            AgentPath::from_raw_path(agent_path)
+                .map_err(|err| ToolError::InvalidArguments(err.to_string()))?;
+            validate_timeout(call)?;
+        }
+        other => {
+            return Err(ToolError::InvalidArguments(format!(
+                "unsupported operation '{other}'"
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn parent_thread_id(call: &ToolCall, context: Option<&ToolContext>) -> Result<String, ToolError> {
+    if let Some(parent_thread_id) = call.get_string("parent_thread_id") {
+        validate_non_empty("parent_thread_id", &parent_thread_id)?;
+        return Ok(parent_thread_id);
+    }
+
+    context
+        .and_then(|context| context.session_id.as_deref())
+        .filter(|session_id| !session_id.trim().is_empty())
+        .map(str::to_string)
+        .ok_or_else(|| {
+            ToolError::InvalidArguments(
+                "AgentLifecycle list requires parent_thread_id or session_id context".to_string(),
+            )
+        })
 }
 
 fn required_string(call: &ToolCall, name: &str) -> Result<String, ToolError> {
@@ -361,17 +407,9 @@ fn depth_label(depth: AgentGraphDepth) -> &'static str {
     }
 }
 
-trait AgentLifecycleResultExt {
-    fn into_error_result(self) -> Self;
-}
-
-impl AgentLifecycleResultExt for ToolResult {
-    fn into_error_result(mut self) -> Self {
-        self.success = false;
-        self.error = self.output.take();
-        self.exit_code = Some(1);
-        self
-    }
+fn error_result(mut result: ToolResult) -> ToolResult {
+    (result.success, result.error, result.exit_code) = (false, result.output.clone(), Some(1));
+    result
 }
 
 fn terminal_status(graph_status: ThreadStatus, task: Option<&TaskRequest>) -> Option<String> {
