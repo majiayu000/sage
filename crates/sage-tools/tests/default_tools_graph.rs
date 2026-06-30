@@ -49,8 +49,13 @@ async fn default_tools_share_graph_backed_task_registry() -> Result<(), Box<dyn 
         .iter()
         .find(|tool| tool.name() == "TaskOutput")
         .ok_or("TaskOutput tool should be registered")?;
+    let agent_lifecycle = tools
+        .iter()
+        .find(|tool| tool.name() == "AgentLifecycle")
+        .ok_or("AgentLifecycle tool should be registered")?;
     assert!(!task.include_in_subagent_runner());
     assert!(!task_output.include_in_subagent_runner());
+    assert!(agent_lifecycle.is_read_only());
     let context = ToolContext::new(workspace.path().to_path_buf()).with_session_id("parent-thread");
 
     let spawn = task
@@ -98,6 +103,24 @@ async fn default_tools_share_graph_backed_task_registry() -> Result<(), Box<dyn 
         Some(&json!("task_graph_default"))
     );
     assert_eq!(output.metadata.get("agent_path"), Some(&json!(agent_path)));
+
+    let listed = agent_lifecycle
+        .execute(&graph_default_tool_call(
+            "agent-list",
+            "AgentLifecycle",
+            json!({
+                "operation": "list",
+                "parent_thread_id": "parent-thread"
+            }),
+        ))
+        .await?;
+    let children = listed
+        .metadata
+        .get("children")
+        .and_then(|value| value.as_array())
+        .ok_or("children metadata should be present")?;
+    assert_eq!(children.len(), 1);
+    assert_eq!(children[0]["agent_path"], json!(agent_path));
     Ok(())
 }
 

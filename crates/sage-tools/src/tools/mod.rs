@@ -73,8 +73,8 @@ pub use monitoring::{LogAnalyzerTool, TestGeneratorTool};
 pub use network::{BrowserTool, HttpClientTool, WebFetchTool, WebSearchTool};
 pub use planning::{EnterPlanModeTool, ExitPlanModeTool};
 pub use process::{
-    BashTool, KillShellTool, TaskOutputTool, TaskRequest, TaskStatus, TaskTool, get_pending_tasks,
-    get_task, update_task_status,
+    AgentLifecycleTool, BashTool, KillShellTool, TaskOutputTool, TaskRequest, TaskStatus, TaskTool,
+    get_pending_tasks, get_task, update_task_status,
 };
 pub use task_mgmt::{
     AddTasksTool, ReorganizeTasklistTool, TaskDoneTool, TodoItem, TodoReadTool, TodoStatus,
@@ -190,7 +190,7 @@ fn build_default_tools(config: DefaultToolConfig) -> Vec<Arc<dyn Tool>> {
     } else {
         process::task::GLOBAL_TASK_REGISTRY.clone()
     };
-    vec![
+    let mut tools: Vec<Arc<dyn Tool>> = vec![
         // File operations
         Arc::new(EditTool::with_working_directory_and_tracker(
             working_directory.clone(),
@@ -285,7 +285,21 @@ fn build_default_tools(config: DefaultToolConfig) -> Vec<Arc<dyn Tool>> {
         // Team collaboration
         Arc::new(TeammateTool::new()),
         Arc::new(SendMessageTool::new()),
-    ]
+    ];
+
+    if let Some(graph) = &subagent_graph {
+        let insert_at = tools
+            .iter()
+            .position(|tool| tool.name() == "TaskOutput")
+            .map(|index| index + 1)
+            .unwrap_or(tools.len());
+        tools.insert(
+            insert_at,
+            Arc::new(AgentLifecycleTool::with_graph(Arc::clone(graph))),
+        );
+    }
+
+    tools
 }
 
 /// Get all default tools organized by category
