@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::agent::{ExecutionOptions, UnifiedExecutor};
 use crate::config::Config;
-use crate::error::SageResult;
+use crate::error::{SageError, SageResult};
 use crate::input::InputChannel;
 use crate::llm::messages::LlmMessage;
 use crate::output::OutputMode;
@@ -14,7 +14,7 @@ use crate::runtime::{
 use crate::runtime_protocol::{RuntimeResponse, RuntimeSource};
 use crate::session::{JsonlSessionStorage, SessionMetadata};
 use crate::skills::SkillRegistry;
-use crate::thread_store::{ThreadStore, ThreadStoreError};
+use crate::thread_store::{ThreadRecord, ThreadStore, ThreadStoreError};
 use crate::tools::Tool;
 use crate::trajectory::SessionRecorder;
 use crate::types::TaskMetadata;
@@ -79,6 +79,7 @@ impl Runtime {
             inner: executor,
             source: self.source,
             state: self.state_capabilities(),
+            thread_store: self.thread_store.clone(),
             protocol_stream: self.protocol_stream,
         })
     }
@@ -156,11 +157,13 @@ pub struct RuntimeExecutor {
     inner: UnifiedExecutor,
     source: RuntimeSource,
     state: RuntimeStateCapabilities,
+    thread_store: Option<Arc<dyn ThreadStore>>,
     protocol_stream: RuntimeProtocolStream,
 }
 
 impl RuntimeExecutor {
     pub async fn start(&mut self, request: RuntimeStartRequest) -> SageResult<RuntimeRunResult> {
+        self.ensure_thread_store_parent(&request).await?;
         let outcome = self.inner.execute(request.task.clone()).await?;
         let notifications =
             self.protocol_stream
@@ -181,6 +184,10 @@ impl RuntimeExecutor {
 
     pub fn register_tools(&mut self, tools: Vec<Arc<dyn Tool>>) {
         self.inner.register_tools(tools);
+    }
+
+    pub fn thread_store(&self) -> Option<Arc<dyn ThreadStore>> {
+        self.thread_store.clone()
     }
 
     pub fn set_output_mode(&mut self, mode: OutputMode) {
@@ -225,5 +232,81 @@ impl RuntimeExecutor {
 
     pub fn switch_model(&mut self, model: &str) -> SageResult<String> {
         self.inner.switch_model(model)
+    }
+
+    async fn ensure_thread_store_parent(&self, request: &RuntimeStartRequest) -> SageResult<()> {
+        let Some(store) = &self.thread_store else {
+            return Ok(());
+        };
+
+        let thread_id = self
+            .inner
+            .current_session_id()
+            .map(str::to_string)
+            .unwrap_or_else(|| self.inner.id().to_string());
+        ensure_runtime_parent_thread(store.as_ref(), &thread_id, request).await
+    }
+}
+
+async fn ensure_runtime_parent_thread(
+    store: &dyn ThreadStore,
+    thread_id: &str,
+    request: &RuntimeStartRequest,
+) -> SageResult<()> {
+    match store.read_thread(thread_id).await {
+        Ok(_) => Ok(()),
+        Err(ThreadStoreError::ThreadNotFound(_)) => {
+            let mut record = ThreadRecord::new(thread_id);
+            record.title = Some(request.task.description.clone());
+            record.cwd = Some(std::path::PathBuf::from(&request.task.working_dir));
+            match store.create_thread(record).await {
+                Ok(_) | Err(ThreadStoreError::ThreadAlreadyExists(_)) => Ok(()),
+                Err(err) => Err(SageError::storage(format!(
+                    "failed to create runtime parent thread '{thread_id}': {err}"
+                ))),
+            }
+        }
+        Err(err) => Err(SageError::storage(format!(
+            "failed to read runtime parent thread '{thread_id}': {err}"
+        ))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::thread_store::{SqliteThreadStore, ThreadStore};
+
+    #[tokio::test]
+    async fn runtime_parent_helper_creates_parent_thread_when_store_is_configured()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let store = Arc::new(SqliteThreadStore::in_memory()?);
+        let runtime = Runtime::new(Config::default(), ExecutionOptions::default());
+        let request = runtime.start_request("graph parent", "/tmp/sage-parent");
+
+        ensure_runtime_parent_thread(store.as_ref(), "parent-thread", &request).await?;
+
+        let snapshot = store.read_thread("parent-thread").await?;
+        assert_eq!(snapshot.thread.thread_id, "parent-thread");
+        assert_eq!(snapshot.thread.title.as_deref(), Some("graph parent"));
+        assert_eq!(
+            snapshot.thread.cwd.as_deref(),
+            Some(std::path::Path::new("/tmp/sage-parent"))
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn runtime_parent_helper_reuses_existing_parent_thread()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let store = Arc::new(SqliteThreadStore::in_memory()?);
+        let runtime = Runtime::new(Config::default(), ExecutionOptions::default());
+        let request = runtime.start_request("graph parent", "/tmp/sage-parent");
+
+        ensure_runtime_parent_thread(store.as_ref(), "parent-thread", &request).await?;
+        ensure_runtime_parent_thread(store.as_ref(), "parent-thread", &request).await?;
+
+        assert!(store.read_thread("parent-thread").await.is_ok());
+        Ok(())
     }
 }
