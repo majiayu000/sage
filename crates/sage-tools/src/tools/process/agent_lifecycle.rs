@@ -258,7 +258,7 @@ impl AgentLifecycleTool {
                     ),
                     start_time,
                 )
-                .as_error()
+                .into_error_result()
                 .with_metadata("operation", json!("wait"))
                 .with_metadata("error_code", json!("timeout"))
                 .with_metadata("agent_path", json!(summary.agent_path.as_path_str()))
@@ -350,11 +350,11 @@ fn depth_label(depth: AgentGraphDepth) -> &'static str {
 }
 
 trait AgentLifecycleResultExt {
-    fn as_error(self) -> Self;
+    fn into_error_result(self) -> Self;
 }
 
 impl AgentLifecycleResultExt for ToolResult {
-    fn as_error(mut self) -> Self {
+    fn into_error_result(mut self) -> Self {
         self.success = false;
         self.error = self.output.take();
         self.exit_code = Some(1);
