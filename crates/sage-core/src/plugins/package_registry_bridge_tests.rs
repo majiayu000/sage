@@ -11,7 +11,18 @@ fn package_record(root: &Path) -> InstalledPackageRecord {
     fs::create_dir_all(root.join("skills/reviewer")).unwrap();
     fs::create_dir_all(root.join("commands")).unwrap();
     fs::create_dir_all(root.join("hooks")).unwrap();
-    fs::write(root.join("skills/reviewer/SKILL.md"), "review prompt").unwrap();
+    fs::write(
+        root.join("skills/reviewer/SKILL.md"),
+        r#"---
+description: Package reviewer
+when_to_use: When package review is needed
+allowed_tools: [Read, Grep]
+user_invocable: true
+---
+review prompt
+"#,
+    )
+    .unwrap();
     fs::write(
         root.join("commands/review.md"),
         "---\ndescription: Review command\n---\nreview prompt",
@@ -87,6 +98,12 @@ fn package_registry_bridge_enable_disable_is_reversible() {
 
     assert_eq!(registered.skills, vec!["reviewer"]);
     assert!(skills.contains("reviewer"));
+    let skill = skills.get("reviewer").unwrap();
+    assert_eq!(
+        skill.when_to_use.as_deref(),
+        Some("When package review is needed")
+    );
+    assert!(skill.user_invocable());
     assert!(commands.contains("review"));
     assert!(hooks.contains_hook_name("preflight"));
     assert!(bridge.mcp_server("docs").is_some());

@@ -165,9 +165,15 @@ fn validate_hook_assets(
     for asset in assets {
         validate_asset_id(package_id, PackageAssetKind::Hook, &asset.id)?;
         validate_relative_asset_path(package_id, &asset.id, &asset.path)?;
-        if let Some(event) = &asset.event {
-            validate_hook_event(package_id, event)?;
-        }
+        let event = asset
+            .event
+            .as_deref()
+            .ok_or_else(|| PackageManifestError::InvalidField {
+                package_id: package_id.to_string(),
+                field: "assets.hooks.event",
+                reason: "hook assets must declare an explicit event".to_string(),
+            })?;
+        validate_hook_event(package_id, event)?;
         validate_required_permissions(
             package_id,
             &asset.id,
@@ -240,11 +246,16 @@ fn validate_not_dot_only(
     field: &'static str,
     value: &str,
 ) -> Result<(), PackageManifestError> {
-    if value == "." || value == ".." || !value.chars().any(|ch| ch.is_ascii_alphanumeric()) {
+    if value == "."
+        || value == ".."
+        || value.starts_with('.')
+        || value.ends_with('.')
+        || !value.chars().any(|ch| ch.is_ascii_alphanumeric())
+    {
         Err(PackageManifestError::InvalidField {
             package_id: package_id.to_string(),
             field,
-            reason: "value must include an ASCII letter or number and cannot be . or .."
+            reason: "value must include an ASCII letter or number and cannot start or end with dot"
                 .to_string(),
         })
     } else {

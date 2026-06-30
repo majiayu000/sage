@@ -71,12 +71,16 @@ impl ExtensionPackageManager {
         hooks: &HookRegistry,
     ) -> PackageResult<InstalledPackageRecord> {
         let mut record = self.store.read(package_id)?;
-        if record.enabled() {
-            return Ok(record);
-        }
 
         self.validate_dependencies(&record)?;
         validate_manifest_assets_under_root(&record.manifest, &record.install_root)?;
+        if record.enabled() {
+            self.bridge
+                .disable_package(package_id, skills, commands, hooks)?;
+            self.bridge
+                .enable_package(&record, skills, commands, hooks)?;
+            return Ok(record);
+        }
 
         self.bridge
             .enable_package(&record, skills, commands, hooks)?;
@@ -299,6 +303,30 @@ required_permissions = ["network:mcp"]
         assert!(skills.contains("reviewer"));
         assert!(commands.contains("review"));
         assert!(manager.bridge().mcp_server("docs").is_some());
+
+        manager
+            .enable("acme.review", &mut skills, &mut commands, &hooks)
+            .unwrap();
+        assert!(skills.contains("reviewer"));
+        assert!(commands.contains("review"));
+        assert!(manager.bridge().mcp_server("docs").is_some());
+
+        let mut restarted_manager =
+            ExtensionPackageManager::new(ExtensionPackageStore::new(store_root.path()));
+        let mut restarted_skills = SkillRegistry::new(source.path());
+        let mut restarted_commands = CommandRegistry::new(source.path());
+        let restarted_hooks = HookRegistry::new();
+        restarted_manager
+            .enable(
+                "acme.review",
+                &mut restarted_skills,
+                &mut restarted_commands,
+                &restarted_hooks,
+            )
+            .unwrap();
+        assert!(restarted_skills.contains("reviewer"));
+        assert!(restarted_commands.contains("review"));
+        assert!(restarted_manager.bridge().mcp_server("docs").is_some());
 
         let disabled = manager
             .disable("acme.review", &mut skills, &mut commands, &hooks)

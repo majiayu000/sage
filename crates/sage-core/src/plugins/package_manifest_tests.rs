@@ -176,11 +176,47 @@ event = "surprise"
 }
 
 #[test]
+fn missing_hook_event_fails_closed() {
+    let err = ExtensionPackageManifest::from_toml_str(
+        r#"
+schema_version = 0
+id = "acme.review"
+name = "Acme Review"
+version = "1.0.0"
+permissions = ["hooks:run"]
+
+[[assets.hooks]]
+id = "preflight"
+path = "hooks/preflight.toml"
+required_permissions = ["hooks:run"]
+"#,
+    )
+    .unwrap_err();
+
+    assert!(matches!(err, PackageManifestError::InvalidField { .. }));
+}
+
+#[test]
 fn dot_only_package_id_fails_closed() {
     let err = ExtensionPackageManifest::from_toml_str(
         r#"
 schema_version = 0
 id = ".."
+name = "Acme Review"
+version = "1.0.0"
+"#,
+    )
+    .unwrap_err();
+
+    assert!(matches!(err, PackageManifestError::InvalidField { .. }));
+}
+
+#[test]
+fn leading_dot_package_id_fails_closed() {
+    let err = ExtensionPackageManifest::from_toml_str(
+        r#"
+schema_version = 0
+id = ".tmp-review"
 name = "Acme Review"
 version = "1.0.0"
 "#,

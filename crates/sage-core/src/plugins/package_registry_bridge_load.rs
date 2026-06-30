@@ -7,7 +7,7 @@ use crate::hooks::{HookEvent, HookMatcher};
 use crate::plugins::package_error::{PackageError, PackageResult};
 use crate::plugins::package_manifest::{PackageFileAsset, PackageHookAsset, PackageMcpServerAsset};
 use crate::plugins::package_store::InstalledPackageRecord;
-use crate::skills::{Skill, SkillSourceType};
+use crate::skills::{Skill, SkillRegistry, SkillSourceType};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -18,21 +18,24 @@ pub(super) fn load_skill_asset(
     let path = record.install_root.join(&asset.path);
     let content =
         fs::read_to_string(&path).map_err(|err| registry_error(record, err.to_string()))?;
-    let description = asset
+    let fallback_description = asset
         .metadata
         .get("description")
         .and_then(|value| value.as_str())
         .or(record.manifest.description.as_deref())
         .unwrap_or(&asset.id);
 
-    Ok(Skill::new(&asset.id, description)
-        .with_prompt(content)
-        .with_source(SkillSourceType::Package {
+    Ok(SkillRegistry::skill_from_content(
+        &asset.id,
+        &content,
+        SkillSourceType::Package {
             package_id: record.package_id.clone(),
             asset_id: asset.id.clone(),
             package_root: record.install_root.clone(),
-        })
-        .with_base_dir(asset_parent(record, &path)?))
+        },
+        Some(&asset_parent(record, &path)?),
+        fallback_description.to_string(),
+    ))
 }
 
 pub(super) fn load_command_asset(
@@ -61,11 +64,11 @@ pub(super) fn load_hook_asset(
     let mut matcher: HookMatcher =
         toml::from_str(&content).map_err(|err| registry_error(record, err.to_string()))?;
     matcher.hook.name = asset.id.clone();
-    let event = match asset.event.as_deref() {
-        Some(value) => parse_hook_event(Some(value))
-            .ok_or_else(|| registry_error(record, format!("unknown hook event '{value}'")))?,
-        None => HookEvent::SessionStart,
-    };
+    let event = asset
+        .event
+        .as_deref()
+        .and_then(|value| parse_hook_event(Some(value)))
+        .ok_or_else(|| registry_error(record, "hook asset requires explicit event"))?;
     Ok((asset.id.clone(), event, matcher))
 }
 
