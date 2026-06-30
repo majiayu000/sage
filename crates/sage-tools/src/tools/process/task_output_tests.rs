@@ -1,3 +1,4 @@
+use super::super::task::{TaskRegistry, TaskRequest, TaskStatus};
 use super::*;
 use sage_core::tools::BackgroundShellTask;
 use serde_json::json;
@@ -46,7 +47,7 @@ fn test_task_output_tool_properties() {
 }
 
 #[tokio::test]
-async fn test_task_output_missing_shell_id() {
+async fn test_task_output_missing_task_identifier() {
     let tool = TaskOutputTool::new();
     let call = create_tool_call("test-1", "TaskOutput", json!({}));
 
@@ -56,6 +57,7 @@ async fn test_task_output_missing_shell_id() {
     match result {
         Err(ToolError::InvalidArguments(msg)) => {
             assert!(msg.contains("shell_id"));
+            assert!(msg.contains("task_id"));
         }
         _ => panic!("Expected InvalidArguments error"),
     }
@@ -103,6 +105,113 @@ async fn test_task_output_invalid_shell_id() {
         }
         _ => panic!("Expected InvalidArguments error"),
     }
+}
+
+#[tokio::test]
+async fn test_task_output_task_not_found() {
+    let registry = Arc::new(TaskRegistry::new());
+    let tool = TaskOutputTool::with_task_registry(registry);
+    let call = create_tool_call(
+        "test-task-missing",
+        "TaskOutput",
+        json!({
+            "task_id": "missing_task"
+        }),
+    );
+
+    let result = tool.execute(&call).await;
+    assert!(result.is_err());
+
+    match result {
+        Err(ToolError::NotFound(msg)) => {
+            assert!(msg.contains("missing_task"));
+        }
+        _ => panic!("Expected NotFound error"),
+    }
+}
+
+#[tokio::test]
+async fn test_task_output_completed_subagent_task() {
+    let registry = Arc::new(TaskRegistry::new());
+    registry.add_task(TaskRequest {
+        id: "task_done".to_string(),
+        description: "Explore code".to_string(),
+        prompt: "Find files".to_string(),
+        subagent_type: "Explore".to_string(),
+        model: None,
+        run_in_background: true,
+        resume: None,
+        status: TaskStatus::Completed,
+        result: Some("final answer".to_string()),
+    });
+
+    let tool = TaskOutputTool::with_task_registry(registry);
+    let call = create_tool_call(
+        "test-task-done",
+        "TaskOutput",
+        json!({
+            "task_id": "task_done"
+        }),
+    );
+
+    let result = match tool.execute(&call).await {
+        Ok(result) => result,
+        Err(err) => panic!("expected completed task output, got {err}"),
+    };
+    assert!(result.success);
+    let Some(output) = result.output.as_deref() else {
+        panic!("expected completed task output text");
+    };
+    assert!(output.contains("Status: completed"));
+    assert!(output.contains("final answer"));
+    assert_eq!(result.metadata.get("status"), Some(&json!("completed")));
+    assert_eq!(
+        result.metadata.get("final_result"),
+        Some(&json!("final answer"))
+    );
+    assert_eq!(result.metadata.get("error"), Some(&json!(null)));
+}
+
+#[tokio::test]
+async fn test_task_output_failed_subagent_task() {
+    let registry = Arc::new(TaskRegistry::new());
+    registry.add_task(TaskRequest {
+        id: "task_failed".to_string(),
+        description: "Plan work".to_string(),
+        prompt: "Plan".to_string(),
+        subagent_type: "Plan".to_string(),
+        model: None,
+        run_in_background: true,
+        resume: None,
+        status: TaskStatus::Failed,
+        result: Some("runner unavailable".to_string()),
+    });
+
+    let tool = TaskOutputTool::with_task_registry(registry);
+    let call = create_tool_call(
+        "test-task-failed",
+        "TaskOutput",
+        json!({
+            "task_id": "task_failed"
+        }),
+    );
+
+    let result = match tool.execute(&call).await {
+        Ok(result) => result,
+        Err(err) => panic!("expected failed task output, got {err}"),
+    };
+    assert!(result.success);
+    let Some(output) = result.output.as_deref() else {
+        panic!("expected failed task output text");
+    };
+    assert!(output.contains("Status: failed"));
+    assert!(output.contains("runner unavailable"));
+    assert_eq!(result.metadata.get("status"), Some(&json!("failed")));
+    assert_eq!(
+        result.metadata.get("error"),
+        Some(&json!("runner unavailable"))
+    );
+    assert_eq!(result.metadata.get("final_result"), Some(&json!(null)));
 }
 
 #[tokio::test]
