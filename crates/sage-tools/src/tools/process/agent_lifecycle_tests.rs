@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use sage_core::agent::subagent::{ChildAgentSpawnRecord, SubAgentGraph};
 use sage_core::thread_store::{SqliteThreadStore, ThreadRecord, ThreadStatus, ThreadStore};
@@ -88,7 +89,19 @@ async fn agent_lifecycle_lists_direct_children_and_descendants()
             "spawn-grandchild",
         ))
         .await?;
-    let tool = AgentLifecycleTool::with_graph(graph);
+    let registry = Arc::new(TaskRegistry::new());
+    registry.add_task(TaskRequest {
+        id: "child-a".to_string(),
+        description: "Listed child".to_string(),
+        prompt: "Return".to_string(),
+        subagent_type: "Plan".to_string(),
+        model: None,
+        run_in_background: true,
+        resume: None,
+        status: TaskStatus::Completed,
+        result: Some("listed final result".to_string()),
+    });
+    let tool = AgentLifecycleTool::with_task_registry_and_graph(registry, graph);
 
     let direct = tool
         .execute(&create_tool_call(
@@ -108,6 +121,12 @@ async fn agent_lifecycle_lists_direct_children_and_descendants()
         .expect("children metadata");
     assert_eq!(direct_children.len(), 2);
     assert_eq!(direct_children[0]["child_thread_id"], json!("child-a"));
+    assert_eq!(direct_children[0]["status"], json!("completed"));
+    assert_eq!(direct_children[0]["graph_status"], json!("active"));
+    assert_eq!(
+        direct_children[0]["final_result"],
+        json!("listed final result")
+    );
     assert_eq!(direct_children[1]["child_thread_id"], json!("child-b"));
 
     let descendants = tool
@@ -255,4 +274,13 @@ async fn agent_lifecycle_wait_times_out_for_active_child() -> Result<(), Box<dyn
 #[test]
 fn agent_lifecycle_does_not_inherit_into_subagent_runner() {
     assert!(!AgentLifecycleTool::new().include_in_subagent_runner());
+}
+
+#[test]
+fn agent_lifecycle_max_execution_has_timeout_headroom() {
+    let max_execution_duration = AgentLifecycleTool::new().max_execution_duration();
+    assert!(matches!(
+        max_execution_duration,
+        Some(duration) if duration > Duration::from_secs(600)
+    ));
 }

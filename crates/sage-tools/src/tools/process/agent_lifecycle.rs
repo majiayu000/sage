@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 use super::task::{GLOBAL_TASK_REGISTRY, TaskRegistry, TaskRequest, TaskStatus};
 
 const MAX_TIMEOUT_MS: f64 = 600_000.0;
+const EXECUTION_TIMEOUT_HEADROOM: Duration = Duration::from_secs(10);
 
 /// Read-only lifecycle operations for graph-backed sub-agent tasks.
 pub struct AgentLifecycleTool {
@@ -152,7 +153,7 @@ This tool requires a runtime ThreadStore-backed SubAgentGraph."#
     }
 
     fn max_execution_duration(&self) -> Option<Duration> {
-        Some(Duration::from_secs(600))
+        Some(timeout_duration(MAX_TIMEOUT_MS) + EXECUTION_TIMEOUT_HEADROOM)
     }
 
     fn include_in_subagent_runner(&self) -> bool {
@@ -181,6 +182,7 @@ impl AgentLifecycleTool {
             depth,
             include_archived: call.get_bool("include_archived").unwrap_or(false),
         };
+        self.task_registry.reconcile_finished_tasks().await;
         let children = graph
             .list_children(&parent_thread_id, query)
             .await
@@ -191,7 +193,10 @@ impl AgentLifecycleTool {
         } else {
             let lines = children
                 .iter()
-                .map(format_summary_line)
+                .map(|summary| {
+                    let task = self.task_registry.get_task(&summary.child_thread_id);
+                    format_summary_line(summary, task.as_ref())
+                })
                 .collect::<Vec<_>>()
                 .join("\n");
             format!(
@@ -402,7 +407,8 @@ fn summary_to_json(summary: &ChildAgentSummary, task: Option<&TaskRequest>) -> V
         "child_thread_id": summary.child_thread_id,
         "parent_turn_id": summary.parent_turn_id,
         "spawn_item_id": summary.spawn_item_id,
-        "status": summary.status.as_str(),
+        "status": status_label(summary.status, task),
+        "graph_status": summary.status.as_str(),
         "archived": summary.archived,
         "title": summary.title,
         "created_at": summary.created_at,
@@ -425,10 +431,11 @@ fn summary_to_json(summary: &ChildAgentSummary, task: Option<&TaskRequest>) -> V
     })
 }
 
-fn format_summary_line(summary: &ChildAgentSummary) -> String {
+fn format_summary_line(summary: &ChildAgentSummary, task: Option<&TaskRequest>) -> String {
     format!(
-        "- {} status={} parent={} spawn_item={}",
+        "- {} status={} graph_status={} parent={} spawn_item={}",
         summary.agent_path.as_path_str(),
+        status_label(summary.status, task),
         summary.status.as_str(),
         summary.parent_thread_id,
         summary.spawn_item_id
