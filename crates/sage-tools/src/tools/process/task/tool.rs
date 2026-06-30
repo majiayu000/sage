@@ -76,6 +76,10 @@ impl Tool for TaskTool {
     ) -> Result<ToolResult, ToolError> {
         self.execute_task(call, Some(context)).await
     }
+
+    fn include_in_subagent_runner(&self) -> bool {
+        self.subagent_graph.is_none()
+    }
 }
 
 impl TaskTool {
@@ -92,25 +96,32 @@ impl TaskTool {
             .unwrap_or(false);
 
         if run_in_background {
-            if let Some(graph) = &self.subagent_graph {
-                let context = context.ok_or_else(|| {
-                    ToolError::InvalidArguments(
-                        "Task background graph spawn requires execution context".to_string(),
-                    )
-                })?;
-                execute_task_background_with_graph(
+            if let (Some(graph), Some(context)) = (&self.subagent_graph, context) {
+                return execute_task_background_with_graph(
                     call,
                     self.registry.clone(),
                     graph.clone(),
                     context,
                 )
                 .await
-                .map_err(|e| ToolError::InvalidArguments(e.to_string()))
-            } else {
-                execute_task_background(call, self.registry.clone())
-                    .await
-                    .map_err(|e| ToolError::InvalidArguments(e.to_string()))
+                .map_err(|e| ToolError::InvalidArguments(e.to_string()));
             }
+
+            if self.subagent_graph.is_some() && context.is_none() {
+                if let Some(resume) = call
+                    .arguments
+                    .get("resume")
+                    .and_then(|value| value.as_str())
+                {
+                    return Err(ToolError::InvalidArguments(format!(
+                        "Task resume '{resume}' requires execution context for graph-backed Task tools"
+                    )));
+                }
+            }
+
+            execute_task_background(call, self.registry.clone())
+                .await
+                .map_err(|e| ToolError::InvalidArguments(e.to_string()))
         } else {
             execute_task_sync(call, self.registry.clone())
                 .await

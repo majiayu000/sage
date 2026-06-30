@@ -174,6 +174,11 @@ pub trait Tool: Send + Sync {
         false
     }
 
+    /// Whether this tool can be inherited by the process-global sub-agent runner.
+    fn include_in_subagent_runner(&self) -> bool {
+        true
+    }
+
     // ========================================================================
     // Execution Helper
     // ========================================================================

@@ -145,6 +145,7 @@ pub use tools::{
     get_default_tool_names,
     get_default_tools,
     get_default_tools_with_context,
+    get_default_tools_with_context_and_thread_store,
     get_diagnostics_tools,
     get_extension_tools,
     get_file_ops_tools,

@@ -9,7 +9,7 @@ use sage_core::thread_store::ThreadStoreError;
 use sage_core::tools::permission::ToolContext;
 use sage_core::tools::types::{ToolCall, ToolResult};
 use serde_json::json;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use uuid::Uuid;
 
 use super::types::{TaskRegistry, TaskRequest, TaskStatus};
@@ -135,19 +135,21 @@ pub async fn execute_task_background(
     let config =
         SubAgentConfig::new(agent_type, task_params.prompt.clone()).with_thoroughness(thoroughness);
     let background_task_id = task_id.clone();
-    let background_registry = registry.clone();
+    let background_registry = Arc::downgrade(&registry);
     let handle = tokio::spawn(async move {
         let result = execute_subagent(config.with_background(true)).await;
         match result {
             Ok(result) => {
-                background_registry.update_status(
+                update_background_status(
+                    &background_registry,
                     &background_task_id,
                     TaskStatus::Completed,
                     Some(result.content),
                 );
             }
             Err(err) => {
-                background_registry.update_status(
+                update_background_status(
+                    &background_registry,
                     &background_task_id,
                     TaskStatus::Failed,
                     Some(err.to_string()),
@@ -218,19 +220,21 @@ pub async fn execute_task_background_with_graph(
     let config =
         SubAgentConfig::new(agent_type, task_params.prompt.clone()).with_thoroughness(thoroughness);
     let background_task_id = task_id.clone();
-    let background_registry = registry.clone();
+    let background_registry = Arc::downgrade(&registry);
     let handle = tokio::spawn(async move {
         let result = execute_subagent(config.with_background(true)).await;
         match result {
             Ok(result) => {
-                background_registry.update_status(
+                update_background_status(
+                    &background_registry,
                     &background_task_id,
                     TaskStatus::Completed,
                     Some(result.content),
                 );
             }
             Err(err) => {
-                background_registry.update_status(
+                update_background_status(
+                    &background_registry,
                     &background_task_id,
                     TaskStatus::Failed,
                     Some(err.to_string()),
@@ -263,6 +267,17 @@ pub async fn execute_task_background_with_graph(
         .with_metadata("spawn_item_id", json!(summary.spawn_item_id))
         .with_metadata("subagent_type", json!(task_params.subagent_type))
         .with_metadata("run_in_background", json!(true)))
+}
+
+fn update_background_status(
+    registry: &Weak<TaskRegistry>,
+    task_id: &str,
+    status: TaskStatus,
+    result: Option<String>,
+) {
+    if let Some(registry) = registry.upgrade() {
+        registry.update_status(task_id, status, result);
+    }
 }
 
 async fn record_or_reuse_graph_child(

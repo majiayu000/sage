@@ -194,6 +194,10 @@ Example: task_output(task_id="task_...", block=true)"#
         Ok(result)
     }
 
+    fn include_in_subagent_runner(&self) -> bool {
+        self.subagent_graph.is_none()
+    }
+
     fn validate(&self, call: &ToolCall) -> Result<(), ToolError> {
         let shell_id = call.get_string("shell_id");
         let task_id = call.get_string("task_id");

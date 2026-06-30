@@ -91,7 +91,9 @@ pub use crate::mcp_tools::{
     get_global_mcp_registry, get_mcp_tools, init_global_mcp_registry,
 };
 
+use sage_core::agent::subagent::SubAgentGraph;
 use sage_core::skills::SkillRegistry;
+use sage_core::thread_store::ThreadStore;
 use sage_core::tools::Tool;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -148,6 +150,7 @@ struct DefaultToolConfig {
     working_directory: PathBuf,
     skill_registry: Arc<RwLock<SkillRegistry>>,
     file_access_tracker: Arc<FileAccessTracker>,
+    thread_store: Option<Arc<dyn ThreadStore>>,
 }
 
 impl DefaultToolConfig {
@@ -159,7 +162,13 @@ impl DefaultToolConfig {
             working_directory: working_directory.into(),
             skill_registry,
             file_access_tracker: Arc::new(FileAccessTracker::new()),
+            thread_store: None,
         }
+    }
+
+    fn with_thread_store(mut self, thread_store: Arc<dyn ThreadStore>) -> Self {
+        self.thread_store = Some(thread_store);
+        self
     }
 
     fn with_new_skill_registry(working_directory: impl Into<PathBuf>) -> Self {
@@ -173,6 +182,14 @@ impl DefaultToolConfig {
 fn build_default_tools(config: DefaultToolConfig) -> Vec<Arc<dyn Tool>> {
     let working_directory = config.working_directory;
     let file_access_tracker = config.file_access_tracker;
+    let subagent_graph = config
+        .thread_store
+        .map(|thread_store| Arc::new(SubAgentGraph::new(thread_store)));
+    let task_registry = if subagent_graph.is_some() {
+        Arc::new(process::task::TaskRegistry::new())
+    } else {
+        process::task::GLOBAL_TASK_REGISTRY.clone()
+    };
     vec![
         // File operations
         Arc::new(EditTool::with_working_directory_and_tracker(
@@ -196,8 +213,22 @@ fn build_default_tools(config: DefaultToolConfig) -> Vec<Arc<dyn Tool>> {
         // Process tools
         Arc::new(BashTool::with_working_directory(working_directory.clone())),
         Arc::new(KillShellTool::new()),
-        Arc::new(TaskTool::new()), // Claude Code compatible subagent spawning
-        Arc::new(TaskOutputTool::new()),
+        match &subagent_graph {
+            Some(graph) => Arc::new(TaskTool::with_registry_and_graph(
+                Arc::clone(&task_registry),
+                Arc::clone(graph),
+            )),
+            None => Arc::new(TaskTool::with_registry(Arc::clone(&task_registry))),
+        },
+        match &subagent_graph {
+            Some(graph) => Arc::new(TaskOutputTool::with_task_registry_and_graph(
+                Arc::clone(&task_registry),
+                Arc::clone(graph),
+            )),
+            None => Arc::new(TaskOutputTool::with_task_registry(Arc::clone(
+                &task_registry,
+            ))),
+        },
         // Task management
         Arc::new(TodoWriteTool::new()), // Claude Code compatible
         Arc::new(TodoReadTool::new()),  // Read current todo list status
@@ -285,6 +316,20 @@ pub fn get_default_tools_with_context(
     skill_registry: Arc<RwLock<SkillRegistry>>,
 ) -> Vec<Arc<dyn Tool>> {
     build_default_tools(DefaultToolConfig::new(working_directory, skill_registry))
+}
+
+/// Get default tools bound to a working directory, skill registry, and ThreadStore.
+///
+/// When a ThreadStore is provided, Task and TaskOutput share one in-memory task
+/// registry plus a SubAgentGraph backed by that store.
+pub fn get_default_tools_with_context_and_thread_store(
+    working_directory: impl Into<PathBuf>,
+    skill_registry: Arc<RwLock<SkillRegistry>>,
+    thread_store: Arc<dyn ThreadStore>,
+) -> Vec<Arc<dyn Tool>> {
+    build_default_tools(
+        DefaultToolConfig::new(working_directory, skill_registry).with_thread_store(thread_store),
+    )
 }
 
 /// Get tools by category

@@ -12,7 +12,7 @@ mod suite {
     use sage_core::tools::types::ToolCall;
 
     use super::super::tool::TaskTool;
-    use super::super::types::{TaskRegistry, TaskStatus};
+    use super::super::types::{TaskRegistry, TaskRequest, TaskStatus};
 
     async fn graph_with_parent(
         parent_thread_id: &str,
@@ -222,6 +222,152 @@ mod suite {
             .expect_err("missing parent must fail");
         assert!(err.to_string().contains("missing-parent"));
         assert!(registry.get_task("task_missing_parent").is_none());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_task_tool_background_with_graph_without_context_uses_task_registry()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let registry = Arc::new(TaskRegistry::new());
+        let (_store, graph) = graph_with_parent("parent-thread").await?;
+        let tool = TaskTool::with_registry_and_graph(registry.clone(), graph.clone());
+        assert!(!tool.include_in_subagent_runner());
+        assert!(
+            TaskTool::with_registry(Arc::new(TaskRegistry::new())).include_in_subagent_runner()
+        );
+
+        let call = ToolCall {
+            id: "spawn-item".to_string(),
+            name: "Task".to_string(),
+            arguments: json!({
+                "description": "Plan implementation",
+                "prompt": "Design authentication system",
+                "subagent_type": "Plan",
+                "run_in_background": true
+            })
+            .as_object()
+            .unwrap()
+            .clone()
+            .into_iter()
+            .collect(),
+            call_id: None,
+        };
+
+        let result = tool.execute(&call).await?;
+        assert!(result.success);
+        let task_id = result
+            .metadata
+            .get("task_id")
+            .and_then(|value| value.as_str())
+            .expect("expected task id");
+        assert_eq!(
+            result
+                .metadata
+                .get("task_id")
+                .and_then(|value| value.as_str()),
+            Some(task_id)
+        );
+        assert!(!result.metadata.contains_key("agent_path"));
+        assert!(registry.get_task(task_id).is_some());
+        assert!(
+            graph
+                .read_child(&AgentPath::try_for_child_thread(task_id)?)
+                .await
+                .is_err()
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_task_tool_background_with_graph_without_context_rejects_duplicate_resume()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let registry = Arc::new(TaskRegistry::new());
+        registry.add_task(TaskRequest {
+            id: "task_without_context".to_string(),
+            description: "Existing task".to_string(),
+            prompt: "Keep result".to_string(),
+            subagent_type: "Plan".to_string(),
+            model: None,
+            run_in_background: true,
+            resume: Some("task_without_context".to_string()),
+            status: TaskStatus::Completed,
+            result: Some("original result".to_string()),
+        });
+        let (_store, graph) = graph_with_parent("parent-thread").await?;
+        let tool = TaskTool::with_registry_and_graph(registry.clone(), graph);
+
+        let call = ToolCall {
+            id: "spawn-item".to_string(),
+            name: "Task".to_string(),
+            arguments: json!({
+                "description": "Plan implementation",
+                "prompt": "Design authentication system",
+                "subagent_type": "Plan",
+                "run_in_background": true,
+                "resume": "task_without_context"
+            })
+            .as_object()
+            .unwrap()
+            .clone()
+            .into_iter()
+            .collect(),
+            call_id: None,
+        };
+
+        let err = tool
+            .execute(&call)
+            .await
+            .expect_err("no-context resume must not overwrite task registry or graph edge");
+        assert!(err.to_string().contains("task_without_context"));
+        let task = registry
+            .get_task("task_without_context")
+            .expect("existing task should remain registered");
+        assert_eq!(task.status, TaskStatus::Completed);
+        assert_eq!(task.result.as_deref(), Some("original result"));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_task_tool_background_with_graph_without_context_keeps_registry_drop_path()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let registry = Arc::new(TaskRegistry::new());
+        let (_store, graph) = graph_with_parent("parent-thread").await?;
+        let tool = TaskTool::with_registry_and_graph(registry.clone(), graph);
+
+        let call = ToolCall {
+            id: "spawn-item".to_string(),
+            name: "Task".to_string(),
+            arguments: json!({
+                "description": "Plan implementation",
+                "prompt": "Design authentication system",
+                "subagent_type": "Plan",
+                "run_in_background": true
+            })
+            .as_object()
+            .unwrap()
+            .clone()
+            .into_iter()
+            .collect(),
+            call_id: None,
+        };
+
+        let result = tool.execute(&call).await?;
+        assert!(result.success);
+        let task_id = result
+            .metadata
+            .get("task_id")
+            .and_then(|value| value.as_str())
+            .expect("expected task id");
+        assert_eq!(
+            result
+                .metadata
+                .get("task_id")
+                .and_then(|value| value.as_str()),
+            Some(task_id)
+        );
+        assert_eq!(Arc::strong_count(&registry), 2);
+        drop(tool);
+        assert_eq!(Arc::strong_count(&registry), 1);
         Ok(())
     }
 
