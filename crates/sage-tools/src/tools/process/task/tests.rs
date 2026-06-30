@@ -489,6 +489,46 @@ profile = "review"
     }
 
     #[tokio::test]
+    async fn test_task_tool_sync_graph_missing_parent_allows_default_no_fork_context()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let registry = Arc::new(TaskRegistry::new());
+        let store = Arc::new(SqliteThreadStore::in_memory()?);
+        let graph_store: Arc<dyn ThreadStore> = store;
+        let graph = Arc::new(SubAgentGraph::new(graph_store));
+        let tool = TaskTool::with_registry_and_graph(registry.clone(), graph);
+        let context = ToolContext::new(std::env::current_dir().unwrap_or_default())
+            .with_session_id("missing-parent");
+
+        let call = ToolCall {
+            id: "sync-spawn".to_string(),
+            name: "Task".to_string(),
+            arguments: json!({
+                "description": "Plan implementation",
+                "prompt": "Design authentication system",
+                "subagent_type": "Plan",
+                "resume": "sync_missing_parent"
+            })
+            .as_object()
+            .unwrap()
+            .clone()
+            .into_iter()
+            .collect(),
+            call_id: None,
+        };
+
+        let result = tool.execute_with_context(&call, &context).await?;
+        assert_eq!(
+            result
+                .metadata
+                .get("task_id")
+                .and_then(|value| value.as_str()),
+            Some("sync_missing_parent")
+        );
+        assert!(registry.get_task("sync_missing_parent").is_some());
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_task_tool_background_with_graph_without_context_uses_task_registry()
     -> Result<(), Box<dyn std::error::Error>> {
         let registry = Arc::new(TaskRegistry::new());

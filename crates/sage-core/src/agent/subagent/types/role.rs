@@ -1,7 +1,6 @@
 //! Declarative sub-agent role schema.
 
 use super::{ForkContextPolicy, ToolAccessControl, WorkingDirectoryConfig};
-use crate::config::ProviderRegistry;
 use crate::error::{SageError, SageResult};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -63,13 +62,7 @@ impl SubAgentRoleConfig {
 
 pub fn validate_model_override(model: &str) -> SageResult<()> {
     validate_non_empty("model override", model)?;
-    validate_model_token(model)?;
-    if supported_model_override(model) {
-        return Ok(());
-    }
-    Err(SageError::config(format!(
-        "unsupported model override '{model}'"
-    )))
+    validate_model_token(model)
 }
 
 pub fn validate_reasoning_override(reasoning: &str) -> SageResult<()> {
@@ -149,15 +142,4 @@ fn validate_model_token(value: &str) -> SageResult<()> {
         ));
     }
     Ok(())
-}
-
-fn supported_model_override(model: &str) -> bool {
-    if matches!(model, "sonnet" | "opus" | "haiku") {
-        return true;
-    }
-    ProviderRegistry::with_defaults()
-        .embedded_providers()
-        .iter()
-        .flat_map(|provider| provider.models.iter())
-        .any(|candidate| candidate.id == model)
 }

@@ -9,6 +9,9 @@ mod runner_global;
 mod runner_mailbox;
 #[path = "runner_roles.rs"]
 mod runner_roles;
+#[cfg(test)]
+#[path = "runner_roles_tests.rs"]
+mod runner_roles_tests;
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -17,7 +20,8 @@ use tokio_util::sync::CancellationToken;
 use std::path::{Path, PathBuf};
 
 use super::types::{
-    AgentDefinition, AgentProgress, AgentType, ExecutionMetadata, SubAgentConfig, SubAgentResult,
+    AgentDefinition, AgentProgress, AgentType, ExecutionMetadata, ForkContextMessage,
+    SubAgentConfig, SubAgentResult,
 };
 use super::{AgentPath, SubAgentGraph};
 use crate::agent::unified::UnifiedExecutor;
@@ -261,7 +265,6 @@ impl SubAgentRunner {
                     &mut messages,
                     &tools,
                     &effective_cwd,
-                    &self.working_directory,
                     &mut progress,
                     &mut metadata,
                 )
@@ -324,7 +327,6 @@ impl SubAgentRunner {
         llm_client: &LlmClient,
         messages: &mut Vec<LlmMessage>,
         tools: &[Arc<dyn Tool>],
-        _working_dir: &Path,
         tool_cwd: &Path,
         progress: &mut AgentProgress,
         metadata: &mut ExecutionMetadata,
@@ -363,7 +365,9 @@ impl SubAgentRunner {
                 metadata.add_tool(call.name.clone());
                 metadata.total_tool_uses += 1;
 
-                let result = self.execute_tool_call(call, tools, tool_cwd).await;
+                let result = self
+                    .execute_tool_call(call, tools, tool_cwd, messages)
+                    .await;
 
                 // Add tool result message
                 let tool_msg = LlmMessage::tool(
@@ -392,6 +396,7 @@ impl SubAgentRunner {
         call: &ToolCall,
         tools: &[Arc<dyn Tool>],
         working_dir: &Path,
+        messages: &[LlmMessage],
     ) -> ToolResult {
         // Find the tool
         let tool = match tools.iter().find(|t| t.name() == call.name) {
@@ -410,8 +415,10 @@ impl SubAgentRunner {
         }
 
         // Execute the tool with the current child tool scope so nested Task
-        // calls cannot expand back to the global runner tool list.
-        let context = tool_context_for_child_tool_call(working_dir, tools);
+        // calls cannot expand back to the global runner tool list. The current
+        // child transcript is also exposed so nested Task fork_context can
+        // inherit from the actual parent sub-agent conversation.
+        let context = tool_context_for_child_tool_call(working_dir, tools, messages);
         tool.execute_with_timing_and_context(call, &context).await
     }
 
@@ -433,13 +440,37 @@ impl SubAgentRunner {
 pub(super) fn tool_context_for_child_tool_call(
     working_dir: &Path,
     tools: &[Arc<dyn Tool>],
+    messages: &[LlmMessage],
 ) -> ToolContext {
     let mut context = ToolContext::new(working_dir.to_path_buf());
     context.metadata.insert(
         "parent_tools".to_string(),
         serde_json::json!(current_tool_names(tools)),
     );
+    let parent_context = fork_context_messages_for_nested_task(messages);
+    if !parent_context.is_empty() {
+        context.metadata.insert(
+            "parent_context".to_string(),
+            serde_json::json!(parent_context),
+        );
+    }
     context
+}
+
+fn fork_context_messages_for_nested_task(messages: &[LlmMessage]) -> Vec<ForkContextMessage> {
+    messages
+        .iter()
+        .filter_map(|message| match message.role {
+            MessageRole::User | MessageRole::Assistant if !message.content.trim().is_empty() => {
+                Some(ForkContextMessage {
+                    role: message.role,
+                    content: message.content.clone(),
+                })
+            }
+            MessageRole::System | MessageRole::Tool | MessageRole::Error => None,
+            MessageRole::User | MessageRole::Assistant => None,
+        })
+        .collect()
 }
 
 fn current_tool_names(tools: &[Arc<dyn Tool>]) -> Vec<String> {

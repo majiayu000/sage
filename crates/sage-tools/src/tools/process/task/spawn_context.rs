@@ -3,9 +3,10 @@
 use std::path::PathBuf;
 
 use sage_core::agent::subagent::{
-    AgentType, ForkContextMessage, SubAgentConfig, SubAgentGraph, Thoroughness,
+    AgentType, ForkContextMessage, SubAgentConfig, SubAgentGraph, SubAgentGraphError, Thoroughness,
     load_custom_role_for_config,
 };
+use sage_core::thread_store::ThreadStoreError;
 use sage_core::tools::permission::ToolContext;
 
 use super::spawn_params::{
@@ -35,6 +36,21 @@ pub(super) async fn resolve_parent_context(
     graph: Option<&SubAgentGraph>,
     context: Option<&ToolContext>,
 ) -> anyhow::Result<ParentContextResolution> {
+    resolve_parent_context_inner(graph, context, false).await
+}
+
+pub(super) async fn resolve_parent_context_allow_missing_thread(
+    graph: Option<&SubAgentGraph>,
+    context: Option<&ToolContext>,
+) -> anyhow::Result<ParentContextResolution> {
+    resolve_parent_context_inner(graph, context, true).await
+}
+
+async fn resolve_parent_context_inner(
+    graph: Option<&SubAgentGraph>,
+    context: Option<&ToolContext>,
+    allow_missing_thread: bool,
+) -> anyhow::Result<ParentContextResolution> {
     if let Some(context) = context
         && let Some(messages) = parent_context_from_tool_context(context)?
     {
@@ -47,10 +63,20 @@ pub(super) async fn resolve_parent_context(
     if let (Some(graph), Some(context)) = (graph, context)
         && let Some(session_id) = context.session_id.as_deref()
     {
-        return Ok(ParentContextResolution {
-            messages: Some(graph.fork_context_messages(session_id).await?),
-            source: Some("thread_store"),
-        });
+        match graph.fork_context_messages(session_id).await {
+            Ok(messages) => {
+                return Ok(ParentContextResolution {
+                    messages: Some(messages),
+                    source: Some("thread_store"),
+                });
+            }
+            Err(SubAgentGraphError::ThreadStore(ThreadStoreError::ThreadNotFound(_)))
+                if allow_missing_thread =>
+            {
+                return Ok(ParentContextResolution::none());
+            }
+            Err(err) => return Err(err.into()),
+        }
     }
 
     Ok(ParentContextResolution::none())

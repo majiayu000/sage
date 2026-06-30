@@ -12,7 +12,9 @@ use serde_json::json;
 use std::sync::{Arc, Weak};
 use uuid::Uuid;
 
-use super::spawn_context::{prepare_subagent_config, resolve_parent_context};
+use super::spawn_context::{
+    prepare_subagent_config, resolve_parent_context, resolve_parent_context_allow_missing_thread,
+};
 use super::spawn_params::parse_task_parameters;
 use super::types::{TaskRegistry, TaskRequest, TaskStatus};
 
@@ -24,7 +26,8 @@ pub async fn execute_task_sync(
     context: Option<&ToolContext>,
 ) -> anyhow::Result<ToolResult> {
     let (task_params, agent_type, thoroughness) = parse_task_parameters(call)?;
-    let parent_context = resolve_parent_context(graph.as_deref(), context).await?;
+    let parent_context =
+        resolve_parent_context_allow_missing_thread(graph.as_deref(), context).await?;
     let config = prepare_subagent_config(
         &task_params,
         agent_type,
