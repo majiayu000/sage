@@ -38,7 +38,7 @@ pub use defaults::{load_config, load_config_from_file, load_config_with_override
 pub use lakeview_config::LakeviewConfig;
 pub use loader::{ConfigLoader, ConfigSource};
 pub use logging_config::LoggingConfig;
-pub use mcp_config::{McpConfig, McpServerConfig};
+pub use mcp_config::{McpAuthConfig, McpAuthKind, McpConfig, McpServerConfig};
 pub use model_params::ModelParameters;
 pub use models_api::{FetchedModel, ModelsApiClient};
 pub use persistence::{ConfigPersistence, ConfigUpdate};

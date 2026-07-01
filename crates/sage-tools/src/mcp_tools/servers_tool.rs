@@ -3,7 +3,10 @@
 //! Provides a tool for viewing and managing MCP server connections within the agent.
 
 use async_trait::async_trait;
-use sage_core::mcp::{McpRegistry, get_active_mcp_registry, set_active_mcp_registry};
+use sage_core::mcp::{
+    McpDeferredTool, McpRegistry, McpServerRuntimeStatus, get_active_mcp_registry,
+    set_active_mcp_registry,
+};
 use sage_core::tools::{Tool, ToolCall, ToolError, ToolParameter, ToolResult, ToolSchema};
 use std::sync::Arc;
 
@@ -28,21 +31,6 @@ async fn server_tool_names(registry: &McpRegistry, server_name: &str) -> Option<
         .collect::<Vec<_>>();
     names.sort();
     Some(names)
-}
-
-async fn all_server_tools(registry: &McpRegistry) -> Vec<(String, Vec<String>)> {
-    let mut server_names = registry.server_names();
-    server_names.sort();
-
-    let mut by_server = Vec::with_capacity(server_names.len());
-    for server_name in server_names {
-        let tools = server_tool_names(registry, &server_name)
-            .await
-            .unwrap_or_default();
-        by_server.push((server_name, tools));
-    }
-
-    by_server
 }
 
 /// MCP Servers management tool
@@ -74,15 +62,17 @@ MCP servers provide external tools that can be used by the agent.
 
 Actions:
 - list: Show all configured MCP servers and their status
-- tools: List all available tools from connected servers
+- tools: List/search deferred tools without connecting every server
 - connect: Connect to a specific server by name
 - disconnect: Disconnect from a specific server
+- retry: Retry a failed server
 - refresh: Refresh tool list from all connected servers
 - status: Show detailed status of a specific server
 
 Example:
 - List all servers: action="list"
 - Show tools from a server: action="tools", server="my-mcp-server"
+- Search deferred tools: action="tools", query="filesystem"
 - Connect to a server: action="connect", server="my-mcp-server""#
     }
 
@@ -93,12 +83,13 @@ Example:
             vec![
                 ToolParameter::string(
                     "action",
-                    "Action to perform: list, tools, connect, disconnect, refresh, status",
+                    "Action to perform: list, tools, connect, disconnect, retry, refresh, status",
                 ),
                 ToolParameter::optional_string(
                     "server",
                     "Server name (for connect/disconnect/tools/status actions)",
                 ),
+                ToolParameter::optional_string("query", "Search query for deferred MCP tools"),
             ],
         )
     }
@@ -121,13 +112,13 @@ Example:
 
         let response = match action.to_lowercase().as_str() {
             "list" => {
-                let by_server = all_server_tools(&registry).await;
-                if by_server.is_empty() {
+                let statuses = registry.runtime_statuses();
+                if statuses.is_empty() {
                     "No MCP servers configured.".to_string()
                 } else {
-                    let mut output = format!("MCP Servers ({} total):\n\n", by_server.len());
-                    for (server_name, tools) in by_server {
-                        output.push_str(&format!("✓ {} - {} tool(s)\n", server_name, tools.len()));
+                    let mut output = format!("MCP Servers ({} total):\n\n", statuses.len());
+                    for status in statuses {
+                        output.push_str(&format_status_line(&status, &registry));
                     }
                     output
                 }
@@ -135,33 +126,30 @@ Example:
 
             "tools" => {
                 let server_name = call.get_string("server");
-                let tools_by_server = all_server_tools(&registry).await;
+                let query = call.get_string("query").unwrap_or_default();
+                let tools = if query.trim().is_empty() {
+                    registry.deferred_tools()
+                } else {
+                    registry.search_deferred_tools(&query)
+                };
 
-                if tools_by_server.is_empty() {
+                if tools.is_empty() {
                     "No MCP tools available. Connect to an MCP server first.".to_string()
                 } else if let Some(server) = server_name {
-                    // Show tools from specific server
-                    if let Some((_, tools)) =
-                        tools_by_server.iter().find(|(name, _)| name == &server)
-                    {
+                    let filtered = tools
+                        .into_iter()
+                        .filter(|tool| tool.server_id == server)
+                        .collect::<Vec<_>>();
+                    if !filtered.is_empty() {
                         let mut output = format!("Tools from '{}':\n\n", server);
-                        for (i, tool) in tools.iter().enumerate() {
-                            output.push_str(&format!("{}. {}\n", i + 1, tool));
-                        }
+                        append_deferred_tools(&mut output, &filtered);
                         output
                     } else {
                         format!("Server '{}' not found or has no tools.", server)
                     }
                 } else {
-                    // Show all tools organized by server
                     let mut output = String::from("Available MCP Tools:\n\n");
-                    for (server, tools) in tools_by_server {
-                        output.push_str(&format!("From '{}':\n", server));
-                        for tool in &tools {
-                            output.push_str(&format!("  - {}\n", tool));
-                        }
-                        output.push('\n');
-                    }
+                    append_deferred_tools(&mut output, &tools);
                     output
                 }
             }
@@ -173,13 +161,11 @@ Example:
                     )
                 })?;
 
-                if let Some(tools) = server_tool_names(&registry, &server_name).await {
+                if let Some(status) = registry.server_runtime_status(&server_name) {
+                    format_detailed_status(&status, &registry)
+                } else if let Some(tools) = server_tool_names(&registry, &server_name).await {
                     format!(
-                        "Server: {}\n\
-                         Connected: {}\n\
-                         Tools: {}",
-                        server_name,
-                        "Yes",
+                        "Server: {server_name}\nState: connected\nTools: {}",
                         tools.len()
                     )
                 } else {
@@ -189,36 +175,91 @@ Example:
 
             "refresh" => {
                 let server_count = registry.server_names().len();
-                let tool_count = registry.as_tools().await.len();
+                let tool_count = registry.deferred_tools().len();
 
                 format!(
                     "MCP registry refreshed.\n\
                      Connected servers: {}\n\
-                     Available tools: {}",
+                     Deferred tools: {}",
                     server_count, tool_count
                 )
             }
 
-            "connect" | "disconnect" => {
-                // Note: Dynamic connect/disconnect requires config access
-                // For now, provide information about static configuration
-                format!(
-                    "Dynamic {} is not supported in this version.\n\
-                     MCP servers are configured in the config file under 'mcp.servers'.\n\
-                     Edit the configuration and restart to change server connections.",
-                    action
-                )
+            "connect" | "disconnect" | "retry" => {
+                let server_name = call.get_string("server").ok_or_else(|| {
+                    ToolError::InvalidArguments(format!(
+                        "Missing 'server' parameter for {} action",
+                        action
+                    ))
+                })?;
+                let result = match action.to_lowercase().as_str() {
+                    "connect" => registry.connect_configured_server(&server_name).await,
+                    "disconnect" => registry.disconnect_configured_server(&server_name).await,
+                    "retry" => registry.retry_configured_server(&server_name).await,
+                    _ => unreachable!(),
+                };
+                match result {
+                    Ok(result) => format_detailed_status(&result.status, &registry),
+                    Err(error) => format!("MCP {action} failed for '{server_name}': {error}"),
+                }
             }
 
             _ => {
                 return Err(ToolError::InvalidArguments(format!(
-                    "Unknown action: '{}'. Valid actions: list, tools, status, refresh",
+                    "Unknown action: '{}'. Valid actions: list, tools, status, refresh, connect, disconnect, retry",
                     action
                 )));
             }
         };
 
         Ok(ToolResult::success(&call.id, self.name(), response))
+    }
+}
+
+fn format_status_line(status: &McpServerRuntimeStatus, registry: &McpRegistry) -> String {
+    let tools = registry
+        .deferred_tools()
+        .into_iter()
+        .filter(|tool| tool.server_id == status.server_id)
+        .count();
+    format!(
+        "- {} - state={:?}, auth={:?}, source={:?}, tools={}\n",
+        status.server_id, status.state, status.auth.state, status.source.kind, tools
+    )
+}
+
+fn format_detailed_status(status: &McpServerRuntimeStatus, registry: &McpRegistry) -> String {
+    let mut output = format!(
+        "Server: {}\nState: {:?}\nAuth: {:?}\nSource: {:?}\nEnabled: {}\n",
+        status.server_id, status.state, status.auth.state, status.source.kind, status.enabled
+    );
+    if let Some(prompt) = &status.auth.prompt {
+        output.push_str(&format!("Authorization: {}\n", prompt.message));
+        if let Some(url) = &prompt.authorization_url {
+            output.push_str(&format!("Authorization URL: {}\n", url));
+        }
+    }
+    if let Some(error) = &status.last_error {
+        output.push_str(&format!("Last error: {} ({})\n", error.message, error.code));
+    }
+    let tools = registry
+        .deferred_tools()
+        .into_iter()
+        .filter(|tool| tool.server_id == status.server_id)
+        .collect::<Vec<_>>();
+    output.push_str(&format!("Deferred tools: {}\n", tools.len()));
+    output
+}
+
+fn append_deferred_tools(output: &mut String, tools: &[McpDeferredTool]) {
+    for (index, tool) in tools.iter().enumerate() {
+        output.push_str(&format!(
+            "{}. {} (server={}, freshness={:?})\n",
+            index + 1,
+            tool.name,
+            tool.server_id,
+            tool.freshness
+        ));
     }
 }
 
@@ -233,9 +274,13 @@ pub async fn get_mcp_tools() -> Vec<Arc<dyn Tool>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sage_core::config::{McpAuthConfig, McpAuthKind, McpServerConfig};
+    use sage_core::mcp::{McpServerSource, merge_mcp_sources};
     use serde_json::json;
+    use serial_test::serial;
 
     #[tokio::test]
+    #[serial]
     async fn test_mcp_servers_tool_list_no_registry() {
         sage_core::mcp::clear_active_mcp_registry();
         let tool = McpServersTool::new();
@@ -266,5 +311,47 @@ mod tests {
 
         assert_eq!(schema.name, "McpServers");
         assert!(schema.description.contains("MCP"));
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_mcp_servers_tool_status_reports_auth_required() {
+        let registry = Arc::new(McpRegistry::new());
+        let source_set = merge_mcp_sources([McpServerSource::direct(
+            "secure",
+            McpServerConfig::http("https://mcp.example.test").with_auth(McpAuthConfig {
+                required: true,
+                kind: McpAuthKind::OAuth,
+                token_env: None,
+                authorization_url: Some("https://auth.example.test/start".to_string()),
+                scopes: Vec::new(),
+            }),
+            true,
+        )])
+        .expect("source set should merge");
+        registry.apply_source_set(source_set);
+        sage_core::mcp::set_active_mcp_registry(registry);
+
+        let tool = McpServersTool::new();
+        let call = ToolCall {
+            id: "test-auth".to_string(),
+            name: "McpServers".to_string(),
+            arguments: json!({
+                "action": "status",
+                "server": "secure"
+            })
+            .as_object()
+            .unwrap()
+            .clone()
+            .into_iter()
+            .collect(),
+            call_id: None,
+        };
+
+        let result = tool.execute(&call).await.unwrap();
+        let output = result.output.expect("status output");
+        assert!(output.contains("AuthRequired"));
+        assert!(output.contains("Authorization URL: https://auth.example.test/start"));
+        sage_core::mcp::clear_active_mcp_registry();
     }
 }

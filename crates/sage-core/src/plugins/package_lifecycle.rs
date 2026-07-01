@@ -1,7 +1,9 @@
 //! Extension package lifecycle coordinator.
 
 use super::package_error::{PackageError, PackageResult};
-use super::package_registry_bridge::{PackageRegistryBridge, RegisteredPackageAssets};
+use super::package_registry_bridge::{
+    PackageMcpServerRegistration, PackageRegistryBridge, RegisteredPackageAssets,
+};
 use super::package_store::{
     DiscoveredExtensionPackage, ExtensionPackageStore, InstalledPackageRecord,
     InstalledPackageState, validate_manifest_assets_under_root,
@@ -50,6 +52,22 @@ impl ExtensionPackageManager {
     /// List installed packages.
     pub fn list(&self) -> PackageResult<Vec<InstalledPackageRecord>> {
         self.store.list()
+    }
+
+    /// Load MCP server declarations from every enabled installed package.
+    pub fn enabled_mcp_servers(&self) -> PackageResult<Vec<PackageMcpServerRegistration>> {
+        let mut registrations = Vec::new();
+        for record in self
+            .store
+            .list()?
+            .into_iter()
+            .filter(|record| record.enabled())
+        {
+            self.validate_dependencies(&record)?;
+            validate_manifest_assets_under_root(&record.manifest, &record.install_root)?;
+            registrations.extend(PackageRegistryBridge::load_mcp_servers(&record)?);
+        }
+        Ok(registrations)
     }
 
     /// Read one installed package.
@@ -327,6 +345,12 @@ required_permissions = ["network:mcp"]
         assert!(restarted_skills.contains("reviewer"));
         assert!(restarted_commands.contains("review"));
         assert!(restarted_manager.bridge().mcp_server("docs").is_some());
+        let restarted_mcp_servers = match restarted_manager.enabled_mcp_servers() {
+            Ok(servers) => servers,
+            Err(err) => panic!("enabled MCP server declarations should load: {err}"),
+        };
+        assert_eq!(restarted_mcp_servers.len(), 1);
+        assert_eq!(restarted_mcp_servers[0].asset_id, "docs");
 
         let disabled = manager
             .disable("acme.review", &mut skills, &mut commands, &hooks)
@@ -335,6 +359,11 @@ required_permissions = ["network:mcp"]
         assert!(!skills.contains("reviewer"));
         assert!(!commands.contains("review"));
         assert!(manager.bridge().mcp_server("docs").is_none());
+        let disabled_mcp_servers = match manager.enabled_mcp_servers() {
+            Ok(servers) => servers,
+            Err(err) => panic!("disabled package MCP declarations should load: {err}"),
+        };
+        assert!(disabled_mcp_servers.is_empty());
 
         manager
             .uninstall("acme.review", &mut skills, &mut commands, &hooks)

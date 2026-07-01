@@ -1,5 +1,6 @@
 //! MCP error types
 
+use super::auth_status::McpAuthorizationPrompt;
 use crate::error::UnifiedError;
 use thiserror::Error;
 
@@ -68,6 +69,44 @@ pub enum McpError {
     /// Serialization error
     #[error("Serialization error: {message}")]
     Serialization {
+        message: String,
+        context: Option<String>,
+    },
+
+    /// Authorization is required before tools can run
+    #[error("Authorization required for MCP server {server}")]
+    AuthRequired {
+        server: String,
+        prompt: Box<McpAuthorizationPrompt>,
+        context: Option<String>,
+    },
+
+    /// Server source is disabled
+    #[error("MCP server disabled: {server}")]
+    Disabled {
+        server: String,
+        context: Option<String>,
+    },
+
+    /// Tool schema discovery or validation failed
+    #[error("Schema error: {message}")]
+    Schema {
+        message: String,
+        context: Option<String>,
+    },
+
+    /// Duplicate source declaration
+    #[error("Duplicate MCP source for {server}: {message}")]
+    DuplicateSource {
+        server: String,
+        message: String,
+        context: Option<String>,
+    },
+
+    /// Unsupported or uncontrolled transport
+    #[error("Unsupported transport {transport}: {message}")]
+    UnsupportedTransport {
+        transport: String,
         message: String,
         context: Option<String>,
     },
@@ -166,6 +205,49 @@ impl McpError {
         }
     }
 
+    /// Create a new AuthRequired error.
+    pub fn auth_required(server: impl Into<String>, prompt: McpAuthorizationPrompt) -> Self {
+        Self::AuthRequired {
+            server: server.into(),
+            prompt: Box::new(prompt),
+            context: None,
+        }
+    }
+
+    /// Create a new Disabled error.
+    pub fn disabled(server: impl Into<String>) -> Self {
+        Self::Disabled {
+            server: server.into(),
+            context: None,
+        }
+    }
+
+    /// Create a new Schema error.
+    pub fn schema(message: impl Into<String>) -> Self {
+        Self::Schema {
+            message: message.into(),
+            context: None,
+        }
+    }
+
+    /// Create a new DuplicateSource error.
+    pub fn duplicate_source(server: impl Into<String>, message: impl Into<String>) -> Self {
+        Self::DuplicateSource {
+            server: server.into(),
+            message: message.into(),
+            context: None,
+        }
+    }
+
+    /// Create a new UnsupportedTransport error.
+    pub fn unsupported_transport(transport: impl Into<String>, message: impl Into<String>) -> Self {
+        Self::UnsupportedTransport {
+            transport: transport.into(),
+            message: message.into(),
+            context: None,
+        }
+    }
+
     /// Create a new Other error
     pub fn other(message: impl Into<String>) -> Self {
         Self::Other {
@@ -187,6 +269,11 @@ impl McpError {
             Self::InvalidRequest { context: c, .. } => *c = ctx,
             Self::Timeout { context: c, .. } => *c = ctx,
             Self::Serialization { context: c, .. } => *c = ctx,
+            Self::AuthRequired { context: c, .. } => *c = ctx,
+            Self::Disabled { context: c, .. } => *c = ctx,
+            Self::Schema { context: c, .. } => *c = ctx,
+            Self::DuplicateSource { context: c, .. } => *c = ctx,
+            Self::UnsupportedTransport { context: c, .. } => *c = ctx,
             Self::Other { context: c, .. } => *c = ctx,
             Self::NotInitialized | Self::AlreadyInitialized | Self::Cancelled => {}
         }
@@ -206,6 +293,11 @@ impl UnifiedError for McpError {
             Self::InvalidRequest { .. } => "MCP_INVALID_REQUEST",
             Self::Timeout { .. } => "MCP_TIMEOUT",
             Self::Serialization { .. } => "MCP_SERIALIZATION",
+            Self::AuthRequired { .. } => "MCP_AUTH_REQUIRED",
+            Self::Disabled { .. } => "MCP_DISABLED",
+            Self::Schema { .. } => "MCP_SCHEMA",
+            Self::DuplicateSource { .. } => "MCP_DUPLICATE_SOURCE",
+            Self::UnsupportedTransport { .. } => "MCP_UNSUPPORTED_TRANSPORT",
             Self::NotInitialized => "MCP_NOT_INITIALIZED",
             Self::AlreadyInitialized => "MCP_ALREADY_INITIALIZED",
             Self::Cancelled => "MCP_CANCELLED",
@@ -224,6 +316,11 @@ impl UnifiedError for McpError {
             Self::InvalidRequest { message, .. } => message,
             Self::Timeout { .. } => "Request timeout",
             Self::Serialization { message, .. } => message,
+            Self::AuthRequired { prompt, .. } => &prompt.message,
+            Self::Disabled { server, .. } => server,
+            Self::Schema { message, .. } => message,
+            Self::DuplicateSource { message, .. } => message,
+            Self::UnsupportedTransport { message, .. } => message,
             Self::NotInitialized => "Client not initialized",
             Self::AlreadyInitialized => "Client already initialized",
             Self::Cancelled => "Operation cancelled",
@@ -242,6 +339,11 @@ impl UnifiedError for McpError {
             Self::InvalidRequest { context, .. } => context.as_deref(),
             Self::Timeout { context, .. } => context.as_deref(),
             Self::Serialization { context, .. } => context.as_deref(),
+            Self::AuthRequired { context, .. } => context.as_deref(),
+            Self::Disabled { context, .. } => context.as_deref(),
+            Self::Schema { context, .. } => context.as_deref(),
+            Self::DuplicateSource { context, .. } => context.as_deref(),
+            Self::UnsupportedTransport { context, .. } => context.as_deref(),
             Self::Other { context, .. } => context.as_deref(),
             Self::NotInitialized | Self::AlreadyInitialized | Self::Cancelled => None,
         }
@@ -254,6 +356,9 @@ impl UnifiedError for McpError {
                 | Self::Transport { .. }
                 | Self::Timeout { .. }
                 | Self::Server { .. }
+                | Self::AuthRequired { .. }
+                | Self::Schema { .. }
+                | Self::DuplicateSource { .. }
         )
     }
 }

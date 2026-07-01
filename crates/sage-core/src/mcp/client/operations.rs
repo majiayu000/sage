@@ -6,6 +6,7 @@ use super::super::types::{
     McpPrompt, McpPromptMessage, McpResource, McpResourceContent, McpTool, McpToolResult,
 };
 use super::McpClient;
+use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use tracing::instrument;
@@ -18,8 +19,7 @@ impl McpClient {
 
         let result: Value = self.call(methods::TOOLS_LIST, None).await?;
 
-        let tools: Vec<McpTool> =
-            serde_json::from_value(result["tools"].clone()).unwrap_or_default();
+        let tools: Vec<McpTool> = decode_required_array(methods::TOOLS_LIST, &result, "tools")?;
 
         *self.tools().write().await = tools.clone();
         Ok(tools)
@@ -46,7 +46,7 @@ impl McpClient {
         let result: Value = self.call(methods::RESOURCES_LIST, None).await?;
 
         let resources: Vec<McpResource> =
-            serde_json::from_value(result["resources"].clone()).unwrap_or_default();
+            decode_required_array(methods::RESOURCES_LIST, &result, "resources")?;
 
         *self.resources().write().await = resources.clone();
         Ok(resources)
@@ -64,7 +64,7 @@ impl McpClient {
 
         // The result should contain "contents" array
         let contents: Vec<McpResourceContent> =
-            serde_json::from_value(result["contents"].clone()).unwrap_or_default();
+            decode_required_array(methods::RESOURCES_READ, &result, "contents")?;
 
         contents
             .into_iter()
@@ -79,7 +79,7 @@ impl McpClient {
         let result: Value = self.call(methods::PROMPTS_LIST, None).await?;
 
         let prompts: Vec<McpPrompt> =
-            serde_json::from_value(result["prompts"].clone()).unwrap_or_default();
+            decode_required_array(methods::PROMPTS_LIST, &result, "prompts")?;
 
         *self.prompts().write().await = prompts.clone();
         Ok(prompts)
@@ -101,7 +101,7 @@ impl McpClient {
         let result: Value = self.call(methods::PROMPTS_GET, Some(params)).await?;
 
         let messages: Vec<McpPromptMessage> =
-            serde_json::from_value(result["messages"].clone()).unwrap_or_default();
+            decode_required_array(methods::PROMPTS_GET, &result, "messages")?;
 
         Ok(messages)
     }
@@ -118,5 +118,49 @@ impl McpClient {
         self.list_resources().await?;
         self.list_prompts().await?;
         Ok(())
+    }
+}
+
+fn decode_required_array<T>(method: &str, result: &Value, field: &str) -> Result<Vec<T>, McpError>
+where
+    T: DeserializeOwned,
+{
+    let value = result.get(field).ok_or_else(|| {
+        McpError::schema(format!(
+            "MCP response for '{method}' is missing required array field '{field}'"
+        ))
+    })?;
+    if !value.is_array() {
+        return Err(McpError::schema(format!(
+            "MCP response for '{method}' field '{field}' must be an array"
+        )));
+    }
+    serde_json::from_value(value.clone()).map_err(|err| {
+        McpError::schema(format!(
+            "Failed to decode MCP response for '{method}' field '{field}': {err}"
+        ))
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn mcp_tools_list_schema_decode_rejects_missing_tools() {
+        let err = decode_required_array::<McpTool>(methods::TOOLS_LIST, &json!({}), "tools")
+            .expect_err("missing tools should be schema error");
+
+        assert!(matches!(err, McpError::Schema { .. }));
+    }
+
+    #[test]
+    fn mcp_tools_list_schema_decode_rejects_non_array_tools() {
+        let err =
+            decode_required_array::<McpTool>(methods::TOOLS_LIST, &json!({"tools": {}}), "tools")
+                .expect_err("object tools should be schema error");
+
+        assert!(matches!(err, McpError::Schema { .. }));
     }
 }

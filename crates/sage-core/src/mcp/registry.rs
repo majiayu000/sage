@@ -3,7 +3,13 @@
 //! Provides centralized management of MCP servers and their tools.
 
 use super::client::McpClient;
+use super::deferred_tools::{
+    McpDeferredToolIndex, namespaced_tool_name as build_namespaced_tool_name,
+};
 use super::error::McpError;
+use super::registry_tool_errors::tool_unavailable_error;
+use super::runtime_status::{McpServerRuntimeStatus, McpToolDiscoveryState};
+use super::source::MergedMcpServerSource;
 use super::transport::{HttpTransport, HttpTransportConfig, StdioTransport, TransportConfig};
 use super::types::{McpPrompt, McpResource, McpServerInfo, McpTool};
 use crate::tools::base::Tool;
@@ -11,35 +17,45 @@ use crate::tools::types::{ToolCall, ToolResult, ToolSchema};
 use crate::types::tool::ToolParameter;
 use async_trait::async_trait;
 use dashmap::DashMap;
+use parking_lot::RwLock;
 use serde_json::Value;
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
-struct ToolRoute {
-    server_name: String,
-    remote_name: String,
+pub(crate) struct ToolRoute {
+    pub(crate) server_name: String,
+    pub(crate) remote_name: String,
 }
 
 /// Registry for managing MCP servers and their capabilities
 pub struct McpRegistry {
+    /// Configured MCP sources by server name
+    pub(crate) sources: DashMap<String, MergedMcpServerSource>,
+    /// Runtime status by server name
+    pub(crate) statuses: DashMap<String, McpServerRuntimeStatus>,
     /// Connected MCP clients by name
-    clients: DashMap<String, Arc<McpClient>>,
+    pub(crate) clients: DashMap<String, Arc<McpClient>>,
     /// Namespaced tool to route mapping
-    tool_mapping: DashMap<String, ToolRoute>,
+    pub(crate) tool_mapping: DashMap<String, ToolRoute>,
     /// Resource to client mapping
-    resource_mapping: DashMap<String, String>,
+    pub(crate) resource_mapping: DashMap<String, String>,
     /// Prompt to client mapping
-    prompt_mapping: DashMap<String, String>,
+    pub(crate) prompt_mapping: DashMap<String, String>,
+    /// Deferred searchable tool metadata
+    pub(crate) deferred_tools: RwLock<McpDeferredToolIndex>,
 }
 
 impl McpRegistry {
     /// Create a new empty registry
     pub fn new() -> Self {
         Self {
+            sources: DashMap::new(),
+            statuses: DashMap::new(),
             clients: DashMap::new(),
             tool_mapping: DashMap::new(),
             resource_mapping: DashMap::new(),
             prompt_mapping: DashMap::new(),
+            deferred_tools: RwLock::new(McpDeferredToolIndex::new()),
         }
     }
 
@@ -81,48 +97,26 @@ impl McpRegistry {
         self.clients.insert(name.clone(), client.clone());
 
         // Discover tools, resources, and prompts
-        self.refresh_server_capabilities(&name, &client).await?;
-
-        Ok(server_info)
-    }
-
-    /// Refresh capabilities for a server
-    async fn refresh_server_capabilities(
-        &self,
-        name: &str,
-        client: &Arc<McpClient>,
-    ) -> Result<(), McpError> {
-        // Get tools
-        if let Ok(tools) = client.list_tools().await {
-            for tool in tools {
-                let namespaced_name = McpToolAdapter::namespaced_tool_name(name, &tool.name);
-                self.tool_mapping.insert(
-                    namespaced_name,
-                    ToolRoute {
-                        server_name: name.to_string(),
-                        remote_name: tool.name,
-                    },
+        if let Err(error) = self.refresh_server_capabilities(&name, &client).await {
+            self.clients.remove(&name);
+            if let Err(close_error) = client.close().await {
+                tracing::debug!(
+                    "Failed to close MCP client '{}' after capability error: {}",
+                    name,
+                    close_error
                 );
             }
+            self.tool_mapping
+                .retain(|_, route| route.server_name != name);
+            self.resource_mapping.retain(|_, v| v != &name);
+            self.prompt_mapping.retain(|_, v| v != &name);
+            self.deferred_tools
+                .write()
+                .mark_server(name.clone(), McpToolDiscoveryState::SchemaError);
+            return Err(error);
         }
 
-        // Get resources
-        if let Ok(resources) = client.list_resources().await {
-            for resource in resources {
-                self.resource_mapping
-                    .insert(resource.uri.clone(), name.to_string());
-            }
-        }
-
-        // Get prompts
-        if let Ok(prompts) = client.list_prompts().await {
-            for prompt in prompts {
-                self.prompt_mapping
-                    .insert(prompt.name.clone(), name.to_string());
-            }
-        }
-
-        Ok(())
+        Ok(server_info)
     }
 
     /// Unregister and disconnect from an MCP server
@@ -137,6 +131,7 @@ impl McpRegistry {
             // Close the client
             client.close().await?;
         }
+        self.deferred_tools.write().mark_server_stale(name);
         Ok(())
     }
 
@@ -185,11 +180,21 @@ impl McpRegistry {
 
     /// Call a tool by name
     pub async fn call_tool(&self, name: &str, arguments: Value) -> Result<String, McpError> {
-        let route = self
+        let route = match self
             .tool_mapping
             .get(name)
             .map(|entry| entry.value().clone())
-            .ok_or_else(|| McpError::tool_not_found(name.to_string()))?;
+        {
+            Some(route) => route,
+            None => {
+                if let Some(status) = self.status_for_tool_name(name) {
+                    if let Some(error) = tool_unavailable_error(status) {
+                        return Err(error);
+                    }
+                }
+                return Err(McpError::tool_not_found(name.to_string()));
+            }
+        };
 
         let client = self
             .clients
@@ -265,6 +270,7 @@ impl McpRegistry {
         self.tool_mapping.clear();
         self.resource_mapping.clear();
         self.prompt_mapping.clear();
+        *self.deferred_tools.write() = McpDeferredToolIndex::new();
         Ok(())
     }
 }
@@ -296,40 +302,7 @@ impl McpToolAdapter {
     }
 
     pub fn namespaced_tool_name(server_name: &str, remote_tool_name: &str) -> String {
-        let server = Self::normalize_component(server_name);
-        let tool = Self::normalize_component(remote_tool_name);
-        format!("mcp__{server}__{tool}")
-    }
-
-    fn normalize_component(input: &str) -> String {
-        let mut normalized = String::new();
-        let mut previous_was_underscore = false;
-
-        for ch in input.chars() {
-            let mapped = if ch.is_ascii_alphanumeric() {
-                ch.to_ascii_lowercase()
-            } else {
-                '_'
-            };
-
-            if mapped == '_' {
-                if previous_was_underscore {
-                    continue;
-                }
-                previous_was_underscore = true;
-            } else {
-                previous_was_underscore = false;
-            }
-
-            normalized.push(mapped);
-        }
-
-        let normalized = normalized.trim_matches('_');
-        if normalized.is_empty() {
-            "unnamed".to_string()
-        } else {
-            normalized.to_string()
-        }
+        build_namespaced_tool_name(server_name, remote_tool_name)
     }
 
     pub fn server_name(&self) -> &str {
