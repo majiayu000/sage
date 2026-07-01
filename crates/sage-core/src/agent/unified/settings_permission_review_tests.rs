@@ -214,6 +214,36 @@ fn test_settings_permission_checks_http_client_save_to_file_path() {
 }
 
 #[test]
+fn test_settings_permission_denies_save_path_before_prompting_for_url() {
+    let settings = Settings {
+        permissions: PermissionSettings {
+            deny: vec!["Write(secrets/**)".to_string()],
+            default_behavior: SettingsPermissionBehavior::Ask,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let decision = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &review_tool_call(
+            "http_client",
+            serde_json::json!({
+                "url": "https://public.example/archive",
+                "follow_redirects": false,
+                "save_to_file": "secrets/token.json"
+            }),
+        ),
+        review_workspace_dir(),
+    );
+
+    assert!(matches!(
+        decision,
+        Some(SettingsPermissionDecision::Deny(reason)) if reason.contains("Write(secrets/**)")
+    ));
+}
+
+#[test]
 fn test_settings_permission_routes_write_through_filesystem_guard() {
     let settings = Settings {
         permissions: PermissionSettings {

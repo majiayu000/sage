@@ -126,6 +126,19 @@ fn deserialized_rules_default_missing_source_to_profile_source() -> serde_json::
 }
 
 #[test]
+fn deserialized_rule_source_cannot_exceed_profile_source() -> serde_json::Result<()> {
+    let project: PermissionProfile = serde_json::from_str(
+        r#"{
+            "source":"project",
+            "allow":[{"pattern":"Bash(cargo *)","source":"runtime"}]
+        }"#,
+    )?;
+
+    assert_eq!(project.allow[0].source, PermissionProfileSource::Project);
+    Ok(())
+}
+
+#[test]
 fn deserializing_profile_without_source_is_rejected() {
     let result = serde_json::from_str::<PermissionProfile>(r#"{"network":{"enabled":true}}"#);
 

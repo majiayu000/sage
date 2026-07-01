@@ -15,7 +15,7 @@ impl PermissionRuleWire {
     fn into_rule(self, source: PermissionProfileSource) -> PermissionRule {
         PermissionRule {
             pattern: self.pattern,
-            source: self.source.unwrap_or(source),
+            source: capped_source(self.source, source),
         }
     }
 }

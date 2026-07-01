@@ -366,6 +366,7 @@ impl UnifiedExecutor {
         .into_iter()
         .map(|input| PermissionDecisionEngine::new(profile.clone()).decide(input));
 
+        let mut first_ask = None;
         for decision in decisions {
             match decision.kind {
                 PermissionDecisionKind::Allow => {}
@@ -373,7 +374,7 @@ impl UnifiedExecutor {
                     return Some(SettingsPermissionDecision::Deny(decision.reason));
                 }
                 PermissionDecisionKind::Ask => {
-                    return Some(SettingsPermissionDecision::Ask(decision.reason));
+                    first_ask.get_or_insert(decision.reason);
                 }
                 PermissionDecisionKind::Unsupported => {
                     return Some(SettingsPermissionDecision::Deny(format!(
@@ -384,7 +385,11 @@ impl UnifiedExecutor {
             }
         }
 
-        Some(SettingsPermissionDecision::Allow)
+        if let Some(reason) = first_ask {
+            Some(SettingsPermissionDecision::Ask(reason))
+        } else {
+            Some(SettingsPermissionDecision::Allow)
+        }
     }
 
     fn legacy_permission_text_decision(text: &str) -> Option<bool> {
