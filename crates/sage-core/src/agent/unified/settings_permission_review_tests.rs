@@ -1,6 +1,9 @@
 use super::*;
-use crate::settings::types::PermissionSettings;
-use std::path::Path;
+use crate::settings::types::{
+    LoadedManagedConfig, ManagedConfig, ManagedConfigSource, ManagedConfigSourceKind,
+    PermissionSettings, SettingsPermissionBehavior,
+};
+use std::path::{Path, PathBuf};
 
 fn review_workspace_dir() -> &'static Path {
     Path::new("/workspace/sage")
@@ -12,6 +15,24 @@ fn review_tool_call(name: &str, arguments: serde_json::Value) -> ToolCall {
         .map(|map| map.clone().into_iter().collect())
         .unwrap_or_default();
     ToolCall::new("call-1", name, arguments)
+}
+
+fn settings_with_managed_policy(policy: &str) -> Settings {
+    let config = match ManagedConfig::parse_json(policy) {
+        Ok(config) => config,
+        Err(error) => panic!("expected managed policy: {error}"),
+    };
+    Settings {
+        managed_configs: vec![LoadedManagedConfig {
+            config,
+            source: ManagedConfigSource {
+                kind: ManagedConfigSourceKind::ProjectPolicy,
+                path: PathBuf::from(".sage/managed.json"),
+                sha256: "test".to_string(),
+            },
+        }],
+        ..Default::default()
+    }
 }
 
 #[test]
@@ -241,6 +262,109 @@ fn test_settings_permission_requires_http_client_redirects_disabled_for_default_
         no_redirect_decision,
         Some(SettingsPermissionDecision::Ask(_))
     ));
+}
+
+#[test]
+fn test_managed_domain_policy_does_not_prompt_unrelated_tools() {
+    let settings = settings_with_managed_policy(r#"{"permissions":{"network":{"enabled":false}}}"#);
+
+    let decision = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &review_tool_call("bash", serde_json::json!({"command": "cargo test"})),
+        review_workspace_dir(),
+    );
+
+    assert_eq!(decision, None);
+}
+
+#[test]
+fn test_managed_search_denies_feed_overlap_preflights() {
+    let mut settings = settings_with_managed_policy(
+        r#"{"permissions":{"deny":["Grep(secrets/**)","Glob(secrets/**)"]}}"#,
+    );
+    settings.permissions.default_behavior = SettingsPermissionBehavior::Allow;
+
+    let grep = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &review_tool_call("grep", serde_json::json!({"pattern": "TOKEN"})),
+        review_workspace_dir(),
+    );
+    let glob = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &review_tool_call("glob", serde_json::json!({"pattern": "**/*"})),
+        review_workspace_dir(),
+    );
+
+    assert!(matches!(grep, Some(SettingsPermissionDecision::Deny(_))));
+    assert!(matches!(glob, Some(SettingsPermissionDecision::Deny(_))));
+}
+
+#[test]
+fn test_managed_http_client_denies_require_redirects_disabled() {
+    let mut settings = settings_with_managed_policy(
+        r#"{"permissions":{"deny":["http_client(https://internal.example/**)"]}}"#,
+    );
+    settings.permissions.default_behavior = SettingsPermissionBehavior::Allow;
+
+    let redirecting = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &review_tool_call(
+            "http_client",
+            serde_json::json!({"url": "https://public.example"}),
+        ),
+        review_workspace_dir(),
+    );
+    let no_redirect = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &review_tool_call(
+            "http_client",
+            serde_json::json!({
+                "url": "https://public.example",
+                "follow_redirects": false
+            }),
+        ),
+        review_workspace_dir(),
+    );
+
+    assert!(matches!(
+        redirecting,
+        Some(SettingsPermissionDecision::Deny(reason))
+            if reason.contains("follow_redirects=false")
+    ));
+    assert_eq!(no_redirect, Some(SettingsPermissionDecision::Allow));
+}
+
+#[test]
+fn test_managed_network_ban_blocks_websearch() {
+    let mut settings =
+        settings_with_managed_policy(r#"{"permissions":{"network":{"enabled":false}}}"#);
+    settings.permissions.default_behavior = SettingsPermissionBehavior::Allow;
+
+    let decision = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &review_tool_call("web_search", serde_json::json!({"query": "public docs"})),
+        review_workspace_dir(),
+    );
+
+    assert!(matches!(
+        decision,
+        Some(SettingsPermissionDecision::Deny(_))
+    ));
+}
+
+#[test]
+fn test_managed_sandbox_required_does_not_fail_unknown_support() {
+    let mut settings =
+        settings_with_managed_policy(r#"{"permissions":{"sandbox":{"required":true}}}"#);
+    settings.permissions.default_behavior = SettingsPermissionBehavior::Allow;
+
+    let decision = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &review_tool_call("bash", serde_json::json!({"command": "cargo test"})),
+        review_workspace_dir(),
+    );
+
+    assert_eq!(decision, Some(SettingsPermissionDecision::Allow));
 }
 
 #[test]

@@ -44,8 +44,7 @@ impl SettingsLocations {
             let sage_dir = root.join(".sage");
             let project = sage_dir.join("settings.json");
             let local = sage_dir.join("settings.local.json");
-            for managed_name in ["managed.json", "managed-config.json"] {
-                let path = sage_dir.join(managed_name);
+            for path in Self::get_project_managed_config_paths(&sage_dir) {
                 if path.exists() && !managed.contains(&path) {
                     managed.push(path);
                 }
@@ -92,6 +91,23 @@ impl SettingsLocations {
         if user_managed.exists() && !paths.contains(&user_managed) {
             paths.push(user_managed);
         }
+        paths
+    }
+
+    fn get_project_managed_config_paths(sage_dir: &Path) -> Vec<PathBuf> {
+        let Ok(entries) = std::fs::read_dir(sage_dir) else {
+            return Vec::new();
+        };
+        let mut paths = entries
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.starts_with("managed") && name.ends_with(".json"))
+            })
+            .collect::<Vec<_>>();
+        paths.sort();
         paths
     }
 
@@ -215,6 +231,33 @@ mod tests {
 
         assert!(locations.local.is_some());
         assert!(locations.has_local_settings());
+    }
+
+    #[test]
+    fn test_discover_project_managed_json_glob() {
+        let temp_dir = match TempDir::new() {
+            Ok(temp_dir) => temp_dir,
+            Err(error) => panic!("expected temp dir: {error}"),
+        };
+        let sage_dir = temp_dir.path().join(".sage");
+        if let Err(error) = fs::create_dir(&sage_dir) {
+            panic!("expected .sage dir: {error}");
+        }
+        for name in ["managed.json", "managed-team.json", "managed-config.json"] {
+            if let Err(error) = fs::write(sage_dir.join(name), "{}") {
+                panic!("expected managed file {name}: {error}");
+            }
+        }
+
+        let locations = SettingsLocations::discover_from(temp_dir.path());
+
+        assert_eq!(locations.managed.len(), 3);
+        assert!(
+            locations
+                .managed
+                .iter()
+                .any(|path| path.ends_with(".sage/managed-team.json"))
+        );
     }
 
     #[test]

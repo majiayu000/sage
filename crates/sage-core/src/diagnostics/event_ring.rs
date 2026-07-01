@@ -2,7 +2,7 @@
 
 use crate::error::{SageError, SageResult};
 use chrono::{DateTime, Utc};
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::io::{BufRead, Write};
@@ -11,6 +11,8 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 pub const DEFAULT_PERSISTED_DIAGNOSTIC_EVENT_CAPACITY: usize = 2048;
+static PERSISTED_DIAGNOSTIC_EVENT_LOG_LOCK: once_cell::sync::Lazy<Mutex<()>> =
+    once_cell::sync::Lazy::new(Mutex::default);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -197,6 +199,7 @@ pub fn append_diagnostic_event_to_path_with_capacity(
     path: impl AsRef<Path>,
     capacity: usize,
 ) -> SageResult<()> {
+    let _guard = PERSISTED_DIAGNOSTIC_EVENT_LOG_LOCK.lock();
     let path = path.as_ref();
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|error| {
@@ -430,5 +433,42 @@ mod tests {
         assert_eq!(snapshot.retained_count, 1);
         assert_eq!(snapshot.dropped_count, 1);
         assert_eq!(snapshot.events[0].payload_summary, "valid");
+    }
+
+    #[test]
+    fn diagnostics_event_log_serializes_parallel_append_and_prune() {
+        let dir = match tempdir() {
+            Ok(dir) => dir,
+            Err(error) => panic!("expected tempdir: {error}"),
+        };
+        let path = std::sync::Arc::new(dir.path().join("events.jsonl"));
+        let mut handles = Vec::new();
+
+        for index in 0..16 {
+            let path = path.clone();
+            handles.push(std::thread::spawn(move || {
+                append_diagnostic_event_to_path_with_capacity(
+                    &event(&format!("event-{index}")),
+                    path.as_ref(),
+                    32,
+                )
+            }));
+        }
+
+        for handle in handles {
+            match handle.join() {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => panic!("expected append: {error}"),
+                Err(_) => panic!("expected append thread to finish"),
+            }
+        }
+
+        let snapshot = match persisted_diagnostics_snapshot_from_path(path.as_ref(), 32) {
+            Ok(snapshot) => snapshot,
+            Err(error) => panic!("expected snapshot: {error}"),
+        };
+
+        assert_eq!(snapshot.retained_count, 16);
+        assert_eq!(snapshot.dropped_count, 0);
     }
 }
