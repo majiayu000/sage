@@ -7,7 +7,8 @@ use super::deferred_tools::{
     McpDeferredToolIndex, namespaced_tool_name as build_namespaced_tool_name,
 };
 use super::error::McpError;
-use super::runtime_status::{McpRuntimeState, McpServerRuntimeStatus, McpToolDiscoveryState};
+use super::registry_tool_errors::tool_unavailable_error;
+use super::runtime_status::{McpServerRuntimeStatus, McpToolDiscoveryState};
 use super::source::MergedMcpServerSource;
 use super::transport::{HttpTransport, HttpTransportConfig, StdioTransport, TransportConfig};
 use super::types::{McpPrompt, McpResource, McpServerInfo, McpTool};
@@ -187,13 +188,8 @@ impl McpRegistry {
             Some(route) => route,
             None => {
                 if let Some(status) = self.status_for_tool_name(name) {
-                    if status.auth_blocks_tools() {
-                        if let Some(prompt) = status.auth.prompt {
-                            return Err(McpError::auth_required(status.server_id, prompt));
-                        }
-                    }
-                    if matches!(status.state, McpRuntimeState::Disabled) {
-                        return Err(McpError::disabled(status.server_id));
+                    if let Some(error) = tool_unavailable_error(status) {
+                        return Err(error);
                     }
                 }
                 return Err(McpError::tool_not_found(name.to_string()));

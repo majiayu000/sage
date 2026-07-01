@@ -43,6 +43,7 @@ pub mod notifications;
 pub mod protocol;
 pub mod registry;
 mod registry_runtime;
+mod registry_tool_errors;
 pub mod runtime_registry;
 pub mod runtime_status;
 pub mod schema_translator;

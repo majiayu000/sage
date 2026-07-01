@@ -93,6 +93,61 @@ async fn mcp_runtime_disconnect_and_retry_update_structured_status() {
     assert_eq!(disconnected.status.state, McpRuntimeState::Disconnected);
 }
 
+#[tokio::test]
+async fn mcp_call_tool_returns_connection_error_for_configured_unavailable_server() {
+    let registry = registry_with_source(McpServerSource::direct(
+        "offline",
+        McpServerConfig::stdio("__sage_missing_mcp_binary__", Vec::new()),
+        true,
+    ));
+
+    assert!(registry.connect_configured_server("offline").await.is_err());
+
+    let err = match registry.call_tool("mcp__offline__read", json!({})).await {
+        Ok(value) => panic!("expected connection error, got {value}"),
+        Err(err) => err,
+    };
+    assert!(matches!(err, McpError::Connection { .. }));
+}
+
+#[tokio::test]
+async fn mcp_call_tool_returns_schema_error_for_configured_schema_failure() {
+    let registry = registry_with_source(McpServerSource::direct(
+        "docs",
+        McpServerConfig::stdio("docs-server", Vec::new()),
+        true,
+    ));
+    let mut status = match registry.server_runtime_status("docs") {
+        Some(status) => status,
+        None => panic!("missing docs runtime status"),
+    };
+    status.mark_error(&McpError::schema("invalid tool schema"));
+    registry.statuses.insert("docs".to_string(), status);
+
+    let err = match registry.call_tool("mcp__docs__read", json!({})).await {
+        Ok(value) => panic!("expected schema error, got {value}"),
+        Err(err) => err,
+    };
+    assert!(matches!(err, McpError::Schema { message, .. } if message == "invalid tool schema"));
+}
+
+#[tokio::test]
+async fn mcp_call_tool_returns_unsupported_transport_for_configured_failure() {
+    let registry = registry_with_source(McpServerSource::direct(
+        "future",
+        McpServerConfig::websocket("ws://localhost:9000"),
+        true,
+    ));
+
+    assert!(registry.connect_configured_server("future").await.is_err());
+
+    let err = match registry.call_tool("mcp__future__read", json!({})).await {
+        Ok(value) => panic!("expected unsupported transport error, got {value}"),
+        Err(err) => err,
+    };
+    assert!(matches!(err, McpError::UnsupportedTransport { .. }));
+}
+
 #[test]
 fn mcp_package_disabled_removes_source_from_runtime_set() {
     let registration = PackageMcpServerRegistration {
