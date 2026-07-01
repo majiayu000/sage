@@ -6,11 +6,8 @@ pub(super) fn rule_match_keys(
     profile: &PermissionProfile,
     input: &PermissionDecisionInput,
 ) -> Vec<String> {
-    if !input.permission_keys.is_empty() {
-        return input.permission_keys.clone();
-    }
-
-    match input.action {
+    let mut keys = input.permission_keys.clone();
+    let structured_keys = match input.action {
         PermissionAction::Filesystem => filesystem_structured_permission_keys(profile, input),
         PermissionAction::Network => input
             .network_target
@@ -23,7 +20,11 @@ pub(super) fn rule_match_keys(
             })
             .unwrap_or_default(),
         _ => bare_tool_key(input),
+    };
+    for key in structured_keys {
+        push_unique(&mut keys, key);
     }
+    keys
 }
 
 fn filesystem_structured_permission_keys(

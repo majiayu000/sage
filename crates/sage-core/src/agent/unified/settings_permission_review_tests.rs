@@ -270,6 +270,59 @@ fn test_settings_permission_routes_write_through_filesystem_guard() {
 }
 
 #[test]
+fn test_settings_permission_routes_search_tools_through_filesystem_guard() {
+    let settings = Settings {
+        permissions: PermissionSettings {
+            allow: vec!["Grep(**)".to_string(), "Glob(**)".to_string()],
+            default_behavior: SettingsPermissionBehavior::Allow,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let grep = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &review_tool_call("grep", serde_json::json!({"path": ".sage"})),
+        review_workspace_dir(),
+    );
+    let grep_workspace = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &review_tool_call("grep", serde_json::json!({"path": "."})),
+        review_workspace_dir(),
+    );
+    let glob = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &review_tool_call("glob", serde_json::json!({"pattern": ".sage/**"})),
+        review_workspace_dir(),
+    );
+    let glob_search_path = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &review_tool_call(
+            "glob",
+            serde_json::json!({"path": ".", "pattern": ".sage/**"}),
+        ),
+        review_workspace_dir(),
+    );
+
+    assert!(matches!(
+        grep,
+        Some(SettingsPermissionDecision::Deny(reason)) if reason.contains("protected")
+    ));
+    assert!(matches!(
+        grep_workspace,
+        Some(SettingsPermissionDecision::Deny(reason)) if reason.contains("protected")
+    ));
+    assert!(matches!(
+        glob,
+        Some(SettingsPermissionDecision::Deny(reason)) if reason.contains("protected")
+    ));
+    assert!(matches!(
+        glob_search_path,
+        Some(SettingsPermissionDecision::Deny(reason)) if reason.contains("protected")
+    ));
+}
+
+#[test]
 fn test_settings_permission_allows_recursive_grep_directory_scope() {
     let settings = Settings {
         permissions: PermissionSettings {

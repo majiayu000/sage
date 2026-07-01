@@ -2,7 +2,7 @@ use super::decision_engine_keys::{normalize_path, path_is_at_or_under, rule_matc
 use super::{PermissionBehavior, PermissionProfile, PermissionRule};
 use crate::tools::permission::PermissionCache;
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -90,7 +90,12 @@ impl PermissionDecisionInput {
     }
 
     pub fn with_network_target(mut self, target: impl Into<String>) -> Self {
-        self.network_target = Some(target.into());
+        let target = target.into();
+        if target.trim().is_empty() {
+            self.network_target = None;
+        } else {
+            self.network_target = Some(target);
+        }
         self
     }
 
@@ -189,6 +194,22 @@ impl PermissionDecisionEngine {
             );
         }
 
+        if matches!(input.action, PermissionAction::Network)
+            && input
+                .network_target
+                .as_deref()
+                .map(str::trim)
+                .unwrap_or_default()
+                .is_empty()
+        {
+            return PermissionDecision::new(
+                PermissionDecisionKind::Deny,
+                audit_key,
+                "network permission decisions require a request target",
+                None,
+            );
+        }
+
         if matches!(input.action, PermissionAction::Exec) && !self.profile.exec.enabled {
             return PermissionDecision::new(
                 PermissionDecisionKind::Deny,
@@ -209,7 +230,9 @@ impl PermissionDecisionEngine {
 
         if let Some(path) = input.path.as_deref() {
             let working_directory = input.working_directory.as_deref();
-            if self.path_is_protected(path, working_directory) {
+            if self.path_is_protected(path, working_directory)
+                || self.search_scope_touches_protected(&input, path, working_directory)
+            {
                 return PermissionDecision::new(
                     PermissionDecisionKind::Deny,
                     audit_key,
@@ -273,14 +296,19 @@ impl PermissionDecisionEngine {
             );
         }
 
-        let allow_matches: Vec<&PermissionRule> = rule_match_keys
+        let allow_keys = if input.permission_keys.is_empty() {
+            &rule_match_keys
+        } else {
+            &input.permission_keys
+        };
+        let allow_matches: Vec<&PermissionRule> = allow_keys
             .iter()
             .filter_map(|key| self.matching_rule_for_key(&self.profile.allow, key))
             .collect();
         let allow_matched = if input.permission_keys.is_empty() {
             !allow_matches.is_empty()
         } else {
-            allow_matches.len() == rule_match_keys.len()
+            allow_matches.len() == input.permission_keys.len()
         };
         if !rule_match_keys.is_empty() && allow_matched {
             return PermissionDecision::new(
@@ -358,29 +386,91 @@ impl PermissionDecisionEngine {
 
     fn path_is_protected(&self, path: &str, working_directory: Option<&str>) -> bool {
         let path = normalize_path(path, working_directory);
+        self.protected_path_roots(working_directory)
+            .iter()
+            .any(|protected| path_is_at_or_under(&path, protected))
+    }
+
+    fn search_scope_touches_protected(
+        &self,
+        input: &PermissionDecisionInput,
+        path: &str,
+        working_directory: Option<&str>,
+    ) -> bool {
+        if !matches!(input.action, PermissionAction::Filesystem)
+            || !matches!(
+                input.tool_name.to_ascii_lowercase().as_str(),
+                "grep" | "glob"
+            )
+        {
+            return false;
+        }
+
+        let scope = if input.tool_name.eq_ignore_ascii_case("glob") {
+            glob_static_scope(path)
+        } else {
+            PathBuf::from(path)
+        };
+        let scope = normalize_path(scope, working_directory);
+        self.protected_path_roots(working_directory)
+            .iter()
+            .any(|protected| {
+                path_is_at_or_under(&scope, protected) || path_is_at_or_under(protected, &scope)
+            })
+    }
+
+    fn protected_path_roots(&self, working_directory: Option<&str>) -> Vec<PathBuf> {
         self.profile
             .filesystem
             .protected_paths
             .iter()
-            .any(|protected| {
+            .flat_map(|protected| {
                 if Path::new(protected).is_absolute() {
-                    return path_is_at_or_under(&path, &normalize_path(protected, None));
+                    vec![normalize_path(protected, None)]
+                } else {
+                    self.profile
+                        .filesystem
+                        .workspace_roots
+                        .iter()
+                        .map(|root| {
+                            normalize_path(
+                                normalize_path(root, working_directory).join(protected),
+                                None,
+                            )
+                        })
+                        .collect()
                 }
-
-                self.profile
-                    .filesystem
-                    .workspace_roots
-                    .iter()
-                    .map(|root| {
-                        normalize_path(
-                            normalize_path(root, working_directory).join(protected),
-                            None,
-                        )
-                    })
-                    .any(|protected_path| path_is_at_or_under(&path, &protected_path))
             })
+            .collect()
     }
 }
+
+fn glob_static_scope(pattern: &str) -> PathBuf {
+    let mut scope = PathBuf::new();
+    for component in Path::new(pattern).components() {
+        let component_text = component.as_os_str().to_string_lossy();
+        if component_text
+            .chars()
+            .any(|ch| matches!(ch, '*' | '?' | '[' | ']' | '{' | '}'))
+        {
+            break;
+        }
+        if component_text == "." {
+            continue;
+        }
+        scope.push(component.as_os_str());
+    }
+
+    if scope.as_os_str().is_empty() {
+        PathBuf::from(".")
+    } else {
+        scope
+    }
+}
+
+#[cfg(test)]
+#[path = "decision_engine_network_tests.rs"]
+mod network_tests;
 
 #[cfg(test)]
 #[path = "decision_engine_path_tests.rs"]

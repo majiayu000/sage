@@ -2,7 +2,7 @@
 
 use crate::permissions::{PermissionAction, PermissionDecisionInput, PermissionPreflight};
 use crate::tools::types::ToolCall;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use super::settings_permission_keys;
 
@@ -16,8 +16,14 @@ pub(super) fn settings_permission_inputs(
 ) -> Vec<PermissionDecisionInput> {
     let lower = tool_name.to_ascii_lowercase();
     match lower.as_str() {
-        "read" | "write" | "edit" | "multiedit" | "notebookedit" => {
-            filesystem_inputs(tool_name, tool_call, working_dir)
+        "read" | "write" | "edit" | "multiedit" | "notebookedit" | "grep" | "glob" => {
+            filesystem_inputs(
+                tool_name,
+                tool_call,
+                working_dir,
+                preflight_denies,
+                scoped_allows,
+            )
         }
         "http_client" => http_client_inputs(
             tool_name,
@@ -49,26 +55,38 @@ fn filesystem_inputs(
     tool_name: &str,
     tool_call: &ToolCall,
     working_dir: &Path,
+    preflight_denies: Vec<PermissionPreflight>,
+    scoped_allows: Vec<PermissionPreflight>,
 ) -> Vec<PermissionDecisionInput> {
     let paths = filesystem_paths(&tool_name.to_ascii_lowercase(), tool_call);
     if paths.is_empty() {
-        return vec![PermissionDecisionInput::new(
-            PermissionAction::Filesystem,
-            tool_name,
-            settings_permission_keys::actual_permission_keys(tool_name, tool_call, working_dir),
+        return vec![with_preflights(
+            PermissionDecisionInput::new(
+                PermissionAction::Filesystem,
+                tool_name,
+                settings_permission_keys::actual_permission_keys(tool_name, tool_call, working_dir),
+            ),
+            preflight_denies,
+            scoped_allows,
         )];
     }
 
     paths
         .into_iter()
-        .map(|path| {
-            PermissionDecisionInput::new(
+        .enumerate()
+        .map(|(index, path)| {
+            let input = PermissionDecisionInput::new(
                 PermissionAction::Filesystem,
                 tool_name,
                 settings_permission_keys::actual_permission_keys(tool_name, tool_call, working_dir),
             )
             .with_path(path)
-            .with_working_directory(working_dir.to_string_lossy())
+            .with_working_directory(working_dir.to_string_lossy());
+            if index == 0 {
+                with_preflights(input, preflight_denies.clone(), scoped_allows.clone())
+            } else {
+                input
+            }
         })
         .collect()
 }
@@ -125,8 +143,15 @@ fn network_input(
     tool_call: &ToolCall,
     keys: Vec<String>,
 ) -> PermissionDecisionInput {
-    PermissionDecisionInput::new(PermissionAction::Network, tool_name, keys)
-        .with_network_target(tool_call.get_argument::<String>("url").unwrap_or_default())
+    let input = PermissionDecisionInput::new(PermissionAction::Network, tool_name, keys);
+    if let Some(url) = tool_call
+        .get_argument::<String>("url")
+        .filter(|url| !url.trim().is_empty())
+    {
+        input.with_network_target(url)
+    } else {
+        input
+    }
 }
 
 fn filesystem_paths(tool_name: &str, tool_call: &ToolCall) -> Vec<String> {
@@ -141,7 +166,30 @@ fn filesystem_paths(tool_name: &str, tool_call: &ToolCall) -> Vec<String> {
             .into_iter()
             .collect(),
         "multiedit" => multiedit_paths(tool_call),
+        "grep" => tool_call
+            .get_argument::<String>("path")
+            .into_iter()
+            .collect(),
+        "glob" => glob_paths(tool_call),
         _ => Vec::new(),
+    }
+}
+
+fn glob_paths(tool_call: &ToolCall) -> Vec<String> {
+    let path = tool_call.get_argument::<String>("path");
+    let pattern = tool_call.get_argument::<String>("pattern");
+    match (path, pattern) {
+        (Some(path), Some(pattern)) => {
+            vec![
+                PathBuf::from(path)
+                    .join(pattern)
+                    .to_string_lossy()
+                    .to_string(),
+            ]
+        }
+        (Some(path), None) => vec![path],
+        (None, Some(pattern)) => vec![pattern],
+        (None, None) => Vec::new(),
     }
 }
 

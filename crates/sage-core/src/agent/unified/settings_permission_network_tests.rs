@@ -89,6 +89,34 @@ fn test_settings_permission_strips_url_fragments_before_matching() {
 }
 
 #[test]
+fn test_settings_permission_denies_blank_network_targets() {
+    let settings = Settings {
+        permissions: PermissionSettings {
+            default_behavior: SettingsPermissionBehavior::Allow,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    for tool_name in ["web_fetch", "http_client", "OpenBrowser"] {
+        let decision = UnifiedExecutor::settings_permission_decision(
+            &settings,
+            &network_url_call(tool_name, "   "),
+            network_workspace_dir(),
+        );
+
+        assert!(
+            matches!(
+                decision,
+                Some(SettingsPermissionDecision::Deny(reason))
+                    if reason.contains("require a request target")
+            ),
+            "{tool_name} should require a non-empty network target"
+        );
+    }
+}
+
+#[test]
 fn test_settings_permission_matches_websearch_query_patterns() {
     let settings = Settings {
         permissions: PermissionSettings {

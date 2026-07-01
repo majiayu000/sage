@@ -172,6 +172,9 @@ fn normalize_webfetch_url(url: &str) -> String {
             return trimmed.to_string();
         }
     }
+    if parsed.set_username("").is_err() || parsed.set_password(None).is_err() {
+        return trimmed.to_string();
+    }
     parsed.set_fragment(None);
 
     let default_port = match parsed.scheme() {
