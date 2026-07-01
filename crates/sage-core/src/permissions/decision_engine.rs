@@ -180,16 +180,27 @@ impl PermissionDecisionEngine {
                 );
             }
 
-            if !self.profile.filesystem.allow_outside_workspace
-                && !self.profile.filesystem.workspace_roots.is_empty()
-                && !self.path_is_in_workspace(path)
-            {
-                return PermissionDecision::new(
-                    PermissionDecisionKind::Deny,
-                    audit_key,
-                    format!("path '{}' is outside configured workspace roots", path),
-                    None,
-                );
+            if !self.profile.filesystem.allow_outside_workspace {
+                if self.profile.filesystem.workspace_roots.is_empty() {
+                    return PermissionDecision::new(
+                        PermissionDecisionKind::Deny,
+                        audit_key,
+                        format!(
+                            "path '{}' cannot be checked because no workspace roots are configured",
+                            path
+                        ),
+                        None,
+                    );
+                }
+
+                if !self.path_is_in_workspace(path) {
+                    return PermissionDecision::new(
+                        PermissionDecisionKind::Deny,
+                        audit_key,
+                        format!("path '{}' is outside configured workspace roots", path),
+                        None,
+                    );
+                }
             }
         }
 

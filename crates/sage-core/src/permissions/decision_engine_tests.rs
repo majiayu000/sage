@@ -101,6 +101,30 @@ fn outside_workspace_path_is_denied() {
     assert!(decision.reason.contains("outside configured workspace"));
 }
 
+#[test]
+fn path_request_without_workspace_roots_fails_closed() -> std::io::Result<()> {
+    let path = std::env::current_dir()?.join("outside/file.txt");
+    let profile =
+        PermissionProfile::default().add_allow("Write(**)", PermissionProfileSource::Project);
+    let decision = PermissionDecisionEngine::new(profile).decide(
+        PermissionDecisionInput::new(
+            PermissionAction::Filesystem,
+            "Write",
+            vec!["Write(outside/file.txt)".to_string()],
+        )
+        .with_path(path.to_string_lossy()),
+    );
+
+    assert_eq!(decision.kind, PermissionDecisionKind::Deny);
+    assert!(
+        decision
+            .reason
+            .contains("no workspace roots are configured")
+    );
+
+    Ok(())
+}
+
 #[cfg(unix)]
 #[test]
 fn symlink_escape_path_is_denied_as_outside_workspace() -> std::io::Result<()> {
