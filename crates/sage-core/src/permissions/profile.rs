@@ -1,5 +1,5 @@
 use crate::settings::types::{PermissionSettings, SettingsPermissionBehavior};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 /// Source precedence for permission profile fragments.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -146,7 +146,7 @@ impl PermissionDomainSources {
 }
 
 /// Unified runtime permission profile.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PermissionProfile {
     pub source: PermissionProfileSource,
     pub filesystem: FilesystemPermissionProfile,
@@ -162,6 +162,34 @@ pub struct PermissionProfile {
     pub default_behavior_source: Option<PermissionProfileSource>,
     #[serde(default, skip_serializing_if = "PermissionDomainSources::is_empty")]
     pub domain_sources: PermissionDomainSources,
+}
+
+#[derive(Deserialize)]
+struct PermissionProfileWire {
+    #[serde(default)]
+    source: PermissionProfileSource,
+    #[serde(default)]
+    filesystem: Option<FilesystemPermissionProfile>,
+    #[serde(default)]
+    network: Option<NetworkPermissionProfile>,
+    #[serde(default)]
+    exec: Option<ExecPermissionProfile>,
+    #[serde(default)]
+    sandbox: Option<SandboxPermissionProfile>,
+    #[serde(default)]
+    approval: Option<ApprovalPermissionProfile>,
+    #[serde(default)]
+    allow: Vec<PermissionRule>,
+    #[serde(default)]
+    deny: Vec<PermissionRule>,
+    #[serde(default)]
+    default_behavior: Option<PermissionBehavior>,
+    #[serde(default)]
+    default_behavior_set: bool,
+    #[serde(default)]
+    default_behavior_source: Option<PermissionProfileSource>,
+    #[serde(default)]
+    domain_sources: PermissionDomainSources,
 }
 
 impl Default for PermissionProfile {
@@ -180,6 +208,57 @@ impl Default for PermissionProfile {
             default_behavior_source: None,
             domain_sources: PermissionDomainSources::default(),
         }
+    }
+}
+
+impl<'de> Deserialize<'de> for PermissionProfile {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let wire = PermissionProfileWire::deserialize(deserializer)?;
+        let source = wire.source;
+        let filesystem_set = wire.filesystem.is_some();
+        let network_set = wire.network.is_some();
+        let exec_set = wire.exec.is_some();
+        let sandbox_set = wire.sandbox.is_some();
+        let approval_set = wire.approval.is_some();
+        let mut domain_sources = wire.domain_sources;
+        if filesystem_set && domain_sources.filesystem.is_none() {
+            domain_sources.filesystem = Some(source);
+        }
+        if network_set && domain_sources.network.is_none() {
+            domain_sources.network = Some(source);
+        }
+        if exec_set && domain_sources.exec.is_none() {
+            domain_sources.exec = Some(source);
+        }
+        if sandbox_set && domain_sources.sandbox.is_none() {
+            domain_sources.sandbox = Some(source);
+        }
+        if approval_set && domain_sources.approval.is_none() {
+            domain_sources.approval = Some(source);
+        }
+
+        let default_behavior = wire.default_behavior.unwrap_or_default();
+        let default_behavior_source = wire.default_behavior_source.or_else(|| {
+            (wire.default_behavior_set || default_behavior != PermissionBehavior::Ask)
+                .then_some(source)
+        });
+        Ok(Self {
+            source,
+            filesystem: wire.filesystem.unwrap_or_default(),
+            network: wire.network.unwrap_or_default(),
+            exec: wire.exec.unwrap_or_default(),
+            sandbox: wire.sandbox.unwrap_or_default(),
+            approval: wire.approval.unwrap_or_default(),
+            allow: wire.allow,
+            deny: wire.deny,
+            default_behavior,
+            default_behavior_set: wire.default_behavior_set,
+            default_behavior_source,
+            domain_sources,
+        })
     }
 }
 
@@ -350,86 +429,5 @@ impl PermissionProfile {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn merge_keeps_rules_and_higher_precedence_domains() {
-        let mut base = PermissionProfile::default()
-            .with_source(PermissionProfileSource::User)
-            .with_network_profile(
-                NetworkPermissionProfile { enabled: false },
-                PermissionProfileSource::User,
-            )
-            .add_allow("Read(src/**)", PermissionProfileSource::User);
-
-        let local = PermissionProfile::default()
-            .with_source(PermissionProfileSource::Local)
-            .with_network_profile(
-                NetworkPermissionProfile { enabled: true },
-                PermissionProfileSource::Local,
-            )
-            .add_deny("Read(secrets/**)", PermissionProfileSource::Local)
-            .with_default_behavior(PermissionBehavior::Deny);
-
-        base.merge(local);
-
-        assert_eq!(base.allow.len(), 1);
-        assert_eq!(base.deny.len(), 1);
-        assert!(base.network.enabled);
-        assert_eq!(base.default_behavior, PermissionBehavior::Deny);
-        assert!(base.default_behavior_set);
-    }
-
-    #[test]
-    fn lower_precedence_profile_cannot_downgrade_domains() {
-        let mut runtime = PermissionProfile::default()
-            .with_source(PermissionProfileSource::Runtime)
-            .with_exec_profile(
-                ExecPermissionProfile { enabled: false },
-                PermissionProfileSource::Runtime,
-            );
-
-        let user = PermissionProfile::default()
-            .with_source(PermissionProfileSource::User)
-            .with_exec_profile(
-                ExecPermissionProfile { enabled: true },
-                PermissionProfileSource::User,
-            );
-
-        runtime.merge(user);
-
-        assert!(!runtime.exec.enabled);
-    }
-
-    #[test]
-    fn settings_fragment_does_not_override_domains_or_higher_default() {
-        let mut runtime = PermissionProfile::default()
-            .with_source(PermissionProfileSource::Runtime)
-            .with_filesystem_profile(
-                FilesystemPermissionProfile {
-                    workspace_roots: vec!["/repo".to_string()],
-                    ..Default::default()
-                },
-                PermissionProfileSource::Runtime,
-            )
-            .with_network_profile(
-                NetworkPermissionProfile { enabled: false },
-                PermissionProfileSource::Runtime,
-            )
-            .with_default_behavior(PermissionBehavior::Deny);
-        let settings = PermissionSettings {
-            allow: vec!["Bash(echo *)".to_string()],
-            default_behavior: SettingsPermissionBehavior::Allow,
-            default_behavior_set: true,
-            ..Default::default()
-        };
-
-        runtime.merge(PermissionProfile::from_settings(&settings));
-
-        assert_eq!(runtime.filesystem.workspace_roots, vec!["/repo"]);
-        assert!(!runtime.network.enabled);
-        assert_eq!(runtime.default_behavior, PermissionBehavior::Deny);
-        assert_eq!(runtime.allow.len(), 1);
-    }
-}
+#[path = "profile_tests.rs"]
+mod tests;

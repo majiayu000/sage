@@ -47,6 +47,8 @@ pub struct PermissionDecisionInput {
     pub tool_name: String,
     pub permission_keys: Vec<String>,
     pub path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub working_directory: Option<String>,
     pub network_target: Option<String>,
     pub requires_sandbox: bool,
     pub sandbox_support: SandboxSupport,
@@ -65,6 +67,7 @@ impl PermissionDecisionInput {
             tool_name: tool_name.into(),
             permission_keys,
             path: None,
+            working_directory: None,
             network_target: None,
             requires_sandbox: false,
             sandbox_support: SandboxSupport::Supported,
@@ -75,6 +78,11 @@ impl PermissionDecisionInput {
 
     pub fn with_path(mut self, path: impl Into<String>) -> Self {
         self.path = Some(path.into());
+        self
+    }
+
+    pub fn with_working_directory(mut self, working_directory: impl Into<String>) -> Self {
+        self.working_directory = Some(working_directory.into());
         self
     }
 
@@ -170,8 +178,18 @@ impl PermissionDecisionEngine {
             );
         }
 
+        if matches!(input.action, PermissionAction::Filesystem) && input.path.is_none() {
+            return PermissionDecision::new(
+                PermissionDecisionKind::Deny,
+                audit_key,
+                "filesystem permission decisions require a request path",
+                None,
+            );
+        }
+
         if let Some(path) = input.path.as_deref() {
-            if self.path_is_protected(path) {
+            let working_directory = input.working_directory.as_deref();
+            if self.path_is_protected(path, working_directory) {
                 return PermissionDecision::new(
                     PermissionDecisionKind::Deny,
                     audit_key,
@@ -193,7 +211,7 @@ impl PermissionDecisionEngine {
                     );
                 }
 
-                if !self.path_is_in_workspace(path) {
+                if !self.path_is_in_workspace(path, working_directory) {
                     return PermissionDecision::new(
                         PermissionDecisionKind::Deny,
                         audit_key,
@@ -304,32 +322,32 @@ impl PermissionDecisionEngine {
             .find(|rule| PermissionCache::pattern_matches(&rule.pattern, key))
     }
 
-    fn path_is_in_workspace(&self, path: &str) -> bool {
-        let path = normalize_path(path);
+    fn path_is_in_workspace(&self, path: &str, working_directory: Option<&str>) -> bool {
+        let path = normalize_path(path, working_directory);
         self.profile
             .filesystem
             .workspace_roots
             .iter()
-            .map(|root| normalize_path(root))
+            .map(|root| normalize_path(root, None))
             .any(|root| path_is_at_or_under(&path, &root))
     }
 
-    fn path_is_protected(&self, path: &str) -> bool {
-        let path = normalize_path(path);
+    fn path_is_protected(&self, path: &str, working_directory: Option<&str>) -> bool {
+        let path = normalize_path(path, working_directory);
         self.profile
             .filesystem
             .protected_paths
             .iter()
             .any(|protected| {
-                if protected.starts_with('/') {
-                    return path_is_at_or_under(&path, &normalize_path(protected));
+                if Path::new(protected).is_absolute() {
+                    return path_is_at_or_under(&path, &normalize_path(protected, None));
                 }
 
                 self.profile
                     .filesystem
                     .workspace_roots
                     .iter()
-                    .map(|root| normalize_path(normalize_path(root).join(protected)))
+                    .map(|root| normalize_path(normalize_path(root, None).join(protected), None))
                     .any(|protected_path| path_is_at_or_under(&path, &protected_path))
             })
     }
@@ -339,10 +357,12 @@ fn path_is_at_or_under(path: &Path, root: &Path) -> bool {
     path == root || path.starts_with(root)
 }
 
-fn normalize_path(path: impl AsRef<Path>) -> PathBuf {
+fn normalize_path(path: impl AsRef<Path>, working_directory: Option<&str>) -> PathBuf {
     let path = path.as_ref();
     let absolute = if path.is_absolute() {
         path.to_path_buf()
+    } else if let Some(working_directory) = working_directory {
+        normalize_path(working_directory, None).join(path)
     } else {
         std::env::current_dir()
             .unwrap_or_else(|_| PathBuf::from("."))

@@ -2,9 +2,7 @@ use super::*;
 use crate::permissions::{
     FilesystemPermissionProfile, NetworkPermissionProfile, PermissionProfileSource,
 };
-#[cfg(unix)]
 use std::fs;
-#[cfg(unix)]
 use tempfile::TempDir;
 
 #[test]
@@ -58,7 +56,7 @@ fn allow_decision_records_matched_rule_for_audit() {
         ..Default::default()
     };
     let decision = PermissionDecisionEngine::new(profile).decide(PermissionDecisionInput::new(
-        PermissionAction::Filesystem,
+        PermissionAction::Tool,
         "Read",
         vec!["Read(src/lib.rs)".to_string()],
     ));
@@ -71,6 +69,20 @@ fn allow_decision_records_matched_rule_for_audit() {
             .map(|rule| rule.pattern.as_str()),
         Some("Read(src/**)")
     );
+}
+
+#[test]
+fn filesystem_decision_without_path_fails_closed() {
+    let profile =
+        PermissionProfile::default().add_allow("Write(**)", PermissionProfileSource::Project);
+    let decision = PermissionDecisionEngine::new(profile).decide(PermissionDecisionInput::new(
+        PermissionAction::Filesystem,
+        "Write",
+        vec!["Write(src/lib.rs)".to_string()],
+    ));
+
+    assert_eq!(decision.kind, PermissionDecisionKind::Deny);
+    assert!(decision.reason.contains("require a request path"));
 }
 
 #[test]
@@ -123,6 +135,104 @@ fn path_request_without_workspace_roots_fails_closed() -> std::io::Result<()> {
     );
 
     Ok(())
+}
+
+#[test]
+fn relative_path_uses_request_working_directory() -> std::io::Result<()> {
+    let temp_dir = TempDir::new()?;
+    let workspace = temp_dir.path().join("workspace");
+    let nested = workspace.join("nested");
+    let outside = temp_dir.path().join("outside");
+    fs::create_dir_all(&nested)?;
+    fs::create_dir_all(&outside)?;
+
+    let profile = PermissionProfile {
+        filesystem: FilesystemPermissionProfile {
+            workspace_roots: vec![workspace.to_string_lossy().to_string()],
+            ..Default::default()
+        },
+        allow: vec![PermissionRule::new(
+            "Write(**)",
+            PermissionProfileSource::Project,
+        )],
+        ..Default::default()
+    };
+    let decision = PermissionDecisionEngine::new(profile).decide(
+        PermissionDecisionInput::new(
+            PermissionAction::Filesystem,
+            "Write",
+            vec!["Write(../../outside/file.txt)".to_string()],
+        )
+        .with_path("../../outside/file.txt")
+        .with_working_directory(nested.to_string_lossy()),
+    );
+
+    assert_eq!(decision.kind, PermissionDecisionKind::Deny);
+    assert!(decision.reason.contains("outside configured workspace"));
+
+    Ok(())
+}
+
+#[test]
+fn absolute_protected_path_is_denied_before_allow() -> std::io::Result<()> {
+    let temp_dir = TempDir::new()?;
+    let protected = temp_dir.path().join("protected");
+    fs::create_dir_all(&protected)?;
+
+    let profile = PermissionProfile {
+        filesystem: FilesystemPermissionProfile {
+            protected_paths: vec![protected.to_string_lossy().to_string()],
+            allow_outside_workspace: true,
+            ..Default::default()
+        },
+        allow: vec![PermissionRule::new(
+            "Write(**)",
+            PermissionProfileSource::Project,
+        )],
+        ..Default::default()
+    };
+    let decision = PermissionDecisionEngine::new(profile).decide(
+        PermissionDecisionInput::new(
+            PermissionAction::Filesystem,
+            "Write",
+            vec!["Write(secret.txt)".to_string()],
+        )
+        .with_path(protected.join("secret.txt").to_string_lossy()),
+    );
+
+    assert_eq!(decision.kind, PermissionDecisionKind::Deny);
+    assert!(decision.reason.contains("protected"));
+
+    Ok(())
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_absolute_protected_path_is_denied_before_allow() {
+    let protected = r"C:\Users\me\.ssh";
+    let profile = PermissionProfile {
+        filesystem: FilesystemPermissionProfile {
+            protected_paths: vec![protected.to_string()],
+            allow_outside_workspace: true,
+            ..Default::default()
+        },
+        allow: vec![PermissionRule::new(
+            "Write(**)",
+            PermissionProfileSource::Project,
+        )],
+        ..Default::default()
+    };
+    let decision = PermissionDecisionEngine::new(profile).decide(
+        PermissionDecisionInput::new(
+            PermissionAction::Filesystem,
+            "Write",
+            vec![r"Write(C:\Users\me\.ssh\id_ed25519)".to_string()],
+        )
+        .with_path(r"C:\Users\me\.ssh\id_ed25519"),
+    );
+
+    assert_eq!(decision.kind, PermissionDecisionKind::Deny);
+    assert!(decision.reason.contains("protected"));
 }
 
 #[cfg(unix)]
