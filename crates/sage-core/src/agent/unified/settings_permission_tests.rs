@@ -7,6 +7,8 @@ use crate::settings::types::PermissionSettings;
 use std::collections::HashMap;
 use std::fs;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 use tempfile::TempDir;
 
 fn bash_call(command: &str) -> ToolCall {
@@ -375,6 +377,51 @@ async fn test_settings_permission_strips_confirmation_fields_from_modified_input
         }
         _ => panic!("modified allowed command should pass settings permission"),
     }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_settings_permission_prompt_uses_execution_timeout() -> SageResult<()> {
+    let temp_dir = TempDir::new()?;
+    let sage_dir = temp_dir.path().join(".sage");
+    fs::create_dir(&sage_dir)?;
+    fs::write(
+        sage_dir.join("settings.local.json"),
+        r#"{
+            "permissions": {
+                "default_behavior": "ask"
+            }
+        }"#,
+    )?;
+
+    let observed_timeout_ms = Arc::new(AtomicU64::new(0));
+    let observed_timeout_for_response = Arc::clone(&observed_timeout_ms);
+    let input_channel =
+        InputChannel::non_interactive(InputAutoResponse::Custom(Arc::new(move |request| {
+            let timeout_ms = request
+                .timeout
+                .map(|timeout| timeout.as_millis() as u64)
+                .unwrap_or(0);
+            observed_timeout_for_response.store(timeout_ms, Ordering::SeqCst);
+            InputResponse::permission_denied(request.id, Some("no".to_string()))
+        })));
+
+    let mut config = Config::default();
+    config.default_provider = "ollama".to_string();
+    let options = ExecutionOptions::interactive()
+        .with_working_directory(temp_dir.path())
+        .with_prompt_timeout(Duration::from_secs(7));
+    let mut executor = UnifiedExecutor::with_options(config, options)?;
+    executor.set_input_channel(input_channel);
+
+    let context = ToolExecutionContext::new("session", temp_dir.path().to_path_buf());
+    let result = executor
+        .check_settings_permission(&bash_call("echo ok"), &context)
+        .await?;
+
+    assert!(matches!(result, Some(SettingsPermissionCheck::Blocked(_))));
+    assert_eq!(observed_timeout_ms.load(Ordering::SeqCst), 7_000);
 
     Ok(())
 }

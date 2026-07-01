@@ -51,6 +51,32 @@ fn test_settings_permission_keeps_outside_absolute_paths_distinct() {
 }
 
 #[test]
+fn test_settings_permission_preserves_explicit_outside_workspace_allow() -> SageResult<()> {
+    let workspace = TempDir::new()?;
+    let outside = TempDir::new()?;
+    let outside_file = outside.path().join("allowed.txt");
+    fs::write(&outside_file, "allowed")?;
+    let allow_rule = format!("Read({}/**)", outside.path().to_string_lossy());
+    let settings = Settings {
+        permissions: PermissionSettings {
+            allow: vec![allow_rule],
+            default_behavior: SettingsPermissionBehavior::Deny,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let decision = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &read_call(&outside_file.to_string_lossy()),
+        workspace.path(),
+    );
+
+    assert_eq!(decision, Some(SettingsPermissionDecision::Allow));
+    Ok(())
+}
+
+#[test]
 fn test_settings_permission_normalizes_windows_separators() {
     let settings = Settings {
         permissions: PermissionSettings {

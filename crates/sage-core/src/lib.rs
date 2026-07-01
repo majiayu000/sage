@@ -131,6 +131,7 @@ pub mod llm;
 pub mod mcp;
 pub mod memory;
 pub mod output;
+pub mod permissions;
 pub mod plugins;
 pub mod prompts;
 pub(crate) mod recovery;
@@ -188,6 +189,13 @@ pub use output::{
     AssistantEvent, CostInfo, ErrorEvent, JsonFormatter, JsonOutput, OutputEvent, OutputFormat,
     OutputFormatter, OutputWriter, ResultEvent, StreamJsonFormatter, SystemEvent, TextFormatter,
     ToolCallResultEvent, ToolCallStartEvent, ToolCallSummary, UserPromptEvent, create_formatter,
+};
+pub use permissions::{
+    ApprovalCache, ApprovalCacheDecision, ApprovalCacheLookup, ApprovalPermissionProfile,
+    ExecPermissionProfile, FilesystemPermissionProfile, NetworkPermissionProfile, PermissionAction,
+    PermissionBehavior, PermissionDecision, PermissionDecisionEngine, PermissionDecisionInput,
+    PermissionDecisionKind, PermissionDomainSources, PermissionPreflight, PermissionProfile,
+    PermissionProfileSource, PermissionRule, SandboxPermissionProfile, SandboxSupport,
 };
 pub use plugins::{
     Plugin, PluginCapability, PluginContext, PluginEntry, PluginError, PluginInfo, PluginLifecycle,
