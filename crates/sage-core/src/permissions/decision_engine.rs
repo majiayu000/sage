@@ -224,17 +224,17 @@ impl PermissionDecisionEngine {
             );
         }
 
-        if !input.permission_keys.is_empty()
-            && input.permission_keys.iter().all(|key| {
-                self.matching_rule_for_key(&self.profile.allow, key)
-                    .is_some()
-            })
-        {
+        let allow_matches: Vec<&PermissionRule> = input
+            .permission_keys
+            .iter()
+            .filter_map(|key| self.matching_rule_for_key(&self.profile.allow, key))
+            .collect();
+        if !input.permission_keys.is_empty() && allow_matches.len() == input.permission_keys.len() {
             return PermissionDecision::new(
                 PermissionDecisionKind::Allow,
                 audit_key,
                 "matched allow rule",
-                None,
+                allow_matches.first().map(|rule| (*rule).clone()),
             );
         }
 

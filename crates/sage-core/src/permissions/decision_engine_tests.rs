@@ -49,6 +49,31 @@ fn workspace_path_is_allowed_when_rule_matches() {
 }
 
 #[test]
+fn allow_decision_records_matched_rule_for_audit() {
+    let profile = PermissionProfile {
+        allow: vec![
+            PermissionRule::new("Read(docs/**)", PermissionProfileSource::User),
+            PermissionRule::new("Read(src/**)", PermissionProfileSource::Project),
+        ],
+        ..Default::default()
+    };
+    let decision = PermissionDecisionEngine::new(profile).decide(PermissionDecisionInput::new(
+        PermissionAction::Filesystem,
+        "Read",
+        vec!["Read(src/lib.rs)".to_string()],
+    ));
+
+    assert_eq!(decision.kind, PermissionDecisionKind::Allow);
+    assert_eq!(
+        decision
+            .matched_rule
+            .as_ref()
+            .map(|rule| rule.pattern.as_str()),
+        Some("Read(src/**)")
+    );
+}
+
+#[test]
 fn outside_workspace_path_is_denied() {
     let workspace = std::env::current_dir().unwrap().join("workspace");
     let outside = std::env::current_dir().unwrap().join("outside/file.txt");
