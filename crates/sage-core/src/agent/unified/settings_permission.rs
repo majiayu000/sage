@@ -2,11 +2,16 @@
 
 use crate::error::SageResult;
 use crate::input::{InputRequest, InputResponseKind};
+use crate::permissions::{
+    PermissionAction, PermissionDecisionEngine, PermissionDecisionInput, PermissionDecisionKind,
+    PermissionPreflight, PermissionProfile,
+};
 use crate::settings::SettingsLoader;
 use crate::settings::locations::SettingsLocations;
-use crate::settings::types::{Settings, SettingsPermissionBehavior};
+use crate::settings::types::Settings;
+#[cfg(test)]
+use crate::settings::types::SettingsPermissionBehavior;
 use crate::settings::validation::SettingsValidator;
-use crate::tools::permission::PermissionCache;
 use crate::tools::types::{ToolCall, ToolResult};
 use std::path::Path;
 
@@ -144,7 +149,7 @@ impl UnifiedExecutor {
     ) -> SageResult<SettingsPermissionPromptResult> {
         self.event_manager.stop_animation().await;
         let input = serde_json::to_value(&tool_call.arguments).unwrap_or(serde_json::Value::Null);
-        let request = InputRequest::permission(
+        let mut request = InputRequest::permission(
             &tool_call.name,
             format!(
                 "Tool '{}' requires permission from settings.\n{}",
@@ -152,6 +157,9 @@ impl UnifiedExecutor {
             ),
             input,
         );
+        if let Some(timeout) = self.options.prompt_timeout {
+            request = request.with_timeout(timeout);
+        }
 
         let response = match self.request_user_input(request).await {
             Ok(response) => response,
@@ -258,12 +266,8 @@ impl UnifiedExecutor {
         tool_call: &ToolCall,
         working_dir: &Path,
     ) -> Option<SettingsPermissionDecision> {
-        let permissions = &settings.permissions;
-        let has_configured_permissions = !permissions.allow.is_empty()
-            || !permissions.deny.is_empty()
-            || permissions.default_behavior_set
-            || permissions.default_behavior != SettingsPermissionBehavior::Ask;
-        if !has_configured_permissions {
+        let profile = PermissionProfile::from_settings(&settings.permissions);
+        if !profile.has_configured_rules() {
             return None;
         }
 
@@ -275,88 +279,85 @@ impl UnifiedExecutor {
             .cloned()
             .unwrap_or_else(|| tool_name.to_string());
 
-        if let Some(pattern) = permissions.deny.iter().find(|pattern| {
-            keys.iter()
-                .any(|key| PermissionCache::pattern_matches(pattern, key))
-        }) {
-            return Some(SettingsPermissionDecision::Deny(format!(
-                "matched deny rule '{}'",
-                pattern
-            )));
-        }
-
+        let mut preflight_denies = Vec::new();
         if tool_name == "Grep" && matches!(key.as_str(), "Grep" | "Grep()") {
-            if let Some(pattern) = permissions.deny.iter().find(|pattern| {
+            if let Some(pattern) = settings.permissions.deny.iter().find(|pattern| {
                 let lower = pattern.to_ascii_lowercase();
                 lower == "grep" || lower.starts_with("grep(")
             }) {
-                return Some(SettingsPermissionDecision::Deny(format!(
-                    "workspace-wide Grep search overlaps deny rule '{}'",
-                    pattern
-                )));
+                preflight_denies.push(PermissionPreflight::new(
+                    format!(
+                        "workspace-wide Grep search overlaps deny rule '{}'",
+                        pattern
+                    ),
+                    Some(pattern.clone()),
+                ));
             }
         }
 
         if tool_name == "Grep" {
-            if let Some(pattern) = permissions.deny.iter().find(|pattern| {
+            if let Some(pattern) = settings.permissions.deny.iter().find(|pattern| {
                 settings_permission_paths::grep_search_overlaps_deny_rule(&key, pattern)
             }) {
-                return Some(SettingsPermissionDecision::Deny(format!(
-                    "Grep search overlaps deny rule '{}'",
-                    pattern
-                )));
+                preflight_denies.push(PermissionPreflight::new(
+                    format!("Grep search overlaps deny rule '{}'", pattern),
+                    Some(pattern.clone()),
+                ));
             }
         }
 
         if tool_name == "Glob" {
-            if let Some(pattern) = permissions.deny.iter().find(|pattern| {
+            if let Some(pattern) = settings.permissions.deny.iter().find(|pattern| {
                 settings_permission_paths::glob_search_overlaps_deny_rule(&key, pattern)
             }) {
-                return Some(SettingsPermissionDecision::Deny(format!(
-                    "Glob search overlaps deny rule '{}'",
-                    pattern
-                )));
+                preflight_denies.push(PermissionPreflight::new(
+                    format!("Glob search overlaps deny rule '{}'", pattern),
+                    Some(pattern.clone()),
+                ));
             }
         }
 
         if tool_name == "http_client"
             && Self::http_client_may_follow_redirects(tool_call)
             && Self::has_http_client_url_permission_rule(
-                permissions.allow.iter().chain(permissions.deny.iter()),
+                settings
+                    .permissions
+                    .allow
+                    .iter()
+                    .chain(settings.permissions.deny.iter()),
             )
         {
-            return Some(SettingsPermissionDecision::Deny(
+            preflight_denies.push(PermissionPreflight::new(
                 "http_client must set follow_redirects=false when URL-scoped settings permission rules are configured".to_string(),
+                None,
             ));
         }
 
-        let all_keys_allowed = keys.iter().all(|key| {
-            permissions
-                .allow
-                .iter()
-                .any(|pattern| PermissionCache::pattern_matches(pattern, key))
-        });
-        if !keys.is_empty() && all_keys_allowed {
-            return Some(SettingsPermissionDecision::Allow);
-        }
-
-        if tool_name == "Grep"
-            && permissions.allow.iter().any(|pattern| {
+        let mut scoped_allows = Vec::new();
+        if tool_name == "Grep" {
+            if let Some(pattern) = settings.permissions.allow.iter().find(|pattern| {
                 settings_permission_paths::grep_search_within_allow_rule(&key, pattern)
-            })
-        {
-            return Some(SettingsPermissionDecision::Allow);
+            }) {
+                scoped_allows.push(PermissionPreflight::new(
+                    format!("Grep search is within allow rule '{}'", pattern),
+                    Some(pattern.clone()),
+                ));
+            }
         }
 
-        match permissions.default_behavior {
-            SettingsPermissionBehavior::Allow => Some(SettingsPermissionDecision::Allow),
-            SettingsPermissionBehavior::Deny => Some(SettingsPermissionDecision::Deny(format!(
-                "no allow rule matched '{}'",
-                key
-            ))),
-            SettingsPermissionBehavior::Ask => Some(SettingsPermissionDecision::Ask(format!(
-                "No permission rule matched '{}'.",
-                key
+        let decision = PermissionDecisionEngine::new(profile).decide(
+            PermissionDecisionInput::new(PermissionAction::Tool, tool_name, keys)
+                .with_preflight_denies(preflight_denies)
+                .with_scoped_allows(scoped_allows),
+        );
+
+        match decision.kind {
+            PermissionDecisionKind::Allow => Some(SettingsPermissionDecision::Allow),
+            PermissionDecisionKind::Deny => Some(SettingsPermissionDecision::Deny(decision.reason)),
+            PermissionDecisionKind::Ask => Some(SettingsPermissionDecision::Ask(decision.reason)),
+            PermissionDecisionKind::Unsupported => Some(SettingsPermissionDecision::Deny(format!(
+                "unsupported permission request: {}",
+                decision.reason
             ))),
         }
     }
