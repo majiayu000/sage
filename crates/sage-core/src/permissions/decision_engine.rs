@@ -318,7 +318,7 @@ impl PermissionDecisionEngine {
                     .filesystem
                     .workspace_roots
                     .iter()
-                    .map(|root| normalize_path(root).join(protected))
+                    .map(|root| normalize_path(normalize_path(root).join(protected)))
                     .any(|protected_path| path_is_at_or_under(&path, &protected_path))
             })
     }

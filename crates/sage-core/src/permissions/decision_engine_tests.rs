@@ -164,6 +164,42 @@ fn protected_workspace_path_is_denied_before_allow() {
     assert!(decision.reason.contains("protected"));
 }
 
+#[cfg(unix)]
+#[test]
+fn symlinked_protected_path_is_denied() -> std::io::Result<()> {
+    let temp_dir = TempDir::new()?;
+    let workspace = temp_dir.path().join("workspace");
+    let protected_target = workspace.join("metadata");
+    fs::create_dir_all(&workspace)?;
+    fs::create_dir_all(&protected_target)?;
+    std::os::unix::fs::symlink(&protected_target, workspace.join(".sage"))?;
+
+    let profile = PermissionProfile {
+        filesystem: FilesystemPermissionProfile {
+            workspace_roots: vec![workspace.to_string_lossy().to_string()],
+            ..Default::default()
+        },
+        allow: vec![PermissionRule::new(
+            "Write(**)",
+            PermissionProfileSource::Project,
+        )],
+        ..Default::default()
+    };
+    let decision = PermissionDecisionEngine::new(profile).decide(
+        PermissionDecisionInput::new(
+            PermissionAction::Filesystem,
+            "Write",
+            vec!["Write(.sage/config.json)".to_string()],
+        )
+        .with_path(workspace.join(".sage/config.json").to_string_lossy()),
+    );
+
+    assert_eq!(decision.kind, PermissionDecisionKind::Deny);
+    assert!(decision.reason.contains("protected"));
+
+    Ok(())
+}
+
 #[test]
 fn network_disabled_denies_network_action() {
     let profile = PermissionProfile {
