@@ -7,10 +7,9 @@ This script checks for consistency between English and Chinese documentation.
 该脚本检查中英文文档之间的一致性。
 """
 
-import os
+import argparse
 import sys
 import re
-import hashlib
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Set, Tuple
@@ -236,17 +235,29 @@ class DocConsistencyChecker:
     
     def save_report(self, filename: str = "doc_consistency_report.json"):
         """Save report to JSON file"""
-        report_path = self.root_dir / filename
+        report_path = Path(filename)
+        if not report_path.is_absolute():
+            report_path = self.root_dir / report_path
+        report_path.parent.mkdir(parents=True, exist_ok=True)
         with open(report_path, 'w', encoding='utf-8') as f:
             json.dump(self.report, f, indent=2, ensure_ascii=False)
         print(f"📄 Report saved to: {report_path}")
 
 def main():
     """Main function"""
-    checker = DocConsistencyChecker()
+    parser = argparse.ArgumentParser(description="Check English/Chinese documentation consistency")
+    parser.add_argument("--root", default=".", help="Repository root to check")
+    parser.add_argument(
+        "--report-path",
+        default="doc_consistency_report.json",
+        help="Path for the JSON report; relative paths are resolved from --root",
+    )
+    args = parser.parse_args()
+
+    checker = DocConsistencyChecker(args.root)
     report = checker.generate_report()
     checker.print_report(report)
-    checker.save_report()
+    checker.save_report(args.report_path)
     
     # Exit with error code if issues found
     sys.exit(0 if report['status'] == 'pass' else 1)

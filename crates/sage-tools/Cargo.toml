@@ -50,7 +50,7 @@ once_cell = { workspace = true }
 parking_lot = { workspace = true }
 
 # Configuration
-toml = "0.8"
+toml = "1.1"
 
 # HTTP client
 reqwest = { workspace = true }
@@ -70,7 +70,7 @@ walkdir = "2"
 grep-regex = "0.1"
 grep-searcher = "0.1"
 grep-matcher = "0.1"
-ignore = "0.4"
+ignore = "0.4.27"
 
 # Process control (Unix only)
 [target.'cfg(unix)'.dependencies]
@@ -80,6 +80,6 @@ nix = { workspace = true }
 mockall = { workspace = true }
 tokio-test = "0.4"
 tempfile = "3.8"
-serial_test = "2.0"
+serial_test = "3.5"
 
 # Note: Examples are defined in the root workspace package to avoid filename collisions

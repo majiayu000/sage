@@ -58,6 +58,7 @@ brew install majiayu000/sage/sage
 
 - 最新已验证 GitHub release: [`v0.13.57`](https://github.com/majiayu000/sage/releases/tag/v0.13.57)，发布于 2026-04-30。
 - GitHub release archives 是 macOS 和 Linux 的主要二进制分发路径。
+- 原生 Windows 预构建 release archives 当前不发布；请使用 WSL2、源码构建或 `cargo install sage-cli`。
 - Cargo 安装使用 `sage-cli` 包 (`cargo install sage-cli`)；根 workspace 中名为 `sage` 的 package 是 private，不是 crates.io 上的 CLI 包。
 - Homebrew 安装使用 `majiayu000/sage` tap。
 

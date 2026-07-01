@@ -1,6 +1,7 @@
 //! UI, Workspace, Model, and managed policy settings.
 
 use crate::error::{SageError, SageResult};
+use crate::hashing::bytes_to_hex;
 use crate::permissions::{
     ExecPermissionProfile, NetworkPermissionProfile, PermissionBehavior, PermissionProfile,
     PermissionProfileSource, SandboxPermissionProfile,
@@ -226,7 +227,7 @@ impl ManagedConfig {
             SageError::io_with_path(error.to_string(), path.display().to_string())
         })?;
         let config = Self::parse_json(&content)?;
-        let sha256 = format!("{:x}", Sha256::digest(content.as_bytes()));
+        let sha256 = bytes_to_hex(Sha256::digest(content.as_bytes()));
         let source = ManagedConfigSource {
             kind: config.source_kind.clone(),
             path: path.to_path_buf(),

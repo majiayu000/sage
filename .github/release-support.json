@@ -1,0 +1,133 @@
+{
+  "schema_version": 1,
+  "platforms": [
+    {
+      "os": "linux",
+      "status": "supported",
+      "targets": [
+        "x86_64-unknown-linux-gnu",
+        "x86_64-unknown-linux-musl",
+        "aarch64-unknown-linux-gnu"
+      ]
+    },
+    {
+      "os": "macos",
+      "status": "supported",
+      "targets": [
+        "aarch64-apple-darwin",
+        "x86_64-apple-darwin"
+      ]
+    },
+    {
+      "os": "windows",
+      "status": "unsupported",
+      "reason": "Windows binary packaging is intentionally not part of the supported release matrix until a dedicated installer and smoke path are restored.",
+      "targets": []
+    }
+  ],
+  "required_gates": {
+    "ci": [
+      "Check",
+      "Format",
+      "Shell scripts",
+      "Clippy",
+      "Test",
+      "Build",
+      "Documentation consistency",
+      "Release gate policy",
+      "Clean worktree",
+      "Required gates"
+    ],
+    "security": [
+      "Security Audit",
+      "License & Dependency Check",
+      "Check Outdated Dependencies",
+      "Minimum Supported Rust Version",
+      "Workflow policy",
+      "Required security gates"
+    ],
+    "release": [
+      "Release preflight",
+      "Quality gates",
+      "Security gates",
+      "Build release artifacts",
+      "Verify release artifacts",
+      "Publish sage-cli to crates.io",
+      "Cargo install smoke",
+      "Publish release"
+    ]
+  },
+  "actions_policy": {
+    "strategy": "Allow documented major-version or stable-channel pins only for trusted GitHub or Rust toolchain actions; all other actions must pin a full 40-character SHA.",
+    "allowed_unpinned": [
+      {
+        "uses": "actions/checkout@v4",
+        "reason": "GitHub-maintained action pinned to a major version."
+      },
+      {
+        "uses": "actions/cache@v4",
+        "reason": "GitHub-maintained action pinned to a major version."
+      },
+      {
+        "uses": "actions/upload-artifact@v4",
+        "reason": "GitHub-maintained action pinned to a major version."
+      },
+      {
+        "uses": "actions/download-artifact@v4",
+        "reason": "GitHub-maintained action pinned to a major version."
+      },
+      {
+        "uses": "actions/setup-python@v4",
+        "reason": "GitHub-maintained action pinned to a major version."
+      },
+      {
+        "uses": "actions/github-script@v6",
+        "reason": "GitHub-maintained action pinned to a major version."
+      },
+      {
+        "uses": "actions/attest-build-provenance@v2",
+        "reason": "GitHub-maintained artifact attestation action pinned to a major version."
+      },
+      {
+        "uses": "dtolnay/rust-toolchain@stable",
+        "reason": "Trusted Rust toolchain action using the stable channel."
+      },
+      {
+        "uses": "dtolnay/rust-toolchain@1.88.0",
+        "reason": "Trusted Rust toolchain action pinned to the declared MSRV."
+      }
+    ]
+  },
+  "release_targets": [
+    {
+      "target": "aarch64-apple-darwin",
+      "os": "macos",
+      "archive": "tar.gz",
+      "smoke": "build-runner"
+    },
+    {
+      "target": "x86_64-apple-darwin",
+      "os": "macos",
+      "archive": "tar.gz",
+      "smoke": "build-runner"
+    },
+    {
+      "target": "x86_64-unknown-linux-gnu",
+      "os": "linux",
+      "archive": "tar.gz",
+      "smoke": "build-runner"
+    },
+    {
+      "target": "x86_64-unknown-linux-musl",
+      "os": "linux",
+      "archive": "tar.gz",
+      "smoke": "build-runner"
+    },
+    {
+      "target": "aarch64-unknown-linux-gnu",
+      "os": "linux",
+      "archive": "tar.gz",
+      "smoke": "qemu-aarch64"
+    }
+  ]
+}

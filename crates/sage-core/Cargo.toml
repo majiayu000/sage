@@ -39,7 +39,7 @@ tracing = { workspace = true }
 colored = { workspace = true }
 
 # Random number generation (for retry jitter)
-rand = "0.9.3"
+rand = "0.10"
 
 # Utilities
 uuid = { workspace = true }
@@ -47,7 +47,7 @@ chrono = { workspace = true }
 dirs = { workspace = true }
 shellexpand = { workspace = true }
 flate2 = "1.0"
-dashmap = "6.0"
+dashmap = "6.2"
 once_cell = { workspace = true }
 shell-words = "1.1"
 glob = "0.3"
@@ -67,7 +67,7 @@ config = { workspace = true }
 # Sandbox
 regex = { workspace = true }
 humantime-serde = { workspace = true }
-sha2 = "0.10.9"
+sha2 = "0.11"
 
 # Platform-specific temporary files (for macOS sandbox profiles)
 tempfile = "3.10"
@@ -80,7 +80,7 @@ nix = { workspace = true }
 mockall = { workspace = true }
 tokio-test = "0.4"
 tracing-subscriber = { workspace = true }
-serial_test = "3"
+serial_test = "3.5"
 wiremock = "0.6"
 
 # Note: Examples are defined in the root workspace package to avoid filename collisions

@@ -42,7 +42,7 @@ parking_lot = { workspace = true }
 
 # Terminal UI (rnk - React-like declarative UI)
 rnk = { workspace = true }
-crossterm = "0.28"
+crossterm = "0.29"
 unicode-width = "0.2"
 
 # Error handling
@@ -62,5 +62,5 @@ signal-hook-tokio = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3.10"
-expectrl = "0.7"
-rexpect = "0.5"
+expectrl = "0.9"
+rexpect = "0.7"

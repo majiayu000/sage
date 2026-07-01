@@ -7,7 +7,7 @@
 - Operating System / 操作系统:
   - Linux (Ubuntu 20.04+, Debian 11+, etc.)
   - macOS 12.0+ (Monterey or later)
-  - Windows 10/11 (WSL2 recommended)
+  - Windows 10/11 through WSL2 or source builds; native Windows release archives are not currently published
 
 **Required Tools / 必需工具:**
 - Git
@@ -42,6 +42,13 @@ sage --version
 # Should output: sage 0.1.0
 # 应输出: sage 0.1.0
 ```
+
+---
+
+### Native Windows Release Archives / 原生 Windows 发布归档
+
+Native Windows prebuilt release archives are currently unsupported. Use WSL2, build from source, or install the `sage-cli` crate when it is available.
+原生 Windows 预构建发布归档当前不支持。请使用 WSL2、源码构建，或在 crate 可用时安装 `sage-cli`。
 
 ---
 

@@ -11,7 +11,7 @@ use super::types::LlmClient;
 use crate::error::{SageError, SageResult};
 use crate::interrupt::global_interrupt_manager;
 use crate::llm::messages::LlmResponse;
-use rand::Rng;
+use rand::RngExt;
 use std::time::Duration;
 use tokio::select;
 use tokio::time::sleep;

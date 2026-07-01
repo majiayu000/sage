@@ -58,6 +58,7 @@ brew install majiayu000/sage/sage
 
 - Latest verified GitHub release: [`v0.13.57`](https://github.com/majiayu000/sage/releases/tag/v0.13.57), published on 2026-04-30.
 - GitHub release archives are the primary binary distribution path for macOS and Linux.
+- Native Windows prebuilt release archives are not currently published; use WSL2, source builds, or `cargo install sage-cli`.
 - Cargo installs use the `sage-cli` package (`cargo install sage-cli`); the root workspace package named `sage` is private and is not the CLI package on crates.io.
 - Homebrew installs use the `majiayu000/sage` tap.
 

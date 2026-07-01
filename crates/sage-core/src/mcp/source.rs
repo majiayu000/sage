@@ -1,6 +1,7 @@
 //! MCP source declarations and deterministic merge rules.
 
 use crate::config::{McpConfig, McpServerConfig};
+use crate::hashing::bytes_to_hex;
 use crate::plugins::PackageMcpServerRegistration;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -245,7 +246,7 @@ fn hash_config(config: &McpServerConfig) -> String {
     let bytes = serde_json::to_vec(config).unwrap_or_else(|_| format!("{config:?}").into_bytes());
     let mut hasher = Sha256::new();
     hasher.update(bytes);
-    format!("{:x}", hasher.finalize())
+    bytes_to_hex(hasher.finalize())
 }
 
 #[cfg(test)]
