@@ -11,27 +11,33 @@ pub(super) fn rule_match_keys(
     }
 
     match input.action {
-        PermissionAction::Filesystem => filesystem_structured_permission_key(profile, input)
-            .map(|key| vec![key])
-            .unwrap_or_default(),
+        PermissionAction::Filesystem => filesystem_structured_permission_keys(profile, input),
         PermissionAction::Network => input
             .network_target
             .as_ref()
-            .map(|target| vec![format!("{}({})", input.tool_name, normalize_url(target))])
+            .map(|target| {
+                normalize_url_keys(target)
+                    .into_iter()
+                    .map(|target| format!("{}({})", input.tool_name, target))
+                    .collect()
+            })
             .unwrap_or_default(),
         _ => Vec::new(),
     }
 }
 
-fn filesystem_structured_permission_key(
+fn filesystem_structured_permission_keys(
     profile: &PermissionProfile,
     input: &PermissionDecisionInput,
-) -> Option<String> {
-    let path = input.path.as_deref()?;
+) -> Vec<String> {
+    let Some(path) = input.path.as_deref() else {
+        return Vec::new();
+    };
     let working_directory = input.working_directory.as_deref();
     let normalized_path = normalize_path(path, working_directory);
+    let mut path_arguments = Vec::new();
 
-    let path_argument = profile
+    if let Some((_, relative)) = profile
         .filesystem
         .workspace_roots
         .iter()
@@ -49,12 +55,20 @@ fn filesystem_structured_permission_key(
             })
         })
         .max_by_key(|(component_count, _)| *component_count)
-        .map(|(_, relative)| relative)
-        .unwrap_or_else(|| {
-            permission_path_string(&normalize_permission_key_path(path, working_directory))
-        });
+    {
+        push_unique(&mut path_arguments, relative);
+    } else {
+        push_path_aliases(&mut path_arguments, &normalized_path);
+        push_path_aliases(
+            &mut path_arguments,
+            &normalize_permission_key_path(path, working_directory),
+        );
+    }
 
-    Some(format!("{}({})", input.tool_name, path_argument))
+    path_arguments
+        .into_iter()
+        .map(|path| format!("{}({})", input.tool_name, path))
+        .collect()
 }
 
 pub(super) fn path_is_at_or_under(path: &Path, root: &Path) -> bool {
@@ -77,6 +91,14 @@ pub(super) fn normalize_path(path: impl AsRef<Path>, working_directory: Option<&
 
 fn permission_path_string(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
+}
+
+fn push_path_aliases(values: &mut Vec<String>, path: &Path) {
+    let path = permission_path_string(path);
+    push_unique(values, path.clone());
+    if let Some(stripped) = path.strip_prefix("/private/") {
+        push_unique(values, format!("/{}", stripped));
+    }
 }
 
 fn normalize_permission_key_path(path: &str, working_directory: Option<&str>) -> PathBuf {
@@ -110,20 +132,20 @@ fn normalize_lexical_path(path: &Path) -> PathBuf {
     normalized
 }
 
-fn normalize_url(url: &str) -> String {
+fn normalize_url_keys(url: &str) -> Vec<String> {
     let trimmed = url.trim();
     let Ok(mut parsed) = reqwest::Url::parse(trimmed) else {
-        return trimmed.to_string();
+        return vec![trimmed.to_string()];
     };
 
     if !matches!(parsed.scheme(), "http" | "https") {
-        return trimmed.to_string();
+        return vec![trimmed.to_string()];
     }
 
     if let Some(host) = parsed.host_str() {
         let lowercase_host = host.to_ascii_lowercase();
         if parsed.set_host(Some(&lowercase_host)).is_err() {
-            return trimmed.to_string();
+            return vec![trimmed.to_string()];
         }
     }
     parsed.set_fragment(None);
@@ -135,7 +157,19 @@ fn normalize_url(url: &str) -> String {
         let _ = parsed.set_port(None);
     }
 
-    parsed.to_string()
+    let normalized = parsed.to_string();
+    let mut keys = Vec::new();
+    if parsed.path() == "/" && parsed.query().is_none() {
+        push_unique(&mut keys, normalized.trim_end_matches('/').to_string());
+    }
+    push_unique(&mut keys, normalized);
+    keys
+}
+
+fn push_unique(values: &mut Vec<String>, value: String) {
+    if !values.contains(&value) {
+        values.push(value);
+    }
 }
 
 fn canonicalize_existing_components(path: &Path) -> PathBuf {

@@ -275,7 +275,12 @@ impl PermissionDecisionEngine {
             .iter()
             .filter_map(|key| self.matching_rule_for_key(&self.profile.allow, key))
             .collect();
-        if !rule_match_keys.is_empty() && allow_matches.len() == rule_match_keys.len() {
+        let allow_matched = if input.permission_keys.is_empty() {
+            !allow_matches.is_empty()
+        } else {
+            allow_matches.len() == rule_match_keys.len()
+        };
+        if !rule_match_keys.is_empty() && allow_matched {
             return PermissionDecision::new(
                 PermissionDecisionKind::Allow,
                 audit_key,
