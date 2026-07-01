@@ -214,6 +214,32 @@ fn test_settings_permission_checks_http_client_save_to_file_path() {
 }
 
 #[test]
+fn test_settings_permission_routes_write_through_filesystem_guard() {
+    let settings = Settings {
+        permissions: PermissionSettings {
+            allow: vec!["Write(**)".to_string()],
+            default_behavior: SettingsPermissionBehavior::Allow,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let decision = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &review_tool_call(
+            "write",
+            serde_json::json!({"path": ".sage/settings.local.json"}),
+        ),
+        review_workspace_dir(),
+    );
+
+    assert!(matches!(
+        decision,
+        Some(SettingsPermissionDecision::Deny(reason)) if reason.contains("protected")
+    ));
+}
+
+#[test]
 fn test_settings_permission_allows_recursive_grep_directory_scope() {
     let settings = Settings {
         permissions: PermissionSettings {

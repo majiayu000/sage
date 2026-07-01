@@ -3,8 +3,8 @@
 use crate::error::SageResult;
 use crate::input::{InputRequest, InputResponseKind};
 use crate::permissions::{
-    PermissionAction, PermissionDecisionEngine, PermissionDecisionInput, PermissionDecisionKind,
-    PermissionPreflight, PermissionProfile,
+    FilesystemPermissionProfile, PermissionDecisionEngine, PermissionDecisionKind,
+    PermissionPreflight, PermissionProfile, PermissionProfileSource,
 };
 use crate::settings::SettingsLoader;
 use crate::settings::locations::SettingsLocations;
@@ -23,6 +23,9 @@ mod settings_permission_paths;
 
 #[path = "settings_permission_keys.rs"]
 mod settings_permission_keys;
+
+#[path = "settings_permission_inputs.rs"]
+mod settings_permission_inputs;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum SettingsPermissionDecision {
@@ -266,7 +269,14 @@ impl UnifiedExecutor {
         tool_call: &ToolCall,
         working_dir: &Path,
     ) -> Option<SettingsPermissionDecision> {
-        let profile = PermissionProfile::from_settings(&settings.permissions);
+        let profile = PermissionProfile::from_settings(&settings.permissions)
+            .with_filesystem_profile(
+                FilesystemPermissionProfile {
+                    workspace_roots: vec![working_dir.to_string_lossy().to_string()],
+                    ..Default::default()
+                },
+                PermissionProfileSource::Local,
+            );
         if !profile.has_configured_rules() {
             return None;
         }
@@ -345,21 +355,36 @@ impl UnifiedExecutor {
             }
         }
 
-        let decision = PermissionDecisionEngine::new(profile).decide(
-            PermissionDecisionInput::new(PermissionAction::Tool, tool_name, keys)
-                .with_preflight_denies(preflight_denies)
-                .with_scoped_allows(scoped_allows),
-        );
+        let decisions = settings_permission_inputs::settings_permission_inputs(
+            &tool_name,
+            tool_call,
+            working_dir,
+            keys,
+            preflight_denies,
+            scoped_allows,
+        )
+        .into_iter()
+        .map(|input| PermissionDecisionEngine::new(profile.clone()).decide(input));
 
-        match decision.kind {
-            PermissionDecisionKind::Allow => Some(SettingsPermissionDecision::Allow),
-            PermissionDecisionKind::Deny => Some(SettingsPermissionDecision::Deny(decision.reason)),
-            PermissionDecisionKind::Ask => Some(SettingsPermissionDecision::Ask(decision.reason)),
-            PermissionDecisionKind::Unsupported => Some(SettingsPermissionDecision::Deny(format!(
-                "unsupported permission request: {}",
-                decision.reason
-            ))),
+        for decision in decisions {
+            match decision.kind {
+                PermissionDecisionKind::Allow => {}
+                PermissionDecisionKind::Deny => {
+                    return Some(SettingsPermissionDecision::Deny(decision.reason));
+                }
+                PermissionDecisionKind::Ask => {
+                    return Some(SettingsPermissionDecision::Ask(decision.reason));
+                }
+                PermissionDecisionKind::Unsupported => {
+                    return Some(SettingsPermissionDecision::Deny(format!(
+                        "unsupported permission request: {}",
+                        decision.reason
+                    )));
+                }
+            }
         }
+
+        Some(SettingsPermissionDecision::Allow)
     }
 
     fn legacy_permission_text_decision(text: &str) -> Option<bool> {

@@ -155,6 +155,55 @@ fn serialized_rules_only_profile_preserves_unset_provenance() -> serde_json::Res
 }
 
 #[test]
+fn deserialized_domain_source_cannot_exceed_profile_source() -> serde_json::Result<()> {
+    let project: PermissionProfile = serde_json::from_str(
+        r#"{
+            "source":"project",
+            "network":{"enabled":true},
+            "domain_sources":{"network":"runtime"}
+        }"#,
+    )?;
+    let mut runtime = PermissionProfile::default()
+        .with_source(PermissionProfileSource::Runtime)
+        .with_network_profile(
+            NetworkPermissionProfile { enabled: false },
+            PermissionProfileSource::Runtime,
+        );
+
+    runtime.merge(project);
+
+    assert!(!runtime.network.enabled);
+    assert_eq!(
+        runtime.domain_sources.network,
+        Some(PermissionProfileSource::Runtime)
+    );
+    Ok(())
+}
+
+#[test]
+fn deserialized_default_behavior_source_cannot_exceed_profile_source() -> serde_json::Result<()> {
+    let project: PermissionProfile = serde_json::from_str(
+        r#"{
+            "source":"project",
+            "default_behavior":"allow",
+            "default_behavior_source":"runtime"
+        }"#,
+    )?;
+    let mut runtime = PermissionProfile::default()
+        .with_source(PermissionProfileSource::Runtime)
+        .with_default_behavior(PermissionBehavior::Deny);
+
+    runtime.merge(project);
+
+    assert_eq!(runtime.default_behavior, PermissionBehavior::Deny);
+    assert_eq!(
+        runtime.default_behavior_source,
+        Some(PermissionProfileSource::Runtime)
+    );
+    Ok(())
+}
+
+#[test]
 fn deserialized_explicit_ask_default_tracks_source() -> serde_json::Result<()> {
     let local: PermissionProfile =
         serde_json::from_str(r#"{"source":"local","default_behavior":"ask"}"#)?;

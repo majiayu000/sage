@@ -86,29 +86,28 @@ impl<'de> Deserialize<'de> for PermissionProfile {
         let exec_set = wire.exec.is_some();
         let sandbox_set = wire.sandbox.is_some();
         let approval_set = wire.approval.is_some();
-        let mut domain_sources = wire.domain_sources;
-        if filesystem_set && domain_sources.filesystem.is_none() {
-            domain_sources.filesystem = Some(source);
+        let mut domain_sources = PermissionDomainSources::default();
+        if filesystem_set {
+            domain_sources.filesystem = Some(capped_source(wire.domain_sources.filesystem, source));
         }
-        if network_set && domain_sources.network.is_none() {
-            domain_sources.network = Some(source);
+        if network_set {
+            domain_sources.network = Some(capped_source(wire.domain_sources.network, source));
         }
-        if exec_set && domain_sources.exec.is_none() {
-            domain_sources.exec = Some(source);
+        if exec_set {
+            domain_sources.exec = Some(capped_source(wire.domain_sources.exec, source));
         }
-        if sandbox_set && domain_sources.sandbox.is_none() {
-            domain_sources.sandbox = Some(source);
+        if sandbox_set {
+            domain_sources.sandbox = Some(capped_source(wire.domain_sources.sandbox, source));
         }
-        if approval_set && domain_sources.approval.is_none() {
-            domain_sources.approval = Some(source);
+        if approval_set {
+            domain_sources.approval = Some(capped_source(wire.domain_sources.approval, source));
         }
 
         let default_behavior_present = wire.default_behavior.is_some();
         let default_behavior = wire.default_behavior.unwrap_or_default();
         let default_behavior_set = wire.default_behavior_set || default_behavior_present;
-        let default_behavior_source = wire
-            .default_behavior_source
-            .or_else(|| default_behavior_set.then_some(source));
+        let default_behavior_source =
+            default_behavior_set.then(|| capped_source(wire.default_behavior_source, source));
         Ok(PermissionProfile {
             source,
             filesystem: wire.filesystem.unwrap_or_default(),
@@ -131,6 +130,16 @@ impl<'de> Deserialize<'de> for PermissionProfile {
             default_behavior_source,
             domain_sources,
         })
+    }
+}
+
+fn capped_source(
+    claimed: Option<PermissionProfileSource>,
+    fragment_source: PermissionProfileSource,
+) -> PermissionProfileSource {
+    match claimed {
+        Some(claimed) if claimed.precedence() <= fragment_source.precedence() => claimed,
+        _ => fragment_source,
     }
 }
 

@@ -1,0 +1,179 @@
+//! Permission decision input routing for settings-backed tool checks.
+
+use crate::permissions::{PermissionAction, PermissionDecisionInput, PermissionPreflight};
+use crate::tools::types::ToolCall;
+use std::path::Path;
+
+use super::settings_permission_keys;
+
+pub(super) fn settings_permission_inputs(
+    tool_name: &str,
+    tool_call: &ToolCall,
+    working_dir: &Path,
+    keys: Vec<String>,
+    preflight_denies: Vec<PermissionPreflight>,
+    scoped_allows: Vec<PermissionPreflight>,
+) -> Vec<PermissionDecisionInput> {
+    let lower = tool_name.to_ascii_lowercase();
+    match lower.as_str() {
+        "read" | "write" | "edit" | "multiedit" | "notebookedit" => {
+            filesystem_inputs(tool_name, tool_call, working_dir)
+        }
+        "http_client" => http_client_inputs(
+            tool_name,
+            tool_call,
+            working_dir,
+            keys,
+            preflight_denies,
+            scoped_allows,
+        ),
+        "bash" => vec![with_preflights(
+            PermissionDecisionInput::new(PermissionAction::Exec, tool_name, keys),
+            preflight_denies,
+            scoped_allows,
+        )],
+        "webfetch" | "openbrowser" => vec![with_preflights(
+            network_input(tool_name, tool_call, keys),
+            preflight_denies,
+            scoped_allows,
+        )],
+        _ => vec![with_preflights(
+            PermissionDecisionInput::new(PermissionAction::Tool, tool_name, keys),
+            preflight_denies,
+            scoped_allows,
+        )],
+    }
+}
+
+fn filesystem_inputs(
+    tool_name: &str,
+    tool_call: &ToolCall,
+    working_dir: &Path,
+) -> Vec<PermissionDecisionInput> {
+    let paths = filesystem_paths(&tool_name.to_ascii_lowercase(), tool_call);
+    if paths.is_empty() {
+        return vec![PermissionDecisionInput::new(
+            PermissionAction::Filesystem,
+            tool_name,
+            settings_permission_keys::actual_permission_keys(tool_name, tool_call, working_dir),
+        )];
+    }
+
+    paths
+        .into_iter()
+        .map(|path| {
+            PermissionDecisionInput::new(
+                PermissionAction::Filesystem,
+                tool_name,
+                settings_permission_keys::actual_permission_keys(tool_name, tool_call, working_dir),
+            )
+            .with_path(path)
+            .with_working_directory(working_dir.to_string_lossy())
+        })
+        .collect()
+}
+
+fn http_client_inputs(
+    tool_name: &str,
+    tool_call: &ToolCall,
+    working_dir: &Path,
+    keys: Vec<String>,
+    preflight_denies: Vec<PermissionPreflight>,
+    scoped_allows: Vec<PermissionPreflight>,
+) -> Vec<PermissionDecisionInput> {
+    let mut inputs = Vec::new();
+    if tool_call.get_argument::<String>("url").is_some() {
+        inputs.push(with_preflights(
+            network_input(
+                tool_name,
+                tool_call,
+                keys.iter()
+                    .filter(|key| key.starts_with("http_client("))
+                    .cloned()
+                    .collect(),
+            ),
+            preflight_denies,
+            scoped_allows,
+        ));
+    }
+    if let Some(path) = tool_call.get_argument::<String>("save_to_file") {
+        inputs.push(
+            PermissionDecisionInput::new(
+                PermissionAction::Filesystem,
+                "Write",
+                keys.iter()
+                    .filter(|key| key.starts_with("Write("))
+                    .cloned()
+                    .collect(),
+            )
+            .with_path(path)
+            .with_working_directory(working_dir.to_string_lossy()),
+        );
+    }
+    if inputs.is_empty() {
+        inputs.push(PermissionDecisionInput::new(
+            PermissionAction::Tool,
+            tool_name,
+            keys,
+        ));
+    }
+    inputs
+}
+
+fn network_input(
+    tool_name: &str,
+    tool_call: &ToolCall,
+    keys: Vec<String>,
+) -> PermissionDecisionInput {
+    PermissionDecisionInput::new(PermissionAction::Network, tool_name, keys)
+        .with_network_target(tool_call.get_argument::<String>("url").unwrap_or_default())
+}
+
+fn filesystem_paths(tool_name: &str, tool_call: &ToolCall) -> Vec<String> {
+    match tool_name {
+        "read" | "write" | "edit" => tool_call
+            .get_argument::<String>("file_path")
+            .or_else(|| tool_call.get_argument::<String>("path"))
+            .into_iter()
+            .collect(),
+        "notebookedit" => tool_call
+            .get_argument::<String>("notebook_path")
+            .into_iter()
+            .collect(),
+        "multiedit" => multiedit_paths(tool_call),
+        _ => Vec::new(),
+    }
+}
+
+fn multiedit_paths(tool_call: &ToolCall) -> Vec<String> {
+    let mut paths = Vec::new();
+    if let Some(path) = tool_call
+        .get_argument::<String>("file_path")
+        .or_else(|| tool_call.get_argument::<String>("path"))
+    {
+        paths.push(path);
+    }
+    if let Some(edits) = tool_call
+        .arguments
+        .get("edits")
+        .and_then(|value| value.as_array())
+    {
+        paths.extend(
+            edits
+                .iter()
+                .filter_map(|edit| edit.get("file_path").and_then(|value| value.as_str()))
+                .map(ToString::to_string),
+        );
+    }
+    paths
+}
+
+fn with_preflights(
+    input: PermissionDecisionInput,
+    preflight_denies: Vec<PermissionPreflight>,
+    scoped_allows: Vec<PermissionPreflight>,
+) -> PermissionDecisionInput {
+    input
+        .with_preflight_denies(preflight_denies)
+        .with_scoped_allows(scoped_allows)
+}
