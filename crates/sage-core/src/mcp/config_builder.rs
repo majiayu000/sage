@@ -4,15 +4,16 @@ use super::registry::McpRegistry;
 use super::source::{direct_config_sources, merge_mcp_sources, package_sources};
 use crate::config::Config;
 use crate::error::{SageError, SageResult};
-use crate::plugins::PackageMcpServerRegistration;
+use crate::plugins::{ExtensionPackageManager, PackageMcpServerRegistration};
 
 /// Build MCP registry from configuration
 pub async fn build_mcp_registry_from_config(config: &Config) -> SageResult<McpRegistry> {
-    build_mcp_registry_from_config_and_packages(
-        config,
-        std::iter::empty::<&PackageMcpServerRegistration>(),
-    )
-    .await
+    let package_registrations = if config.mcp.enabled {
+        default_enabled_package_mcp_servers()?
+    } else {
+        Vec::new()
+    };
+    build_mcp_registry_from_config_and_packages(config, package_registrations.iter()).await
 }
 
 /// Build MCP registry from direct config and package-sourced MCP declarations.
@@ -55,11 +56,23 @@ pub async fn build_mcp_registry_from_config_and_packages<'a>(
     Ok(registry)
 }
 
+fn default_enabled_package_mcp_servers() -> SageResult<Vec<PackageMcpServerRegistration>> {
+    let manager = ExtensionPackageManager::default_user_manager().map_err(|err| {
+        SageError::config(format!("Failed to load extension package store: {err}"))
+    })?;
+    manager.enabled_mcp_servers().map_err(|err| {
+        SageError::config(format!(
+            "Failed to load enabled extension package MCP servers: {err}"
+        ))
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::config::McpServerConfig;
-    use crate::mcp::{McpFailureKind, McpRuntimeState};
+    use crate::mcp::{McpFailureKind, McpRuntimeState, McpSourceKind};
+    use std::path::PathBuf;
 
     fn config_with_server(name: &str, server: McpServerConfig) -> Config {
         let mut config = Config::default();
@@ -207,6 +220,30 @@ mod tests {
         assert!(registry.server_names().is_empty());
         let status = registry.server_runtime_status("offline").expect("status");
         assert_eq!(status.state, McpRuntimeState::Disconnected);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_package_sources_feed_runtime_status_without_eager_connection() -> SageResult<()> {
+        let mut config = Config::default();
+        config.mcp.enabled = true;
+        config.mcp.auto_connect = false;
+        let registration = PackageMcpServerRegistration {
+            package_id: "pkg.docs".to_string(),
+            asset_id: "docs".to_string(),
+            package_root: PathBuf::from("/tmp/pkg.docs"),
+            config: McpServerConfig::stdio("docs-server", Vec::new()),
+        };
+
+        let registry =
+            build_mcp_registry_from_config_and_packages(&config, [&registration]).await?;
+
+        let status = registry
+            .server_runtime_status("docs")
+            .ok_or_else(|| SageError::config("missing docs runtime status"))?;
+        assert_eq!(status.source.kind, McpSourceKind::Package);
+        assert_eq!(status.state, McpRuntimeState::Disconnected);
+        assert!(registry.deferred_tools().is_empty());
         Ok(())
     }
 }

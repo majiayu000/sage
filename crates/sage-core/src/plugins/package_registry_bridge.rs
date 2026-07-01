@@ -62,6 +62,19 @@ impl PackageRegistryBridge {
         self.mcp_servers.values().collect()
     }
 
+    /// Load MCP server declarations from an installed package record.
+    pub fn load_mcp_servers(
+        record: &InstalledPackageRecord,
+    ) -> PackageResult<Vec<PackageMcpServerRegistration>> {
+        record
+            .manifest
+            .assets
+            .mcp_servers
+            .iter()
+            .map(|asset| load_mcp_asset(record, asset))
+            .collect()
+    }
+
     /// Enable a package by registering every declared asset.
     pub fn enable_package(
         &mut self,
@@ -147,9 +160,7 @@ impl PackageRegistryBridge {
         for asset in &manifest.assets.hooks {
             prepared.hooks.push(load_hook_asset(record, asset)?);
         }
-        for asset in &manifest.assets.mcp_servers {
-            prepared.mcp_servers.push(load_mcp_asset(record, asset)?);
-        }
+        prepared.mcp_servers = Self::load_mcp_servers(record)?;
         Ok(prepared)
     }
 
