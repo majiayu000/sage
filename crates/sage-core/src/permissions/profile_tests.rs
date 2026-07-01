@@ -95,3 +95,40 @@ fn deserialized_fragment_tracks_present_domain_sources() -> serde_json::Result<(
     );
     Ok(())
 }
+
+#[test]
+fn deserialized_explicit_ask_default_tracks_source() -> serde_json::Result<()> {
+    let local: PermissionProfile =
+        serde_json::from_str(r#"{"source":"local","default_behavior":"ask"}"#)?;
+    let mut user = PermissionProfile::default()
+        .with_source(PermissionProfileSource::User)
+        .with_default_behavior(PermissionBehavior::Allow);
+
+    user.merge(local);
+
+    assert_eq!(user.default_behavior, PermissionBehavior::Ask);
+    assert!(user.default_behavior_set);
+    assert_eq!(
+        user.default_behavior_source,
+        Some(PermissionProfileSource::Local)
+    );
+    Ok(())
+}
+
+#[test]
+fn with_source_reassigns_default_behavior_source() {
+    let mut local = PermissionProfile::default()
+        .with_source(PermissionProfileSource::Local)
+        .with_default_behavior(PermissionBehavior::Deny);
+    let user = PermissionProfile::default()
+        .with_default_behavior(PermissionBehavior::Allow)
+        .with_source(PermissionProfileSource::User);
+
+    local.merge(user);
+
+    assert_eq!(local.default_behavior, PermissionBehavior::Deny);
+    assert_eq!(
+        local.default_behavior_source,
+        Some(PermissionProfileSource::Local)
+    );
+}

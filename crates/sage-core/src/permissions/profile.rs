@@ -240,11 +240,12 @@ impl<'de> Deserialize<'de> for PermissionProfile {
             domain_sources.approval = Some(source);
         }
 
+        let default_behavior_present = wire.default_behavior.is_some();
         let default_behavior = wire.default_behavior.unwrap_or_default();
-        let default_behavior_source = wire.default_behavior_source.or_else(|| {
-            (wire.default_behavior_set || default_behavior != PermissionBehavior::Ask)
-                .then_some(source)
-        });
+        let default_behavior_set = wire.default_behavior_set || default_behavior_present;
+        let default_behavior_source = wire
+            .default_behavior_source
+            .or_else(|| default_behavior_set.then_some(source));
         Ok(Self {
             source,
             filesystem: wire.filesystem.unwrap_or_default(),
@@ -255,7 +256,7 @@ impl<'de> Deserialize<'de> for PermissionProfile {
             allow: wire.allow,
             deny: wire.deny,
             default_behavior,
-            default_behavior_set: wire.default_behavior_set,
+            default_behavior_set,
             default_behavior_source,
             domain_sources,
         })
@@ -264,7 +265,15 @@ impl<'de> Deserialize<'de> for PermissionProfile {
 
 impl PermissionProfile {
     pub fn with_source(mut self, source: PermissionProfileSource) -> Self {
+        let previous_source = self.source;
+        let default_behavior_tracks_profile = self.default_behavior_source.is_none()
+            || self.default_behavior_source == Some(previous_source);
         self.source = source;
+        if (self.default_behavior_set || self.default_behavior != PermissionBehavior::Ask)
+            && default_behavior_tracks_profile
+        {
+            self.default_behavior_source = Some(source);
+        }
         self
     }
 

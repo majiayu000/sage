@@ -111,7 +111,32 @@ impl PermissionDecisionInput {
         self.permission_keys
             .first()
             .cloned()
+            .or_else(|| self.structured_permission_key())
             .unwrap_or_else(|| self.tool_name.clone())
+    }
+
+    fn rule_match_keys(&self) -> Vec<String> {
+        if self.permission_keys.is_empty() {
+            self.structured_permission_key()
+                .map(|key| vec![key])
+                .unwrap_or_default()
+        } else {
+            self.permission_keys.clone()
+        }
+    }
+
+    fn structured_permission_key(&self) -> Option<String> {
+        match self.action {
+            PermissionAction::Filesystem => self
+                .path
+                .as_ref()
+                .map(|path| format!("{}({})", self.tool_name, path)),
+            PermissionAction::Network => self
+                .network_target
+                .as_ref()
+                .map(|target| format!("{}({})", self.tool_name, target)),
+            _ => None,
+        }
     }
 }
 
@@ -159,6 +184,7 @@ impl PermissionDecisionEngine {
 
     pub fn decide(&self, input: PermissionDecisionInput) -> PermissionDecision {
         let audit_key = input.audit_key();
+        let rule_match_keys = input.rule_match_keys();
 
         if matches!(input.action, PermissionAction::Network) && !self.profile.network.enabled {
             return PermissionDecision::new(
@@ -244,7 +270,7 @@ impl PermissionDecisionEngine {
             );
         }
 
-        if let Some(rule) = self.matching_rule(&self.profile.deny, &input.permission_keys) {
+        if let Some(rule) = self.matching_rule(&self.profile.deny, &rule_match_keys) {
             return PermissionDecision::new(
                 PermissionDecisionKind::Deny,
                 audit_key,
@@ -253,12 +279,11 @@ impl PermissionDecisionEngine {
             );
         }
 
-        let allow_matches: Vec<&PermissionRule> = input
-            .permission_keys
+        let allow_matches: Vec<&PermissionRule> = rule_match_keys
             .iter()
             .filter_map(|key| self.matching_rule_for_key(&self.profile.allow, key))
             .collect();
-        if !input.permission_keys.is_empty() && allow_matches.len() == input.permission_keys.len() {
+        if !rule_match_keys.is_empty() && allow_matches.len() == rule_match_keys.len() {
             return PermissionDecision::new(
                 PermissionDecisionKind::Allow,
                 audit_key,

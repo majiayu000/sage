@@ -1,6 +1,7 @@
 use super::*;
 use crate::permissions::{
-    FilesystemPermissionProfile, NetworkPermissionProfile, PermissionProfileSource,
+    FilesystemPermissionProfile, NetworkPermissionProfile, PermissionBehavior,
+    PermissionProfileSource,
 };
 use std::fs;
 use tempfile::TempDir;
@@ -355,6 +356,60 @@ fn network_disabled_denies_network_action() {
 
     assert_eq!(decision.kind, PermissionDecisionKind::Deny);
     assert!(decision.reason.contains("network access is disabled"));
+}
+
+#[test]
+fn network_target_matches_rules_when_permission_keys_are_empty() {
+    let profile = PermissionProfile::default()
+        .with_default_behavior(PermissionBehavior::Allow)
+        .add_deny(
+            "WebFetch(https://internal.example/**)",
+            PermissionProfileSource::Project,
+        );
+    let decision = PermissionDecisionEngine::new(profile).decide(
+        PermissionDecisionInput::new(PermissionAction::Network, "WebFetch", Vec::new())
+            .with_network_target("https://internal.example/private"),
+    );
+
+    assert_eq!(decision.kind, PermissionDecisionKind::Deny);
+    assert_eq!(
+        decision
+            .matched_rule
+            .as_ref()
+            .map(|rule| rule.pattern.as_str()),
+        Some("WebFetch(https://internal.example/**)")
+    );
+}
+
+#[test]
+fn filesystem_path_matches_rules_when_permission_keys_are_empty() {
+    let profile = PermissionProfile {
+        filesystem: FilesystemPermissionProfile {
+            allow_outside_workspace: true,
+            ..Default::default()
+        },
+        default_behavior: PermissionBehavior::Allow,
+        default_behavior_set: true,
+        default_behavior_source: Some(PermissionProfileSource::Project),
+        deny: vec![PermissionRule::new(
+            "Write(/tmp/secret/**)",
+            PermissionProfileSource::Project,
+        )],
+        ..Default::default()
+    };
+    let decision = PermissionDecisionEngine::new(profile).decide(
+        PermissionDecisionInput::new(PermissionAction::Filesystem, "Write", Vec::new())
+            .with_path("/tmp/secret/file.txt"),
+    );
+
+    assert_eq!(decision.kind, PermissionDecisionKind::Deny);
+    assert_eq!(
+        decision
+            .matched_rule
+            .as_ref()
+            .map(|rule| rule.pattern.as_str()),
+        Some("Write(/tmp/secret/**)")
+    );
 }
 
 #[test]
