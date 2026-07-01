@@ -126,6 +126,35 @@ fn deserialized_rules_default_missing_source_to_profile_source() -> serde_json::
 }
 
 #[test]
+fn deserializing_profile_without_source_is_rejected() {
+    let result = serde_json::from_str::<PermissionProfile>(r#"{"network":{"enabled":true}}"#);
+
+    assert!(result.is_err());
+}
+
+#[test]
+fn serialized_rules_only_profile_preserves_unset_provenance() -> serde_json::Result<()> {
+    let project = PermissionProfile::default()
+        .with_source(PermissionProfileSource::Project)
+        .add_allow("Bash(cargo *)", PermissionProfileSource::Project);
+    let serialized = serde_json::to_value(&project)?;
+
+    assert!(serialized.get("source").is_some());
+    assert!(serialized.get("allow").is_some());
+    assert!(serialized.get("filesystem").is_none());
+    assert!(serialized.get("network").is_none());
+    assert!(serialized.get("exec").is_none());
+    assert!(serialized.get("sandbox").is_none());
+    assert!(serialized.get("default_behavior").is_none());
+
+    let round_tripped: PermissionProfile = serde_json::from_value(serialized)?;
+    assert!(round_tripped.domain_sources.is_empty());
+    assert!(!round_tripped.default_behavior_set);
+    assert_eq!(round_tripped.default_behavior_source, None);
+    Ok(())
+}
+
+#[test]
 fn deserialized_explicit_ask_default_tracks_source() -> serde_json::Result<()> {
     let local: PermissionProfile =
         serde_json::from_str(r#"{"source":"local","default_behavior":"ask"}"#)?;

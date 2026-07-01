@@ -352,7 +352,7 @@ impl PermissionDecisionEngine {
             .filesystem
             .workspace_roots
             .iter()
-            .map(|root| normalize_path(root, None))
+            .map(|root| normalize_path(root, working_directory))
             .any(|root| path_is_at_or_under(&path, &root))
     }
 
@@ -371,11 +371,20 @@ impl PermissionDecisionEngine {
                     .filesystem
                     .workspace_roots
                     .iter()
-                    .map(|root| normalize_path(normalize_path(root, None).join(protected), None))
+                    .map(|root| {
+                        normalize_path(
+                            normalize_path(root, working_directory).join(protected),
+                            None,
+                        )
+                    })
                     .any(|protected_path| path_is_at_or_under(&path, &protected_path))
             })
     }
 }
+
+#[cfg(test)]
+#[path = "decision_engine_path_tests.rs"]
+mod path_tests;
 
 #[cfg(test)]
 #[path = "decision_engine_tests.rs"]

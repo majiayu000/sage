@@ -41,7 +41,7 @@ fn filesystem_structured_permission_keys(
         .filesystem
         .workspace_roots
         .iter()
-        .map(|root| normalize_path(root, None))
+        .map(|root| normalize_path(root, working_directory))
         .filter_map(|root| {
             normalized_path.strip_prefix(&root).ok().map(|relative| {
                 (
@@ -79,6 +79,16 @@ fn bare_tool_key(input: &PermissionDecisionInput) -> Vec<String> {
 }
 
 pub(super) fn path_is_at_or_under(path: &Path, root: &Path) -> bool {
+    #[cfg(windows)]
+    {
+        let path = permission_path_string(path).to_ascii_lowercase();
+        let root = permission_path_string(root).to_ascii_lowercase();
+        return path == root
+            || path
+                .strip_prefix(&root)
+                .is_some_and(|suffix| suffix.starts_with('/'));
+    }
+
     path == root || path.starts_with(root)
 }
 
