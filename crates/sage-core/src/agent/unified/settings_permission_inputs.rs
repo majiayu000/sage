@@ -33,6 +33,14 @@ pub(super) fn settings_permission_inputs(
             preflight_denies,
             scoped_allows,
         ),
+        "log_analyzer" => file_reading_tool_inputs(
+            tool_name,
+            tool_call,
+            working_dir,
+            keys,
+            preflight_denies,
+            scoped_allows,
+        ),
         "bash" => vec![with_preflights(
             PermissionDecisionInput::new(PermissionAction::Exec, tool_name, keys),
             preflight_denies,
@@ -136,6 +144,31 @@ fn http_client_inputs(
         ));
     }
     inputs
+}
+
+fn file_reading_tool_inputs(
+    tool_name: &str,
+    tool_call: &ToolCall,
+    working_dir: &Path,
+    keys: Vec<String>,
+    preflight_denies: Vec<PermissionPreflight>,
+    scoped_allows: Vec<PermissionPreflight>,
+) -> Vec<PermissionDecisionInput> {
+    if let Some(path) = tool_call.get_argument::<String>("file_path") {
+        return vec![with_preflights(
+            PermissionDecisionInput::new(PermissionAction::Filesystem, "Read", keys)
+                .with_path(path)
+                .with_working_directory(working_dir.to_string_lossy()),
+            preflight_denies,
+            scoped_allows,
+        )];
+    }
+
+    vec![with_preflights(
+        PermissionDecisionInput::new(PermissionAction::Tool, tool_name, keys),
+        preflight_denies,
+        scoped_allows,
+    )]
 }
 
 fn network_input(

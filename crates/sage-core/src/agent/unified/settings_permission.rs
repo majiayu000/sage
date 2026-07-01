@@ -3,14 +3,13 @@
 use crate::error::SageResult;
 use crate::input::{InputRequest, InputResponseKind};
 use crate::permissions::{
-    FilesystemPermissionProfile, PermissionDecisionEngine, PermissionDecisionKind,
-    PermissionPreflight, PermissionProfile, PermissionProfileSource, permission_pattern_matches,
+    FilesystemPermissionProfile, PermissionAction, PermissionDecisionEngine,
+    PermissionDecisionInput, PermissionDecisionKind, PermissionPreflight, PermissionProfile,
+    PermissionProfileSource, permission_pattern_matches,
 };
 use crate::settings::SettingsLoader;
 use crate::settings::locations::SettingsLocations;
-use crate::settings::types::Settings;
-#[cfg(test)]
-use crate::settings::types::SettingsPermissionBehavior;
+use crate::settings::types::{Settings, SettingsPermissionBehavior};
 use crate::settings::validation::SettingsValidator;
 use crate::tools::types::{ToolCall, ToolResult};
 use std::path::Path;
@@ -272,15 +271,10 @@ impl UnifiedExecutor {
         let tool_name = settings_permission_keys::canonical_permission_tool_name(&tool_call.name);
         let keys =
             settings_permission_keys::actual_permission_keys(&tool_name, tool_call, working_dir);
-        let allow_outside_workspace = Self::settings_allow_current_outside_filesystem_request(
-            &settings.permissions.allow,
-            &keys,
-        );
         let profile = PermissionProfile::from_settings(&settings.permissions)
             .with_filesystem_profile(
                 FilesystemPermissionProfile {
                     workspace_roots: vec![working_dir.to_string_lossy().to_string()],
-                    allow_outside_workspace,
                     ..Default::default()
                 },
                 PermissionProfileSource::Local,
@@ -334,16 +328,10 @@ impl UnifiedExecutor {
 
         if tool_name == "http_client"
             && Self::http_client_may_follow_redirects(tool_call)
-            && Self::has_http_client_url_permission_rule(
-                settings
-                    .permissions
-                    .allow
-                    .iter()
-                    .chain(settings.permissions.deny.iter()),
-            )
+            && Self::http_client_redirects_require_disabled(settings)
         {
             preflight_denies.push(PermissionPreflight::new(
-                "http_client must set follow_redirects=false when URL-scoped settings permission rules are configured".to_string(),
+                "http_client must set follow_redirects=false when settings URL policy can prompt or block redirects".to_string(),
                 None,
             ));
         }
@@ -369,7 +357,12 @@ impl UnifiedExecutor {
             scoped_allows,
         )
         .into_iter()
-        .map(|input| PermissionDecisionEngine::new(profile.clone()).decide(input));
+        .map(|input| {
+            let mut input_profile = profile.clone();
+            input_profile.filesystem.allow_outside_workspace =
+                Self::settings_allow_outside_for_input(&settings.permissions.allow, &input);
+            PermissionDecisionEngine::new(input_profile).decide(input)
+        });
 
         let mut first_ask = None;
         for decision in decisions {
@@ -415,6 +408,17 @@ impl UnifiedExecutor {
         tool_call.get_bool("follow_redirects").unwrap_or(true)
     }
 
+    fn http_client_redirects_require_disabled(settings: &Settings) -> bool {
+        settings.permissions.default_behavior != SettingsPermissionBehavior::Allow
+            || Self::has_http_client_url_permission_rule(
+                settings
+                    .permissions
+                    .allow
+                    .iter()
+                    .chain(settings.permissions.deny.iter()),
+            )
+    }
+
     fn has_http_client_url_permission_rule<'a>(
         mut patterns: impl Iterator<Item = &'a String>,
     ) -> bool {
@@ -426,15 +430,20 @@ impl UnifiedExecutor {
         })
     }
 
-    fn settings_allow_current_outside_filesystem_request(
+    fn settings_allow_outside_for_input(
         patterns: &[String],
-        keys: &[String],
+        input: &PermissionDecisionInput,
     ) -> bool {
-        keys.iter().any(|key| {
-            patterns.iter().any(|pattern| {
-                Self::is_absolute_filesystem_permission(pattern)
-                    && permission_pattern_matches(pattern, key)
-            })
+        if !matches!(input.action, PermissionAction::Filesystem) {
+            return false;
+        }
+        let Some(path) = input.path.as_deref() else {
+            return false;
+        };
+        let key = format!("{}({})", input.tool_name, path);
+        patterns.iter().any(|pattern| {
+            Self::is_absolute_filesystem_permission(pattern)
+                && permission_pattern_matches(pattern, &key)
         })
     }
 

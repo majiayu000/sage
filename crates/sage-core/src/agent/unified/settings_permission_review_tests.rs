@@ -88,6 +88,37 @@ fn test_settings_permission_requires_all_multiedit_paths_to_be_allowed() {
 }
 
 #[test]
+fn test_settings_permission_outside_allow_is_per_multiedit_path() {
+    let settings = Settings {
+        permissions: PermissionSettings {
+            allow: vec!["MultiEdit(/tmp/allowed.txt)".to_string()],
+            default_behavior: SettingsPermissionBehavior::Allow,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let decision = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &review_tool_call(
+            "multi_edit",
+            serde_json::json!({
+                "edits": [
+                    {"file_path": "/tmp/allowed.txt", "old_string": "a", "new_string": "b"},
+                    {"file_path": "/etc/secret", "old_string": "x", "new_string": "y"}
+                ]
+            }),
+        ),
+        review_workspace_dir(),
+    );
+
+    assert!(matches!(
+        decision,
+        Some(SettingsPermissionDecision::Deny(_))
+    ));
+}
+
+#[test]
 fn test_settings_permission_matches_default_network_url_arguments() {
     let settings = Settings {
         permissions: PermissionSettings {
@@ -171,6 +202,48 @@ fn test_settings_permission_requires_http_client_redirects_disabled_for_url_rule
 }
 
 #[test]
+fn test_settings_permission_requires_http_client_redirects_disabled_for_default_url_policy() {
+    let settings = Settings {
+        permissions: PermissionSettings {
+            default_behavior: SettingsPermissionBehavior::Ask,
+            default_behavior_set: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let redirecting_decision = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &review_tool_call(
+            "http_client",
+            serde_json::json!({"url": "https://public.example"}),
+        ),
+        review_workspace_dir(),
+    );
+    let no_redirect_decision = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &review_tool_call(
+            "http_client",
+            serde_json::json!({
+                "url": "https://public.example",
+                "follow_redirects": false
+            }),
+        ),
+        review_workspace_dir(),
+    );
+
+    assert!(matches!(
+        redirecting_decision,
+        Some(SettingsPermissionDecision::Deny(reason))
+            if reason.contains("follow_redirects=false")
+    ));
+    assert!(matches!(
+        no_redirect_decision,
+        Some(SettingsPermissionDecision::Ask(_))
+    ));
+}
+
+#[test]
 fn test_settings_permission_checks_http_client_save_to_file_path() {
     let settings = Settings {
         permissions: PermissionSettings {
@@ -240,6 +313,32 @@ fn test_settings_permission_denies_save_path_before_prompting_for_url() {
     assert!(matches!(
         decision,
         Some(SettingsPermissionDecision::Deny(reason)) if reason.contains("Write(secrets/**)")
+    ));
+}
+
+#[test]
+fn test_settings_permission_routes_log_analyzer_through_filesystem_guard() {
+    let settings = Settings {
+        permissions: PermissionSettings {
+            allow: vec!["log_analyzer".to_string()],
+            default_behavior: SettingsPermissionBehavior::Allow,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let decision = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &review_tool_call(
+            "log_analyzer",
+            serde_json::json!({"file_path": ".sage/settings.local.json"}),
+        ),
+        review_workspace_dir(),
+    );
+
+    assert!(matches!(
+        decision,
+        Some(SettingsPermissionDecision::Deny(reason)) if reason.contains("protected")
     ));
 }
 

@@ -68,6 +68,33 @@ fn filesystem_rule_patterns_normalize_lexical_components() {
 
 #[cfg(windows)]
 #[test]
+fn filesystem_rule_patterns_match_case_insensitively_on_windows() {
+    let profile = PermissionProfile {
+        filesystem: FilesystemPermissionProfile {
+            workspace_roots: vec![r"C:\repo".to_string()],
+            ..Default::default()
+        },
+        default_behavior: PermissionBehavior::Allow,
+        default_behavior_set: true,
+        default_behavior_source: Some(PermissionProfileSource::Project),
+        deny: vec![PermissionRule::new(
+            "Write(secrets/**)",
+            PermissionProfileSource::Project,
+        )],
+        ..Default::default()
+    };
+
+    let decision = PermissionDecisionEngine::new(profile).decide(
+        PermissionDecisionInput::new(PermissionAction::Filesystem, "Write", Vec::new())
+            .with_path(r"Secrets\key.txt")
+            .with_working_directory(r"C:\repo"),
+    );
+
+    assert_eq!(decision.kind, PermissionDecisionKind::Deny);
+}
+
+#[cfg(windows)]
+#[test]
 fn protected_workspace_path_matches_case_insensitively_on_windows() {
     let profile = PermissionProfile {
         filesystem: FilesystemPermissionProfile {

@@ -199,11 +199,26 @@ pub(crate) fn permission_pattern_matches(pattern: &str, key: &str) -> bool {
             normalize_permission_key_path_rule(pattern),
             normalize_permission_key_path_rule(key),
         ) {
-            (Some(pattern), Some(key)) => PermissionCache::pattern_matches(&pattern, &key),
-            (Some(pattern), None) => PermissionCache::pattern_matches(&pattern, key),
-            (None, Some(key)) => PermissionCache::pattern_matches(pattern, &key),
+            (Some(pattern), Some(key)) => filesystem_pattern_matches(&pattern, &key),
+            (Some(pattern), None) => filesystem_pattern_matches(&pattern, key),
+            (None, Some(key)) => filesystem_pattern_matches(pattern, &key),
             (None, None) => false,
         },
+    }
+}
+
+fn filesystem_pattern_matches(pattern: &str, key: &str) -> bool {
+    #[cfg(windows)]
+    {
+        return PermissionCache::pattern_matches(
+            &pattern.to_ascii_lowercase(),
+            &key.to_ascii_lowercase(),
+        );
+    }
+
+    #[cfg(not(windows))]
+    {
+        PermissionCache::pattern_matches(pattern, key)
     }
 }
 
