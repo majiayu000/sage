@@ -1,7 +1,8 @@
+use super::decision_engine_keys::{normalize_path, path_is_at_or_under, rule_match_keys};
 use super::{PermissionBehavior, PermissionProfile, PermissionRule};
 use crate::tools::permission::PermissionCache;
 use serde::{Deserialize, Serialize};
-use std::path::{Component, Path, PathBuf};
+use std::path::Path;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -174,7 +175,7 @@ impl PermissionDecisionEngine {
     }
 
     pub fn decide(&self, input: PermissionDecisionInput) -> PermissionDecision {
-        let rule_match_keys = self.rule_match_keys(&input);
+        let rule_match_keys = rule_match_keys(&self.profile, &input);
         let audit_key = input.audit_key(&rule_match_keys);
 
         if matches!(input.action, PermissionAction::Network) && !self.profile.network.enabled {
@@ -338,58 +339,6 @@ impl PermissionDecisionEngine {
             .find(|rule| PermissionCache::pattern_matches(&rule.pattern, key))
     }
 
-    fn rule_match_keys(&self, input: &PermissionDecisionInput) -> Vec<String> {
-        if !input.permission_keys.is_empty() {
-            return input.permission_keys.clone();
-        }
-
-        match input.action {
-            PermissionAction::Filesystem => self
-                .filesystem_structured_permission_key(input)
-                .map(|key| vec![key])
-                .unwrap_or_default(),
-            PermissionAction::Network => input
-                .network_target
-                .as_ref()
-                .map(|target| vec![format!("{}({})", input.tool_name, target)])
-                .unwrap_or_default(),
-            _ => Vec::new(),
-        }
-    }
-
-    fn filesystem_structured_permission_key(
-        &self,
-        input: &PermissionDecisionInput,
-    ) -> Option<String> {
-        let path = input.path.as_deref()?;
-        let working_directory = input.working_directory.as_deref();
-        let normalized_path = normalize_path(path, working_directory);
-
-        let path_argument = self
-            .profile
-            .filesystem
-            .workspace_roots
-            .iter()
-            .map(|root| normalize_path(root, None))
-            .filter_map(|root| {
-                normalized_path.strip_prefix(&root).ok().map(|relative| {
-                    (
-                        root.components().count(),
-                        permission_path_string(if relative.as_os_str().is_empty() {
-                            Path::new(".")
-                        } else {
-                            relative
-                        }),
-                    )
-                })
-            })
-            .max_by_key(|(component_count, _)| *component_count)
-            .map(|(_, relative)| relative)
-            .unwrap_or_else(|| permission_path_string(Path::new(path)));
-
-        Some(format!("{}({})", input.tool_name, path_argument))
-    }
-
     fn path_is_in_workspace(&self, path: &str, working_directory: Option<&str>) -> bool {
         let path = normalize_path(path, working_directory);
         self.profile
@@ -419,49 +368,6 @@ impl PermissionDecisionEngine {
                     .any(|protected_path| path_is_at_or_under(&path, &protected_path))
             })
     }
-}
-
-fn path_is_at_or_under(path: &Path, root: &Path) -> bool {
-    path == root || path.starts_with(root)
-}
-
-fn normalize_path(path: impl AsRef<Path>, working_directory: Option<&str>) -> PathBuf {
-    let path = path.as_ref();
-    let absolute = if path.is_absolute() {
-        path.to_path_buf()
-    } else if let Some(working_directory) = working_directory {
-        normalize_path(working_directory, None).join(path)
-    } else {
-        std::env::current_dir()
-            .unwrap_or_else(|_| PathBuf::from("."))
-            .join(path)
-    };
-    canonicalize_existing_components(&absolute)
-}
-
-fn permission_path_string(path: &Path) -> String {
-    path.to_string_lossy().replace('\\', "/")
-}
-
-fn canonicalize_existing_components(path: &Path) -> PathBuf {
-    let mut normalized = PathBuf::new();
-
-    for component in path.components() {
-        match component {
-            Component::CurDir => {}
-            Component::ParentDir => {
-                normalized.pop();
-            }
-            Component::Normal(part) => normalized.push(part),
-            Component::RootDir | Component::Prefix(_) => normalized.push(component.as_os_str()),
-        }
-
-        if let Ok(canonical) = normalized.canonicalize() {
-            normalized = canonical;
-        }
-    }
-
-    normalized
 }
 
 #[cfg(test)]

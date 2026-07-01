@@ -446,6 +446,56 @@ fn filesystem_path_fallback_uses_workspace_relative_rule_keys() -> std::io::Resu
 }
 
 #[test]
+fn outside_filesystem_path_fallback_normalizes_traversal_before_matching() -> std::io::Result<()> {
+    let temp_dir = TempDir::new()?;
+    let public = temp_dir.path().join("public");
+    let secret = temp_dir.path().join("secret");
+    fs::create_dir_all(&public)?;
+    fs::create_dir_all(&secret)?;
+    let profile = PermissionProfile {
+        filesystem: FilesystemPermissionProfile {
+            allow_outside_workspace: true,
+            ..Default::default()
+        },
+        default_behavior: PermissionBehavior::Allow,
+        default_behavior_set: true,
+        default_behavior_source: Some(PermissionProfileSource::Project),
+        deny: vec![PermissionRule::new(
+            format!("Write({}/**)", secret.to_string_lossy()),
+            PermissionProfileSource::Project,
+        )],
+        ..Default::default()
+    };
+    let decision = PermissionDecisionEngine::new(profile).decide(
+        PermissionDecisionInput::new(PermissionAction::Filesystem, "Write", Vec::new())
+            .with_path(public.join("../secret/key").to_string_lossy()),
+    );
+
+    assert_eq!(decision.kind, PermissionDecisionKind::Deny);
+    Ok(())
+}
+
+#[test]
+fn network_target_fallback_normalizes_url_before_matching() {
+    let profile = PermissionProfile::default()
+        .with_default_behavior(PermissionBehavior::Allow)
+        .add_deny(
+            "WebFetch(https://internal.example/**)",
+            PermissionProfileSource::Project,
+        );
+    let decision = PermissionDecisionEngine::new(profile).decide(
+        PermissionDecisionInput::new(PermissionAction::Network, "WebFetch", Vec::new())
+            .with_network_target("HTTPS://INTERNAL.EXAMPLE:443/private#token"),
+    );
+
+    assert_eq!(decision.kind, PermissionDecisionKind::Deny);
+    assert_eq!(
+        decision.audit_key,
+        "WebFetch(https://internal.example/private)"
+    );
+}
+
+#[test]
 fn unsupported_requested_sandbox_fails_closed() {
     let profile = PermissionProfile::default();
     let decision = PermissionDecisionEngine::new(profile).decide(

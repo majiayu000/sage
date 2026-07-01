@@ -2,6 +2,7 @@
 
 mod approval_cache;
 mod decision_engine;
+mod decision_engine_keys;
 mod profile;
 
 pub use approval_cache::{ApprovalCache, ApprovalCacheDecision, ApprovalCacheLookup};

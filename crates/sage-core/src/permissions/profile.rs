@@ -73,8 +73,11 @@ impl PermissionRule {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FilesystemPermissionProfile {
+    #[serde(default)]
     pub workspace_roots: Vec<String>,
+    #[serde(default)]
     pub allow_outside_workspace: bool,
+    #[serde(default = "default_protected_paths")]
     pub protected_paths: Vec<String>,
 }
 
@@ -83,13 +86,18 @@ impl Default for FilesystemPermissionProfile {
         Self {
             workspace_roots: Vec::new(),
             allow_outside_workspace: false,
-            protected_paths: vec![".git".to_string(), ".sage".to_string(), ".ssh".to_string()],
+            protected_paths: default_protected_paths(),
         }
     }
 }
 
+fn default_protected_paths() -> Vec<String> {
+    vec![".git".to_string(), ".sage".to_string(), ".ssh".to_string()]
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NetworkPermissionProfile {
+    #[serde(default = "default_true")]
     pub enabled: bool,
 }
 
@@ -101,6 +109,7 @@ impl Default for NetworkPermissionProfile {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExecPermissionProfile {
+    #[serde(default = "default_true")]
     pub enabled: bool,
 }
 
@@ -110,8 +119,13 @@ impl Default for ExecPermissionProfile {
     }
 }
 
+fn default_true() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct SandboxPermissionProfile {
+    #[serde(default)]
     pub required: bool,
 }
 
@@ -165,6 +179,22 @@ pub struct PermissionProfile {
 }
 
 #[derive(Deserialize)]
+struct PermissionRuleWire {
+    pattern: String,
+    #[serde(default)]
+    source: Option<PermissionProfileSource>,
+}
+
+impl PermissionRuleWire {
+    fn into_rule(self, source: PermissionProfileSource) -> PermissionRule {
+        PermissionRule {
+            pattern: self.pattern,
+            source: self.source.unwrap_or(source),
+        }
+    }
+}
+
+#[derive(Deserialize)]
 struct PermissionProfileWire {
     #[serde(default)]
     source: PermissionProfileSource,
@@ -179,9 +209,9 @@ struct PermissionProfileWire {
     #[serde(default)]
     approval: Option<ApprovalPermissionProfile>,
     #[serde(default)]
-    allow: Vec<PermissionRule>,
+    allow: Vec<PermissionRuleWire>,
     #[serde(default)]
-    deny: Vec<PermissionRule>,
+    deny: Vec<PermissionRuleWire>,
     #[serde(default)]
     default_behavior: Option<PermissionBehavior>,
     #[serde(default)]
@@ -253,8 +283,16 @@ impl<'de> Deserialize<'de> for PermissionProfile {
             exec: wire.exec.unwrap_or_default(),
             sandbox: wire.sandbox.unwrap_or_default(),
             approval: wire.approval.unwrap_or_default(),
-            allow: wire.allow,
-            deny: wire.deny,
+            allow: wire
+                .allow
+                .into_iter()
+                .map(|rule| rule.into_rule(source))
+                .collect(),
+            deny: wire
+                .deny
+                .into_iter()
+                .map(|rule| rule.into_rule(source))
+                .collect(),
             default_behavior,
             default_behavior_set,
             default_behavior_source,

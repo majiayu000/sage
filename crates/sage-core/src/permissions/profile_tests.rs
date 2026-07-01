@@ -97,6 +97,35 @@ fn deserialized_fragment_tracks_present_domain_sources() -> serde_json::Result<(
 }
 
 #[test]
+fn deserialized_filesystem_fragment_defaults_missing_fields() -> serde_json::Result<()> {
+    let project: PermissionProfile =
+        serde_json::from_str(r#"{"source":"project","filesystem":{"workspace_roots":["/repo"]}}"#)?;
+
+    assert_eq!(project.filesystem.workspace_roots, vec!["/repo"]);
+    assert!(!project.filesystem.allow_outside_workspace);
+    assert_eq!(
+        project.filesystem.protected_paths,
+        vec![".git", ".sage", ".ssh"]
+    );
+    assert_eq!(
+        project.domain_sources.filesystem,
+        Some(PermissionProfileSource::Project)
+    );
+    Ok(())
+}
+
+#[test]
+fn deserialized_rules_default_missing_source_to_profile_source() -> serde_json::Result<()> {
+    let project: PermissionProfile = serde_json::from_str(
+        r#"{"source":"project","allow":[{"pattern":"Bash(cargo *)"}],"deny":[{"pattern":"Read(secrets/**)"}]}"#,
+    )?;
+
+    assert_eq!(project.allow[0].source, PermissionProfileSource::Project);
+    assert_eq!(project.deny[0].source, PermissionProfileSource::Project);
+    Ok(())
+}
+
+#[test]
 fn deserialized_explicit_ask_default_tracks_source() -> serde_json::Result<()> {
     let local: PermissionProfile =
         serde_json::from_str(r#"{"source":"local","default_behavior":"ask"}"#)?;
