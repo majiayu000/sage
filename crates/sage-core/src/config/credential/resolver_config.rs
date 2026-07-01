@@ -24,6 +24,8 @@ pub struct ResolverConfig {
     pub enable_auto_import: bool,
     /// Whether legacy plaintext JSON credentials are accepted as fallback.
     pub allow_legacy_plaintext: bool,
+    /// Whether a secure backend load error may fall through to legacy plaintext.
+    pub allow_legacy_plaintext_after_backend_error: bool,
     /// Durable secure credential backend.
     pub credential_backend: Arc<dyn CredentialBackend>,
 }
@@ -37,6 +39,7 @@ impl Default for ResolverConfig {
             cli_keys: HashMap::new(),
             enable_auto_import: true,
             allow_legacy_plaintext: true,
+            allow_legacy_plaintext_after_backend_error: false,
             credential_backend: Arc::new(UnsupportedCredentialBackend),
         }
     }
@@ -51,6 +54,10 @@ impl fmt::Debug for ResolverConfig {
             .field("cli_keys", &self.cli_keys.keys().collect::<Vec<_>>())
             .field("enable_auto_import", &self.enable_auto_import)
             .field("allow_legacy_plaintext", &self.allow_legacy_plaintext)
+            .field(
+                "allow_legacy_plaintext_after_backend_error",
+                &self.allow_legacy_plaintext_after_backend_error,
+            )
             .field("credential_backend", &self.credential_backend.kind())
             .finish()
     }
@@ -86,6 +93,12 @@ impl ResolverConfig {
     /// Set whether legacy plaintext JSON credentials are accepted as fallback.
     pub fn with_legacy_plaintext(mut self, enabled: bool) -> Self {
         self.allow_legacy_plaintext = enabled;
+        self
+    }
+
+    /// Explicitly allow legacy plaintext fallback after a backend load error.
+    pub fn with_legacy_plaintext_after_backend_error(mut self, enabled: bool) -> Self {
+        self.allow_legacy_plaintext_after_backend_error = enabled;
         self
     }
 

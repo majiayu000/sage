@@ -168,14 +168,14 @@ impl CredentialOperationStatus {
 }
 
 fn redact_secret(secret: &str) -> String {
-    if secret.len() <= 8 {
-        return "*".repeat(secret.len());
+    let char_count = secret.chars().count();
+    if char_count <= 8 {
+        return "*".repeat(char_count);
     }
-    format!(
-        "{}...{}",
-        &secret[..3],
-        &secret[secret.len().saturating_sub(4)..]
-    )
+    let prefix: String = secret.chars().take(3).collect();
+    let suffix_chars: Vec<char> = secret.chars().rev().take(4).collect();
+    let suffix: String = suffix_chars.into_iter().rev().collect();
+    format!("{prefix}...{suffix}")
 }
 
 fn recovery_hint(operation: CredentialOperation, error: &CredentialBackendError) -> String {

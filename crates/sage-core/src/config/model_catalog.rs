@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
+use tracing::warn;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -103,7 +104,17 @@ impl ModelCatalogManager {
             source: CatalogSource::Remote,
             last_error: None,
         };
-        self.save_cache(&cache)?;
+        let last_error = match self.save_cache(&cache) {
+            Ok(()) => None,
+            Err(error) => {
+                let message = error.to_string();
+                warn!(
+                    "Failed to write model catalog cache for {}: {}",
+                    static_provider.id, message
+                );
+                Some(message)
+            }
+        };
         Ok(ProviderCatalogSnapshot {
             provider,
             freshness: CatalogFreshness::Fresh,
@@ -111,7 +122,7 @@ impl ModelCatalogManager {
             etag: cache.etag,
             fetched_at: Some(cache.fetched_at),
             ttl_seconds: cache.ttl_seconds,
-            last_error: None,
+            last_error,
         })
     }
 
@@ -246,6 +257,7 @@ fn epoch_seconds(now: SystemTime) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use tempfile::tempdir;
 
     fn provider() -> ProviderInfo {
@@ -343,5 +355,31 @@ mod tests {
 
         let snapshot = manager.snapshot(&provider());
         assert_eq!(snapshot.freshness, CatalogFreshness::Stale);
+    }
+
+    #[test]
+    fn remote_catalog_survives_cache_write_failure() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempdir()?;
+        let blocked_cache_root = dir.path().join("cache-root-file");
+        fs::write(&blocked_cache_root, "not a directory")?;
+        let manager = ModelCatalogManager::new(&blocked_cache_root);
+
+        let snapshot = manager.merge_remote(
+            &provider(),
+            vec![model("remote")],
+            Some("etag-1".to_string()),
+            SystemTime::UNIX_EPOCH + Duration::from_secs(10),
+        )?;
+
+        assert_eq!(snapshot.freshness, CatalogFreshness::Fresh);
+        assert!(
+            snapshot
+                .provider
+                .models
+                .iter()
+                .any(|model| model.id == "remote")
+        );
+        assert!(snapshot.last_error.is_some());
+        Ok(())
     }
 }

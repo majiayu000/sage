@@ -44,7 +44,7 @@ impl CapabilityManager {
     }
 
     fn insert_model(&mut self, model: &ModelInfo) {
-        let mut capability = ModelCapability::default();
+        let mut capability = get_static_model_capability(&model.id);
         if let Some(max_output_tokens) = model.max_output_tokens {
             capability.max_output_tokens = max_output_tokens;
         }
@@ -105,6 +105,25 @@ mod tests {
         let registered = manager.capability("claude-sonnet-4-6");
 
         assert_eq!(cap.max_output_tokens, registered.max_output_tokens);
+    }
+
+    #[test]
+    fn catalog_entry_without_limits_preserves_static_capability() {
+        let mut snapshot = snapshot();
+        snapshot.provider.models.push(ModelInfo {
+            id: "gpt-4o".to_string(),
+            name: "GPT-4o".to_string(),
+            default: false,
+            context_window: None,
+            max_output_tokens: None,
+        });
+        let manager = CapabilityManager::from_catalog_snapshot(&snapshot);
+
+        let cap = manager.capability("gpt-4o");
+
+        assert_eq!(cap.max_output_tokens, 16_384);
+        assert_eq!(cap.context_window, 128_000);
+        assert!(cap.supports_vision);
     }
 
     #[test]

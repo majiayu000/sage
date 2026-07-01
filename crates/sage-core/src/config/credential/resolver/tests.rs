@@ -212,6 +212,49 @@ fn secure_backend_wins_over_legacy_plaintext() -> Result<(), Box<dyn std::error:
 }
 
 #[test]
+fn backend_load_error_does_not_fallback_to_legacy_plaintext()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp_dir = tempdir()?;
+    let global_dir = temp_dir.path().join(".sage");
+    let mut legacy = CredentialsFile::default();
+    legacy.set_api_key("test_provider", "legacy_secret");
+    legacy.save(&global_dir.join("credentials.json"))?;
+    let backend = Arc::new(FakeCredentialBackend::default());
+    backend.fail_load();
+    let config = ResolverConfig::default()
+        .with_global_dir(&global_dir)
+        .with_credential_backend(backend);
+    let resolver = CredentialResolver::new(config);
+
+    let credential = resolver.resolve_provider("test_provider", "NONEXISTENT_ENV");
+
+    assert!(credential.is_missing());
+    Ok(())
+}
+
+#[test]
+fn backend_load_error_allows_explicit_legacy_plaintext_fallback()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp_dir = tempdir()?;
+    let global_dir = temp_dir.path().join(".sage");
+    let mut legacy = CredentialsFile::default();
+    legacy.set_api_key("test_provider", "legacy_secret");
+    legacy.save(&global_dir.join("credentials.json"))?;
+    let backend = Arc::new(FakeCredentialBackend::default());
+    backend.fail_load();
+    let config = ResolverConfig::default()
+        .with_global_dir(&global_dir)
+        .with_credential_backend(backend)
+        .with_legacy_plaintext_after_backend_error(true);
+    let resolver = CredentialResolver::new(config);
+
+    let credential = resolver.resolve_provider("test_provider", "NONEXISTENT_ENV");
+
+    assert_eq!(credential.value(), Some("legacy_secret"));
+    Ok(())
+}
+
+#[test]
 fn legacy_plaintext_can_be_disabled() -> Result<(), Box<dyn std::error::Error>> {
     let temp_dir = tempdir()?;
     let global_dir = temp_dir.path().join(".sage");
@@ -247,6 +290,19 @@ fn credential_operations_return_structured_status() {
     let failed = resolver.revoke_provider("openai");
     assert_eq!(failed.outcome, CredentialOperationOutcome::Failed);
     assert!(failed.recovery_hint.unwrap().contains("provider console"));
+}
+
+#[test]
+fn credential_status_redacts_multibyte_secrets_without_panicking() {
+    let backend = Arc::new(FakeCredentialBackend::default());
+    let config = ResolverConfig::default().with_credential_backend(backend);
+    let resolver = CredentialResolver::new(config);
+    let secret = "ééééésecret";
+
+    let save = resolver.save_credential_status("openai", secret);
+
+    assert_eq!(save.outcome, CredentialOperationOutcome::Succeeded);
+    assert!(!save.provider.redacted_display.contains(secret));
 }
 
 #[test]

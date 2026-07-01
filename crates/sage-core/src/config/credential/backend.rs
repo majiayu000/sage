@@ -60,6 +60,7 @@ impl CredentialRecord {
 pub enum CredentialBackendErrorKind {
     Unsupported,
     NotFound,
+    LoadFailed,
     SaveFailed,
     LogoutFailed,
     RevokeFailed,
@@ -139,6 +140,7 @@ fn unsupported(provider: &str) -> CredentialBackendError {
 #[derive(Debug, Default)]
 pub struct FakeCredentialBackend {
     records: Mutex<HashMap<String, String>>,
+    fail_load: Mutex<bool>,
     fail_revoke: Mutex<bool>,
 }
 
@@ -156,6 +158,13 @@ impl FakeCredentialBackend {
     pub fn fail_revoke(&self) {
         *self.fail_revoke.lock().expect("fake backend mutex") = true;
     }
+
+    pub fn fail_load(&self) {
+        *self
+            .fail_load
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = true;
+    }
 }
 
 impl CredentialBackend for FakeCredentialBackend {
@@ -164,6 +173,19 @@ impl CredentialBackend for FakeCredentialBackend {
     }
 
     fn load(&self, provider: &str) -> Result<Option<CredentialRecord>, CredentialBackendError> {
+        if *self
+            .fail_load
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+        {
+            return Err(CredentialBackendError::new(
+                CredentialBackendErrorKind::LoadFailed,
+                provider,
+                CredentialBackendKind::Fake,
+                "fake load failed",
+                true,
+            ));
+        }
         Ok(self
             .records
             .lock()

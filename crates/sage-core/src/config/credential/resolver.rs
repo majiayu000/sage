@@ -13,7 +13,7 @@ use crate::config::api_key_helpers::get_standard_env_vars_for_provider;
 use std::env;
 use std::io;
 use std::path::PathBuf;
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 
 /// Credential resolver that loads credentials from multiple sources
 pub struct CredentialResolver {
@@ -81,10 +81,20 @@ impl CredentialResolver {
             }
             Ok(None) => {}
             Err(error) => {
-                debug!(
-                    "Credential backend load failed for {}: {}",
-                    provider, error.message
-                );
+                if self.config.allow_legacy_plaintext
+                    && self.config.allow_legacy_plaintext_after_backend_error
+                {
+                    debug!(
+                        "Credential backend load failed for {}; using explicit legacy plaintext fallback: {}",
+                        provider, error.message
+                    );
+                } else {
+                    error!(
+                        "Credential backend load failed for {}; refusing legacy plaintext fallback: {}",
+                        provider, error.message
+                    );
+                    return ResolvedCredential::missing(provider);
+                }
             }
         }
 
