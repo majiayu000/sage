@@ -1,8 +1,8 @@
 //! Shared policy helpers for settings-backed permission checks.
 
 use crate::permissions::{
-    PermissionAction, PermissionDecisionInput, PermissionProfileSource, PermissionRule,
-    permission_pattern_matches,
+    PermissionAction, PermissionDecision, PermissionDecisionInput, PermissionProfileSource,
+    PermissionRule, permission_pattern_matches,
 };
 use crate::settings::types::{Settings, SettingsPermissionBehavior};
 use std::path::Path;
@@ -27,6 +27,16 @@ pub(super) fn deny_rules(settings: &Settings) -> Vec<PermissionRule> {
         );
     }
     rules
+}
+
+pub(super) fn decision_reason(decision: &PermissionDecision) -> String {
+    let Some(rule) = decision.matched_rule.as_ref() else {
+        return decision.reason.clone();
+    };
+    format!(
+        "{} source={:?} matched_rule={}",
+        decision.reason, rule.source, rule.pattern
+    )
 }
 
 pub(super) fn http_client_redirects_require_disabled(

@@ -28,6 +28,9 @@ mod settings_permission_keys;
 #[path = "settings_permission_inputs.rs"]
 mod settings_permission_inputs;
 
+#[path = "settings_permission_diagnostics.rs"]
+mod settings_permission_diagnostics;
+
 #[path = "settings_permission_policy.rs"]
 mod settings_permission_policy;
 
@@ -253,7 +256,9 @@ impl UnifiedExecutor {
         tool_call: &ToolCall,
         message: impl Into<String>,
     ) -> ToolResult {
-        ToolResult::error(&tool_call.id, &tool_call.name, message.into())
+        let message = message.into();
+        settings_permission_diagnostics::record_blocked_result(tool_call, &message);
+        ToolResult::error(&tool_call.id, &tool_call.name, message)
     }
 
     fn load_settings_strict(working_dir: &Path) -> SageResult<Settings> {
@@ -422,10 +427,14 @@ impl UnifiedExecutor {
             match decision.kind {
                 PermissionDecisionKind::Allow => {}
                 PermissionDecisionKind::Deny => {
-                    return Some(SettingsPermissionDecision::Deny(decision.reason));
+                    return Some(SettingsPermissionDecision::Deny(
+                        settings_permission_policy::decision_reason(&decision),
+                    ));
                 }
                 PermissionDecisionKind::Ask => {
-                    first_ask.get_or_insert(decision.reason);
+                    first_ask.get_or_insert_with(|| {
+                        settings_permission_policy::decision_reason(&decision)
+                    });
                 }
                 PermissionDecisionKind::Unsupported => {
                     return Some(SettingsPermissionDecision::Deny(format!(
