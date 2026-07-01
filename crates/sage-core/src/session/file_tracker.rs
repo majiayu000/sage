@@ -20,6 +20,7 @@
 //! ```
 
 use crate::error::{SageError, SageResult};
+use crate::hashing::bytes_to_hex;
 use crate::session::types::{
     FileBackupInfo, FileHistorySnapshot, TrackedFileState, TrackedFilesSnapshot,
 };
@@ -333,7 +334,7 @@ impl FileSnapshotTracker {
 fn compute_hash(content: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(content);
-    format!("{:x}", hasher.finalize())
+    bytes_to_hex(hasher.finalize())
 }
 
 #[cfg(test)]

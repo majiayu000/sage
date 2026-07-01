@@ -32,7 +32,7 @@ jobs:
             ${{ runner.os }}-cargo-check-
 
       - name: Run cargo check
-        run: cargo check --workspace --all-targets --all-features
+        run: cargo check --locked --workspace --all-targets --all-features
 
   fmt:
     name: Format
@@ -199,7 +199,34 @@ jobs:
             ${{ runner.os }}-cargo-clippy-
 
       - name: Run clippy
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+        run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+
+  documentation-consistency:
+    name: Documentation consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check documentation consistency
+        run: python3 scripts/check_doc_consistency.py --report-path "$RUNNER_TEMP/doc_consistency_report.json"
+
+  release-gate-policy:
+    name: Release gate policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate support matrix
+        run: python3 scripts/release_gate.py support-matrix --repo .
+
+      - name: Validate workflow policy
+        run: python3 scripts/release_gate.py validate-workflows --repo .
+
+      - name: Run release gate fixtures
+        run: python3 scripts/release_gate.py self-test
+
+      - name: Run clean worktree dirty-file fixture
+        run: python3 scripts/check_clean_worktree.py --self-test
 
   test:
     name: Test
@@ -227,12 +254,12 @@ jobs:
             ${{ runner.os }}-cargo-test-
 
       - name: Run tests
-        run: cargo test --workspace --all-targets --verbose
+        run: cargo test --locked --workspace --all-targets --verbose
 
   build:
     name: Build
     runs-on: ${{ matrix.os }}
-    needs: [fmt, shell-scripts, clippy, test]
+    needs: [fmt, shell-scripts, clippy, test, documentation-consistency, release-gate-policy]
     strategy:
       fail-fast: false
       matrix:
@@ -245,9 +272,9 @@ jobs:
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             cross: true
-          - os: macos-latest
+          - os: macos-15
             target: aarch64-apple-darwin
-          - os: macos-latest
+          - os: macos-15-intel
             target: x86_64-apple-darwin
     steps:
       - uses: actions/checkout@v4
@@ -284,7 +311,7 @@ jobs:
             ${{ runner.os }}-cargo-registry-
 
       - name: Build release binary
-        run: cargo build --release --target ${{ matrix.target }} -p sage-cli
+        run: cargo build --locked --release --target ${{ matrix.target }} -p sage-cli
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
@@ -292,3 +319,41 @@ jobs:
           name: sage-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/sage
           if-no-files-found: error
+
+  clean-worktree:
+    name: Clean worktree
+    runs-on: ubuntu-latest
+    needs: [fmt, shell-scripts, clippy, test, build, documentation-consistency, release-gate-policy]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Confirm generated files are committed
+        run: python3 scripts/check_clean_worktree.py --repo .
+
+  required-gates:
+    name: Required gates
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [fmt, shell-scripts, clippy, test, build, documentation-consistency, release-gate-policy, clean-worktree]
+    steps:
+      - name: Require every CI gate
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for result in \
+            "${{ needs.fmt.result }}" \
+            "${{ needs.shell-scripts.result }}" \
+            "${{ needs.clippy.result }}" \
+            "${{ needs.test.result }}" \
+            "${{ needs.build.result }}" \
+            "${{ needs.documentation-consistency.result }}" \
+            "${{ needs.release-gate-policy.result }}" \
+            "${{ needs.clean-worktree.result }}"; do
+            if [ "$result" != "success" ]; then
+              echo "A required CI gate finished with result: $result"
+              exit 1
+            fi
+          done
+
+          echo "All required CI gates passed."

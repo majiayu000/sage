@@ -1,6 +1,6 @@
 # Sage Agent Makefile
 
-.PHONY: help build test clean install dev check fmt clippy docs examples doc-check doc-status guard guard-strict guard-bash-check arch-guard
+.PHONY: help build test clean install dev check fmt clippy docs examples doc-check doc-status release-preflight release-gate release-self-test release-artifact-smoke release-smoke clean-worktree guard guard-strict guard-bash-check arch-guard
 
 # Default target
 help:
@@ -29,6 +29,7 @@ help:
 	@echo "  examples   - Run smoke-test examples"
 	@echo "  doc-check  - Check documentation consistency"
 	@echo "  doc-status - Show documentation status"
+	@echo "  release-gate - Validate release support matrix and workflow policy"
 	@echo ""
 	@echo "Guards:"
 	@echo "  guard        - Run VibeGuard checks (report only)"
@@ -122,6 +123,31 @@ ci: fmt clippy test build guard
 doc-check:
 	@echo "🔍 Checking documentation consistency..."
 	@python3 scripts/check_doc_consistency.py
+
+release-preflight:
+	@test -n "$(TAG)" || (echo "TAG is required, for example: make release-preflight TAG=v0.13.57" >&2; exit 2)
+	@python3 scripts/release_gate.py preflight --repo . --tag "$(TAG)"
+
+release-gate:
+	@python3 scripts/release_gate.py support-matrix --repo .
+	@python3 scripts/release_gate.py validate-workflows --repo .
+	@python3 scripts/check_clean_worktree.py --repo .
+
+release-self-test:
+	@python3 scripts/release_gate.py self-test
+	@python3 scripts/check_clean_worktree.py --self-test
+
+release-artifact-smoke:
+	@test -n "$(VERSION)" || (echo "VERSION is required, for example: make release-artifact-smoke VERSION=v0.13.57 ARTIFACT_DIR=release-artifacts" >&2; exit 2)
+	@test -n "$(ARTIFACT_DIR)" || (echo "ARTIFACT_DIR is required" >&2; exit 2)
+	@python3 scripts/release_gate.py verify-artifacts --repo . --artifact-dir "$(ARTIFACT_DIR)" --version "$(VERSION)" --write-manifest
+
+release-smoke:
+	@test -n "$(VERSION)" || (echo "VERSION is required, for example: make release-smoke VERSION=v0.13.57" >&2; exit 2)
+	@python3 scripts/release_gate.py cargo-install-smoke --repo . --expected-version "$(VERSION)"
+
+clean-worktree:
+	@python3 scripts/check_clean_worktree.py --repo .
 
 doc-status:
 	@echo "📊 Documentation Status:"

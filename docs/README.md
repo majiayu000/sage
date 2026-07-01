@@ -31,6 +31,7 @@ Documentation for developers and contributors:
 - **[MCP Integration Plan](development/MCP_INTEGRATION_PLAN.md)** - Model Context Protocol integration
 - **[Tools Expansion Plan](development/TOOLS_EXPANSION_PLAN.md)** - Tool ecosystem expansion
 - **[Release Process](development/release-process.md)** - How releases are managed
+- **[Release Gates](development/release-process.md#required-gates)** - Required CI, security, artifact, and supply-chain gates
 
 ### 📋 Planning (`planning/`)
 Project planning and roadmap documentation:

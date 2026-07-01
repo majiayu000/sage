@@ -57,7 +57,7 @@ jobs:
         run: cargo install cargo-outdated --locked
 
       - name: Check for outdated dependencies
-        run: cargo outdated --root-deps-only
+        run: cargo outdated --workspace --root-deps-only --exit-code 1
 
   msrv:
     name: Minimum Supported Rust Version
@@ -69,4 +69,38 @@ jobs:
         uses: dtolnay/rust-toolchain@1.88.0
 
       - name: Check MSRV compatibility
-        run: cargo check --all-features
+        run: cargo check --locked --all-features
+
+  workflow-policy:
+    name: Workflow policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate release and supply-chain workflow policy
+        run: python3 scripts/release_gate.py validate-workflows --repo .
+
+  required-security-gates:
+    name: Required security gates
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [audit, deny, outdated, msrv, workflow-policy]
+    steps:
+      - name: Require every security gate
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for result in \
+            "${{ needs.audit.result }}" \
+            "${{ needs.deny.result }}" \
+            "${{ needs.outdated.result }}" \
+            "${{ needs.msrv.result }}" \
+            "${{ needs.workflow-policy.result }}"; do
+            if [ "$result" != "success" ]; then
+              echo "A required security gate finished with result: $result"
+              exit 1
+            fi
+          done
+
+          echo "All required security gates passed."

@@ -1,3 +1,4 @@
+use crate::hashing::bytes_to_hex;
 use chrono::{DateTime, Utc};
 use sha2::{Digest, Sha256};
 use std::path::Path;
@@ -86,7 +87,7 @@ pub(super) fn legacy_ref(path: &Path, line_no: usize) -> String {
 pub(super) fn checksum_bytes(bytes: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
-    format!("{:x}", hasher.finalize())
+    bytes_to_hex(hasher.finalize())
 }
 
 pub(super) fn checksum_paths<'a>(paths: impl IntoIterator<Item = &'a Path>) -> String {
@@ -96,5 +97,5 @@ pub(super) fn checksum_paths<'a>(paths: impl IntoIterator<Item = &'a Path>) -> S
             hasher.update(bytes);
         }
     }
-    format!("{:x}", hasher.finalize())
+    bytes_to_hex(hasher.finalize())
 }

@@ -2,15 +2,8 @@ name: Documentation Consistency Check
 
 on:
   pull_request:
-    paths:
-      - 'README*.md'
-      - 'docs/**/*.md'
-      - 'scripts/check_doc_consistency.py'
   push:
     branches: [main]
-    paths:
-      - 'README*.md'
-      - 'docs/**/*.md'
   schedule:
     # Run daily at 9 AM UTC to catch any inconsistencies
     - cron: '0 9 * * *'
@@ -39,8 +32,10 @@ jobs:
         id: consistency-check
         run: |
           set +e
-          python scripts/check_doc_consistency.py
+          report_path="$RUNNER_TEMP/doc_consistency_report.json"
+          python scripts/check_doc_consistency.py --report-path "$report_path"
           status=$?
+          echo "report_path=$report_path" >> "$GITHUB_OUTPUT"
           echo "check_result=$status" >> "$GITHUB_OUTPUT"
           exit $status
         continue-on-error: true
@@ -50,7 +45,7 @@ jobs:
         if: always()
         with:
           name: doc-consistency-report
-          path: doc_consistency_report.json
+          path: ${{ steps.consistency-check.outputs.report_path }}
           retention-days: 30
       
       - name: Comment on PR with results
@@ -59,9 +54,10 @@ jobs:
         with:
           script: |
             const fs = require('fs');
+            const reportPath = `${{ steps.consistency-check.outputs.report_path }}`;
             
             try {
-              const report = JSON.parse(fs.readFileSync('doc_consistency_report.json', 'utf8'));
+              const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
               
               let comment = `## 📚 Documentation Consistency Check\n\n`;
               comment += `**Status:** ${report.status === 'pass' ? '✅ PASS' : '❌ FAIL'}\n`;
@@ -131,9 +127,10 @@ jobs:
         with:
           script: |
             const fs = require('fs');
+            const reportPath = `${{ steps.consistency-check.outputs.report_path }}`;
             
             try {
-              const report = JSON.parse(fs.readFileSync('doc_consistency_report.json', 'utf8'));
+              const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
               
               if (report.stats.total_issues > 0) {
                 const title = `📚 Documentation Consistency Issues Detected - ${new Date().toISOString().split('T')[0]}`;

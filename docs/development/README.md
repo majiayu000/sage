@@ -40,6 +40,7 @@ This section contains documentation for developers working on Sage Agent.
 - **[Versioning Strategy](release-process.md#versioning)** - Semantic versioning approach
 - **[Changelog Management](release-process.md#changelog)** - Maintaining changelogs
 - **[Deployment Process](release-process.md#deployment)** - Deployment procedures
+- **[Release Gates](release-process.md#required-gates)** - Required CI, security, artifact, and supply-chain gates
 
 ## 🛠️ Development Tools
 
