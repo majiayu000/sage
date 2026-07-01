@@ -348,13 +348,19 @@ impl PermissionDecisionEngine {
             PermissionBehavior::Deny => PermissionDecision::new(
                 PermissionDecisionKind::Deny,
                 audit_key.clone(),
-                format!("no allow rule matched '{}'", audit_key),
+                format!(
+                    "no allow rule matched '{}' source={:?}",
+                    audit_key, self.profile.default_behavior_source
+                ),
                 None,
             ),
             PermissionBehavior::Ask => PermissionDecision::new(
                 PermissionDecisionKind::Ask,
                 audit_key.clone(),
-                format!("No permission rule matched '{}'.", audit_key),
+                format!(
+                    "No permission rule matched '{}'. source={:?}",
+                    audit_key, self.profile.default_behavior_source
+                ),
                 None,
             ),
         }

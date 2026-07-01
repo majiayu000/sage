@@ -339,7 +339,7 @@ async fn test_settings_permission_rechecks_modified_input_against_deny_rules() -
 
 #[tokio::test]
 #[serial]
-async fn test_managed_settings_denial_records_audit_summary() -> SageResult<()> {
+async fn test_managed_default_denial_records_audit_summary() -> SageResult<()> {
     global_diagnostics().clear();
     let temp_dir = TempDir::new()?;
     let sage_dir = temp_dir.path().join(".sage");
@@ -348,7 +348,7 @@ async fn test_managed_settings_denial_records_audit_summary() -> SageResult<()> 
         sage_dir.join("managed.json"),
         r#"{
             "permissions": {
-                "deny": ["Bash(curl *)"]
+                "default_behavior": "deny"
             }
         }"#,
     )?;
@@ -366,7 +366,7 @@ async fn test_managed_settings_denial_records_audit_summary() -> SageResult<()> 
     assert!(matches!(result, Some(SettingsPermissionCheck::Blocked(_))));
     let summaries = audit_summaries_from_events(&global_diagnostics().snapshot());
     assert!(summaries.iter().any(|summary| {
-        summary.reason.contains("Bash(curl *)")
+        summary.reason.contains("source=Some(Managed)")
             && summary.decision == AuditDecisionKind::Deny
             && summary.source == Some(PermissionProfileSource::Managed)
     }));
