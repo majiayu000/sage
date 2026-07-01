@@ -177,8 +177,11 @@ pub use diagnostics::{
     AuditDecisionKind, DiagnosticBundleSections, DiagnosticEvent, DiagnosticEventKind,
     DiagnosticEventRing, DiagnosticEventSnapshot, DiagnosticRedactor, DiagnosticSeverity,
     FeedbackBundle, FeedbackBundleOutcome, FeedbackConsent, PolicyAuditSummary, RedactedText,
-    RedactionClass, RedactionReport, audit_permission_decision, audit_provider_error,
-    audit_sandbox_violation, build_feedback_bundle, global_diagnostics, write_feedback_bundle,
+    RedactionClass, RedactionReport, append_diagnostic_event_to_default_store,
+    append_diagnostic_event_to_path, audit_permission_decision, audit_provider_error,
+    audit_sandbox_violation, build_feedback_bundle, default_diagnostic_event_log_path,
+    global_diagnostics, persisted_diagnostics_snapshot, persisted_diagnostics_snapshot_from_path,
+    write_feedback_bundle,
 };
 pub use error::{OptionExt, ResultExt, SageError, SageResult};
 pub use hooks::{

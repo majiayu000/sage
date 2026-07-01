@@ -11,9 +11,10 @@ mod usage;
 mod usage_cmd;
 
 use colored::Colorize;
+use sage_core::config::load_config_from_file;
 use sage_core::diagnostics::{
     DiagnosticBundleSections, FeedbackBundleOutcome, FeedbackConsent, global_diagnostics,
-    write_feedback_bundle,
+    persisted_diagnostics_snapshot, write_feedback_bundle,
 };
 use sage_core::telemetry::global_telemetry;
 use sage_core::{Config, SageResult};
@@ -65,12 +66,33 @@ fn feedback_sections(config_file: &str) -> DiagnosticBundleSections {
             telemetry.event_capacity
         ),
         config_source_stack: vec![format!("config_file={config_file}")],
-        provider_summary: Config::default().default_provider,
+        provider_summary: provider_summary(config_file),
         proxy_summary: proxy_summary(),
-        sandbox_summary: "sandbox summary unavailable in CLI feedback snapshot".to_string(),
-        permission_summary: "permission summary unavailable in CLI feedback snapshot".to_string(),
-        recent_events: Some(global_diagnostics().snapshot()),
+        sandbox_summary: "sandbox diagnostics section present; no violation snapshot supplied"
+            .to_string(),
+        permission_summary: "permission diagnostics section present; no decision snapshot supplied"
+            .to_string(),
+        recent_events: Some(diagnostic_snapshot()),
         audit_summaries: Vec::new(),
+    }
+}
+
+fn provider_summary(config_file: &str) -> String {
+    match load_config_from_file(config_file) {
+        Ok(config) => format!("default_provider={}", config.default_provider),
+        Err(error) => format!(
+            "default_provider={} config_load_error={}",
+            Config::default().default_provider,
+            error
+        ),
+    }
+}
+
+fn diagnostic_snapshot() -> sage_core::diagnostics::DiagnosticEventSnapshot {
+    let memory = global_diagnostics().snapshot();
+    match persisted_diagnostics_snapshot(memory.capacity) {
+        Ok(persisted) if !persisted.events.is_empty() => persisted,
+        _ => memory,
     }
 }
 

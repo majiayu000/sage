@@ -1,9 +1,12 @@
 //! Bounded in-memory diagnostic event ring.
 
+use crate::error::{SageError, SageResult};
 use chrono::{DateTime, Utc};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
+use std::io::{BufRead, Write};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -166,9 +169,93 @@ pub fn global_diagnostics() -> &'static DiagnosticEventRing {
     &GLOBAL_DIAGNOSTICS
 }
 
+pub fn default_diagnostic_event_log_path() -> PathBuf {
+    crate::config::default_data_dir_or_warn()
+        .join("diagnostics")
+        .join("events.jsonl")
+}
+
+pub fn append_diagnostic_event_to_default_store(event: &DiagnosticEvent) -> SageResult<()> {
+    append_diagnostic_event_to_path(event, default_diagnostic_event_log_path())
+}
+
+pub fn append_diagnostic_event_to_path(
+    event: &DiagnosticEvent,
+    path: impl AsRef<Path>,
+) -> SageResult<()> {
+    let path = path.as_ref();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| {
+            SageError::io_with_path(error.to_string(), parent.display().to_string())
+        })?;
+    }
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .map_err(|error| SageError::io_with_path(error.to_string(), path.display().to_string()))?;
+    let line = serde_json::to_string(event)
+        .map_err(|error| SageError::json(format!("serialize diagnostic event: {error}")))?;
+    writeln!(file, "{line}")
+        .map_err(|error| SageError::io_with_path(error.to_string(), path.display().to_string()))
+}
+
+pub fn persisted_diagnostics_snapshot(capacity: usize) -> SageResult<DiagnosticEventSnapshot> {
+    persisted_diagnostics_snapshot_from_path(default_diagnostic_event_log_path(), capacity)
+}
+
+pub fn persisted_diagnostics_snapshot_from_path(
+    path: impl AsRef<Path>,
+    capacity: usize,
+) -> SageResult<DiagnosticEventSnapshot> {
+    let path = path.as_ref();
+    if !path.exists() {
+        return Ok(DiagnosticEventSnapshot {
+            capacity,
+            retained_count: 0,
+            dropped_count: 0,
+            freshness: Utc::now(),
+            events: Vec::new(),
+        });
+    }
+    let file = std::fs::File::open(path)
+        .map_err(|error| SageError::io_with_path(error.to_string(), path.display().to_string()))?;
+    let reader = std::io::BufReader::new(file);
+    let mut events = VecDeque::with_capacity(capacity);
+    let mut dropped_count = 0_u64;
+    for line in reader.lines() {
+        let line = line.map_err(|error| {
+            SageError::io_with_path(error.to_string(), path.display().to_string())
+        })?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let event: DiagnosticEvent = serde_json::from_str(&line)
+            .map_err(|error| SageError::json(format!("parse diagnostic event log: {error}")))?;
+        if capacity == 0 {
+            dropped_count = dropped_count.saturating_add(1);
+            continue;
+        }
+        if events.len() >= capacity {
+            events.pop_front();
+            dropped_count = dropped_count.saturating_add(1);
+        }
+        events.push_back(event);
+    }
+    let events: Vec<_> = events.into_iter().collect();
+    Ok(DiagnosticEventSnapshot {
+        capacity,
+        retained_count: events.len(),
+        dropped_count,
+        freshness: Utc::now(),
+        events,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::tempdir;
 
     fn event(label: &str) -> DiagnosticEvent {
         DiagnosticEvent::new(
@@ -205,5 +292,30 @@ mod tests {
         let snapshot = ring.snapshot();
         assert_eq!(snapshot.retained_count, 0);
         assert_eq!(snapshot.dropped_count, 1);
+    }
+
+    #[test]
+    fn diagnostics_event_ring_persists_and_loads_recent_events() {
+        let dir = match tempdir() {
+            Ok(dir) => dir,
+            Err(error) => panic!("expected tempdir: {error}"),
+        };
+        let path = dir.path().join("events.jsonl");
+
+        for label in ["first", "second", "third"] {
+            if let Err(error) = append_diagnostic_event_to_path(&event(label), &path) {
+                panic!("expected append {label}: {error}");
+            }
+        }
+
+        let snapshot = match persisted_diagnostics_snapshot_from_path(&path, 2) {
+            Ok(snapshot) => snapshot,
+            Err(error) => panic!("expected persisted events: {error}"),
+        };
+
+        assert_eq!(snapshot.retained_count, 2);
+        assert_eq!(snapshot.dropped_count, 1);
+        assert_eq!(snapshot.events[0].payload_summary, "second");
+        assert_eq!(snapshot.events[1].payload_summary, "third");
     }
 }

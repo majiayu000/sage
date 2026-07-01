@@ -17,7 +17,7 @@ impl PermissionProfileSource {
     pub(super) fn precedence(self) -> u8 {
         match self {
             Self::System => 0,
-            Self::Managed => 5,
+            Self::Managed => 35,
             Self::User => 10,
             Self::Project => 20,
             Self::Local => 30,

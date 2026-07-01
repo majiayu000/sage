@@ -11,6 +11,8 @@ pub use bundle::{
 };
 pub use event_ring::{
     DiagnosticEvent, DiagnosticEventKind, DiagnosticEventRing, DiagnosticEventSnapshot,
-    DiagnosticSeverity, RedactionClass, global_diagnostics,
+    DiagnosticSeverity, RedactionClass, append_diagnostic_event_to_default_store,
+    append_diagnostic_event_to_path, default_diagnostic_event_log_path, global_diagnostics,
+    persisted_diagnostics_snapshot, persisted_diagnostics_snapshot_from_path,
 };
 pub use redaction::{DiagnosticRedactor, RedactedText, RedactionReport};

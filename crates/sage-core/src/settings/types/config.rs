@@ -422,4 +422,39 @@ mod managed_config_tests {
         assert!(!profile.network.enabled);
         assert!(profile.sandbox.required);
     }
+
+    #[test]
+    fn managed_config_standard_merge_is_not_overridden_by_user_profile() {
+        let managed = match ManagedConfig::parse_json(
+            r#"{
+                "permissions": {
+                    "network": {"enabled": false},
+                    "exec": {"enabled": false}
+                }
+            }"#,
+        ) {
+            Ok(config) => config.to_permission_profile(),
+            Err(error) => panic!("expected managed config to parse: {error}"),
+        };
+        let user = PermissionProfile::default()
+            .with_source(PermissionProfileSource::User)
+            .with_network_profile(
+                NetworkPermissionProfile { enabled: true },
+                PermissionProfileSource::User,
+            )
+            .with_exec_profile(
+                ExecPermissionProfile { enabled: true },
+                PermissionProfileSource::User,
+            );
+        let mut profile = managed;
+
+        profile.merge(user);
+
+        assert!(!profile.network.enabled);
+        assert!(!profile.exec.enabled);
+        assert_eq!(
+            profile.domain_sources.network,
+            Some(PermissionProfileSource::Managed)
+        );
+    }
 }

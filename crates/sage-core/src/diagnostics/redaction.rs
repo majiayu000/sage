@@ -14,7 +14,7 @@ static BEARER_TOKEN_RE: Lazy<Regex> = Lazy::new(|| {
 
 static KEY_VALUE_SECRET_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
-        r#"(?i)\b(api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password|authorization|x-api-key|cookie)\b\s*[:=]\s*["']?[^"',\s}]+"#,
+        r#"(?i)\b([A-Z0-9_-]*(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password|authorization|x-api-key|cookie)[A-Z0-9_-]*)\b\s*[:=]\s*["']?[^"',\s}]+"#,
     )
     .expect("valid secret regex")
 });
@@ -167,12 +167,15 @@ mod tests {
     #[test]
     fn diagnostics_redaction_redacts_tokens_cookies_provider_keys_and_paths() {
         let redactor = DiagnosticRedactor::new();
-        let input = "Authorization: Bearer sk-secret-token-value cookie=sessionid=abc /Users/alice/project/.env OPENAI_API_KEY=sk-abc123456789";
+        let input = "Authorization: Bearer sk-secret-token-value cookie=sessionid=abc /Users/alice/project/.env OPENAI_API_KEY=sk-abc123456789 ANTHROPIC_API_KEY=plain-secret AWS_SECRET_ACCESS_KEY=aws-secret DATABASE_PASSWORD=db-secret";
 
         let redacted = redactor.redact_text(input);
 
         assert!(!redacted.value.contains("sk-secret-token-value"));
         assert!(!redacted.value.contains("abc123456789"));
+        assert!(!redacted.value.contains("plain-secret"));
+        assert!(!redacted.value.contains("aws-secret"));
+        assert!(!redacted.value.contains("db-secret"));
         assert!(!redacted.value.contains("/Users/alice"));
         assert!(redacted.value.contains("[REDACTED]"));
         assert!(redacted.value.contains("[REDACTED_PATH]"));

@@ -2,7 +2,7 @@
 
 use crate::diagnostics::{
     DiagnosticEvent, DiagnosticEventKind, DiagnosticRedactor, DiagnosticSeverity, RedactionClass,
-    global_diagnostics,
+    append_diagnostic_event_to_default_store, global_diagnostics,
 };
 use crate::error::{SageError, SageResult};
 use crate::telemetry::{global_metrics, global_telemetry};
@@ -308,7 +308,7 @@ fn record_tool_diagnostic(tool_name: &str, success: bool, error: Option<&str>) {
         ),
         None => format!("tool={tool_name} success={success}"),
     };
-    global_diagnostics().record(DiagnosticEvent::new(
+    let event = DiagnosticEvent::new(
         DiagnosticEventKind::Tool,
         "tool_executor",
         if success {
@@ -322,7 +322,11 @@ fn record_tool_diagnostic(tool_name: &str, success: bool, error: Option<&str>) {
             RedactionClass::Public
         },
         payload_summary,
-    ));
+    );
+    global_diagnostics().record(event.clone());
+    if let Err(error) = append_diagnostic_event_to_default_store(&event) {
+        tracing::debug!("failed to persist diagnostic event: {}", error);
+    }
 }
 
 fn timeout_result(call: &ToolCall, execution_timeout: Duration, elapsed: Duration) -> ToolResult {
