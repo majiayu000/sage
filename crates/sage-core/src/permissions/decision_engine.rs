@@ -107,22 +107,13 @@ impl PermissionDecisionInput {
         self
     }
 
-    fn audit_key(&self) -> String {
+    fn audit_key(&self, rule_match_keys: &[String]) -> String {
         self.permission_keys
             .first()
             .cloned()
+            .or_else(|| rule_match_keys.first().cloned())
             .or_else(|| self.structured_permission_key())
             .unwrap_or_else(|| self.tool_name.clone())
-    }
-
-    fn rule_match_keys(&self) -> Vec<String> {
-        if self.permission_keys.is_empty() {
-            self.structured_permission_key()
-                .map(|key| vec![key])
-                .unwrap_or_default()
-        } else {
-            self.permission_keys.clone()
-        }
     }
 
     fn structured_permission_key(&self) -> Option<String> {
@@ -183,8 +174,8 @@ impl PermissionDecisionEngine {
     }
 
     pub fn decide(&self, input: PermissionDecisionInput) -> PermissionDecision {
-        let audit_key = input.audit_key();
-        let rule_match_keys = input.rule_match_keys();
+        let rule_match_keys = self.rule_match_keys(&input);
+        let audit_key = input.audit_key(&rule_match_keys);
 
         if matches!(input.action, PermissionAction::Network) && !self.profile.network.enabled {
             return PermissionDecision::new(
@@ -347,6 +338,58 @@ impl PermissionDecisionEngine {
             .find(|rule| PermissionCache::pattern_matches(&rule.pattern, key))
     }
 
+    fn rule_match_keys(&self, input: &PermissionDecisionInput) -> Vec<String> {
+        if !input.permission_keys.is_empty() {
+            return input.permission_keys.clone();
+        }
+
+        match input.action {
+            PermissionAction::Filesystem => self
+                .filesystem_structured_permission_key(input)
+                .map(|key| vec![key])
+                .unwrap_or_default(),
+            PermissionAction::Network => input
+                .network_target
+                .as_ref()
+                .map(|target| vec![format!("{}({})", input.tool_name, target)])
+                .unwrap_or_default(),
+            _ => Vec::new(),
+        }
+    }
+
+    fn filesystem_structured_permission_key(
+        &self,
+        input: &PermissionDecisionInput,
+    ) -> Option<String> {
+        let path = input.path.as_deref()?;
+        let working_directory = input.working_directory.as_deref();
+        let normalized_path = normalize_path(path, working_directory);
+
+        let path_argument = self
+            .profile
+            .filesystem
+            .workspace_roots
+            .iter()
+            .map(|root| normalize_path(root, None))
+            .filter_map(|root| {
+                normalized_path.strip_prefix(&root).ok().map(|relative| {
+                    (
+                        root.components().count(),
+                        permission_path_string(if relative.as_os_str().is_empty() {
+                            Path::new(".")
+                        } else {
+                            relative
+                        }),
+                    )
+                })
+            })
+            .max_by_key(|(component_count, _)| *component_count)
+            .map(|(_, relative)| relative)
+            .unwrap_or_else(|| permission_path_string(Path::new(path)));
+
+        Some(format!("{}({})", input.tool_name, path_argument))
+    }
+
     fn path_is_in_workspace(&self, path: &str, working_directory: Option<&str>) -> bool {
         let path = normalize_path(path, working_directory);
         self.profile
@@ -394,6 +437,10 @@ fn normalize_path(path: impl AsRef<Path>, working_directory: Option<&str>) -> Pa
             .join(path)
     };
     canonicalize_existing_components(&absolute)
+}
+
+fn permission_path_string(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
 }
 
 fn canonicalize_existing_components(path: &Path) -> PathBuf {

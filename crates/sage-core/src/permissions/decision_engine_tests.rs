@@ -413,6 +413,39 @@ fn filesystem_path_matches_rules_when_permission_keys_are_empty() {
 }
 
 #[test]
+fn filesystem_path_fallback_uses_workspace_relative_rule_keys() -> std::io::Result<()> {
+    let temp_dir = TempDir::new()?;
+    let workspace = temp_dir.path().join("workspace");
+    fs::create_dir_all(workspace.join("src"))?;
+    let profile = PermissionProfile {
+        filesystem: FilesystemPermissionProfile {
+            workspace_roots: vec![workspace.to_string_lossy().to_string()],
+            ..Default::default()
+        },
+        allow: vec![PermissionRule::new(
+            "Write(src/**)",
+            PermissionProfileSource::Project,
+        )],
+        ..Default::default()
+    };
+    let decision = PermissionDecisionEngine::new(profile).decide(
+        PermissionDecisionInput::new(PermissionAction::Filesystem, "Write", Vec::new())
+            .with_path(workspace.join("src/main.rs").to_string_lossy()),
+    );
+
+    assert_eq!(decision.kind, PermissionDecisionKind::Allow);
+    assert_eq!(decision.audit_key, "Write(src/main.rs)");
+    assert_eq!(
+        decision
+            .matched_rule
+            .as_ref()
+            .map(|rule| rule.pattern.as_str()),
+        Some("Write(src/**)")
+    );
+    Ok(())
+}
+
+#[test]
 fn unsupported_requested_sandbox_fails_closed() {
     let profile = PermissionProfile::default();
     let decision = PermissionDecisionEngine::new(profile).decide(
