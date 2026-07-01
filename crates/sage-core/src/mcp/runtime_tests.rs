@@ -1,8 +1,9 @@
 use super::{
-    McpError, McpFailureKind, McpRegistry, McpRuntimeState, McpServerSource, McpSourceKind,
-    McpSourceSet, merge_mcp_sources,
+    McpAuthState, McpError, McpFailureKind, McpRegistry, McpRuntimeState, McpServerSource,
+    McpSourceKind, McpSourceSet, merge_mcp_sources,
 };
 use crate::config::{McpAuthConfig, McpAuthKind, McpServerConfig};
+use crate::mcp::registry::ToolRoute;
 use crate::plugins::PackageMcpServerRegistration;
 use serde_json::json;
 use std::path::PathBuf;
@@ -115,4 +116,74 @@ fn mcp_package_disabled_removes_source_from_runtime_set() {
 
     assert!(registry.server_runtime_status("docs").is_none());
     assert!(registry.configured_server_names().is_empty());
+}
+
+#[test]
+fn mcp_source_replacement_clears_stale_routes() {
+    let registration = PackageMcpServerRegistration {
+        package_id: "pkg.docs".to_string(),
+        asset_id: "docs".to_string(),
+        package_root: PathBuf::from("/tmp/pkg.docs"),
+        config: McpServerConfig::stdio("docs-server", Vec::new()),
+    };
+    let registry = registry_with_source(McpServerSource::package(&registration));
+    registry.tool_mapping.insert(
+        "mcp__docs__read".to_string(),
+        ToolRoute {
+            server_name: "docs".to_string(),
+            remote_name: "read".to_string(),
+        },
+    );
+    registry
+        .resource_mapping
+        .insert("file:///docs".to_string(), "docs".to_string());
+    registry
+        .prompt_mapping
+        .insert("summarize".to_string(), "docs".to_string());
+
+    registry.apply_source_set(McpSourceSet::default());
+
+    assert!(registry.tool_mapping.is_empty());
+    assert!(registry.resource_mapping.is_empty());
+    assert!(registry.prompt_mapping.is_empty());
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn mcp_auth_retry_refreshes_recovery_status() {
+    const TOKEN_ENV: &str = "SAGE_GH87_TEST_MCP_TOKEN";
+    unsafe {
+        std::env::remove_var(TOKEN_ENV);
+    }
+    let registry = registry_with_source(McpServerSource::direct(
+        "secure",
+        McpServerConfig::stdio("__sage_missing_mcp_binary__", Vec::new()).with_auth(
+            McpAuthConfig {
+                required: true,
+                kind: McpAuthKind::Bearer,
+                token_env: Some(TOKEN_ENV.to_string()),
+                authorization_url: None,
+                scopes: Vec::new(),
+            },
+        ),
+        true,
+    ));
+
+    let first = registry.connect_configured_server("secure").await;
+    assert!(matches!(first, Err(McpError::AuthRequired { .. })));
+
+    unsafe {
+        std::env::set_var(TOKEN_ENV, "test-token");
+    }
+    let retry = registry.retry_configured_server("secure").await;
+    unsafe {
+        std::env::remove_var(TOKEN_ENV);
+    }
+
+    assert!(matches!(retry, Err(McpError::Connection { .. })));
+    let status = registry
+        .server_runtime_status("secure")
+        .expect("runtime status");
+    assert_eq!(status.auth.state, McpAuthState::Authorized);
+    assert_eq!(status.state, McpRuntimeState::ConnectionError);
 }

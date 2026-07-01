@@ -1,6 +1,6 @@
 //! Runtime source/status extensions for the MCP registry.
 
-use super::auth_status::McpAuthorizationPrompt;
+use super::auth_status::{McpAuthStatus, McpAuthorizationPrompt};
 use super::client::McpClient;
 use super::deferred_tools::{McpDeferredTool, McpDeferredToolIndex, namespaced_tool_prefix};
 use super::discovery::utils::server_config_to_transport;
@@ -15,6 +15,10 @@ use std::sync::Arc;
 impl McpRegistry {
     /// Replace configured MCP sources and initialize runtime status without connecting.
     pub fn apply_source_set(&self, source_set: McpSourceSet) {
+        self.clients.clear();
+        self.tool_mapping.clear();
+        self.resource_mapping.clear();
+        self.prompt_mapping.clear();
         self.sources.clear();
         self.statuses.clear();
         *self.deferred_tools.write() = McpDeferredToolIndex::new();
@@ -75,6 +79,7 @@ impl McpRegistry {
     ) -> Result<McpRuntimeActionResult, McpError> {
         let source = self.configured_source(name)?;
         let mut status = self.current_or_initial_status(&source);
+        refresh_status_auth(&source, &mut status);
 
         if !status.enabled {
             let error = McpError::disabled(name);
@@ -303,4 +308,26 @@ fn validate_mcp_tool_schema(server_name: &str, tool: &McpTool) -> Result<(), Mcp
         )));
     }
     Ok(())
+}
+
+fn refresh_status_auth(source: &MergedMcpServerSource, status: &mut McpServerRuntimeStatus) {
+    status.auth =
+        McpAuthStatus::from_server_config(&source.selected.server_id, &source.selected.config);
+    if status.enabled
+        && status.auth_blocks_tools()
+        && !matches!(
+            status.state,
+            super::runtime_status::McpRuntimeState::AuthRequired
+        )
+    {
+        status.state = super::runtime_status::McpRuntimeState::AuthRequired;
+    } else if status.enabled
+        && !status.auth_blocks_tools()
+        && matches!(
+            status.state,
+            super::runtime_status::McpRuntimeState::AuthRequired
+        )
+    {
+        status.state = super::runtime_status::McpRuntimeState::Disconnected;
+    }
 }
