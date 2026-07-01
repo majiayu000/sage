@@ -167,8 +167,8 @@ fn normalize_webfetch_url(url: &str) -> String {
     }
 
     if let Some(host) = parsed.host_str() {
-        let lowercase_host = host.to_ascii_lowercase();
-        if parsed.set_host(Some(&lowercase_host)).is_err() {
+        let normalized_host = host.trim_end_matches('.').to_ascii_lowercase();
+        if normalized_host.is_empty() || parsed.set_host(Some(&normalized_host)).is_err() {
             return trimmed.to_string();
         }
     }

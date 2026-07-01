@@ -1,5 +1,6 @@
 use super::decision_engine::{PermissionAction, PermissionDecisionInput};
 use super::profile::PermissionProfile;
+use crate::tools::permission::PermissionCache;
 use std::path::{Component, Path, PathBuf};
 
 pub(super) fn rule_match_keys(
@@ -152,22 +153,65 @@ fn normalize_lexical_path(path: &Path) -> PathBuf {
 
 fn normalize_url_keys(url: &str) -> Vec<String> {
     let trimmed = url.trim();
-    let Ok(mut parsed) = reqwest::Url::parse(trimmed) else {
+    let Some(parsed) = parse_normalized_http_url(trimmed) else {
         return vec![trimmed.to_string()];
     };
 
-    if !matches!(parsed.scheme(), "http" | "https") {
-        return vec![trimmed.to_string()];
+    let normalized = parsed.to_string();
+    let mut keys = Vec::new();
+    if parsed.path() == "/" && parsed.query().is_none() {
+        push_unique(&mut keys, normalized.trim_end_matches('/').to_string());
+    }
+    push_unique(&mut keys, normalized);
+    keys
+}
+
+pub(super) fn normalize_permission_key_url(value: &str) -> Option<String> {
+    let open = value.find('(')?;
+    let close = value.rfind(')')?;
+    if close <= open {
+        return None;
     }
 
+    let tool = value[..open].trim();
+    let argument = value[open + 1..close].trim();
+    let parsed = parse_normalized_http_url(argument)?;
+    let mut normalized = parsed.to_string();
+    if parsed.path() == "/" && parsed.query().is_none() {
+        normalized.truncate(normalized.trim_end_matches('/').len());
+    }
+    Some(format!("{}({})", tool, normalized))
+}
+
+pub(super) fn permission_pattern_matches(pattern: &str, key: &str) -> bool {
+    if PermissionCache::pattern_matches(pattern, key) {
+        return true;
+    }
+
+    match (
+        normalize_permission_key_url(pattern),
+        normalize_permission_key_url(key),
+    ) {
+        (Some(pattern), Some(key)) => PermissionCache::pattern_matches(&pattern, &key),
+        (Some(pattern), None) => PermissionCache::pattern_matches(&pattern, key),
+        (None, Some(key)) => PermissionCache::pattern_matches(pattern, &key),
+        (None, None) => false,
+    }
+}
+
+fn parse_normalized_http_url(url: &str) -> Option<reqwest::Url> {
+    let mut parsed = reqwest::Url::parse(url).ok()?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return None;
+    }
     if let Some(host) = parsed.host_str() {
-        let lowercase_host = host.to_ascii_lowercase();
-        if parsed.set_host(Some(&lowercase_host)).is_err() {
-            return vec![trimmed.to_string()];
+        let normalized_host = host.trim_end_matches('.').to_ascii_lowercase();
+        if normalized_host.is_empty() || parsed.set_host(Some(&normalized_host)).is_err() {
+            return None;
         }
     }
     if parsed.set_username("").is_err() || parsed.set_password(None).is_err() {
-        return vec![trimmed.to_string()];
+        return None;
     }
     parsed.set_fragment(None);
 
@@ -178,13 +222,7 @@ fn normalize_url_keys(url: &str) -> Vec<String> {
         let _ = parsed.set_port(None);
     }
 
-    let normalized = parsed.to_string();
-    let mut keys = Vec::new();
-    if parsed.path() == "/" && parsed.query().is_none() {
-        push_unique(&mut keys, normalized.trim_end_matches('/').to_string());
-    }
-    push_unique(&mut keys, normalized);
-    keys
+    Some(parsed)
 }
 
 fn push_unique(values: &mut Vec<String>, value: String) {
