@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "snake_case")]
 pub enum PermissionProfileSource {
     System,
+    Managed,
     User,
     Project,
     Local,
@@ -16,6 +17,7 @@ impl PermissionProfileSource {
     pub(super) fn precedence(self) -> u8 {
         match self {
             Self::System => 0,
+            Self::Managed => 5,
             Self::User => 10,
             Self::Project => 20,
             Self::Local => 30,

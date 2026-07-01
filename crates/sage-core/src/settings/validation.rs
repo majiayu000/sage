@@ -1,7 +1,4 @@
-//! Settings validation
-//!
-//! This module provides validation for settings to ensure
-//! they are well-formed and consistent.
+//! Settings validation.
 
 use crate::error::{SageError, SageResult};
 

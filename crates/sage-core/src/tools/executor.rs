@@ -1,5 +1,9 @@
 //! Tool execution engine
 
+use crate::diagnostics::{
+    DiagnosticEvent, DiagnosticEventKind, DiagnosticRedactor, DiagnosticSeverity, RedactionClass,
+    global_diagnostics,
+};
 use crate::error::{SageError, SageResult};
 use crate::telemetry::{global_metrics, global_telemetry};
 use crate::tools::base::Tool;
@@ -131,6 +135,7 @@ impl ToolExecutor {
                     Some("Tool not found".to_string()),
                     None,
                 );
+                record_tool_diagnostic(&call.name, false, Some("Tool not found"));
                 return ToolResult::error(
                     &call.id,
                     &call.name,
@@ -172,9 +177,13 @@ impl ToolExecutor {
             &call.name,
             elapsed,
             result.success,
-            result.error.clone(),
+            result
+                .error
+                .as_ref()
+                .map(|error| DiagnosticRedactor::new().redact_text(error).value),
             None,
         );
+        record_tool_diagnostic(&call.name, result.success, result.error.as_deref());
 
         // Record metrics
         let metrics = global_metrics();
@@ -287,6 +296,33 @@ impl ToolExecutor {
             allow_parallel_execution: self.allow_parallel_execution,
         }
     }
+}
+
+fn record_tool_diagnostic(tool_name: &str, success: bool, error: Option<&str>) {
+    let redactor = DiagnosticRedactor::new();
+    let payload_summary = match error {
+        Some(error) => format!(
+            "tool={} success=false error={}",
+            tool_name,
+            redactor.redact_text(error).value
+        ),
+        None => format!("tool={tool_name} success={success}"),
+    };
+    global_diagnostics().record(DiagnosticEvent::new(
+        DiagnosticEventKind::Tool,
+        "tool_executor",
+        if success {
+            DiagnosticSeverity::Info
+        } else {
+            DiagnosticSeverity::Warn
+        },
+        if error.is_some() {
+            RedactionClass::Sensitive
+        } else {
+            RedactionClass::Public
+        },
+        payload_summary,
+    ));
 }
 
 fn timeout_result(call: &ToolCall, execution_timeout: Duration, elapsed: Duration) -> ToolResult {

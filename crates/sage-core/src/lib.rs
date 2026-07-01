@@ -122,6 +122,7 @@ pub(crate) mod checkpoints;
 pub mod commands;
 pub mod config;
 pub mod context;
+pub mod diagnostics;
 pub mod error;
 pub mod hooks;
 pub mod input;
@@ -172,6 +173,13 @@ pub use context::{
     MessagePruner, OverflowStrategy, PrepareResult, PruneResult, SharedStreamingMetrics,
     StreamingMetrics, StreamingStats, StreamingTokenCounter, TokenEstimator,
 };
+pub use diagnostics::{
+    AuditDecisionKind, DiagnosticBundleSections, DiagnosticEvent, DiagnosticEventKind,
+    DiagnosticEventRing, DiagnosticEventSnapshot, DiagnosticRedactor, DiagnosticSeverity,
+    FeedbackBundle, FeedbackBundleOutcome, FeedbackConsent, PolicyAuditSummary, RedactedText,
+    RedactionClass, RedactionReport, audit_permission_decision, audit_provider_error,
+    audit_sandbox_violation, build_feedback_bundle, global_diagnostics, write_feedback_bundle,
+};
 pub use error::{OptionExt, ResultExt, SageError, SageResult};
 pub use hooks::{
     CallbackHook, CommandHook, HookConfig, HookEvent, HookExecutionResult, HookExecutor,
@@ -210,6 +218,11 @@ pub use session::{
     ConversationMessage, FileSessionStorage, MemorySessionStorage, MessageRole, Session,
     SessionConfig, SessionManager, SessionState, SessionStorage, SessionSummary, SessionToolCall,
     SessionToolResult,
+};
+pub use settings::types::{
+    LoadedManagedConfig, ManagedConfig, ManagedConfigSource, ManagedConfigSourceKind,
+    ManagedDefaultBehavior, ManagedExecConfig, ManagedNetworkConfig, ManagedPermissionConfig,
+    ManagedSandboxConfig,
 };
 pub use skills::{
     Skill, SkillActivation, SkillContext, SkillInvocationConfig, SkillMetadata, SkillRegistry,

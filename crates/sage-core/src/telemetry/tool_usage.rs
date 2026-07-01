@@ -2,8 +2,11 @@
 
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+
+const DEFAULT_TELEMETRY_EVENT_CAPACITY: usize = 1_024;
 
 /// Tool usage event
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,15 +45,24 @@ pub struct ToolStats {
 /// Telemetry collector
 #[derive(Debug)]
 pub struct TelemetryCollector {
-    events: Arc<RwLock<Vec<ToolUsageEvent>>>,
+    events: Arc<RwLock<VecDeque<ToolUsageEvent>>>,
+    event_capacity: usize,
+    dropped_events: Arc<RwLock<u64>>,
     start_time: Instant,
 }
 
 impl TelemetryCollector {
     /// Create a new telemetry collector
     pub fn new() -> Self {
+        Self::with_event_capacity(DEFAULT_TELEMETRY_EVENT_CAPACITY)
+    }
+
+    /// Create a telemetry collector with a bounded event capacity.
+    pub fn with_event_capacity(event_capacity: usize) -> Self {
         Self {
-            events: Arc::new(RwLock::new(Vec::new())),
+            events: Arc::new(RwLock::new(VecDeque::with_capacity(event_capacity))),
+            event_capacity,
+            dropped_events: Arc::new(RwLock::new(0)),
             start_time: Instant::now(),
         }
     }
@@ -76,13 +88,31 @@ impl TelemetryCollector {
         };
 
         let mut events = self.events.write();
-        events.push(event);
+        if self.event_capacity == 0 {
+            self.increment_dropped_events();
+            return;
+        }
+        if events.len() >= self.event_capacity {
+            events.pop_front();
+            self.increment_dropped_events();
+        }
+        events.push_back(event);
     }
 
     /// Get all events
     pub fn get_events(&self) -> Vec<ToolUsageEvent> {
         let events = self.events.read();
-        events.clone()
+        events.iter().cloned().collect()
+    }
+
+    /// Get dropped telemetry event count caused by ring overflow.
+    pub fn dropped_events(&self) -> u64 {
+        *self.dropped_events.read()
+    }
+
+    /// Get configured bounded event capacity.
+    pub fn event_capacity(&self) -> usize {
+        self.event_capacity
     }
 
     /// Get statistics for a specific tool
@@ -189,6 +219,8 @@ impl TelemetryCollector {
             total_duration_ms,
             avg_duration_ms,
             uptime_secs: self.start_time.elapsed().as_secs(),
+            dropped_events: self.dropped_events(),
+            event_capacity: self.event_capacity,
         }
     }
 
@@ -196,6 +228,12 @@ impl TelemetryCollector {
     pub fn clear(&self) {
         let mut events = self.events.write();
         events.clear();
+        *self.dropped_events.write() = 0;
+    }
+
+    fn increment_dropped_events(&self) {
+        let mut dropped = self.dropped_events.write();
+        *dropped = dropped.saturating_add(1);
     }
 }
 
@@ -222,6 +260,10 @@ pub struct TelemetrySummary {
     pub avg_duration_ms: f64,
     /// Uptime in seconds
     pub uptime_secs: u64,
+    /// Number of events dropped due to bounded ring capacity.
+    pub dropped_events: u64,
+    /// Configured in-memory telemetry event capacity.
+    pub event_capacity: usize,
 }
 
 /// Global telemetry collector
@@ -332,5 +374,23 @@ mod tests {
         assert_eq!(failure_rates[1].1, 0.5);
         assert_eq!(failure_rates[2].0, "Read");
         assert_eq!(failure_rates[2].1, 0.0);
+    }
+
+    #[test]
+    fn telemetry_collector_uses_bounded_ring_and_tracks_dropped_count() {
+        let collector = TelemetryCollector::with_event_capacity(2);
+
+        collector.record_tool_usage("Read", Duration::from_millis(1), true, None, None);
+        collector.record_tool_usage("Write", Duration::from_millis(1), true, None, None);
+        collector.record_tool_usage("Bash", Duration::from_millis(1), false, None, None);
+
+        let events = collector.get_events();
+        let summary = collector.get_summary();
+
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].tool_name, "Write");
+        assert_eq!(events[1].tool_name, "Bash");
+        assert_eq!(summary.dropped_events, 1);
+        assert_eq!(summary.event_capacity, 2);
     }
 }
