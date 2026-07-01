@@ -330,11 +330,18 @@ fn path_is_at_or_under(path: &Path, root: &Path) -> bool {
 
 fn normalize_path(path: impl AsRef<Path>) -> PathBuf {
     let path = path.as_ref();
-    let mut normalized = if path.is_absolute() {
-        PathBuf::new()
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
     } else {
-        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+        std::env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join(path)
     };
+    canonicalize_existing_components(&absolute)
+}
+
+fn canonicalize_existing_components(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
 
     for component in path.components() {
         match component {
@@ -345,149 +352,15 @@ fn normalize_path(path: impl AsRef<Path>) -> PathBuf {
             Component::Normal(part) => normalized.push(part),
             Component::RootDir | Component::Prefix(_) => normalized.push(component.as_os_str()),
         }
+
+        if let Ok(canonical) = normalized.canonicalize() {
+            normalized = canonical;
+        }
     }
 
     normalized
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::permissions::{
-        FilesystemPermissionProfile, NetworkPermissionProfile, PermissionProfileSource,
-    };
-
-    #[test]
-    fn deny_rules_take_precedence_over_allow_rules() {
-        let profile = PermissionProfile::default()
-            .add_allow("Bash(*)", PermissionProfileSource::User)
-            .add_deny("Bash(rm *)", PermissionProfileSource::Project);
-        let decision = PermissionDecisionEngine::new(profile).decide(PermissionDecisionInput::new(
-            PermissionAction::Exec,
-            "Bash",
-            vec!["Bash(rm -rf target)".to_string()],
-        ));
-
-        assert_eq!(decision.kind, PermissionDecisionKind::Deny);
-        assert!(decision.reason.contains("matched deny rule"));
-    }
-
-    #[test]
-    fn workspace_path_is_allowed_when_rule_matches() {
-        let workspace = std::env::current_dir().unwrap().join("workspace");
-        let profile = PermissionProfile {
-            filesystem: FilesystemPermissionProfile {
-                workspace_roots: vec![workspace.to_string_lossy().to_string()],
-                ..Default::default()
-            },
-            allow: vec![PermissionRule::new(
-                "Write(src/**)",
-                PermissionProfileSource::Project,
-            )],
-            ..Default::default()
-        };
-        let decision = PermissionDecisionEngine::new(profile).decide(
-            PermissionDecisionInput::new(
-                PermissionAction::Filesystem,
-                "Write",
-                vec!["Write(src/main.rs)".to_string()],
-            )
-            .with_path(workspace.join("src/main.rs").to_string_lossy()),
-        );
-
-        assert_eq!(decision.kind, PermissionDecisionKind::Allow);
-    }
-
-    #[test]
-    fn outside_workspace_path_is_denied() {
-        let workspace = std::env::current_dir().unwrap().join("workspace");
-        let outside = std::env::current_dir().unwrap().join("outside/file.txt");
-        let profile = PermissionProfile {
-            filesystem: FilesystemPermissionProfile {
-                workspace_roots: vec![workspace.to_string_lossy().to_string()],
-                ..Default::default()
-            },
-            allow: vec![PermissionRule::new(
-                "Write(**)",
-                PermissionProfileSource::Project,
-            )],
-            ..Default::default()
-        };
-        let decision = PermissionDecisionEngine::new(profile).decide(
-            PermissionDecisionInput::new(
-                PermissionAction::Filesystem,
-                "Write",
-                vec!["Write(outside/file.txt)".to_string()],
-            )
-            .with_path(outside.to_string_lossy()),
-        );
-
-        assert_eq!(decision.kind, PermissionDecisionKind::Deny);
-        assert!(decision.reason.contains("outside configured workspace"));
-    }
-
-    #[test]
-    fn protected_workspace_path_is_denied_before_allow() {
-        let workspace = std::env::current_dir().unwrap().join("workspace");
-        let profile = PermissionProfile {
-            filesystem: FilesystemPermissionProfile {
-                workspace_roots: vec![workspace.to_string_lossy().to_string()],
-                ..Default::default()
-            },
-            allow: vec![PermissionRule::new(
-                "Write(**)",
-                PermissionProfileSource::Project,
-            )],
-            ..Default::default()
-        };
-        let decision = PermissionDecisionEngine::new(profile).decide(
-            PermissionDecisionInput::new(
-                PermissionAction::Filesystem,
-                "Write",
-                vec!["Write(.git/config)".to_string()],
-            )
-            .with_path(workspace.join(".git/config").to_string_lossy()),
-        );
-
-        assert_eq!(decision.kind, PermissionDecisionKind::Deny);
-        assert!(decision.reason.contains("protected"));
-    }
-
-    #[test]
-    fn network_disabled_denies_network_action() {
-        let profile = PermissionProfile {
-            network: NetworkPermissionProfile { enabled: false },
-            allow: vec![PermissionRule::new(
-                "WebFetch(https://example.com/**)",
-                PermissionProfileSource::Project,
-            )],
-            ..Default::default()
-        };
-        let decision = PermissionDecisionEngine::new(profile).decide(
-            PermissionDecisionInput::new(
-                PermissionAction::Network,
-                "WebFetch",
-                vec!["WebFetch(https://example.com/docs)".to_string()],
-            )
-            .with_network_target("https://example.com/docs"),
-        );
-
-        assert_eq!(decision.kind, PermissionDecisionKind::Deny);
-        assert!(decision.reason.contains("network access is disabled"));
-    }
-
-    #[test]
-    fn unsupported_requested_sandbox_fails_closed() {
-        let profile = PermissionProfile::default();
-        let decision = PermissionDecisionEngine::new(profile).decide(
-            PermissionDecisionInput::new(
-                PermissionAction::Sandbox,
-                "Bash",
-                vec!["Bash(cargo test)".to_string()],
-            )
-            .with_required_sandbox(SandboxSupport::Unsupported),
-        );
-
-        assert_eq!(decision.kind, PermissionDecisionKind::Unsupported);
-    }
-}
+#[path = "decision_engine_tests.rs"]
+mod tests;

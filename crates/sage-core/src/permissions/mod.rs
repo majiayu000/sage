@@ -11,6 +11,6 @@ pub use decision_engine::{
 };
 pub use profile::{
     ApprovalPermissionProfile, ExecPermissionProfile, FilesystemPermissionProfile,
-    NetworkPermissionProfile, PermissionBehavior, PermissionProfile, PermissionProfileSource,
-    PermissionRule, SandboxPermissionProfile,
+    NetworkPermissionProfile, PermissionBehavior, PermissionDomainSources, PermissionProfile,
+    PermissionProfileSource, PermissionRule, SandboxPermissionProfile,
 };

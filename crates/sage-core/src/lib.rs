@@ -194,8 +194,8 @@ pub use permissions::{
     ApprovalCache, ApprovalCacheDecision, ApprovalCacheLookup, ApprovalPermissionProfile,
     ExecPermissionProfile, FilesystemPermissionProfile, NetworkPermissionProfile, PermissionAction,
     PermissionBehavior, PermissionDecision, PermissionDecisionEngine, PermissionDecisionInput,
-    PermissionDecisionKind, PermissionPreflight, PermissionProfile, PermissionProfileSource,
-    PermissionRule, SandboxPermissionProfile, SandboxSupport,
+    PermissionDecisionKind, PermissionDomainSources, PermissionPreflight, PermissionProfile,
+    PermissionProfileSource, PermissionRule, SandboxPermissionProfile, SandboxSupport,
 };
 pub use plugins::{
     Plugin, PluginCapability, PluginContext, PluginEntry, PluginError, PluginInfo, PluginLifecycle,
