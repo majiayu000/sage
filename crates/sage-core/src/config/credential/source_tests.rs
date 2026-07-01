@@ -4,11 +4,11 @@ use super::*;
 fn test_priority_ordering() {
     // Lower number = higher priority
     assert!(CredentialPriority::CliArgument < CredentialPriority::Environment);
-    assert!(CredentialPriority::Environment < CredentialPriority::ProjectConfig);
+    assert!(CredentialPriority::Environment < CredentialPriority::SystemKeychain);
+    assert!(CredentialPriority::SystemKeychain < CredentialPriority::OAuthToken);
+    assert!(CredentialPriority::OAuthToken < CredentialPriority::ProjectConfig);
     assert!(CredentialPriority::ProjectConfig < CredentialPriority::GlobalConfig);
     assert!(CredentialPriority::GlobalConfig < CredentialPriority::AutoImported);
-    assert!(CredentialPriority::AutoImported < CredentialPriority::SystemKeychain);
-    assert!(CredentialPriority::SystemKeychain < CredentialPriority::OAuthToken);
     assert!(CredentialPriority::OAuthToken < CredentialPriority::Default);
 }
 
@@ -17,6 +17,7 @@ fn test_priority_all() {
     let all = CredentialPriority::all();
     assert_eq!(all.len(), 8);
     assert_eq!(all[0], CredentialPriority::CliArgument);
+    assert_eq!(all[2], CredentialPriority::SystemKeychain);
     assert_eq!(all[7], CredentialPriority::Default);
 }
 

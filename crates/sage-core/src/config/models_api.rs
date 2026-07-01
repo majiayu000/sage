@@ -49,6 +49,13 @@ pub struct FetchedModel {
     pub name: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FetchedModelsResponse {
+    pub models: Vec<FetchedModel>,
+    pub etag: Option<String>,
+    pub not_modified: bool,
+}
+
 /// Models API client
 pub struct ModelsApiClient {
     http_client: Client,
@@ -87,19 +94,44 @@ impl ModelsApiClient {
         base_url: &str,
         api_key: &str,
     ) -> SageResult<Vec<FetchedModel>> {
+        Ok(self
+            .fetch_anthropic_models_with_etag(base_url, api_key, None)
+            .await?
+            .models)
+    }
+
+    /// Fetch models from Anthropic API with optional ETag handling.
+    pub async fn fetch_anthropic_models_with_etag(
+        &self,
+        base_url: &str,
+        api_key: &str,
+        etag: Option<&str>,
+    ) -> SageResult<FetchedModelsResponse> {
         let url = format!("{}/v1/models", base_url.trim_end_matches('/'));
 
         debug!("Fetching Anthropic models from: {}", url);
 
-        let response = self
+        let mut request = self
             .http_client
             .get(&url)
             .header("x-api-key", api_key)
             .header("anthropic-version", "2023-06-01")
-            .timeout(self.timeout)
+            .timeout(self.timeout);
+        if let Some(etag) = etag {
+            request = request.header(reqwest::header::IF_NONE_MATCH, etag);
+        }
+        let response = request
             .send()
             .await
             .map_err(|e| SageError::llm(format!("Failed to fetch Anthropic models: {}", e)))?;
+
+        if response.status() == reqwest::StatusCode::NOT_MODIFIED {
+            return Ok(FetchedModelsResponse {
+                models: Vec::new(),
+                etag: response_etag(&response),
+                not_modified: true,
+            });
+        }
 
         if !response.status().is_success() {
             let status = response.status();
@@ -111,6 +143,7 @@ impl ModelsApiClient {
             )));
         }
 
+        let etag = response_etag(&response);
         let api_response: AnthropicModelsResponse = response
             .json()
             .await
@@ -126,7 +159,11 @@ impl ModelsApiClient {
             .collect();
 
         debug!("Fetched {} Anthropic models", models.len());
-        Ok(models)
+        Ok(FetchedModelsResponse {
+            models,
+            etag,
+            not_modified: false,
+        })
     }
 
     /// Fetch models from OpenAI API
@@ -135,18 +172,43 @@ impl ModelsApiClient {
         base_url: &str,
         api_key: &str,
     ) -> SageResult<Vec<FetchedModel>> {
+        Ok(self
+            .fetch_openai_models_with_etag(base_url, api_key, None)
+            .await?
+            .models)
+    }
+
+    /// Fetch models from OpenAI API with optional ETag handling.
+    pub async fn fetch_openai_models_with_etag(
+        &self,
+        base_url: &str,
+        api_key: &str,
+        etag: Option<&str>,
+    ) -> SageResult<FetchedModelsResponse> {
         let url = format!("{}/models", base_url.trim_end_matches('/'));
 
         debug!("Fetching OpenAI models from: {}", url);
 
-        let response = self
+        let mut request = self
             .http_client
             .get(&url)
             .bearer_auth(api_key)
-            .timeout(self.timeout)
+            .timeout(self.timeout);
+        if let Some(etag) = etag {
+            request = request.header(reqwest::header::IF_NONE_MATCH, etag);
+        }
+        let response = request
             .send()
             .await
             .map_err(|e| SageError::llm(format!("Failed to fetch OpenAI models: {}", e)))?;
+
+        if response.status() == reqwest::StatusCode::NOT_MODIFIED {
+            return Ok(FetchedModelsResponse {
+                models: Vec::new(),
+                etag: response_etag(&response),
+                not_modified: true,
+            });
+        }
 
         if !response.status().is_success() {
             let status = response.status();
@@ -157,6 +219,7 @@ impl ModelsApiClient {
             )));
         }
 
+        let etag = response_etag(&response);
         let api_response: OpenAiModelsResponse = response
             .json()
             .await
@@ -180,7 +243,11 @@ impl ModelsApiClient {
             .collect();
 
         debug!("Fetched {} OpenAI models", models.len());
-        Ok(models)
+        Ok(FetchedModelsResponse {
+            models,
+            etag,
+            not_modified: false,
+        })
     }
 
     /// Fetch models from Ollama API
@@ -232,6 +299,14 @@ impl ModelsApiClient {
 
         Ok(models)
     }
+}
+
+fn response_etag(response: &reqwest::Response) -> Option<String> {
+    response
+        .headers()
+        .get(reqwest::header::ETAG)
+        .and_then(|value| value.to_str().ok())
+        .map(ToString::to_string)
 }
 
 #[cfg(test)]

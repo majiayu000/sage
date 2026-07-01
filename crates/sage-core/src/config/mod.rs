@@ -13,6 +13,7 @@ mod file_loader;
 mod lakeview_config;
 mod logging_config;
 mod mcp_config;
+mod model_catalog;
 mod model_params;
 pub mod models_api;
 mod provider_defaults;
@@ -39,6 +40,10 @@ pub use lakeview_config::LakeviewConfig;
 pub use loader::{ConfigLoader, ConfigSource};
 pub use logging_config::LoggingConfig;
 pub use mcp_config::{McpAuthConfig, McpAuthKind, McpConfig, McpServerConfig};
+pub use model_catalog::{
+    CatalogCacheEntry, CatalogFreshness, CatalogSource, ModelCatalogManager,
+    ProviderCatalogSnapshot, merge_provider_catalog,
+};
 pub use model_params::ModelParameters;
 pub use models_api::{FetchedModel, ModelsApiClient};
 pub use persistence::{ConfigPersistence, ConfigUpdate};

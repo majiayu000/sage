@@ -39,6 +39,7 @@
 //! }
 //! ```
 
+mod backend;
 mod cli_overrides;
 mod credentials_file;
 mod hint;
@@ -48,9 +49,14 @@ mod resolved;
 mod resolver;
 mod resolver_config;
 mod source;
+mod source_precedence;
 mod status;
 mod unified_loader;
 
+pub use backend::{
+    CredentialBackend, CredentialBackendError, CredentialBackendErrorKind, CredentialBackendKind,
+    CredentialRecord, FakeCredentialBackend, UnsupportedCredentialBackend,
+};
 pub use cli_overrides::CliOverrides;
 pub use credentials_file::CredentialsFile;
 pub use hint::{
@@ -63,5 +69,11 @@ pub use resolved::{ResolvedCredential, ResolvedCredentials};
 pub use resolver::CredentialResolver;
 pub use resolver_config::ResolverConfig;
 pub use source::{CredentialPriority, CredentialSource};
-pub use status::{ConfigStatus, ConfigStatusReport};
+pub use source_precedence::{
+    credential_source_precedence, is_legacy_plaintext_source, precedence_rank,
+};
+pub use status::{
+    ConfigStatus, ConfigStatusReport, CredentialOperation, CredentialOperationOutcome,
+    CredentialOperationStatus, CredentialProviderIdentity,
+};
 pub use unified_loader::{UnifiedConfigLoader, load_config_unified};

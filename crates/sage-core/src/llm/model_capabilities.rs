@@ -365,7 +365,7 @@ static MODEL_CAPABILITIES: LazyLock<HashMap<&'static str, ModelCapability>> = La
 /// Iterating `MODEL_CAPABILITIES` in `HashMap` order would otherwise
 /// return whichever matching key the iterator visited first, which is
 /// randomized per process and can flip the result between runs.
-pub fn get_model_capability(model: &str) -> ModelCapability {
+pub(crate) fn get_static_model_capability(model: &str) -> ModelCapability {
     // Try exact match first.
     if let Some(cap) = MODEL_CAPABILITIES.get(model) {
         return cap.clone();
@@ -387,24 +387,21 @@ pub fn get_model_capability(model: &str) -> ModelCapability {
     ModelCapability::default()
 }
 
+pub fn get_model_capability(model: &str) -> ModelCapability {
+    crate::llm::CapabilityManager::default().capability(model)
+}
+
 /// Get the recommended max_tokens for a model
 ///
 /// Returns a sensible default based on the model's capability,
 /// typically half of max_output_tokens to leave room for the model.
 pub fn get_recommended_max_tokens(model: &str) -> u32 {
-    let cap = get_model_capability(model);
-    // Use 75% of max_output_tokens as the recommended default
-    let tokens_f64 = cap.max_output_tokens as f64 * 0.75;
-    if tokens_f64.is_finite() && tokens_f64 >= 0.0 {
-        (tokens_f64 as u32).min(cap.max_output_tokens)
-    } else {
-        cap.max_output_tokens
-    }
+    crate::llm::CapabilityManager::default().recommended_max_tokens(model)
 }
 
 /// Get the maximum allowed max_tokens for a model
 pub fn get_max_output_tokens(model: &str) -> u32 {
-    get_model_capability(model).max_output_tokens
+    crate::llm::CapabilityManager::default().max_output_tokens(model)
 }
 
 #[cfg(test)]
