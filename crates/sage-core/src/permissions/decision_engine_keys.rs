@@ -183,7 +183,7 @@ pub(super) fn normalize_permission_key_url(value: &str) -> Option<String> {
     Some(format!("{}({})", tool, normalized))
 }
 
-pub(super) fn permission_pattern_matches(pattern: &str, key: &str) -> bool {
+pub(crate) fn permission_pattern_matches(pattern: &str, key: &str) -> bool {
     if PermissionCache::pattern_matches(pattern, key) {
         return true;
     }
@@ -195,8 +195,60 @@ pub(super) fn permission_pattern_matches(pattern: &str, key: &str) -> bool {
         (Some(pattern), Some(key)) => PermissionCache::pattern_matches(&pattern, &key),
         (Some(pattern), None) => PermissionCache::pattern_matches(&pattern, key),
         (None, Some(key)) => PermissionCache::pattern_matches(pattern, &key),
-        (None, None) => false,
+        (None, None) => match (
+            normalize_permission_key_path_rule(pattern),
+            normalize_permission_key_path_rule(key),
+        ) {
+            (Some(pattern), Some(key)) => PermissionCache::pattern_matches(&pattern, &key),
+            (Some(pattern), None) => PermissionCache::pattern_matches(&pattern, key),
+            (None, Some(key)) => PermissionCache::pattern_matches(pattern, &key),
+            (None, None) => false,
+        },
     }
+}
+
+fn normalize_permission_key_path_rule(value: &str) -> Option<String> {
+    let open = value.find('(')?;
+    let close = value.rfind(')')?;
+    if close <= open {
+        return None;
+    }
+
+    let tool = value[..open].trim();
+    if !uses_path_permission(tool) {
+        return None;
+    }
+
+    let argument = value[open + 1..close].trim();
+    let raw_path = Path::new(argument);
+    let path = if raw_path.is_absolute() {
+        canonicalize_existing_components(raw_path)
+    } else {
+        normalize_lexical_path(raw_path)
+    };
+    let mut normalized = permission_path_string(&path);
+    while let Some(stripped) = normalized.strip_prefix("./") {
+        normalized = stripped.to_string();
+    }
+    if normalized.len() > 1 {
+        normalized = normalized.trim_end_matches('/').to_string();
+    }
+    Some(format!("{}({})", tool, normalized))
+}
+
+fn uses_path_permission(tool_name: &str) -> bool {
+    matches!(
+        tool_name.to_ascii_lowercase().as_str(),
+        "read"
+            | "write"
+            | "edit"
+            | "multiedit"
+            | "multi_edit"
+            | "grep"
+            | "glob"
+            | "notebookedit"
+            | "notebook_edit"
+    )
 }
 
 fn parse_normalized_http_url(url: &str) -> Option<reqwest::Url> {

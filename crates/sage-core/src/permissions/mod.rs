@@ -11,6 +11,7 @@ pub use decision_engine::{
     PermissionAction, PermissionDecision, PermissionDecisionEngine, PermissionDecisionInput,
     PermissionDecisionKind, PermissionPreflight, SandboxSupport,
 };
+pub(crate) use decision_engine_keys::permission_pattern_matches;
 pub use profile::{
     ApprovalPermissionProfile, ExecPermissionProfile, FilesystemPermissionProfile,
     NetworkPermissionProfile, PermissionBehavior, PermissionDomainSources, PermissionProfile,

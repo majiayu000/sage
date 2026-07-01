@@ -4,7 +4,7 @@ use crate::error::SageResult;
 use crate::input::{InputRequest, InputResponseKind};
 use crate::permissions::{
     FilesystemPermissionProfile, PermissionDecisionEngine, PermissionDecisionKind,
-    PermissionPreflight, PermissionProfile, PermissionProfileSource,
+    PermissionPreflight, PermissionProfile, PermissionProfileSource, permission_pattern_matches,
 };
 use crate::settings::SettingsLoader;
 use crate::settings::locations::SettingsLocations;
@@ -269,10 +269,18 @@ impl UnifiedExecutor {
         tool_call: &ToolCall,
         working_dir: &Path,
     ) -> Option<SettingsPermissionDecision> {
+        let tool_name = settings_permission_keys::canonical_permission_tool_name(&tool_call.name);
+        let keys =
+            settings_permission_keys::actual_permission_keys(&tool_name, tool_call, working_dir);
+        let allow_outside_workspace = Self::settings_allow_current_outside_filesystem_request(
+            &settings.permissions.allow,
+            &keys,
+        );
         let profile = PermissionProfile::from_settings(&settings.permissions)
             .with_filesystem_profile(
                 FilesystemPermissionProfile {
                     workspace_roots: vec![working_dir.to_string_lossy().to_string()],
+                    allow_outside_workspace,
                     ..Default::default()
                 },
                 PermissionProfileSource::Local,
@@ -281,9 +289,6 @@ impl UnifiedExecutor {
             return None;
         }
 
-        let tool_name = settings_permission_keys::canonical_permission_tool_name(&tool_call.name);
-        let keys =
-            settings_permission_keys::actual_permission_keys(&tool_name, tool_call, working_dir);
         let key = keys
             .first()
             .cloned()
@@ -419,6 +424,39 @@ impl UnifiedExecutor {
                 .to_ascii_lowercase()
                 .starts_with("http_client(")
         })
+    }
+
+    fn settings_allow_current_outside_filesystem_request(
+        patterns: &[String],
+        keys: &[String],
+    ) -> bool {
+        keys.iter().any(|key| {
+            patterns.iter().any(|pattern| {
+                Self::is_absolute_filesystem_permission(pattern)
+                    && permission_pattern_matches(pattern, key)
+            })
+        })
+    }
+
+    fn is_absolute_filesystem_permission(pattern: &str) -> bool {
+        let Some((tool, argument)) = pattern
+            .split_once('(')
+            .and_then(|(tool, rest)| rest.rsplit_once(')').map(|(argument, _)| (tool, argument)))
+        else {
+            return false;
+        };
+        matches!(
+            tool.trim().to_ascii_lowercase().as_str(),
+            "read"
+                | "write"
+                | "edit"
+                | "multiedit"
+                | "multi_edit"
+                | "grep"
+                | "glob"
+                | "notebookedit"
+                | "notebook_edit"
+        ) && Path::new(argument.trim()).is_absolute()
     }
 }
 

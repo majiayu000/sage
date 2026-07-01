@@ -33,6 +33,39 @@ fn relative_workspace_root_uses_request_working_directory() -> std::io::Result<(
     Ok(())
 }
 
+#[test]
+fn filesystem_rule_patterns_normalize_lexical_components() {
+    let profile = PermissionProfile {
+        filesystem: FilesystemPermissionProfile {
+            workspace_roots: vec!["/workspace/repo".to_string()],
+            ..Default::default()
+        },
+        default_behavior: PermissionBehavior::Allow,
+        default_behavior_set: true,
+        default_behavior_source: Some(PermissionProfileSource::Project),
+        deny: vec![PermissionRule::new(
+            "Write(./secrets/**)",
+            PermissionProfileSource::Project,
+        )],
+        ..Default::default()
+    };
+
+    let decision = PermissionDecisionEngine::new(profile).decide(
+        PermissionDecisionInput::new(PermissionAction::Filesystem, "Write", Vec::new())
+            .with_path("secrets/key.txt")
+            .with_working_directory("/workspace/repo"),
+    );
+
+    assert_eq!(decision.kind, PermissionDecisionKind::Deny);
+    assert_eq!(
+        decision
+            .matched_rule
+            .as_ref()
+            .map(|rule| rule.pattern.as_str()),
+        Some("Write(./secrets/**)")
+    );
+}
+
 #[cfg(windows)]
 #[test]
 fn protected_workspace_path_matches_case_insensitively_on_windows() {
