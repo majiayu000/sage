@@ -259,6 +259,7 @@ impl UnifiedExecutor {
         }
 
         settings.apply_env_overrides();
+        loader.load_managed_configs(&mut settings)?;
         SettingsValidator::new().validate(&settings)?;
         Ok(settings)
     }
@@ -271,7 +272,7 @@ impl UnifiedExecutor {
         let tool_name = settings_permission_keys::canonical_permission_tool_name(&tool_call.name);
         let keys =
             settings_permission_keys::actual_permission_keys(&tool_name, tool_call, working_dir);
-        let profile = PermissionProfile::from_settings(&settings.permissions)
+        let mut profile = PermissionProfile::from_settings(&settings.permissions)
             .with_filesystem_profile(
                 FilesystemPermissionProfile {
                     workspace_roots: vec![working_dir.to_string_lossy().to_string()],
@@ -279,7 +280,10 @@ impl UnifiedExecutor {
                 },
                 PermissionProfileSource::Local,
             );
-        if !profile.has_configured_rules() {
+        for managed in &settings.managed_configs {
+            managed.config.apply_restrictive_to(&mut profile);
+        }
+        if !profile.has_configured_rules() && settings.managed_configs.is_empty() {
             return None;
         }
 

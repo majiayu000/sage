@@ -2,7 +2,8 @@
 
 use super::permissions::SettingsPermissionBehavior;
 use super::{
-    HooksSettings, ModelSettings, PermissionSettings, ToolSettings, UiSettings, WorkspaceSettings,
+    HooksSettings, LoadedManagedConfig, ModelSettings, PermissionSettings, ToolSettings,
+    UiSettings, WorkspaceSettings,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -37,6 +38,10 @@ pub struct Settings {
     /// Model settings
     #[serde(default)]
     pub model: ModelSettings,
+
+    /// Loaded managed configs are runtime metadata, not part of the settings file format.
+    #[serde(skip)]
+    pub managed_configs: Vec<LoadedManagedConfig>,
 }
 
 impl Settings {

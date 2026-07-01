@@ -185,12 +185,13 @@ impl PermissionDecisionEngine {
     pub fn decide(&self, input: PermissionDecisionInput) -> PermissionDecision {
         let rule_match_keys = rule_match_keys(&self.profile, &input);
         let audit_key = input.audit_key(&rule_match_keys);
+        let sources = &self.profile.domain_sources;
 
         if matches!(input.action, PermissionAction::Network) && !self.profile.network.enabled {
             return PermissionDecision::new(
                 PermissionDecisionKind::Deny,
                 audit_key,
-                "network access is disabled by permission profile",
+                format!("network access is disabled source={:?}", sources.network),
                 None,
             );
         }
@@ -215,7 +216,7 @@ impl PermissionDecisionEngine {
             return PermissionDecision::new(
                 PermissionDecisionKind::Deny,
                 audit_key,
-                "process execution is disabled by permission profile",
+                format!("exec disabled source={:?}", sources.exec),
                 None,
             );
         }
@@ -237,7 +238,7 @@ impl PermissionDecisionEngine {
                 return PermissionDecision::new(
                     PermissionDecisionKind::Deny,
                     audit_key,
-                    format!("path '{}' is protected by permission profile", path),
+                    format!("protected path source={:?}: '{}'", sources.filesystem, path),
                     None,
                 );
             }
@@ -248,8 +249,8 @@ impl PermissionDecisionEngine {
                         PermissionDecisionKind::Deny,
                         audit_key,
                         format!(
-                            "path '{}' cannot be checked because no workspace roots are configured",
-                            path
+                            "no workspace roots are configured source={:?}: '{}'",
+                            sources.filesystem, path
                         ),
                         None,
                     );
@@ -272,7 +273,7 @@ impl PermissionDecisionEngine {
             return PermissionDecision::new(
                 PermissionDecisionKind::Unsupported,
                 audit_key,
-                "requested sandbox support is unsupported or unknown on this platform",
+                format!("sandbox unsupported source={:?}", sources.sandbox),
                 None,
             );
         }

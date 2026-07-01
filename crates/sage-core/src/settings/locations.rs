@@ -4,6 +4,7 @@
 //! - User level: ~/.config/sage/settings.json
 //! - Project level: .sage/settings.json
 //! - Local level: .sage/settings.local.json
+//! - Managed policy: SAGE_MANAGED_CONFIG, ~/.config/sage/managed.json, or .sage/managed*.json
 
 use std::path::{Path, PathBuf};
 
@@ -19,6 +20,9 @@ pub struct SettingsLocations {
     /// Local-level settings (.sage/settings.local.json)
     pub local: Option<PathBuf>,
 
+    /// Managed read-only policy config locations.
+    pub managed: Vec<PathBuf>,
+
     /// Project root directory (used in tests and for project settings init)
     #[allow(dead_code)]
     pub project_root: Option<PathBuf>,
@@ -33,12 +37,19 @@ impl SettingsLocations {
     /// Discover settings locations from a specific directory
     pub fn discover_from(start_dir: impl AsRef<Path>) -> Self {
         let user = Self::get_user_settings_path();
+        let mut managed = Self::discover_managed_config_paths();
         let project_root = Self::find_project_root(&start_dir);
 
         let (project, local) = if let Some(ref root) = project_root {
             let sage_dir = root.join(".sage");
             let project = sage_dir.join("settings.json");
             let local = sage_dir.join("settings.local.json");
+            for managed_name in ["managed.json", "managed-config.json"] {
+                let path = sage_dir.join(managed_name);
+                if path.exists() && !managed.contains(&path) {
+                    managed.push(path);
+                }
+            }
 
             (
                 if project.exists() {
@@ -56,6 +67,7 @@ impl SettingsLocations {
             user,
             project,
             local,
+            managed,
             project_root,
         }
     }
@@ -64,6 +76,23 @@ impl SettingsLocations {
     pub fn get_user_settings_path() -> PathBuf {
         let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
         home.join(".config").join("sage").join("settings.json")
+    }
+
+    fn get_user_managed_config_path() -> PathBuf {
+        let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+        home.join(".config").join("sage").join("managed.json")
+    }
+
+    fn discover_managed_config_paths() -> Vec<PathBuf> {
+        let mut paths = Vec::new();
+        if let Ok(path) = std::env::var("SAGE_MANAGED_CONFIG") {
+            paths.push(PathBuf::from(path));
+        }
+        let user_managed = Self::get_user_managed_config_path();
+        if user_managed.exists() && !paths.contains(&user_managed) {
+            paths.push(user_managed);
+        }
+        paths
     }
 
     /// Find the project root by looking for .sage directory or .git

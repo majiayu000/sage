@@ -10,6 +10,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use uuid::Uuid;
 
+pub const DEFAULT_PERSISTED_DIAGNOSTIC_EVENT_CAPACITY: usize = 2048;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DiagnosticEventKind {
@@ -183,6 +185,18 @@ pub fn append_diagnostic_event_to_path(
     event: &DiagnosticEvent,
     path: impl AsRef<Path>,
 ) -> SageResult<()> {
+    append_diagnostic_event_to_path_with_capacity(
+        event,
+        path,
+        DEFAULT_PERSISTED_DIAGNOSTIC_EVENT_CAPACITY,
+    )
+}
+
+pub fn append_diagnostic_event_to_path_with_capacity(
+    event: &DiagnosticEvent,
+    path: impl AsRef<Path>,
+    capacity: usize,
+) -> SageResult<()> {
     let path = path.as_ref();
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|error| {
@@ -197,6 +211,42 @@ pub fn append_diagnostic_event_to_path(
     let line = serde_json::to_string(event)
         .map_err(|error| SageError::json(format!("serialize diagnostic event: {error}")))?;
     writeln!(file, "{line}")
+        .map_err(|error| SageError::io_with_path(error.to_string(), path.display().to_string()))?;
+    prune_diagnostic_event_log(path, capacity)
+}
+
+fn prune_diagnostic_event_log(path: &Path, capacity: usize) -> SageResult<()> {
+    if capacity == 0 {
+        return std::fs::write(path, "").map_err(|error| {
+            SageError::io_with_path(error.to_string(), path.display().to_string())
+        });
+    }
+
+    let file = std::fs::File::open(path)
+        .map_err(|error| SageError::io_with_path(error.to_string(), path.display().to_string()))?;
+    let reader = std::io::BufReader::new(file);
+    let mut lines = VecDeque::with_capacity(capacity);
+    let mut pruned = false;
+    for line in reader.lines() {
+        let line = line.map_err(|error| {
+            SageError::io_with_path(error.to_string(), path.display().to_string())
+        })?;
+        if lines.len() >= capacity {
+            lines.pop_front();
+            pruned = true;
+        }
+        lines.push_back(line);
+    }
+
+    if !pruned {
+        return Ok(());
+    }
+
+    let mut content = lines.into_iter().collect::<Vec<_>>().join("\n");
+    if !content.is_empty() {
+        content.push('\n');
+    }
+    std::fs::write(path, content)
         .map_err(|error| SageError::io_with_path(error.to_string(), path.display().to_string()))
 }
 
@@ -230,8 +280,18 @@ pub fn persisted_diagnostics_snapshot_from_path(
         if line.trim().is_empty() {
             continue;
         }
-        let event: DiagnosticEvent = serde_json::from_str(&line)
-            .map_err(|error| SageError::json(format!("parse diagnostic event log: {error}")))?;
+        let event: DiagnosticEvent = match serde_json::from_str(&line) {
+            Ok(event) => event,
+            Err(error) => {
+                dropped_count = dropped_count.saturating_add(1);
+                tracing::debug!(
+                    "skipping malformed diagnostic event log line from {}: {}",
+                    path.display(),
+                    error
+                );
+                continue;
+            }
+        };
         if capacity == 0 {
             dropped_count = dropped_count.saturating_add(1);
             continue;
@@ -317,5 +377,58 @@ mod tests {
         assert_eq!(snapshot.dropped_count, 1);
         assert_eq!(snapshot.events[0].payload_summary, "second");
         assert_eq!(snapshot.events[1].payload_summary, "third");
+    }
+
+    #[test]
+    fn diagnostics_event_log_write_prunes_to_retention_capacity() {
+        let dir = match tempdir() {
+            Ok(dir) => dir,
+            Err(error) => panic!("expected tempdir: {error}"),
+        };
+        let path = dir.path().join("events.jsonl");
+
+        for label in ["first", "second", "third"] {
+            if let Err(error) =
+                append_diagnostic_event_to_path_with_capacity(&event(label), &path, 2)
+            {
+                panic!("expected append {label}: {error}");
+            }
+        }
+
+        let content = match std::fs::read_to_string(&path) {
+            Ok(content) => content,
+            Err(error) => panic!("expected event log: {error}"),
+        };
+
+        assert_eq!(content.lines().count(), 2);
+        assert!(!content.contains("first"));
+        assert!(content.contains("second"));
+        assert!(content.contains("third"));
+    }
+
+    #[test]
+    fn diagnostics_event_snapshot_skips_malformed_lines() {
+        let dir = match tempdir() {
+            Ok(dir) => dir,
+            Err(error) => panic!("expected tempdir: {error}"),
+        };
+        let path = dir.path().join("events.jsonl");
+        let valid = match serde_json::to_string(&event("valid")) {
+            Ok(valid) => valid,
+            Err(error) => panic!("expected serialized event: {error}"),
+        };
+        let content = format!("{{not-json}}\n{valid}\n");
+        if let Err(error) = std::fs::write(&path, content) {
+            panic!("expected write: {error}");
+        }
+
+        let snapshot = match persisted_diagnostics_snapshot_from_path(&path, 4) {
+            Ok(snapshot) => snapshot,
+            Err(error) => panic!("expected snapshot with malformed line skipped: {error}"),
+        };
+
+        assert_eq!(snapshot.retained_count, 1);
+        assert_eq!(snapshot.dropped_count, 1);
+        assert_eq!(snapshot.events[0].payload_summary, "valid");
     }
 }

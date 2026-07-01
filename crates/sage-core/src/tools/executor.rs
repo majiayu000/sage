@@ -309,7 +309,7 @@ fn record_tool_diagnostic(tool_name: &str, success: bool, error: Option<&str>) {
         None => format!("tool={tool_name} success={success}"),
     };
     let event = DiagnosticEvent::new(
-        DiagnosticEventKind::Tool,
+        diagnostic_kind_for_tool_result(error),
         "tool_executor",
         if success {
             DiagnosticSeverity::Info
@@ -329,19 +329,35 @@ fn record_tool_diagnostic(tool_name: &str, success: bool, error: Option<&str>) {
     }
 }
 
+fn diagnostic_kind_for_tool_result(error: Option<&str>) -> DiagnosticEventKind {
+    let Some(error) = error else {
+        return DiagnosticEventKind::Tool;
+    };
+    let error = error.to_ascii_lowercase();
+    if error.contains("permission") || error.contains("denied") {
+        DiagnosticEventKind::Permission
+    } else if error.contains("sandbox") {
+        DiagnosticEventKind::Sandbox
+    } else if error.contains("provider")
+        || error.contains("api key")
+        || error.contains("api_key")
+        || error.contains("authorization")
+        || error.contains("model")
+        || error.contains("openai")
+        || error.contains("anthropic")
+        || error.contains("google")
+    {
+        DiagnosticEventKind::Provider
+    } else {
+        DiagnosticEventKind::Tool
+    }
+}
+
 fn timeout_result(call: &ToolCall, execution_timeout: Duration, elapsed: Duration) -> ToolResult {
-    global_telemetry().record_tool_usage(
-        &call.name,
-        elapsed,
-        false,
-        Some(format!("Timed out after {:?}", execution_timeout)),
-        None,
-    );
-    ToolResult::error(
-        &call.id,
-        &call.name,
-        format!("Tool execution timed out after {:?}", execution_timeout),
-    )
+    let error = format!("Tool execution timed out after {:?}", execution_timeout);
+    global_telemetry().record_tool_usage(&call.name, elapsed, false, Some(error.clone()), None);
+    record_tool_diagnostic(&call.name, false, Some(&error));
+    ToolResult::error(&call.id, &call.name, error)
 }
 
 impl Default for ToolExecutor {

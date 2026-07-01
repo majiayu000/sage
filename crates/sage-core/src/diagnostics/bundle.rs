@@ -1,6 +1,9 @@
 //! Opt-in feedback diagnostic bundle generation.
 
-use super::{DiagnosticEventSnapshot, DiagnosticRedactor, RedactionReport};
+use super::{
+    DiagnosticEvent, DiagnosticEventKind, DiagnosticEventSnapshot, DiagnosticRedactor,
+    DiagnosticSeverity, RedactionReport,
+};
 use crate::error::{SageError, SageResult};
 use crate::permissions::{PermissionDecision, PermissionDecisionKind, PermissionProfileSource};
 use crate::sandbox::violations::Violation;
@@ -63,7 +66,11 @@ pub fn audit_permission_decision(
 ) -> PolicyAuditSummary {
     PolicyAuditSummary {
         decision: decision.kind.into(),
-        source: decision.matched_rule.as_ref().map(|rule| rule.source),
+        source: decision
+            .matched_rule
+            .as_ref()
+            .map(|rule| rule.source)
+            .or_else(|| source_from_event_source(&decision.reason)),
         matched_rule: decision
             .matched_rule
             .as_ref()
@@ -106,6 +113,71 @@ pub fn audit_provider_error(provider: &str, raw_error: &str) -> PolicyAuditSumma
         matched_rule: Some(provider.to_string()),
         reason: "provider error".to_string(),
         redacted_context: DiagnosticRedactor::new().redact_text(raw_error).value,
+    }
+}
+
+pub fn audit_summaries_from_events(snapshot: &DiagnosticEventSnapshot) -> Vec<PolicyAuditSummary> {
+    snapshot
+        .events
+        .iter()
+        .filter_map(audit_summary_from_event)
+        .collect()
+}
+
+fn audit_summary_from_event(event: &DiagnosticEvent) -> Option<PolicyAuditSummary> {
+    let decision = match event.kind {
+        DiagnosticEventKind::Permission => permission_event_decision(event),
+        DiagnosticEventKind::Sandbox => {
+            if event.severity >= DiagnosticSeverity::Error {
+                AuditDecisionKind::Deny
+            } else {
+                AuditDecisionKind::Warning
+            }
+        }
+        DiagnosticEventKind::Provider => AuditDecisionKind::ProviderError,
+        DiagnosticEventKind::Config => AuditDecisionKind::Warning,
+        _ => return None,
+    };
+
+    Some(PolicyAuditSummary {
+        decision,
+        source: source_from_event_source(&event.source),
+        matched_rule: Some(event.source.clone()),
+        reason: event.payload_summary.clone(),
+        redacted_context: format!(
+            "event_id={} kind={:?} source={}",
+            event.event_id, event.kind, event.source
+        ),
+    })
+}
+
+fn permission_event_decision(event: &DiagnosticEvent) -> AuditDecisionKind {
+    let payload = event.payload_summary.to_ascii_lowercase();
+    if payload.contains("decision=deny") || payload.contains("denied") {
+        AuditDecisionKind::Deny
+    } else if payload.contains("decision=ask") {
+        AuditDecisionKind::Ask
+    } else if event.severity >= DiagnosticSeverity::Error {
+        AuditDecisionKind::Deny
+    } else {
+        AuditDecisionKind::Warning
+    }
+}
+
+fn source_from_event_source(source: &str) -> Option<PermissionProfileSource> {
+    let source = source.to_ascii_lowercase();
+    if source.contains("managed") {
+        Some(PermissionProfileSource::Managed)
+    } else if source.contains("project") {
+        Some(PermissionProfileSource::Project)
+    } else if source.contains("user") {
+        Some(PermissionProfileSource::User)
+    } else if source.contains("local") {
+        Some(PermissionProfileSource::Local)
+    } else if source.contains("system") {
+        Some(PermissionProfileSource::System)
+    } else {
+        None
     }
 }
 
@@ -336,5 +408,59 @@ mod tests {
 
         assert!(!sandbox.redacted_context.contains("/Users/alice"));
         assert!(!provider.redacted_context.contains("sk-secret-token"));
+    }
+
+    #[test]
+    fn audit_policy_source_preserves_domain_denial_source() {
+        let profile = PermissionProfile::default()
+            .with_source(PermissionProfileSource::Managed)
+            .with_network_profile(
+                crate::permissions::NetworkPermissionProfile { enabled: false },
+                PermissionProfileSource::Managed,
+            );
+        let engine = PermissionDecisionEngine::new(profile);
+        let decision = engine.decide(
+            PermissionDecisionInput::new(PermissionAction::Network, "WebFetch", Vec::new())
+                .with_network_target("example.test"),
+        );
+
+        let summary = audit_permission_decision(&decision, "request");
+
+        assert_eq!(summary.decision, AuditDecisionKind::Deny);
+        assert_eq!(summary.source, Some(PermissionProfileSource::Managed));
+    }
+
+    #[test]
+    fn audit_summaries_from_events_capture_policy_provider_and_sandbox_sources() {
+        let ring = DiagnosticEventRing::new(4);
+        ring.record(DiagnosticEvent::new(
+            DiagnosticEventKind::Permission,
+            "managed_policy",
+            DiagnosticSeverity::Warn,
+            RedactionClass::Sensitive,
+            "decision=deny reason=Read(.env)",
+        ));
+        ring.record(DiagnosticEvent::new(
+            DiagnosticEventKind::Provider,
+            "provider:openai",
+            DiagnosticSeverity::Error,
+            RedactionClass::Sensitive,
+            "Authorization: Bearer sk-secret-token",
+        ));
+        ring.record(DiagnosticEvent::new(
+            DiagnosticEventKind::Sandbox,
+            "sandbox:exec",
+            DiagnosticSeverity::Error,
+            RedactionClass::Sensitive,
+            "blocked exec",
+        ));
+
+        let summaries = audit_summaries_from_events(&ring.snapshot());
+
+        assert_eq!(summaries.len(), 3);
+        assert_eq!(summaries[0].decision, AuditDecisionKind::Deny);
+        assert_eq!(summaries[0].source, Some(PermissionProfileSource::Managed));
+        assert_eq!(summaries[1].decision, AuditDecisionKind::ProviderError);
+        assert_eq!(summaries[2].decision, AuditDecisionKind::Deny);
     }
 }

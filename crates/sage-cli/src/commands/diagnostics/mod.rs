@@ -13,8 +13,8 @@ mod usage_cmd;
 use colored::Colorize;
 use sage_core::config::load_config_from_file;
 use sage_core::diagnostics::{
-    DiagnosticBundleSections, FeedbackBundleOutcome, FeedbackConsent, global_diagnostics,
-    persisted_diagnostics_snapshot, write_feedback_bundle,
+    DiagnosticBundleSections, FeedbackBundleOutcome, FeedbackConsent, audit_summaries_from_events,
+    global_diagnostics, persisted_diagnostics_snapshot, write_feedback_bundle,
 };
 use sage_core::telemetry::global_telemetry;
 use sage_core::{Config, SageResult};
@@ -57,6 +57,8 @@ fn feedback_sections(config_file: &str) -> DiagnosticBundleSections {
         "config file missing"
     };
     let telemetry = global_telemetry().get_summary();
+    let recent_events = diagnostic_snapshot();
+    let audit_summaries = audit_summaries_from_events(&recent_events);
     DiagnosticBundleSections {
         doctor_summary: format!(
             "{}; telemetry_events={} dropped={} capacity={}",
@@ -72,8 +74,8 @@ fn feedback_sections(config_file: &str) -> DiagnosticBundleSections {
             .to_string(),
         permission_summary: "permission diagnostics section present; no decision snapshot supplied"
             .to_string(),
-        recent_events: Some(diagnostic_snapshot()),
-        audit_summaries: Vec::new(),
+        recent_events: Some(recent_events),
+        audit_summaries,
     }
 }
 
@@ -90,6 +92,9 @@ fn provider_summary(config_file: &str) -> String {
 
 fn diagnostic_snapshot() -> sage_core::diagnostics::DiagnosticEventSnapshot {
     let memory = global_diagnostics().snapshot();
+    if !memory.events.is_empty() {
+        return memory;
+    }
     match persisted_diagnostics_snapshot(memory.capacity) {
         Ok(persisted) if !persisted.events.is_empty() => persisted,
         _ => memory,
@@ -115,6 +120,10 @@ mod tests {
     use super::types::{CheckResult, CheckStatus, format_number};
     use super::usage::{extract_usage_from_content, extract_usage_from_json};
     use super::{feedback, feedback_sections};
+    use sage_core::diagnostics::{
+        DiagnosticEvent, DiagnosticEventKind, DiagnosticSeverity, RedactionClass,
+        global_diagnostics,
+    };
     use tempfile::tempdir;
 
     #[test]
@@ -188,5 +197,22 @@ mod tests {
 
         assert!(sections.recent_events.is_some());
         assert!(sections.doctor_summary.contains("telemetry_events="));
+    }
+
+    #[test]
+    fn feedback_sections_populate_audit_summaries_from_diagnostics() {
+        global_diagnostics().clear();
+        global_diagnostics().record(DiagnosticEvent::new(
+            DiagnosticEventKind::Provider,
+            "provider:openai",
+            DiagnosticSeverity::Error,
+            RedactionClass::Sensitive,
+            "Authorization: Bearer sk-secret-token",
+        ));
+
+        let sections = feedback_sections("missing-config.json");
+
+        assert_eq!(sections.audit_summaries.len(), 1);
+        global_diagnostics().clear();
     }
 }

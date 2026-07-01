@@ -7,7 +7,8 @@ mod redaction;
 pub use bundle::{
     AuditDecisionKind, DiagnosticBundleSections, FeedbackBundle, FeedbackBundleOutcome,
     FeedbackConsent, PolicyAuditSummary, audit_permission_decision, audit_provider_error,
-    audit_sandbox_violation, build_feedback_bundle, write_feedback_bundle,
+    audit_sandbox_violation, audit_summaries_from_events, build_feedback_bundle,
+    write_feedback_bundle,
 };
 pub use event_ring::{
     DiagnosticEvent, DiagnosticEventKind, DiagnosticEventRing, DiagnosticEventSnapshot,

@@ -14,9 +14,18 @@ static BEARER_TOKEN_RE: Lazy<Regex> = Lazy::new(|| {
 
 static KEY_VALUE_SECRET_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
-        r#"(?i)\b([A-Z0-9_-]*(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password|authorization|x-api-key|cookie)[A-Z0-9_-]*)\b\s*[:=]\s*["']?[^"',\s}]+"#,
+        r#"(?i)\b([A-Z0-9_-]*(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password|cookie|credential|private[_-]?key)[A-Z0-9_-]*)\b\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|[^"',\s}\]]+)"#,
     )
     .expect("valid secret regex")
+});
+
+static AUTHORIZATION_SECRET_RE: Lazy<Regex> = Lazy::new(|| {
+    match Regex::new(
+        r#"(?i)\b(authorization|x-api-key)\b\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|(?:bearer|basic|token|api-key|apikey)\s+[^"',\s=}\]]+(?:\s+[^"',\s=}\]]+)?|[^"',\s}\]]+)"#,
+    ) {
+        Ok(regex) => regex,
+        Err(error) => panic!("invalid authorization secret regex: {error}"),
+    }
 });
 
 static PROVIDER_KEY_RE: Lazy<Regex> = Lazy::new(|| {
@@ -80,6 +89,7 @@ impl DiagnosticRedactor {
         let mut value = input.to_string();
 
         for replacement in [
+            (&*AUTHORIZATION_SECRET_RE, "$1=[REDACTED]"),
             (&*BEARER_TOKEN_RE, "Bearer [REDACTED]"),
             (&*KEY_VALUE_SECRET_RE, "$1=[REDACTED]"),
             (&*PROVIDER_KEY_RE, REDACTED),
@@ -180,6 +190,23 @@ mod tests {
         assert!(redacted.value.contains("[REDACTED]"));
         assert!(redacted.value.contains("[REDACTED_PATH]"));
         assert!(redacted.report.replacements >= 3);
+    }
+
+    #[test]
+    fn diagnostics_redaction_redacts_quoted_and_space_separated_secret_values() {
+        let redactor = DiagnosticRedactor::new();
+        let input = "DATABASE_PASSWORD=\"foo bar,baz\" Authorization: Basic abc def token='x y,z'";
+
+        let redacted = redactor.redact_text(input);
+
+        assert!(!redacted.value.contains("foo"));
+        assert!(!redacted.value.contains("bar"));
+        assert!(!redacted.value.contains("baz"));
+        assert!(!redacted.value.contains("abc def"));
+        assert!(!redacted.value.contains("x y"));
+        assert!(redacted.value.contains("DATABASE_PASSWORD=[REDACTED]"));
+        assert!(redacted.value.contains("Authorization=[REDACTED]"));
+        assert!(redacted.value.contains("token=[REDACTED]"));
     }
 
     #[test]
