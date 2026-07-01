@@ -682,6 +682,27 @@ fn unsupported_requested_sandbox_fails_closed() {
 }
 
 #[test]
+fn preflight_denial_preserves_matched_rule_source() {
+    let profile = PermissionProfile::default();
+    let decision = PermissionDecisionEngine::new(profile).decide(
+        PermissionDecisionInput::new(PermissionAction::Tool, "Grep", vec!["Grep".to_string()])
+            .with_preflight_denies(vec![
+                PermissionPreflight::new(
+                    "Grep search overlaps deny rule 'Grep(secrets/**)'",
+                    Some("Grep(secrets/**)".to_string()),
+                )
+                .with_source(PermissionProfileSource::Managed),
+            ]),
+    );
+
+    assert_eq!(decision.kind, PermissionDecisionKind::Deny);
+    assert_eq!(
+        decision.matched_rule.as_ref().map(|rule| rule.source),
+        Some(PermissionProfileSource::Managed)
+    );
+}
+
+#[test]
 fn required_profile_sandbox_with_unknown_support_fails_closed() {
     let profile = PermissionProfile {
         sandbox: SandboxPermissionProfile { required: true },

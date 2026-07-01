@@ -2,6 +2,7 @@
 
 #[cfg(test)]
 mod tests {
+    use crate::diagnostics::{DiagnosticEventKind, global_diagnostics};
     use crate::tools::base::{Tool, ToolError};
     use crate::tools::executor::{ToolExecutor, ToolExecutorBuilder};
     use crate::tools::permission::ToolContext;
@@ -16,6 +17,7 @@ mod tests {
         name: String,
         should_succeed: bool,
         execution_delay: Option<Duration>,
+        max_duration: Option<Duration>,
         supports_parallel: bool,
     }
 
@@ -97,6 +99,7 @@ mod tests {
                 name: name.to_string(),
                 should_succeed: true,
                 execution_delay: None,
+                max_duration: None,
                 supports_parallel: true,
             }
         }
@@ -108,6 +111,11 @@ mod tests {
 
         fn with_delay(mut self, delay: Duration) -> Self {
             self.execution_delay = Some(delay);
+            self
+        }
+
+        fn with_max_duration(mut self, max_duration: Duration) -> Self {
+            self.max_duration = Some(max_duration);
             self
         }
 
@@ -156,6 +164,10 @@ mod tests {
 
         fn supports_parallel_execution(&self) -> bool {
             self.supports_parallel
+        }
+
+        fn max_execution_duration(&self) -> Option<Duration> {
+            self.max_duration
         }
     }
 
@@ -383,6 +395,29 @@ mod tests {
         assert!(!result.success);
         assert!(result.error.is_some());
         assert!(result.error.unwrap().contains("timed out"));
+    }
+
+    #[tokio::test]
+    async fn test_tool_timeout_records_diagnostic_event() {
+        global_diagnostics().clear();
+        let mut executor = ToolExecutor::new();
+
+        let tool = Arc::new(
+            MockTool::new("slow_tool")
+                .with_delay(Duration::from_millis(50))
+                .with_max_duration(Duration::from_millis(1)),
+        );
+        executor.register_tool(tool);
+
+        let call = ToolCall::new("call_timeout_diagnostics", "slow_tool", HashMap::new());
+        let result = executor.execute_tool(&call).await;
+        let snapshot = global_diagnostics().snapshot();
+
+        assert!(!result.success);
+        assert!(snapshot.events.iter().any(|event| {
+            event.kind == DiagnosticEventKind::Tool && event.payload_summary.contains("timed out")
+        }));
+        global_diagnostics().clear();
     }
 
     #[test]

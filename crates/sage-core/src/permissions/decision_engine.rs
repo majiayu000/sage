@@ -1,7 +1,7 @@
 use super::decision_engine_keys::{
     normalize_path, path_is_at_or_under, permission_pattern_matches, rule_match_keys,
 };
-use super::{PermissionBehavior, PermissionProfile, PermissionRule};
+use super::{PermissionBehavior, PermissionProfile, PermissionProfileSource, PermissionRule};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -33,15 +33,14 @@ impl Default for SandboxSupport {
 pub struct PermissionPreflight {
     pub reason: String,
     pub matched_rule: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub matched_rule_source: Option<PermissionProfileSource>,
 }
 
+#[rustfmt::skip]
 impl PermissionPreflight {
-    pub fn new(reason: impl Into<String>, matched_rule: Option<String>) -> Self {
-        Self {
-            reason: reason.into(),
-            matched_rule,
-        }
-    }
+    pub fn new(reason: impl Into<String>, matched_rule: Option<String>) -> Self { Self { reason: reason.into(), matched_rule, matched_rule_source: None } }
+    pub fn with_source(mut self, source: PermissionProfileSource) -> Self { self.matched_rule_source = Some(source); self }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -185,12 +184,13 @@ impl PermissionDecisionEngine {
     pub fn decide(&self, input: PermissionDecisionInput) -> PermissionDecision {
         let rule_match_keys = rule_match_keys(&self.profile, &input);
         let audit_key = input.audit_key(&rule_match_keys);
+        let sources = &self.profile.domain_sources;
 
         if matches!(input.action, PermissionAction::Network) && !self.profile.network.enabled {
             return PermissionDecision::new(
                 PermissionDecisionKind::Deny,
                 audit_key,
-                "network access is disabled by permission profile",
+                format!("network access is disabled source={:?}", sources.network),
                 None,
             );
         }
@@ -215,7 +215,7 @@ impl PermissionDecisionEngine {
             return PermissionDecision::new(
                 PermissionDecisionKind::Deny,
                 audit_key,
-                "process execution is disabled by permission profile",
+                format!("exec disabled source={:?}", sources.exec),
                 None,
             );
         }
@@ -237,7 +237,7 @@ impl PermissionDecisionEngine {
                 return PermissionDecision::new(
                     PermissionDecisionKind::Deny,
                     audit_key,
-                    format!("path '{}' is protected by permission profile", path),
+                    format!("protected path source={:?}: '{}'", sources.filesystem, path),
                     None,
                 );
             }
@@ -248,8 +248,8 @@ impl PermissionDecisionEngine {
                         PermissionDecisionKind::Deny,
                         audit_key,
                         format!(
-                            "path '{}' cannot be checked because no workspace roots are configured",
-                            path
+                            "no workspace roots are configured source={:?}: '{}'",
+                            sources.filesystem, path
                         ),
                         None,
                     );
@@ -272,19 +272,20 @@ impl PermissionDecisionEngine {
             return PermissionDecision::new(
                 PermissionDecisionKind::Unsupported,
                 audit_key,
-                "requested sandbox support is unsupported or unknown on this platform",
+                format!("sandbox unsupported source={:?}", sources.sandbox),
                 None,
             );
         }
 
         if let Some(deny) = input.preflight_denies.first() {
+            let source = deny.matched_rule_source.unwrap_or(self.profile.source);
             return PermissionDecision::new(
                 PermissionDecisionKind::Deny,
                 audit_key,
                 deny.reason.clone(),
                 deny.matched_rule
                     .as_ref()
-                    .map(|pattern| PermissionRule::new(pattern.clone(), self.profile.source)),
+                    .map(|pattern| PermissionRule::new(pattern.clone(), source)),
             );
         }
 
@@ -347,13 +348,19 @@ impl PermissionDecisionEngine {
             PermissionBehavior::Deny => PermissionDecision::new(
                 PermissionDecisionKind::Deny,
                 audit_key.clone(),
-                format!("no allow rule matched '{}'", audit_key),
+                format!(
+                    "no allow rule matched '{}' source={:?}",
+                    audit_key, self.profile.default_behavior_source
+                ),
                 None,
             ),
             PermissionBehavior::Ask => PermissionDecision::new(
                 PermissionDecisionKind::Ask,
                 audit_key.clone(),
-                format!("No permission rule matched '{}'.", audit_key),
+                format!(
+                    "No permission rule matched '{}'. source={:?}",
+                    audit_key, self.profile.default_behavior_source
+                ),
                 None,
             ),
         }

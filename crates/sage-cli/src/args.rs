@@ -120,6 +120,22 @@ pub enum Commands {
         #[arg(long, short)]
         detailed: bool,
     },
+
+    /// Generate an opt-in redacted feedback diagnostic bundle
+    #[command(verbatim_doc_comment)]
+    Feedback {
+        /// Path to configuration file
+        #[arg(long, default_value = DEFAULT_CONFIG_FILE)]
+        config_file: String,
+
+        /// Output path for the redacted feedback bundle
+        #[arg(long, default_value = "sage-feedback-bundle.json")]
+        output: PathBuf,
+
+        /// Explicitly consent to writing the redacted bundle
+        #[arg(long)]
+        yes: bool,
+    },
 }
 
 #[derive(Subcommand, Clone)]
@@ -199,5 +215,34 @@ mod tests {
         };
 
         assert_eq!(err.kind(), clap::error::ErrorKind::ArgumentConflict);
+    }
+
+    #[test]
+    fn cli_contract_parses_feedback_consent_command() {
+        let cli = match Cli::try_parse_from([
+            "sage",
+            "feedback",
+            "--config-file",
+            "config.json",
+            "--output",
+            "bundle.json",
+            "--yes",
+        ]) {
+            Ok(cli) => cli,
+            Err(err) => panic!("expected feedback command to parse: {err}"),
+        };
+
+        match cli.command {
+            Some(Commands::Feedback {
+                config_file,
+                output,
+                yes,
+            }) => {
+                assert_eq!(config_file, "config.json");
+                assert_eq!(output, PathBuf::from("bundle.json"));
+                assert!(yes);
+            }
+            _ => panic!("expected feedback command"),
+        }
     }
 }

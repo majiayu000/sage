@@ -10,7 +10,11 @@ mod permissions;
 mod tools;
 
 pub use base::Settings;
-pub use config::{ModelSettings, UiSettings, WorkspaceSettings};
+pub use config::{
+    LoadedManagedConfig, ManagedConfig, ManagedConfigSource, ManagedConfigSourceKind,
+    ManagedDefaultBehavior, ManagedExecConfig, ManagedNetworkConfig, ManagedPermissionConfig,
+    ManagedSandboxConfig, ModelSettings, UiSettings, WorkspaceSettings,
+};
 pub use hooks::HooksSettings;
 pub use permissions::{PermissionSettings, SettingsPermissionBehavior};
 pub use tools::ToolSettings;

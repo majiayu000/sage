@@ -252,3 +252,52 @@ fn with_source_reassigns_default_behavior_source() {
         Some(PermissionProfileSource::Local)
     );
 }
+
+#[test]
+fn managed_merge_does_not_loosen_existing_deny_default() {
+    let managed = PermissionProfile::default()
+        .with_source(PermissionProfileSource::Managed)
+        .with_default_behavior(PermissionBehavior::Ask);
+    let mut profile = PermissionProfile::default()
+        .with_source(PermissionProfileSource::Project)
+        .with_default_behavior(PermissionBehavior::Deny);
+
+    profile.merge(managed);
+
+    assert_eq!(profile.default_behavior, PermissionBehavior::Deny);
+}
+
+#[test]
+fn managed_merge_preserves_workspace_roots_when_adding_protected_paths() {
+    let managed_filesystem = FilesystemPermissionProfile {
+        protected_paths: vec!["secrets/**".to_string()],
+        ..Default::default()
+    };
+    let managed = PermissionProfile::default()
+        .with_source(PermissionProfileSource::Managed)
+        .with_filesystem_profile(managed_filesystem, PermissionProfileSource::Managed);
+    let mut profile = PermissionProfile::default().with_filesystem_profile(
+        FilesystemPermissionProfile {
+            workspace_roots: vec!["/workspace".to_string()],
+            allow_outside_workspace: false,
+            protected_paths: vec![".env".to_string()],
+        },
+        PermissionProfileSource::Project,
+    );
+
+    profile.merge(managed);
+
+    assert_eq!(profile.filesystem.workspace_roots, vec!["/workspace"]);
+    assert!(
+        profile
+            .filesystem
+            .protected_paths
+            .contains(&".env".to_string())
+    );
+    assert!(
+        profile
+            .filesystem
+            .protected_paths
+            .contains(&"secrets/**".to_string())
+    );
+}

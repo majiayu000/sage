@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "snake_case")]
 pub enum PermissionProfileSource {
     System,
+    Managed,
     User,
     Project,
     Local,
@@ -16,6 +17,7 @@ impl PermissionProfileSource {
     pub(super) fn precedence(self) -> u8 {
         match self {
             Self::System => 0,
+            Self::Managed => 35,
             Self::User => 10,
             Self::Project => 20,
             Self::Local => 30,
@@ -288,6 +290,11 @@ impl PermissionProfile {
     }
 
     pub fn merge(&mut self, other: PermissionProfile) {
+        if other.source == PermissionProfileSource::Managed {
+            self.merge_managed(other);
+            return;
+        }
+
         self.allow.extend(other.allow);
         self.deny.extend(other.deny);
 
@@ -340,6 +347,47 @@ impl PermissionProfile {
         match current {
             Some(current) => incoming.precedence() >= current.precedence(),
             None => true,
+        }
+    }
+
+    fn merge_managed(&mut self, other: PermissionProfile) {
+        self.deny.extend(other.deny);
+
+        let other_default_source = other.default_behavior_source.or_else(|| {
+            (other.default_behavior_set || other.default_behavior != PermissionBehavior::Ask)
+                .then_some(other.source)
+        });
+        if other_default_source.is_some()
+            && (other.default_behavior == PermissionBehavior::Deny
+                || self.default_behavior != PermissionBehavior::Deny)
+        {
+            self.default_behavior = other.default_behavior;
+            self.default_behavior_set = true;
+            self.default_behavior_source = other_default_source;
+        }
+
+        if other.domain_sources.filesystem.is_some() {
+            self.filesystem
+                .protected_paths
+                .extend(other.filesystem.protected_paths);
+            self.filesystem.protected_paths.sort();
+            self.filesystem.protected_paths.dedup();
+            self.domain_sources.filesystem = Some(PermissionProfileSource::Managed);
+        }
+        if other.domain_sources.network.is_some() {
+            self.network.enabled = self.network.enabled && other.network.enabled;
+            self.domain_sources.network = Some(PermissionProfileSource::Managed);
+        }
+        if other.domain_sources.exec.is_some() {
+            self.exec.enabled = self.exec.enabled && other.exec.enabled;
+            self.domain_sources.exec = Some(PermissionProfileSource::Managed);
+        }
+        if other.domain_sources.sandbox.is_some() {
+            self.sandbox.required = self.sandbox.required || other.sandbox.required;
+            self.domain_sources.sandbox = Some(PermissionProfileSource::Managed);
+        }
+        if other.source.precedence() >= self.source.precedence() {
+            self.source = other.source;
         }
     }
 

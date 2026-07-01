@@ -12,6 +12,8 @@ pub struct ToolExecutionContext {
     pub session_id: String,
     /// Working directory for hook execution
     pub working_dir: PathBuf,
+    /// Whether tool execution is already sandboxed by the caller.
+    pub sandboxed: bool,
 }
 
 impl ToolExecutionContext {
@@ -20,12 +22,24 @@ impl ToolExecutionContext {
         Self {
             session_id: session_id.into(),
             working_dir,
+            sandboxed: false,
         }
+    }
+
+    pub fn with_sandboxed(mut self, sandboxed: bool) -> Self {
+        self.sandboxed = sandboxed;
+        self
     }
 
     /// Convert to the permission-layer tool context used by context-aware tools.
     pub fn to_tool_context(&self) -> ToolContext {
-        ToolContext::new(self.working_dir.clone()).with_session_id(self.session_id.clone())
+        let context =
+            ToolContext::new(self.working_dir.clone()).with_session_id(self.session_id.clone());
+        if self.sandboxed {
+            context.sandboxed()
+        } else {
+            context
+        }
     }
 }
 

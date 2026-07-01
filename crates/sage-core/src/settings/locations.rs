@@ -4,6 +4,7 @@
 //! - User level: ~/.config/sage/settings.json
 //! - Project level: .sage/settings.json
 //! - Local level: .sage/settings.local.json
+//! - Managed policy: SAGE_MANAGED_CONFIG, ~/.config/sage/managed.json, or .sage/managed*.json
 
 use std::path::{Path, PathBuf};
 
@@ -19,6 +20,9 @@ pub struct SettingsLocations {
     /// Local-level settings (.sage/settings.local.json)
     pub local: Option<PathBuf>,
 
+    /// Managed read-only policy config locations.
+    pub managed: Vec<PathBuf>,
+
     /// Project root directory (used in tests and for project settings init)
     #[allow(dead_code)]
     pub project_root: Option<PathBuf>,
@@ -33,12 +37,18 @@ impl SettingsLocations {
     /// Discover settings locations from a specific directory
     pub fn discover_from(start_dir: impl AsRef<Path>) -> Self {
         let user = Self::get_user_settings_path();
+        let mut managed = Self::discover_managed_config_paths();
         let project_root = Self::find_project_root(&start_dir);
 
         let (project, local) = if let Some(ref root) = project_root {
             let sage_dir = root.join(".sage");
             let project = sage_dir.join("settings.json");
             let local = sage_dir.join("settings.local.json");
+            for path in Self::get_project_managed_config_paths(&sage_dir) {
+                if path.exists() && !managed.contains(&path) {
+                    managed.push(path);
+                }
+            }
 
             (
                 if project.exists() {
@@ -56,6 +66,7 @@ impl SettingsLocations {
             user,
             project,
             local,
+            managed,
             project_root,
         }
     }
@@ -64,6 +75,40 @@ impl SettingsLocations {
     pub fn get_user_settings_path() -> PathBuf {
         let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
         home.join(".config").join("sage").join("settings.json")
+    }
+
+    fn get_user_managed_config_path() -> PathBuf {
+        let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+        home.join(".config").join("sage").join("managed.json")
+    }
+
+    fn discover_managed_config_paths() -> Vec<PathBuf> {
+        let mut paths = Vec::new();
+        if let Ok(path) = std::env::var("SAGE_MANAGED_CONFIG") {
+            paths.push(PathBuf::from(path));
+        }
+        let user_managed = Self::get_user_managed_config_path();
+        if user_managed.exists() && !paths.contains(&user_managed) {
+            paths.push(user_managed);
+        }
+        paths
+    }
+
+    fn get_project_managed_config_paths(sage_dir: &Path) -> Vec<PathBuf> {
+        let Ok(entries) = std::fs::read_dir(sage_dir) else {
+            return Vec::new();
+        };
+        let mut paths = entries
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.starts_with("managed") && name.ends_with(".json"))
+            })
+            .collect::<Vec<_>>();
+        paths.sort();
+        paths
     }
 
     /// Find the project root by looking for .sage directory or .git
@@ -186,6 +231,33 @@ mod tests {
 
         assert!(locations.local.is_some());
         assert!(locations.has_local_settings());
+    }
+
+    #[test]
+    fn test_discover_project_managed_json_glob() {
+        let temp_dir = match TempDir::new() {
+            Ok(temp_dir) => temp_dir,
+            Err(error) => panic!("expected temp dir: {error}"),
+        };
+        let sage_dir = temp_dir.path().join(".sage");
+        if let Err(error) = fs::create_dir(&sage_dir) {
+            panic!("expected .sage dir: {error}");
+        }
+        for name in ["managed.json", "managed-team.json", "managed-config.json"] {
+            if let Err(error) = fs::write(sage_dir.join(name), "{}") {
+                panic!("expected managed file {name}: {error}");
+            }
+        }
+
+        let locations = SettingsLocations::discover_from(temp_dir.path());
+
+        assert_eq!(locations.managed.len(), 3);
+        assert!(
+            locations
+                .managed
+                .iter()
+                .any(|path| path.ends_with(".sage/managed-team.json"))
+        );
     }
 
     #[test]

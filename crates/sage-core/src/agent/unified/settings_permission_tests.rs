@@ -2,8 +2,11 @@ use super::settings_permission_test_support::workspace_dir;
 use super::*;
 use crate::agent::ExecutionOptions;
 use crate::config::Config;
+use crate::diagnostics::{AuditDecisionKind, audit_summaries_from_events, global_diagnostics};
 use crate::input::{InputAutoResponse, InputChannel, InputRequestKind, InputResponse};
+use crate::permissions::PermissionProfileSource;
 use crate::settings::types::PermissionSettings;
+use serial_test::serial;
 use std::collections::HashMap;
 use std::fs;
 use std::sync::Arc;
@@ -268,7 +271,9 @@ fn test_legacy_permission_text_decision_parses_yes_and_no() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_settings_permission_rechecks_modified_input_against_deny_rules() -> SageResult<()> {
+    global_diagnostics().clear();
     let temp_dir = TempDir::new()?;
     let sage_dir = temp_dir.path().join(".sage");
     fs::create_dir(&sage_dir)?;
@@ -319,6 +324,53 @@ async fn test_settings_permission_rechecks_modified_input_against_deny_rules() -
         }
         _ => panic!("modified denied path should be blocked by settings"),
     }
+
+    let summaries = audit_summaries_from_events(&global_diagnostics().snapshot());
+    let summary = summaries
+        .iter()
+        .find(|summary| summary.reason.contains("Write(secrets/**)"))
+        .expect("settings denial should be captured in diagnostics audit summary");
+    assert_eq!(summary.decision, AuditDecisionKind::Deny);
+    assert_eq!(summary.source, Some(PermissionProfileSource::Local));
+    global_diagnostics().clear();
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn test_managed_default_denial_records_audit_summary() -> SageResult<()> {
+    global_diagnostics().clear();
+    let temp_dir = TempDir::new()?;
+    let sage_dir = temp_dir.path().join(".sage");
+    fs::create_dir(&sage_dir)?;
+    fs::write(
+        sage_dir.join("managed.json"),
+        r#"{
+            "permissions": {
+                "default_behavior": "deny"
+            }
+        }"#,
+    )?;
+
+    let mut config = Config::default();
+    config.default_provider = "ollama".to_string();
+    let options = ExecutionOptions::interactive().with_working_directory(temp_dir.path());
+    let mut executor = UnifiedExecutor::with_options(config, options)?;
+
+    let context = ToolExecutionContext::new("session", temp_dir.path().to_path_buf());
+    let result = executor
+        .check_settings_permission(&bash_call("curl https://example.com"), &context)
+        .await?;
+
+    assert!(matches!(result, Some(SettingsPermissionCheck::Blocked(_))));
+    let summaries = audit_summaries_from_events(&global_diagnostics().snapshot());
+    assert!(summaries.iter().any(|summary| {
+        summary.reason.contains("source=Some(Managed)")
+            && summary.decision == AuditDecisionKind::Deny
+            && summary.source == Some(PermissionProfileSource::Managed)
+    }));
+    global_diagnostics().clear();
 
     Ok(())
 }

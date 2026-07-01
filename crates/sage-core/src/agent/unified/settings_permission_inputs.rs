@@ -46,7 +46,7 @@ pub(super) fn settings_permission_inputs(
             preflight_denies,
             scoped_allows,
         )],
-        "webfetch" | "openbrowser" => vec![with_preflights(
+        "webfetch" | "openbrowser" | "websearch" => vec![with_preflights(
             network_input(tool_name, tool_call, keys),
             preflight_denies,
             scoped_allows,
@@ -182,6 +182,11 @@ fn network_input(
         .filter(|url| !url.trim().is_empty())
     {
         input.with_network_target(url)
+    } else if let Some(query) = tool_call
+        .get_argument::<String>("query")
+        .filter(|query| !query.trim().is_empty())
+    {
+        input.with_network_target(query)
     } else {
         input
     }

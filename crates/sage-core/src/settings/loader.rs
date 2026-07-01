@@ -7,7 +7,7 @@ use crate::error::{SageError, SageResult};
 use std::path::Path;
 
 use super::locations::SettingsLocations;
-use super::types::Settings;
+use super::types::{ManagedConfig, Settings};
 use super::validation::SettingsValidator;
 
 /// Settings loader that merges settings from multiple sources
@@ -107,6 +107,7 @@ impl SettingsLoader {
 
         // Apply environment variable overrides
         settings.apply_env_overrides();
+        self.load_managed_configs(&mut settings)?;
 
         // Validate if enabled
         if self.validate {
@@ -124,6 +125,21 @@ impl SettingsLoader {
         })?;
 
         self.parse_settings(&content, path)
+    }
+
+    /// Load managed policy configs and attach source provenance to settings.
+    pub fn load_managed_configs(&self, settings: &mut Settings) -> SageResult<()> {
+        settings.managed_configs.clear();
+        for path in &self.locations.managed {
+            let loaded = ManagedConfig::load_from_path(path).map_err(|error| {
+                SageError::config(format!(
+                    "Failed to load managed config {:?}: {}",
+                    path, error
+                ))
+            })?;
+            settings.managed_configs.push(loaded);
+        }
+        Ok(())
     }
 
     /// Parse settings from JSON string
@@ -333,6 +349,60 @@ mod tests {
             settings.permissions.default_behavior,
             SettingsPermissionBehavior::Ask
         );
+    }
+
+    #[test]
+    fn test_load_managed_config_with_source_provenance_and_fail_closed() {
+        let temp_dir = match TempDir::new() {
+            Ok(temp_dir) => temp_dir,
+            Err(error) => panic!("expected temp dir: {error}"),
+        };
+        let sage_dir = temp_dir.path().join(".sage");
+        if let Err(error) = fs::create_dir(&sage_dir) {
+            panic!("expected .sage dir: {error}");
+        }
+        let managed_path = sage_dir.join("managed.json");
+        if let Err(error) = fs::write(
+            &managed_path,
+            r#"{
+                "source_kind": "organization",
+                "permissions": {
+                    "deny": ["Bash(curl *)"],
+                    "network": {"enabled": false}
+                }
+            }"#,
+        ) {
+            panic!("expected managed config write: {error}");
+        }
+
+        let loader = SettingsLoader::from_directory(temp_dir.path());
+        let settings = match loader.load() {
+            Ok(settings) => settings,
+            Err(error) => panic!("expected settings load: {error}"),
+        };
+
+        assert!(
+            settings
+                .managed_configs
+                .iter()
+                .any(|managed| managed.source.path == managed_path)
+        );
+        assert!(
+            settings
+                .managed_configs
+                .iter()
+                .any(|managed| !managed.source.sha256.is_empty())
+        );
+
+        if let Err(error) = fs::write(
+            &managed_path,
+            r#"{"permissions":{"network":{"enabled":true}}}"#,
+        ) {
+            panic!("expected managed config rewrite: {error}");
+        }
+        let loader = SettingsLoader::from_directory(temp_dir.path());
+
+        assert!(loader.load().is_err());
     }
 
     #[test]

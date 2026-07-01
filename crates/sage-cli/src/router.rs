@@ -27,6 +27,11 @@ pub async fn route(cli: Cli) -> SageResult<()> {
                 session_dir,
                 detailed,
             } => commands::diagnostics::usage(session_dir.as_deref(), *detailed).await,
+            Commands::Feedback {
+                config_file,
+                output,
+                yes,
+            } => commands::diagnostics::feedback(config_file, output, *yes).await,
         };
     }
 

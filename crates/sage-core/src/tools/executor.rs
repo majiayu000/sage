@@ -1,5 +1,9 @@
 //! Tool execution engine
 
+use crate::diagnostics::{
+    DiagnosticEvent, DiagnosticEventKind, DiagnosticRedactor, DiagnosticSeverity, RedactionClass,
+    append_diagnostic_event_to_default_store, global_diagnostics,
+};
 use crate::error::{SageError, SageResult};
 use crate::telemetry::{global_metrics, global_telemetry};
 use crate::tools::base::Tool;
@@ -131,6 +135,7 @@ impl ToolExecutor {
                     Some("Tool not found".to_string()),
                     None,
                 );
+                record_tool_diagnostic(&call.name, false, Some("Tool not found"));
                 return ToolResult::error(
                     &call.id,
                     &call.name,
@@ -172,9 +177,13 @@ impl ToolExecutor {
             &call.name,
             elapsed,
             result.success,
-            result.error.clone(),
+            result
+                .error
+                .as_ref()
+                .map(|error| DiagnosticRedactor::new().redact_text(error).value),
             None,
         );
+        record_tool_diagnostic(&call.name, result.success, result.error.as_deref());
 
         // Record metrics
         let metrics = global_metrics();
@@ -289,19 +298,66 @@ impl ToolExecutor {
     }
 }
 
-fn timeout_result(call: &ToolCall, execution_timeout: Duration, elapsed: Duration) -> ToolResult {
-    global_telemetry().record_tool_usage(
-        &call.name,
-        elapsed,
-        false,
-        Some(format!("Timed out after {:?}", execution_timeout)),
-        None,
+fn record_tool_diagnostic(tool_name: &str, success: bool, error: Option<&str>) {
+    let redactor = DiagnosticRedactor::new();
+    let payload_summary = match error {
+        Some(error) => format!(
+            "tool={} success=false error={}",
+            tool_name,
+            redactor.redact_text(error).value
+        ),
+        None => format!("tool={tool_name} success={success}"),
+    };
+    let event = DiagnosticEvent::new(
+        diagnostic_kind_for_tool_result(error),
+        "tool_executor",
+        if success {
+            DiagnosticSeverity::Info
+        } else {
+            DiagnosticSeverity::Warn
+        },
+        if error.is_some() {
+            RedactionClass::Sensitive
+        } else {
+            RedactionClass::Public
+        },
+        payload_summary,
     );
-    ToolResult::error(
-        &call.id,
-        &call.name,
-        format!("Tool execution timed out after {:?}", execution_timeout),
-    )
+    global_diagnostics().record(event.clone());
+    if let Err(error) = append_diagnostic_event_to_default_store(&event) {
+        tracing::debug!("failed to persist diagnostic event: {}", error);
+    }
+}
+
+fn diagnostic_kind_for_tool_result(error: Option<&str>) -> DiagnosticEventKind {
+    let Some(error) = error else {
+        return DiagnosticEventKind::Tool;
+    };
+    let error = error.to_ascii_lowercase();
+    if error.contains("permission") || error.contains("denied") {
+        DiagnosticEventKind::Permission
+    } else if error.contains("sandbox") {
+        DiagnosticEventKind::Sandbox
+    } else if error.contains("provider")
+        || error.contains("api key")
+        || error.contains("api_key")
+        || error.contains("authorization")
+        || error.contains("model")
+        || error.contains("openai")
+        || error.contains("anthropic")
+        || error.contains("google")
+    {
+        DiagnosticEventKind::Provider
+    } else {
+        DiagnosticEventKind::Tool
+    }
+}
+
+fn timeout_result(call: &ToolCall, execution_timeout: Duration, elapsed: Duration) -> ToolResult {
+    let error = format!("Tool execution timed out after {:?}", execution_timeout);
+    global_telemetry().record_tool_usage(&call.name, elapsed, false, Some(error.clone()), None);
+    record_tool_diagnostic(&call.name, false, Some(&error));
+    ToolResult::error(&call.id, &call.name, error)
 }
 
 impl Default for ToolExecutor {
