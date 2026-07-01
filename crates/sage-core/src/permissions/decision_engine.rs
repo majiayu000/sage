@@ -17,13 +17,14 @@ pub enum PermissionAction {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SandboxSupport {
+    Unknown,
     Supported,
     Unsupported,
 }
 
 impl Default for SandboxSupport {
     fn default() -> Self {
-        Self::Supported
+        Self::Unknown
     }
 }
 
@@ -52,6 +53,7 @@ pub struct PermissionDecisionInput {
     pub working_directory: Option<String>,
     pub network_target: Option<String>,
     pub requires_sandbox: bool,
+    #[serde(default)]
     pub sandbox_support: SandboxSupport,
     pub preflight_denies: Vec<PermissionPreflight>,
     pub scoped_allows: Vec<PermissionPreflight>,
@@ -71,7 +73,7 @@ impl PermissionDecisionInput {
             working_directory: None,
             network_target: None,
             requires_sandbox: false,
-            sandbox_support: SandboxSupport::Supported,
+            sandbox_support: SandboxSupport::Unknown,
             preflight_denies: Vec::new(),
             scoped_allows: Vec::new(),
         }
@@ -241,12 +243,12 @@ impl PermissionDecisionEngine {
         }
 
         if (input.requires_sandbox || self.profile.sandbox.required)
-            && input.sandbox_support == SandboxSupport::Unsupported
+            && input.sandbox_support != SandboxSupport::Supported
         {
             return PermissionDecision::new(
                 PermissionDecisionKind::Unsupported,
                 audit_key,
-                "requested sandbox is not supported on this platform",
+                "requested sandbox support is unsupported or unknown on this platform",
                 None,
             );
         }

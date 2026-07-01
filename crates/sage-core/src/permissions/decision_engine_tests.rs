@@ -1,7 +1,7 @@
 use super::*;
 use crate::permissions::{
     FilesystemPermissionProfile, NetworkPermissionProfile, PermissionBehavior,
-    PermissionProfileSource,
+    PermissionProfileSource, SandboxPermissionProfile,
 };
 use std::fs;
 use tempfile::TempDir;
@@ -446,6 +446,109 @@ fn filesystem_path_fallback_uses_workspace_relative_rule_keys() -> std::io::Resu
 }
 
 #[test]
+fn filesystem_path_fallback_preserves_absolute_workspace_rule_keys() -> std::io::Result<()> {
+    let temp_dir = TempDir::new()?;
+    let workspace = temp_dir.path().join("workspace");
+    let secret = workspace.join("secret");
+    fs::create_dir_all(&secret)?;
+    fs::create_dir_all(workspace.join("public"))?;
+    let profile = PermissionProfile {
+        filesystem: FilesystemPermissionProfile {
+            workspace_roots: vec![workspace.to_string_lossy().to_string()],
+            ..Default::default()
+        },
+        default_behavior: PermissionBehavior::Allow,
+        default_behavior_set: true,
+        default_behavior_source: Some(PermissionProfileSource::Project),
+        deny: vec![PermissionRule::new(
+            format!("Write({}/**)", secret.to_string_lossy()),
+            PermissionProfileSource::Project,
+        )],
+        ..Default::default()
+    };
+    let decision = PermissionDecisionEngine::new(profile).decide(
+        PermissionDecisionInput::new(PermissionAction::Filesystem, "Write", Vec::new())
+            .with_path(workspace.join("public/../secret/key").to_string_lossy()),
+    );
+
+    assert_eq!(decision.kind, PermissionDecisionKind::Deny);
+    let expected_rule = format!("Write({}/**)", secret.to_string_lossy());
+    assert_eq!(
+        decision
+            .matched_rule
+            .as_ref()
+            .map(|rule| rule.pattern.as_str()),
+        Some(expected_rule.as_str())
+    );
+    Ok(())
+}
+
+#[test]
+fn bare_tool_rule_matches_when_permission_keys_are_empty() {
+    let profile = PermissionProfile::default()
+        .with_default_behavior(PermissionBehavior::Allow)
+        .add_deny("Bash", PermissionProfileSource::Project);
+    let decision = PermissionDecisionEngine::new(profile).decide(PermissionDecisionInput::new(
+        PermissionAction::Tool,
+        "Bash",
+        Vec::new(),
+    ));
+
+    assert_eq!(decision.kind, PermissionDecisionKind::Deny);
+    assert_eq!(decision.audit_key, "Bash");
+    assert_eq!(
+        decision
+            .matched_rule
+            .as_ref()
+            .map(|rule| rule.pattern.as_str()),
+        Some("Bash")
+    );
+}
+
+#[test]
+fn bare_exec_rule_matches_when_permission_keys_are_empty() {
+    let profile = PermissionProfile::default()
+        .with_default_behavior(PermissionBehavior::Allow)
+        .add_deny("Bash", PermissionProfileSource::Project);
+    let decision = PermissionDecisionEngine::new(profile).decide(PermissionDecisionInput::new(
+        PermissionAction::Exec,
+        "Bash",
+        Vec::new(),
+    ));
+
+    assert_eq!(decision.kind, PermissionDecisionKind::Deny);
+    assert_eq!(decision.audit_key, "Bash");
+    assert_eq!(
+        decision
+            .matched_rule
+            .as_ref()
+            .map(|rule| rule.pattern.as_str()),
+        Some("Bash")
+    );
+}
+
+#[test]
+fn bare_sandbox_rule_matches_when_permission_keys_are_empty() {
+    let profile = PermissionProfile::default()
+        .with_default_behavior(PermissionBehavior::Allow)
+        .add_deny("Bash", PermissionProfileSource::Project);
+    let decision = PermissionDecisionEngine::new(profile).decide(
+        PermissionDecisionInput::new(PermissionAction::Sandbox, "Bash", Vec::new())
+            .with_required_sandbox(SandboxSupport::Supported),
+    );
+
+    assert_eq!(decision.kind, PermissionDecisionKind::Deny);
+    assert_eq!(decision.audit_key, "Bash");
+    assert_eq!(
+        decision
+            .matched_rule
+            .as_ref()
+            .map(|rule| rule.pattern.as_str()),
+        Some("Bash")
+    );
+}
+
+#[test]
 fn outside_filesystem_path_fallback_normalizes_traversal_before_matching() -> std::io::Result<()> {
     let temp_dir = TempDir::new()?;
     let public = temp_dir.path().join("public");
@@ -527,6 +630,26 @@ fn network_target_fallback_normalizes_url_before_matching() {
 }
 
 #[test]
+fn network_target_fallback_strips_url_credentials_before_matching() {
+    let profile = PermissionProfile::default()
+        .with_default_behavior(PermissionBehavior::Allow)
+        .add_deny(
+            "WebFetch(https://internal.example/**)",
+            PermissionProfileSource::Project,
+        );
+    let decision = PermissionDecisionEngine::new(profile).decide(
+        PermissionDecisionInput::new(PermissionAction::Network, "WebFetch", Vec::new())
+            .with_network_target("https://user:password@internal.example/private"),
+    );
+
+    assert_eq!(decision.kind, PermissionDecisionKind::Deny);
+    assert_eq!(
+        decision.audit_key,
+        "WebFetch(https://internal.example/private)"
+    );
+}
+
+#[test]
 fn network_target_fallback_matches_exact_origin_without_trailing_slash() {
     let profile = PermissionProfile::default()
         .with_default_behavior(PermissionBehavior::Allow)
@@ -556,4 +679,53 @@ fn unsupported_requested_sandbox_fails_closed() {
     );
 
     assert_eq!(decision.kind, PermissionDecisionKind::Unsupported);
+}
+
+#[test]
+fn required_profile_sandbox_with_unknown_support_fails_closed() {
+    let profile = PermissionProfile {
+        sandbox: SandboxPermissionProfile { required: true },
+        allow: vec![PermissionRule::new(
+            "Bash",
+            PermissionProfileSource::Project,
+        )],
+        ..Default::default()
+    };
+    let decision = PermissionDecisionEngine::new(profile).decide(PermissionDecisionInput::new(
+        PermissionAction::Sandbox,
+        "Bash",
+        Vec::new(),
+    ));
+
+    assert_eq!(decision.kind, PermissionDecisionKind::Unsupported);
+    assert_eq!(decision.audit_key, "Bash");
+}
+
+#[test]
+fn deserialized_missing_sandbox_support_fails_closed_when_profile_requires_sandbox()
+-> serde_json::Result<()> {
+    let profile = PermissionProfile {
+        sandbox: SandboxPermissionProfile { required: true },
+        allow: vec![PermissionRule::new(
+            "Bash",
+            PermissionProfileSource::Project,
+        )],
+        ..Default::default()
+    };
+    let input: PermissionDecisionInput = serde_json::from_value(serde_json::json!({
+        "action": "sandbox",
+        "tool_name": "Bash",
+        "permission_keys": [],
+        "path": null,
+        "network_target": null,
+        "requires_sandbox": false,
+        "preflight_denies": [],
+        "scoped_allows": []
+    }))?;
+
+    let decision = PermissionDecisionEngine::new(profile).decide(input);
+
+    assert_eq!(decision.kind, PermissionDecisionKind::Unsupported);
+    assert_eq!(decision.audit_key, "Bash");
+    Ok(())
 }

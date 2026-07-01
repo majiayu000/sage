@@ -22,7 +22,7 @@ pub(super) fn rule_match_keys(
                     .collect()
             })
             .unwrap_or_default(),
-        _ => Vec::new(),
+        _ => bare_tool_key(input),
     }
 }
 
@@ -57,18 +57,25 @@ fn filesystem_structured_permission_keys(
         .max_by_key(|(component_count, _)| *component_count)
     {
         push_unique(&mut path_arguments, relative);
-    } else {
-        push_path_aliases(&mut path_arguments, &normalized_path);
-        push_path_aliases(
-            &mut path_arguments,
-            &normalize_permission_key_path(path, working_directory),
-        );
     }
+    push_path_aliases(&mut path_arguments, &normalized_path);
+    push_path_aliases(
+        &mut path_arguments,
+        &normalize_permission_key_path(path, working_directory),
+    );
 
     path_arguments
         .into_iter()
         .map(|path| format!("{}({})", input.tool_name, path))
         .collect()
+}
+
+fn bare_tool_key(input: &PermissionDecisionInput) -> Vec<String> {
+    if input.tool_name.is_empty() {
+        Vec::new()
+    } else {
+        vec![input.tool_name.clone()]
+    }
 }
 
 pub(super) fn path_is_at_or_under(path: &Path, root: &Path) -> bool {
@@ -147,6 +154,9 @@ fn normalize_url_keys(url: &str) -> Vec<String> {
         if parsed.set_host(Some(&lowercase_host)).is_err() {
             return vec![trimmed.to_string()];
         }
+    }
+    if parsed.set_username("").is_err() || parsed.set_password(None).is_err() {
+        return vec![trimmed.to_string()];
     }
     parsed.set_fragment(None);
 
