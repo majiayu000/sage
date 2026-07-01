@@ -1,34 +1,53 @@
 //! MCP registry builder from configuration
 
-use super::discovery::utils::server_config_to_transport;
 use super::registry::McpRegistry;
+use super::source::{direct_config_sources, merge_mcp_sources, package_sources};
 use crate::config::Config;
 use crate::error::{SageError, SageResult};
+use crate::plugins::PackageMcpServerRegistration;
 
 /// Build MCP registry from configuration
 pub async fn build_mcp_registry_from_config(config: &Config) -> SageResult<McpRegistry> {
+    build_mcp_registry_from_config_and_packages(
+        config,
+        std::iter::empty::<&PackageMcpServerRegistration>(),
+    )
+    .await
+}
+
+/// Build MCP registry from direct config and package-sourced MCP declarations.
+pub async fn build_mcp_registry_from_config_and_packages<'a>(
+    config: &Config,
+    package_registrations: impl IntoIterator<Item = &'a PackageMcpServerRegistration>,
+) -> SageResult<McpRegistry> {
     let registry = McpRegistry::new();
+
+    let mut sources = direct_config_sources(&config.mcp);
+    if config.mcp.enabled {
+        sources.extend(package_sources(package_registrations));
+    }
+    let source_set = merge_mcp_sources(sources)
+        .map_err(|err| SageError::config(format!("Failed to merge MCP server sources: {err}")))?;
+    registry.apply_source_set(source_set);
 
     if !config.mcp.enabled || !config.mcp.auto_connect {
         return Ok(registry);
     }
 
-    for (name, server_config) in config.mcp.enabled_servers() {
-        let transport_config = server_config_to_transport(server_config)?;
-        match registry.register_server(name, transport_config).await {
-            Ok(server_info) => {
+    for status in registry.runtime_statuses() {
+        if !status.enabled {
+            continue;
+        }
+        match registry.connect_configured_server(&status.server_id).await {
+            Ok(result) => {
                 tracing::info!(
-                    "Connected to MCP server '{}': {} v{}",
-                    name,
-                    server_info.name,
-                    server_info.version
+                    "Connected to MCP server '{}': {:?}",
+                    result.status.server_id,
+                    result.status.state
                 );
             }
             Err(err) => {
-                return Err(SageError::config(format!(
-                    "Failed to connect or initialize enabled MCP server '{}': {}",
-                    name, err
-                )));
+                tracing::warn!("MCP server '{}' is unavailable: {}", status.server_id, err);
             }
         }
     }
@@ -40,6 +59,7 @@ pub async fn build_mcp_registry_from_config(config: &Config) -> SageResult<McpRe
 mod tests {
     use super::*;
     use crate::config::McpServerConfig;
+    use crate::mcp::{McpFailureKind, McpRuntimeState};
 
     fn config_with_server(name: &str, server: McpServerConfig) -> Config {
         let mut config = Config::default();
@@ -50,48 +70,76 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_enabled_stdio_server_without_command_fails() {
+    async fn test_enabled_stdio_server_without_command_records_status() -> SageResult<()> {
         let mut server = McpServerConfig::stdio("ignored", Vec::new());
         server.command = None;
         let config = config_with_server("broken", server);
 
-        let result = build_mcp_registry_from_config(&config).await;
+        let registry = build_mcp_registry_from_config(&config).await?;
 
-        assert!(result.is_err());
+        assert!(registry.server_names().is_empty());
+        let status = registry.server_runtime_status("broken").expect("status");
+        assert_eq!(status.state, McpRuntimeState::ConnectionError);
+        assert_eq!(
+            status.last_error.expect("error").kind,
+            McpFailureKind::Config
+        );
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_enabled_http_server_without_url_fails() {
+    async fn test_enabled_http_server_without_url_records_status() -> SageResult<()> {
         let mut server = McpServerConfig::http("http://localhost:9999");
         server.url = None;
         let config = config_with_server("broken", server);
 
-        let result = build_mcp_registry_from_config(&config).await;
+        let registry = build_mcp_registry_from_config(&config).await?;
 
-        assert!(result.is_err());
+        assert!(registry.server_names().is_empty());
+        let status = registry.server_runtime_status("broken").expect("status");
+        assert_eq!(status.state, McpRuntimeState::ConnectionError);
+        assert_eq!(
+            status.last_error.expect("error").kind,
+            McpFailureKind::Config
+        );
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_enabled_sse_server_without_url_fails() {
+    async fn test_enabled_sse_server_without_url_records_status() -> SageResult<()> {
         let mut server = McpServerConfig::http("http://localhost:9999");
         server.transport = "sse".to_string();
         server.url = None;
         let config = config_with_server("broken", server);
 
-        let result = build_mcp_registry_from_config(&config).await;
+        let registry = build_mcp_registry_from_config(&config).await?;
 
-        assert!(result.is_err());
+        assert!(registry.server_names().is_empty());
+        let status = registry.server_runtime_status("broken").expect("status");
+        assert_eq!(status.state, McpRuntimeState::ConnectionError);
+        assert_eq!(
+            status.last_error.expect("error").kind,
+            McpFailureKind::Config
+        );
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_enabled_unknown_transport_fails() {
+    async fn test_enabled_unknown_transport_records_status() -> SageResult<()> {
         let mut server = McpServerConfig::http("http://localhost:9999");
         server.transport = "invalid".to_string();
         let config = config_with_server("broken", server);
 
-        let result = build_mcp_registry_from_config(&config).await;
+        let registry = build_mcp_registry_from_config(&config).await?;
 
-        assert!(result.is_err());
+        assert!(registry.server_names().is_empty());
+        let status = registry.server_runtime_status("broken").expect("status");
+        assert_eq!(status.state, McpRuntimeState::ConnectionError);
+        assert_eq!(
+            status.last_error.expect("error").kind,
+            McpFailureKind::Config
+        );
+        Ok(())
     }
 
     #[tokio::test]
@@ -104,29 +152,46 @@ mod tests {
         let registry = build_mcp_registry_from_config(&config).await?;
 
         assert!(registry.server_names().is_empty());
+        let status = registry.server_runtime_status("disabled").expect("status");
+        assert_eq!(status.state, McpRuntimeState::Disabled);
+        assert!(status.last_error.is_none());
         Ok(())
     }
 
     #[tokio::test]
-    async fn test_enabled_websocket_server_fails_until_supported() {
+    async fn test_enabled_websocket_server_fails_closed_with_status() -> SageResult<()> {
         let config =
             config_with_server("future", McpServerConfig::websocket("ws://localhost:9000"));
 
-        let result = build_mcp_registry_from_config(&config).await;
+        let registry = build_mcp_registry_from_config(&config).await?;
 
-        assert!(result.is_err());
+        assert!(registry.server_names().is_empty());
+        let status = registry.server_runtime_status("future").expect("status");
+        assert_eq!(status.state, McpRuntimeState::UnsupportedTransport);
+        assert_eq!(
+            status.last_error.expect("error").kind,
+            McpFailureKind::UnsupportedTransport
+        );
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_enabled_runtime_connection_failure_fails() {
+    async fn test_enabled_runtime_connection_failure_records_status() -> SageResult<()> {
         let config = config_with_server(
             "offline",
             McpServerConfig::stdio("__sage_missing_mcp_binary__", Vec::new()),
         );
 
-        let result = build_mcp_registry_from_config(&config).await;
+        let registry = build_mcp_registry_from_config(&config).await?;
 
-        assert!(result.is_err());
+        assert!(registry.server_names().is_empty());
+        let status = registry.server_runtime_status("offline").expect("status");
+        assert_eq!(status.state, McpRuntimeState::ConnectionError);
+        assert_eq!(
+            status.last_error.expect("error").kind,
+            McpFailureKind::Connection
+        );
+        Ok(())
     }
 
     #[tokio::test]
@@ -140,6 +205,8 @@ mod tests {
         let registry = build_mcp_registry_from_config(&config).await?;
 
         assert!(registry.server_names().is_empty());
+        let status = registry.server_runtime_status("offline").expect("status");
+        assert_eq!(status.state, McpRuntimeState::Disconnected);
         Ok(())
     }
 }

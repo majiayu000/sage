@@ -95,6 +95,42 @@ impl<'de> Deserialize<'de> for McpConfig {
     }
 }
 
+/// Authentication method declared by an MCP server config.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum McpAuthKind {
+    /// No authentication is required.
+    None,
+    /// A bearer token or equivalent shared secret is required.
+    Bearer,
+    /// OAuth authorization is required before tools may run.
+    OAuth,
+}
+
+impl Default for McpAuthKind {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
+/// Authentication requirements for a single MCP server.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct McpAuthConfig {
+    /// Whether tools from this server require authentication before execution.
+    #[serde(default)]
+    pub required: bool,
+    /// Authentication method used by the server.
+    #[serde(default)]
+    pub kind: McpAuthKind,
+    /// Optional environment variable that must contain the token.
+    pub token_env: Option<String>,
+    /// Optional URL where the caller can complete authorization.
+    pub authorization_url: Option<String>,
+    /// Optional OAuth scopes or server-specific grants.
+    #[serde(default)]
+    pub scopes: Vec<String>,
+}
+
 /// Configuration for a single MCP server
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpServerConfig {
@@ -118,6 +154,9 @@ pub struct McpServerConfig {
     pub enabled: bool,
     /// Request timeout in seconds (overrides default)
     pub timeout_secs: Option<u64>,
+    /// Authentication requirements for this server.
+    #[serde(default)]
+    pub auth: Option<McpAuthConfig>,
 }
 
 impl McpConfig {
@@ -169,6 +208,7 @@ impl McpServerConfig {
             headers: HashMap::new(),
             enabled: true,
             timeout_secs: None,
+            auth: None,
         }
     }
 
@@ -183,6 +223,7 @@ impl McpServerConfig {
             headers: HashMap::new(),
             enabled: true,
             timeout_secs: None,
+            auth: None,
         }
     }
 
@@ -197,6 +238,7 @@ impl McpServerConfig {
             headers: HashMap::new(),
             enabled: true,
             timeout_secs: None,
+            auth: None,
         }
     }
 
@@ -215,6 +257,12 @@ impl McpServerConfig {
     /// Set timeout
     pub fn with_timeout(mut self, secs: u64) -> Self {
         self.timeout_secs = Some(secs);
+        self
+    }
+
+    /// Declare authentication requirements.
+    pub fn with_auth(mut self, auth: McpAuthConfig) -> Self {
+        self.auth = Some(auth);
         self
     }
 }

@@ -32,22 +32,36 @@
 //! let tools = registry.all_tools().await;
 //! ```
 
+pub mod auth_status;
 pub mod cache;
 pub mod client;
 pub mod config_builder;
+pub mod deferred_tools;
 pub mod discovery;
 pub mod error;
 pub mod notifications;
 pub mod protocol;
 pub mod registry;
+mod registry_runtime;
 pub mod runtime_registry;
+pub mod runtime_status;
 pub mod schema_translator;
+pub mod source;
 pub mod transport;
 pub mod types;
 
+#[cfg(test)]
+mod runtime_tests;
+
+pub use auth_status::{McpAuthState, McpAuthStatus, McpAuthorizationPrompt};
 pub use cache::{McpCache, McpCacheConfig, McpCacheStats};
 pub use client::McpClient;
-pub use config_builder::build_mcp_registry_from_config;
+pub use config_builder::{
+    build_mcp_registry_from_config, build_mcp_registry_from_config_and_packages,
+};
+pub use deferred_tools::{
+    McpDeferredTool, McpDeferredToolIndex, McpDeferredToolSearchResult, McpToolFreshness,
+};
 pub use discovery::{
     DiscoverySource, McpServerManager, McpServerManagerBuilder, ServerHealth, ServerStatus,
 };
@@ -60,7 +74,15 @@ pub use registry::{McpRegistry, McpToolAdapter};
 pub use runtime_registry::{
     clear_active_mcp_registry, get_active_mcp_registry, set_active_mcp_registry,
 };
+pub use runtime_status::{
+    McpFailureKind, McpRuntimeAction, McpRuntimeActionResult, McpRuntimeState,
+    McpServerRuntimeStatus, McpStructuredFailure, McpToolDiscoveryState,
+};
 pub use schema_translator::SchemaTranslator;
+pub use source::{
+    McpServerSource, McpSourceKind, McpSourceMergeError, McpSourceMetadata, McpSourceSet,
+    direct_config_sources, merge_mcp_sources, package_sources,
+};
 pub use transport::{
     HttpTransport, HttpTransportConfig, McpTransport, StdioTransport, TransportConfig,
 };
