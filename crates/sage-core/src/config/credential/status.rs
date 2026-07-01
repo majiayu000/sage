@@ -6,6 +6,8 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
+use super::backend::{CredentialBackendError, CredentialBackendKind};
+
 /// The overall status of the configuration
 ///
 /// Used to determine what actions the system should take:
@@ -74,6 +76,122 @@ pub struct ConfigStatusReport {
     pub message: String,
     /// Suggested action for the user
     pub suggestion: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CredentialOperation {
+    Save,
+    Logout,
+    Revoke,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CredentialOperationOutcome {
+    Succeeded,
+    Missing,
+    Unsupported,
+    Failed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CredentialProviderIdentity {
+    pub provider_id: String,
+    pub redacted_display: String,
+}
+
+impl CredentialProviderIdentity {
+    pub fn new(provider_id: impl Into<String>, secret: Option<&str>) -> Self {
+        let provider_id = provider_id.into();
+        let redacted_display = secret
+            .map(redact_secret)
+            .unwrap_or_else(|| "(none)".to_string());
+        Self {
+            provider_id,
+            redacted_display,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CredentialOperationStatus {
+    pub operation: CredentialOperation,
+    pub outcome: CredentialOperationOutcome,
+    pub provider: CredentialProviderIdentity,
+    pub backend: CredentialBackendKind,
+    pub recovery_hint: Option<String>,
+    pub error: Option<String>,
+}
+
+impl CredentialOperationStatus {
+    pub fn succeeded(
+        operation: CredentialOperation,
+        provider_id: &str,
+        secret: Option<&str>,
+        backend: CredentialBackendKind,
+    ) -> Self {
+        Self {
+            operation,
+            outcome: CredentialOperationOutcome::Succeeded,
+            provider: CredentialProviderIdentity::new(provider_id, secret),
+            backend,
+            recovery_hint: None,
+            error: None,
+        }
+    }
+
+    pub fn failed(
+        operation: CredentialOperation,
+        provider_id: &str,
+        secret: Option<&str>,
+        error: CredentialBackendError,
+    ) -> Self {
+        let outcome = match error.kind {
+            super::backend::CredentialBackendErrorKind::Unsupported => {
+                CredentialOperationOutcome::Unsupported
+            }
+            super::backend::CredentialBackendErrorKind::NotFound => {
+                CredentialOperationOutcome::Missing
+            }
+            _ => CredentialOperationOutcome::Failed,
+        };
+        Self {
+            operation,
+            outcome,
+            provider: CredentialProviderIdentity::new(provider_id, secret),
+            backend: error.backend,
+            recovery_hint: Some(recovery_hint(operation, &error)),
+            error: Some(error.message),
+        }
+    }
+}
+
+fn redact_secret(secret: &str) -> String {
+    let char_count = secret.chars().count();
+    if char_count <= 8 {
+        return "*".repeat(char_count);
+    }
+    let prefix: String = secret.chars().take(3).collect();
+    let suffix_chars: Vec<char> = secret.chars().rev().take(4).collect();
+    let suffix: String = suffix_chars.into_iter().rev().collect();
+    format!("{prefix}...{suffix}")
+}
+
+fn recovery_hint(operation: CredentialOperation, error: &CredentialBackendError) -> String {
+    match (operation, error.kind) {
+        (_, super::backend::CredentialBackendErrorKind::Unsupported) => {
+            "Configure a secure credential backend or use an explicit legacy plaintext import."
+                .to_string()
+        }
+        (CredentialOperation::Revoke, _) => {
+            format!(
+                "Revoke the {} credential in the provider console, then run logout.",
+                error.provider
+            )
+        }
+        _ => "Retry the operation or inspect the configured credential backend.".to_string(),
+    }
 }
 
 impl ConfigStatusReport {

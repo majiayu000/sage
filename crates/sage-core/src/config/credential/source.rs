@@ -12,11 +12,11 @@ use std::path::PathBuf;
 /// The priority order is:
 /// 1. CLI arguments (highest priority)
 /// 2. Environment variables
-/// 3. Project-level .sage/credentials.json
-/// 4. Global ~/.sage/credentials.json
-/// 5. Auto-imported from other tools (Claude Code, etc.)
-/// 6. System keychain
-/// 7. OAuth tokens
+/// 3. System keychain
+/// 4. OAuth tokens
+/// 5. Project-level .sage/credentials.json legacy fallback
+/// 6. Global ~/.sage/credentials.json legacy fallback
+/// 7. Auto-imported legacy plaintext fallback
 /// 8. Default/built-in (lowest priority)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[repr(u8)]
@@ -25,16 +25,16 @@ pub enum CredentialPriority {
     CliArgument = 1,
     /// Environment variables: OPENAI_API_KEY, ANTHROPIC_API_KEY
     Environment = 2,
-    /// Project config: .sage/credentials.json in working directory
-    ProjectConfig = 3,
-    /// Global config: ~/.sage/credentials.json
-    GlobalConfig = 4,
-    /// Auto-imported from other tools
-    AutoImported = 5,
     /// System keychain (macOS Keychain, Windows Credential Manager, etc.)
-    SystemKeychain = 6,
+    SystemKeychain = 3,
     /// OAuth tokens from authentication flow
-    OAuthToken = 7,
+    OAuthToken = 4,
+    /// Project config: .sage/credentials.json in working directory
+    ProjectConfig = 5,
+    /// Global config: ~/.sage/credentials.json
+    GlobalConfig = 6,
+    /// Auto-imported from other tools
+    AutoImported = 7,
     /// Default/fallback (lowest priority)
     Default = 8,
 }
@@ -45,11 +45,11 @@ impl CredentialPriority {
         &[
             CredentialPriority::CliArgument,
             CredentialPriority::Environment,
+            CredentialPriority::SystemKeychain,
+            CredentialPriority::OAuthToken,
             CredentialPriority::ProjectConfig,
             CredentialPriority::GlobalConfig,
             CredentialPriority::AutoImported,
-            CredentialPriority::SystemKeychain,
-            CredentialPriority::OAuthToken,
             CredentialPriority::Default,
         ]
     }

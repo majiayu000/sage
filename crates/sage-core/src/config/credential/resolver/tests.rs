@@ -1,7 +1,11 @@
 //! Tests for the credential resolver
 
 use super::*;
+use crate::config::credential::{
+    CredentialOperationOutcome, FakeCredentialBackend, UnsupportedCredentialBackend,
+};
 use serial_test::serial;
+use std::sync::Arc;
 use tempfile::tempdir;
 
 struct EnvVarGuard {
@@ -89,19 +93,15 @@ fn test_resolve_from_cli_key() {
 
 #[test]
 fn test_save_and_load_credential() {
-    let temp_dir = tempdir().unwrap();
-    let global_dir = temp_dir.path().join(".sage");
-
-    let config = ResolverConfig::default().with_global_dir(&global_dir);
+    let backend = Arc::new(FakeCredentialBackend::default());
+    let config = ResolverConfig::default().with_credential_backend(backend.clone());
     let resolver = CredentialResolver::new(config);
 
-    // Save a credential
     resolver
         .save_credential("test_provider", "test_api_key")
         .unwrap();
 
-    // Create a new resolver to load it
-    let config2 = ResolverConfig::default().with_global_dir(&global_dir);
+    let config2 = ResolverConfig::default().with_credential_backend(backend);
     let resolver2 = CredentialResolver::new(config2);
     let credential = resolver2.resolve_provider("test_provider", "NONEXISTENT_ENV");
 
@@ -110,22 +110,22 @@ fn test_save_and_load_credential() {
 }
 
 #[test]
-fn save_credential_does_not_overwrite_invalid_credentials_file()
+fn save_credential_does_not_fallback_to_plaintext_when_backend_unsupported()
 -> Result<(), Box<dyn std::error::Error>> {
     let temp_dir = tempdir()?;
     let global_dir = temp_dir.path().join(".sage");
-    std::fs::create_dir_all(&global_dir)?;
-    let creds_path = global_dir.join("credentials.json");
-    let invalid = "{not valid json";
-    std::fs::write(&creds_path, invalid)?;
-
-    let config = ResolverConfig::default().with_global_dir(&global_dir);
+    let config = ResolverConfig::default()
+        .with_global_dir(&global_dir)
+        .with_credential_backend(Arc::new(UnsupportedCredentialBackend));
     let resolver = CredentialResolver::new(config);
 
     let result = resolver.save_credential("test_provider", "test_api_key");
 
     assert!(result.is_err());
-    assert_eq!(std::fs::read_to_string(&creds_path)?, invalid);
+    assert!(
+        !global_dir.join("credentials.json").exists(),
+        "unsupported secure backend must not silently write plaintext"
+    );
     Ok(())
 }
 
@@ -160,6 +160,149 @@ fn test_priority_cli_over_env() {
     // CLI should take priority
     assert!(credential.has_value());
     assert_eq!(credential.value(), Some("cli_value"));
+}
+
+#[test]
+#[serial]
+fn env_override_wins_over_secure_backend() {
+    let _env = EnvVarGuard::clean(&["SAGE_TEST_BACKEND_ENV"]);
+    unsafe {
+        std::env::set_var("SAGE_TEST_BACKEND_ENV", "env_secret");
+    }
+    let backend = Arc::new(FakeCredentialBackend::with_record(
+        "test_provider",
+        "backend_secret",
+    ));
+    let config = ResolverConfig::default().with_credential_backend(backend);
+    let resolver = CredentialResolver::new(config);
+
+    let credential = resolver.resolve_provider("test_provider", "SAGE_TEST_BACKEND_ENV");
+
+    assert_eq!(credential.value(), Some("env_secret"));
+    assert!(matches!(
+        credential.source,
+        CredentialSource::Environment { .. }
+    ));
+}
+
+#[test]
+fn secure_backend_wins_over_legacy_plaintext() -> Result<(), Box<dyn std::error::Error>> {
+    let temp_dir = tempdir()?;
+    let global_dir = temp_dir.path().join(".sage");
+    let mut legacy = CredentialsFile::default();
+    legacy.set_api_key("test_provider", "legacy_secret");
+    legacy.save(&global_dir.join("credentials.json"))?;
+    let backend = Arc::new(FakeCredentialBackend::with_record(
+        "test_provider",
+        "backend_secret",
+    ));
+    let config = ResolverConfig::default()
+        .with_global_dir(&global_dir)
+        .with_credential_backend(backend);
+    let resolver = CredentialResolver::new(config);
+
+    let credential = resolver.resolve_provider("test_provider", "NONEXISTENT_ENV");
+
+    assert_eq!(credential.value(), Some("backend_secret"));
+    assert!(matches!(
+        credential.source,
+        CredentialSource::SystemKeychain { .. }
+    ));
+    Ok(())
+}
+
+#[test]
+fn backend_load_error_does_not_fallback_to_legacy_plaintext()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp_dir = tempdir()?;
+    let global_dir = temp_dir.path().join(".sage");
+    let mut legacy = CredentialsFile::default();
+    legacy.set_api_key("test_provider", "legacy_secret");
+    legacy.save(&global_dir.join("credentials.json"))?;
+    let backend = Arc::new(FakeCredentialBackend::default());
+    backend.fail_load();
+    let config = ResolverConfig::default()
+        .with_global_dir(&global_dir)
+        .with_credential_backend(backend);
+    let resolver = CredentialResolver::new(config);
+
+    let credential = resolver.resolve_provider("test_provider", "NONEXISTENT_ENV");
+
+    assert!(credential.is_missing());
+    Ok(())
+}
+
+#[test]
+fn backend_load_error_allows_explicit_legacy_plaintext_fallback()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp_dir = tempdir()?;
+    let global_dir = temp_dir.path().join(".sage");
+    let mut legacy = CredentialsFile::default();
+    legacy.set_api_key("test_provider", "legacy_secret");
+    legacy.save(&global_dir.join("credentials.json"))?;
+    let backend = Arc::new(FakeCredentialBackend::default());
+    backend.fail_load();
+    let config = ResolverConfig::default()
+        .with_global_dir(&global_dir)
+        .with_credential_backend(backend)
+        .with_legacy_plaintext_after_backend_error(true);
+    let resolver = CredentialResolver::new(config);
+
+    let credential = resolver.resolve_provider("test_provider", "NONEXISTENT_ENV");
+
+    assert_eq!(credential.value(), Some("legacy_secret"));
+    Ok(())
+}
+
+#[test]
+fn legacy_plaintext_can_be_disabled() -> Result<(), Box<dyn std::error::Error>> {
+    let temp_dir = tempdir()?;
+    let global_dir = temp_dir.path().join(".sage");
+    let mut legacy = CredentialsFile::default();
+    legacy.set_api_key("test_provider", "legacy_secret");
+    legacy.save(&global_dir.join("credentials.json"))?;
+    let config = ResolverConfig::default()
+        .with_global_dir(&global_dir)
+        .with_legacy_plaintext(false);
+    let resolver = CredentialResolver::new(config);
+
+    let credential = resolver.resolve_provider("test_provider", "NONEXISTENT_ENV");
+
+    assert!(credential.is_missing());
+    Ok(())
+}
+
+#[test]
+fn credential_operations_return_structured_status() {
+    let backend = Arc::new(FakeCredentialBackend::default());
+    let config = ResolverConfig::default().with_credential_backend(backend.clone());
+    let resolver = CredentialResolver::new(config);
+
+    let save = resolver.save_credential_status("openai", "sk-test-secret");
+    assert_eq!(save.outcome, CredentialOperationOutcome::Succeeded);
+    assert_eq!(save.provider.provider_id, "openai");
+    assert!(!save.provider.redacted_display.contains("test-secret"));
+
+    let revoke = resolver.revoke_provider("openai");
+    assert_eq!(revoke.outcome, CredentialOperationOutcome::Succeeded);
+
+    backend.fail_revoke();
+    let failed = resolver.revoke_provider("openai");
+    assert_eq!(failed.outcome, CredentialOperationOutcome::Failed);
+    assert!(failed.recovery_hint.unwrap().contains("provider console"));
+}
+
+#[test]
+fn credential_status_redacts_multibyte_secrets_without_panicking() {
+    let backend = Arc::new(FakeCredentialBackend::default());
+    let config = ResolverConfig::default().with_credential_backend(backend);
+    let resolver = CredentialResolver::new(config);
+    let secret = "ééééésecret";
+
+    let save = resolver.save_credential_status("openai", secret);
+
+    assert_eq!(save.outcome, CredentialOperationOutcome::Succeeded);
+    assert!(!save.provider.redacted_display.contains(secret));
 }
 
 #[test]

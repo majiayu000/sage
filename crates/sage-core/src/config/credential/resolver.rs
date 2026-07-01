@@ -8,10 +8,12 @@ use super::providers::auto_import_paths;
 use super::resolved::{ResolvedCredential, ResolvedCredentials};
 use super::resolver_config::ResolverConfig;
 use super::source::CredentialSource;
-use super::status::ConfigStatusReport;
+use super::status::{ConfigStatusReport, CredentialOperation, CredentialOperationStatus};
+use crate::config::api_key_helpers::get_standard_env_vars_for_provider;
 use std::env;
+use std::io;
 use std::path::PathBuf;
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 
 /// Credential resolver that loads credentials from multiple sources
 pub struct CredentialResolver {
@@ -59,17 +61,49 @@ impl CredentialResolver {
         }
 
         // 2. Check environment variables
-        if let Ok(key) = env::var(env_var) {
-            if !key.is_empty() {
+        for candidate in env_candidates(provider, env_var) {
+            if let Ok(key) = env::var(&candidate)
+                && !key.is_empty()
+            {
                 debug!(
                     "Found {} key from environment variable {}",
-                    provider, env_var
+                    provider, candidate
                 );
-                return ResolvedCredential::new(key, provider, CredentialSource::env(env_var));
+                return ResolvedCredential::new(key, provider, CredentialSource::env(candidate));
             }
         }
 
-        // 3. Check project-level credentials
+        // 3. Check secure credential backend
+        match self.config.credential_backend.load(provider) {
+            Ok(Some(record)) => {
+                debug!("Found {} key from credential backend", provider);
+                return ResolvedCredential::new(record.secret, provider, record.source);
+            }
+            Ok(None) => {}
+            Err(error) => {
+                if self.config.allow_legacy_plaintext
+                    && self.config.allow_legacy_plaintext_after_backend_error
+                {
+                    debug!(
+                        "Credential backend load failed for {}; using explicit legacy plaintext fallback: {}",
+                        provider, error.message
+                    );
+                } else {
+                    error!(
+                        "Credential backend load failed for {}; refusing legacy plaintext fallback: {}",
+                        provider, error.message
+                    );
+                    return ResolvedCredential::missing(provider);
+                }
+            }
+        }
+
+        if !self.config.allow_legacy_plaintext {
+            debug!("Legacy plaintext credentials disabled for {}", provider);
+            return ResolvedCredential::missing(provider);
+        }
+
+        // 4. Check project-level legacy plaintext credentials
         let project_path = self.config.project_credentials_path();
         if let Some(creds) = CredentialsFile::load_or_warn(&project_path) {
             if let Some(key) = creds.get_api_key(provider) {
@@ -82,7 +116,7 @@ impl CredentialResolver {
             }
         }
 
-        // 4. Check global credentials
+        // 5. Check global legacy plaintext credentials
         let global_path = self.config.global_credentials_path();
         if let Some(creds) = CredentialsFile::load_or_warn(&global_path) {
             if let Some(key) = creds.get_api_key(provider) {
@@ -95,7 +129,7 @@ impl CredentialResolver {
             }
         }
 
-        // 5. Try auto-import from other tools
+        // 6. Try auto-import from other tools
         if self.config.enable_auto_import {
             for (tool_name, path) in auto_import_paths() {
                 if let Some(creds) = CredentialsFile::load_or_warn(&path) {
@@ -194,17 +228,92 @@ impl CredentialResolver {
             .any(|env_var| self.resolve_provider(default_provider, env_var).has_value())
     }
 
-    /// Save a credential to the global credentials file
+    /// Save a credential to the configured secure backend.
     pub fn save_credential(&self, provider: &str, key: &str) -> std::io::Result<()> {
-        let path = self.config.global_credentials_path();
-        let mut creds = CredentialsFile::load(&path)?.unwrap_or_default();
-        creds.set_api_key(provider, key);
-        creds.save(&path)
+        match self.save_credential_status(provider, key).outcome {
+            super::status::CredentialOperationOutcome::Succeeded => Ok(()),
+            _ => Err(io::Error::other(
+                "secure credential backend failed to save credential",
+            )),
+        }
+    }
+
+    /// Save a credential and return structured recovery status.
+    pub fn save_credential_status(&self, provider: &str, key: &str) -> CredentialOperationStatus {
+        match self.config.credential_backend.save(provider, key) {
+            Ok(()) => CredentialOperationStatus::succeeded(
+                CredentialOperation::Save,
+                provider,
+                Some(key),
+                self.config.credential_backend.kind(),
+            ),
+            Err(error) => CredentialOperationStatus::failed(
+                CredentialOperation::Save,
+                provider,
+                Some(key),
+                error,
+            ),
+        }
+    }
+
+    /// Remove a saved credential from the configured backend.
+    pub fn logout_provider(&self, provider: &str) -> CredentialOperationStatus {
+        match self.config.credential_backend.logout(provider) {
+            Ok(()) => CredentialOperationStatus::succeeded(
+                CredentialOperation::Logout,
+                provider,
+                None,
+                self.config.credential_backend.kind(),
+            ),
+            Err(error) => CredentialOperationStatus::failed(
+                CredentialOperation::Logout,
+                provider,
+                None,
+                error,
+            ),
+        }
+    }
+
+    /// Revoke a saved credential through the configured backend when supported.
+    pub fn revoke_provider(&self, provider: &str) -> CredentialOperationStatus {
+        match self.config.credential_backend.revoke(provider) {
+            Ok(()) => CredentialOperationStatus::succeeded(
+                CredentialOperation::Revoke,
+                provider,
+                None,
+                self.config.credential_backend.kind(),
+            ),
+            Err(error) => CredentialOperationStatus::failed(
+                CredentialOperation::Revoke,
+                provider,
+                None,
+                error,
+            ),
+        }
     }
 
     /// Get the resolver configuration
     pub fn config(&self) -> &ResolverConfig {
         &self.config
+    }
+}
+
+fn env_candidates(provider: &str, env_var: &str) -> Vec<String> {
+    let mut candidates = Vec::new();
+    push_unique(&mut candidates, env_var.to_string());
+    for candidate in get_standard_env_vars_for_provider(provider) {
+        push_unique(&mut candidates, candidate);
+    }
+    push_unique(
+        &mut candidates,
+        format!("{}_API_KEY", provider.to_uppercase()),
+    );
+    candidates
+}
+
+fn push_unique(values: &mut Vec<String>, value: String) {
+    if !values.iter().any(|candidate| candidate == &value) {
+        values.push(value);
     }
 }
 

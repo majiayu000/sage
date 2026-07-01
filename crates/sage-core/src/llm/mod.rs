@@ -1,5 +1,6 @@
 //! LLM client and message types
 
+pub mod capability_manager;
 pub mod client;
 pub mod converters;
 pub mod fallback;
@@ -19,6 +20,7 @@ mod client_tests;
 #[cfg(test)]
 mod provider_fallback_tests;
 
+pub use capability_manager::CapabilityManager;
 pub use client::LlmClient;
 pub use fallback::{
     FallbackChain, FallbackChainBuilder, FallbackEvent, FallbackReason, ModelConfig,

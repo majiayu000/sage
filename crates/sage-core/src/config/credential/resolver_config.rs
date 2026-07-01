@@ -2,12 +2,15 @@
 //!
 //! This module defines configuration for the credential resolver.
 
+use super::backend::{CredentialBackend, UnsupportedCredentialBackend};
 use super::providers::{ProviderEnvConfig, default_providers};
 use std::collections::HashMap;
+use std::fmt;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 /// Configuration for the credential resolver
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ResolverConfig {
     /// Working directory (for project-level config)
     pub working_dir: PathBuf,
@@ -19,6 +22,12 @@ pub struct ResolverConfig {
     pub cli_keys: HashMap<String, String>,
     /// Whether to attempt auto-import
     pub enable_auto_import: bool,
+    /// Whether legacy plaintext JSON credentials are accepted as fallback.
+    pub allow_legacy_plaintext: bool,
+    /// Whether a secure backend load error may fall through to legacy plaintext.
+    pub allow_legacy_plaintext_after_backend_error: bool,
+    /// Durable secure credential backend.
+    pub credential_backend: Arc<dyn CredentialBackend>,
 }
 
 impl Default for ResolverConfig {
@@ -29,7 +38,28 @@ impl Default for ResolverConfig {
             providers: default_providers(),
             cli_keys: HashMap::new(),
             enable_auto_import: true,
+            allow_legacy_plaintext: true,
+            allow_legacy_plaintext_after_backend_error: false,
+            credential_backend: Arc::new(UnsupportedCredentialBackend),
         }
+    }
+}
+
+impl fmt::Debug for ResolverConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ResolverConfig")
+            .field("working_dir", &self.working_dir)
+            .field("global_dir", &self.global_dir)
+            .field("providers", &self.providers)
+            .field("cli_keys", &self.cli_keys.keys().collect::<Vec<_>>())
+            .field("enable_auto_import", &self.enable_auto_import)
+            .field("allow_legacy_plaintext", &self.allow_legacy_plaintext)
+            .field(
+                "allow_legacy_plaintext_after_backend_error",
+                &self.allow_legacy_plaintext_after_backend_error,
+            )
+            .field("credential_backend", &self.credential_backend.kind())
+            .finish()
     }
 }
 
@@ -57,6 +87,24 @@ impl ResolverConfig {
     /// Set whether to enable auto-import
     pub fn with_auto_import(mut self, enabled: bool) -> Self {
         self.enable_auto_import = enabled;
+        self
+    }
+
+    /// Set whether legacy plaintext JSON credentials are accepted as fallback.
+    pub fn with_legacy_plaintext(mut self, enabled: bool) -> Self {
+        self.allow_legacy_plaintext = enabled;
+        self
+    }
+
+    /// Explicitly allow legacy plaintext fallback after a backend load error.
+    pub fn with_legacy_plaintext_after_backend_error(mut self, enabled: bool) -> Self {
+        self.allow_legacy_plaintext_after_backend_error = enabled;
+        self
+    }
+
+    /// Set the secure credential backend.
+    pub fn with_credential_backend(mut self, backend: Arc<dyn CredentialBackend>) -> Self {
+        self.credential_backend = backend;
         self
     }
 

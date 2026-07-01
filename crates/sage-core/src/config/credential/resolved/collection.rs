@@ -1,6 +1,7 @@
 //! Collection of resolved credentials for multiple providers
 
 use super::credential::ResolvedCredential;
+use crate::config::credential::precedence_rank;
 
 /// A collection of resolved credentials for multiple providers
 #[derive(Debug, Clone, Default)]
@@ -22,7 +23,7 @@ impl ResolvedCredentials {
             .iter_mut()
             .find(|c| c.provider == credential.provider)
         {
-            if credential.priority() < existing.priority() {
+            if precedence_rank(&credential.source) < precedence_rank(&existing.source) {
                 *existing = credential;
             }
         } else {
