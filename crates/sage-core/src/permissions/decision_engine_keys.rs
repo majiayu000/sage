@@ -85,9 +85,9 @@ pub(super) fn path_is_at_or_under(path: &Path, root: &Path) -> bool {
         let path = permission_path_string(path).to_ascii_lowercase();
         let root = permission_path_string(root).to_ascii_lowercase();
         return path == root
-            || path
-                .strip_prefix(&root)
-                .is_some_and(|suffix| suffix.starts_with('/'));
+            || path.strip_prefix(&root).is_some_and(|suffix| {
+                suffix.starts_with('/') || (root.ends_with('/') && !suffix.is_empty())
+            });
     }
 
     path == root || path.starts_with(root)

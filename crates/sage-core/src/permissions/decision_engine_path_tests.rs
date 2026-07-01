@@ -63,3 +63,33 @@ fn protected_workspace_path_matches_case_insensitively_on_windows() {
     assert_eq!(decision.kind, PermissionDecisionKind::Deny);
     assert!(decision.reason.contains("protected"));
 }
+
+#[cfg(windows)]
+#[test]
+fn trailing_workspace_root_contains_children_on_windows() {
+    let profile = PermissionProfile {
+        filesystem: FilesystemPermissionProfile {
+            workspace_roots: vec![r"C:\".to_string()],
+            ..Default::default()
+        },
+        allow: vec![PermissionRule::new(
+            "Read(src/**)",
+            PermissionProfileSource::Project,
+        )],
+        default_behavior: PermissionBehavior::Deny,
+        default_behavior_set: true,
+        default_behavior_source: Some(PermissionProfileSource::Project),
+        ..Default::default()
+    };
+
+    let decision = PermissionDecisionEngine::new(profile).decide(
+        PermissionDecisionInput::new(
+            PermissionAction::Filesystem,
+            "Read",
+            vec![r"Read(C:\src\lib.rs)".to_string()],
+        )
+        .with_path(r"C:\src\lib.rs"),
+    );
+
+    assert_eq!(decision.kind, PermissionDecisionKind::Allow);
+}

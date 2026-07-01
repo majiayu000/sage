@@ -166,10 +166,11 @@ fn filesystem_paths(tool_name: &str, tool_call: &ToolCall) -> Vec<String> {
             .into_iter()
             .collect(),
         "multiedit" => multiedit_paths(tool_call),
-        "grep" => tool_call
-            .get_argument::<String>("path")
-            .into_iter()
-            .collect(),
+        "grep" => vec![
+            tool_call
+                .get_argument::<String>("path")
+                .unwrap_or_else(|| ".".to_string()),
+        ],
         "glob" => glob_paths(tool_call),
         _ => Vec::new(),
     }
@@ -224,4 +225,17 @@ fn with_preflights(
     input
         .with_preflight_denies(preflight_denies)
         .with_scoped_allows(scoped_allows)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn pathless_grep_uses_workspace_scope() {
+        let call = ToolCall::new("call-1", "grep", HashMap::new());
+
+        assert_eq!(filesystem_paths("grep", &call), vec![".".to_string()]);
+    }
 }

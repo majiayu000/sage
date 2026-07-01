@@ -296,26 +296,31 @@ impl PermissionDecisionEngine {
             );
         }
 
-        let allow_keys = if input.permission_keys.is_empty() {
-            &rule_match_keys
-        } else {
-            &input.permission_keys
-        };
-        let allow_matches: Vec<&PermissionRule> = allow_keys
+        let supplied_allow_matches: Vec<&PermissionRule> = input
+            .permission_keys
             .iter()
             .filter_map(|key| self.matching_rule_for_key(&self.profile.allow, key))
             .collect();
+        let structured_allow_matches: Vec<&PermissionRule> = rule_match_keys
+            .iter()
+            .filter(|key| !input.permission_keys.contains(key))
+            .filter_map(|key| self.matching_rule_for_key(&self.profile.allow, key))
+            .collect();
         let allow_matched = if input.permission_keys.is_empty() {
-            !allow_matches.is_empty()
+            !structured_allow_matches.is_empty()
         } else {
-            allow_matches.len() == input.permission_keys.len()
+            supplied_allow_matches.len() == input.permission_keys.len()
+                || !structured_allow_matches.is_empty()
         };
         if !rule_match_keys.is_empty() && allow_matched {
             return PermissionDecision::new(
                 PermissionDecisionKind::Allow,
                 audit_key,
                 "matched allow rule",
-                allow_matches.first().map(|rule| (*rule).clone()),
+                supplied_allow_matches
+                    .first()
+                    .or_else(|| structured_allow_matches.first())
+                    .map(|rule| (*rule).clone()),
             );
         }
 
@@ -467,6 +472,10 @@ fn glob_static_scope(pattern: &str) -> PathBuf {
         scope
     }
 }
+
+#[cfg(test)]
+#[path = "decision_engine_allow_tests.rs"]
+mod allow_tests;
 
 #[cfg(test)]
 #[path = "decision_engine_network_tests.rs"]
