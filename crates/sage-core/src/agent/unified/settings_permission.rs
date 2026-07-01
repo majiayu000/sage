@@ -62,9 +62,17 @@ impl UnifiedExecutor {
         let mut prompted_count = 0usize;
 
         loop {
-            let Some(decision) =
-                Self::settings_permission_decision(&settings, &current_call, &context.working_dir)
-            else {
+            let sandbox_support = if context.sandboxed {
+                SandboxSupport::Supported
+            } else {
+                SandboxSupport::Unsupported
+            };
+            let Some(decision) = Self::settings_permission_decision_with_sandbox_support(
+                &settings,
+                &current_call,
+                &context.working_dir,
+                sandbox_support,
+            ) else {
                 return if current_call == *tool_call {
                     Ok(None)
                 } else {
@@ -274,6 +282,20 @@ impl UnifiedExecutor {
         tool_call: &ToolCall,
         working_dir: &Path,
     ) -> Option<SettingsPermissionDecision> {
+        Self::settings_permission_decision_with_sandbox_support(
+            settings,
+            tool_call,
+            working_dir,
+            SandboxSupport::Unknown,
+        )
+    }
+
+    fn settings_permission_decision_with_sandbox_support(
+        settings: &Settings,
+        tool_call: &ToolCall,
+        working_dir: &Path,
+        sandbox_support: SandboxSupport,
+    ) -> Option<SettingsPermissionDecision> {
         let tool_name = settings_permission_keys::canonical_permission_tool_name(&tool_call.name);
         let keys =
             settings_permission_keys::actual_permission_keys(&tool_name, tool_call, working_dir);
@@ -299,41 +321,50 @@ impl UnifiedExecutor {
             .unwrap_or_else(|| tool_name.to_string());
 
         let mut preflight_denies = Vec::new();
-        let deny_patterns = settings_permission_policy::deny_patterns(settings);
+        let deny_rules = settings_permission_policy::deny_rules(settings);
         if tool_name == "Grep" && matches!(key.as_str(), "Grep" | "Grep()") {
-            if let Some(pattern) = deny_patterns.iter().find(|pattern| {
-                let lower = pattern.to_ascii_lowercase();
+            if let Some(rule) = deny_rules.iter().find(|rule| {
+                let lower = rule.pattern.to_ascii_lowercase();
                 lower == "grep" || lower.starts_with("grep(")
             }) {
-                preflight_denies.push(PermissionPreflight::new(
-                    format!(
-                        "workspace-wide Grep search overlaps deny rule '{}'",
-                        pattern
-                    ),
-                    Some(pattern.clone()),
-                ));
+                preflight_denies.push(
+                    PermissionPreflight::new(
+                        format!(
+                            "workspace-wide Grep search overlaps deny rule '{}'",
+                            rule.pattern
+                        ),
+                        Some(rule.pattern.clone()),
+                    )
+                    .with_source(rule.source),
+                );
             }
         }
 
         if tool_name == "Grep" {
-            if let Some(pattern) = deny_patterns.iter().find(|pattern| {
-                settings_permission_paths::grep_search_overlaps_deny_rule(&key, pattern)
+            if let Some(rule) = deny_rules.iter().find(|rule| {
+                settings_permission_paths::grep_search_overlaps_deny_rule(&key, &rule.pattern)
             }) {
-                preflight_denies.push(PermissionPreflight::new(
-                    format!("Grep search overlaps deny rule '{}'", pattern),
-                    Some(pattern.clone()),
-                ));
+                preflight_denies.push(
+                    PermissionPreflight::new(
+                        format!("Grep search overlaps deny rule '{}'", rule.pattern),
+                        Some(rule.pattern.clone()),
+                    )
+                    .with_source(rule.source),
+                );
             }
         }
 
         if tool_name == "Glob" {
-            if let Some(pattern) = deny_patterns.iter().find(|pattern| {
-                settings_permission_paths::glob_search_overlaps_deny_rule(&key, pattern)
+            if let Some(rule) = deny_rules.iter().find(|rule| {
+                settings_permission_paths::glob_search_overlaps_deny_rule(&key, &rule.pattern)
             }) {
-                preflight_denies.push(PermissionPreflight::new(
-                    format!("Glob search overlaps deny rule '{}'", pattern),
-                    Some(pattern.clone()),
-                ));
+                preflight_denies.push(
+                    PermissionPreflight::new(
+                        format!("Glob search overlaps deny rule '{}'", rule.pattern),
+                        Some(rule.pattern.clone()),
+                    )
+                    .with_source(rule.source),
+                );
             }
         }
 
@@ -341,7 +372,7 @@ impl UnifiedExecutor {
             && Self::http_client_may_follow_redirects(tool_call)
             && settings_permission_policy::http_client_redirects_require_disabled(
                 settings,
-                &deny_patterns,
+                &deny_rules,
             )
         {
             preflight_denies.push(PermissionPreflight::new(
@@ -373,7 +404,7 @@ impl UnifiedExecutor {
         .into_iter()
         .map(|input| {
             let input = if profile.sandbox.required {
-                input.with_required_sandbox(SandboxSupport::Supported)
+                input.with_required_sandbox(sandbox_support)
             } else {
                 input
             };

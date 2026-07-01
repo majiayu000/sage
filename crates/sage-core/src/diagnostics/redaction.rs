@@ -14,14 +14,14 @@ static BEARER_TOKEN_RE: Lazy<Regex> = Lazy::new(|| {
 
 static KEY_VALUE_SECRET_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
-        r#"(?i)\b([A-Z0-9_-]*(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password|cookie|credential|private[_-]?key)[A-Z0-9_-]*)\b\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|[^"',\s}\]]+)"#,
+        r#"(?i)["']?\b([A-Z0-9_-]*(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password|cookie|credential|private[_-]?key)[A-Z0-9_-]*)\b["']?\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|[^"',\s}\]]+)"#,
     )
     .expect("valid secret regex")
 });
 
 static AUTHORIZATION_SECRET_RE: Lazy<Regex> = Lazy::new(|| {
     match Regex::new(
-        r#"(?i)\b(authorization|x-api-key)\b\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|(?:bearer|basic|token|api-key|apikey)\s+[^"',\s=}\]]+(?:\s+[^"',\s=}\]]+)?|[^"',\s}\]]+)"#,
+        r#"(?i)["']?\b(authorization|x-api-key)\b["']?\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|(?:bearer|basic|token|api-key|apikey)\s+[^"',\s=}\]]+(?:\s+[^"',\s=}\]]+)?|[^"',\s}\]]+)"#,
     ) {
         Ok(regex) => regex,
         Err(error) => panic!("invalid authorization secret regex: {error}"),
@@ -207,6 +207,19 @@ mod tests {
         assert!(redacted.value.contains("DATABASE_PASSWORD=[REDACTED]"));
         assert!(redacted.value.contains("Authorization=[REDACTED]"));
         assert!(redacted.value.contains("token=[REDACTED]"));
+    }
+
+    #[test]
+    fn diagnostics_redaction_redacts_json_shaped_quoted_secret_keys() {
+        let redactor = DiagnosticRedactor::new();
+        let input = r#"{"DATABASE_PASSWORD":"foo bar","authorization":"Basic abc def"}"#;
+
+        let redacted = redactor.redact_text(input);
+
+        assert!(!redacted.value.contains("foo bar"));
+        assert!(!redacted.value.contains("abc def"));
+        assert!(redacted.value.contains("DATABASE_PASSWORD=[REDACTED]"));
+        assert!(redacted.value.contains("authorization=[REDACTED]"));
     }
 
     #[test]

@@ -1,7 +1,7 @@
 use super::decision_engine_keys::{
     normalize_path, path_is_at_or_under, permission_pattern_matches, rule_match_keys,
 };
-use super::{PermissionBehavior, PermissionProfile, PermissionRule};
+use super::{PermissionBehavior, PermissionProfile, PermissionProfileSource, PermissionRule};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -33,15 +33,14 @@ impl Default for SandboxSupport {
 pub struct PermissionPreflight {
     pub reason: String,
     pub matched_rule: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub matched_rule_source: Option<PermissionProfileSource>,
 }
 
+#[rustfmt::skip]
 impl PermissionPreflight {
-    pub fn new(reason: impl Into<String>, matched_rule: Option<String>) -> Self {
-        Self {
-            reason: reason.into(),
-            matched_rule,
-        }
-    }
+    pub fn new(reason: impl Into<String>, matched_rule: Option<String>) -> Self { Self { reason: reason.into(), matched_rule, matched_rule_source: None } }
+    pub fn with_source(mut self, source: PermissionProfileSource) -> Self { self.matched_rule_source = Some(source); self }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -279,13 +278,14 @@ impl PermissionDecisionEngine {
         }
 
         if let Some(deny) = input.preflight_denies.first() {
+            let source = deny.matched_rule_source.unwrap_or(self.profile.source);
             return PermissionDecision::new(
                 PermissionDecisionKind::Deny,
                 audit_key,
                 deny.reason.clone(),
                 deny.matched_rule
                     .as_ref()
-                    .map(|pattern| PermissionRule::new(pattern.clone(), self.profile.source)),
+                    .map(|pattern| PermissionRule::new(pattern.clone(), source)),
             );
         }
 

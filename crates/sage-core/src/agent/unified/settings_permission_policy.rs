@@ -1,33 +1,54 @@
 //! Shared policy helpers for settings-backed permission checks.
 
-use crate::permissions::{PermissionAction, PermissionDecisionInput, permission_pattern_matches};
+use crate::permissions::{
+    PermissionAction, PermissionDecisionInput, PermissionProfileSource, PermissionRule,
+    permission_pattern_matches,
+};
 use crate::settings::types::{Settings, SettingsPermissionBehavior};
 use std::path::Path;
 
-pub(super) fn deny_patterns(settings: &Settings) -> Vec<String> {
-    let mut patterns = settings.permissions.deny.clone();
+pub(super) fn deny_rules(settings: &Settings) -> Vec<PermissionRule> {
+    let mut rules = settings
+        .permissions
+        .deny
+        .iter()
+        .cloned()
+        .map(|pattern| PermissionRule::new(pattern, PermissionProfileSource::Local))
+        .collect::<Vec<_>>();
     for managed in &settings.managed_configs {
-        patterns.extend(managed.config.permissions.deny.clone());
+        rules.extend(
+            managed
+                .config
+                .permissions
+                .deny
+                .iter()
+                .cloned()
+                .map(|pattern| PermissionRule::new(pattern, PermissionProfileSource::Managed)),
+        );
     }
-    patterns
+    rules
 }
 
 pub(super) fn http_client_redirects_require_disabled(
     settings: &Settings,
-    managed_deny_patterns: &[String],
+    deny_rules: &[PermissionRule],
 ) -> bool {
     settings.permissions.default_behavior != SettingsPermissionBehavior::Allow
+        || settings
+            .managed_configs
+            .iter()
+            .any(|managed| managed.config.permissions.default_behavior.is_some())
         || has_http_client_url_permission_rule(
             settings
                 .permissions
                 .allow
                 .iter()
-                .chain(settings.permissions.deny.iter())
-                .chain(managed_deny_patterns.iter()),
+                .map(String::as_str)
+                .chain(deny_rules.iter().map(|rule| rule.pattern.as_str())),
         )
 }
 
-fn has_http_client_url_permission_rule<'a>(mut patterns: impl Iterator<Item = &'a String>) -> bool {
+fn has_http_client_url_permission_rule<'a>(mut patterns: impl Iterator<Item = &'a str>) -> bool {
     patterns.any(|pattern| {
         pattern
             .trim_start()

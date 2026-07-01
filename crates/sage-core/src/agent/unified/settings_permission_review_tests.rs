@@ -335,6 +335,28 @@ fn test_managed_http_client_denies_require_redirects_disabled() {
 }
 
 #[test]
+fn test_managed_default_ask_requires_http_client_redirects_disabled() {
+    let mut settings =
+        settings_with_managed_policy(r#"{"permissions":{"default_behavior":"ask"}}"#);
+    settings.permissions.default_behavior = SettingsPermissionBehavior::Allow;
+
+    let decision = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &review_tool_call(
+            "http_client",
+            serde_json::json!({"url": "https://public.example"}),
+        ),
+        review_workspace_dir(),
+    );
+
+    assert!(matches!(
+        decision,
+        Some(SettingsPermissionDecision::Deny(reason))
+            if reason.contains("follow_redirects=false")
+    ));
+}
+
+#[test]
 fn test_managed_network_ban_blocks_websearch() {
     let mut settings =
         settings_with_managed_policy(r#"{"permissions":{"network":{"enabled":false}}}"#);
@@ -353,18 +375,29 @@ fn test_managed_network_ban_blocks_websearch() {
 }
 
 #[test]
-fn test_managed_sandbox_required_does_not_fail_unknown_support() {
+fn test_managed_sandbox_required_uses_actual_sandbox_support() {
     let mut settings =
         settings_with_managed_policy(r#"{"permissions":{"sandbox":{"required":true}}}"#);
     settings.permissions.default_behavior = SettingsPermissionBehavior::Allow;
 
-    let decision = UnifiedExecutor::settings_permission_decision(
+    let unsupported = UnifiedExecutor::settings_permission_decision_with_sandbox_support(
         &settings,
         &review_tool_call("bash", serde_json::json!({"command": "cargo test"})),
         review_workspace_dir(),
+        SandboxSupport::Unsupported,
+    );
+    let supported = UnifiedExecutor::settings_permission_decision_with_sandbox_support(
+        &settings,
+        &review_tool_call("bash", serde_json::json!({"command": "cargo test"})),
+        review_workspace_dir(),
+        SandboxSupport::Supported,
     );
 
-    assert_eq!(decision, Some(SettingsPermissionDecision::Allow));
+    assert!(matches!(
+        unsupported,
+        Some(SettingsPermissionDecision::Deny(reason)) if reason.contains("sandbox unsupported")
+    ));
+    assert_eq!(supported, Some(SettingsPermissionDecision::Allow));
 }
 
 #[test]
