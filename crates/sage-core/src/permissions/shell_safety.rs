@@ -9,23 +9,16 @@
 //! - deny bypass: `Bash(rm *)` would not match `echo hi && rm -rf x`
 //!   because the chain does not start with `rm`.
 //!
-//! These helpers close the command-chaining class. They intentionally do not
-//! implement a full shell parser: quoting is ignored, so quoted metacharacters
-//! produce false positives that degrade allow decisions to Ask (fail closed).
+//! These helpers close the command-chaining class with a small shell-aware
+//! scanner. It is not a full Bash parser, but it tracks quotes, comments,
+//! redirection operands, and common command prefixes so deny matching does not
+//! silently miss executed command words.
 
 /// Shell metacharacters that chain or redirect commands when the string is
 /// handed to `bash -c`. Mirrors `ALLOWLIST_BYPASS_METACHARS` in the bash
 /// tool's allowlist guard, plus single `&` (backgrounding still chains).
 const SHELL_CONTROL_METACHARS: &[&str] = &[
     "&&", "||", ">>", "<<", ";", "|", "&", "$(", "`", ">", "<", "\n", "\r",
-];
-
-/// Separators that start a new command in a `bash -c` string. Redirection
-/// targets and substitution delimiters are included so that the text after
-/// them is inspected as its own segment; over-splitting can only make deny
-/// matching stricter.
-const SEGMENT_SEPARATORS: &[&str] = &[
-    "&&", "||", ";", "|", "&", "$(", "`", "{", "}", ")", "<", ">", "\n", "\r",
 ];
 
 /// Returns true when the command contains a shell control metacharacter,
@@ -55,13 +48,8 @@ pub(crate) fn command_segments(command: &str) -> Vec<String> {
     push(&command);
 
     let command_without_heredocs = remove_heredoc_bodies(&command);
-    push_redirection_remainders(&command_without_heredocs, &mut push);
-    let mut normalized = command_without_heredocs;
-    for separator in SEGMENT_SEPARATORS {
-        normalized = normalized.replace(separator, "\u{0}");
-    }
-    for part in normalized.split('\u{0}') {
-        push(part);
+    for segment in shell_command_segments(&command_without_heredocs) {
+        push(&segment);
     }
 
     segments
@@ -79,7 +67,7 @@ fn normalize_command_segment(segment: &str) -> String {
         let consumed = consume_assignment_value(rest, value_start);
         rest = rest[consumed..].trim_start();
     }
-    normalize_shell_whitespace(strip_shell_leading_syntax(rest))
+    normalize_shell_whitespace(&quote_removed_shell_word(strip_shell_leading_syntax(rest)))
 }
 
 fn remove_escaped_newlines(command: &str) -> String {
@@ -117,6 +105,7 @@ fn strip_shell_leading_syntax(mut segment: &str) -> &str {
         let before_len = segment.len();
         segment = strip_shell_negation_prefix(segment);
         segment = strip_shell_group_prefixes(segment);
+        segment = strip_shell_time_prefix(segment);
         segment = strip_shell_reserved_prefixes(segment);
         if segment.len() == before_len {
             return segment;
@@ -134,6 +123,14 @@ fn strip_shell_negation_prefix(segment: &str) -> &str {
     } else {
         segment
     }
+}
+
+fn strip_shell_time_prefix(segment: &str) -> &str {
+    let segment = segment.trim_start();
+    let Some(rest) = strip_shell_word_prefix(segment, "time") else {
+        return segment;
+    };
+    strip_shell_word_prefix(rest, "-p").unwrap_or(rest)
 }
 
 fn strip_shell_group_prefixes(mut segment: &str) -> &str {
@@ -158,19 +155,19 @@ fn strip_shell_reserved_prefixes(mut segment: &str) -> &str {
         segment = segment.trim_start();
         let Some(prefix) = RESERVED_PREFIXES
             .iter()
-            .find(|prefix| has_shell_word_prefix(segment, prefix))
+            .find_map(|prefix| strip_shell_word_prefix(segment, prefix))
         else {
             return segment;
         };
-        segment = segment[prefix.len()..].trim_start();
+        segment = prefix;
     }
 }
 
-fn has_shell_word_prefix(segment: &str, prefix: &str) -> bool {
+fn strip_shell_word_prefix<'a>(segment: &'a str, prefix: &str) -> Option<&'a str> {
     segment
         .strip_prefix(prefix)
-        .and_then(|rest| rest.chars().next())
-        .is_some_and(char::is_whitespace)
+        .filter(|rest| rest.chars().next().is_some_and(char::is_whitespace))
+        .map(str::trim_start)
 }
 
 fn normalize_shell_whitespace(segment: &str) -> String {
@@ -248,7 +245,9 @@ fn remove_heredoc_bodies(command: &str) -> String {
     retained.join("\n")
 }
 
-fn push_redirection_remainders(command: &str, push: &mut impl FnMut(&str)) {
+fn shell_command_segments(command: &str) -> Vec<String> {
+    let mut segments = Vec::new();
+    let mut current = String::new();
     let mut cursor = 0;
     let mut quote = None;
     let mut escaped = false;
@@ -259,12 +258,14 @@ fn push_redirection_remainders(command: &str, push: &mut impl FnMut(&str)) {
         };
 
         if escaped {
+            current.push(c);
             escaped = false;
             cursor += c.len_utf8();
             continue;
         }
 
         if let Some(active_quote) = quote {
+            current.push(c);
             if active_quote == '"' && c == '\\' {
                 escaped = true;
             } else if c == active_quote {
@@ -275,39 +276,107 @@ fn push_redirection_remainders(command: &str, push: &mut impl FnMut(&str)) {
         }
 
         if starts_shell_comment(command, cursor) {
+            push_raw_segment(&mut segments, &mut current);
             cursor = next_line_start(command, cursor).unwrap_or(command.len());
             continue;
         }
 
         if c == '\'' || c == '"' {
+            current.push(c);
             quote = Some(c);
             cursor += c.len_utf8();
             continue;
         }
 
-        if !matches!(c, '<' | '>') {
+        if c == '\\' {
+            current.push(c);
+            escaped = true;
             cursor += c.len_utf8();
             continue;
         }
 
-        let operator_start = cursor;
-        cursor += c.len_utf8();
-        if command[cursor..].starts_with(c) {
-            cursor += c.len_utf8();
-        }
-        if command[cursor..].starts_with('&') {
-            cursor += '&'.len_utf8();
+        if command[cursor..].starts_with("$(")
+            || command[cursor..].starts_with("<(")
+            || command[cursor..].starts_with(">(")
+        {
+            push_raw_segment(&mut segments, &mut current);
+            cursor += 2;
+            continue;
         }
 
-        cursor = skip_shell_whitespace(command, cursor);
-        let target_end = skip_shell_word(command, cursor);
-        if target_end > cursor {
-            push(&command[target_end..]);
-            cursor = target_end;
-        } else {
-            cursor = operator_start + c.len_utf8();
+        if matches!(c, '<' | '>') {
+            if current.trim().chars().all(|c| c.is_ascii_digit()) {
+                current.clear();
+            }
+            cursor = skip_redirection_operand(command, cursor);
+            continue;
+        }
+
+        if is_shell_command_separator(command, cursor) {
+            push_raw_segment(&mut segments, &mut current);
+            cursor += shell_separator_len(command, cursor);
+            continue;
+        }
+
+        current.push(c);
+        cursor += c.len_utf8();
+    }
+
+    push_raw_segment(&mut segments, &mut current);
+    segments
+}
+
+fn push_raw_segment(segments: &mut Vec<String>, current: &mut String) {
+    let trimmed = current.trim();
+    if !trimmed.is_empty() {
+        segments.push(trimmed.to_string());
+    }
+    current.clear();
+}
+
+fn is_shell_command_separator(input: &str, cursor: usize) -> bool {
+    input[cursor..].starts_with("&&")
+        || input[cursor..].starts_with("||")
+        || input[cursor..].starts_with(';')
+        || input[cursor..].starts_with('|')
+        || input[cursor..].starts_with('&')
+        || input[cursor..].starts_with('{')
+        || input[cursor..].starts_with('}')
+        || input[cursor..].starts_with(')')
+        || input[cursor..].starts_with('\n')
+        || input[cursor..].starts_with('\r')
+}
+
+fn shell_separator_len(input: &str, cursor: usize) -> usize {
+    if input[cursor..].starts_with("&&") || input[cursor..].starts_with("||") {
+        2
+    } else {
+        input[cursor..]
+            .chars()
+            .next()
+            .map(char::len_utf8)
+            .unwrap_or(1)
+    }
+}
+
+fn skip_redirection_operand(input: &str, cursor: usize) -> usize {
+    let Some(operator) = input[cursor..].chars().next() else {
+        return cursor;
+    };
+    let mut next = cursor + operator.len_utf8();
+
+    if input[next..].starts_with(operator) {
+        next += operator.len_utf8();
+        if operator == '<' && input[next..].starts_with(operator) {
+            next += operator.len_utf8();
         }
     }
+    if input[next..].starts_with('&') {
+        next += '&'.len_utf8();
+    }
+
+    next = skip_shell_whitespace(input, next);
+    skip_shell_word(input, next)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

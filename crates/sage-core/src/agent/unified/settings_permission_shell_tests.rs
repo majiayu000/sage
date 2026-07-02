@@ -118,6 +118,10 @@ fn test_deny_matches_chained_command_segment() {
         "cat <<E\"OF\"\nbody\nEOF\nrm -rf important/",
         "echo hi # <<EOF\nrm -rf important/\nEOF",
         "function cleanup { rm -rf important/; }; cleanup",
+        "time rm -rf important/",
+        "time -p rm -rf important/",
+        "r''m -rf important/",
+        "\\rm -rf important/",
     ] {
         assert!(
             matches!(
@@ -145,6 +149,14 @@ fn test_deny_does_not_match_heredoc_body() {
 
     assert!(matches!(
         decide(&settings, "cat <<EOF\nrm -rf important/\nEOF"),
+        Some(SettingsPermissionDecision::Allow)
+    ));
+    assert!(matches!(
+        decide(&settings, ": <<< rm -rf important/"),
+        Some(SettingsPermissionDecision::Allow)
+    ));
+    assert!(matches!(
+        decide(&settings, "echo 'safe; rm -rf important/'"),
         Some(SettingsPermissionDecision::Allow)
     ));
 }
