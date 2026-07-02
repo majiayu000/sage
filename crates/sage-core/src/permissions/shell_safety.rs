@@ -51,7 +51,8 @@ pub(crate) fn command_segments(command: &str) -> Vec<String> {
 
     push(command);
 
-    let mut normalized = command.to_string();
+    let command_without_heredocs = remove_heredoc_bodies(command);
+    let mut normalized = command_without_heredocs;
     for separator in SEGMENT_SEPARATORS {
         normalized = normalized.replace(separator, "\u{0}");
     }
@@ -66,26 +67,158 @@ pub(crate) fn command_segments(command: &str) -> Vec<String> {
 /// `rm -rf x`.
 fn strip_env_assignments(segment: &str) -> String {
     let mut rest = segment.trim_start();
-    while let Some(token) = rest.split_whitespace().next() {
-        if !is_env_assignment(token) {
+    loop {
+        rest = strip_shell_group_prefixes(rest);
+        let Some(value_start) = env_assignment_value_start(rest) else {
             break;
-        }
-        // `token` is a prefix of `rest` because `rest` is trimmed at the
-        // start of every iteration.
-        rest = rest[token.len()..].trim_start();
+        };
+        let consumed = consume_assignment_value(rest, value_start);
+        rest = rest[consumed..].trim_start();
     }
-    rest.to_string()
+    strip_shell_group_prefixes(rest).to_string()
 }
 
-fn is_env_assignment(token: &str) -> bool {
-    let Some((name, _)) = token.split_once('=') else {
-        return false;
+fn strip_shell_group_prefixes(mut segment: &str) -> &str {
+    loop {
+        segment = segment.trim_start();
+        let Some(first) = segment.chars().next() else {
+            return segment;
+        };
+        if !matches!(first, '(' | '{') {
+            return segment;
+        }
+        segment = &segment[first.len_utf8()..];
+    }
+}
+
+fn env_assignment_value_start(segment: &str) -> Option<usize> {
+    let mut seen_name = false;
+    for (index, c) in segment.char_indices() {
+        if c == '=' {
+            return seen_name.then_some(index + c.len_utf8());
+        }
+        if !(c == '_' || c.is_ascii_alphabetic() || (seen_name && c.is_ascii_digit())) {
+            return None;
+        }
+        seen_name = true;
+    }
+    None
+}
+
+fn consume_assignment_value(segment: &str, value_start: usize) -> usize {
+    let Some(first) = segment[value_start..].chars().next() else {
+        return value_start;
     };
-    !name.is_empty()
-        && name
+    match first {
+        '\'' | '"' => consume_quoted_value(segment, value_start, first),
+        _ => segment[value_start..]
+            .find(char::is_whitespace)
+            .map(|offset| value_start + offset)
+            .unwrap_or(segment.len()),
+    }
+}
+
+fn consume_quoted_value(segment: &str, value_start: usize, quote: char) -> usize {
+    let mut escaped = false;
+    let content_start = value_start + quote.len_utf8();
+    for (offset, c) in segment[content_start..].char_indices() {
+        if quote == '"' && escaped {
+            escaped = false;
+            continue;
+        }
+        if quote == '"' && c == '\\' {
+            escaped = true;
+            continue;
+        }
+        if c == quote {
+            return content_start + offset + c.len_utf8();
+        }
+    }
+    segment.len()
+}
+
+fn remove_heredoc_bodies(command: &str) -> String {
+    let mut retained = Vec::new();
+    let mut pending_delimiters: Vec<HereDocDelimiter> = Vec::new();
+
+    for line in command.split('\n') {
+        if let Some(delimiter) = pending_delimiters.first() {
+            let candidate = line.trim_end_matches('\r');
+            let candidate = if delimiter.strip_tabs {
+                candidate.trim_start_matches('\t')
+            } else {
+                candidate
+            };
+            if candidate == delimiter.value {
+                pending_delimiters.remove(0);
+            }
+            continue;
+        }
+
+        retained.push(line);
+        pending_delimiters.extend(find_heredoc_delimiters(line));
+    }
+
+    retained.join("\n")
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct HereDocDelimiter {
+    value: String,
+    strip_tabs: bool,
+}
+
+fn find_heredoc_delimiters(line: &str) -> Vec<HereDocDelimiter> {
+    let mut delimiters = Vec::new();
+    let mut search_from = 0;
+    while let Some(offset) = line[search_from..].find("<<") {
+        let mut cursor = search_from + offset + 2;
+        if line[cursor..].starts_with('<') {
+            search_from = cursor + 1;
+            continue;
+        }
+
+        let strip_tabs = line[cursor..].starts_with('-');
+        if strip_tabs {
+            cursor += 1;
+        }
+        cursor += line[cursor..]
             .chars()
-            .enumerate()
-            .all(|(i, c)| c == '_' || c.is_ascii_alphabetic() || (i > 0 && c.is_ascii_digit()))
+            .take_while(|c| c.is_whitespace())
+            .map(char::len_utf8)
+            .sum::<usize>();
+
+        if let Some((delimiter, consumed)) = read_heredoc_delimiter(&line[cursor..]) {
+            delimiters.push(HereDocDelimiter {
+                value: delimiter,
+                strip_tabs,
+            });
+            search_from = cursor + consumed;
+        } else {
+            search_from = cursor;
+        }
+    }
+    delimiters
+}
+
+fn read_heredoc_delimiter(input: &str) -> Option<(String, usize)> {
+    let first = input.chars().next()?;
+    if matches!(first, '\'' | '"') {
+        let end = consume_quoted_value(input, 0, first);
+        if end <= first.len_utf8() {
+            return None;
+        }
+        return Some((
+            input[first.len_utf8()..end - first.len_utf8()].to_string(),
+            end,
+        ));
+    }
+
+    let end = input
+        .char_indices()
+        .find_map(|(index, c)| (c.is_whitespace() || matches!(c, ';' | '|' | '&')).then_some(index))
+        .unwrap_or(input.len());
+    (end > 0).then(|| (input[..end].to_string(), end))
 }
 
 /// True when an allow rule's argument is a partial wildcard pattern such as
@@ -133,6 +266,27 @@ mod tests {
     fn strips_leading_env_assignments() {
         let segments = command_segments("FOO=1 BAR=2 rm -rf x");
         assert!(segments.contains(&"rm -rf x".to_string()));
+    }
+
+    #[test]
+    fn strips_quoted_env_assignments() {
+        let segments = command_segments("FOO='a b' BAR=\"c d\" rm -rf x");
+        assert!(segments.contains(&"rm -rf x".to_string()));
+    }
+
+    #[test]
+    fn strips_shell_group_prefixes() {
+        let grouped = command_segments("echo ok && (rm -rf important/)");
+        assert!(grouped.contains(&"rm -rf important/".to_string()));
+
+        let process_substitution = command_segments("git <(rm -rf important/)");
+        assert!(process_substitution.contains(&"rm -rf important/".to_string()));
+    }
+
+    #[test]
+    fn ignores_heredoc_bodies() {
+        let segments = command_segments("cat <<EOF\nrm -rf important/\nEOF");
+        assert!(!segments.contains(&"rm -rf important/".to_string()));
     }
 
     #[test]

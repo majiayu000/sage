@@ -105,6 +105,9 @@ fn test_deny_matches_chained_command_segment() {
         "true; rm -rf important/",
         "git $(rm -rf important/)",
         "FOO=1 rm -rf important/",
+        "FOO='a b' rm -rf important/",
+        "echo ok && (rm -rf important/)",
+        "git <(rm -rf important/)",
         "echo hi | rm -rf important/",
     ] {
         assert!(
@@ -119,6 +122,20 @@ fn test_deny_matches_chained_command_segment() {
     // Unrelated commands remain allowed.
     assert!(matches!(
         decide(&settings, "echo hi"),
+        Some(SettingsPermissionDecision::Allow)
+    ));
+}
+
+#[test]
+fn test_deny_does_not_match_heredoc_body() {
+    let settings = settings(
+        vec![],
+        vec!["Bash(rm *)"],
+        SettingsPermissionBehavior::Allow,
+    );
+
+    assert!(matches!(
+        decide(&settings, "cat <<EOF\nrm -rf important/\nEOF"),
         Some(SettingsPermissionDecision::Allow)
     ));
 }
