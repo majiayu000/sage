@@ -239,9 +239,16 @@ Create `sage_config.json` or use environment variables:
     }
   },
   "max_steps": 20,
+  "memory": {
+    "enabled": false,
+    "storage_path": ".sage/memory/agent-memory.json"
+  },
   "working_directory": "."
 }
 ```
+
+Cross-session memory is opt-in. Set `memory.enabled` to `true` to inject bounded,
+redacted project memories and learning patterns into future prompts.
 
 ### Environment Variables
 

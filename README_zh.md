@@ -239,9 +239,15 @@ Create `sage_config.json` or use environment variables:
     }
   },
   "max_steps": 20,
+  "memory": {
+    "enabled": false,
+    "storage_path": ".sage/memory/agent-memory.json"
+  },
   "working_directory": "."
 }
 ```
+
+跨会话 memory 默认关闭。将 `memory.enabled` 设为 `true` 后，Sage 会把经过上界控制和脱敏的项目记忆与学习模式注入后续 prompt。
 
 ### Environment Variables
 

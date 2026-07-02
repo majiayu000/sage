@@ -25,6 +25,7 @@ pub fn load_from_args(args: &HashMap<String, String>) -> SageResult<Config> {
         logging: crate::config::model::LoggingConfig::default(),
         trajectory: crate::config::model::TrajectoryConfig::default(),
         mcp: crate::config::model::McpConfig::default(),
+        memory: crate::config::model::AgentMemoryConfig::default(),
     };
 
     if let Some(provider) = args.get("provider") {
