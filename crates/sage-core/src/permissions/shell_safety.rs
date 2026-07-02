@@ -30,10 +30,16 @@ use shell_safety_words::{
     strip_shell_word_prefix,
 };
 
+pub(crate) const UNKNOWN_EXEC_SEGMENT: &str = "__sage_unknown_shell_execution__";
+
 /// Returns true when the command contains a shell control metacharacter,
 /// i.e. it may execute more than the single command named by its prefix.
 pub(crate) fn contains_shell_control_metachar(command: &str) -> bool {
     contains_unquoted_shell_control_metachar(command)
+}
+
+pub(crate) fn is_unknown_execution_segment(segment: &str) -> bool {
+    segment == UNKNOWN_EXEC_SEGMENT
 }
 
 /// Split a `bash -c` command string into candidate command segments for
@@ -96,9 +102,12 @@ fn strip_leading_assignment_words(mut segment: &str) -> &str {
 fn executable_builtin_segments(segment: &str) -> Vec<String> {
     let mut segment = strip_leading_assignment_words(segment);
     if let Some(rest) = strip_shell_command_word_prefix(segment, "builtin") {
-        segment = rest.trim_start();
+        segment = strip_shell_word_prefix(rest, "--")
+            .unwrap_or(rest)
+            .trim_start();
     }
     if let Some(rest) = strip_shell_command_word_prefix(segment, "eval") {
+        let rest = strip_shell_word_prefix(rest, "--").unwrap_or(rest);
         return shell_command_segments(&quote_removed_shell_word(rest));
     }
     if let Some(script) = shell_c_script(segment) {
@@ -160,23 +169,37 @@ fn alias_expansion_segments(command: &str) -> Vec<String> {
             continue;
         }
         let invocation = normalize_command_segment(&segment);
-        for (name, value) in &aliases {
-            if invocation == *name || invocation.starts_with(&format!("{name} ")) {
-                let rest = invocation[name.len()..].trim_start();
-                let expanded = if rest.is_empty() {
-                    value.clone()
-                } else {
-                    format!("{value} {rest}")
-                };
-                segments.extend(shell_command_segments(&expanded));
-            }
+        if let Some(expanded) = expand_alias_invocation(&invocation, &aliases) {
+            segments.extend(shell_command_segments(&expanded));
         }
     }
     segments
 }
 
+fn expand_alias_invocation(invocation: &str, aliases: &[(String, String)]) -> Option<String> {
+    let mut current = invocation.to_string();
+    let mut changed = false;
+    for _ in 0..aliases.len() {
+        let Some((name, value)) = aliases
+            .iter()
+            .find(|(name, _)| current == *name || current.starts_with(&format!("{name} ")))
+        else {
+            break;
+        };
+        let rest = current[name.len()..].trim_start();
+        current = if rest.is_empty() {
+            value.clone()
+        } else {
+            format!("{value} {rest}")
+        };
+        changed = true;
+    }
+    changed.then_some(current)
+}
+
 fn parse_alias_definition(segment: &str) -> Option<(String, String)> {
-    let rest = strip_shell_word_prefix(segment.trim_start(), "alias")?;
+    let segment = strip_leading_assignment_words(segment);
+    let rest = strip_shell_command_word_prefix(segment, "alias")?;
     let name_end = rest.find('=')?;
     let name = &rest[..name_end];
     if name.is_empty() || !name.chars().all(|c| c == '_' || c.is_ascii_alphanumeric()) {
@@ -258,7 +281,9 @@ fn strip_shell_time_prefix(segment: &str) -> &str {
 fn strip_shell_command_prefixes(mut segment: &str) -> &str {
     loop {
         segment = segment.trim_start();
-        if let Some(rest) = strip_shell_command_word_prefix(segment, "command") {
+        if let Some(rest) = strip_shell_command_word_prefix(segment, "builtin") {
+            segment = strip_shell_word_prefix(rest, "--").unwrap_or(rest);
+        } else if let Some(rest) = strip_shell_command_word_prefix(segment, "command") {
             segment = strip_command_options(rest);
         } else if let Some(rest) = strip_shell_command_word_prefix(segment, "exec") {
             segment = strip_exec_options(rest);
@@ -292,6 +317,14 @@ fn strip_exec_options(mut segment: &str) -> &str {
             segment = rest;
         } else if let Some(rest) = strip_shell_word_prefix(segment, "-l") {
             segment = rest;
+        } else if segment.starts_with('-')
+            && segment[1..]
+                .chars()
+                .take_while(|c| !c.is_whitespace())
+                .all(|c| matches!(c, 'c' | 'l'))
+        {
+            let arg_end = skip_shell_word(segment, 0);
+            segment = segment[arg_end..].trim_start();
         } else if let Some(rest) = strip_shell_word_prefix(segment, "--") {
             segment = rest;
         } else {
@@ -553,7 +586,8 @@ fn line_sources_stdin(line: &str) -> bool {
 
 fn line_invokes_stdin_shell(line: &str) -> bool {
     shell_command_segments(line).into_iter().any(|segment| {
-        let segment = strip_leading_assignment_words(&segment);
+        let normalized = normalize_command_segment(&segment);
+        let segment = normalized.as_str();
         let Some((word, rest)) = split_shell_word(segment) else {
             return false;
         };
@@ -593,7 +627,7 @@ fn shell_invocation_reads_stdin(mut rest: &str) -> bool {
 }
 
 fn sources_stdin_segment(segment: &str) -> bool {
-    let normalized = normalize_shell_whitespace(&quote_removed_shell_word(segment));
+    let normalized = normalize_command_segment(segment);
     ["source ", ". "].iter().any(|prefix| {
         normalized
             .strip_prefix(prefix)

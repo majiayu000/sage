@@ -148,7 +148,9 @@ fn test_deny_matches_chained_command_segment() {
         "command -p rm -rf important/",
         "command -- rm -rf important/",
         "builtin command rm -rf important/",
+        "command bash <<EOF\nrm -rf important/\nEOF",
         "exec -a x rm -rf important/",
+        "exec -cl rm -rf important/",
         "r''m -rf important/",
         "\\rm -rf important/",
         "r$(:)m -rf important/",
@@ -170,6 +172,8 @@ fn test_deny_matches_chained_command_segment() {
         "<> /tmp/out rm -rf important/",
         ">| /tmp/out rm -rf important/",
         "source /dev/stdin <<EOF\nrm -rf important/\nEOF",
+        "FOO=1 source /dev/stdin <<EOF\nrm -rf important/\nEOF",
+        "builtin source /dev/stdin <<EOF\nrm -rf important/\nEOF",
         "echo ok; source /dev/stdin <<EOF\nrm -rf important/\nEOF",
         "source /dev/stdin <<< 'rm -rf important/'",
         "bash <<EOF\nrm -rf important/\nEOF",
@@ -177,16 +181,22 @@ fn test_deny_matches_chained_command_segment() {
         "bash <<< 'rm -rf important/'",
         ". /dev/fd/0 <<EOF\nrm -rf important/\nEOF",
         "source <(printf 'rm -rf important/\\n')",
+        "source <(printf '%s\\n' 'rm -rf important/')",
         "cat <<\"E\\OF\"\nbody\nE\\OF\nrm -rf important/",
         "echo $((1 << 2))\nrm -rf important/",
         ">/tmp/out< /dev/null rm -rf important/",
         "shopt -s expand_aliases\nalias x='rm -rf important/'\nx",
+        "shopt -s expand_aliases\nFOO=1 alias x='rm -rf important/'\nx",
+        "shopt -s expand_aliases\nalias x=y\nalias y='rm -rf important/'\nx",
         "shopt -s expand_aliases\nalias x='rm -rf important/'\nFOO=1 x",
         "bash -c 'rm -rf important/'",
         "bash -lc 'rm -rf important/'",
         "/bin/bash -c 'rm -rf important/'",
         "/bin/sh -c 'rm -rf important/'",
         "sh -c 'rm -rf important/'",
+        "eval -- rm -rf important/",
+        "builtin -- eval rm -rf important/",
+        "$(printf rm) -rf important/",
     ] {
         assert!(
             matches!(
@@ -230,6 +240,10 @@ fn test_deny_does_not_match_heredoc_body() {
     ));
     assert!(matches!(
         decide(&settings, "echo $((rm - rf))"),
+        Some(SettingsPermissionDecision::Allow)
+    ));
+    assert!(matches!(
+        decide(&settings, "echo $(true) rm -rf important/"),
         Some(SettingsPermissionDecision::Allow)
     ));
     assert!(matches!(

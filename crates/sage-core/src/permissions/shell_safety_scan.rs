@@ -1,7 +1,7 @@
 use super::{
-    is_shell_command_separator, normalize_command_segment, quote_removed_shell_word,
-    shell_separator_len, skip_shell_whitespace, skip_shell_word, sources_stdin_segment,
-    split_shell_word, starts_shell_comment, strip_shell_command_word_prefix,
+    UNKNOWN_EXEC_SEGMENT, is_shell_command_separator, normalize_command_segment,
+    quote_removed_shell_word, shell_separator_len, skip_shell_whitespace, skip_shell_word,
+    sources_stdin_segment, split_shell_word, starts_shell_comment, strip_shell_command_word_prefix,
 };
 
 pub(super) fn contains_unquoted_shell_control_metachar(input: &str) -> bool {
@@ -93,20 +93,38 @@ pub(super) fn shell_command_segments(command: &str) -> Vec<String> {
             || command[cursor..].starts_with("<(")
             || command[cursor..].starts_with(">(")
         {
-            if (command[cursor..].starts_with("<(") || command[cursor..].starts_with(">("))
-                && current_consumes_shell_input(&current)
-            {
-                if let Some((body, _)) = parenthesized_body(command, cursor + 2) {
+            let is_process_substitution =
+                command[cursor..].starts_with("<(") || command[cursor..].starts_with(">(");
+            if let Some((body, end)) = parenthesized_body(command, cursor + 2) {
+                if is_process_substitution {
+                    segments.extend(shell_command_segments(body));
+                }
+                if is_process_substitution && current_consumes_shell_input(&current) {
+                    segments.push(UNKNOWN_EXEC_SEGMENT.to_string());
                     segments.extend(shell_input_producer_segments(body));
                 }
+                if command[cursor..].starts_with("$(") {
+                    segments.extend(shell_command_segments(body));
+                    if current.trim().is_empty() {
+                        segments.push(UNKNOWN_EXEC_SEGMENT.to_string());
+                    }
+                }
+                current.push_str("$()");
+                cursor = end;
+            } else {
+                push_raw_segment(&mut segments, &mut current);
+                cursor += 2;
             }
-            push_raw_segment(&mut segments, &mut current);
-            cursor += 2;
             continue;
         }
         if c == '`' {
-            push_raw_segment(&mut segments, &mut current);
-            cursor += c.len_utf8();
+            let (body, end) = backtick_body(command, cursor);
+            segments.extend(shell_command_segments(body));
+            if current.trim().is_empty() {
+                segments.push(UNKNOWN_EXEC_SEGMENT.to_string());
+            }
+            current.push_str("``");
+            cursor = end;
             continue;
         }
         if matches!(c, '<' | '>') {
@@ -388,11 +406,20 @@ fn shell_input_producer_segments(body: &str) -> Vec<String> {
         let Some(rest) = strip_shell_command_word_prefix(&segment, "printf") else {
             continue;
         };
-        let Some((format, _)) = split_shell_word(rest) else {
+        let Some((format, mut rest)) = split_shell_word(rest) else {
             continue;
         };
-        let script = quote_removed_shell_word(format).replace("\\n", "\n");
-        segments.extend(shell_command_segments(&script));
+        let format = quote_removed_shell_word(format);
+        if format.contains("%s") {
+            while let Some((arg, after)) = split_shell_word(rest) {
+                let script = quote_removed_shell_word(arg).replace("\\n", "\n");
+                segments.extend(shell_command_segments(&script));
+                rest = after;
+            }
+        } else {
+            let script = format.replace("\\n", "\n");
+            segments.extend(shell_command_segments(&script));
+        }
     }
     segments
 }

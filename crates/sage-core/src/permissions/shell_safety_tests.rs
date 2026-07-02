@@ -135,6 +135,9 @@ fn strips_shell_command_prefixes() {
     let command_terminator = command_segments("command -- rm -rf important/");
     assert!(command_terminator.contains(&"rm -rf important/".to_string()));
 
+    let command_shell = command_segments("command bash <<EOF\nrm -rf important/\nEOF");
+    assert!(command_shell.contains(&"rm -rf important/".to_string()));
+
     let builtin_command = command_segments("builtin command rm -rf important/");
     assert!(builtin_command.contains(&"rm -rf important/".to_string()));
 
@@ -146,6 +149,9 @@ fn strips_shell_command_prefixes() {
 
     let exec_terminator = command_segments("exec -- rm -rf important/");
     assert!(exec_terminator.contains(&"rm -rf important/".to_string()));
+
+    let exec_combined = command_segments("exec -cl rm -rf important/");
+    assert!(exec_combined.contains(&"rm -rf important/".to_string()));
 
     let time_terminator = command_segments("time -- rm -rf important/");
     assert!(time_terminator.contains(&"rm -rf important/".to_string()));
@@ -261,6 +267,14 @@ fn expands_aliases_when_enabled() {
     let assigned_alias =
         command_segments("shopt -s expand_aliases\nalias x='rm -rf important/'\nFOO=1 x");
     assert!(assigned_alias.contains(&"rm -rf important/".to_string()));
+
+    let assigned_definition =
+        command_segments("shopt -s expand_aliases\nFOO=1 alias x='rm -rf important/'\nx");
+    assert!(assigned_definition.contains(&"rm -rf important/".to_string()));
+
+    let recursive_alias =
+        command_segments("shopt -s expand_aliases\nalias x=y\nalias y='rm -rf important/'\nx");
+    assert!(recursive_alias.contains(&"rm -rf important/".to_string()));
 }
 
 #[test]
@@ -288,6 +302,9 @@ fn scans_heredoc_body_when_sourced() {
 
     let process_substitution = command_segments("source <(printf 'rm -rf important/\\n')");
     assert!(process_substitution.contains(&"rm -rf important/".to_string()));
+
+    let printf_arg = command_segments("source <(printf '%s\\n' 'rm -rf important/')");
+    assert!(printf_arg.contains(&"rm -rf important/".to_string()));
 }
 
 #[test]
@@ -306,6 +323,9 @@ fn does_not_strip_reserved_data_words() {
 fn ignores_arithmetic_expansion_words() {
     let segments = command_segments("echo $((rm - rf))");
     assert!(!segments.contains(&"rm - rf".to_string()));
+
+    let substitution_argument = command_segments("echo $(true) rm -rf important/");
+    assert!(!substitution_argument.contains(&"rm -rf important/".to_string()));
 }
 
 #[test]

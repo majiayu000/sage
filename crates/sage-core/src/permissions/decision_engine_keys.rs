@@ -43,7 +43,10 @@ pub(crate) fn bash_aware_deny_matches(pattern: &str, key: &str) -> bool {
 
     shell_safety::command_segments(command)
         .iter()
-        .any(|segment| permission_pattern_matches(pattern, &format!("{}({})", tool, segment)))
+        .any(|segment| {
+            shell_safety::is_unknown_execution_segment(segment)
+                || permission_pattern_matches(pattern, &format!("{}({})", tool, segment))
+        })
 }
 
 fn bash_key_tool(value: &str) -> Option<&str> {
