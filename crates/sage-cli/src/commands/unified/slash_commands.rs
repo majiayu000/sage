@@ -199,6 +199,20 @@ pub async fn handle_interactive_command_v2(
 
             // Fetch models from API
             let client = ModelsApiClient::new();
+            let static_models = || -> Vec<String> {
+                provider_info
+                    .as_ref()
+                    .map(|p| p.models.iter().map(|m| m.id.clone()).collect())
+                    .unwrap_or_default()
+            };
+            let fallback_on_error = |error: &dyn std::fmt::Display| -> Vec<String> {
+                tracing::warn!(
+                    provider = provider_name,
+                    error = %error,
+                    "failed to fetch live model list; falling back to static models"
+                );
+                static_models()
+            };
             let models: Vec<String> = match provider_name {
                 "anthropic" | "glm" | "zhipu" => {
                     match client
@@ -206,10 +220,7 @@ pub async fn handle_interactive_command_v2(
                         .await
                     {
                         Ok(m) => m.into_iter().map(|m| m.id).collect(),
-                        Err(_) => provider_info
-                            .as_ref()
-                            .map(|p| p.models.iter().map(|m| m.id.clone()).collect())
-                            .unwrap_or_default(),
+                        Err(e) => fallback_on_error(&e),
                     }
                 }
                 "openai" | "openrouter" | "zai" | "moonshot" | "kimi" => {
@@ -218,23 +229,14 @@ pub async fn handle_interactive_command_v2(
                         .await
                     {
                         Ok(m) => m.into_iter().map(|m| m.id).collect(),
-                        Err(_) => provider_info
-                            .as_ref()
-                            .map(|p| p.models.iter().map(|m| m.id.clone()).collect())
-                            .unwrap_or_default(),
+                        Err(e) => fallback_on_error(&e),
                     }
                 }
                 "ollama" => match client.fetch_ollama_models(&base_url).await {
                     Ok(m) => m.into_iter().map(|m| m.id).collect(),
-                    Err(_) => provider_info
-                        .as_ref()
-                        .map(|p| p.models.iter().map(|m| m.id.clone()).collect())
-                        .unwrap_or_default(),
+                    Err(e) => fallback_on_error(&e),
                 },
-                _ => provider_info
-                    .as_ref()
-                    .map(|p| p.models.iter().map(|m| m.id.clone()).collect())
-                    .unwrap_or_default(),
+                _ => static_models(),
             };
 
             if models.is_empty() {

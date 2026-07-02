@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Logged live model list fetch failures in `/model` instead of silently falling back to the static model list.
 - Moved the Homebrew formula to the dedicated `majiayu000/homebrew-sage` tap and restored the verified Homebrew install command.
 
 ## [0.13.57] - 2026-05-01
