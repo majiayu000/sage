@@ -482,6 +482,10 @@ mod settings_permission_test_support;
 mod settings_permission_tests;
 
 #[cfg(test)]
+#[path = "settings_permission_shell_tests.rs"]
+mod settings_permission_shell_tests;
+
+#[cfg(test)]
 #[path = "settings_permission_path_tests.rs"]
 mod settings_permission_path_tests;
 
