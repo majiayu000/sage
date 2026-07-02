@@ -14,12 +14,17 @@ pub(in crate::agent::unified) enum SettingsRecheckAfterDestructiveConfirmation {
 
 impl UnifiedExecutor {
     /// Execute a tool and request explicit user confirmation for destructive operations.
+    ///
+    /// Returns the tool result together with the call that was actually
+    /// executed (stripped of the internal confirmation marker), so callers can
+    /// keep post-execution hooks, session records, and undo tracking in sync
+    /// with user-edited arguments.
     pub(super) async fn execute_with_permission_check(
         &mut self,
         tool_call: &ToolCall,
         context: &ToolExecutionContext,
         cancel_token: tokio_util::sync::CancellationToken,
-    ) -> ToolResult {
+    ) -> (ToolResult, ToolCall) {
         let mut current_call = tool_call.clone();
         let mut prompted_count = 0usize;
 
@@ -30,16 +35,19 @@ impl UnifiedExecutor {
                 .await;
 
             if !Self::requires_destructive_confirmation(&first_result) {
-                return first_result;
+                let executed_call = Self::without_user_confirmation_marker(&current_call);
+                return (first_result, executed_call);
             }
 
             prompted_count += 1;
             if prompted_count > 8 {
-                return ToolResult::error(
+                let result = ToolResult::error(
                     &current_call.id,
                     &current_call.name,
                     "Destructive confirmation exceeded the maximum number of edited approvals.",
                 );
+                let executed_call = Self::without_user_confirmation_marker(&current_call);
+                return (result, executed_call);
             }
 
             self.event_manager.stop_animation().await;
@@ -60,11 +68,13 @@ impl UnifiedExecutor {
             let response = match self.request_user_input(request).await {
                 Ok(response) => response,
                 Err(err) => {
-                    return ToolResult::error(
+                    let result = ToolResult::error(
                         &current_call.id,
                         &current_call.name,
                         format!("Operation cancelled: {}", err),
                     );
+                    let executed_call = Self::without_user_confirmation_marker(&current_call);
+                    return (result, executed_call);
                 }
             };
 
@@ -86,42 +96,63 @@ impl UnifiedExecutor {
                         .await
                     {
                         Ok(SettingsRecheckAfterDestructiveConfirmation::Ready(confirmed_call)) => {
-                            return self
+                            if input_modified {
+                                // The user may have redirected the call to a
+                                // different file; snapshot it before it runs.
+                                self.track_file_for_undo(&confirmed_call).await;
+                            }
+                            let result = self
                                 .tool_orchestrator
                                 .execution_phase(&confirmed_call, context, cancel_token)
                                 .await;
+                            let executed_call =
+                                Self::without_user_confirmation_marker(&confirmed_call);
+                            return (result, executed_call);
                         }
                         Ok(
                             SettingsRecheckAfterDestructiveConfirmation::NeedsDestructiveConfirmation(
                                 approved_call,
                             ),
                         ) => {
+                            if input_modified {
+                                self.track_file_for_undo(&approved_call).await;
+                            }
                             current_call = approved_call;
                         }
-                        Err(blocked_result) => return blocked_result,
+                        Err(blocked_result) => {
+                            let executed_call =
+                                Self::without_user_confirmation_marker(&current_call);
+                            return (blocked_result, executed_call);
+                        }
                     }
                 }
                 InputResponseKind::PermissionDenied { reason } => {
                     let reason = reason.unwrap_or_else(|| "No reason provided".to_string());
-                    return ToolResult::error(
+                    let result = ToolResult::error(
                         &current_call.id,
                         &current_call.name,
                         format!("Operation cancelled by user: {}", reason),
                     );
+                    let executed_call = Self::without_user_confirmation_marker(&current_call);
+                    return (result, executed_call);
                 }
                 InputResponseKind::Cancelled => {
-                    return ToolResult::error(
+                    let result = ToolResult::error(
                         &current_call.id,
                         &current_call.name,
                         "Operation cancelled by user.",
                     );
+                    let executed_call = Self::without_user_confirmation_marker(&current_call);
+                    return (result, executed_call);
                 }
                 _ => {
-                    return ToolResult::error(
+                    let result = ToolResult::error(
                         &current_call.id,
                         &current_call.name,
                         "Invalid permission response from input handler.",
                     );
+                    let executed_call = Self::without_user_confirmation_marker(&current_call);
+                    return (result, executed_call);
                 }
             }
         }

@@ -238,19 +238,19 @@ impl UnifiedExecutor {
                 execution_tool_call = approved_call;
                 self.track_file_for_undo(&execution_tool_call).await;
 
-                (
-                    self.pre_execute_or_block(&execution_tool_call, context, cancel_token.clone())
-                        .await?,
-                    true,
-                )
+                let (result, executed_call) = self
+                    .pre_execute_or_block(&execution_tool_call, context, cancel_token.clone())
+                    .await?;
+                execution_tool_call = executed_call;
+                (result, true)
             }
             None => {
                 self.track_file_for_undo(&execution_tool_call).await;
-                (
-                    self.pre_execute_or_block(&execution_tool_call, context, cancel_token.clone())
-                        .await?,
-                    true,
-                )
+                let (result, executed_call) = self
+                    .pre_execute_or_block(&execution_tool_call, context, cancel_token.clone())
+                    .await?;
+                execution_tool_call = executed_call;
+                (result, true)
             }
         };
 
@@ -277,12 +277,18 @@ impl UnifiedExecutor {
         Ok(tool_result)
     }
 
+    /// Run pre-execution hooks and execute the tool.
+    ///
+    /// Returns the tool result together with the call that was actually
+    /// executed: destructive-confirmation prompts allow the user to edit the
+    /// arguments, and post-execution hooks and session records must observe
+    /// the edited call rather than the original request.
     async fn pre_execute_or_block(
         &mut self,
         tool_call: &ToolCall,
         context: &ToolExecutionContext,
         cancel_token: tokio_util::sync::CancellationToken,
-    ) -> SageResult<ToolResult> {
+    ) -> SageResult<(ToolResult, ToolCall)> {
         // Phase 1: Pre-execution
         let pre_result = self
             .tool_orchestrator
@@ -290,10 +296,13 @@ impl UnifiedExecutor {
             .await?;
 
         if let Some(reason) = pre_result.block_reason() {
-            return Ok(ToolResult::error(
-                &tool_call.id,
-                &tool_call.name,
-                format!("Tool blocked by hook: {}", reason),
+            return Ok((
+                ToolResult::error(
+                    &tool_call.id,
+                    &tool_call.name,
+                    format!("Tool blocked by hook: {}", reason),
+                ),
+                tool_call.clone(),
             ));
         }
 
@@ -308,18 +317,20 @@ impl UnifiedExecutor {
         tool_call: &ToolCall,
         context: &ToolExecutionContext,
         cancel_token: tokio_util::sync::CancellationToken,
-    ) -> SageResult<crate::tools::types::ToolResult> {
+    ) -> SageResult<(crate::tools::types::ToolResult, ToolCall)> {
         let requires_interaction = self
             .tool_orchestrator
             .requires_user_interaction(&tool_call.name);
 
         if requires_interaction && tool_call.name == "AskUserQuestion" {
-            self.handle_ask_user_question(tool_call).await
+            let result = self.handle_ask_user_question(tool_call).await?;
+            Ok((result, tool_call.clone()))
         } else if requires_interaction {
-            Ok(self
+            let result = self
                 .tool_orchestrator
                 .execution_phase(tool_call, context, cancel_token)
-                .await)
+                .await;
+            Ok((result, tool_call.clone()))
         } else {
             Ok(self
                 .execute_with_permission_check(tool_call, context, cancel_token)
