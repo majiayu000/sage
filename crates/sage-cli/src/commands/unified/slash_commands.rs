@@ -253,9 +253,9 @@ pub async fn handle_interactive_command_v2(
             };
 
             if models.is_empty() {
-                return Ok(SlashCommandAction::HandledWithOutput(
-                    "No models available for this provider".to_string(),
-                ));
+                return Ok(SlashCommandAction::HandledWithOutput(no_models_output(
+                    fallback_warning.as_deref(),
+                )));
             }
 
             // Return models for interactive selection
@@ -277,6 +277,13 @@ fn model_fetch_fallback_warning(provider_name: &str, reason: &'static str) -> St
         "Failed to fetch live model list for provider '{}' ({reason}); using static model list.",
         provider_name,
     )
+}
+
+fn no_models_output(warning: Option<&str>) -> String {
+    match warning {
+        Some(warning) => format!("{warning}\nNo models available for this provider"),
+        None => "No models available for this provider".to_string(),
+    }
 }
 
 fn model_fetch_fallback_reason(error: &dyn std::fmt::Display) -> &'static str {
@@ -341,5 +348,14 @@ mod tests {
             model_fetch_fallback_reason(&"429 Too Many Requests"),
             "rate limit error"
         );
+    }
+
+    #[test]
+    fn no_models_output_preserves_fallback_warning() {
+        let warning = "Failed to fetch live model list for provider 'kimi' (network timeout); using static model list.";
+        let output = no_models_output(Some(warning));
+
+        assert!(output.contains(warning));
+        assert!(output.contains("No models available for this provider"));
     }
 }
