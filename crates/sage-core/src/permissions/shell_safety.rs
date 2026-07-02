@@ -14,26 +14,26 @@
 //! redirection operands, and common command prefixes so deny matching does not
 //! silently miss executed command words.
 
-/// Shell metacharacters that chain or redirect commands when the string is
-/// handed to `bash -c`. Mirrors `ALLOWLIST_BYPASS_METACHARS` in the bash
-/// tool's allowlist guard, plus single `&` (backgrounding still chains).
-const SHELL_CONTROL_METACHARS: &[&str] = &[
-    "&&", "||", ">>", "<<", ";", "|", "&", "$(", "`", ">", "<", "\n", "\r",
-];
-
 #[path = "shell_safety_normalize.rs"]
 mod shell_safety_normalize;
 #[path = "shell_safety_scan.rs"]
 mod shell_safety_scan;
+#[path = "shell_safety_words.rs"]
+mod shell_safety_words;
 use shell_safety_normalize::normalized_command_segments;
-use shell_safety_scan::{shell_command_segments, substitution_body_segments};
+use shell_safety_scan::{
+    contains_unquoted_shell_control_metachar, shell_command_segments, substitution_body_segments,
+};
+use shell_safety_words::{
+    normalize_shell_whitespace, quote_removed_shell_word, skip_shell_whitespace, skip_shell_word,
+    split_shell_word, starts_shell_comment, strip_shell_command_word_prefix,
+    strip_shell_word_prefix,
+};
 
 /// Returns true when the command contains a shell control metacharacter,
 /// i.e. it may execute more than the single command named by its prefix.
 pub(crate) fn contains_shell_control_metachar(command: &str) -> bool {
-    SHELL_CONTROL_METACHARS
-        .iter()
-        .any(|meta| command.contains(meta))
+    contains_unquoted_shell_control_metachar(command)
 }
 
 /// Split a `bash -c` command string into candidate command segments for
@@ -96,7 +96,7 @@ fn strip_leading_assignment_words(mut segment: &str) -> &str {
 fn executable_builtin_segments(segment: &str) -> Vec<String> {
     let mut segment = strip_leading_assignment_words(segment);
     if let Some(rest) = strip_shell_command_word_prefix(segment, "builtin") {
-        segment = strip_leading_assignment_words(rest);
+        segment = rest.trim_start();
     }
     if let Some(rest) = strip_shell_command_word_prefix(segment, "eval") {
         return shell_command_segments(&quote_removed_shell_word(rest));
@@ -105,7 +105,13 @@ fn executable_builtin_segments(segment: &str) -> Vec<String> {
         return shell_command_segments(&script);
     }
     let Some(rest) = strip_shell_command_word_prefix(segment, "trap") else {
-        return Vec::new();
+        let normalized = normalize_command_segment(segment);
+        if normalized == normalize_shell_whitespace(&quote_removed_shell_word(segment)) {
+            return Vec::new();
+        }
+        let mut segments = shell_command_segments(&normalized);
+        segments.extend(executable_builtin_segments(&normalized));
+        return segments;
     };
     let rest = strip_trap_options(rest);
     let handler_end = skip_shell_word(rest, 0);
@@ -116,8 +122,10 @@ fn executable_builtin_segments(segment: &str) -> Vec<String> {
 }
 
 fn shell_c_script(segment: &str) -> Option<String> {
-    let mut rest = strip_shell_command_word_prefix(segment, "bash")
-        .or_else(|| strip_shell_command_word_prefix(segment, "sh"))?;
+    let (word, mut rest) = split_shell_word(segment)?;
+    if !is_shell_command_name(word) {
+        return None;
+    }
     loop {
         let (word, after) = split_shell_word(rest)?;
         let option = quote_removed_shell_word(word);
@@ -236,7 +244,7 @@ fn strip_shell_negation_prefix(segment: &str) -> &str {
 
 fn strip_shell_time_prefix(segment: &str) -> &str {
     let segment = segment.trim_start();
-    let Some(mut rest) = strip_shell_word_prefix(segment, "time") else {
+    let Some(mut rest) = strip_shell_command_word_prefix(segment, "time") else {
         return segment;
     };
     while let Some(after) =
@@ -250,11 +258,11 @@ fn strip_shell_time_prefix(segment: &str) -> &str {
 fn strip_shell_command_prefixes(mut segment: &str) -> &str {
     loop {
         segment = segment.trim_start();
-        if let Some(rest) = strip_shell_word_prefix(segment, "command") {
+        if let Some(rest) = strip_shell_command_word_prefix(segment, "command") {
             segment = strip_command_options(rest);
-        } else if let Some(rest) = strip_shell_word_prefix(segment, "exec") {
+        } else if let Some(rest) = strip_shell_command_word_prefix(segment, "exec") {
             segment = strip_exec_options(rest);
-        } else if let Some(rest) = strip_shell_word_prefix(segment, "coproc") {
+        } else if let Some(rest) = strip_shell_command_word_prefix(segment, "coproc") {
             segment = rest;
         } else {
             return segment;
@@ -330,28 +338,6 @@ fn strip_shell_reserved_prefixes(mut segment: &str) -> &str {
     }
 }
 
-fn strip_shell_word_prefix<'a>(segment: &'a str, prefix: &str) -> Option<&'a str> {
-    segment
-        .strip_prefix(prefix)
-        .filter(|rest| rest.chars().next().is_some_and(char::is_whitespace))
-        .map(str::trim_start)
-}
-
-fn strip_shell_command_word_prefix<'a>(segment: &'a str, prefix: &str) -> Option<&'a str> {
-    let (word, rest) = split_shell_word(segment)?;
-    (quote_removed_shell_word(word) == prefix).then_some(rest)
-}
-
-fn split_shell_word(input: &str) -> Option<(&str, &str)> {
-    let input = input.trim_start();
-    let end = skip_shell_word(input, 0);
-    (end > 0).then(|| (&input[..end], input[end..].trim_start()))
-}
-
-fn normalize_shell_whitespace(segment: &str) -> String {
-    segment.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
 fn env_assignment_value_start(segment: &str) -> Option<usize> {
     let mut seen_name = false;
     for (index, c) in segment.char_indices() {
@@ -371,6 +357,13 @@ fn env_assignment_value_start(segment: &str) -> Option<usize> {
 
 fn consume_assignment_value(segment: &str, value_start: usize) -> usize {
     skip_shell_word(segment, value_start)
+}
+
+fn is_shell_command_name(word: &str) -> bool {
+    let command = quote_removed_shell_word(word);
+    matches!(command.as_str(), "bash" | "sh")
+        || command.ends_with("/bash")
+        || command.ends_with("/sh")
 }
 
 fn remove_heredoc_bodies(command: &str) -> String {
@@ -564,12 +557,12 @@ fn line_invokes_stdin_shell(line: &str) -> bool {
         let Some((word, rest)) = split_shell_word(segment) else {
             return false;
         };
-        matches!(quote_removed_shell_word(word).as_str(), "bash" | "sh")
-            && shell_invocation_reads_stdin(rest)
+        is_shell_command_name(word) && shell_invocation_reads_stdin(rest)
     })
 }
 
 fn shell_invocation_reads_stdin(mut rest: &str) -> bool {
+    let mut reads_stdin = false;
     loop {
         let Some((word, after)) = split_shell_word(rest) else {
             return true;
@@ -580,11 +573,14 @@ fn shell_invocation_reads_stdin(mut rest: &str) -> bool {
         {
             return false;
         }
+        if option.starts_with('-') && !option.starts_with("--") && option[1..].contains('s') {
+            reads_stdin = true;
+        }
         if option == "--" {
-            return split_shell_word(after).is_none();
+            return reads_stdin || split_shell_word(after).is_none();
         }
         if !option.starts_with('-') && !option.starts_with('+') {
-            return false;
+            return reads_stdin;
         }
         rest = after;
         if matches!(
@@ -620,170 +616,6 @@ fn read_heredoc_delimiter(input: &str) -> Option<(String, usize, bool)> {
 
 fn shell_word_has_quote(input: &str) -> bool {
     input.chars().any(|c| matches!(c, '\'' | '"' | '\\'))
-}
-
-fn quote_removed_shell_word(input: &str) -> String {
-    let mut output = String::new();
-    let mut chars = input.chars().peekable();
-    let mut quote = None;
-    let mut ansi_c_quote = false;
-    let mut escaped = false;
-
-    while let Some(c) = chars.next() {
-        if escaped {
-            output.push(c);
-            escaped = false;
-            continue;
-        }
-
-        if let Some(active_quote) = quote {
-            if ansi_c_quote && c == '\\' {
-                output.push(read_ansi_c_escape(&mut chars));
-            } else if active_quote == '"' && c == '\\' {
-                escaped = true;
-            } else if c == active_quote {
-                quote = None;
-                ansi_c_quote = false;
-            } else {
-                output.push(c);
-            }
-            continue;
-        }
-
-        if c == '$' && matches!(chars.peek(), Some('\'') | Some('"')) {
-            let shell_quote = chars.next().unwrap_or('\'');
-            quote = Some(shell_quote);
-            ansi_c_quote = shell_quote == '\'';
-        } else if c == '\'' || c == '"' {
-            quote = Some(c);
-        } else if c == '\\' {
-            escaped = true;
-        } else {
-            output.push(c);
-        }
-    }
-
-    output
-}
-
-fn read_ansi_c_escape(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> char {
-    let Some(first) = chars.next() else {
-        return '\\';
-    };
-    if first.is_digit(8) {
-        let mut value = first.to_digit(8).unwrap_or(0);
-        for _ in 0..2 {
-            let Some(next) = chars.peek().copied().filter(|c| c.is_digit(8)) else {
-                break;
-            };
-            chars.next();
-            value = value * 8 + next.to_digit(8).unwrap_or(0);
-        }
-        return char::from_u32(value).unwrap_or(first);
-    }
-    if first == 'x' {
-        return read_hex_escape(chars, 2).unwrap_or(first);
-    }
-    if first == 'u' {
-        return read_hex_escape(chars, 4).unwrap_or(first);
-    }
-    if first == 'U' {
-        return read_hex_escape(chars, 8).unwrap_or(first);
-    }
-    match first {
-        'n' => '\n',
-        'r' => '\r',
-        't' => '\t',
-        '\\' => '\\',
-        '\'' => '\'',
-        '"' => '"',
-        other => other,
-    }
-}
-
-fn read_hex_escape(
-    chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
-    max: usize,
-) -> Option<char> {
-    let mut value = 0;
-    let mut seen = false;
-    for _ in 0..max {
-        let Some(next) = chars.peek().copied().and_then(|c| c.to_digit(16)) else {
-            break;
-        };
-        chars.next();
-        value = value * 16 + next;
-        seen = true;
-    }
-    seen.then(|| char::from_u32(value)).flatten()
-}
-
-fn skip_shell_word(input: &str, mut cursor: usize) -> usize {
-    let mut quote = None;
-    let mut escaped = false;
-
-    while cursor < input.len() {
-        let Some(c) = input[cursor..].chars().next() else {
-            break;
-        };
-
-        if escaped {
-            escaped = false;
-            cursor += c.len_utf8();
-            continue;
-        }
-
-        if let Some(active_quote) = quote {
-            if active_quote == '"' && c == '\\' {
-                escaped = true;
-            } else if c == active_quote {
-                quote = None;
-            }
-            cursor += c.len_utf8();
-            continue;
-        }
-
-        if c == '\'' || c == '"' {
-            quote = Some(c);
-            cursor += c.len_utf8();
-            continue;
-        }
-
-        if c == '\\' {
-            escaped = true;
-            cursor += c.len_utf8();
-            continue;
-        }
-
-        if c.is_whitespace() || matches!(c, ';' | '|' | '&' | '<' | '>') {
-            break;
-        }
-
-        cursor += c.len_utf8();
-    }
-
-    cursor
-}
-
-fn skip_shell_whitespace(input: &str, mut cursor: usize) -> usize {
-    while cursor < input.len() {
-        let Some(c) = input[cursor..].chars().next() else {
-            break;
-        };
-        if !c.is_whitespace() {
-            break;
-        }
-        cursor += c.len_utf8();
-    }
-    cursor
-}
-
-fn starts_shell_comment(input: &str, cursor: usize) -> bool {
-    input[cursor..].starts_with('#')
-        && input[..cursor]
-            .chars()
-            .next_back()
-            .is_none_or(|c| c.is_whitespace() || matches!(c, ';' | '&' | '|'))
 }
 
 /// True when an allow rule's argument is a partial wildcard pattern such as

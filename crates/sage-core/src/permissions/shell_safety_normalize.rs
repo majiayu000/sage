@@ -24,18 +24,28 @@ fn brace_expanded_first_word_segments(segment: &str) -> Vec<String> {
     let Some((word, rest)) = split_first_shell_word(segment) else {
         return Vec::new();
     };
-    let Some((prefix, body, suffix)) = split_simple_brace_word(word) else {
-        return Vec::new();
-    };
-
-    body.split(',')
+    brace_expanded_words(word)
+        .into_iter()
+        .filter(|expanded| expanded != word)
         .map(|choice| {
-            let expanded = format!("{prefix}{choice}{suffix}");
             if rest.is_empty() {
-                expanded
+                choice
             } else {
-                format!("{expanded} {rest}")
+                format!("{choice} {rest}")
             }
+        })
+        .collect()
+}
+
+fn brace_expanded_words(word: &str) -> Vec<String> {
+    let Some((prefix, body, suffix)) = split_simple_brace_word(word) else {
+        return vec![word.to_string()];
+    };
+    body.split(',')
+        .flat_map(|choice| {
+            brace_expanded_words(suffix)
+                .into_iter()
+                .map(move |expanded_suffix| format!("{prefix}{choice}{expanded_suffix}"))
         })
         .collect()
 }

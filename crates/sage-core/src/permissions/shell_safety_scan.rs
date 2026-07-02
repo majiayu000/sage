@@ -1,7 +1,45 @@
 use super::{
-    is_shell_command_separator, quote_removed_shell_word, shell_separator_len,
-    skip_shell_whitespace, skip_shell_word, sources_stdin_segment, starts_shell_comment,
+    is_shell_command_separator, normalize_command_segment, quote_removed_shell_word,
+    shell_separator_len, skip_shell_whitespace, skip_shell_word, sources_stdin_segment,
+    split_shell_word, starts_shell_comment, strip_shell_command_word_prefix,
 };
+
+pub(super) fn contains_unquoted_shell_control_metachar(input: &str) -> bool {
+    let mut cursor = 0;
+    let mut escaped = false;
+    while cursor < input.len() {
+        let Some(c) = input[cursor..].chars().next() else {
+            break;
+        };
+        if escaped {
+            escaped = false;
+            cursor += c.len_utf8();
+            continue;
+        }
+        if c == '\'' || c == '"' {
+            let end = consume_quoted_span(input, cursor, c);
+            if c == '"' && double_quoted_has_command_substitution(input, cursor, end) {
+                return true;
+            }
+            cursor = end;
+            continue;
+        }
+        if c == '\\' {
+            escaped = true;
+            cursor += c.len_utf8();
+            continue;
+        }
+        if input[cursor..].starts_with("&&")
+            || input[cursor..].starts_with("||")
+            || input[cursor..].starts_with("$(")
+            || matches!(c, ';' | '|' | '&' | '<' | '>' | '`' | '\n' | '\r')
+        {
+            return true;
+        }
+        cursor += c.len_utf8();
+    }
+    false
+}
 
 pub(super) fn shell_command_segments(command: &str) -> Vec<String> {
     let mut segments = Vec::new();
@@ -55,6 +93,13 @@ pub(super) fn shell_command_segments(command: &str) -> Vec<String> {
             || command[cursor..].starts_with("<(")
             || command[cursor..].starts_with(">(")
         {
+            if (command[cursor..].starts_with("<(") || command[cursor..].starts_with(">("))
+                && current_consumes_shell_input(&current)
+            {
+                if let Some((body, _)) = parenthesized_body(command, cursor + 2) {
+                    segments.extend(shell_input_producer_segments(body));
+                }
+            }
             push_raw_segment(&mut segments, &mut current);
             cursor += 2;
             continue;
@@ -71,7 +116,7 @@ pub(super) fn shell_command_segments(command: &str) -> Vec<String> {
             if let Some((operand_start, operand_end)) = redirection_operand_range(command, cursor) {
                 let operand = &command[operand_start..operand_end];
                 segments.extend(substitution_body_segments(operand));
-                if is_here_string(command, cursor) && current_sources_stdin(&current) {
+                if is_here_string(command, cursor) && current_consumes_shell_input(&current) {
                     segments.extend(shell_command_segments(&quote_removed_shell_word(operand)));
                 }
                 if operand.starts_with("<(") || operand.starts_with(">(") {
@@ -191,6 +236,13 @@ fn quoted_content_end(input: &str, end: usize, quote: char) -> usize {
         .unwrap_or(end)
 }
 
+fn double_quoted_has_command_substitution(input: &str, start: usize, end: usize) -> bool {
+    let content_start = start + '"'.len_utf8();
+    let content_end = quoted_content_end(input, end, '"');
+    input[content_start..content_end].contains("$(")
+        || input[content_start..content_end].contains('`')
+}
+
 fn arithmetic_expansion_body(input: &str, cursor: usize) -> (&str, usize) {
     let body_start = cursor + 3;
     let mut next = body_start;
@@ -281,6 +333,68 @@ fn is_here_string(input: &str, cursor: usize) -> bool {
 
 fn current_sources_stdin(current: &str) -> bool {
     sources_stdin_segment(current)
+}
+
+fn current_consumes_shell_input(current: &str) -> bool {
+    current_sources_stdin(current)
+        || current_sources_argument(current)
+        || current_invokes_stdin_shell(current)
+}
+
+fn current_sources_argument(current: &str) -> bool {
+    matches!(normalize_command_segment(current).as_str(), "source" | ".")
+}
+
+fn current_invokes_stdin_shell(current: &str) -> bool {
+    let normalized = normalize_command_segment(current);
+    let Some((word, rest)) = split_shell_word(&normalized) else {
+        return false;
+    };
+    let command = quote_removed_shell_word(word);
+    (matches!(command.as_str(), "bash" | "sh")
+        || command.ends_with("/bash")
+        || command.ends_with("/sh"))
+        && shell_invocation_reads_stdin(rest)
+}
+
+fn shell_invocation_reads_stdin(mut rest: &str) -> bool {
+    let mut reads_stdin = false;
+    loop {
+        let Some((word, after)) = split_shell_word(rest) else {
+            return true;
+        };
+        let option = quote_removed_shell_word(word);
+        if option == "-c"
+            || (option.starts_with('-') && !option.starts_with("--") && option[1..].contains('c'))
+        {
+            return false;
+        }
+        if option.starts_with('-') && !option.starts_with("--") && option[1..].contains('s') {
+            reads_stdin = true;
+        }
+        if option == "--" {
+            return reads_stdin || split_shell_word(after).is_none();
+        }
+        if !option.starts_with('-') && !option.starts_with('+') {
+            return reads_stdin;
+        }
+        rest = after;
+    }
+}
+
+fn shell_input_producer_segments(body: &str) -> Vec<String> {
+    let mut segments = Vec::new();
+    for segment in shell_command_segments(body) {
+        let Some(rest) = strip_shell_command_word_prefix(&segment, "printf") else {
+            continue;
+        };
+        let Some((format, _)) = split_shell_word(rest) else {
+            continue;
+        };
+        let script = quote_removed_shell_word(format).replace("\\n", "\n");
+        segments.extend(shell_command_segments(&script));
+    }
+    segments
 }
 
 fn redirection_word_end(input: &str, cursor: usize) -> usize {

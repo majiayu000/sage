@@ -45,6 +45,14 @@ fn test_wildcard_allow_does_not_match_chained_command() {
         decide(&settings, "git status"),
         Some(SettingsPermissionDecision::Allow)
     ));
+    assert!(matches!(
+        decide(&settings, "git commit -m 'fix; docs'"),
+        Some(SettingsPermissionDecision::Allow)
+    ));
+    assert!(matches!(
+        decide(&settings, "git grep 'a|b'"),
+        Some(SettingsPermissionDecision::Allow)
+    ));
 
     // Chained payloads must not ride on the allow rule.
     for command in [
@@ -126,6 +134,7 @@ fn test_deny_matches_chained_command_segment() {
         "time -p rm -rf important/",
         "time -- rm -rf important/",
         "command rm -rf important/",
+        "co''mmand rm -rf important/",
         "exec rm -rf important/",
         "exec -- rm -rf important/",
         "eval rm -rf important/",
@@ -138,6 +147,7 @@ fn test_deny_matches_chained_command_segment() {
         "trap -- 'rm -rf important/' EXIT",
         "command -p rm -rf important/",
         "command -- rm -rf important/",
+        "builtin command rm -rf important/",
         "exec -a x rm -rf important/",
         "r''m -rf important/",
         "\\rm -rf important/",
@@ -149,6 +159,7 @@ fn test_deny_matches_chained_command_segment() {
         "$'r\\x6d' -rf important/",
         "$'r\\u006d' -rf important/",
         "r{m,} -rf important/",
+        "r{m,}{,x} -rf important/",
         "echo \"$(rm -rf important/)\"",
         "echo `rm -rf important/`",
         "cat <<EOF\n$(rm -rf important/)\nEOF",
@@ -162,13 +173,19 @@ fn test_deny_matches_chained_command_segment() {
         "echo ok; source /dev/stdin <<EOF\nrm -rf important/\nEOF",
         "source /dev/stdin <<< 'rm -rf important/'",
         "bash <<EOF\nrm -rf important/\nEOF",
+        "bash -s arg0 <<EOF\nrm -rf important/\nEOF",
+        "bash <<< 'rm -rf important/'",
         ". /dev/fd/0 <<EOF\nrm -rf important/\nEOF",
+        "source <(printf 'rm -rf important/\\n')",
+        "cat <<\"E\\OF\"\nbody\nE\\OF\nrm -rf important/",
         "echo $((1 << 2))\nrm -rf important/",
         ">/tmp/out< /dev/null rm -rf important/",
         "shopt -s expand_aliases\nalias x='rm -rf important/'\nx",
         "shopt -s expand_aliases\nalias x='rm -rf important/'\nFOO=1 x",
         "bash -c 'rm -rf important/'",
         "bash -lc 'rm -rf important/'",
+        "/bin/bash -c 'rm -rf important/'",
+        "/bin/sh -c 'rm -rf important/'",
         "sh -c 'rm -rf important/'",
     ] {
         assert!(

