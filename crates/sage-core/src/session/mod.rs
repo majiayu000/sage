@@ -5,40 +5,33 @@
 //!
 //! # Features
 //!
-//! - Session creation with configurable working directory and model
+//! - JSONL session persistence and recovery
 //! - Message history tracking with tool calls and results
 //! - Token usage statistics
 //! - Session state management (active, paused, completed, failed)
-//! - File-based and in-memory storage backends
 //! - Session caching for persistent state (like Claude Code's ~/.claude.json)
 //!
 //! # Example
 //!
 //! ```rust
-//! use sage_core::session::{SessionManager, SessionConfig, ConversationMessage};
+//! use sage_core::session::{JsonlSessionStorage, SessionContext, SessionMessage};
 //!
 //! # #[tokio::main]
 //! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! // Create a session manager with in-memory storage
-//! let manager = SessionManager::in_memory();
-//!
-//! // Create a new session
-//! let config = SessionConfig::new()
-//!     .with_name("My Session")
-//!     .with_model("claude-3");
-//!
-//! let session_id = manager.create(config).await?;
+//! let temp_dir = tempfile::tempdir()?;
+//! let storage = JsonlSessionStorage::new(temp_dir.path());
+//! let working_dir = temp_dir.path().to_path_buf();
+//! let metadata = storage
+//!     .create_session("example-session", working_dir.clone())
+//!     .await?;
+//! let context = SessionContext::new(working_dir);
 //!
 //! // Add messages to the session
-//! manager.add_message(&session_id, ConversationMessage::user("Hello!")).await?;
-//! manager.add_message(&session_id, ConversationMessage::assistant("Hi there!")).await?;
-//!
-//! // Get session info
-//! let session = manager.get(&session_id).await?.unwrap();
-//! println!("Session has {} messages", session.message_count());
-//!
-//! // Complete the session
-//! manager.complete(&session_id).await?;
+//! let user_message = SessionMessage::user("Hello!", &metadata.id, context.clone());
+//! storage.append_message(&metadata.id, &user_message).await?;
+//! let assistant_message =
+//!     SessionMessage::assistant("Hi there!", &metadata.id, context, Some(user_message.uuid));
+//! storage.append_message(&metadata.id, &assistant_message).await?;
 //! # Ok(())
 //! # }
 //! ```
@@ -49,9 +42,7 @@ pub mod enhanced;
 pub mod file_tracker;
 pub mod file_tracking;
 pub mod jsonl_storage;
-pub mod manager;
 pub mod session_cache;
-pub mod storage;
 pub mod summary;
 pub mod types;
 
@@ -62,12 +53,10 @@ pub use branching::{
 };
 pub use file_tracker::FileSnapshotTracker;
 pub use jsonl_storage::{JsonlSessionStorage, MessageChainTracker, SessionMetadata};
-pub use manager::SessionManager;
 pub use session_cache::{
     CachedMcpServerConfig, McpServerCache, RecentSession, SessionCache, SessionCacheConfig,
     SessionCacheData, SessionCacheStats, ToolTrustSettings, UserPreferences,
 };
-pub use storage::{BoxedSessionStorage, FileSessionStorage, MemorySessionStorage, SessionStorage};
 pub use summary::SummaryGenerator;
 pub use types::{
     ConversationMessage,

@@ -219,9 +219,8 @@ pub use sandbox::{
     SandboxError, SandboxMode, SandboxPolicy, SandboxResult, SandboxedExecution,
 };
 pub use session::{
-    ConversationMessage, FileSessionStorage, MemorySessionStorage, MessageRole, Session,
-    SessionConfig, SessionManager, SessionState, SessionStorage, SessionSummary, SessionToolCall,
-    SessionToolResult,
+    ConversationMessage, MessageRole, Session, SessionConfig, SessionState, SessionSummary,
+    SessionToolCall, SessionToolResult,
 };
 pub use settings::types::{
     LoadedManagedConfig, ManagedConfig, ManagedConfigSource, ManagedConfigSourceKind,
