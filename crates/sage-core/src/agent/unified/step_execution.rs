@@ -14,6 +14,10 @@ use super::event_manager::ExecutionEvent;
 use super::settings_permission::SettingsPermissionCheck;
 use super::tool_display;
 use super::tool_orchestrator::ToolExecutionContext;
+use step_execution_bash::{bash_rm_targets, expand_rm_undo_paths};
+
+#[path = "step_execution_bash.rs"]
+mod step_execution_bash;
 
 #[path = "step_execution_permissions.rs"]
 mod step_execution_permissions;
@@ -378,8 +382,10 @@ impl UnifiedExecutor {
 
     async fn track_path_for_undo(&mut self, file_path: &str, context: &ToolExecutionContext) {
         let path = workspace_path(file_path, context);
-        if let Err(e) = self.session_manager.track_file(&path).await {
-            tracing::warn!(error = %e, file_path = %path.display(), "Failed to track file");
+        for path in expand_rm_undo_paths(&path) {
+            if let Err(e) = self.session_manager.track_file(&path).await {
+                tracing::warn!(error = %e, file_path = %path.display(), "Failed to track file");
+            }
         }
     }
 }
@@ -391,76 +397,6 @@ fn workspace_path(file_path: &str, context: &ToolExecutionContext) -> PathBuf {
     } else {
         context.working_dir.join(path)
     }
-}
-
-fn bash_rm_targets(tool_call: &ToolCall) -> Vec<String> {
-    let Some(command) = tool_call
-        .arguments
-        .get("command")
-        .and_then(|value| value.as_str())
-    else {
-        return Vec::new();
-    };
-
-    let words = first_shell_command_words(command);
-    if !matches!(words.first().map(String::as_str), Some("rm")) {
-        return Vec::new();
-    }
-
-    words
-        .into_iter()
-        .skip(1)
-        .filter(|token| !token.starts_with('-'))
-        .filter(|token| !token.is_empty())
-        .collect()
-}
-
-fn first_shell_command_words(command: &str) -> Vec<String> {
-    let mut words = Vec::new();
-    let mut current = String::new();
-    let mut quote = None;
-    let mut escaped = false;
-
-    for c in command.chars() {
-        if escaped {
-            current.push(c);
-            escaped = false;
-            continue;
-        }
-
-        if let Some(active_quote) = quote {
-            if active_quote == '"' && c == '\\' {
-                escaped = true;
-            } else if c == active_quote {
-                quote = None;
-            } else {
-                current.push(c);
-            }
-            continue;
-        }
-
-        if c == '\\' {
-            escaped = true;
-        } else if c == '\'' || c == '"' {
-            quote = Some(c);
-        } else if c.is_whitespace() {
-            push_shell_word(&mut words, &mut current);
-        } else if matches!(c, ';' | '|' | '&' | '<' | '>' | '\n' | '\r') {
-            push_shell_word(&mut words, &mut current);
-            break;
-        } else {
-            current.push(c);
-        }
-    }
-    push_shell_word(&mut words, &mut current);
-    words
-}
-
-fn push_shell_word(words: &mut Vec<String>, current: &mut String) {
-    if current.is_empty() {
-        return;
-    }
-    words.push(std::mem::take(current));
 }
 
 #[cfg(test)]

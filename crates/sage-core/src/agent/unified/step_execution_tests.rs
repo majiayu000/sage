@@ -466,6 +466,121 @@ fn test_bash_rm_targets_stop_at_shell_separator() {
 }
 
 #[tokio::test]
+async fn test_destructive_confirmation_tracks_expanded_rm_glob_targets() -> SageResult<()> {
+    let temp_dir = TempDir::new()?;
+    let log_a = temp_dir.path().join("a.log");
+    let log_b = temp_dir.path().join("b.log");
+    let text_file = temp_dir.path().join("keep.txt");
+    fs::write(&log_a, "a")?;
+    fs::write(&log_b, "b")?;
+    fs::write(&text_file, "keep")?;
+
+    let edited_command = format!("rm {}/*.log", temp_dir.path().display());
+    let input_command = edited_command.clone();
+    let input_channel =
+        InputChannel::non_interactive(InputAutoResponse::Custom(Arc::new(move |request| {
+            if matches!(&request.kind, InputRequestKind::Permission { .. }) {
+                InputResponse::permission_granted_with_input(
+                    request.id,
+                    serde_json::json!({ "command": input_command }),
+                )
+            } else {
+                InputResponse::cancelled(request.id)
+            }
+        })));
+
+    let mut config = Config::default();
+    config.default_provider = "ollama".to_string();
+    let options = ExecutionOptions::interactive().with_working_directory(temp_dir.path());
+    let mut executor = UnifiedExecutor::with_options(config, options)?;
+    executor.set_input_channel(input_channel);
+    executor
+        .tool_orchestrator
+        .tool_executor
+        .register_tool(Arc::new(FakeDestructiveBash));
+    let context = ToolExecutionContext::new("session", temp_dir.path().to_path_buf());
+    let interrupt_manager = InterruptManager::new();
+    let task_scope = interrupt_manager.create_task_scope();
+
+    let result = executor
+        .execute_single_tool(&bash_call("rm original-target"), &context, &task_scope)
+        .await?;
+
+    let tracked = executor.session_manager().file_tracker().tracked_paths();
+    assert!(result.success, "edited command should execute");
+    assert!(
+        tracked.contains(&log_a),
+        "first glob match should be tracked"
+    );
+    assert!(
+        tracked.contains(&log_b),
+        "second glob match should be tracked"
+    );
+    assert!(
+        !tracked.contains(&text_file),
+        "non-matching file should not be tracked"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_destructive_confirmation_tracks_rm_directory_children() -> SageResult<()> {
+    let temp_dir = TempDir::new()?;
+    let edited_dir = temp_dir.path().join("edited-dir");
+    let nested_dir = edited_dir.join("nested");
+    fs::create_dir_all(&nested_dir)?;
+    let child = edited_dir.join("child.txt");
+    let nested_child = nested_dir.join("nested.txt");
+    fs::write(&child, "child")?;
+    fs::write(&nested_child, "nested")?;
+
+    let edited_command = format!("rm -rf {}", edited_dir.display());
+    let input_command = edited_command.clone();
+    let input_channel =
+        InputChannel::non_interactive(InputAutoResponse::Custom(Arc::new(move |request| {
+            if matches!(&request.kind, InputRequestKind::Permission { .. }) {
+                InputResponse::permission_granted_with_input(
+                    request.id,
+                    serde_json::json!({ "command": input_command }),
+                )
+            } else {
+                InputResponse::cancelled(request.id)
+            }
+        })));
+
+    let mut config = Config::default();
+    config.default_provider = "ollama".to_string();
+    let options = ExecutionOptions::interactive().with_working_directory(temp_dir.path());
+    let mut executor = UnifiedExecutor::with_options(config, options)?;
+    executor.set_input_channel(input_channel);
+    executor
+        .tool_orchestrator
+        .tool_executor
+        .register_tool(Arc::new(FakeDestructiveBash));
+    let context = ToolExecutionContext::new("session", temp_dir.path().to_path_buf());
+    let interrupt_manager = InterruptManager::new();
+    let task_scope = interrupt_manager.create_task_scope();
+
+    let result = executor
+        .execute_single_tool(&bash_call("rm -rf original-target"), &context, &task_scope)
+        .await?;
+
+    let tracked = executor.session_manager().file_tracker().tracked_paths();
+    assert!(result.success, "edited command should execute");
+    assert!(
+        tracked.contains(&child),
+        "directory child should be tracked"
+    );
+    assert!(
+        tracked.contains(&nested_child),
+        "nested directory child should be tracked"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_settings_denial_skips_post_execution_rollback() -> SageResult<()> {
     let temp_dir = TempDir::new()?;
     let tracked_file = temp_dir.path().join("tracked.txt");
