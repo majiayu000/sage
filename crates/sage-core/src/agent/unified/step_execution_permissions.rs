@@ -24,7 +24,7 @@ impl UnifiedExecutor {
         tool_call: &ToolCall,
         context: &ToolExecutionContext,
         cancel_token: tokio_util::sync::CancellationToken,
-    ) -> (ToolResult, ToolCall) {
+    ) -> (ToolResult, ToolCall, bool) {
         let mut current_call = tool_call.clone();
         let mut prompted_count = 0usize;
 
@@ -36,7 +36,7 @@ impl UnifiedExecutor {
 
             if !Self::requires_destructive_confirmation(&first_result) {
                 let executed_call = Self::without_user_confirmation_marker(&current_call);
-                return (first_result, executed_call);
+                return (first_result, executed_call, false);
             }
 
             prompted_count += 1;
@@ -47,7 +47,7 @@ impl UnifiedExecutor {
                     "Destructive confirmation exceeded the maximum number of edited approvals.",
                 );
                 let executed_call = Self::without_user_confirmation_marker(&current_call);
-                return (result, executed_call);
+                return (result, executed_call, false);
             }
 
             self.event_manager.stop_animation().await;
@@ -74,7 +74,7 @@ impl UnifiedExecutor {
                         format!("Operation cancelled: {}", err),
                     );
                     let executed_call = Self::without_user_confirmation_marker(&current_call);
-                    return (result, executed_call);
+                    return (result, executed_call, false);
                 }
             };
 
@@ -99,15 +99,16 @@ impl UnifiedExecutor {
                             if input_modified {
                                 // The user may have redirected the call to a
                                 // different file; snapshot it before it runs.
-                                self.track_file_for_undo(&confirmed_call).await;
+                                self.track_file_for_undo(&confirmed_call, context).await;
                             }
+                            let executed_call =
+                                Self::without_user_confirmation_marker(&confirmed_call);
+                            self.record_session_tool_call(&executed_call).await;
                             let result = self
                                 .tool_orchestrator
                                 .execution_phase(&confirmed_call, context, cancel_token)
                                 .await;
-                            let executed_call =
-                                Self::without_user_confirmation_marker(&confirmed_call);
-                            return (result, executed_call);
+                            return (result, executed_call, true);
                         }
                         Ok(
                             SettingsRecheckAfterDestructiveConfirmation::NeedsDestructiveConfirmation(
@@ -115,14 +116,14 @@ impl UnifiedExecutor {
                             ),
                         ) => {
                             if input_modified {
-                                self.track_file_for_undo(&approved_call).await;
+                                self.track_file_for_undo(&approved_call, context).await;
                             }
                             current_call = approved_call;
                         }
                         Err((blocked_result, blocked_call)) => {
                             let executed_call =
                                 Self::without_user_confirmation_marker(&blocked_call);
-                            return (blocked_result, executed_call);
+                            return (blocked_result, executed_call, false);
                         }
                     }
                 }
@@ -134,7 +135,7 @@ impl UnifiedExecutor {
                         format!("Operation cancelled by user: {}", reason),
                     );
                     let executed_call = Self::without_user_confirmation_marker(&current_call);
-                    return (result, executed_call);
+                    return (result, executed_call, false);
                 }
                 InputResponseKind::Cancelled => {
                     let result = ToolResult::error(
@@ -143,7 +144,7 @@ impl UnifiedExecutor {
                         "Operation cancelled by user.",
                     );
                     let executed_call = Self::without_user_confirmation_marker(&current_call);
-                    return (result, executed_call);
+                    return (result, executed_call, false);
                 }
                 _ => {
                     let result = ToolResult::error(
@@ -152,7 +153,7 @@ impl UnifiedExecutor {
                         "Invalid permission response from input handler.",
                     );
                     let executed_call = Self::without_user_confirmation_marker(&current_call);
-                    return (result, executed_call);
+                    return (result, executed_call, false);
                 }
             }
         }

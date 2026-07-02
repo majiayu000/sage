@@ -6,6 +6,7 @@ use crate::interrupt::global_interrupt_manager;
 use crate::llm::client::LlmClient;
 use crate::llm::messages::LlmMessage;
 use crate::tools::types::{ToolCall, ToolResult, ToolSchema};
+use std::path::{Path, PathBuf};
 use tracing::instrument;
 
 use super::UnifiedExecutor;
@@ -224,41 +225,40 @@ impl UnifiedExecutor {
 
         let mut execution_tool_call = tool_call.clone();
 
-        let (tool_result, run_post_execution) =
+        let (tool_result, run_post_execution, tool_call_recorded) =
             match self.check_settings_permission(tool_call, context).await? {
                 Some(SettingsPermissionCheck::Blocked {
                     result,
                     tool_call: blocked_call,
                 }) => {
                     execution_tool_call = blocked_call;
-                    (result, false)
+                    (result, false, false)
                 }
                 Some(SettingsPermissionCheck::Allowed(approved_call)) => {
                     execution_tool_call = approved_call;
-                    self.track_file_for_undo(&execution_tool_call).await;
+                    self.track_file_for_undo(&execution_tool_call, context)
+                        .await;
 
-                    let (result, executed_call) = self
+                    let (result, executed_call, recorded_call) = self
                         .pre_execute_or_block(&execution_tool_call, context, cancel_token.clone())
                         .await?;
                     execution_tool_call = executed_call;
-                    (result, true)
+                    (result, true, recorded_call)
                 }
                 None => {
-                    self.track_file_for_undo(&execution_tool_call).await;
-                    let (result, executed_call) = self
+                    self.track_file_for_undo(&execution_tool_call, context)
+                        .await;
+                    let (result, executed_call, recorded_call) = self
                         .pre_execute_or_block(&execution_tool_call, context, cancel_token.clone())
                         .await?;
                     execution_tool_call = executed_call;
-                    (result, true)
+                    (result, true, recorded_call)
                 }
             };
 
-        self.session_manager
-            .record_tool_call(
-                &execution_tool_call.name,
-                &serde_json::to_value(&execution_tool_call.arguments).unwrap_or_default(),
-            )
-            .await;
+        if !tool_call_recorded {
+            self.record_session_tool_call(&execution_tool_call).await;
+        }
 
         // Phase 3: Post-execution
         if run_post_execution {
@@ -294,7 +294,7 @@ impl UnifiedExecutor {
         tool_call: &ToolCall,
         context: &ToolExecutionContext,
         cancel_token: tokio_util::sync::CancellationToken,
-    ) -> SageResult<(ToolResult, ToolCall)> {
+    ) -> SageResult<(ToolResult, ToolCall, bool)> {
         // Phase 1: Pre-execution
         let pre_result = self
             .tool_orchestrator
@@ -309,6 +309,7 @@ impl UnifiedExecutor {
                     format!("Tool blocked by hook: {}", reason),
                 ),
                 tool_call.clone(),
+                false,
             ));
         }
 
@@ -323,20 +324,22 @@ impl UnifiedExecutor {
         tool_call: &ToolCall,
         context: &ToolExecutionContext,
         cancel_token: tokio_util::sync::CancellationToken,
-    ) -> SageResult<(crate::tools::types::ToolResult, ToolCall)> {
+    ) -> SageResult<(crate::tools::types::ToolResult, ToolCall, bool)> {
         let requires_interaction = self
             .tool_orchestrator
             .requires_user_interaction(&tool_call.name);
 
         if requires_interaction && tool_call.name == "AskUserQuestion" {
+            self.record_session_tool_call(tool_call).await;
             let result = self.handle_ask_user_question(tool_call).await?;
-            Ok((result, tool_call.clone()))
+            Ok((result, tool_call.clone(), true))
         } else if requires_interaction {
+            self.record_session_tool_call(tool_call).await;
             let result = self
                 .tool_orchestrator
                 .execution_phase(tool_call, context, cancel_token)
                 .await;
-            Ok((result, tool_call.clone()))
+            Ok((result, tool_call.clone(), true))
         } else {
             Ok(self
                 .execute_with_permission_check(tool_call, context, cancel_token)
@@ -344,8 +347,17 @@ impl UnifiedExecutor {
         }
     }
 
+    pub(super) async fn record_session_tool_call(&self, tool_call: &ToolCall) {
+        self.session_manager
+            .record_tool_call(
+                &tool_call.name,
+                &serde_json::to_value(&tool_call.arguments).unwrap_or_default(),
+            )
+            .await;
+    }
+
     /// Track file for undo capability
-    async fn track_file_for_undo(&mut self, tool_call: &ToolCall) {
+    async fn track_file_for_undo(&mut self, tool_call: &ToolCall, context: &ToolExecutionContext) {
         if crate::tools::names::is_file_modifying_tool(&tool_call.name) {
             if let Some(file_path) = tool_call
                 .arguments
@@ -353,12 +365,53 @@ impl UnifiedExecutor {
                 .or_else(|| tool_call.arguments.get("path"))
                 .and_then(|v| v.as_str())
             {
-                if let Err(e) = self.session_manager.track_file(file_path).await {
-                    tracing::warn!(error = %e, file_path = %file_path, "Failed to track file");
-                }
+                self.track_path_for_undo(file_path, context).await;
+            }
+        }
+
+        if tool_call.name.eq_ignore_ascii_case("bash") {
+            for target in bash_rm_targets(tool_call) {
+                self.track_path_for_undo(&target, context).await;
             }
         }
     }
+
+    async fn track_path_for_undo(&mut self, file_path: &str, context: &ToolExecutionContext) {
+        let path = workspace_path(file_path, context);
+        if let Err(e) = self.session_manager.track_file(&path).await {
+            tracing::warn!(error = %e, file_path = %path.display(), "Failed to track file");
+        }
+    }
+}
+
+fn workspace_path(file_path: &str, context: &ToolExecutionContext) -> PathBuf {
+    let path = Path::new(file_path);
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        context.working_dir.join(path)
+    }
+}
+
+fn bash_rm_targets(tool_call: &ToolCall) -> Vec<String> {
+    let Some(command) = tool_call
+        .arguments
+        .get("command")
+        .and_then(|value| value.as_str())
+    else {
+        return Vec::new();
+    };
+
+    let mut tokens = command.split_whitespace();
+    if !matches!(tokens.next(), Some("rm")) {
+        return Vec::new();
+    }
+
+    tokens
+        .filter(|token| !token.starts_with('-'))
+        .map(|token| token.trim_matches(['"', '\'']).to_string())
+        .filter(|token| !token.is_empty())
+        .collect()
 }
 
 #[cfg(test)]
