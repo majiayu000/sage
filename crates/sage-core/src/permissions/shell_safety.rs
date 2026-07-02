@@ -98,6 +98,9 @@ fn executable_builtin_segments(segment: &str) -> Vec<String> {
     if let Some(rest) = strip_shell_word_prefix(segment, "eval") {
         return shell_command_segments(&quote_removed_shell_word(rest));
     }
+    if let Some(script) = shell_c_script(segment) {
+        return shell_command_segments(&script);
+    }
     let Some(rest) = strip_shell_word_prefix(segment, "trap") else {
         return Vec::new();
     };
@@ -107,6 +110,14 @@ fn executable_builtin_segments(segment: &str) -> Vec<String> {
         return Vec::new();
     }
     shell_command_segments(&quote_removed_shell_word(&rest[..handler_end]))
+}
+
+fn shell_c_script(segment: &str) -> Option<String> {
+    let rest = strip_shell_word_prefix(segment, "bash")
+        .or_else(|| strip_shell_word_prefix(segment, "sh"))?;
+    let rest = strip_shell_word_prefix(rest, "-c")?;
+    let script_end = skip_shell_word(rest, 0);
+    (script_end > 0).then(|| quote_removed_shell_word(&rest[..script_end]))
 }
 
 fn alias_expansion_segments(command: &str) -> Vec<String> {
@@ -121,9 +132,10 @@ fn alias_expansion_segments(command: &str) -> Vec<String> {
             aliases.push((name, value));
             continue;
         }
+        let invocation = normalize_command_segment(&segment);
         for (name, value) in &aliases {
-            if segment == *name || segment.starts_with(&format!("{name} ")) {
-                let rest = segment[name.len()..].trim_start();
+            if invocation == *name || invocation.starts_with(&format!("{name} ")) {
+                let rest = invocation[name.len()..].trim_start();
                 let expanded = if rest.is_empty() {
                     value.clone()
                 } else {
@@ -229,7 +241,9 @@ fn strip_shell_command_prefixes(mut segment: &str) -> &str {
 fn strip_command_options(mut segment: &str) -> &str {
     loop {
         segment = segment.trim_start();
-        let Some(rest) = strip_shell_word_prefix(segment, "-p") else {
+        let Some(rest) = strip_shell_word_prefix(segment, "-p")
+            .or_else(|| strip_shell_word_prefix(segment, "--"))
+        else {
             return segment;
         };
         segment = rest;
@@ -276,9 +290,7 @@ fn strip_shell_group_prefixes(mut segment: &str) -> &str {
 }
 
 fn strip_shell_reserved_prefixes(mut segment: &str) -> &str {
-    const RESERVED_PREFIXES: &[&str] = &[
-        "then", "do", "else", "elif", "if", "while", "until", "for", "select", "case",
-    ];
+    const RESERVED_PREFIXES: &[&str] = &["then", "do", "else", "elif", "if", "while", "until"];
 
     loop {
         segment = segment.trim_start();
@@ -476,6 +488,11 @@ fn find_heredoc_delimiters(line: &str) -> Vec<HereDocDelimiter> {
             break;
         }
 
+        if line[cursor..].starts_with("$((") {
+            cursor = skip_arithmetic_expansion(line, cursor);
+            continue;
+        }
+
         if !line[cursor..].starts_with("<<") {
             cursor += c.len_utf8();
             continue;
@@ -516,9 +533,21 @@ fn find_heredoc_delimiters(line: &str) -> Vec<HereDocDelimiter> {
     delimiters
 }
 
+fn skip_arithmetic_expansion(input: &str, cursor: usize) -> usize {
+    input[cursor + 3..]
+        .find("))")
+        .map(|offset| cursor + 3 + offset + 2)
+        .unwrap_or(input.len())
+}
+
 fn line_sources_stdin(line: &str) -> bool {
-    let normalized = normalize_shell_whitespace(&quote_removed_shell_word(line));
-    normalized.starts_with("source /dev/stdin ") || normalized.starts_with(". /dev/stdin ")
+    shell_command_segments(line).into_iter().any(|segment| {
+        let normalized = normalize_shell_whitespace(&quote_removed_shell_word(&segment));
+        normalized == "source /dev/stdin"
+            || normalized.starts_with("source /dev/stdin ")
+            || normalized == ". /dev/stdin"
+            || normalized.starts_with(". /dev/stdin ")
+    })
 }
 
 fn read_heredoc_delimiter(input: &str) -> Option<(String, usize, bool)> {
@@ -596,6 +625,15 @@ fn read_ansi_c_escape(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> c
         }
         return char::from_u32(value).unwrap_or(first);
     }
+    if first == 'x' {
+        return read_hex_escape(chars, 2).unwrap_or(first);
+    }
+    if first == 'u' {
+        return read_hex_escape(chars, 4).unwrap_or(first);
+    }
+    if first == 'U' {
+        return read_hex_escape(chars, 8).unwrap_or(first);
+    }
     match first {
         'n' => '\n',
         'r' => '\r',
@@ -605,6 +643,23 @@ fn read_ansi_c_escape(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> c
         '"' => '"',
         other => other,
     }
+}
+
+fn read_hex_escape(
+    chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
+    max: usize,
+) -> Option<char> {
+    let mut value = 0;
+    let mut seen = false;
+    for _ in 0..max {
+        let Some(next) = chars.peek().copied().and_then(|c| c.to_digit(16)) else {
+            break;
+        };
+        chars.next();
+        value = value * 16 + next;
+        seen = true;
+    }
+    seen.then(|| char::from_u32(value)).flatten()
 }
 
 fn skip_shell_word(input: &str, mut cursor: usize) -> usize {
@@ -644,7 +699,7 @@ fn skip_shell_word(input: &str, mut cursor: usize) -> usize {
             continue;
         }
 
-        if c.is_whitespace() || matches!(c, ';' | '|' | '&') {
+        if c.is_whitespace() || matches!(c, ';' | '|' | '&' | '<' | '>') {
             break;
         }
 

@@ -130,6 +130,7 @@ fn test_deny_matches_chained_command_segment() {
         "trap 'rm -rf important/' EXIT",
         "trap -- 'rm -rf important/' EXIT",
         "command -p rm -rf important/",
+        "command -- rm -rf important/",
         "exec -a x rm -rf important/",
         "r''m -rf important/",
         "\\rm -rf important/",
@@ -137,6 +138,8 @@ fn test_deny_matches_chained_command_segment() {
         "r${x:+}m -rf important/",
         "$'rm' -rf important/",
         "$'r\\155' -rf important/",
+        "$'r\\x6d' -rf important/",
+        "$'r\\u006d' -rf important/",
         "r{m,} -rf important/",
         "echo \"$(rm -rf important/)\"",
         "echo `rm -rf important/`",
@@ -148,7 +151,14 @@ fn test_deny_matches_chained_command_segment() {
         "<> /tmp/out rm -rf important/",
         ">| /tmp/out rm -rf important/",
         "source /dev/stdin <<EOF\nrm -rf important/\nEOF",
+        "echo ok; source /dev/stdin <<EOF\nrm -rf important/\nEOF",
+        "source /dev/stdin <<< 'rm -rf important/'",
+        "echo $((1 << 2))\nrm -rf important/",
+        ">/tmp/out< /dev/null rm -rf important/",
         "shopt -s expand_aliases\nalias x='rm -rf important/'\nx",
+        "shopt -s expand_aliases\nalias x='rm -rf important/'\nFOO=1 x",
+        "bash -c 'rm -rf important/'",
+        "sh -c 'rm -rf important/'",
     ] {
         assert!(
             matches!(
@@ -192,6 +202,14 @@ fn test_deny_does_not_match_heredoc_body() {
     ));
     assert!(matches!(
         decide(&settings, "echo $((rm - rf))"),
+        Some(SettingsPermissionDecision::Allow)
+    ));
+    assert!(matches!(
+        decide(&settings, "case rm in foo) echo ok;; esac"),
+        Some(SettingsPermissionDecision::Allow)
+    ));
+    assert!(matches!(
+        decide(&settings, "for rm in a; do echo ok; done"),
         Some(SettingsPermissionDecision::Allow)
     ));
 }

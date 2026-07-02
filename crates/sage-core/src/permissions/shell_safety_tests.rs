@@ -115,8 +115,14 @@ fn strips_shell_command_prefixes() {
     let command_option = command_segments("command -p rm -rf important/");
     assert!(command_option.contains(&"rm -rf important/".to_string()));
 
+    let command_terminator = command_segments("command -- rm -rf important/");
+    assert!(command_terminator.contains(&"rm -rf important/".to_string()));
+
     let exec_option = command_segments("exec -a x rm -rf important/");
     assert!(exec_option.contains(&"rm -rf important/".to_string()));
+
+    let bash_c = command_segments("bash -c 'rm -rf important/'");
+    assert!(bash_c.contains(&"rm -rf important/".to_string()));
 }
 
 #[test]
@@ -135,6 +141,9 @@ fn strips_leading_redirection_targets() {
 
     let clobber = command_segments(">| /tmp/out rm -rf important/");
     assert!(clobber.contains(&"rm -rf important/".to_string()));
+
+    let adjacent = command_segments(">/tmp/out< /dev/null rm -rf important/");
+    assert!(adjacent.contains(&"rm -rf important/".to_string()));
 }
 
 #[test]
@@ -177,6 +186,12 @@ fn quote_removes_ansi_c_and_expands_simple_command_braces() {
 
     let ansi_octal = command_segments("$'r\\155' -rf important/");
     assert!(ansi_octal.contains(&"rm -rf important/".to_string()));
+
+    let ansi_hex = command_segments("$'r\\x6d' -rf important/");
+    assert!(ansi_hex.contains(&"rm -rf important/".to_string()));
+
+    let ansi_unicode = command_segments("$'r\\u006d' -rf important/");
+    assert!(ansi_unicode.contains(&"rm -rf important/".to_string()));
 }
 
 #[test]
@@ -195,12 +210,34 @@ fn extracts_eval_and_trap_executed_commands() {
 fn expands_aliases_when_enabled() {
     let alias = command_segments("shopt -s expand_aliases\nalias x='rm -rf important/'\nx");
     assert!(alias.contains(&"rm -rf important/".to_string()));
+
+    let assigned_alias =
+        command_segments("shopt -s expand_aliases\nalias x='rm -rf important/'\nFOO=1 x");
+    assert!(assigned_alias.contains(&"rm -rf important/".to_string()));
 }
 
 #[test]
 fn scans_heredoc_body_when_sourced() {
     let sourced = command_segments("source /dev/stdin <<EOF\nrm -rf important/\nEOF");
     assert!(sourced.contains(&"rm -rf important/".to_string()));
+
+    let chained = command_segments("echo ok; source /dev/stdin <<EOF\nrm -rf important/\nEOF");
+    assert!(chained.contains(&"rm -rf important/".to_string()));
+
+    let here_string = command_segments("source /dev/stdin <<< 'rm -rf important/'");
+    assert!(here_string.contains(&"rm -rf important/".to_string()));
+}
+
+#[test]
+fn ignores_arithmetic_shift_when_finding_heredocs() {
+    let segments = command_segments("echo $((1 << 2))\nrm -rf important/");
+    assert!(segments.contains(&"rm -rf important/".to_string()));
+}
+
+#[test]
+fn does_not_strip_reserved_data_words() {
+    assert!(!command_segments("case rm in foo) echo ok;; esac").contains(&"rm".to_string()));
+    assert!(!command_segments("for rm in a; do echo ok; done").contains(&"rm in a".to_string()));
 }
 
 #[test]

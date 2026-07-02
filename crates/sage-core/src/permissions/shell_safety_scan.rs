@@ -1,6 +1,6 @@
 use super::{
-    is_shell_command_separator, shell_separator_len, skip_shell_whitespace, skip_shell_word,
-    starts_shell_comment,
+    is_shell_command_separator, normalize_shell_whitespace, quote_removed_shell_word,
+    shell_separator_len, skip_shell_whitespace, skip_shell_word, starts_shell_comment,
 };
 
 pub(super) fn shell_command_segments(command: &str) -> Vec<String> {
@@ -71,6 +71,9 @@ pub(super) fn shell_command_segments(command: &str) -> Vec<String> {
             if let Some((operand_start, operand_end)) = redirection_operand_range(command, cursor) {
                 let operand = &command[operand_start..operand_end];
                 segments.extend(substitution_body_segments(operand));
+                if is_here_string(command, cursor) && current_sources_stdin(&current) {
+                    segments.extend(shell_command_segments(&quote_removed_shell_word(operand)));
+                }
                 if operand.starts_with("<(") || operand.starts_with(">(") {
                     push_raw_segment(&mut segments, &mut current);
                     cursor = operand_start + 2;
@@ -270,6 +273,15 @@ fn redirection_operand_range(input: &str, cursor: usize) -> Option<(usize, usize
 
     next = skip_shell_whitespace(input, next);
     Some((next, redirection_word_end(input, next)))
+}
+
+fn is_here_string(input: &str, cursor: usize) -> bool {
+    input[cursor..].starts_with("<<<")
+}
+
+fn current_sources_stdin(current: &str) -> bool {
+    let normalized = normalize_shell_whitespace(&quote_removed_shell_word(current));
+    normalized.starts_with("source /dev/stdin") || normalized.starts_with(". /dev/stdin")
 }
 
 fn redirection_word_end(input: &str, cursor: usize) -> usize {
