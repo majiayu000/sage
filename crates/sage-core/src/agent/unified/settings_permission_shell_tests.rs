@@ -120,8 +120,19 @@ fn test_deny_matches_chained_command_segment() {
         "function cleanup { rm -rf important/; }; cleanup",
         "time rm -rf important/",
         "time -p rm -rf important/",
+        "command rm -rf important/",
+        "exec rm -rf important/",
         "r''m -rf important/",
         "\\rm -rf important/",
+        "$'rm' -rf important/",
+        "r{m,} -rf important/",
+        "echo \"$(rm -rf important/)\"",
+        "echo `rm -rf important/`",
+        "cat <<EOF\n$(rm -rf important/)\nEOF",
+        "FOO=\"$(rm -rf important/)\" echo hi",
+        "cat < <(rm -rf important/)",
+        ": <<< $(rm -rf important/)",
+        "cat > \"$(rm -rf important/)\"",
     ] {
         assert!(
             matches!(
@@ -157,6 +168,14 @@ fn test_deny_does_not_match_heredoc_body() {
     ));
     assert!(matches!(
         decide(&settings, "echo 'safe; rm -rf important/'"),
+        Some(SettingsPermissionDecision::Allow)
+    ));
+    assert!(matches!(
+        decide(&settings, "cat <<'EOF'\n$(rm -rf important/)\nEOF"),
+        Some(SettingsPermissionDecision::Allow)
+    ));
+    assert!(matches!(
+        decide(&settings, "echo $((rm - rf))"),
         Some(SettingsPermissionDecision::Allow)
     ));
 }
