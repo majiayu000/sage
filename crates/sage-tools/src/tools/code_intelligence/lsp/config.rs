@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 
 /// LSP client for a specific language
+#[derive(Debug, Clone)]
 pub struct LspClient {
     /// Language ID (e.g., "rust", "typescript")
     pub language_id: String,
@@ -26,10 +27,21 @@ impl LspClient {
 }
 
 /// LSP configuration
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct LspConfig {
     /// Registered language servers
     pub servers: HashMap<String, LspServerConfig>,
+    /// Per-request timeout in milliseconds.
+    pub request_timeout_ms: u64,
+}
+
+impl Default for LspConfig {
+    fn default() -> Self {
+        Self {
+            servers: HashMap::new(),
+            request_timeout_ms: 5_000,
+        }
+    }
 }
 
 impl LspConfig {

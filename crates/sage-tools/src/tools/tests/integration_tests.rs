@@ -942,6 +942,10 @@ mod tool_integration_tests {
             "Arc::new(NotebookEditTool::new())",
             "Arc::new(BashTool::new())",
             "Arc::new(LspTool::new())",
+            "Arc::new(GoToDefinitionTool::new())",
+            "Arc::new(FindReferencesTool::new())",
+            "Arc::new(SymbolSearchTool::new())",
+            "Arc::new(TypeHierarchyTool::new())",
             "Arc::new(SkillTool::new())",
             "Arc::new(SlashCommandTool::new())",
         ] {

@@ -9,20 +9,28 @@
 //! - Go to implementation
 //! - Call hierarchy
 
+mod client;
 mod config;
 mod operations;
-mod symbols;
+mod protocol;
+mod response;
+mod tools;
 pub mod types;
 
 pub use config::{LspClient, LspConfig, LspServerConfig};
-pub use types::{CallHierarchyItem, HoverInfo, Location, Position, SymbolInfo};
+pub use tools::{FindReferencesTool, GoToDefinitionTool, SymbolSearchTool, TypeHierarchyTool};
+pub use types::{
+    CallHierarchyItem, DegradedReason, HoverInfo, Location, NavigationItem, NavigationResponse,
+    NavigationStatus, Position, SymbolInfo,
+};
 
 use async_trait::async_trait;
 use sage_core::tools::base::{Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
 use std::path::{Path, PathBuf};
 
-/// LSP tool for code intelligence
+/// LSP tool for code intelligence.
+#[derive(Clone)]
 pub struct LspTool {
     /// Configuration
     config: LspConfig,
@@ -75,21 +83,6 @@ impl LspTool {
             self.working_directory.join(path)
         }
     }
-
-    /// Check if LSP server is available for a language
-    async fn is_server_available(&self, language: &str) -> bool {
-        if let Some(config) = self.config.servers.get(language) {
-            tokio::process::Command::new(&config.command)
-                .arg("--version")
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .status()
-                .await
-                .is_ok()
-        } else {
-            false
-        }
-    }
 }
 
 #[async_trait]
@@ -99,20 +92,16 @@ impl Tool for LspTool {
     }
 
     fn description(&self) -> &str {
-        r#"Interact with Language Server Protocol (LSP) servers to get code intelligence features.
+        r#"Interact with Language Server Protocol (LSP) servers to get structured code navigation.
 
 Supported operations:
 - goToDefinition: Find where a symbol is defined
 - findReferences: Find all references to a symbol
-- hover: Get hover information (documentation, type info)
-- documentSymbol: Get all symbols in a document
 - workspaceSymbol: Search for symbols across the workspace
-- goToImplementation: Find implementations of an interface/trait
-- prepareCallHierarchy: Get call hierarchy item at a position
-- incomingCalls: Find all callers of a function
-- outgoingCalls: Find all functions called by a function
+- typeHierarchy: Get type hierarchy for a Rust type
 
-All operations require filePath, line (1-based), and character (1-based)."#
+Prefer Grep/Glob for small lexical searches; use structured navigation for large repositories or cross-symbol work.
+Results are structured JSON. LSP unavailable and capability unsupported return status=degraded, distinct from status=ok with empty items."#
     }
 
     fn schema(&self) -> ToolSchema {
@@ -122,37 +111,42 @@ All operations require filePath, line (1-based), and character (1-based)."#
             vec![
                 ToolParameter::string(
                     "operation",
-                    "LSP operation: goToDefinition, findReferences, hover, documentSymbol, workspaceSymbol, goToImplementation, prepareCallHierarchy, incomingCalls, outgoingCalls",
+                    "LSP operation: goToDefinition, findReferences, workspaceSymbol, typeHierarchy",
                 ),
-                ToolParameter::string("filePath", "The file to operate on"),
-                ToolParameter::number("line", "Line number (1-based)"),
-                ToolParameter::number("character", "Character offset (1-based)"),
+                ToolParameter::optional_string("filePath", "The file to operate on"),
+                ToolParameter::number("line", "Line number (1-based)").optional(),
+                ToolParameter::number("character", "Character offset (1-based)").optional(),
                 ToolParameter::string("query", "Search query (for workspaceSymbol)").optional(),
             ],
         )
     }
 
     async fn execute(&self, call: &ToolCall) -> Result<ToolResult, ToolError> {
+        self.validate(call)?;
         let operation = call.get_string("operation").ok_or_else(|| {
             ToolError::InvalidArguments("Missing required parameter: operation".to_string())
         })?;
 
+        if operation == "workspaceSymbol" {
+            let query = call.get_string("query").ok_or_else(|| {
+                ToolError::InvalidArguments("Missing required parameter: query".to_string())
+            })?;
+            let result = self.workspace_symbol(&query).await?;
+            return Ok(ToolResult::success(&call.id, self.name(), result));
+        }
+
         let file_path = call.get_string("filePath").ok_or_else(|| {
             ToolError::InvalidArguments("Missing required parameter: filePath".to_string())
         })?;
-
-        let line = call.get_u32("line", 1);
-        let character = call.get_u32("character", 1);
+        let line = call.get_u32("line", 0);
+        let character = call.get_u32("character", 0);
 
         let result = match operation.as_str() {
             "goToDefinition" => self.go_to_definition(&file_path, line, character).await?,
             "findReferences" => self.find_references(&file_path, line, character).await?,
             "hover" => self.hover(&file_path, line, character).await?,
             "documentSymbol" => self.document_symbol(&file_path).await?,
-            "workspaceSymbol" => {
-                let query = call.get_string("query").unwrap_or_default();
-                self.workspace_symbol(&query).await?
-            }
+            "typeHierarchy" => self.type_hierarchy(&file_path, line, character).await?,
             "goToImplementation" => {
                 self.go_to_implementation(&file_path, line, character)
                     .await?
@@ -175,13 +169,32 @@ All operations require filePath, line (1-based), and character (1-based)."#
     }
 
     fn validate(&self, call: &ToolCall) -> Result<(), ToolError> {
-        call.get_string("operation").ok_or_else(|| {
+        let operation = call.get_string("operation").ok_or_else(|| {
             ToolError::InvalidArguments("Missing required parameter: operation".to_string())
         })?;
+
+        if operation == "workspaceSymbol" {
+            call.get_string("query").ok_or_else(|| {
+                ToolError::InvalidArguments("Missing required parameter: query".to_string())
+            })?;
+            return Ok(());
+        }
 
         call.get_string("filePath").ok_or_else(|| {
             ToolError::InvalidArguments("Missing required parameter: filePath".to_string())
         })?;
+
+        if call.get_u32("line", 0) == 0 {
+            return Err(ToolError::InvalidArguments(
+                "line must be a positive 1-based number".to_string(),
+            ));
+        }
+
+        if call.get_u32("character", 0) == 0 {
+            return Err(ToolError::InvalidArguments(
+                "character must be a positive 1-based number".to_string(),
+            ));
+        }
 
         Ok(())
     }
@@ -218,41 +231,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_document_symbol() {
+    async fn test_workspace_symbol_requires_query() {
         let tool = LspTool::new();
+        let call = create_tool_call("workspaceSymbol", "test.rs", 1, 1);
 
-        let temp_dir = tempfile::TempDir::new().unwrap();
-        let file_path = temp_dir.path().join("test.rs");
-        tokio::fs::write(
-            &file_path,
-            r#"
-pub fn hello() {}
-struct Foo {}
-impl Foo {
-    fn bar(&self) {}
-}
-"#,
-        )
-        .await
-        .unwrap();
-
-        let mut arguments = std::collections::HashMap::new();
-        arguments.insert("operation".to_string(), json!("documentSymbol"));
-        arguments.insert("filePath".to_string(), json!(file_path.to_str().unwrap()));
-        arguments.insert("line".to_string(), json!(1));
-        arguments.insert("character".to_string(), json!(1));
-
-        let call = ToolCall {
-            id: "test-2".to_string(),
-            name: "LSP".to_string(),
-            arguments,
-            call_id: None,
-        };
-
-        let result = tool.execute(&call).await.unwrap();
-        assert!(result.success);
-        let output = result.output.unwrap();
-        assert!(output.contains("hello") || output.contains("Foo"));
+        let result = tool.validate(&call);
+        assert!(result.is_err());
     }
 
     #[tokio::test]
@@ -297,22 +281,10 @@ impl Foo {
     }
 
     #[test]
-    fn test_extract_symbols_rust() {
-        let content = r#"
-pub fn hello() {}
-fn private_fn() {}
-pub struct Foo {}
-struct Bar {}
-pub enum MyEnum {}
-trait MyTrait {}
-impl Foo {}
-"#;
+    fn test_lsp_tool_description_documents_degraded_results() {
+        let tool = LspTool::new();
 
-        let symbols = symbols::extract_symbols_simple(content, "rust");
-        assert!(!symbols.is_empty());
-
-        let names: Vec<&str> = symbols.iter().map(|s| s.name.as_str()).collect();
-        assert!(names.contains(&"hello"));
-        assert!(names.contains(&"Foo"));
+        assert!(tool.description().contains("status=degraded"));
+        assert!(tool.description().contains("Grep/Glob"));
     }
 }
