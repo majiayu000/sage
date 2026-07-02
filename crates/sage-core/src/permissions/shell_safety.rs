@@ -78,30 +78,33 @@ pub(crate) fn command_segments(command: &str) -> Vec<String> {
 /// Strip leading `VAR=value` assignments so `FOO=1 rm -rf x` is matched as
 /// `rm -rf x`.
 fn normalize_command_segment(segment: &str) -> String {
-    let mut rest = segment.trim_start();
-    loop {
-        rest = strip_shell_leading_syntax(rest);
-        let Some(value_start) = env_assignment_value_start(rest) else {
-            break;
-        };
-        let consumed = consume_assignment_value(rest, value_start);
-        rest = rest[consumed..].trim_start();
-    }
+    let rest = strip_leading_assignment_words(segment);
     normalize_shell_whitespace(&quote_removed_shell_word(strip_shell_leading_syntax(rest)))
 }
 
-fn executable_builtin_segments(segment: &str) -> Vec<String> {
-    let mut segment = strip_shell_leading_syntax(segment);
-    if let Some(rest) = strip_shell_word_prefix(segment, "builtin") {
-        segment = strip_shell_leading_syntax(rest);
+fn strip_leading_assignment_words(mut segment: &str) -> &str {
+    loop {
+        segment = strip_shell_leading_syntax(segment);
+        let Some(value_start) = env_assignment_value_start(segment) else {
+            return segment;
+        };
+        let consumed = consume_assignment_value(segment, value_start);
+        segment = segment[consumed..].trim_start();
     }
-    if let Some(rest) = strip_shell_word_prefix(segment, "eval") {
+}
+
+fn executable_builtin_segments(segment: &str) -> Vec<String> {
+    let mut segment = strip_leading_assignment_words(segment);
+    if let Some(rest) = strip_shell_command_word_prefix(segment, "builtin") {
+        segment = strip_leading_assignment_words(rest);
+    }
+    if let Some(rest) = strip_shell_command_word_prefix(segment, "eval") {
         return shell_command_segments(&quote_removed_shell_word(rest));
     }
     if let Some(script) = shell_c_script(segment) {
         return shell_command_segments(&script);
     }
-    let Some(rest) = strip_shell_word_prefix(segment, "trap") else {
+    let Some(rest) = strip_shell_command_word_prefix(segment, "trap") else {
         return Vec::new();
     };
     let rest = strip_trap_options(rest);
@@ -113,11 +116,27 @@ fn executable_builtin_segments(segment: &str) -> Vec<String> {
 }
 
 fn shell_c_script(segment: &str) -> Option<String> {
-    let rest = strip_shell_word_prefix(segment, "bash")
-        .or_else(|| strip_shell_word_prefix(segment, "sh"))?;
-    let rest = strip_shell_word_prefix(rest, "-c")?;
-    let script_end = skip_shell_word(rest, 0);
-    (script_end > 0).then(|| quote_removed_shell_word(&rest[..script_end]))
+    let mut rest = strip_shell_command_word_prefix(segment, "bash")
+        .or_else(|| strip_shell_command_word_prefix(segment, "sh"))?;
+    loop {
+        let (word, after) = split_shell_word(rest)?;
+        let option = quote_removed_shell_word(word);
+        if option == "-c"
+            || (option.starts_with('-') && !option.starts_with("--") && option[1..].contains('c'))
+        {
+            return split_shell_word(after).map(|(script, _)| quote_removed_shell_word(script));
+        }
+        if option == "--" || !option.starts_with('-') {
+            return None;
+        }
+        rest = after;
+        if matches!(
+            option.as_str(),
+            "-O" | "+O" | "-o" | "--init-file" | "--rcfile"
+        ) {
+            rest = split_shell_word(rest).map(|(_, after)| after)?;
+        }
+    }
 }
 
 fn alias_expansion_segments(command: &str) -> Vec<String> {
@@ -217,10 +236,15 @@ fn strip_shell_negation_prefix(segment: &str) -> &str {
 
 fn strip_shell_time_prefix(segment: &str) -> &str {
     let segment = segment.trim_start();
-    let Some(rest) = strip_shell_word_prefix(segment, "time") else {
+    let Some(mut rest) = strip_shell_word_prefix(segment, "time") else {
         return segment;
     };
-    strip_shell_word_prefix(rest, "-p").unwrap_or(rest)
+    while let Some(after) =
+        strip_shell_word_prefix(rest, "-p").or_else(|| strip_shell_word_prefix(rest, "--"))
+    {
+        rest = after;
+    }
+    rest
 }
 
 fn strip_shell_command_prefixes(mut segment: &str) -> &str {
@@ -259,6 +283,8 @@ fn strip_exec_options(mut segment: &str) -> &str {
         } else if let Some(rest) = strip_shell_word_prefix(segment, "-c") {
             segment = rest;
         } else if let Some(rest) = strip_shell_word_prefix(segment, "-l") {
+            segment = rest;
+        } else if let Some(rest) = strip_shell_word_prefix(segment, "--") {
             segment = rest;
         } else {
             return segment;
@@ -311,6 +337,17 @@ fn strip_shell_word_prefix<'a>(segment: &'a str, prefix: &str) -> Option<&'a str
         .map(str::trim_start)
 }
 
+fn strip_shell_command_word_prefix<'a>(segment: &'a str, prefix: &str) -> Option<&'a str> {
+    let (word, rest) = split_shell_word(segment)?;
+    (quote_removed_shell_word(word) == prefix).then_some(rest)
+}
+
+fn split_shell_word(input: &str) -> Option<(&str, &str)> {
+    let input = input.trim_start();
+    let end = skip_shell_word(input, 0);
+    (end > 0).then(|| (&input[..end], input[end..].trim_start()))
+}
+
 fn normalize_shell_whitespace(segment: &str) -> String {
     segment.split_whitespace().collect::<Vec<_>>().join(" ")
 }
@@ -321,6 +358,9 @@ fn env_assignment_value_start(segment: &str) -> Option<usize> {
         if c == '=' {
             return seen_name.then_some(index + c.len_utf8());
         }
+        if c == '+' && seen_name && segment[index + c.len_utf8()..].starts_with('=') {
+            return Some(index + c.len_utf8() + '='.len_utf8());
+        }
         if !(c == '_' || c.is_ascii_alphabetic() || (seen_name && c.is_ascii_digit())) {
             return None;
         }
@@ -330,35 +370,7 @@ fn env_assignment_value_start(segment: &str) -> Option<usize> {
 }
 
 fn consume_assignment_value(segment: &str, value_start: usize) -> usize {
-    let Some(first) = segment[value_start..].chars().next() else {
-        return value_start;
-    };
-    match first {
-        '\'' | '"' => consume_quoted_value(segment, value_start, first),
-        _ => segment[value_start..]
-            .find(char::is_whitespace)
-            .map(|offset| value_start + offset)
-            .unwrap_or(segment.len()),
-    }
-}
-
-fn consume_quoted_value(segment: &str, value_start: usize, quote: char) -> usize {
-    let mut escaped = false;
-    let content_start = value_start + quote.len_utf8();
-    for (offset, c) in segment[content_start..].char_indices() {
-        if quote == '"' && escaped {
-            escaped = false;
-            continue;
-        }
-        if quote == '"' && c == '\\' {
-            escaped = true;
-            continue;
-        }
-        if c == quote {
-            return content_start + offset + c.len_utf8();
-        }
-    }
-    segment.len()
+    skip_shell_word(segment, value_start)
 }
 
 fn remove_heredoc_bodies(command: &str) -> String {
@@ -452,7 +464,7 @@ struct HereDocDelimiter {
 
 fn find_heredoc_delimiters(line: &str) -> Vec<HereDocDelimiter> {
     let mut delimiters = Vec::new();
-    let execute_body = line_sources_stdin(line);
+    let execute_body = line_sources_stdin(line) || line_invokes_stdin_shell(line);
     let mut cursor = 0;
     let mut quote = None;
     let mut escaped = false;
@@ -541,12 +553,56 @@ fn skip_arithmetic_expansion(input: &str, cursor: usize) -> usize {
 }
 
 fn line_sources_stdin(line: &str) -> bool {
+    shell_command_segments(line)
+        .into_iter()
+        .any(|segment| sources_stdin_segment(&segment))
+}
+
+fn line_invokes_stdin_shell(line: &str) -> bool {
     shell_command_segments(line).into_iter().any(|segment| {
-        let normalized = normalize_shell_whitespace(&quote_removed_shell_word(&segment));
-        normalized == "source /dev/stdin"
-            || normalized.starts_with("source /dev/stdin ")
-            || normalized == ". /dev/stdin"
-            || normalized.starts_with(". /dev/stdin ")
+        let segment = strip_leading_assignment_words(&segment);
+        let Some((word, rest)) = split_shell_word(segment) else {
+            return false;
+        };
+        matches!(quote_removed_shell_word(word).as_str(), "bash" | "sh")
+            && shell_invocation_reads_stdin(rest)
+    })
+}
+
+fn shell_invocation_reads_stdin(mut rest: &str) -> bool {
+    loop {
+        let Some((word, after)) = split_shell_word(rest) else {
+            return true;
+        };
+        let option = quote_removed_shell_word(word);
+        if option == "-c"
+            || (option.starts_with('-') && !option.starts_with("--") && option[1..].contains('c'))
+        {
+            return false;
+        }
+        if option == "--" {
+            return split_shell_word(after).is_none();
+        }
+        if !option.starts_with('-') && !option.starts_with('+') {
+            return false;
+        }
+        rest = after;
+        if matches!(
+            option.as_str(),
+            "-O" | "+O" | "-o" | "--init-file" | "--rcfile"
+        ) {
+            rest = split_shell_word(rest).map(|(_, after)| after).unwrap_or("");
+        }
+    }
+}
+
+fn sources_stdin_segment(segment: &str) -> bool {
+    let normalized = normalize_shell_whitespace(&quote_removed_shell_word(segment));
+    ["source ", ". "].iter().any(|prefix| {
+        normalized
+            .strip_prefix(prefix)
+            .and_then(|rest| rest.split_whitespace().next())
+            .is_some_and(|path| matches!(path, "/dev/stdin" | "/dev/fd/0" | "/proc/self/fd/0"))
     })
 }
 
@@ -594,10 +650,10 @@ fn quote_removed_shell_word(input: &str) -> String {
             continue;
         }
 
-        if c == '$' && matches!(chars.peek(), Some('\'')) {
-            chars.next();
-            quote = Some('\'');
-            ansi_c_quote = true;
+        if c == '$' && matches!(chars.peek(), Some('\'') | Some('"')) {
+            let shell_quote = chars.next().unwrap_or('\'');
+            quote = Some(shell_quote);
+            ansi_c_quote = shell_quote == '\'';
         } else if c == '\'' || c == '"' {
             quote = Some(c);
         } else if c == '\\' {

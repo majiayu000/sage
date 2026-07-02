@@ -39,12 +39,24 @@ fn extracts_command_substitution_bodies() {
 fn strips_leading_env_assignments() {
     let segments = command_segments("FOO=1 BAR=2 rm -rf x");
     assert!(segments.contains(&"rm -rf x".to_string()));
+
+    let append = command_segments("A+=x rm -rf important/");
+    assert!(append.contains(&"rm -rf important/".to_string()));
+
+    let assigned_eval = command_segments("FOO=1 eval rm -rf important/");
+    assert!(assigned_eval.contains(&"rm -rf important/".to_string()));
 }
 
 #[test]
 fn strips_quoted_env_assignments() {
     let segments = command_segments("FOO='a b' BAR=\"c d\" rm -rf x");
     assert!(segments.contains(&"rm -rf x".to_string()));
+
+    let ansi_c = command_segments("FOO=$'a b' rm -rf important/");
+    assert!(ansi_c.contains(&"rm -rf important/".to_string()));
+
+    let escaped_space = command_segments("FOO=a\\ b rm -rf important/");
+    assert!(escaped_space.contains(&"rm -rf important/".to_string()));
 
     let expanded = command_segments("FOO=\"$(rm -rf important/)\" echo hi");
     assert!(expanded.contains(&"rm -rf important/".to_string()));
@@ -121,8 +133,17 @@ fn strips_shell_command_prefixes() {
     let exec_option = command_segments("exec -a x rm -rf important/");
     assert!(exec_option.contains(&"rm -rf important/".to_string()));
 
+    let exec_terminator = command_segments("exec -- rm -rf important/");
+    assert!(exec_terminator.contains(&"rm -rf important/".to_string()));
+
+    let time_terminator = command_segments("time -- rm -rf important/");
+    assert!(time_terminator.contains(&"rm -rf important/".to_string()));
+
     let bash_c = command_segments("bash -c 'rm -rf important/'");
     assert!(bash_c.contains(&"rm -rf important/".to_string()));
+
+    let bash_lc = command_segments("bash -lc 'rm -rf important/'");
+    assert!(bash_lc.contains(&"rm -rf important/".to_string()));
 }
 
 #[test]
@@ -175,6 +196,9 @@ fn quote_removes_ansi_c_and_expands_simple_command_braces() {
     let ansi = command_segments("$'rm' -rf important/");
     assert!(ansi.contains(&"rm -rf important/".to_string()));
 
+    let locale_quote = command_segments("$\"rm\" -rf important/");
+    assert!(locale_quote.contains(&"rm -rf important/".to_string()));
+
     let brace = command_segments("r{m,} -rf important/");
     assert!(brace.contains(&"rm -rf important/".to_string()));
 
@@ -198,6 +222,9 @@ fn quote_removes_ansi_c_and_expands_simple_command_braces() {
 fn extracts_eval_and_trap_executed_commands() {
     let eval = command_segments("eval \"rm -rf important/\"");
     assert!(eval.contains(&"rm -rf important/".to_string()));
+
+    let quoted_eval = command_segments("e''val rm -rf important/");
+    assert!(quoted_eval.contains(&"rm -rf important/".to_string()));
 
     let trap = command_segments("trap 'rm -rf important/' EXIT");
     assert!(trap.contains(&"rm -rf important/".to_string()));
@@ -226,6 +253,12 @@ fn scans_heredoc_body_when_sourced() {
 
     let here_string = command_segments("source /dev/stdin <<< 'rm -rf important/'");
     assert!(here_string.contains(&"rm -rf important/".to_string()));
+
+    let bash_heredoc = command_segments("bash <<EOF\nrm -rf important/\nEOF");
+    assert!(bash_heredoc.contains(&"rm -rf important/".to_string()));
+
+    let fd_alias = command_segments(". /dev/fd/0 <<EOF\nrm -rf important/\nEOF");
+    assert!(fd_alias.contains(&"rm -rf important/".to_string()));
 }
 
 #[test]

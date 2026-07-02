@@ -1,6 +1,6 @@
 use super::{
-    is_shell_command_separator, normalize_shell_whitespace, quote_removed_shell_word,
-    shell_separator_len, skip_shell_whitespace, skip_shell_word, starts_shell_comment,
+    is_shell_command_separator, quote_removed_shell_word, shell_separator_len,
+    skip_shell_whitespace, skip_shell_word, sources_stdin_segment, starts_shell_comment,
 };
 
 pub(super) fn shell_command_segments(command: &str) -> Vec<String> {
@@ -280,8 +280,7 @@ fn is_here_string(input: &str, cursor: usize) -> bool {
 }
 
 fn current_sources_stdin(current: &str) -> bool {
-    let normalized = normalize_shell_whitespace(&quote_removed_shell_word(current));
-    normalized.starts_with("source /dev/stdin") || normalized.starts_with(". /dev/stdin")
+    sources_stdin_segment(current)
 }
 
 fn redirection_word_end(input: &str, cursor: usize) -> usize {
