@@ -21,8 +21,11 @@ const SHELL_CONTROL_METACHARS: &[&str] = &[
     "&&", "||", ">>", "<<", ";", "|", "&", "$(", "`", ">", "<", "\n", "\r",
 ];
 
+#[path = "shell_safety_normalize.rs"]
+mod shell_safety_normalize;
 #[path = "shell_safety_scan.rs"]
 mod shell_safety_scan;
+use shell_safety_normalize::normalized_command_segments;
 use shell_safety_scan::{shell_command_segments, substitution_body_segments};
 
 /// Returns true when the command contains a shell control metacharacter,
@@ -62,6 +65,9 @@ pub(crate) fn command_segments(command: &str) -> Vec<String> {
     for nested in executable_builtin_segments(&command_without_heredocs) {
         push(&nested);
     }
+    for segment in alias_expansion_segments(&command_without_heredocs) {
+        push(&segment);
+    }
     for segment in unquoted_heredoc_substitution_segments(&command) {
         push(&segment);
     }
@@ -84,136 +90,61 @@ fn normalize_command_segment(segment: &str) -> String {
     normalize_shell_whitespace(&quote_removed_shell_word(strip_shell_leading_syntax(rest)))
 }
 
-fn normalized_command_segments(segment: &str) -> Vec<String> {
-    let normalized = normalize_command_segment(segment);
-    if normalized.is_empty() {
-        return Vec::new();
-    }
-
-    let mut segments = vec![normalized.clone()];
-    for expanded in brace_expanded_first_word_segments(&normalized) {
-        if !expanded.is_empty() && !segments.contains(&expanded) {
-            segments.push(expanded);
-        }
-    }
-    for assembled in substitution_removed_first_word_segments(&normalized) {
-        if !assembled.is_empty() && !segments.contains(&assembled) {
-            segments.push(assembled);
-        }
-    }
-    segments
-}
-
-fn brace_expanded_first_word_segments(segment: &str) -> Vec<String> {
-    let Some((word, rest)) = split_first_shell_word(segment) else {
-        return Vec::new();
-    };
-    let Some((prefix, body, suffix)) = split_simple_brace_word(word) else {
-        return Vec::new();
-    };
-
-    body.split(',')
-        .map(|choice| {
-            let expanded = format!("{prefix}{choice}{suffix}");
-            if rest.is_empty() {
-                expanded
-            } else {
-                format!("{expanded} {rest}")
-            }
-        })
-        .collect()
-}
-
-fn split_first_shell_word(segment: &str) -> Option<(&str, &str)> {
-    let trimmed = segment.trim_start();
-    let end = trimmed.find(char::is_whitespace).unwrap_or(trimmed.len());
-    (end > 0).then(|| {
-        let rest = trimmed[end..].trim_start();
-        (&trimmed[..end], rest)
-    })
-}
-
-fn split_simple_brace_word(word: &str) -> Option<(&str, &str, &str)> {
-    let open = word.find('{')?;
-    let close = word[open + 1..].find('}')? + open + 1;
-    let body = &word[open + 1..close];
-    body.contains(',')
-        .then(|| (&word[..open], body, &word[close + 1..]))
-}
-
-fn substitution_removed_first_word_segments(segment: &str) -> Vec<String> {
-    let Some((word, rest)) = split_first_shell_word(segment) else {
-        return Vec::new();
-    };
-    let Some(assembled) = remove_embedded_substitutions(word) else {
-        return Vec::new();
-    };
-    if rest.is_empty() {
-        vec![assembled]
-    } else {
-        vec![format!("{assembled} {rest}")]
-    }
-}
-
-fn remove_embedded_substitutions(word: &str) -> Option<String> {
-    let mut output = String::new();
-    let mut cursor = 0;
-    let mut changed = false;
-    while cursor < word.len() {
-        if word[cursor..].starts_with("$(") {
-            if let Some(end) = word_parenthesized_end(word, cursor + 2) {
-                cursor = end;
-                changed = true;
-                continue;
-            }
-        }
-        if word[cursor..].starts_with('`') {
-            if let Some(end) = word[cursor + 1..].find('`') {
-                cursor += end + 2;
-                changed = true;
-                continue;
-            }
-        }
-        let Some(c) = word[cursor..].chars().next() else {
-            break;
-        };
-        output.push(c);
-        cursor += c.len_utf8();
-    }
-    (changed && !output.is_empty()).then_some(output)
-}
-
-fn word_parenthesized_end(input: &str, body_start: usize) -> Option<usize> {
-    let mut depth = 1usize;
-    let mut cursor = body_start;
-    while cursor < input.len() {
-        let c = input[cursor..].chars().next()?;
-        if c == '(' {
-            depth += 1;
-        } else if c == ')' {
-            depth -= 1;
-            if depth == 0 {
-                return Some(cursor + c.len_utf8());
-            }
-        }
-        cursor += c.len_utf8();
-    }
-    None
-}
-
 fn executable_builtin_segments(segment: &str) -> Vec<String> {
-    let segment = strip_shell_leading_syntax(segment);
+    let mut segment = strip_shell_leading_syntax(segment);
+    if let Some(rest) = strip_shell_word_prefix(segment, "builtin") {
+        segment = strip_shell_leading_syntax(rest);
+    }
     if let Some(rest) = strip_shell_word_prefix(segment, "eval") {
         return shell_command_segments(&quote_removed_shell_word(rest));
     }
     let Some(rest) = strip_shell_word_prefix(segment, "trap") else {
         return Vec::new();
     };
+    let rest = strip_trap_options(rest);
     let handler_end = skip_shell_word(rest, 0);
     if handler_end == 0 {
         return Vec::new();
     }
     shell_command_segments(&quote_removed_shell_word(&rest[..handler_end]))
+}
+
+fn alias_expansion_segments(command: &str) -> Vec<String> {
+    if !command.contains("expand_aliases") {
+        return Vec::new();
+    }
+
+    let mut aliases: Vec<(String, String)> = Vec::new();
+    let mut segments = Vec::new();
+    for segment in shell_command_segments(command) {
+        if let Some((name, value)) = parse_alias_definition(&segment) {
+            aliases.push((name, value));
+            continue;
+        }
+        for (name, value) in &aliases {
+            if segment == *name || segment.starts_with(&format!("{name} ")) {
+                let rest = segment[name.len()..].trim_start();
+                let expanded = if rest.is_empty() {
+                    value.clone()
+                } else {
+                    format!("{value} {rest}")
+                };
+                segments.extend(shell_command_segments(&expanded));
+            }
+        }
+    }
+    segments
+}
+
+fn parse_alias_definition(segment: &str) -> Option<(String, String)> {
+    let rest = strip_shell_word_prefix(segment.trim_start(), "alias")?;
+    let name_end = rest.find('=')?;
+    let name = &rest[..name_end];
+    if name.is_empty() || !name.chars().all(|c| c == '_' || c.is_ascii_alphanumeric()) {
+        return None;
+    }
+    let value = quote_removed_shell_word(rest[name_end + 1..].trim_start());
+    (!value.is_empty()).then(|| (name.to_string(), value))
 }
 
 fn remove_escaped_newlines(command: &str) -> String {
@@ -283,10 +214,48 @@ fn strip_shell_time_prefix(segment: &str) -> &str {
 fn strip_shell_command_prefixes(mut segment: &str) -> &str {
     loop {
         segment = segment.trim_start();
-        let Some(rest) = ["command", "exec", "eval", "coproc"]
-            .iter()
-            .find_map(|prefix| strip_shell_word_prefix(segment, prefix))
-        else {
+        if let Some(rest) = strip_shell_word_prefix(segment, "command") {
+            segment = strip_command_options(rest);
+        } else if let Some(rest) = strip_shell_word_prefix(segment, "exec") {
+            segment = strip_exec_options(rest);
+        } else if let Some(rest) = strip_shell_word_prefix(segment, "coproc") {
+            segment = rest;
+        } else {
+            return segment;
+        }
+    }
+}
+
+fn strip_command_options(mut segment: &str) -> &str {
+    loop {
+        segment = segment.trim_start();
+        let Some(rest) = strip_shell_word_prefix(segment, "-p") else {
+            return segment;
+        };
+        segment = rest;
+    }
+}
+
+fn strip_exec_options(mut segment: &str) -> &str {
+    loop {
+        segment = segment.trim_start();
+        if let Some(rest) = strip_shell_word_prefix(segment, "-a") {
+            let arg_end = skip_shell_word(rest, 0);
+            segment = rest[arg_end..].trim_start();
+        } else if let Some(rest) = strip_shell_word_prefix(segment, "-c") {
+            segment = rest;
+        } else if let Some(rest) = strip_shell_word_prefix(segment, "-l") {
+            segment = rest;
+        } else {
+            return segment;
+        }
+    }
+}
+
+fn strip_trap_options(mut segment: &str) -> &str {
+    loop {
+        segment = segment.trim_start();
+        let Some(rest) = strip_shell_word_prefix(segment, "--") else {
             return segment;
         };
         segment = rest;
@@ -424,6 +393,9 @@ fn unquoted_heredoc_substitution_segments(command: &str) -> Vec<String> {
             if delimiter.expand_body {
                 segments.extend(substitution_body_segments(line));
             }
+            if delimiter.execute_body {
+                segments.extend(shell_command_segments(line));
+            }
             continue;
         }
 
@@ -463,10 +435,12 @@ struct HereDocDelimiter {
     value: String,
     strip_tabs: bool,
     expand_body: bool,
+    execute_body: bool,
 }
 
 fn find_heredoc_delimiters(line: &str) -> Vec<HereDocDelimiter> {
     let mut delimiters = Vec::new();
+    let execute_body = line_sources_stdin(line);
     let mut cursor = 0;
     let mut quote = None;
     let mut escaped = false;
@@ -528,6 +502,7 @@ fn find_heredoc_delimiters(line: &str) -> Vec<HereDocDelimiter> {
                 value: delimiter,
                 strip_tabs,
                 expand_body: !quoted,
+                execute_body,
             });
             cursor += consumed;
         } else {
@@ -539,6 +514,11 @@ fn find_heredoc_delimiters(line: &str) -> Vec<HereDocDelimiter> {
         }
     }
     delimiters
+}
+
+fn line_sources_stdin(line: &str) -> bool {
+    let normalized = normalize_shell_whitespace(&quote_removed_shell_word(line));
+    normalized.starts_with("source /dev/stdin ") || normalized.starts_with(". /dev/stdin ")
 }
 
 fn read_heredoc_delimiter(input: &str) -> Option<(String, usize, bool)> {
@@ -561,6 +541,7 @@ fn quote_removed_shell_word(input: &str) -> String {
     let mut output = String::new();
     let mut chars = input.chars().peekable();
     let mut quote = None;
+    let mut ansi_c_quote = false;
     let mut escaped = false;
 
     while let Some(c) = chars.next() {
@@ -571,10 +552,13 @@ fn quote_removed_shell_word(input: &str) -> String {
         }
 
         if let Some(active_quote) = quote {
-            if active_quote == '"' && c == '\\' {
+            if ansi_c_quote && c == '\\' {
+                output.push(read_ansi_c_escape(&mut chars));
+            } else if active_quote == '"' && c == '\\' {
                 escaped = true;
             } else if c == active_quote {
                 quote = None;
+                ansi_c_quote = false;
             } else {
                 output.push(c);
             }
@@ -584,6 +568,7 @@ fn quote_removed_shell_word(input: &str) -> String {
         if c == '$' && matches!(chars.peek(), Some('\'')) {
             chars.next();
             quote = Some('\'');
+            ansi_c_quote = true;
         } else if c == '\'' || c == '"' {
             quote = Some(c);
         } else if c == '\\' {
@@ -594,6 +579,32 @@ fn quote_removed_shell_word(input: &str) -> String {
     }
 
     output
+}
+
+fn read_ansi_c_escape(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> char {
+    let Some(first) = chars.next() else {
+        return '\\';
+    };
+    if first.is_digit(8) {
+        let mut value = first.to_digit(8).unwrap_or(0);
+        for _ in 0..2 {
+            let Some(next) = chars.peek().copied().filter(|c| c.is_digit(8)) else {
+                break;
+            };
+            chars.next();
+            value = value * 8 + next.to_digit(8).unwrap_or(0);
+        }
+        return char::from_u32(value).unwrap_or(first);
+    }
+    match first {
+        'n' => '\n',
+        'r' => '\r',
+        't' => '\t',
+        '\\' => '\\',
+        '\'' => '\'',
+        '"' => '"',
+        other => other,
+    }
 }
 
 fn skip_shell_word(input: &str, mut cursor: usize) -> usize {

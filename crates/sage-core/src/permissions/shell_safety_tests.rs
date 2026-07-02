@@ -103,8 +103,20 @@ fn strips_shell_command_prefixes() {
     let eval_prefix = command_segments("eval rm -rf important/");
     assert!(eval_prefix.contains(&"rm -rf important/".to_string()));
 
+    let eval_chain = command_segments("eval \"echo ok; rm -rf important/\"");
+    assert!(eval_chain.contains(&"rm -rf important/".to_string()));
+
+    let builtin_eval = command_segments("builtin eval rm -rf important/");
+    assert!(builtin_eval.contains(&"rm -rf important/".to_string()));
+
     let coproc_prefix = command_segments("coproc rm -rf important/");
     assert!(coproc_prefix.contains(&"rm -rf important/".to_string()));
+
+    let command_option = command_segments("command -p rm -rf important/");
+    assert!(command_option.contains(&"rm -rf important/".to_string()));
+
+    let exec_option = command_segments("exec -a x rm -rf important/");
+    assert!(exec_option.contains(&"rm -rf important/".to_string()));
 }
 
 #[test]
@@ -120,6 +132,9 @@ fn strips_leading_redirection_targets() {
 
     let mixed = command_segments("<> /tmp/out rm -rf important/");
     assert!(mixed.contains(&"rm -rf important/".to_string()));
+
+    let clobber = command_segments(">| /tmp/out rm -rf important/");
+    assert!(clobber.contains(&"rm -rf important/".to_string()));
 }
 
 #[test]
@@ -156,6 +171,12 @@ fn quote_removes_ansi_c_and_expands_simple_command_braces() {
 
     let empty_substitution = command_segments("r$(:)m -rf important/");
     assert!(empty_substitution.contains(&"rm -rf important/".to_string()));
+
+    let empty_parameter = command_segments("r${x:+}m -rf important/");
+    assert!(empty_parameter.contains(&"rm -rf important/".to_string()));
+
+    let ansi_octal = command_segments("$'r\\155' -rf important/");
+    assert!(ansi_octal.contains(&"rm -rf important/".to_string()));
 }
 
 #[test]
@@ -165,6 +186,21 @@ fn extracts_eval_and_trap_executed_commands() {
 
     let trap = command_segments("trap 'rm -rf important/' EXIT");
     assert!(trap.contains(&"rm -rf important/".to_string()));
+
+    let trap_terminator = command_segments("trap -- 'rm -rf important/' EXIT");
+    assert!(trap_terminator.contains(&"rm -rf important/".to_string()));
+}
+
+#[test]
+fn expands_aliases_when_enabled() {
+    let alias = command_segments("shopt -s expand_aliases\nalias x='rm -rf important/'\nx");
+    assert!(alias.contains(&"rm -rf important/".to_string()));
+}
+
+#[test]
+fn scans_heredoc_body_when_sourced() {
+    let sourced = command_segments("source /dev/stdin <<EOF\nrm -rf important/\nEOF");
+    assert!(sourced.contains(&"rm -rf important/".to_string()));
 }
 
 #[test]

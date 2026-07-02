@@ -261,6 +261,8 @@ fn redirection_operand_range(input: &str, cursor: usize) -> Option<(usize, usize
         }
     } else if operator == '<' && input[next..].starts_with('>') {
         next += '>'.len_utf8();
+    } else if operator == '>' && input[next..].starts_with('|') {
+        next += '|'.len_utf8();
     }
     if input[next..].starts_with('&') {
         next += '&'.len_utf8();
