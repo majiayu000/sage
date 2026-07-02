@@ -459,6 +459,12 @@ async fn test_destructive_confirmation_tracks_edited_bash_rm_target() -> SageRes
     Ok(())
 }
 
+#[test]
+fn test_bash_rm_targets_stop_at_shell_separator() {
+    let targets = bash_rm_targets(&bash_call("rm edited-target; echo done"));
+    assert_eq!(targets, vec!["edited-target"]);
+}
+
 #[tokio::test]
 async fn test_settings_denial_skips_post_execution_rollback() -> SageResult<()> {
     let temp_dir = TempDir::new()?;
