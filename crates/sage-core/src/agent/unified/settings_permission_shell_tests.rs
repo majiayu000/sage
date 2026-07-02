@@ -108,6 +108,10 @@ fn test_deny_matches_chained_command_segment() {
         "FOO='a b' rm -rf important/",
         "echo ok && (rm -rf important/)",
         "git <(rm -rf important/)",
+        "if true; then rm -rf important/; fi",
+        "echo ok && r\\\nm -rf important/",
+        "echo ok && rm\t-rf important/",
+        "echo \"<<EOF\"\nrm -rf important/",
         "echo hi | rm -rf important/",
     ] {
         assert!(

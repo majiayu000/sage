@@ -43,7 +43,7 @@ pub(crate) fn contains_shell_control_metachar(command: &str) -> bool {
 pub(crate) fn command_segments(command: &str) -> Vec<String> {
     let mut segments = Vec::new();
     let mut push = |segment: &str| {
-        let trimmed = strip_env_assignments(segment.trim());
+        let trimmed = normalize_command_segment(segment.trim());
         if !trimmed.is_empty() && !segments.contains(&trimmed) {
             segments.push(trimmed);
         }
@@ -51,7 +51,10 @@ pub(crate) fn command_segments(command: &str) -> Vec<String> {
 
     push(command);
 
-    let command_without_heredocs = remove_heredoc_bodies(command);
+    let command = remove_escaped_newlines(command);
+    push(&command);
+
+    let command_without_heredocs = remove_heredoc_bodies(&command);
     let mut normalized = command_without_heredocs;
     for separator in SEGMENT_SEPARATORS {
         normalized = normalized.replace(separator, "\u{0}");
@@ -65,17 +68,58 @@ pub(crate) fn command_segments(command: &str) -> Vec<String> {
 
 /// Strip leading `VAR=value` assignments so `FOO=1 rm -rf x` is matched as
 /// `rm -rf x`.
-fn strip_env_assignments(segment: &str) -> String {
+fn normalize_command_segment(segment: &str) -> String {
     let mut rest = segment.trim_start();
     loop {
-        rest = strip_shell_group_prefixes(rest);
+        rest = strip_shell_leading_syntax(rest);
         let Some(value_start) = env_assignment_value_start(rest) else {
             break;
         };
         let consumed = consume_assignment_value(rest, value_start);
         rest = rest[consumed..].trim_start();
     }
-    strip_shell_group_prefixes(rest).to_string()
+    normalize_shell_whitespace(strip_shell_leading_syntax(rest))
+}
+
+fn remove_escaped_newlines(command: &str) -> String {
+    let mut normalized = String::with_capacity(command.len());
+    let mut chars = command.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            normalized.push(c);
+            continue;
+        }
+
+        match chars.peek().copied() {
+            Some('\n') => {
+                chars.next();
+            }
+            Some('\r') => {
+                chars.next();
+                if matches!(chars.peek(), Some('\n')) {
+                    chars.next();
+                } else {
+                    normalized.push('\\');
+                    normalized.push('\r');
+                }
+            }
+            _ => normalized.push(c),
+        }
+    }
+
+    normalized
+}
+
+fn strip_shell_leading_syntax(mut segment: &str) -> &str {
+    loop {
+        let before_len = segment.len();
+        segment = strip_shell_group_prefixes(segment);
+        segment = strip_shell_reserved_prefixes(segment);
+        if segment.len() == before_len {
+            return segment;
+        }
+    }
 }
 
 fn strip_shell_group_prefixes(mut segment: &str) -> &str {
@@ -89,6 +133,34 @@ fn strip_shell_group_prefixes(mut segment: &str) -> &str {
         }
         segment = &segment[first.len_utf8()..];
     }
+}
+
+fn strip_shell_reserved_prefixes(mut segment: &str) -> &str {
+    const RESERVED_PREFIXES: &[&str] = &[
+        "then", "do", "else", "elif", "if", "while", "until", "for", "select", "case",
+    ];
+
+    loop {
+        segment = segment.trim_start();
+        let Some(prefix) = RESERVED_PREFIXES
+            .iter()
+            .find(|prefix| has_shell_word_prefix(segment, prefix))
+        else {
+            return segment;
+        };
+        segment = segment[prefix.len()..].trim_start();
+    }
+}
+
+fn has_shell_word_prefix(segment: &str, prefix: &str) -> bool {
+    segment
+        .strip_prefix(prefix)
+        .and_then(|rest| rest.chars().next())
+        .is_some_and(char::is_whitespace)
+}
+
+fn normalize_shell_whitespace(segment: &str) -> String {
+    segment.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 fn env_assignment_value_start(segment: &str) -> Option<usize> {
@@ -170,11 +242,45 @@ struct HereDocDelimiter {
 
 fn find_heredoc_delimiters(line: &str) -> Vec<HereDocDelimiter> {
     let mut delimiters = Vec::new();
-    let mut search_from = 0;
-    while let Some(offset) = line[search_from..].find("<<") {
-        let mut cursor = search_from + offset + 2;
+    let mut cursor = 0;
+    let mut quote = None;
+    let mut escaped = false;
+
+    while cursor < line.len() {
+        let Some(c) = line[cursor..].chars().next() else {
+            break;
+        };
+
+        if escaped {
+            escaped = false;
+            cursor += c.len_utf8();
+            continue;
+        }
+
+        if let Some(active_quote) = quote {
+            if active_quote == '"' && c == '\\' {
+                escaped = true;
+            } else if c == active_quote {
+                quote = None;
+            }
+            cursor += c.len_utf8();
+            continue;
+        }
+
+        if c == '\'' || c == '"' {
+            quote = Some(c);
+            cursor += c.len_utf8();
+            continue;
+        }
+
+        if !line[cursor..].starts_with("<<") {
+            cursor += c.len_utf8();
+            continue;
+        }
+
+        cursor += 2;
         if line[cursor..].starts_with('<') {
-            search_from = cursor + 1;
+            cursor += 1;
             continue;
         }
 
@@ -193,9 +299,13 @@ fn find_heredoc_delimiters(line: &str) -> Vec<HereDocDelimiter> {
                 value: delimiter,
                 strip_tabs,
             });
-            search_from = cursor + consumed;
+            cursor += consumed;
         } else {
-            search_from = cursor;
+            cursor += line[cursor..]
+                .chars()
+                .next()
+                .map(char::len_utf8)
+                .unwrap_or(1);
         }
     }
     delimiters
@@ -287,6 +397,30 @@ mod tests {
     fn ignores_heredoc_bodies() {
         let segments = command_segments("cat <<EOF\nrm -rf important/\nEOF");
         assert!(!segments.contains(&"rm -rf important/".to_string()));
+    }
+
+    #[test]
+    fn does_not_treat_quoted_heredoc_text_as_operator() {
+        let segments = command_segments("echo \"<<EOF\"\nrm -rf important/");
+        assert!(segments.contains(&"rm -rf important/".to_string()));
+    }
+
+    #[test]
+    fn joins_escaped_newlines_before_segment_matching() {
+        let segments = command_segments("echo ok && r\\\nm -rf important/");
+        assert!(segments.contains(&"rm -rf important/".to_string()));
+    }
+
+    #[test]
+    fn strips_shell_reserved_word_prefixes() {
+        let segments = command_segments("if true; then rm -rf important/; fi");
+        assert!(segments.contains(&"rm -rf important/".to_string()));
+    }
+
+    #[test]
+    fn normalizes_tabs_for_segment_matching() {
+        let segments = command_segments("echo ok && rm\t-rf important/");
+        assert!(segments.contains(&"rm -rf important/".to_string()));
     }
 
     #[test]
