@@ -34,19 +34,15 @@ mod settings_permission_diagnostics;
 #[path = "settings_permission_policy.rs"]
 mod settings_permission_policy;
 
+#[path = "settings_permission_check.rs"]
+mod settings_permission_check;
+pub(in crate::agent::unified) use settings_permission_check::SettingsPermissionCheck;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum SettingsPermissionDecision {
     Allow,
     Deny(String),
     Ask(String),
-}
-
-pub(in crate::agent::unified) enum SettingsPermissionCheck {
-    Allowed(ToolCall),
-    Blocked {
-        result: ToolResult,
-        tool_call: ToolCall,
-    },
 }
 
 enum SettingsPermissionPromptResult {
