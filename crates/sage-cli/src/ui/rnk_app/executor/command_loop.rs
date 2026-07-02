@@ -115,7 +115,10 @@ pub async fn executor_loop(
                         handle_switch_model(&state, &mut executor, &model);
                         continue;
                     }
-                    Ok(SlashCommandAction::ModelSelect { models }) => {
+                    Ok(SlashCommandAction::ModelSelect { models, warning }) => {
+                        if let Some(warning) = warning {
+                            rnk::println(Text::new(warning).color(Color::Yellow).into_element());
+                        }
                         handle_model_select(&state, models);
                         continue;
                     }

@@ -21,7 +21,10 @@ pub enum SlashCommandAction {
     /// Switch model
     SwitchModel { model: String },
     /// Enter model selection mode with available models
-    ModelSelect { models: Vec<String> },
+    ModelSelect {
+        models: Vec<String>,
+        warning: Option<String>,
+    },
     /// Run diagnostics
     Doctor,
     /// Exit the application
@@ -199,57 +202,160 @@ pub async fn handle_interactive_command_v2(
 
             // Fetch models from API
             let client = ModelsApiClient::new();
-            let models: Vec<String> = match provider_name {
-                "anthropic" | "glm" | "zhipu" => {
-                    match client
-                        .fetch_anthropic_models(&base_url, api_key.as_deref().unwrap_or(""))
-                        .await
-                    {
-                        Ok(m) => m.into_iter().map(|m| m.id).collect(),
-                        Err(_) => provider_info
-                            .as_ref()
-                            .map(|p| p.models.iter().map(|m| m.id.clone()).collect())
-                            .unwrap_or_default(),
-                    }
-                }
-                "openai" | "openrouter" | "zai" | "moonshot" | "kimi" => {
-                    match client
-                        .fetch_openai_models(&base_url, api_key.as_deref().unwrap_or(""))
-                        .await
-                    {
-                        Ok(m) => m.into_iter().map(|m| m.id).collect(),
-                        Err(_) => provider_info
-                            .as_ref()
-                            .map(|p| p.models.iter().map(|m| m.id.clone()).collect())
-                            .unwrap_or_default(),
-                    }
-                }
-                "ollama" => match client.fetch_ollama_models(&base_url).await {
-                    Ok(m) => m.into_iter().map(|m| m.id).collect(),
-                    Err(_) => provider_info
-                        .as_ref()
-                        .map(|p| p.models.iter().map(|m| m.id.clone()).collect())
-                        .unwrap_or_default(),
-                },
-                _ => provider_info
+            let static_models = || -> Vec<String> {
+                provider_info
                     .as_ref()
                     .map(|p| p.models.iter().map(|m| m.id.clone()).collect())
-                    .unwrap_or_default(),
+                    .unwrap_or_default()
+            };
+            let mut fallback_warning = None;
+            let models: Vec<String> = {
+                let mut fallback_on_error = |error: &dyn std::fmt::Display| -> Vec<String> {
+                    tracing::warn!(
+                        provider = provider_name,
+                        reason = model_fetch_fallback_reason(error),
+                        "failed to fetch live model list; falling back to static models"
+                    );
+                    fallback_warning.get_or_insert_with(|| {
+                        model_fetch_fallback_warning(
+                            provider_name,
+                            model_fetch_fallback_reason(error),
+                        )
+                    });
+                    static_models()
+                };
+
+                match provider_name {
+                    "anthropic" | "glm" | "zhipu" => {
+                        match client
+                            .fetch_anthropic_models(&base_url, api_key.as_deref().unwrap_or(""))
+                            .await
+                        {
+                            Ok(m) => m.into_iter().map(|m| m.id).collect(),
+                            Err(e) => fallback_on_error(&e),
+                        }
+                    }
+                    "openai" | "openrouter" | "zai" | "moonshot" | "kimi" => {
+                        match client
+                            .fetch_openai_models(&base_url, api_key.as_deref().unwrap_or(""))
+                            .await
+                        {
+                            Ok(m) => m.into_iter().map(|m| m.id).collect(),
+                            Err(e) => fallback_on_error(&e),
+                        }
+                    }
+                    "ollama" => match client.fetch_ollama_models(&base_url).await {
+                        Ok(m) => m.into_iter().map(|m| m.id).collect(),
+                        Err(e) => fallback_on_error(&e),
+                    },
+                    _ => static_models(),
+                }
             };
 
             if models.is_empty() {
-                return Ok(SlashCommandAction::HandledWithOutput(
-                    "No models available for this provider".to_string(),
-                ));
+                return Ok(SlashCommandAction::HandledWithOutput(no_models_output(
+                    fallback_warning.as_deref(),
+                )));
             }
 
             // Return models for interactive selection
-            Ok(SlashCommandAction::ModelSelect { models })
+            Ok(SlashCommandAction::ModelSelect {
+                models,
+                warning: fallback_warning,
+            })
         }
         InteractiveCommand::Doctor => Ok(SlashCommandAction::Doctor),
         InteractiveCommand::Exit => {
             console.info("Exiting...");
             Ok(SlashCommandAction::Exit)
         }
+    }
+}
+
+fn model_fetch_fallback_warning(provider_name: &str, reason: &'static str) -> String {
+    format!(
+        "Failed to fetch live model list for provider '{}' ({reason}); using static model list.",
+        provider_name,
+    )
+}
+
+fn no_models_output(warning: Option<&str>) -> String {
+    match warning {
+        Some(warning) => format!("{warning}\nNo models available for this provider"),
+        None => "No models available for this provider".to_string(),
+    }
+}
+
+fn model_fetch_fallback_reason(error: &dyn std::fmt::Display) -> &'static str {
+    let message = error.to_string().to_ascii_lowercase();
+    if message.contains("401")
+        || message.contains("403")
+        || message.contains("unauthorized")
+        || message.contains("forbidden")
+        || message.contains("invalid api key")
+    {
+        "authentication or authorization error"
+    } else if message.contains("429") || message.contains("rate limit") {
+        "rate limit error"
+    } else if message.contains("timeout") || message.contains("timed out") {
+        "network timeout"
+    } else if message.contains("parse response")
+        || message.contains("decode")
+        || message.contains("json")
+    {
+        "response parse error"
+    } else if message.contains("failed to fetch")
+        || message.contains("connection")
+        || message.contains("dns")
+        || message.contains("request")
+    {
+        "network or endpoint error"
+    } else {
+        "provider request error"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn model_fetch_fallback_warning_omits_provider_error_text() {
+        let raw_error = "API key provided: abcdef1234567890abcdef";
+        let warning = model_fetch_fallback_warning(
+            "zai",
+            model_fetch_fallback_reason(&format!("401 Unauthorized: {raw_error}")),
+        );
+
+        assert!(warning.contains("zai"));
+        assert!(warning.contains("authentication or authorization error"));
+        assert!(warning.contains("using static model list"));
+        assert!(!warning.contains(raw_error));
+        assert!(!warning.contains("abcdef1234567890abcdef"));
+    }
+
+    #[test]
+    fn model_fetch_fallback_reason_classifies_safe_error_categories() {
+        assert_eq!(
+            model_fetch_fallback_reason(&"Failed to fetch OpenAI models: dns error"),
+            "network or endpoint error"
+        );
+        assert_eq!(
+            model_fetch_fallback_reason(&"Failed to parse response: expected value"),
+            "response parse error"
+        );
+        assert_eq!(
+            model_fetch_fallback_reason(&"429 Too Many Requests"),
+            "rate limit error"
+        );
+    }
+
+    #[test]
+    fn no_models_output_preserves_fallback_warning() {
+        let warning = "Failed to fetch live model list for provider 'kimi' (network timeout); using static model list.";
+        let output = no_models_output(Some(warning));
+
+        assert!(output.contains(warning));
+        assert!(output.contains("No models available for this provider"));
     }
 }
