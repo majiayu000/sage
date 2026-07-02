@@ -87,7 +87,12 @@ pub(super) async fn execute_init() -> SageResult<CommandResult> {
   "version": "1.0",
   "commands": {}
 }"#;
-            let _ = fs::write(sage_dir.join("settings.json"), default_config);
+            if let Err(e) = fs::write(sage_dir.join("settings.json"), default_config) {
+                return Ok(CommandResult::local(format!(
+                    "Failed to write .sage/settings.json: {}",
+                    e
+                )));
+            }
 
             Ok(CommandResult::local(
                 "Initialized .sage directory with:\n- .sage/settings.json\n- .sage/commands/\n\nYou can now add custom commands in .sage/commands/",

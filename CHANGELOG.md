@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Permission decision persistence now fails instead of silently rebuilding an unreadable `settings.local.json`, preserving previously configured allow/deny rules.
+- `/init` now reports `settings.json` write failures instead of claiming success.
 - Moved the Homebrew formula to the dedicated `majiayu000/homebrew-sage` tap and restored the verified Homebrew install command.
 
 ## [0.13.57] - 2026-05-01
