@@ -1,5 +1,6 @@
 use super::decision_engine_keys::{
-    normalize_path, path_is_at_or_under, permission_pattern_matches, rule_match_keys,
+    bash_aware_allow_matches, bash_aware_deny_matches, normalize_path, path_is_at_or_under,
+    rule_match_keys,
 };
 use super::{PermissionBehavior, PermissionProfile, PermissionProfileSource, PermissionRule};
 use serde::{Deserialize, Serialize};
@@ -373,7 +374,7 @@ impl PermissionDecisionEngine {
     ) -> Option<&'a PermissionRule> {
         rules.iter().find(|rule| {
             keys.iter()
-                .any(|key| permission_pattern_matches(&rule.pattern, key))
+                .any(|key| bash_aware_deny_matches(&rule.pattern, key))
         })
     }
 
@@ -384,7 +385,7 @@ impl PermissionDecisionEngine {
     ) -> Option<&'a PermissionRule> {
         rules
             .iter()
-            .find(|rule| permission_pattern_matches(&rule.pattern, key))
+            .find(|rule| bash_aware_allow_matches(&rule.pattern, key))
     }
 
     fn path_is_in_workspace(&self, path: &str, working_directory: Option<&str>) -> bool {

@@ -34,16 +34,15 @@ mod settings_permission_diagnostics;
 #[path = "settings_permission_policy.rs"]
 mod settings_permission_policy;
 
+#[path = "settings_permission_check.rs"]
+mod settings_permission_check;
+pub(in crate::agent::unified) use settings_permission_check::SettingsPermissionCheck;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum SettingsPermissionDecision {
     Allow,
     Deny(String),
     Ask(String),
-}
-
-pub(in crate::agent::unified) enum SettingsPermissionCheck {
-    Allowed(ToolCall),
-    Blocked(ToolResult),
 }
 
 enum SettingsPermissionPromptResult {
@@ -88,22 +87,26 @@ impl UnifiedExecutor {
                     return Ok(Some(SettingsPermissionCheck::Allowed(current_call)));
                 }
                 SettingsPermissionDecision::Deny(reason) => {
-                    return Ok(Some(SettingsPermissionCheck::Blocked(
-                        Self::settings_permission_blocked_result(
-                            &current_call,
-                            format!("Permission denied by settings: {}", reason),
-                        ),
-                    )));
+                    let result = Self::settings_permission_blocked_result(
+                        &current_call,
+                        format!("Permission denied by settings: {}", reason),
+                    );
+                    return Ok(Some(SettingsPermissionCheck::Blocked {
+                        result,
+                        tool_call: current_call,
+                    }));
                 }
                 SettingsPermissionDecision::Ask(reason) => {
                     prompted_count += 1;
                     if prompted_count > 8 {
-                        return Ok(Some(SettingsPermissionCheck::Blocked(
-                            Self::settings_permission_blocked_result(
-                                &current_call,
-                                "Permission request exceeded the maximum number of edited approvals.",
-                            ),
-                        )));
+                        let result = Self::settings_permission_blocked_result(
+                            &current_call,
+                            "Permission request exceeded the maximum number of edited approvals.",
+                        );
+                        return Ok(Some(SettingsPermissionCheck::Blocked {
+                            result,
+                            tool_call: current_call,
+                        }));
                     }
 
                     match self
@@ -122,7 +125,10 @@ impl UnifiedExecutor {
                             return Ok(Some(SettingsPermissionCheck::Allowed(approved_call)));
                         }
                         SettingsPermissionPromptResult::Blocked(result) => {
-                            return Ok(Some(SettingsPermissionCheck::Blocked(result)));
+                            return Ok(Some(SettingsPermissionCheck::Blocked {
+                                result,
+                                tool_call: current_call,
+                            }));
                         }
                     }
                 }
@@ -198,7 +204,9 @@ impl UnifiedExecutor {
                 if let Some(serde_json::Value::Object(map)) = modified_input {
                     approved_call.arguments = map
                         .into_iter()
-                        .filter(|(key, _)| !Self::is_confirmation_only_argument(key))
+                        .filter(|(key, _)| {
+                            !settings_permission_policy::is_confirmation_only_argument(key)
+                        })
                         .collect();
                 }
 
@@ -374,7 +382,7 @@ impl UnifiedExecutor {
         }
 
         if tool_name == "http_client"
-            && Self::http_client_may_follow_redirects(tool_call)
+            && settings_permission_policy::http_client_may_follow_redirects(tool_call)
             && settings_permission_policy::http_client_redirects_require_disabled(
                 settings,
                 &deny_rules,
@@ -463,14 +471,6 @@ impl UnifiedExecutor {
             _ => None,
         }
     }
-
-    fn is_confirmation_only_argument(key: &str) -> bool {
-        key == "user_confirmed"
-    }
-
-    fn http_client_may_follow_redirects(tool_call: &ToolCall) -> bool {
-        tool_call.get_bool("follow_redirects").unwrap_or(true)
-    }
 }
 
 #[cfg(test)]
@@ -480,6 +480,10 @@ mod settings_permission_test_support;
 #[cfg(test)]
 #[path = "settings_permission_tests.rs"]
 mod settings_permission_tests;
+
+#[cfg(test)]
+#[path = "settings_permission_shell_tests.rs"]
+mod settings_permission_shell_tests;
 
 #[cfg(test)]
 #[path = "settings_permission_path_tests.rs"]

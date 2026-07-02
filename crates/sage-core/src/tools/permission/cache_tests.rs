@@ -34,6 +34,56 @@ async fn test_persistent_cache() {
 }
 
 #[tokio::test]
+async fn test_persist_decision_preserves_corrupted_settings_file()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp_dir = TempDir::new()?;
+    let sage_dir = temp_dir.path().join(".sage");
+    fs::create_dir(&sage_dir)?;
+
+    let settings_path = sage_dir.join("settings.local.json");
+    let corrupted = "{ this is not valid json";
+    fs::write(&settings_path, corrupted)?;
+
+    let cache = PermissionCache::with_persistence(temp_dir.path());
+
+    let result = cache
+        .set_with_persistence("Bash(npm *)".to_string(), true, true)
+        .await;
+
+    assert!(
+        result.is_err(),
+        "persisting over an unreadable settings file must fail instead of wiping it"
+    );
+    assert_eq!(
+        fs::read_to_string(&settings_path)?,
+        corrupted,
+        "original settings file content must be preserved"
+    );
+    // The session cache still records the decision for this run.
+    assert_eq!(cache.get("Bash(npm *)").await, Some(true));
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_persist_decision_creates_settings_when_missing()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp_dir = TempDir::new()?;
+    let sage_dir = temp_dir.path().join(".sage");
+    fs::create_dir(&sage_dir)?;
+
+    let cache = PermissionCache::with_persistence(temp_dir.path());
+
+    cache
+        .set_with_persistence("Read(src/**)".to_string(), false, true)
+        .await?;
+
+    let settings_path = sage_dir.join("settings.local.json");
+    let content = fs::read_to_string(&settings_path)?;
+    assert!(content.contains("Read(src/**)"));
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_cache_key_bash() {
     let mut arguments = HashMap::new();
     arguments.insert(

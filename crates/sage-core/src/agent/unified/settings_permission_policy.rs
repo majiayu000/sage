@@ -5,6 +5,7 @@ use crate::permissions::{
     PermissionRule, permission_pattern_matches,
 };
 use crate::settings::types::{Settings, SettingsPermissionBehavior};
+use crate::tools::types::ToolCall;
 use std::path::Path;
 
 pub(super) fn deny_rules(settings: &Settings) -> Vec<PermissionRule> {
@@ -56,6 +57,14 @@ pub(super) fn http_client_redirects_require_disabled(
                 .map(String::as_str)
                 .chain(deny_rules.iter().map(|rule| rule.pattern.as_str())),
         )
+}
+
+pub(super) fn http_client_may_follow_redirects(tool_call: &ToolCall) -> bool {
+    tool_call.get_bool("follow_redirects").unwrap_or(true)
+}
+
+pub(super) fn is_confirmation_only_argument(key: &str) -> bool {
+    key == "user_confirmed"
 }
 
 fn has_http_client_url_permission_rule<'a>(mut patterns: impl Iterator<Item = &'a str>) -> bool {

