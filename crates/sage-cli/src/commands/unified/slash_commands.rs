@@ -206,11 +206,16 @@ pub async fn handle_interactive_command_v2(
                     .unwrap_or_default()
             };
             let fallback_on_error = |error: &dyn std::fmt::Display| -> Vec<String> {
+                let redacted_error = redact_model_fetch_error(error);
                 tracing::warn!(
                     provider = provider_name,
-                    error = %error,
+                    error = %redacted_error,
                     "failed to fetch live model list; falling back to static models"
                 );
+                console.warn(&model_fetch_fallback_warning(
+                    provider_name,
+                    &redacted_error,
+                ));
                 static_models()
             };
             let models: Vec<String> = match provider_name {
@@ -253,5 +258,37 @@ pub async fn handle_interactive_command_v2(
             console.info("Exiting...");
             Ok(SlashCommandAction::Exit)
         }
+    }
+}
+
+fn redact_model_fetch_error(error: &dyn std::fmt::Display) -> String {
+    sage_core::DiagnosticRedactor::new()
+        .redact_text(&error.to_string())
+        .value
+}
+
+fn model_fetch_fallback_warning(provider_name: &str, redacted_error: &str) -> String {
+    format!(
+        "Failed to fetch live model list for provider '{}'; using static model list. Error: {}",
+        provider_name, redacted_error
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn model_fetch_fallback_warning_redacts_error_text() {
+        let raw_error =
+            "OpenAI API error: Authorization: Bearer sk-secret-token and api_key=plain-secret";
+        let redacted = redact_model_fetch_error(&raw_error);
+        let warning = model_fetch_fallback_warning("openai", &redacted);
+
+        assert!(warning.contains("openai"));
+        assert!(warning.contains("using static model list"));
+        assert!(!warning.contains("sk-secret-token"));
+        assert!(!warning.contains("plain-secret"));
+        assert!(warning.contains("[REDACTED]"));
     }
 }
