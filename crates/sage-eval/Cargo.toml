@@ -1,0 +1,30 @@
+[package]
+name = "sage-eval"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+description = "Evaluation harness for Sage Agent quality metrics"
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+sage-core = { path = "../sage-core", version = "0.13.57" }
+sage-sdk = { path = "../sage-sdk", version = "0.13.57" }
+
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+uuid = { workspace = true }
+clap = { workspace = true }
+tempfile = "3.10"
+
+[dev-dependencies]
+tempfile = "3.10"

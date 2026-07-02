@@ -34,6 +34,7 @@ members = [
     "crates/sage-cli",
     "crates/sage-sdk",
     "crates/sage-tools",
+    "crates/sage-eval",
 ]
 default-members = [
     ".",
@@ -41,6 +42,7 @@ default-members = [
     "crates/sage-cli",
     "crates/sage-sdk",
     "crates/sage-tools",
+    "crates/sage-eval",
 ]
 resolver = "2"
 
