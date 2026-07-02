@@ -5,6 +5,7 @@ mod decision_engine;
 mod decision_engine_keys;
 mod profile;
 mod profile_wire;
+mod shell_safety;
 
 pub use approval_cache::{ApprovalCache, ApprovalCacheDecision, ApprovalCacheLookup};
 pub use decision_engine::{
