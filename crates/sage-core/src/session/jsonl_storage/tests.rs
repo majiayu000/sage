@@ -71,6 +71,10 @@ async fn test_message_chain() {
     storage.append_message(&session_id, &msg2).await.unwrap();
     storage.append_message(&session_id, &msg3).await.unwrap();
 
+    let messages_file = tmp.path().join(&session_id).join("messages.jsonl");
+    let persisted = tokio::fs::read_to_string(messages_file).await.unwrap();
+    assert_eq!(persisted.lines().count(), 3);
+
     let chain = storage
         .get_message_chain(&session_id, &msg3.uuid)
         .await

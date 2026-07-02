@@ -6,6 +6,7 @@ use crate::interrupt::global_interrupt_manager;
 use crate::llm::client::LlmClient;
 use crate::llm::messages::LlmMessage;
 use crate::tools::types::{ToolCall, ToolResult, ToolSchema};
+use std::path::{Path, PathBuf};
 use tracing::instrument;
 
 use super::UnifiedExecutor;
@@ -13,6 +14,10 @@ use super::event_manager::ExecutionEvent;
 use super::settings_permission::SettingsPermissionCheck;
 use super::tool_display;
 use super::tool_orchestrator::ToolExecutionContext;
+use step_execution_bash::{bash_rm_targets, expand_rm_undo_paths};
+
+#[path = "step_execution_bash.rs"]
+mod step_execution_bash;
 
 #[path = "step_execution_permissions.rs"]
 mod step_execution_permissions;
@@ -215,44 +220,49 @@ impl UnifiedExecutor {
         context: &ToolExecutionContext,
         task_scope: &crate::interrupt::TaskScope,
     ) -> SageResult<crate::tools::types::ToolResult> {
-        // Display and record the requested tool call.
+        // Display the requested tool call. Session recording happens after
+        // permission prompts because the user may edit the actual call.
         tool_display::display_tool_start(&mut self.event_manager, tool_call).await;
-        self.session_manager
-            .record_tool_call(
-                &tool_call.name,
-                &serde_json::to_value(&tool_call.arguments).unwrap_or_default(),
-            )
-            .await;
 
         let tool_start_time = std::time::Instant::now();
         let cancel_token = task_scope.token().clone();
 
         let mut execution_tool_call = tool_call.clone();
 
-        let (tool_result, run_post_execution) = match self
-            .check_settings_permission(tool_call, context)
-            .await?
-        {
-            Some(SettingsPermissionCheck::Blocked(permission_result)) => (permission_result, false),
-            Some(SettingsPermissionCheck::Allowed(approved_call)) => {
-                execution_tool_call = approved_call;
-                self.track_file_for_undo(&execution_tool_call).await;
+        let (tool_result, run_post_execution, tool_call_recorded) =
+            match self.check_settings_permission(tool_call, context).await? {
+                Some(SettingsPermissionCheck::Blocked {
+                    result,
+                    tool_call: blocked_call,
+                }) => {
+                    execution_tool_call = blocked_call;
+                    (result, false, false)
+                }
+                Some(SettingsPermissionCheck::Allowed(approved_call)) => {
+                    execution_tool_call = approved_call;
+                    self.track_file_for_undo(&execution_tool_call, context)
+                        .await;
 
-                (
-                    self.pre_execute_or_block(&execution_tool_call, context, cancel_token.clone())
-                        .await?,
-                    true,
-                )
-            }
-            None => {
-                self.track_file_for_undo(&execution_tool_call).await;
-                (
-                    self.pre_execute_or_block(&execution_tool_call, context, cancel_token.clone())
-                        .await?,
-                    true,
-                )
-            }
-        };
+                    let (result, executed_call, recorded_call) = self
+                        .pre_execute_or_block(&execution_tool_call, context, cancel_token.clone())
+                        .await?;
+                    execution_tool_call = executed_call;
+                    (result, true, recorded_call)
+                }
+                None => {
+                    self.track_file_for_undo(&execution_tool_call, context)
+                        .await;
+                    let (result, executed_call, recorded_call) = self
+                        .pre_execute_or_block(&execution_tool_call, context, cancel_token.clone())
+                        .await?;
+                    execution_tool_call = executed_call;
+                    (result, true, recorded_call)
+                }
+            };
+
+        if !tool_call_recorded {
+            self.record_session_tool_call(&execution_tool_call).await;
+        }
 
         // Phase 3: Post-execution
         if run_post_execution {
@@ -277,12 +287,18 @@ impl UnifiedExecutor {
         Ok(tool_result)
     }
 
+    /// Run pre-execution hooks and execute the tool.
+    ///
+    /// Returns the tool result together with the call that was actually
+    /// executed: destructive-confirmation prompts allow the user to edit the
+    /// arguments, and post-execution hooks and session records must observe
+    /// the edited call rather than the original request.
     async fn pre_execute_or_block(
         &mut self,
         tool_call: &ToolCall,
         context: &ToolExecutionContext,
         cancel_token: tokio_util::sync::CancellationToken,
-    ) -> SageResult<ToolResult> {
+    ) -> SageResult<(ToolResult, ToolCall, bool)> {
         // Phase 1: Pre-execution
         let pre_result = self
             .tool_orchestrator
@@ -290,10 +306,14 @@ impl UnifiedExecutor {
             .await?;
 
         if let Some(reason) = pre_result.block_reason() {
-            return Ok(ToolResult::error(
-                &tool_call.id,
-                &tool_call.name,
-                format!("Tool blocked by hook: {}", reason),
+            return Ok((
+                ToolResult::error(
+                    &tool_call.id,
+                    &tool_call.name,
+                    format!("Tool blocked by hook: {}", reason),
+                ),
+                tool_call.clone(),
+                false,
             ));
         }
 
@@ -308,18 +328,22 @@ impl UnifiedExecutor {
         tool_call: &ToolCall,
         context: &ToolExecutionContext,
         cancel_token: tokio_util::sync::CancellationToken,
-    ) -> SageResult<crate::tools::types::ToolResult> {
+    ) -> SageResult<(crate::tools::types::ToolResult, ToolCall, bool)> {
         let requires_interaction = self
             .tool_orchestrator
             .requires_user_interaction(&tool_call.name);
 
         if requires_interaction && tool_call.name == "AskUserQuestion" {
-            self.handle_ask_user_question(tool_call).await
+            self.record_session_tool_call(tool_call).await;
+            let result = self.handle_ask_user_question(tool_call).await?;
+            Ok((result, tool_call.clone(), true))
         } else if requires_interaction {
-            Ok(self
+            self.record_session_tool_call(tool_call).await;
+            let result = self
                 .tool_orchestrator
                 .execution_phase(tool_call, context, cancel_token)
-                .await)
+                .await;
+            Ok((result, tool_call.clone(), true))
         } else {
             Ok(self
                 .execute_with_permission_check(tool_call, context, cancel_token)
@@ -327,8 +351,17 @@ impl UnifiedExecutor {
         }
     }
 
+    pub(super) async fn record_session_tool_call(&self, tool_call: &ToolCall) {
+        self.session_manager
+            .record_tool_call(
+                &tool_call.name,
+                &serde_json::to_value(&tool_call.arguments).unwrap_or_default(),
+            )
+            .await;
+    }
+
     /// Track file for undo capability
-    async fn track_file_for_undo(&mut self, tool_call: &ToolCall) {
+    async fn track_file_for_undo(&mut self, tool_call: &ToolCall, context: &ToolExecutionContext) {
         if crate::tools::names::is_file_modifying_tool(&tool_call.name) {
             if let Some(file_path) = tool_call
                 .arguments
@@ -336,11 +369,33 @@ impl UnifiedExecutor {
                 .or_else(|| tool_call.arguments.get("path"))
                 .and_then(|v| v.as_str())
             {
-                if let Err(e) = self.session_manager.track_file(file_path).await {
-                    tracing::warn!(error = %e, file_path = %file_path, "Failed to track file");
-                }
+                self.track_path_for_undo(file_path, context).await;
             }
         }
+
+        if tool_call.name.eq_ignore_ascii_case("bash") {
+            for target in bash_rm_targets(tool_call) {
+                self.track_path_for_undo(&target, context).await;
+            }
+        }
+    }
+
+    async fn track_path_for_undo(&mut self, file_path: &str, context: &ToolExecutionContext) {
+        let path = workspace_path(file_path, context);
+        for path in expand_rm_undo_paths(&path) {
+            if let Err(e) = self.session_manager.track_file(&path).await {
+                tracing::warn!(error = %e, file_path = %path.display(), "Failed to track file");
+            }
+        }
+    }
+}
+
+fn workspace_path(file_path: &str, context: &ToolExecutionContext) -> PathBuf {
+    let path = Path::new(file_path);
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        context.working_dir.join(path)
     }
 }
 
