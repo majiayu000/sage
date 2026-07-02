@@ -28,6 +28,8 @@ pub struct TrajectorySessionSummary {
     pub llm_response_count: u32,
     /// Total tool calls
     pub tool_call_count: u32,
+    /// Total tool intent records
+    pub tool_intent_count: u32,
     /// Successful tool calls
     pub successful_tool_calls: u32,
     /// Failed tool calls
@@ -99,6 +101,9 @@ impl SessionReplayer {
                 }
                 SessionEntry::ToolCall { .. } => {
                     summary.tool_call_count += 1;
+                }
+                SessionEntry::ToolIntent { .. } => {
+                    summary.tool_intent_count += 1;
                 }
                 SessionEntry::ToolResult { success, .. } => {
                     if *success {
@@ -246,6 +251,14 @@ mod tests {
                 tool_calls: None,
                 timestamp: "2024-01-01T00:00:02Z".to_string(),
             },
+            SessionEntry::ToolIntent {
+                uuid: Uuid::new_v4(),
+                parent_uuid: None,
+                tool_category: "shell".to_string(),
+                tool_name: Some("bash".to_string()),
+                reason: "List files".to_string(),
+                timestamp: "2024-01-01T00:00:03Z".to_string(),
+            },
             SessionEntry::ToolCall {
                 uuid: Uuid::new_v4(),
                 parent_uuid: None,
@@ -286,6 +299,7 @@ mod tests {
         assert_eq!(summary.llm_request_count, 1);
         assert_eq!(summary.llm_response_count, 1);
         assert_eq!(summary.tool_call_count, 1);
+        assert_eq!(summary.tool_intent_count, 1);
         assert_eq!(summary.successful_tool_calls, 1);
         assert_eq!(summary.total_input_tokens, 100);
         assert_eq!(summary.total_output_tokens, 50);
