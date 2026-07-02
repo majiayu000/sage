@@ -67,6 +67,7 @@ mod tests {
             },
             trajectory: TrajectoryConfig::default(),
             mcp: McpConfig::default(),
+            memory: crate::config::model::AgentMemoryConfig::default(),
         }
     }
 
