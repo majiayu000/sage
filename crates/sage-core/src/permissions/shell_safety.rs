@@ -25,7 +25,7 @@ const SHELL_CONTROL_METACHARS: &[&str] = &[
 /// them is inspected as its own segment; over-splitting can only make deny
 /// matching stricter.
 const SEGMENT_SEPARATORS: &[&str] = &[
-    "&&", "||", ";", "|", "&", "$(", "`", ")", "<", ">", "\n", "\r",
+    "&&", "||", ";", "|", "&", "$(", "`", "{", "}", ")", "<", ">", "\n", "\r",
 ];
 
 /// Returns true when the command contains a shell control metacharacter,
@@ -55,6 +55,7 @@ pub(crate) fn command_segments(command: &str) -> Vec<String> {
     push(&command);
 
     let command_without_heredocs = remove_heredoc_bodies(&command);
+    push_redirection_remainders(&command_without_heredocs, &mut push);
     let mut normalized = command_without_heredocs;
     for separator in SEGMENT_SEPARATORS {
         normalized = normalized.replace(separator, "\u{0}");
@@ -114,11 +115,24 @@ fn remove_escaped_newlines(command: &str) -> String {
 fn strip_shell_leading_syntax(mut segment: &str) -> &str {
     loop {
         let before_len = segment.len();
+        segment = strip_shell_negation_prefix(segment);
         segment = strip_shell_group_prefixes(segment);
         segment = strip_shell_reserved_prefixes(segment);
         if segment.len() == before_len {
             return segment;
         }
+    }
+}
+
+fn strip_shell_negation_prefix(segment: &str) -> &str {
+    let segment = segment.trim_start();
+    let Some(rest) = segment.strip_prefix('!') else {
+        return segment;
+    };
+    if rest.chars().next().is_none_or(char::is_whitespace) {
+        rest.trim_start()
+    } else {
+        segment
     }
 }
 
@@ -234,6 +248,68 @@ fn remove_heredoc_bodies(command: &str) -> String {
     retained.join("\n")
 }
 
+fn push_redirection_remainders(command: &str, push: &mut impl FnMut(&str)) {
+    let mut cursor = 0;
+    let mut quote = None;
+    let mut escaped = false;
+
+    while cursor < command.len() {
+        let Some(c) = command[cursor..].chars().next() else {
+            break;
+        };
+
+        if escaped {
+            escaped = false;
+            cursor += c.len_utf8();
+            continue;
+        }
+
+        if let Some(active_quote) = quote {
+            if active_quote == '"' && c == '\\' {
+                escaped = true;
+            } else if c == active_quote {
+                quote = None;
+            }
+            cursor += c.len_utf8();
+            continue;
+        }
+
+        if starts_shell_comment(command, cursor) {
+            cursor = next_line_start(command, cursor).unwrap_or(command.len());
+            continue;
+        }
+
+        if c == '\'' || c == '"' {
+            quote = Some(c);
+            cursor += c.len_utf8();
+            continue;
+        }
+
+        if !matches!(c, '<' | '>') {
+            cursor += c.len_utf8();
+            continue;
+        }
+
+        let operator_start = cursor;
+        cursor += c.len_utf8();
+        if command[cursor..].starts_with(c) {
+            cursor += c.len_utf8();
+        }
+        if command[cursor..].starts_with('&') {
+            cursor += '&'.len_utf8();
+        }
+
+        cursor = skip_shell_whitespace(command, cursor);
+        let target_end = skip_shell_word(command, cursor);
+        if target_end > cursor {
+            push(&command[target_end..]);
+            cursor = target_end;
+        } else {
+            cursor = operator_start + c.len_utf8();
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct HereDocDelimiter {
     value: String,
@@ -271,6 +347,10 @@ fn find_heredoc_delimiters(line: &str) -> Vec<HereDocDelimiter> {
             quote = Some(c);
             cursor += c.len_utf8();
             continue;
+        }
+
+        if starts_shell_comment(line, cursor) {
+            break;
         }
 
         if !line[cursor..].starts_with("<<") {
@@ -312,23 +392,118 @@ fn find_heredoc_delimiters(line: &str) -> Vec<HereDocDelimiter> {
 }
 
 fn read_heredoc_delimiter(input: &str) -> Option<(String, usize)> {
-    let first = input.chars().next()?;
-    if matches!(first, '\'' | '"') {
-        let end = consume_quoted_value(input, 0, first);
-        if end <= first.len_utf8() {
-            return None;
+    let end = skip_shell_word(input, 0);
+    (end > 0).then(|| (quote_removed_shell_word(&input[..end]), end))
+}
+
+fn quote_removed_shell_word(input: &str) -> String {
+    let mut output = String::new();
+    let chars = input.chars().peekable();
+    let mut quote = None;
+    let mut escaped = false;
+
+    for c in chars {
+        if escaped {
+            output.push(c);
+            escaped = false;
+            continue;
         }
-        return Some((
-            input[first.len_utf8()..end - first.len_utf8()].to_string(),
-            end,
-        ));
+
+        if let Some(active_quote) = quote {
+            if active_quote == '"' && c == '\\' {
+                escaped = true;
+            } else if c == active_quote {
+                quote = None;
+            } else {
+                output.push(c);
+            }
+            continue;
+        }
+
+        if c == '\'' || c == '"' {
+            quote = Some(c);
+        } else if c == '\\' {
+            escaped = true;
+        } else {
+            output.push(c);
+        }
     }
 
-    let end = input
-        .char_indices()
-        .find_map(|(index, c)| (c.is_whitespace() || matches!(c, ';' | '|' | '&')).then_some(index))
-        .unwrap_or(input.len());
-    (end > 0).then(|| (input[..end].to_string(), end))
+    output
+}
+
+fn skip_shell_word(input: &str, mut cursor: usize) -> usize {
+    let mut quote = None;
+    let mut escaped = false;
+
+    while cursor < input.len() {
+        let Some(c) = input[cursor..].chars().next() else {
+            break;
+        };
+
+        if escaped {
+            escaped = false;
+            cursor += c.len_utf8();
+            continue;
+        }
+
+        if let Some(active_quote) = quote {
+            if active_quote == '"' && c == '\\' {
+                escaped = true;
+            } else if c == active_quote {
+                quote = None;
+            }
+            cursor += c.len_utf8();
+            continue;
+        }
+
+        if c == '\'' || c == '"' {
+            quote = Some(c);
+            cursor += c.len_utf8();
+            continue;
+        }
+
+        if c == '\\' {
+            escaped = true;
+            cursor += c.len_utf8();
+            continue;
+        }
+
+        if c.is_whitespace() || matches!(c, ';' | '|' | '&') {
+            break;
+        }
+
+        cursor += c.len_utf8();
+    }
+
+    cursor
+}
+
+fn skip_shell_whitespace(input: &str, mut cursor: usize) -> usize {
+    while cursor < input.len() {
+        let Some(c) = input[cursor..].chars().next() else {
+            break;
+        };
+        if !c.is_whitespace() {
+            break;
+        }
+        cursor += c.len_utf8();
+    }
+    cursor
+}
+
+fn starts_shell_comment(input: &str, cursor: usize) -> bool {
+    input[cursor..].starts_with('#')
+        && input[..cursor]
+            .chars()
+            .next_back()
+            .is_none_or(|c| c.is_whitespace() || matches!(c, ';' | '&' | '|'))
+}
+
+fn next_line_start(input: &str, cursor: usize) -> Option<usize> {
+    input[cursor..]
+        .find('\n')
+        .map(|offset| cursor + offset + '\n'.len_utf8())
 }
 
 /// True when an allow rule's argument is a partial wildcard pattern such as
@@ -414,6 +589,36 @@ mod tests {
     #[test]
     fn strips_shell_reserved_word_prefixes() {
         let segments = command_segments("if true; then rm -rf important/; fi");
+        assert!(segments.contains(&"rm -rf important/".to_string()));
+    }
+
+    #[test]
+    fn strips_shell_negation_prefix() {
+        let segments = command_segments("! rm -rf important/");
+        assert!(segments.contains(&"rm -rf important/".to_string()));
+    }
+
+    #[test]
+    fn strips_leading_redirection_targets() {
+        let segments = command_segments("> /tmp/out rm -rf important/");
+        assert!(segments.contains(&"rm -rf important/".to_string()));
+    }
+
+    #[test]
+    fn quote_removes_mixed_heredoc_delimiters() {
+        let segments = command_segments("cat <<E\"OF\"\nbody\nEOF\nrm -rf important/");
+        assert!(segments.contains(&"rm -rf important/".to_string()));
+    }
+
+    #[test]
+    fn ignores_commented_heredoc_markers() {
+        let segments = command_segments("echo hi # <<EOF\nrm -rf important/\nEOF");
+        assert!(segments.contains(&"rm -rf important/".to_string()));
+    }
+
+    #[test]
+    fn splits_function_bodies_into_segments() {
+        let segments = command_segments("function cleanup { rm -rf important/; }; cleanup");
         assert!(segments.contains(&"rm -rf important/".to_string()));
     }
 

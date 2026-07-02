@@ -113,6 +113,11 @@ fn test_deny_matches_chained_command_segment() {
         "echo ok && rm\t-rf important/",
         "echo \"<<EOF\"\nrm -rf important/",
         "echo hi | rm -rf important/",
+        "! rm -rf important/",
+        "> /tmp/out rm -rf important/",
+        "cat <<E\"OF\"\nbody\nEOF\nrm -rf important/",
+        "echo hi # <<EOF\nrm -rf important/\nEOF",
+        "function cleanup { rm -rf important/; }; cleanup",
     ] {
         assert!(
             matches!(
