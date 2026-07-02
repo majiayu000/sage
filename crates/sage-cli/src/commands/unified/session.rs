@@ -76,9 +76,14 @@ pub async fn execute_single_task(
             }
             return Ok(());
         }
-        SlashCommandAction::ModelSelect { models } => {
+        SlashCommandAction::ModelSelect { models, warning } => {
             // In non-interactive mode, just show the list
-            let mut output = "Available models:\n".to_string();
+            let mut output = String::new();
+            if let Some(warning) = warning {
+                output.push_str(&warning);
+                output.push_str("\n\n");
+            }
+            output.push_str("Available models:\n");
             for model in &models {
                 output.push_str(&format!("  - {}\n", model));
             }
@@ -261,8 +266,13 @@ pub async fn execute_session_resume(
             }
             return Ok(());
         }
-        SlashCommandAction::ModelSelect { models } => {
-            let mut output = "Available models:\n".to_string();
+        SlashCommandAction::ModelSelect { models, warning } => {
+            let mut output = String::new();
+            if let Some(warning) = warning {
+                output.push_str(&warning);
+                output.push_str("\n\n");
+            }
+            output.push_str("Available models:\n");
             for model in &models {
                 output.push_str(&format!("  - {}\n", model));
             }

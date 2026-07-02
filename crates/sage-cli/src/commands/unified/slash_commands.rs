@@ -21,7 +21,10 @@ pub enum SlashCommandAction {
     /// Switch model
     SwitchModel { model: String },
     /// Enter model selection mode with available models
-    ModelSelect { models: Vec<String> },
+    ModelSelect {
+        models: Vec<String>,
+        warning: Option<String>,
+    },
     /// Run diagnostics
     Doctor,
     /// Exit the application
@@ -205,43 +208,43 @@ pub async fn handle_interactive_command_v2(
                     .map(|p| p.models.iter().map(|m| m.id.clone()).collect())
                     .unwrap_or_default()
             };
-            let fallback_on_error = |error: &dyn std::fmt::Display| -> Vec<String> {
-                let redacted_error = redact_model_fetch_error(error);
-                tracing::warn!(
-                    provider = provider_name,
-                    error = %redacted_error,
-                    "failed to fetch live model list; falling back to static models"
-                );
-                console.warn(&model_fetch_fallback_warning(
-                    provider_name,
-                    &redacted_error,
-                ));
-                static_models()
-            };
-            let models: Vec<String> = match provider_name {
-                "anthropic" | "glm" | "zhipu" => {
-                    match client
-                        .fetch_anthropic_models(&base_url, api_key.as_deref().unwrap_or(""))
-                        .await
-                    {
+            let mut fallback_warning = None;
+            let models: Vec<String> = {
+                let mut fallback_on_error = |_error: &dyn std::fmt::Display| -> Vec<String> {
+                    tracing::warn!(
+                        provider = provider_name,
+                        "failed to fetch live model list; falling back to static models"
+                    );
+                    fallback_warning
+                        .get_or_insert_with(|| model_fetch_fallback_warning(provider_name));
+                    static_models()
+                };
+
+                match provider_name {
+                    "anthropic" | "glm" | "zhipu" => {
+                        match client
+                            .fetch_anthropic_models(&base_url, api_key.as_deref().unwrap_or(""))
+                            .await
+                        {
+                            Ok(m) => m.into_iter().map(|m| m.id).collect(),
+                            Err(e) => fallback_on_error(&e),
+                        }
+                    }
+                    "openai" | "openrouter" | "zai" | "moonshot" | "kimi" => {
+                        match client
+                            .fetch_openai_models(&base_url, api_key.as_deref().unwrap_or(""))
+                            .await
+                        {
+                            Ok(m) => m.into_iter().map(|m| m.id).collect(),
+                            Err(e) => fallback_on_error(&e),
+                        }
+                    }
+                    "ollama" => match client.fetch_ollama_models(&base_url).await {
                         Ok(m) => m.into_iter().map(|m| m.id).collect(),
                         Err(e) => fallback_on_error(&e),
-                    }
+                    },
+                    _ => static_models(),
                 }
-                "openai" | "openrouter" | "zai" | "moonshot" | "kimi" => {
-                    match client
-                        .fetch_openai_models(&base_url, api_key.as_deref().unwrap_or(""))
-                        .await
-                    {
-                        Ok(m) => m.into_iter().map(|m| m.id).collect(),
-                        Err(e) => fallback_on_error(&e),
-                    }
-                }
-                "ollama" => match client.fetch_ollama_models(&base_url).await {
-                    Ok(m) => m.into_iter().map(|m| m.id).collect(),
-                    Err(e) => fallback_on_error(&e),
-                },
-                _ => static_models(),
             };
 
             if models.is_empty() {
@@ -251,7 +254,10 @@ pub async fn handle_interactive_command_v2(
             }
 
             // Return models for interactive selection
-            Ok(SlashCommandAction::ModelSelect { models })
+            Ok(SlashCommandAction::ModelSelect {
+                models,
+                warning: fallback_warning,
+            })
         }
         InteractiveCommand::Doctor => Ok(SlashCommandAction::Doctor),
         InteractiveCommand::Exit => {
@@ -261,16 +267,10 @@ pub async fn handle_interactive_command_v2(
     }
 }
 
-fn redact_model_fetch_error(error: &dyn std::fmt::Display) -> String {
-    sage_core::DiagnosticRedactor::new()
-        .redact_text(&error.to_string())
-        .value
-}
-
-fn model_fetch_fallback_warning(provider_name: &str, redacted_error: &str) -> String {
+fn model_fetch_fallback_warning(provider_name: &str) -> String {
     format!(
-        "Failed to fetch live model list for provider '{}'; using static model list. Error: {}",
-        provider_name, redacted_error
+        "Failed to fetch live model list for provider '{}'; using static model list.",
+        provider_name
     )
 }
 
@@ -279,16 +279,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn model_fetch_fallback_warning_redacts_error_text() {
-        let raw_error =
-            "OpenAI API error: Authorization: Bearer sk-secret-token and api_key=plain-secret";
-        let redacted = redact_model_fetch_error(&raw_error);
-        let warning = model_fetch_fallback_warning("openai", &redacted);
+    fn model_fetch_fallback_warning_omits_provider_error_text() {
+        let raw_error = "API key provided: abcdef1234567890abcdef";
+        let warning = model_fetch_fallback_warning("zai");
 
-        assert!(warning.contains("openai"));
+        assert!(warning.contains("zai"));
         assert!(warning.contains("using static model list"));
-        assert!(!warning.contains("sk-secret-token"));
-        assert!(!warning.contains("plain-secret"));
-        assert!(warning.contains("[REDACTED]"));
+        assert!(!warning.contains(raw_error));
+        assert!(!warning.contains("abcdef1234567890abcdef"));
     }
 }
