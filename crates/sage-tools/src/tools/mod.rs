@@ -53,7 +53,9 @@ pub mod network {
 }
 
 // Re-export all tools for easy access
-pub use code_intelligence::LspTool;
+pub use code_intelligence::{
+    FindReferencesTool, GoToDefinitionTool, LspTool, SymbolSearchTool, TypeHierarchyTool,
+};
 pub use diagnostics::{
     DiagnosticsTool, LearnTool, LearningPatternsTool, RememberTool, RenderMermaidTool,
     SearchUntruncatedTool, SessionNotesTool, ViewRangeUntruncatedTool, get_global_learning_engine,
@@ -145,6 +147,10 @@ const DEFAULT_TOOL_NAMES: &[&str] = &[
     "terraform",
     "cloud",
     "LSP",
+    "GoToDefinition",
+    "FindReferences",
+    "SymbolSearch",
+    "TypeHierarchy",
     "TeammateTool",
     "SendMessageTool",
 ];
@@ -286,7 +292,17 @@ fn build_default_tools(config: DefaultToolConfig) -> Vec<Arc<dyn Tool>> {
         Arc::new(TerraformTool::new()),
         Arc::new(CloudTool::new()),
         // Code intelligence
-        Arc::new(LspTool::with_working_directory(working_directory)),
+        Arc::new(LspTool::with_working_directory(working_directory.clone())),
+        Arc::new(GoToDefinitionTool::with_working_directory(
+            working_directory.clone(),
+        )),
+        Arc::new(FindReferencesTool::with_working_directory(
+            working_directory.clone(),
+        )),
+        Arc::new(SymbolSearchTool::with_working_directory(
+            working_directory.clone(),
+        )),
+        Arc::new(TypeHierarchyTool::with_working_directory(working_directory)),
         // Team collaboration
         Arc::new(TeammateTool::new()),
         Arc::new(SendMessageTool::new()),
@@ -461,7 +477,13 @@ pub fn get_infrastructure_tools() -> Vec<Arc<dyn Tool>> {
 }
 
 pub fn get_code_intelligence_tools() -> Vec<Arc<dyn Tool>> {
-    vec![Arc::new(LspTool::new())]
+    vec![
+        Arc::new(LspTool::new()),
+        Arc::new(GoToDefinitionTool::new()),
+        Arc::new(FindReferencesTool::new()),
+        Arc::new(SymbolSearchTool::new()),
+        Arc::new(TypeHierarchyTool::new()),
+    ]
 }
 
 pub fn get_team_tools() -> Vec<Arc<dyn Tool>> {

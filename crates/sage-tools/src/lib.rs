@@ -86,9 +86,12 @@ pub use tools::{
     // Planning
     EnterPlanModeTool,
     ExitPlanModeTool,
+    // Code intelligence
+    FindReferencesTool,
     // VCS
     GitTool,
     GlobTool,
+    GoToDefinitionTool,
     GrepTool,
     HttpClientTool,
     KillShellTool,
@@ -97,7 +100,6 @@ pub use tools::{
     LearningPatternsTool,
     // Monitoring
     LogAnalyzerTool,
-    // Code intelligence
     LspTool,
     NotebookEditTool,
     PlatformToolProxy,
@@ -113,6 +115,7 @@ pub use tools::{
     SessionNotesTool,
     SkillTool,
     SlashCommandTool,
+    SymbolSearchTool,
     TaskDoneTool,
     TaskOutputTool,
     TaskRequest,
@@ -131,6 +134,7 @@ pub use tools::{
     TodoWriteTool,
     ToolSearchResult,
     ToolSearchTool,
+    TypeHierarchyTool,
     UpdateTasksTool,
     ViewRangeUntruncatedTool,
     ViewTasklistTool,
