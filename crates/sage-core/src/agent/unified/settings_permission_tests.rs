@@ -316,11 +316,19 @@ async fn test_settings_permission_rechecks_modified_input_against_deny_rules() -
         .await?;
 
     match result {
-        Some(SettingsPermissionCheck::Blocked(result)) => {
+        Some(SettingsPermissionCheck::Blocked { result, tool_call }) => {
             assert!(result.error.is_some_and(|error| {
                 error.contains("Permission denied by settings")
                     && error.contains("Write(secrets/**)")
             }));
+            assert!(
+                tool_call
+                    .arguments
+                    .get("file_path")
+                    .and_then(|value| value.as_str())
+                    .is_some_and(|path| path.ends_with("secrets/key.txt")),
+                "blocked settings result should preserve the edited call"
+            );
         }
         _ => panic!("modified denied path should be blocked by settings"),
     }
@@ -363,7 +371,10 @@ async fn test_managed_default_denial_records_audit_summary() -> SageResult<()> {
         .check_settings_permission(&bash_call("curl https://example.com"), &context)
         .await?;
 
-    assert!(matches!(result, Some(SettingsPermissionCheck::Blocked(_))));
+    assert!(matches!(
+        result,
+        Some(SettingsPermissionCheck::Blocked { .. })
+    ));
     let summaries = audit_summaries_from_events(&global_diagnostics().snapshot());
     assert!(summaries.iter().any(|summary| {
         summary.reason.contains("source=Some(Managed)")
@@ -472,7 +483,10 @@ async fn test_settings_permission_prompt_uses_execution_timeout() -> SageResult<
         .check_settings_permission(&bash_call("echo ok"), &context)
         .await?;
 
-    assert!(matches!(result, Some(SettingsPermissionCheck::Blocked(_))));
+    assert!(matches!(
+        result,
+        Some(SettingsPermissionCheck::Blocked { .. })
+    ));
     assert_eq!(observed_timeout_ms.load(Ordering::SeqCst), 7_000);
 
     Ok(())

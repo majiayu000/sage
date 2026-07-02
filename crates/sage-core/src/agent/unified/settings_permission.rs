@@ -43,7 +43,10 @@ enum SettingsPermissionDecision {
 
 pub(in crate::agent::unified) enum SettingsPermissionCheck {
     Allowed(ToolCall),
-    Blocked(ToolResult),
+    Blocked {
+        result: ToolResult,
+        tool_call: ToolCall,
+    },
 }
 
 enum SettingsPermissionPromptResult {
@@ -88,22 +91,26 @@ impl UnifiedExecutor {
                     return Ok(Some(SettingsPermissionCheck::Allowed(current_call)));
                 }
                 SettingsPermissionDecision::Deny(reason) => {
-                    return Ok(Some(SettingsPermissionCheck::Blocked(
-                        Self::settings_permission_blocked_result(
-                            &current_call,
-                            format!("Permission denied by settings: {}", reason),
-                        ),
-                    )));
+                    let result = Self::settings_permission_blocked_result(
+                        &current_call,
+                        format!("Permission denied by settings: {}", reason),
+                    );
+                    return Ok(Some(SettingsPermissionCheck::Blocked {
+                        result,
+                        tool_call: current_call,
+                    }));
                 }
                 SettingsPermissionDecision::Ask(reason) => {
                     prompted_count += 1;
                     if prompted_count > 8 {
-                        return Ok(Some(SettingsPermissionCheck::Blocked(
-                            Self::settings_permission_blocked_result(
-                                &current_call,
-                                "Permission request exceeded the maximum number of edited approvals.",
-                            ),
-                        )));
+                        let result = Self::settings_permission_blocked_result(
+                            &current_call,
+                            "Permission request exceeded the maximum number of edited approvals.",
+                        );
+                        return Ok(Some(SettingsPermissionCheck::Blocked {
+                            result,
+                            tool_call: current_call,
+                        }));
                     }
 
                     match self
@@ -122,7 +129,10 @@ impl UnifiedExecutor {
                             return Ok(Some(SettingsPermissionCheck::Allowed(approved_call)));
                         }
                         SettingsPermissionPromptResult::Blocked(result) => {
-                            return Ok(Some(SettingsPermissionCheck::Blocked(result)));
+                            return Ok(Some(SettingsPermissionCheck::Blocked {
+                                result,
+                                tool_call: current_call,
+                            }));
                         }
                     }
                 }

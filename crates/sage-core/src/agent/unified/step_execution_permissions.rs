@@ -119,9 +119,9 @@ impl UnifiedExecutor {
                             }
                             current_call = approved_call;
                         }
-                        Err(blocked_result) => {
+                        Err((blocked_result, blocked_call)) => {
                             let executed_call =
-                                Self::without_user_confirmation_marker(&current_call);
+                                Self::without_user_confirmation_marker(&blocked_call);
                             return (blocked_result, executed_call);
                         }
                     }
@@ -163,7 +163,8 @@ impl UnifiedExecutor {
         confirmed_call: ToolCall,
         context: &ToolExecutionContext,
         input_modified: bool,
-    ) -> std::result::Result<SettingsRecheckAfterDestructiveConfirmation, ToolResult> {
+    ) -> std::result::Result<SettingsRecheckAfterDestructiveConfirmation, (ToolResult, ToolCall)>
+    {
         if !input_modified {
             return Ok(SettingsRecheckAfterDestructiveConfirmation::Ready(
                 confirmed_call,
@@ -174,7 +175,9 @@ impl UnifiedExecutor {
             .check_settings_permission(&confirmed_call, context)
             .await
         {
-            Ok(Some(SettingsPermissionCheck::Blocked(result))) => Err(result),
+            Ok(Some(SettingsPermissionCheck::Blocked { result, tool_call })) => {
+                Err((result, tool_call))
+            }
             Ok(Some(SettingsPermissionCheck::Allowed(mut approved_call))) => {
                 let confirmed_without_marker =
                     Self::without_user_confirmation_marker(&confirmed_call);
@@ -194,11 +197,14 @@ impl UnifiedExecutor {
             Ok(None) => Ok(SettingsRecheckAfterDestructiveConfirmation::Ready(
                 confirmed_call,
             )),
-            Err(err) => Err(ToolResult::error(
-                &confirmed_call.id,
-                &confirmed_call.name,
-                format!("Settings permission check failed: {}", err),
-            )),
+            Err(err) => {
+                let result = ToolResult::error(
+                    &confirmed_call.id,
+                    &confirmed_call.name,
+                    format!("Settings permission check failed: {}", err),
+                );
+                Err((result, confirmed_call))
+            }
         }
     }
 

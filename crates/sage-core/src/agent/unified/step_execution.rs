@@ -215,44 +215,50 @@ impl UnifiedExecutor {
         context: &ToolExecutionContext,
         task_scope: &crate::interrupt::TaskScope,
     ) -> SageResult<crate::tools::types::ToolResult> {
-        // Display and record the requested tool call.
+        // Display the requested tool call. Session recording happens after
+        // permission prompts because the user may edit the actual call.
         tool_display::display_tool_start(&mut self.event_manager, tool_call).await;
-        self.session_manager
-            .record_tool_call(
-                &tool_call.name,
-                &serde_json::to_value(&tool_call.arguments).unwrap_or_default(),
-            )
-            .await;
 
         let tool_start_time = std::time::Instant::now();
         let cancel_token = task_scope.token().clone();
 
         let mut execution_tool_call = tool_call.clone();
 
-        let (tool_result, run_post_execution) = match self
-            .check_settings_permission(tool_call, context)
-            .await?
-        {
-            Some(SettingsPermissionCheck::Blocked(permission_result)) => (permission_result, false),
-            Some(SettingsPermissionCheck::Allowed(approved_call)) => {
-                execution_tool_call = approved_call;
-                self.track_file_for_undo(&execution_tool_call).await;
+        let (tool_result, run_post_execution) =
+            match self.check_settings_permission(tool_call, context).await? {
+                Some(SettingsPermissionCheck::Blocked {
+                    result,
+                    tool_call: blocked_call,
+                }) => {
+                    execution_tool_call = blocked_call;
+                    (result, false)
+                }
+                Some(SettingsPermissionCheck::Allowed(approved_call)) => {
+                    execution_tool_call = approved_call;
+                    self.track_file_for_undo(&execution_tool_call).await;
 
-                let (result, executed_call) = self
-                    .pre_execute_or_block(&execution_tool_call, context, cancel_token.clone())
-                    .await?;
-                execution_tool_call = executed_call;
-                (result, true)
-            }
-            None => {
-                self.track_file_for_undo(&execution_tool_call).await;
-                let (result, executed_call) = self
-                    .pre_execute_or_block(&execution_tool_call, context, cancel_token.clone())
-                    .await?;
-                execution_tool_call = executed_call;
-                (result, true)
-            }
-        };
+                    let (result, executed_call) = self
+                        .pre_execute_or_block(&execution_tool_call, context, cancel_token.clone())
+                        .await?;
+                    execution_tool_call = executed_call;
+                    (result, true)
+                }
+                None => {
+                    self.track_file_for_undo(&execution_tool_call).await;
+                    let (result, executed_call) = self
+                        .pre_execute_or_block(&execution_tool_call, context, cancel_token.clone())
+                        .await?;
+                    execution_tool_call = executed_call;
+                    (result, true)
+                }
+            };
+
+        self.session_manager
+            .record_tool_call(
+                &execution_tool_call.name,
+                &serde_json::to_value(&execution_tool_call.arguments).unwrap_or_default(),
+            )
+            .await;
 
         // Phase 3: Post-execution
         if run_post_execution {

@@ -63,10 +63,18 @@ async fn test_destructive_confirmation_edit_rechecks_settings() -> SageResult<()
         .await;
 
     match result {
-        Err(blocked) => {
+        Err((blocked, blocked_call)) => {
             assert!(blocked.error.is_some_and(|error| {
                 error.contains("Permission denied by settings") && error.contains("Bash(curl *)")
             }));
+            assert_eq!(
+                blocked_call
+                    .arguments
+                    .get("command")
+                    .and_then(|value| value.as_str()),
+                Some("curl https://internal.example"),
+                "blocked destructive recheck must preserve the edited call"
+            );
         }
         Ok(_) => panic!("modified denied command should be blocked by settings"),
     }
