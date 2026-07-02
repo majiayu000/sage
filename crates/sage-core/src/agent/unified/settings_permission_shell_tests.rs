@@ -122,8 +122,13 @@ fn test_deny_matches_chained_command_segment() {
         "time -p rm -rf important/",
         "command rm -rf important/",
         "exec rm -rf important/",
+        "eval rm -rf important/",
+        "eval \"rm -rf important/\"",
+        "coproc rm -rf important/",
+        "trap 'rm -rf important/' EXIT",
         "r''m -rf important/",
         "\\rm -rf important/",
+        "r$(:)m -rf important/",
         "$'rm' -rf important/",
         "r{m,} -rf important/",
         "echo \"$(rm -rf important/)\"",
@@ -133,6 +138,7 @@ fn test_deny_matches_chained_command_segment() {
         "cat < <(rm -rf important/)",
         ": <<< $(rm -rf important/)",
         "cat > \"$(rm -rf important/)\"",
+        "<> /tmp/out rm -rf important/",
     ] {
         assert!(
             matches!(

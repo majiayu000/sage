@@ -55,6 +55,12 @@ pub(crate) fn command_segments(command: &str) -> Vec<String> {
     let command_without_heredocs = remove_heredoc_bodies(&command);
     for segment in shell_command_segments(&command_without_heredocs) {
         push(&segment);
+        for nested in executable_builtin_segments(&segment) {
+            push(&nested);
+        }
+    }
+    for nested in executable_builtin_segments(&command_without_heredocs) {
+        push(&nested);
     }
     for segment in unquoted_heredoc_substitution_segments(&command) {
         push(&segment);
@@ -88,6 +94,11 @@ fn normalized_command_segments(segment: &str) -> Vec<String> {
     for expanded in brace_expanded_first_word_segments(&normalized) {
         if !expanded.is_empty() && !segments.contains(&expanded) {
             segments.push(expanded);
+        }
+    }
+    for assembled in substitution_removed_first_word_segments(&normalized) {
+        if !assembled.is_empty() && !segments.contains(&assembled) {
+            segments.push(assembled);
         }
     }
     segments
@@ -128,6 +139,81 @@ fn split_simple_brace_word(word: &str) -> Option<(&str, &str, &str)> {
     let body = &word[open + 1..close];
     body.contains(',')
         .then(|| (&word[..open], body, &word[close + 1..]))
+}
+
+fn substitution_removed_first_word_segments(segment: &str) -> Vec<String> {
+    let Some((word, rest)) = split_first_shell_word(segment) else {
+        return Vec::new();
+    };
+    let Some(assembled) = remove_embedded_substitutions(word) else {
+        return Vec::new();
+    };
+    if rest.is_empty() {
+        vec![assembled]
+    } else {
+        vec![format!("{assembled} {rest}")]
+    }
+}
+
+fn remove_embedded_substitutions(word: &str) -> Option<String> {
+    let mut output = String::new();
+    let mut cursor = 0;
+    let mut changed = false;
+    while cursor < word.len() {
+        if word[cursor..].starts_with("$(") {
+            if let Some(end) = word_parenthesized_end(word, cursor + 2) {
+                cursor = end;
+                changed = true;
+                continue;
+            }
+        }
+        if word[cursor..].starts_with('`') {
+            if let Some(end) = word[cursor + 1..].find('`') {
+                cursor += end + 2;
+                changed = true;
+                continue;
+            }
+        }
+        let Some(c) = word[cursor..].chars().next() else {
+            break;
+        };
+        output.push(c);
+        cursor += c.len_utf8();
+    }
+    (changed && !output.is_empty()).then_some(output)
+}
+
+fn word_parenthesized_end(input: &str, body_start: usize) -> Option<usize> {
+    let mut depth = 1usize;
+    let mut cursor = body_start;
+    while cursor < input.len() {
+        let c = input[cursor..].chars().next()?;
+        if c == '(' {
+            depth += 1;
+        } else if c == ')' {
+            depth -= 1;
+            if depth == 0 {
+                return Some(cursor + c.len_utf8());
+            }
+        }
+        cursor += c.len_utf8();
+    }
+    None
+}
+
+fn executable_builtin_segments(segment: &str) -> Vec<String> {
+    let segment = strip_shell_leading_syntax(segment);
+    if let Some(rest) = strip_shell_word_prefix(segment, "eval") {
+        return shell_command_segments(&quote_removed_shell_word(rest));
+    }
+    let Some(rest) = strip_shell_word_prefix(segment, "trap") else {
+        return Vec::new();
+    };
+    let handler_end = skip_shell_word(rest, 0);
+    if handler_end == 0 {
+        return Vec::new();
+    }
+    shell_command_segments(&quote_removed_shell_word(&rest[..handler_end]))
 }
 
 fn remove_escaped_newlines(command: &str) -> String {
@@ -197,7 +283,7 @@ fn strip_shell_time_prefix(segment: &str) -> &str {
 fn strip_shell_command_prefixes(mut segment: &str) -> &str {
     loop {
         segment = segment.trim_start();
-        let Some(rest) = ["command", "exec"]
+        let Some(rest) = ["command", "exec", "eval", "coproc"]
             .iter()
             .find_map(|prefix| strip_shell_word_prefix(segment, prefix))
         else {

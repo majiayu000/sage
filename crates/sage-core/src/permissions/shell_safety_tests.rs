@@ -99,6 +99,12 @@ fn strips_shell_command_prefixes() {
 
     let exec_prefix = command_segments("exec rm -rf important/");
     assert!(exec_prefix.contains(&"rm -rf important/".to_string()));
+
+    let eval_prefix = command_segments("eval rm -rf important/");
+    assert!(eval_prefix.contains(&"rm -rf important/".to_string()));
+
+    let coproc_prefix = command_segments("coproc rm -rf important/");
+    assert!(coproc_prefix.contains(&"rm -rf important/".to_string()));
 }
 
 #[test]
@@ -111,6 +117,9 @@ fn strips_shell_negation_prefix() {
 fn strips_leading_redirection_targets() {
     let segments = command_segments("> /tmp/out rm -rf important/");
     assert!(segments.contains(&"rm -rf important/".to_string()));
+
+    let mixed = command_segments("<> /tmp/out rm -rf important/");
+    assert!(mixed.contains(&"rm -rf important/".to_string()));
 }
 
 #[test]
@@ -144,6 +153,18 @@ fn quote_removes_ansi_c_and_expands_simple_command_braces() {
 
     let brace = command_segments("r{m,} -rf important/");
     assert!(brace.contains(&"rm -rf important/".to_string()));
+
+    let empty_substitution = command_segments("r$(:)m -rf important/");
+    assert!(empty_substitution.contains(&"rm -rf important/".to_string()));
+}
+
+#[test]
+fn extracts_eval_and_trap_executed_commands() {
+    let eval = command_segments("eval \"rm -rf important/\"");
+    assert!(eval.contains(&"rm -rf important/".to_string()));
+
+    let trap = command_segments("trap 'rm -rf important/' EXIT");
+    assert!(trap.contains(&"rm -rf important/".to_string()));
 }
 
 #[test]
