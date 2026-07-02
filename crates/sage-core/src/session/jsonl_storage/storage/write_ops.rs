@@ -32,6 +32,9 @@ impl JsonlSessionStorage {
         file.write_all(json_line.as_bytes())
             .await
             .map_err(|e| SageError::io(format!("Failed to write message: {}", e)))?;
+        file.flush()
+            .await
+            .map_err(|e| SageError::io(format!("Failed to flush message: {}", e)))?;
 
         debug!("Appended message {} to session {}", message.uuid, id);
         Ok(())
@@ -63,6 +66,9 @@ impl JsonlSessionStorage {
         file.write_all(json_line.as_bytes())
             .await
             .map_err(|e| SageError::io(format!("Failed to write snapshot: {}", e)))?;
+        file.flush()
+            .await
+            .map_err(|e| SageError::io(format!("Failed to flush snapshot: {}", e)))?;
 
         debug!(
             "Appended snapshot for message {} to session {}",
