@@ -324,10 +324,20 @@ impl PermissionCache {
             return Ok(());
         };
 
-        // Load existing settings or create new
+        // Load existing settings, or create new ones only when no file exists.
+        // A file that exists but fails to parse must abort persistence:
+        // falling back to defaults here would overwrite and wipe every
+        // previously configured allow/deny rule.
         let loader = SettingsLoader::new().without_validation();
         let mut settings = if settings_path.exists() {
-            loader.load_from_file(settings_path).unwrap_or_default()
+            loader.load_from_file(settings_path).map_err(|e| {
+                tracing::error!(
+                    path = %settings_path.display(),
+                    error = %e,
+                    "refusing to persist permission decision: existing settings file is unreadable"
+                );
+                e
+            })?
         } else {
             Settings::default()
         };

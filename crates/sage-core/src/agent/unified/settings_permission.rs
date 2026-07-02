@@ -204,7 +204,9 @@ impl UnifiedExecutor {
                 if let Some(serde_json::Value::Object(map)) = modified_input {
                     approved_call.arguments = map
                         .into_iter()
-                        .filter(|(key, _)| !Self::is_confirmation_only_argument(key))
+                        .filter(|(key, _)| {
+                            !settings_permission_policy::is_confirmation_only_argument(key)
+                        })
                         .collect();
                 }
 
@@ -380,7 +382,7 @@ impl UnifiedExecutor {
         }
 
         if tool_name == "http_client"
-            && Self::http_client_may_follow_redirects(tool_call)
+            && settings_permission_policy::http_client_may_follow_redirects(tool_call)
             && settings_permission_policy::http_client_redirects_require_disabled(
                 settings,
                 &deny_rules,
@@ -468,14 +470,6 @@ impl UnifiedExecutor {
             "n" | "no" | "deny" | "denied" | "reject" | "rejected" | "false" => Some(false),
             _ => None,
         }
-    }
-
-    fn is_confirmation_only_argument(key: &str) -> bool {
-        key == "user_confirmed"
-    }
-
-    fn http_client_may_follow_redirects(tool_call: &ToolCall) -> bool {
-        tool_call.get_bool("follow_redirects").unwrap_or(true)
     }
 }
 
