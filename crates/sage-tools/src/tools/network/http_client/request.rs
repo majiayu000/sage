@@ -80,6 +80,8 @@ pub fn create_client(
     reqwest::Client::builder()
         .danger_accept_invalid_certs(!verify_ssl)
         .redirect(reqwest::redirect::Policy::none())
+        .no_proxy()
+        .pool_max_idle_per_host(0)
         .timeout(Duration::from_secs(timeout_secs))
         .user_agent("Sage-Agent-HTTP-Client/1.0")
         .build()

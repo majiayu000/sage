@@ -22,6 +22,8 @@ fn get_client() -> anyhow::Result<&'static reqwest::Client> {
             reqwest::Client::builder()
                 .timeout(WEB_FETCH_TIMEOUT)
                 .redirect(reqwest::redirect::Policy::none())
+                .no_proxy()
+                .pool_max_idle_per_host(0)
                 .user_agent("Sage-Agent-WebFetch/1.0")
                 .build()
                 .map_err(|error| error.to_string())
