@@ -148,8 +148,23 @@ impl McpRegistry {
     /// Get all available tools across all servers
     pub async fn all_tools(&self) -> Vec<McpTool> {
         let mut tools = Vec::new();
-        for entry in self.clients.iter() {
-            tools.extend(entry.value().cached_tools().await);
+        let clients = self
+            .clients
+            .iter()
+            .map(|entry| (entry.key().clone(), entry.value().clone()))
+            .collect::<Vec<_>>();
+        for (server_name, client) in clients {
+            if let Err(error) = self
+                .refresh_server_capabilities(&server_name, &client)
+                .await
+            {
+                tracing::warn!(
+                    server = server_name.as_str(),
+                    error = %error,
+                    "Failed to refresh trusted MCP tools before listing; returning last trusted cache"
+                );
+            }
+            tools.extend(client.cached_tools().await);
         }
         tools
     }

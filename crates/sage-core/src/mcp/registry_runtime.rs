@@ -194,7 +194,7 @@ impl McpRegistry {
         })
     }
 
-    pub(super) async fn refresh_server_capabilities(
+    pub(crate) async fn refresh_server_capabilities(
         &self,
         name: &str,
         client: &Arc<McpClient>,
