@@ -207,6 +207,11 @@ impl McpRegistry {
 
         let mut trust_store = McpToolTrustStore::load_default()?;
         let trusted_tools = trusted_mcp_tools_for_server(name, tools, &mut trust_store)?;
+        let cached_tools = trusted_tools
+            .iter()
+            .map(|(tool, _)| tool.clone())
+            .collect::<Vec<_>>();
+        *client.tools().write().await = cached_tools.clone();
         trust_store.save_if_dirty()?;
 
         self.tool_mapping
@@ -223,10 +228,9 @@ impl McpRegistry {
                 },
             );
         }
-        self.deferred_tools.write().replace_server_tools(
-            name.to_string(),
-            trusted_tools.iter().map(|(tool, _)| tool.clone()),
-        );
+        self.deferred_tools
+            .write()
+            .replace_server_tools(name.to_string(), cached_tools);
 
         if let Ok(resources) = client.list_resources().await {
             for resource in resources {

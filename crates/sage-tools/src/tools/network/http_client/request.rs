@@ -4,11 +4,13 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use reqwest::{Response, StatusCode, Url};
+use reqwest::{Response, StatusCode};
 use tokio::time::{Instant, timeout};
 use tracing::{debug, info};
 
-use super::super::validation::{resolve_and_validate_url, verify_response_endpoint};
+use super::super::validation::{
+    ValidatedEndpoint, resolve_and_validate_url, verify_response_endpoint,
+};
 use super::types::{AuthType, HttpClientParams, HttpMethod, HttpResponse, RequestBody};
 use crate::tools::network::redirect::{
     MAX_REDIRECTS, is_redirect_status, same_origin, validate_redirect_target,
@@ -109,14 +111,34 @@ async fn send_request_once(
     client: &reqwest::Client,
     params: &HttpClientParams,
     method: reqwest::Method,
-    url: Url,
+    endpoint: &ValidatedEndpoint,
     request_timeout: Duration,
     include_body: bool,
     include_sensitive_headers: bool,
+    verify_remote_endpoint: bool,
 ) -> Result<Response> {
+    let url = endpoint.url().clone();
     debug!("Making HTTP request: {} {}", method, url);
 
-    let mut request = client.request(method, url);
+    let pinned_client;
+    let request_client = if verify_remote_endpoint {
+        let builder = reqwest::Client::builder()
+            .danger_accept_invalid_certs(!params.verify_ssl.unwrap_or(true))
+            .redirect(reqwest::redirect::Policy::none())
+            .timeout(request_timeout)
+            .no_proxy()
+            .pool_max_idle_per_host(0)
+            .user_agent("Sage-Agent-HTTP-Client/1.0");
+        pinned_client = endpoint
+            .apply_dns_pinning(builder)?
+            .build()
+            .context("Failed to create pinned HTTP client")?;
+        &pinned_client
+    } else {
+        client
+    };
+
+    let mut request = request_client.request(method, url);
 
     if let Some(headers) = &params.headers {
         for (key, value) in headers {
@@ -192,10 +214,11 @@ async fn execute_request_inner(
             client,
             &params,
             method.clone(),
-            current_endpoint.url().clone(),
+            &current_endpoint,
             remaining_timeout,
             include_body,
             include_sensitive_headers,
+            verify_remote_endpoint,
         )
         .await?;
         if verify_remote_endpoint {

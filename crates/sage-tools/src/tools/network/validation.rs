@@ -26,6 +26,32 @@ impl ValidatedEndpoint {
         &self.resolved_ips
     }
 
+    pub fn resolved_socket_addrs(&self) -> Result<Vec<SocketAddr>> {
+        let port = self.url.port_or_known_default().ok_or_else(|| {
+            anyhow!(
+                "URL must include a valid port for scheme '{}'",
+                self.url.scheme()
+            )
+        })?;
+        Ok(self
+            .resolved_ips
+            .iter()
+            .map(|ip| SocketAddr::new(*ip, port))
+            .collect())
+    }
+
+    pub fn apply_dns_pinning(
+        &self,
+        builder: reqwest::ClientBuilder,
+    ) -> Result<reqwest::ClientBuilder> {
+        if matches!(self.url.host(), Some(Host::Domain(_))) {
+            let addrs = self.resolved_socket_addrs()?;
+            Ok(builder.resolve_to_addrs(&self.host, &addrs))
+        } else {
+            Ok(builder)
+        }
+    }
+
     fn contains_ip(&self, ip: &IpAddr) -> bool {
         self.resolved_ips.contains(ip)
     }
@@ -487,6 +513,32 @@ mod tests {
         let remote_addr = SocketAddr::from(([1, 1, 1, 1], 80));
 
         assert!(verify_remote_addr(&endpoint, Some(remote_addr)).is_ok());
+        Ok(())
+    }
+
+    #[test]
+    fn test_validated_endpoint_builds_pinned_socket_addrs() -> Result<()> {
+        let endpoint = ValidatedEndpoint {
+            url: Url::parse("https://example.test/resource")?,
+            host: "example.test".to_string(),
+            resolved_ips: vec![
+                IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)),
+                IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8)),
+            ],
+        };
+
+        assert_eq!(
+            endpoint.resolved_socket_addrs()?,
+            vec![
+                SocketAddr::from(([1, 1, 1, 1], 443)),
+                SocketAddr::from(([8, 8, 8, 8], 443)),
+            ]
+        );
+        assert!(
+            endpoint
+                .apply_dns_pinning(reqwest::Client::builder())
+                .is_ok()
+        );
         Ok(())
     }
 }
