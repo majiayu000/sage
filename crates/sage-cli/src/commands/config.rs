@@ -312,6 +312,7 @@ fn create_sample_config() -> Config {
         logging: LoggingConfig::default(),
         trajectory: TrajectoryConfig::default(),
         mcp: sage_core::config::McpConfig::default(),
+        memory: sage_core::config::AgentMemoryConfig::default(),
     }
 }
 

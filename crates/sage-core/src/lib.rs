@@ -168,7 +168,7 @@ pub use commands::{
     CommandArgument, CommandExecutor, CommandInvocation, CommandRegistry, CommandResult,
     CommandSource, SlashCommand,
 };
-pub use config::{Config, LakeviewConfig, ModelParameters};
+pub use config::{AgentMemoryConfig, Config, LakeviewConfig, ModelParameters};
 pub use context::{
     AggregatedStats, ContextConfig, ContextManager, ContextUsageStats, ConversationSummarizer,
     MessagePruner, OverflowStrategy, PrepareResult, PruneResult, SharedStreamingMetrics,
@@ -249,9 +249,12 @@ pub use learning::{
     analyze_user_message, create_learning_engine, create_learning_engine_with_memory,
 };
 pub use memory::{
-    FileMemoryStorage, Memory, MemoryCategory, MemoryConfig, MemoryId, MemoryManager,
-    MemoryMetadata, MemoryQuery, MemoryScore, MemorySource, MemoryStats, MemoryStorage,
-    MemoryStorageError, MemoryType, RelevanceScore, SharedMemoryManager, create_memory_manager,
+    AgentMemoryRuntime, AgentOutcomeKind, AgentOutcomeRecord, FileMemoryStorage, Memory,
+    MemoryCategory, MemoryConfig, MemoryId, MemoryManager, MemoryMetadata, MemoryQuery,
+    MemoryScore, MemorySource, MemoryStats, MemoryStorage, MemoryStorageError, MemoryType,
+    RecallQuery, RecalledContext, RelevanceScore, SharedMemoryManager, create_memory_manager,
+    init_agent_memory_runtime, init_global_learning_engine, init_global_memory_manager,
+    recall_agent_context, record_agent_outcome,
 };
 pub use prompts::{
     AgentPrompts, GitPrompts, PlanPhase, PromptVariables, SecurityPolicy, SystemPrompt,

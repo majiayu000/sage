@@ -96,6 +96,13 @@
     "max_execution_time": 300,
     "tool_settings": {}
   },
+  "memory": {
+    "enabled": false,
+    "storage_path": ".sage/memory/agent-memory.json",
+    "max_recall_items": 8,
+    "max_recall_chars": 4000,
+    "max_stored_outcome_chars": 2000
+  },
   "working_directory": null,
   "trajectory": {
     "enabled": false,

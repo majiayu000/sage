@@ -1,7 +1,9 @@
 //! Message building utilities for the unified executor
 
 use crate::error::SageResult;
+use crate::memory::{RecallQuery, recall_agent_context};
 use crate::prompts::SystemPromptBuilder;
+use crate::types::{MessageRole, TaskMetadata};
 use std::path::PathBuf;
 use tracing::instrument;
 
@@ -11,7 +13,10 @@ use super::context_builder::ContextBuilder;
 impl UnifiedExecutor {
     /// Build the system prompt
     #[instrument(skip(self))]
-    pub(super) async fn build_system_prompt(&self) -> SageResult<String> {
+    pub(super) async fn build_system_prompt(
+        &self,
+        task: Option<&TaskMetadata>,
+    ) -> SageResult<String> {
         let model_name = self
             .config
             .default_model_parameters()
@@ -70,7 +75,84 @@ impl UnifiedExecutor {
             builder = builder.with_custom_section("Project Instructions", instructions);
         }
 
+        if let Some(task) = task {
+            let recent_messages = self
+                .conversation_history
+                .iter()
+                .rev()
+                .filter(|message| message.role != MessageRole::System)
+                .take(8)
+                .map(|message| message.content.clone())
+                .collect::<Vec<_>>();
+            let query = RecallQuery {
+                task_text: task.description.clone(),
+                recent_messages,
+                touched_paths: Vec::new(),
+                limit: self.config.memory.max_recall_items,
+            };
+            match recall_agent_context(&self.config.memory, &working_dir_path, &query).await {
+                Ok(Some(recalled)) => {
+                    if let Some(section) = recalled.render_prompt_section() {
+                        builder =
+                            builder.with_custom_section("Recalled Memory And Learning", section);
+                    }
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    tracing::error!(
+                        error = %error,
+                        "Agent memory recall failed; continuing without memory injection"
+                    );
+                }
+            }
+        }
+
         let prompt = builder.build();
         Ok(prompt)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::agent::ExecutionOptions;
+    use crate::agent::UnifiedExecutor;
+    use crate::config::{AgentMemoryConfig, Config};
+    use crate::memory::runtime::clear_runtime_registry_for_tests;
+    use crate::types::TaskMetadata;
+    use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn build_system_prompt_injects_redacted_recall_when_enabled() {
+        clear_runtime_registry_for_tests().await;
+        let dir = tempdir().unwrap();
+        let mut config = Config::default();
+        config.default_provider = "ollama".to_string();
+        config.memory = AgentMemoryConfig {
+            enabled: true,
+            enabled_set: true,
+            storage_path: Some(dir.path().join("memory.json")),
+            ..AgentMemoryConfig::default()
+        };
+        let options = ExecutionOptions {
+            working_directory: Some(dir.path().to_path_buf()),
+            ..ExecutionOptions::default()
+        };
+        let runtime = crate::memory::init_agent_memory_runtime(&config.memory, dir.path())
+            .await
+            .unwrap()
+            .unwrap();
+        runtime
+            .memory_manager()
+            .remember_lesson("Run cargo check before completion. OPENAI_API_KEY=sk-secret12345")
+            .await
+            .unwrap();
+        let executor = UnifiedExecutor::with_options(config, options).unwrap();
+        let task = TaskMetadata::new("Run cargo check", dir.path().to_string_lossy().as_ref());
+
+        let prompt = executor.build_system_prompt(Some(&task)).await.unwrap();
+
+        assert!(prompt.contains("Recalled Memory And Learning"));
+        assert!(prompt.contains("cargo check"));
+        assert!(!prompt.contains("sk-secret12345"));
     }
 }

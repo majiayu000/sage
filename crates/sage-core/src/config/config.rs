@@ -1,7 +1,8 @@
 //! Main configuration for Sage Agent
 
 use crate::config::model::{
-    LakeviewConfig, LoggingConfig, McpConfig, ModelParameters, ToolConfig, TrajectoryConfig,
+    AgentMemoryConfig, LakeviewConfig, LoggingConfig, McpConfig, ModelParameters, ToolConfig,
+    TrajectoryConfig,
 };
 use crate::config::provider_defaults::create_default_providers;
 use crate::config::validation::{validate_logging, validate_providers};
@@ -40,6 +41,8 @@ pub struct Config {
     pub trajectory: TrajectoryConfig,
     /// MCP (Model Context Protocol) configuration
     pub mcp: McpConfig,
+    /// Cross-session memory and learning recall configuration
+    pub memory: AgentMemoryConfig,
 }
 
 impl Default for Config {
@@ -56,6 +59,7 @@ impl Default for Config {
             logging: LoggingConfig::default(),
             trajectory: TrajectoryConfig::default(),
             mcp: McpConfig::default(),
+            memory: AgentMemoryConfig::default(),
         }
     }
 }
@@ -126,6 +130,22 @@ impl Config {
                     "Max steps must be greater than 0 (use None for unlimited)",
                 ));
             }
+        }
+
+        if self.memory.max_recall_items == 0 {
+            return Err(SageError::config(
+                "memory.max_recall_items must be greater than 0",
+            ));
+        }
+        if self.memory.max_recall_chars == 0 {
+            return Err(SageError::config(
+                "memory.max_recall_chars must be greater than 0",
+            ));
+        }
+        if self.memory.max_stored_outcome_chars == 0 {
+            return Err(SageError::config(
+                "memory.max_stored_outcome_chars must be greater than 0",
+            ));
         }
 
         // Validate all model parameters
@@ -203,6 +223,7 @@ impl Config {
         self.tools.merge(other.tools);
         self.logging.merge(other.logging);
         self.mcp.merge(other.mcp);
+        self.memory.merge(other.memory);
     }
 }
 
@@ -315,6 +336,35 @@ mod tests {
         let mut config = Config::default();
         config.max_steps = Some(0);
         assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_config_validate_zero_memory_limits() {
+        let mut config = Config::default();
+        config.memory.max_recall_items = 0;
+        assert!(config.validate().is_err());
+
+        let mut config = Config::default();
+        config.memory.max_recall_chars = 0;
+        assert!(config.validate().is_err());
+
+        let mut config = Config::default();
+        config.memory.max_stored_outcome_chars = 0;
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_config_merge_memory_can_disable() {
+        let mut config1 = Config::default();
+        config1.memory.enabled = true;
+        config1.memory.enabled_set = true;
+
+        let config2: Config = serde_json::from_str(r#"{"memory":{"enabled":false}}"#).unwrap();
+
+        config1.merge(config2);
+
+        assert!(!config1.memory.enabled);
+        assert!(config1.memory.enabled_set);
     }
 
     #[test]

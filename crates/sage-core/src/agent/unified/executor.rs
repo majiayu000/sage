@@ -4,8 +4,10 @@ use crate::agent::{AgentExecution, ExecutionOutcome};
 use crate::error::SageResult;
 use crate::interrupt::{global_interrupt_manager, reset_global_interrupt_manager};
 use crate::llm::messages::LlmMessage;
+use crate::memory::{AgentOutcomeKind, AgentOutcomeRecord, record_agent_outcome};
 use crate::types::{MessageRole, TaskMetadata};
 use anyhow::Context;
+use std::path::{Path, PathBuf};
 use tracing::instrument;
 
 use super::UnifiedExecutor;
@@ -89,7 +91,7 @@ impl UnifiedExecutor {
         }
 
         // Build system prompt (includes skills for AI auto-invocation)
-        let system_prompt = self.build_system_prompt().await?;
+        let system_prompt = self.build_system_prompt(Some(&task)).await?;
 
         // Get tool schemas
         let tool_schemas = self.tool_orchestrator.tool_executor().get_tool_schemas();
@@ -130,9 +132,67 @@ impl UnifiedExecutor {
         // Stop any running animations
         self.event_manager.stop_animation().await;
 
+        self.record_memory_outcome(&task, &outcome).await;
+
         // Finalize session recording
         self.record_session_end_if_enabled(&outcome).await;
 
         Ok(outcome)
+    }
+
+    async fn record_memory_outcome(&self, task: &TaskMetadata, outcome: &ExecutionOutcome) {
+        let working_dir = execution_working_dir(
+            &self.options.working_directory,
+            &self.config.working_directory,
+        );
+        let record = AgentOutcomeRecord::new(
+            task.description.clone(),
+            if outcome.is_success() {
+                AgentOutcomeKind::Success
+            } else {
+                AgentOutcomeKind::Failure
+            },
+            outcome_memory_summary(outcome),
+        );
+
+        if let Err(error) = record_agent_outcome(&self.config.memory, &working_dir, record).await {
+            tracing::error!(
+                error = %error,
+                "Agent memory outcome recording failed; continuing without persistence"
+            );
+        }
+    }
+}
+
+fn execution_working_dir(option_dir: &Option<PathBuf>, config_dir: &Option<PathBuf>) -> PathBuf {
+    option_dir
+        .clone()
+        .or_else(|| config_dir.clone())
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf()))
+}
+
+fn outcome_memory_summary(outcome: &ExecutionOutcome) -> String {
+    match outcome {
+        ExecutionOutcome::Success(execution) => execution
+            .final_result
+            .clone()
+            .unwrap_or_else(|| execution.summary()),
+        ExecutionOutcome::Failed { error, .. } => error.message.clone(),
+        ExecutionOutcome::Interrupted { execution } => execution
+            .final_result
+            .clone()
+            .unwrap_or_else(|| "Task interrupted by user".to_string()),
+        ExecutionOutcome::MaxStepsReached { execution } => execution
+            .final_result
+            .clone()
+            .unwrap_or_else(|| "Task reached maximum steps".to_string()),
+        ExecutionOutcome::UserCancelled {
+            pending_question, ..
+        } => pending_question
+            .clone()
+            .unwrap_or_else(|| "Task cancelled by user".to_string()),
+        ExecutionOutcome::NeedsUserInput { last_response, .. } => {
+            format!("Task paused for user input: {}", last_response)
+        }
     }
 }

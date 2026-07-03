@@ -8,6 +8,7 @@ pub use super::config::Config;
 pub use super::lakeview_config::LakeviewConfig;
 pub use super::logging_config::LoggingConfig;
 pub use super::mcp_config::{McpConfig, McpServerConfig};
+pub use super::memory_config::AgentMemoryConfig;
 pub use super::model_params::ModelParameters;
 pub use super::tool_config::ToolConfig;
 pub use super::trajectory_config::TrajectoryConfig;

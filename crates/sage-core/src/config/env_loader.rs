@@ -27,6 +27,7 @@ pub fn load_from_env() -> SageResult<Config> {
         logging: crate::config::model::LoggingConfig::default(),
         trajectory: crate::config::model::TrajectoryConfig::default(),
         mcp: crate::config::model::McpConfig::default(),
+        memory: crate::config::model::AgentMemoryConfig::default(),
     };
 
     // Load provider settings
