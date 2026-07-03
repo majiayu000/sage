@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed the unused `SessionStorage`/`FileSessionStorage`/`MemorySessionStorage`/`SessionManager` public API stack; JSONL session storage remains the production session persistence path.
 - Routed `/model` model listing through the model catalog cache so live refreshes use cached freshness, ETag, and explicit stale/static fallback warnings.
 - Unified strict config loading, `settings.tools` filtering, and onboarding writeback so credentials, tool switches, and persisted config share the production paths.
+- Breaking SDK API: replaced `ExecutionResult.config_used` with `ExecutionConfigSummary`, folded `UnifiedRunOptions` into `RunOptions`, and removed duplicate `execute_unified` entry points.
 - Scoped Cargo install guidance and generated release notes to `cargo install sage-cli` as the user-facing Sage CLI package.
 - Documented the supported Linux/macOS release matrix and explicit native Windows archive boundary.
 - Added fail-closed release gates for preflight, required CI/security checks, artifact manifests, attestations, and install smoke.

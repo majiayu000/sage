@@ -1,7 +1,7 @@
 //! Basic run execution methods
 
 use super::{default_thread_store_for_tools, default_tools, resolve_working_directory};
-use crate::client::{ExecutionResult, RunOptions, SageAgentSdk};
+use crate::client::{ExecutionConfigSummary, ExecutionResult, RunOptions, SageAgentSdk};
 use sage_core::{
     agent::{ExecutionMode, ExecutionOptions},
     error::SageResult,
@@ -93,8 +93,13 @@ impl SageAgentSdk {
 
         // Set up execution options for unified executor
         let max_steps = options.max_steps.or(self.config.max_steps);
+        let mode = if options.non_interactive {
+            ExecutionMode::non_interactive()
+        } else {
+            ExecutionMode::interactive()
+        };
         let exec_options = ExecutionOptions::default()
-            .with_mode(ExecutionMode::interactive())
+            .with_mode(mode)
             .with_max_steps(max_steps)
             .with_working_directory(&working_dir);
 
@@ -152,51 +157,54 @@ impl SageAgentSdk {
         }
 
         // Set up input channel for interactive mode
-        let (input_channel, mut input_handle) = InputChannel::new(16);
-        executor.set_input_channel(input_channel);
+        let input_task = if options.non_interactive {
+            None
+        } else {
+            let (input_channel, mut input_handle) = InputChannel::new(16);
+            executor.set_input_channel(input_channel);
 
-        // Spawn background task to handle user input from stdin
-        let input_task = tokio::spawn(async move {
-            use std::io::Write;
-            while let Some(request) = input_handle.request_rx.recv().await {
-                print!("> ");
-                let _ = std::io::stdout().flush();
+            Some(tokio::spawn(async move {
+                use std::io::Write;
+                while let Some(request) = input_handle.request_rx.recv().await {
+                    print!("> ");
+                    let _ = std::io::stdout().flush();
 
-                let input_result = tokio::task::spawn_blocking(|| {
-                    let mut input = String::new();
-                    match std::io::stdin().read_line(&mut input) {
-                        Ok(_) => Some(input),
-                        Err(_) => None,
-                    }
-                })
-                .await;
+                    let input_result = tokio::task::spawn_blocking(|| {
+                        let mut input = String::new();
+                        match std::io::stdin().read_line(&mut input) {
+                            Ok(_) => Some(input),
+                            Err(_) => None,
+                        }
+                    })
+                    .await;
 
-                match input_result {
-                    Ok(Some(input)) => {
-                        let content = input.trim().to_string();
-                        let cancelled = content.to_lowercase() == "cancel"
-                            || content.to_lowercase() == "quit"
-                            || content.to_lowercase() == "exit";
+                    match input_result {
+                        Ok(Some(input)) => {
+                            let content = input.trim().to_string();
+                            let cancelled = content.to_lowercase() == "cancel"
+                                || content.to_lowercase() == "quit"
+                                || content.to_lowercase() == "exit";
 
-                        let response = if cancelled {
-                            InputResponse::cancelled(request.id)
-                        } else {
-                            InputResponse::text(request.id, content)
-                        };
+                            let response = if cancelled {
+                                InputResponse::cancelled(request.id)
+                            } else {
+                                InputResponse::text(request.id, content)
+                            };
 
-                        if input_handle.respond(response).await.is_err() {
+                            if input_handle.respond(response).await.is_err() {
+                                break;
+                            }
+                        }
+                        _ => {
+                            let _ = input_handle
+                                .respond(InputResponse::cancelled(request.id))
+                                .await;
                             break;
                         }
                     }
-                    _ => {
-                        let _ = input_handle
-                            .respond(InputResponse::cancelled(request.id))
-                            .await;
-                        break;
-                    }
                 }
-            }
-        });
+            }))
+        };
 
         // Session recording - always enabled, stored in ~/.sage/projects/{cwd}/
         if self.config.trajectory.is_enabled() {
@@ -209,8 +217,16 @@ impl SageAgentSdk {
         let outcome = executor.start_task(task).await?.outcome;
 
         // Clean up input task
-        input_task.abort();
+        if let Some(input_task) = input_task {
+            input_task.abort();
+        }
 
-        Ok(ExecutionResult::new(outcome, self.config.clone()))
+        let config_summary = ExecutionConfigSummary::from_config(
+            &self.config,
+            working_dir,
+            max_steps,
+            options.non_interactive,
+        );
+        Ok(ExecutionResult::new(outcome, config_summary))
     }
 }

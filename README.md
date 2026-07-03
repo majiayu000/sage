@@ -280,8 +280,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // let sdk = SageAgentSdk::new()?;
 
     // Run a task
-    let options = RunOptions::new("Create a README file");
-    let result = sdk.run(options).await?;
+    let options = RunOptions::new().with_max_steps(30);
+    let result = sdk
+        .run_with_options("Create a README file", options)
+        .await?;
 
     println!("Execution completed: {:?}", result.outcome());
 

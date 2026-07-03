@@ -23,6 +23,8 @@ pub struct RunOptions {
     pub working_directory: Option<PathBuf>,
     /// Maximum number of steps
     pub max_steps: Option<u32>,
+    /// Non-interactive mode (auto-respond to user questions)
+    pub non_interactive: bool,
     /// Additional metadata
     pub metadata: HashMap<String, serde_json::Value>,
 }
@@ -71,6 +73,24 @@ impl RunOptions {
         self
     }
 
+    /// Set non-interactive mode.
+    ///
+    /// When enabled, the agent uses non-interactive execution mode instead of
+    /// blocking for user input.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use sage_sdk::RunOptions;
+    ///
+    /// let options = RunOptions::new()
+    ///     .with_non_interactive(true);
+    /// ```
+    pub fn with_non_interactive(mut self, non_interactive: bool) -> Self {
+        self.non_interactive = non_interactive;
+        self
+    }
+
     /// Add custom metadata to the execution.
     ///
     /// # Examples
@@ -89,5 +109,17 @@ impl RunOptions {
     {
         self.metadata.insert(key.into(), value.into());
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn with_non_interactive_sets_execution_mode_flag() {
+        let options = RunOptions::new().with_non_interactive(true);
+
+        assert!(options.non_interactive);
     }
 }
