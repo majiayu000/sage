@@ -8,7 +8,7 @@ use super::credentials_file::CredentialsFile;
 use super::loaded_config::LoadedConfig;
 use super::resolver::CredentialResolver;
 use super::resolver_config::ResolverConfig;
-use crate::config::ConfigLoader;
+use crate::config::env_loader;
 use crate::config::file_loader;
 use crate::config::model::Config;
 use crate::config::validation::validate_providers;
@@ -202,19 +202,17 @@ impl UnifiedConfigLoader {
     /// validation, and override errors to callers while still using the unified
     /// credential resolution path.
     pub fn load_strict(&self) -> Result<Config, SageError> {
-        let mut loader = ConfigLoader::new().with_defaults().with_env();
-        if let Some(path) = &self.config_file {
-            loader = loader.with_file(path);
-        } else {
-            loader = loader
-                .with_file(self.working_dir.join("sage_config.json"))
-                .with_file(self.working_dir.join("sage_config.toml"))
-                .with_file(self.working_dir.join("sage_config.yaml"))
-                .with_file(self.working_dir.join("sage_config.yml"))
-                .with_file(self.global_dir.join("config.json"));
+        let mut config = Config::default();
+        config.merge(env_loader::load_from_env()?);
+
+        for path in self.strict_config_paths() {
+            if path.exists() {
+                config.merge(self.load_config_file(&path)?);
+            } else {
+                debug!("Config file {} not found, skipping", path.display());
+            }
         }
 
-        let mut config = loader.load()?;
         self.apply_cli_overrides(&mut config);
         self.resolve_credentials(&mut config);
         self.reject_unknown_legacy_credential_providers(&config)?;
@@ -237,6 +235,18 @@ impl UnifiedConfigLoader {
         }
 
         let default_provider = config.default_provider.clone();
+        if !config.model_providers.contains_key(&default_provider)
+            && self.cli_provider_parameters_present()
+        {
+            let params = crate::config::provider_defaults::default_parameters_for_provider(
+                &default_provider,
+            )
+            .unwrap_or_default();
+            config
+                .model_providers
+                .insert(default_provider.clone(), params);
+        }
+
         if let Some(params) = config.model_providers.get_mut(&default_provider) {
             if let Some(ref model) = self.cli_overrides.model {
                 params.model = model.clone();
@@ -248,6 +258,12 @@ impl UnifiedConfigLoader {
                 params.base_url = Some(model_base_url.clone());
             }
         }
+    }
+
+    fn cli_provider_parameters_present(&self) -> bool {
+        self.cli_overrides.model.is_some()
+            || self.cli_overrides.api_key.is_some()
+            || self.cli_overrides.model_base_url.is_some()
     }
 
     /// Resolve credentials and update config
@@ -334,6 +350,20 @@ impl UnifiedConfigLoader {
         }
 
         CredentialResolver::new(config)
+    }
+
+    fn strict_config_paths(&self) -> Vec<PathBuf> {
+        if let Some(path) = &self.config_file {
+            return vec![path.clone()];
+        }
+
+        vec![
+            self.working_dir.join("sage_config.json"),
+            self.working_dir.join("sage_config.toml"),
+            self.working_dir.join("sage_config.yaml"),
+            self.working_dir.join("sage_config.yml"),
+            self.global_dir.join("config.json"),
+        ]
     }
 }
 

@@ -45,6 +45,20 @@ pub fn create_default_providers() -> HashMap<String, ModelParameters> {
     providers
 }
 
+/// Return shipped defaults for a provider id or a supported alias.
+pub(crate) fn default_parameters_for_provider(provider: &str) -> Option<ModelParameters> {
+    let defaults = create_default_providers();
+    if let Some(params) = defaults.get(provider) {
+        return Some(params.clone());
+    }
+
+    match provider {
+        "zhipu" => defaults.get("glm").cloned(),
+        "kimi" => defaults.get("moonshot").cloned(),
+        _ => None,
+    }
+}
+
 fn provider_tuning(id: &str, model: String, base_url: Option<String>) -> ModelParameters {
     let (temperature, top_p, top_k, parallel_tool_calls, max_retries, api_version): (
         f32,
@@ -176,5 +190,26 @@ mod tests {
             doubao.base_url.as_deref(),
             Some("https://ark.cn-beijing.volces.com")
         );
+    }
+
+    #[test]
+    fn alias_defaults_resolve_to_canonical_provider_defaults() {
+        let Some(zhipu) = default_parameters_for_provider("zhipu") else {
+            panic!("zhipu alias missing");
+        };
+        let Some(glm) = default_parameters_for_provider("glm") else {
+            panic!("glm default missing");
+        };
+        assert_eq!(zhipu.model, glm.model);
+        assert_eq!(zhipu.base_url, glm.base_url);
+
+        let Some(kimi) = default_parameters_for_provider("kimi") else {
+            panic!("kimi alias missing");
+        };
+        let Some(moonshot) = default_parameters_for_provider("moonshot") else {
+            panic!("moonshot default missing");
+        };
+        assert_eq!(kimi.model, moonshot.model);
+        assert_eq!(kimi.base_url, moonshot.base_url);
     }
 }

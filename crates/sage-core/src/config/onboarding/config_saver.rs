@@ -44,24 +44,13 @@ pub fn save_global_config(global_dir: &Path, provider: &str) -> SageResult<()> {
 
 /// Create model parameters for a provider
 fn create_provider_params(provider: &str) -> ModelParameters {
-    let mut params = ModelParameters::default();
-    apply_provider_defaults(provider, &mut params);
-    params
-}
-
-/// Apply provider-specific defaults
-fn apply_provider_defaults(provider: &str, params: &mut ModelParameters) {
-    if provider == "glm" || provider == "zhipu" {
-        params.model = "glm-4.7".to_string();
-        params.base_url = Some("https://open.bigmodel.cn/api/anthropic".to_string());
-        params.api_version = Some("2023-06-01".to_string());
-        params.parallel_tool_calls = Some(false);
-    }
+    crate::config::provider_defaults::default_parameters_for_provider(provider).unwrap_or_default()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::Config;
     use tempfile::tempdir;
 
     #[test]
@@ -76,6 +65,26 @@ mod tests {
 
         assert!(result.is_err());
         assert_eq!(std::fs::read_to_string(&creds_path)?, invalid);
+        Ok(())
+    }
+
+    #[test]
+    fn save_global_config_preserves_builtin_provider_defaults()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempdir()?;
+
+        save_global_config(dir.path(), "anthropic")?;
+
+        let config: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(dir.path().join("config.json"))?)?;
+        let saved_model = config["model_providers"]["anthropic"]["model"].as_str();
+        let defaults = Config::default();
+        let Some(default_params) = defaults.model_providers.get("anthropic") else {
+            panic!("anthropic default missing");
+        };
+        let default_model = default_params.model.as_str();
+        assert_eq!(saved_model, Some(default_model));
+        assert_ne!(saved_model, Some("gpt-4"));
         Ok(())
     }
 }

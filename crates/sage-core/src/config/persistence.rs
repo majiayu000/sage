@@ -3,6 +3,7 @@
 //! This module provides functionality for runtime configuration changes
 //! that persist across sessions, similar to Crush's SetConfigField pattern.
 
+use crate::config::credential::CredentialsFile;
 use crate::error::{SageError, SageResult};
 use serde_json::Value;
 use std::fs;
@@ -91,42 +92,22 @@ impl ConfigPersistence {
 
     /// Set an API key for a provider in the credentials file
     pub fn set_api_key(&self, provider: &str, api_key: &str) -> SageResult<()> {
-        let mut creds = self.load_credentials_json()?;
-
-        // Ensure api_keys object exists
-        if !creds
-            .get("api_keys")
-            .map(|v| v.is_object())
-            .unwrap_or(false)
-        {
-            creds["api_keys"] = Value::Object(serde_json::Map::new());
-        }
-
-        creds["api_keys"][provider] = Value::String(api_key.to_string());
-        self.save_credentials_json(&creds)
+        let mut creds = self.load_credentials_file()?;
+        creds.set_api_key(provider, api_key);
+        self.save_credentials_file(&creds)
     }
 
     /// Get an API key for a provider from the credentials file
     pub fn get_api_key(&self, provider: &str) -> Option<String> {
-        let creds = self.load_credentials_json().ok()?;
-        creds
-            .get("api_keys")?
-            .get(provider)?
-            .as_str()
-            .map(String::from)
+        let creds = self.load_credentials_file().ok()?;
+        creds.get_api_key(provider).map(String::from)
     }
 
     /// Remove an API key for a provider
     pub fn remove_api_key(&self, provider: &str) -> SageResult<()> {
-        let mut creds = self.load_credentials_json()?;
-
-        if let Some(api_keys) = creds.get_mut("api_keys") {
-            if let Some(obj) = api_keys.as_object_mut() {
-                obj.remove(provider);
-            }
-        }
-
-        self.save_credentials_json(&creds)
+        let mut creds = self.load_credentials_file()?;
+        creds.api_keys.remove(provider);
+        self.save_credentials_file(&creds)
     }
 
     /// Load the config JSON file
@@ -137,16 +118,6 @@ impl ConfigPersistence {
     /// Save the config JSON file
     fn save_config_json(&self, value: &Value) -> SageResult<()> {
         self.save_json_file(&self.config_path, value)
-    }
-
-    /// Load the credentials JSON file
-    fn load_credentials_json(&self) -> SageResult<Value> {
-        self.load_json_file(&self.credentials_path)
-    }
-
-    /// Save the credentials JSON file
-    fn save_credentials_json(&self, value: &Value) -> SageResult<()> {
-        self.save_json_file(&self.credentials_path, value)
     }
 
     /// Load a JSON file, returning empty object if it doesn't exist
@@ -180,6 +151,33 @@ impl ConfigPersistence {
             .map_err(|e| SageError::io(format!("Failed to write {}: {}", path.display(), e)))?;
 
         debug!("Saved configuration to {}", path.display());
+        Ok(())
+    }
+
+    /// Load the credentials file, returning an empty credentials set if absent.
+    fn load_credentials_file(&self) -> SageResult<CredentialsFile> {
+        CredentialsFile::load(&self.credentials_path)
+            .map(|creds| creds.unwrap_or_default())
+            .map_err(|e| {
+                SageError::config(format!(
+                    "Failed to load {}: {}",
+                    self.credentials_path.display(),
+                    e
+                ))
+            })
+    }
+
+    /// Save the credentials file using hardened permissions where supported.
+    fn save_credentials_file(&self, credentials: &CredentialsFile) -> SageResult<()> {
+        credentials.save(&self.credentials_path).map_err(|e| {
+            SageError::io(format!(
+                "Failed to write {}: {}",
+                self.credentials_path.display(),
+                e
+            ))
+        })?;
+
+        debug!("Saved credentials to {}", self.credentials_path.display());
         Ok(())
     }
 }
@@ -413,6 +411,24 @@ mod tests {
         persistence.set_api_key("test", "key").unwrap();
         persistence.remove_api_key("test").unwrap();
         assert_eq!(persistence.get_api_key("test"), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_persistence_api_key_file_mode_is_private() -> Result<(), Box<dyn std::error::Error>> {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempdir()?;
+        let persistence = ConfigPersistence::new(dir.path());
+
+        persistence.set_api_key("anthropic", "sk-ant-test")?;
+
+        let mode = std::fs::metadata(persistence.credentials_path())?
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o600);
+        Ok(())
     }
 
     #[test]

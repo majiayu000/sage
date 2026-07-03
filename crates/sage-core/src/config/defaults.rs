@@ -117,6 +117,8 @@ fn default_config_paths() -> Vec<PathBuf> {
     let mut paths = vec![
         PathBuf::from("sage_config.json"),
         PathBuf::from("sage_config.toml"),
+        PathBuf::from("sage_config.yaml"),
+        PathBuf::from("sage_config.yml"),
     ];
 
     if let Some(global_config) = dirs::home_dir().map(|h| h.join(".sage").join("config.json")) {
@@ -271,6 +273,26 @@ mod tests {
         }
     }
 
+    struct CurrentDirGuard {
+        original: PathBuf,
+    }
+
+    impl CurrentDirGuard {
+        fn set(path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
+            let original = std::env::current_dir()?;
+            std::env::set_current_dir(path)?;
+            Ok(Self { original })
+        }
+    }
+
+    impl Drop for CurrentDirGuard {
+        fn drop(&mut self) {
+            if let Err(error) = std::env::set_current_dir(&self.original) {
+                eprintln!("failed to restore current directory: {error}");
+            }
+        }
+    }
+
     #[test]
     #[serial]
     fn test_load_config_from_file() {
@@ -372,6 +394,25 @@ mod tests {
         select_default_provider_with_credentials(&mut config, true);
 
         assert_eq!(config.default_provider, "ollama");
+    }
+
+    #[test]
+    #[serial]
+    fn test_yaml_default_provider_is_preserved_as_explicit_default()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp_home = TempDir::new()?;
+        let _env = EnvVarGuard::remove_provider_vars_and_set_home(temp_home.path());
+        let project_dir = TempDir::new()?;
+        let _cwd = CurrentDirGuard::set(project_dir.path())?;
+        fs::write("sage_config.yaml", "default_provider: ollama\n")?;
+        unsafe {
+            std::env::set_var("OPENAI_API_KEY", "sk-test-key");
+        }
+
+        let config = load_config_with_overrides(None, HashMap::new())?;
+
+        assert_eq!(config.default_provider, "ollama");
+        Ok(())
     }
 
     #[test]

@@ -41,6 +41,7 @@ pub fn default_providers() -> Vec<ProviderEnvConfig> {
         ProviderEnvConfig::new("kimi", "KIMI_API_KEY"),
         ProviderEnvConfig::new("openrouter", "OPENROUTER_API_KEY"),
         ProviderEnvConfig::new("azure", "AZURE_OPENAI_API_KEY"),
+        ProviderEnvConfig::new("doubao", "DOUBAO_API_KEY"),
         ProviderEnvConfig::new("ollama", "OLLAMA_API_KEY"),
     ]
 }
@@ -103,6 +104,19 @@ mod tests {
             by_name.get("azure").map(String::as_str),
             Some("AZURE_OPENAI_API_KEY"),
             "azure must be resolvable via AZURE_OPENAI_API_KEY"
+        );
+    }
+
+    #[test]
+    fn doubao_is_resolvable() {
+        let by_name: HashMap<_, _> = default_providers()
+            .into_iter()
+            .map(|p| (p.name, p.env_var))
+            .collect();
+        assert_eq!(
+            by_name.get("doubao").map(String::as_str),
+            Some("DOUBAO_API_KEY"),
+            "doubao must be resolvable via DOUBAO_API_KEY"
         );
     }
 
