@@ -18,7 +18,9 @@ pub use executor::ParallelToolExecutor;
 mod tests {
     use super::*;
     use crate::tools::base::{ConcurrencyMode, Tool, ToolError};
-    use crate::tools::permission::{ToolContext, ToolPermissionResult};
+    use crate::tools::permission::{
+        PermissionDecision, PermissionHandler, PermissionRequest, ToolContext, ToolPermissionResult,
+    };
     use crate::tools::types::{ToolCall, ToolResult, ToolSchema};
     use async_trait::async_trait;
     use std::collections::HashMap;
@@ -32,6 +34,7 @@ mod tests {
         delay: Duration,
         call_count: AtomicU32,
         concurrency_mode: ConcurrencyMode,
+        permission_result: Option<ToolPermissionResult>,
     }
 
     impl TestTool {
@@ -41,7 +44,13 @@ mod tests {
                 delay,
                 call_count: AtomicU32::new(0),
                 concurrency_mode: concurrency,
+                permission_result: None,
             }
+        }
+
+        fn with_permission_result(mut self, permission_result: ToolPermissionResult) -> Self {
+            self.permission_result = Some(permission_result);
+            self
         }
     }
 
@@ -74,7 +83,23 @@ mod tests {
             _call: &ToolCall,
             _context: &ToolContext,
         ) -> ToolPermissionResult {
-            ToolPermissionResult::Allow
+            self.permission_result
+                .clone()
+                .unwrap_or(ToolPermissionResult::Allow)
+        }
+    }
+
+    struct ModifyHandler;
+
+    #[async_trait]
+    impl PermissionHandler for ModifyHandler {
+        async fn handle_permission_request(
+            &self,
+            request: PermissionRequest,
+        ) -> PermissionDecision {
+            PermissionDecision::Modify {
+                new_call: request.call,
+            }
         }
     }
 
@@ -152,5 +177,61 @@ mod tests {
             .await;
 
         assert!(!executor.tool_names().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_transform_permission_fails_closed_without_executing_tool() {
+        let transformed = ToolCall::new("2", "test", HashMap::new());
+        let tool = Arc::new(
+            TestTool::new("test", Duration::from_millis(10), ConcurrencyMode::Parallel)
+                .with_permission_result(ToolPermissionResult::transform(transformed, "normalize")),
+        );
+        let executor = ParallelToolExecutor::new();
+        executor.register_tool(tool.clone());
+
+        let call = ToolCall::new("1", "test", HashMap::new());
+        let result = executor.execute_tool(&call).await;
+        let stats = executor.get_stats().await;
+
+        assert!(!result.result.success);
+        assert!(
+            result
+                .result
+                .error
+                .is_some_and(|error| { error.contains("Permission transform is unsupported") })
+        );
+        assert_eq!(tool.call_count.load(Ordering::SeqCst), 0);
+        assert_eq!(stats.permission_denials, 1);
+    }
+
+    #[tokio::test]
+    async fn test_modify_permission_fails_closed_without_executing_tool() {
+        let tool = Arc::new(
+            TestTool::new("test", Duration::from_millis(10), ConcurrencyMode::Parallel)
+                .with_permission_result(ToolPermissionResult::ask(
+                    "modify?",
+                    true,
+                    crate::tools::permission::RiskLevel::Medium,
+                )),
+        );
+        let executor = ParallelToolExecutor::new();
+        executor.register_tool(tool.clone());
+        executor
+            .set_permission_handler(Arc::new(ModifyHandler))
+            .await;
+
+        let call = ToolCall::new("1", "test", HashMap::new());
+        let result = executor.execute_tool(&call).await;
+        let stats = executor.get_stats().await;
+
+        assert!(!result.result.success);
+        assert!(
+            result
+                .result
+                .error
+                .is_some_and(|error| { error.contains("Permission modification is unsupported") })
+        );
+        assert_eq!(tool.call_count.load(Ordering::SeqCst), 0);
+        assert_eq!(stats.permission_denials, 1);
     }
 }

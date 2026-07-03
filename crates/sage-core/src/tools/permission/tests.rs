@@ -27,6 +27,19 @@ mod tests {
     fn test_permission_result() {
         assert!(ToolPermissionResult::allow().is_allowed());
         assert!(!ToolPermissionResult::deny("test").is_allowed());
+        assert!(
+            !ToolPermissionResult::transform(
+                ToolCall::new("1", "test", HashMap::new()),
+                "unsupported"
+            )
+            .is_allowed()
+        );
+        assert!(
+            !PermissionDecision::Modify {
+                new_call: ToolCall::new("2", "test", HashMap::new())
+            }
+            .is_allowed()
+        );
     }
 
     #[test]

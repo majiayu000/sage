@@ -63,7 +63,22 @@ impl ParallelToolExecutor {
                 self.handle_ask_permission(call, tool, &cache_key, question, default, risk_level)
                     .await
             }
-            ToolPermissionResult::Transform { .. } => None, // Transform support planned
+            ToolPermissionResult::Transform { reason, .. } => {
+                self.stats.write().await.permission_denials += 1;
+                Some(ToolExecutionResult {
+                    result: ToolResult::error(
+                        &call.id,
+                        &call.name,
+                        format!(
+                            "Permission transform is unsupported; refusing to execute original tool call: {}",
+                            reason
+                        ),
+                    ),
+                    wait_time: Duration::ZERO,
+                    execution_time: Duration::ZERO,
+                    permission_checked: true,
+                })
+            }
         }
     }
 
@@ -122,7 +137,19 @@ impl ParallelToolExecutor {
                         permission_checked: true,
                     })
                 }
-                PermissionDecision::Modify { .. } => None, // Modify support planned
+                PermissionDecision::Modify { .. } => {
+                    self.stats.write().await.permission_denials += 1;
+                    Some(ToolExecutionResult {
+                        result: ToolResult::error(
+                            &call.id,
+                            &call.name,
+                            "Permission modification is unsupported; refusing to execute original tool call",
+                        ),
+                        wait_time: Duration::ZERO,
+                        execution_time: Duration::ZERO,
+                        permission_checked: true,
+                    })
+                }
             }
         } else if !default {
             self.stats.write().await.permission_denials += 1;

@@ -5,7 +5,7 @@ use crate::config::Config;
 use crate::diagnostics::{AuditDecisionKind, audit_summaries_from_events, global_diagnostics};
 use crate::input::{InputAutoResponse, InputChannel, InputRequestKind, InputResponse};
 use crate::permissions::PermissionProfileSource;
-use crate::settings::types::PermissionSettings;
+use crate::settings::types::{ApprovalSettings, PermissionSettings};
 use serial_test::serial;
 use std::collections::HashMap;
 use std::fs;
@@ -225,6 +225,35 @@ fn test_explicit_ask_default_requires_prompt_without_rules() {
     );
 
     assert!(matches!(decision, Some(SettingsPermissionDecision::Ask(_))));
+}
+
+#[test]
+fn test_explicit_ask_decision_carries_approval_cache_ttl() {
+    let settings = Settings {
+        permissions: PermissionSettings {
+            default_behavior: SettingsPermissionBehavior::Ask,
+            default_behavior_set: true,
+            approval: ApprovalSettings {
+                cache_ttl_ms: Some(60_000),
+            },
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let decision = UnifiedExecutor::settings_permission_decision(
+        &settings,
+        &bash_call("echo needs prompt"),
+        workspace_dir(),
+    );
+
+    match decision {
+        Some(SettingsPermissionDecision::Ask(ask)) => {
+            assert_eq!(ask.audit_key, "Bash(echo needs prompt)");
+            assert_eq!(ask.cache_ttl_ms, Some(60_000));
+        }
+        _ => panic!("explicit ask should carry approval cache metadata"),
+    }
 }
 
 #[test]
@@ -488,6 +517,142 @@ async fn test_settings_permission_prompt_uses_execution_timeout() -> SageResult<
         Some(SettingsPermissionCheck::Blocked { .. })
     ));
     assert_eq!(observed_timeout_ms.load(Ordering::SeqCst), 7_000);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_settings_permission_approval_cache_reuses_allow_within_ttl() -> SageResult<()> {
+    let temp_dir = TempDir::new()?;
+    let sage_dir = temp_dir.path().join(".sage");
+    fs::create_dir(&sage_dir)?;
+    fs::write(
+        sage_dir.join("settings.local.json"),
+        r#"{
+            "permissions": {
+                "default_behavior": "ask",
+                "approval": { "cache_ttl_ms": 60000 }
+            }
+        }"#,
+    )?;
+
+    let prompt_count = Arc::new(AtomicU64::new(0));
+    let prompt_count_for_response = Arc::clone(&prompt_count);
+    let input_channel =
+        InputChannel::non_interactive(InputAutoResponse::Custom(Arc::new(move |request| {
+            prompt_count_for_response.fetch_add(1, Ordering::SeqCst);
+            InputResponse::permission_granted(request.id)
+        })));
+
+    let mut config = Config::default();
+    config.default_provider = "ollama".to_string();
+    let options = ExecutionOptions::interactive().with_working_directory(temp_dir.path());
+    let mut executor = UnifiedExecutor::with_options(config, options)?;
+    executor.set_input_channel(input_channel);
+    let context = ToolExecutionContext::new("session", temp_dir.path().to_path_buf());
+    let call = bash_call("echo cache me");
+
+    let first = executor.check_settings_permission(&call, &context).await?;
+    let second = executor.check_settings_permission(&call, &context).await?;
+
+    assert!(matches!(first, Some(SettingsPermissionCheck::Allowed(_))));
+    assert!(matches!(second, Some(SettingsPermissionCheck::Allowed(_))));
+    assert_eq!(prompt_count.load(Ordering::SeqCst), 1);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_settings_permission_approval_cache_expires_allow_after_ttl() -> SageResult<()> {
+    let temp_dir = TempDir::new()?;
+    let sage_dir = temp_dir.path().join(".sage");
+    fs::create_dir(&sage_dir)?;
+    fs::write(
+        sage_dir.join("settings.local.json"),
+        r#"{
+            "permissions": {
+                "default_behavior": "ask",
+                "approval": { "cache_ttl_ms": 1 }
+            }
+        }"#,
+    )?;
+
+    let prompt_count = Arc::new(AtomicU64::new(0));
+    let prompt_count_for_response = Arc::clone(&prompt_count);
+    let input_channel =
+        InputChannel::non_interactive(InputAutoResponse::Custom(Arc::new(move |request| {
+            prompt_count_for_response.fetch_add(1, Ordering::SeqCst);
+            InputResponse::permission_granted(request.id)
+        })));
+
+    let mut config = Config::default();
+    config.default_provider = "ollama".to_string();
+    let options = ExecutionOptions::interactive().with_working_directory(temp_dir.path());
+    let mut executor = UnifiedExecutor::with_options(config, options)?;
+    executor.set_input_channel(input_channel);
+    let context = ToolExecutionContext::new("session", temp_dir.path().to_path_buf());
+    let call = bash_call("echo cache expires");
+
+    let first = executor.check_settings_permission(&call, &context).await?;
+    tokio::time::sleep(Duration::from_millis(5)).await;
+    let second = executor.check_settings_permission(&call, &context).await?;
+
+    assert!(matches!(first, Some(SettingsPermissionCheck::Allowed(_))));
+    assert!(matches!(second, Some(SettingsPermissionCheck::Allowed(_))));
+    assert_eq!(prompt_count.load(Ordering::SeqCst), 2);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_settings_permission_approval_cache_reuses_deny_within_ttl() -> SageResult<()> {
+    let temp_dir = TempDir::new()?;
+    let sage_dir = temp_dir.path().join(".sage");
+    fs::create_dir(&sage_dir)?;
+    fs::write(
+        sage_dir.join("settings.local.json"),
+        r#"{
+            "permissions": {
+                "default_behavior": "ask",
+                "approval": { "cache_ttl_ms": 60000 }
+            }
+        }"#,
+    )?;
+
+    let prompt_count = Arc::new(AtomicU64::new(0));
+    let prompt_count_for_response = Arc::clone(&prompt_count);
+    let input_channel =
+        InputChannel::non_interactive(InputAutoResponse::Custom(Arc::new(move |request| {
+            prompt_count_for_response.fetch_add(1, Ordering::SeqCst);
+            InputResponse::permission_denied(request.id, Some("blocked".to_string()))
+        })));
+
+    let mut config = Config::default();
+    config.default_provider = "ollama".to_string();
+    let options = ExecutionOptions::interactive().with_working_directory(temp_dir.path());
+    let mut executor = UnifiedExecutor::with_options(config, options)?;
+    executor.set_input_channel(input_channel);
+    let context = ToolExecutionContext::new("session", temp_dir.path().to_path_buf());
+    let call = bash_call("echo cache denied");
+
+    let first = executor.check_settings_permission(&call, &context).await?;
+    let second = executor.check_settings_permission(&call, &context).await?;
+
+    assert!(matches!(
+        first,
+        Some(SettingsPermissionCheck::Blocked { .. })
+    ));
+    match second {
+        Some(SettingsPermissionCheck::Blocked { result, .. }) => {
+            assert!(
+                result
+                    .error
+                    .is_some_and(|error| error.contains("cached approval"))
+            );
+        }
+        _ => panic!("cached denial should block without prompting"),
+    }
+    assert_eq!(prompt_count.load(Ordering::SeqCst), 1);
 
     Ok(())
 }

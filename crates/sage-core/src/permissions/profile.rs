@@ -395,7 +395,7 @@ impl PermissionProfile {
         let default_behavior_source = (settings.default_behavior_set
             || settings.default_behavior != SettingsPermissionBehavior::Ask)
             .then_some(PermissionProfileSource::Local);
-        Self {
+        let mut profile = Self {
             source: PermissionProfileSource::Local,
             allow: settings
                 .allow
@@ -409,11 +409,19 @@ impl PermissionProfile {
                 .cloned()
                 .map(|pattern| PermissionRule::new(pattern, PermissionProfileSource::Local))
                 .collect(),
+            approval: ApprovalPermissionProfile {
+                cache_ttl_ms: settings.approval.cache_ttl_ms,
+                ..Default::default()
+            },
             default_behavior: settings.default_behavior.into(),
             default_behavior_set: settings.default_behavior_set,
             default_behavior_source,
             ..Default::default()
+        };
+        if settings.approval.cache_ttl_ms.is_some() {
+            profile.domain_sources.approval = Some(PermissionProfileSource::Local);
         }
+        profile
     }
 }
 

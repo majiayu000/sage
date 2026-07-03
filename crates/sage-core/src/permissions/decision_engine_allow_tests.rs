@@ -44,6 +44,43 @@ fn supplied_filesystem_keys_can_match_structured_absolute_allow_alias() -> std::
 }
 
 #[test]
+fn structured_allow_takes_priority_over_supplied_compatibility_key() {
+    let profile = PermissionProfile {
+        filesystem: FilesystemPermissionProfile {
+            workspace_roots: vec!["/workspace/repo".to_string()],
+            ..Default::default()
+        },
+        allow: vec![
+            PermissionRule::new("Read(src/**)", PermissionProfileSource::Project),
+            PermissionRule::new(
+                "Read(/workspace/repo/vendor/**)",
+                PermissionProfileSource::Project,
+            ),
+        ],
+        ..Default::default()
+    };
+
+    let decision = PermissionDecisionEngine::new(profile).decide(
+        PermissionDecisionInput::new(
+            PermissionAction::Filesystem,
+            "Read",
+            vec!["Read(src/lib.rs)".to_string()],
+        )
+        .with_path("/workspace/repo/vendor/lib.rs")
+        .with_working_directory("/workspace/repo"),
+    );
+
+    assert_eq!(decision.kind, PermissionDecisionKind::Allow);
+    assert_eq!(
+        decision
+            .matched_rule
+            .as_ref()
+            .map(|rule| rule.pattern.as_str()),
+        Some("Read(/workspace/repo/vendor/**)")
+    );
+}
+
+#[test]
 fn unrelated_supplied_keys_do_not_allow_current_structured_path() {
     let profile = PermissionProfile {
         filesystem: FilesystemPermissionProfile {

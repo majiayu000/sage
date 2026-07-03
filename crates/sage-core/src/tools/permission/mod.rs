@@ -5,13 +5,13 @@
 //! - Permission decisions (allow, deny, ask)
 //! - Permission handlers for user interaction
 //! - Tool execution context
-//! - Rule-based permission matching (OpenClaude compatible)
 
 mod cache;
 mod context;
 mod handler;
 mod handlers;
 mod request;
+#[cfg(test)]
 mod rules;
 #[cfg(test)]
 mod tests;
@@ -21,8 +21,11 @@ mod types;
 pub use cache::PermissionCache;
 pub use context::ToolContext;
 pub use handler::{PermissionHandler, SharedPermissionHandler};
-pub use handlers::{AutoAllowHandler, AutoDenyHandler, PermissionPolicy, PolicyHandler};
+pub use handlers::{AutoAllowHandler, AutoDenyHandler};
+#[cfg(test)]
+pub use handlers::{PermissionPolicy, PolicyHandler};
 pub use request::{PermissionDecision, PermissionRequest, ToolPermissionResult};
+#[cfg(test)]
 pub use rules::{
     PermissionEvaluation, PermissionRule, PermissionRuleEngine, PermissionRulesConfig,
     RuleBasedHandler,
