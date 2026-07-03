@@ -6,6 +6,7 @@ use sage_core::error::SageResult;
 use sage_core::mcp::{clear_active_mcp_registry, set_active_mcp_registry};
 use sage_core::output::{OutputMode, UiEventOutput};
 use sage_core::runtime::{default_thread_store, ensure_thread_store_thread};
+use sage_core::tools::filter_tools_by_settings;
 use sage_core::ui::traits::UiContext;
 use std::sync::Arc;
 
@@ -82,6 +83,8 @@ pub async fn create_executor(
         clear_active_mcp_registry();
     }
 
+    let settings = sage_core::load_settings_for_workspace(&resolved_working_dir)?;
+    all_tools = filter_tools_by_settings(all_tools, &settings.tools)?;
     executor.register_tools(all_tools);
     if let Err(e) = executor.init_subagent_support() {
         tracing::warn!("Failed to initialize subagent support: {}", e);

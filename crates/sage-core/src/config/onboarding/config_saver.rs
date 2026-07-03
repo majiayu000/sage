@@ -2,82 +2,55 @@
 //!
 //! This module handles saving credentials and configuration during onboarding.
 
-use crate::config::Config;
 use crate::config::ModelParameters;
-use crate::config::credential::CredentialsFile;
+use crate::config::persistence::ConfigPersistence;
 use crate::error::{SageError, SageResult};
 use std::path::Path;
 use tracing::info;
 
 /// Save credentials to the credentials file
 pub fn save_credentials(global_dir: &Path, provider: &str, api_key: &str) -> SageResult<()> {
-    let creds_path = global_dir.join("credentials.json");
-    let mut creds = CredentialsFile::load(&creds_path)
-        .map_err(|e| SageError::config(format!("Failed to load credentials: {}", e)))?
-        .unwrap_or_default();
-    creds.set_api_key(provider, api_key);
+    let persistence = ConfigPersistence::new(global_dir);
+    persistence.set_api_key(provider, api_key)?;
 
-    creds
-        .save(&creds_path)
-        .map_err(|e| SageError::config(format!("Failed to save credentials: {}", e)))?;
-
-    info!("Saved {} credentials to {}", provider, creds_path.display());
+    info!(
+        "Saved {} credentials to {}",
+        provider,
+        persistence.credentials_path().display()
+    );
 
     Ok(())
 }
 
 /// Save global configuration for a provider
 pub fn save_global_config(global_dir: &Path, provider: &str) -> SageResult<()> {
-    let config_path = global_dir.join("config.json");
-    let mut config = Config::default();
-
-    if !config.model_providers.contains_key(provider) {
-        let params = create_provider_params(provider);
-        config.model_providers.insert(provider.to_string(), params);
+    let persistence = ConfigPersistence::new(global_dir);
+    let mut params = create_provider_params(provider);
+    if params.api_key.is_none() {
+        params.api_key = Some(format!("${{{}_API_KEY}}", provider.to_uppercase()));
     }
 
-    config.set_default_provider(provider.to_string())?;
+    let provider_value = serde_json::to_value(params)
+        .map_err(|error| SageError::config(format!("Failed to serialize provider: {}", error)))?;
+    persistence.set_default_provider(provider)?;
+    persistence.set_field(&format!("model_providers.{}", provider), provider_value)?;
 
-    if let Some(params) = config.model_providers.get_mut(provider) {
-        apply_provider_defaults(provider, params);
-        if params.api_key.is_none() {
-            params.api_key = Some(format!("${{{}_API_KEY}}", provider.to_uppercase()));
-        }
-    }
-
-    std::fs::create_dir_all(global_dir)
-        .map_err(|e| SageError::config(format!("Failed to create config directory: {}", e)))?;
-
-    let config_json = serde_json::to_string_pretty(&config)
-        .map_err(|e| SageError::config(format!("Failed to serialize config: {}", e)))?;
-
-    std::fs::write(&config_path, config_json)
-        .map_err(|e| SageError::config(format!("Failed to save config: {}", e)))?;
-
-    info!("Saved global config to {}", config_path.display());
+    info!(
+        "Saved global config to {}",
+        persistence.config_path().display()
+    );
     Ok(())
 }
 
 /// Create model parameters for a provider
 fn create_provider_params(provider: &str) -> ModelParameters {
-    let mut params = ModelParameters::default();
-    apply_provider_defaults(provider, &mut params);
-    params
-}
-
-/// Apply provider-specific defaults
-fn apply_provider_defaults(provider: &str, params: &mut ModelParameters) {
-    if provider == "glm" || provider == "zhipu" {
-        params.model = "glm-4.7".to_string();
-        params.base_url = Some("https://open.bigmodel.cn/api/anthropic".to_string());
-        params.api_version = Some("2023-06-01".to_string());
-        params.parallel_tool_calls = Some(false);
-    }
+    crate::config::provider_defaults::default_parameters_for_provider(provider).unwrap_or_default()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::Config;
     use tempfile::tempdir;
 
     #[test]
@@ -92,6 +65,26 @@ mod tests {
 
         assert!(result.is_err());
         assert_eq!(std::fs::read_to_string(&creds_path)?, invalid);
+        Ok(())
+    }
+
+    #[test]
+    fn save_global_config_preserves_builtin_provider_defaults()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempdir()?;
+
+        save_global_config(dir.path(), "anthropic")?;
+
+        let config: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(dir.path().join("config.json"))?)?;
+        let saved_model = config["model_providers"]["anthropic"]["model"].as_str();
+        let defaults = Config::default();
+        let Some(default_params) = defaults.model_providers.get("anthropic") else {
+            panic!("anthropic default missing");
+        };
+        let default_model = default_params.model.as_str();
+        assert_eq!(saved_model, Some(default_model));
+        assert_ne!(saved_model, Some("gpt-4"));
         Ok(())
     }
 }

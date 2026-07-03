@@ -76,5 +76,12 @@ pub mod locations;
 pub mod types;
 pub mod validation;
 
+use crate::error::SageResult;
+use std::path::Path;
+
 pub use loader::SettingsLoader;
 pub use types::Settings;
+
+pub fn load_settings_for_workspace(working_dir: impl AsRef<Path>) -> SageResult<Settings> {
+    SettingsLoader::from_directory(working_dir).load()
+}

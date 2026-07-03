@@ -4,10 +4,14 @@
 //! or invalid configuration, returning usable defaults with status information.
 
 use super::cli_overrides::CliOverrides;
+use super::credentials_file::CredentialsFile;
 use super::loaded_config::LoadedConfig;
 use super::resolver::CredentialResolver;
 use super::resolver_config::ResolverConfig;
+use crate::config::env_loader;
+use crate::config::file_loader;
 use crate::config::model::Config;
+use crate::config::validation::validate_providers;
 use crate::error::SageError;
 use std::path::{Path, PathBuf};
 use tracing::{debug, warn};
@@ -78,7 +82,7 @@ impl UnifiedConfigLoader {
 
         // 2. Try default locations if no file specified or found
         if config_file_used.is_none() {
-            config_file_used = self.try_default_locations(&mut config);
+            config_file_used = self.try_default_locations(&mut config, &mut warnings);
         }
 
         // 3. Apply CLI overrides
@@ -137,24 +141,50 @@ impl UnifiedConfigLoader {
     }
 
     /// Try loading from default locations
-    fn try_default_locations(&self, config: &mut Config) -> Option<PathBuf> {
+    fn try_default_locations(
+        &self,
+        config: &mut Config,
+        warnings: &mut Vec<String>,
+    ) -> Option<PathBuf> {
         // Try project-level config
-        let project_config = self.working_dir.join("sage_config.json");
-        if project_config.exists() {
-            if let Ok(file_config) = self.load_config_file(&project_config) {
-                debug!("Loaded project config from {}", project_config.display());
-                config.merge(file_config);
-                return Some(project_config);
+        for project_config in [
+            self.working_dir.join("sage_config.json"),
+            self.working_dir.join("sage_config.toml"),
+            self.working_dir.join("sage_config.yaml"),
+            self.working_dir.join("sage_config.yml"),
+        ] {
+            if project_config.exists() {
+                match self.load_config_file(&project_config) {
+                    Ok(file_config) => {
+                        debug!("Loaded project config from {}", project_config.display());
+                        config.merge(file_config);
+                        return Some(project_config);
+                    }
+                    Err(error) => warnings.push(format!(
+                        "Config file {} could not be loaded: {}",
+                        project_config.display(),
+                        error
+                    )),
+                }
             }
         }
 
         // Try global config
         let global_config = self.global_dir.join("config.json");
         if global_config.exists() {
-            if let Ok(file_config) = self.load_config_file(&global_config) {
-                debug!("Loaded global config from {}", global_config.display());
-                config.merge(file_config);
-                return Some(global_config);
+            match self.load_config_file(&global_config) {
+                Ok(file_config) => {
+                    debug!("Loaded global config from {}", global_config.display());
+                    config.merge(file_config);
+                    return Some(global_config);
+                }
+                Err(error) => {
+                    warnings.push(format!(
+                        "Config file {} could not be loaded: {}",
+                        global_config.display(),
+                        error
+                    ));
+                }
             }
         }
 
@@ -163,15 +193,31 @@ impl UnifiedConfigLoader {
 
     /// Load a config file
     fn load_config_file(&self, path: &Path) -> Result<Config, SageError> {
-        let content = std::fs::read_to_string(path).map_err(|e| {
-            SageError::io_with_path(
-                format!("Failed to read file: {}", e),
-                path.display().to_string(),
-            )
-        })?;
+        file_loader::load_from_file(path)
+    }
 
-        serde_json::from_str(&content)
-            .map_err(|e| SageError::json(format!("Failed to parse config: {}", e)))
+    /// Load configuration for execution paths.
+    ///
+    /// Unlike `load`, this preserves the legacy strict API by returning parse,
+    /// validation, and override errors to callers while still using the unified
+    /// credential resolution path.
+    pub fn load_strict(&self) -> Result<Config, SageError> {
+        let mut config = Config::default();
+        config.merge(env_loader::load_from_env()?);
+
+        for path in self.strict_config_paths() {
+            if path.exists() {
+                config.merge(self.load_config_file(&path)?);
+            } else {
+                debug!("Config file {} not found, skipping", path.display());
+            }
+        }
+
+        self.apply_cli_overrides(&mut config);
+        self.resolve_credentials(&mut config);
+        self.reject_unknown_legacy_credential_providers(&config)?;
+        config.validate()?;
+        Ok(config)
     }
 
     /// Apply CLI overrides to the config
@@ -184,7 +230,23 @@ impl UnifiedConfigLoader {
             config.max_steps = Some(max_steps);
         }
 
+        if let Some(working_dir) = &self.cli_overrides.working_dir {
+            config.working_directory = Some(working_dir.clone());
+        }
+
         let default_provider = config.default_provider.clone();
+        if !config.model_providers.contains_key(&default_provider)
+            && self.cli_provider_parameters_present()
+        {
+            let params = crate::config::provider_defaults::default_parameters_for_provider(
+                &default_provider,
+            )
+            .unwrap_or_default();
+            config
+                .model_providers
+                .insert(default_provider.clone(), params);
+        }
+
         if let Some(params) = config.model_providers.get_mut(&default_provider) {
             if let Some(ref model) = self.cli_overrides.model {
                 params.model = model.clone();
@@ -192,7 +254,16 @@ impl UnifiedConfigLoader {
             if let Some(ref api_key) = self.cli_overrides.api_key {
                 params.api_key = Some(api_key.clone());
             }
+            if let Some(ref model_base_url) = self.cli_overrides.model_base_url {
+                params.base_url = Some(model_base_url.clone());
+            }
         }
+    }
+
+    fn cli_provider_parameters_present(&self) -> bool {
+        self.cli_overrides.model.is_some()
+            || self.cli_overrides.api_key.is_some()
+            || self.cli_overrides.model_base_url.is_some()
     }
 
     /// Resolve credentials and update config
@@ -222,6 +293,49 @@ impl UnifiedConfigLoader {
         }
     }
 
+    fn reject_unknown_legacy_credential_providers(&self, config: &Config) -> Result<(), SageError> {
+        let resolver = self.create_credential_resolver();
+        if !resolver.config().allow_legacy_plaintext {
+            return Ok(());
+        }
+
+        for path in [
+            resolver.config().project_credentials_path(),
+            resolver.config().global_credentials_path(),
+        ] {
+            let Some(credentials) = CredentialsFile::load(&path).map_err(|error| {
+                SageError::config(format!(
+                    "Failed to load credentials file {}: {}",
+                    path.display(),
+                    error
+                ))
+            })?
+            else {
+                continue;
+            };
+
+            let mut unknown_providers = credentials
+                .api_keys
+                .keys()
+                .filter(|provider| !config.model_providers.contains_key(*provider))
+                .cloned()
+                .collect::<Vec<_>>();
+            unknown_providers.sort();
+
+            if let Some(provider) = unknown_providers.into_iter().next() {
+                let mut validation_config = config.clone();
+                validation_config.default_provider = provider.clone();
+                validation_config
+                    .model_providers
+                    .entry(provider)
+                    .or_default();
+                validate_providers(&validation_config)?;
+            }
+        }
+
+        Ok(())
+    }
+
     /// Create a credential resolver based on current settings
     fn create_credential_resolver(&self) -> CredentialResolver {
         let mut config = ResolverConfig::new(&self.working_dir).with_global_dir(&self.global_dir);
@@ -236,6 +350,20 @@ impl UnifiedConfigLoader {
         }
 
         CredentialResolver::new(config)
+    }
+
+    fn strict_config_paths(&self) -> Vec<PathBuf> {
+        if let Some(path) = &self.config_file {
+            return vec![path.clone()];
+        }
+
+        vec![
+            self.working_dir.join("sage_config.json"),
+            self.working_dir.join("sage_config.toml"),
+            self.working_dir.join("sage_config.yaml"),
+            self.working_dir.join("sage_config.yml"),
+            self.global_dir.join("config.json"),
+        ]
     }
 }
 

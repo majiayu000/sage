@@ -222,10 +222,11 @@ pub use session::{
     ConversationMessage, MessageRole, Session, SessionConfig, SessionState, SessionSummary,
     SessionToolCall, SessionToolResult,
 };
+pub use settings::load_settings_for_workspace;
 pub use settings::types::{
     LoadedManagedConfig, ManagedConfig, ManagedConfigSource, ManagedConfigSourceKind,
     ManagedDefaultBehavior, ManagedExecConfig, ManagedNetworkConfig, ManagedPermissionConfig,
-    ManagedSandboxConfig,
+    ManagedSandboxConfig, ToolSettings,
 };
 pub use skills::{
     Skill, SkillActivation, SkillContext, SkillInvocationConfig, SkillMetadata, SkillRegistry,

@@ -6,9 +6,11 @@ use sage_core::{
     agent::{ExecutionMode, ExecutionOptions},
     error::SageResult,
     input::{InputChannel, InputChannelHandle},
+    load_settings_for_workspace,
     mcp::{build_mcp_registry_from_config, clear_active_mcp_registry, set_active_mcp_registry},
     runtime::Runtime,
     runtime_protocol::RuntimeSource,
+    tools::filter_tools_by_settings,
     types::TaskMetadata,
 };
 use std::sync::Arc;
@@ -72,12 +74,20 @@ impl SageAgentSdk {
         }
         let mut executor = runtime.build_executor()?;
 
+        let settings = load_settings_for_workspace(&working_dir)?;
+        let default_tools = filter_tools_by_settings(
+            default_tools(
+                working_dir.clone(),
+                executor.skill_registry(),
+                executor.thread_store(),
+            ),
+            &settings.tools,
+        )?;
+
         // Register default tools
-        executor.register_tools(default_tools(
-            working_dir.clone(),
-            executor.skill_registry(),
-            executor.thread_store(),
-        ));
+        executor.register_tools(default_tools);
+
+        let mcp_tool_settings = settings.tools.clone();
 
         // Set up input channel if interactive
         let input_handle = if !options.non_interactive {
@@ -119,6 +129,8 @@ impl SageAgentSdk {
                         );
 
                         if !mcp_tools.is_empty() {
+                            let mcp_tools =
+                                filter_tools_by_settings(mcp_tools, &mcp_tool_settings)?;
                             executor.register_tools(mcp_tools);
                         }
                     }

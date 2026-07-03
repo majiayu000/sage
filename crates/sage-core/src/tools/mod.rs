@@ -4,6 +4,7 @@ pub mod background_registry;
 pub mod background_task;
 pub mod base;
 pub mod executor;
+mod filter;
 pub mod names;
 pub mod parallel_executor;
 pub mod permission;
@@ -20,6 +21,7 @@ pub use background_registry::{
 pub use background_task::{BackgroundShellTask, BackgroundTaskStatus};
 pub use base::{ConcurrencyMode, Tool, ToolError};
 pub use executor::ToolExecutor;
+pub use filter::filter_tools_by_settings;
 pub use parallel_executor::{
     ExecutorStats, ParallelExecutorBuilder, ParallelExecutorConfig, ParallelToolExecutor,
     ToolExecutionResult,

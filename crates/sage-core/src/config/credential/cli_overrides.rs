@@ -13,6 +13,10 @@ pub struct CliOverrides {
     pub api_key: Option<String>,
     /// Max steps specified via CLI
     pub max_steps: Option<u32>,
+    /// Base URL specified via CLI
+    pub model_base_url: Option<String>,
+    /// Working directory specified via CLI
+    pub working_dir: Option<std::path::PathBuf>,
 }
 
 impl CliOverrides {
@@ -40,12 +44,24 @@ impl CliOverrides {
         self
     }
 
+    pub fn with_model_base_url(mut self, model_base_url: impl Into<String>) -> Self {
+        self.model_base_url = Some(model_base_url.into());
+        self
+    }
+
+    pub fn with_working_dir(mut self, working_dir: impl Into<std::path::PathBuf>) -> Self {
+        self.working_dir = Some(working_dir.into());
+        self
+    }
+
     /// Check if any overrides are set
     pub fn has_overrides(&self) -> bool {
         self.provider.is_some()
             || self.model.is_some()
             || self.api_key.is_some()
             || self.max_steps.is_some()
+            || self.model_base_url.is_some()
+            || self.working_dir.is_some()
     }
 }
 
@@ -65,12 +81,22 @@ mod tests {
             .with_provider("openai")
             .with_model("gpt-4")
             .with_api_key("test-key")
-            .with_max_steps(50);
+            .with_max_steps(50)
+            .with_model_base_url("https://api.example.test")
+            .with_working_dir("/tmp/sage");
 
         assert!(overrides.has_overrides());
         assert_eq!(overrides.provider, Some("openai".to_string()));
         assert_eq!(overrides.model, Some("gpt-4".to_string()));
         assert_eq!(overrides.api_key, Some("test-key".to_string()));
         assert_eq!(overrides.max_steps, Some(50));
+        assert_eq!(
+            overrides.model_base_url,
+            Some("https://api.example.test".to_string())
+        );
+        assert_eq!(
+            overrides.working_dir,
+            Some(std::path::PathBuf::from("/tmp/sage"))
+        );
     }
 }

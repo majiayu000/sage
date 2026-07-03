@@ -1,11 +1,8 @@
 //! Default configuration loading functions
 
-use crate::config::ModelParameters;
-use crate::config::credential::CredentialsFile;
-use crate::config::loader::ConfigLoader;
+use crate::config::credential::{CliOverrides, UnifiedConfigLoader};
 use crate::config::model::Config;
-use crate::config::provider_defaults::create_default_providers;
-use crate::error::SageResult;
+use crate::error::{SageError, SageResult};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -45,76 +42,49 @@ pub fn load_config_with_overrides(
     config_file: Option<&str>,
     overrides: HashMap<String, String>,
 ) -> SageResult<Config> {
-    let mut loader = ConfigLoader::new().with_defaults().with_env();
     let explicit_default_provider = explicit_default_provider_requested(config_file, &overrides);
-
+    let cli_overrides = cli_overrides_from_map(overrides)?;
+    let mut loader = UnifiedConfigLoader::new().with_cli_overrides(cli_overrides);
     if let Some(file) = config_file {
-        loader = loader.with_file(file);
-    } else {
-        loader = loader
-            .with_file("sage_config.json")
-            .with_file("sage_config.toml");
-
-        if let Some(global_config) = dirs::home_dir().map(|h| h.join(".sage").join("config.json")) {
-            if global_config.exists() {
-                loader = loader.with_file(global_config);
-            }
-        }
+        loader = loader.with_config_file(file);
     }
 
-    let mut config = loader.with_args(overrides).load()?;
-
-    // Load credentials from ~/.sage/credentials.json
-    if let Some(creds_path) = dirs::home_dir().map(|h| h.join(".sage").join("credentials.json")) {
-        if let Some(creds) = CredentialsFile::load_or_warn(&creds_path) {
-            let default_params = create_default_providers();
-            // Merge credentials into config
-            for (provider, api_key) in creds.api_keys {
-                tracing::debug!(
-                    "Processing credential for provider '{}': key_len={}",
-                    provider,
-                    api_key.len()
-                );
-                // Only add if not already configured
-                if !config.model_providers.contains_key(&provider) {
-                    let mut params = default_params
-                        .get(&provider)
-                        .cloned()
-                        .unwrap_or_else(ModelParameters::default);
-                    params.api_key = Some(api_key.clone());
-                    config.model_providers.insert(provider.clone(), params);
-                    tracing::debug!("Added new provider '{}' with API key", provider);
-                } else if let Some(params) = config.model_providers.get_mut(&provider) {
-                    // Update API key if not set or is an env var placeholder
-                    let current_key = params.api_key.as_deref().unwrap_or("");
-                    let should_update = match &params.api_key {
-                        None => true,
-                        Some(key) => key.starts_with("${") || key.is_empty(),
-                    };
-                    tracing::debug!(
-                        "Provider '{}' exists: current_key_preview='{}...', should_update={}",
-                        provider,
-                        if current_key.len() > 8 {
-                            &current_key[..8]
-                        } else {
-                            current_key
-                        },
-                        should_update
-                    );
-                    if should_update {
-                        params.api_key = Some(api_key.clone());
-                        tracing::debug!("Updated API key for provider '{}'", provider);
-                    }
-                }
-            }
-            tracing::debug!("Loaded credentials from {}", creds_path.display());
-        }
-    }
-
+    let mut config = loader.load_strict()?;
     select_default_provider_with_credentials(&mut config, explicit_default_provider);
     config.validate()?;
 
     Ok(config)
+}
+
+fn cli_overrides_from_map(overrides: HashMap<String, String>) -> SageResult<CliOverrides> {
+    let mut cli_overrides = CliOverrides::new();
+    for (key, value) in overrides {
+        match key.as_str() {
+            "provider" | "default_provider" => {
+                cli_overrides = cli_overrides.with_provider(value);
+            }
+            "model" => {
+                cli_overrides = cli_overrides.with_model(value);
+            }
+            "api_key" => {
+                cli_overrides = cli_overrides.with_api_key(value);
+            }
+            "model_base_url" => {
+                cli_overrides = cli_overrides.with_model_base_url(value);
+            }
+            "working_dir" => {
+                cli_overrides = cli_overrides.with_working_dir(value);
+            }
+            "max_steps" => {
+                let max_steps = value.parse::<u32>().map_err(|_| {
+                    SageError::config(format!("Invalid max_steps value '{}'", value))
+                })?;
+                cli_overrides = cli_overrides.with_max_steps(max_steps);
+            }
+            _ => {}
+        }
+    }
+    Ok(cli_overrides)
 }
 
 fn explicit_default_provider_requested(
@@ -147,6 +117,8 @@ fn default_config_paths() -> Vec<PathBuf> {
     let mut paths = vec![
         PathBuf::from("sage_config.json"),
         PathBuf::from("sage_config.toml"),
+        PathBuf::from("sage_config.yaml"),
+        PathBuf::from("sage_config.yml"),
     ];
 
     if let Some(global_config) = dirs::home_dir().map(|h| h.join(".sage").join("config.json")) {
@@ -301,6 +273,26 @@ mod tests {
         }
     }
 
+    struct CurrentDirGuard {
+        original: PathBuf,
+    }
+
+    impl CurrentDirGuard {
+        fn set(path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
+            let original = std::env::current_dir()?;
+            std::env::set_current_dir(path)?;
+            Ok(Self { original })
+        }
+    }
+
+    impl Drop for CurrentDirGuard {
+        fn drop(&mut self) {
+            if let Err(error) = std::env::set_current_dir(&self.original) {
+                eprintln!("failed to restore current directory: {error}");
+            }
+        }
+    }
+
     #[test]
     #[serial]
     fn test_load_config_from_file() {
@@ -402,6 +394,25 @@ mod tests {
         select_default_provider_with_credentials(&mut config, true);
 
         assert_eq!(config.default_provider, "ollama");
+    }
+
+    #[test]
+    #[serial]
+    fn test_yaml_default_provider_is_preserved_as_explicit_default()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp_home = TempDir::new()?;
+        let _env = EnvVarGuard::remove_provider_vars_and_set_home(temp_home.path());
+        let project_dir = TempDir::new()?;
+        let _cwd = CurrentDirGuard::set(project_dir.path())?;
+        fs::write("sage_config.yaml", "default_provider: ollama\n")?;
+        unsafe {
+            std::env::set_var("OPENAI_API_KEY", "sk-test-key");
+        }
+
+        let config = load_config_with_overrides(None, HashMap::new())?;
+
+        assert_eq!(config.default_provider, "ollama");
+        Ok(())
     }
 
     #[test]

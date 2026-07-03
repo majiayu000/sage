@@ -10,6 +10,7 @@ use sage_core::mcp::{clear_active_mcp_registry, set_active_mcp_registry};
 use sage_core::output::OutputMode;
 use sage_core::runtime::{Runtime, default_thread_store};
 use sage_core::runtime_protocol::RuntimeSource;
+use sage_core::tools::filter_tools_by_settings;
 use sage_tools::get_default_tools_with_context_and_thread_store;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -115,6 +116,8 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
         tracing::debug!("MCP is disabled in configuration");
     }
 
+    let settings = sage_core::load_settings_for_workspace(&working_dir)?;
+    all_tools = filter_tools_by_settings(all_tools, &settings.tools)?;
     executor.register_tools(all_tools);
 
     // Initialize sub-agent support for Task tool
