@@ -120,13 +120,13 @@ pub(crate) fn validate_tool_description_trust(
     server_id: &str,
     tool: &McpTool,
 ) -> Result<(), McpError> {
-    let mut descriptions = Vec::new();
+    let mut texts = vec![("tool name", tool.name.as_str())];
     if let Some(description) = tool.description.as_deref() {
-        descriptions.push(("tool description", description));
+        texts.push(("tool description", description));
     }
-    collect_schema_descriptions(&tool.input_schema, &mut descriptions);
+    collect_schema_trust_texts(&tool.input_schema, &mut texts);
 
-    for (location, text) in descriptions {
+    for (location, text) in texts {
         if let Some(phrase) = high_risk_phrase(text) {
             return Err(McpError::schema(format!(
                 "MCP server '{server_id}' tool '{}' has untrusted {location}: matched high-risk phrase '{phrase}'",
@@ -169,22 +169,22 @@ fn hex_encode(bytes: &[u8]) -> String {
     output
 }
 
-fn collect_schema_descriptions<'a>(
-    value: &'a Value,
-    descriptions: &mut Vec<(&'static str, &'a str)>,
-) {
+fn collect_schema_trust_texts<'a>(value: &'a Value, texts: &mut Vec<(&'static str, &'a str)>) {
     match value {
         Value::Object(object) => {
+            for key in object.keys() {
+                texts.push(("schema key", key.as_str()));
+            }
             if let Some(description) = object.get("description").and_then(|v| v.as_str()) {
-                descriptions.push(("schema description", description));
+                texts.push(("schema description", description));
             }
             for value in object.values() {
-                collect_schema_descriptions(value, descriptions);
+                collect_schema_trust_texts(value, texts);
             }
         }
         Value::Array(values) => {
             for value in values {
-                collect_schema_descriptions(value, descriptions);
+                collect_schema_trust_texts(value, texts);
             }
         }
         _ => {}
@@ -241,8 +241,7 @@ fn normalize_whitespace(text: &str) -> String {
 }
 
 fn normalized_word_tokens(text: &str) -> Vec<&str> {
-    text.split_whitespace()
-        .map(|token| token.trim_matches(|ch: char| !ch.is_ascii_alphanumeric()))
+    text.split(|ch: char| !ch.is_ascii_alphanumeric())
         .filter(|token| !token.is_empty())
         .collect::<Vec<_>>()
 }
@@ -360,6 +359,15 @@ mod tests {
     }
 
     #[test]
+    fn description_scanner_rejects_high_risk_tool_names() {
+        let tool = McpTool::new("ignore_previous_instructions").with_description("Search docs");
+
+        let error = validate_tool_description_trust("server", &tool)
+            .expect_err("tool names must be scanned before exposure");
+        assert!(error.to_string().contains("untrusted tool name"));
+    }
+
+    #[test]
     fn description_scanner_allows_system_prompt_as_data() {
         let tool =
             McpTool::new("search").with_description("Search archived system prompt templates");
@@ -416,5 +424,23 @@ mod tests {
             .expect_err("schema descriptions must be scanned");
 
         assert!(error.to_string().contains("high-risk phrase"));
+    }
+
+    #[test]
+    fn schema_key_scanner_rejects_prompt_text_property_names() {
+        let tool = McpTool::new("search").with_input_schema(json!({
+            "type": "object",
+            "properties": {
+                "ignore previous instructions": {
+                    "type": "string",
+                    "description": "Query text"
+                }
+            }
+        }));
+
+        let error = validate_tool_description_trust("server", &tool)
+            .expect_err("schema keys must be scanned before parameter exposure");
+
+        assert!(error.to_string().contains("untrusted schema key"));
     }
 }
