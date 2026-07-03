@@ -205,12 +205,29 @@ fn high_risk_phrase(text: &str) -> Option<&'static str> {
         "override system prompt",
         "ignore system prompt",
         "reveal system prompt",
-        "higher priority than",
         "you must obey this tool",
         "act as system",
     ]
     .into_iter()
     .find(|phrase| lower.contains(phrase))
+    .or_else(|| contains_priority_authority_claim(&lower).then_some("higher priority than"))
+}
+
+fn contains_priority_authority_claim(text: &str) -> bool {
+    text.contains("higher priority than")
+        && [
+            "system prompt",
+            "system message",
+            "developer message",
+            "developer instruction",
+            "developer instructions",
+            "user instruction",
+            "user instructions",
+            "previous instruction",
+            "previous instructions",
+        ]
+        .into_iter()
+        .any(|phrase| text.contains(phrase))
 }
 
 fn normalize_whitespace(text: &str) -> String {
@@ -326,6 +343,21 @@ mod tests {
     fn description_scanner_allows_system_prompt_as_data() {
         let tool =
             McpTool::new("search").with_description("Search archived system prompt templates");
+
+        assert!(validate_tool_description_trust("server", &tool).is_ok());
+    }
+
+    #[test]
+    fn description_scanner_allows_priority_filter_descriptions() {
+        let tool = McpTool::new("search").with_input_schema(json!({
+            "type": "object",
+            "properties": {
+                "priority": {
+                    "type": "string",
+                    "description": "Return issues with higher priority than this value"
+                }
+            }
+        }));
 
         assert!(validate_tool_description_trust("server", &tool).is_ok());
     }
