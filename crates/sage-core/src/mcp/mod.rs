@@ -48,6 +48,7 @@ pub mod runtime_registry;
 pub mod runtime_status;
 pub mod schema_translator;
 pub mod source;
+mod tool_trust;
 pub mod transport;
 pub mod types;
 

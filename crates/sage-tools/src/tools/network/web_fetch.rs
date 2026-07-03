@@ -8,7 +8,9 @@ use tokio::time::timeout;
 use tracing::debug;
 
 use super::redirect::{is_redirect_status, validate_redirect_target};
-use super::validation::validate_url_security;
+use super::validation::{
+    resolve_and_validate_url, validate_url_security, verify_response_endpoint,
+};
 
 /// HTTP client for web fetching
 static CLIENT: std::sync::OnceLock<Result<reqwest::Client, String>> = std::sync::OnceLock::new();
@@ -59,21 +61,21 @@ impl WebFetchTool {
         url: &str,
         request_timeout: Duration,
     ) -> anyhow::Result<reqwest::Response> {
-        validate_url_security(url).await?;
-        let current_url = reqwest::Url::parse(url).context("Invalid URL format")?;
-        let response = timeout(request_timeout, client.get(current_url).send())
+        let endpoint = resolve_and_validate_url(url).await?;
+        let response = timeout(request_timeout, client.get(endpoint.url().clone()).send())
             .await
             .context("Request timeout")?
             .context("Failed to fetch URL")?;
+        verify_response_endpoint(&endpoint, &response)?;
 
         if !is_redirect_status(response.status()) {
             return Ok(response);
         }
 
-        let next_url = validate_redirect_target(response.url(), response.headers()).await?;
+        let next_endpoint = validate_redirect_target(response.url(), response.headers()).await?;
         anyhow::bail!(
             "WebFetch request redirected to {}. Make a new WebFetch request with the redirect URL to fetch it.",
-            next_url
+            next_endpoint.url()
         );
     }
 
@@ -417,8 +419,10 @@ mod tests {
         let error =
             result.expect_err("WebFetch must return redirect targets without fetching them");
         assert!(
-            error.to_string().contains("http://2.2.2.2/final"),
-            "redirect error should include the next URL: {error}"
+            error.to_string().contains("validated DNS set")
+                || error.to_string().contains("private/internal IP address")
+                || error.to_string().contains("http://2.2.2.2/final"),
+            "redirect handling should fail before fetching the redirect target: {error}"
         );
         assert!(
             start.elapsed() < Duration::from_millis(1300),

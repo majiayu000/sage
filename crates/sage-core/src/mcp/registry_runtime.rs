@@ -8,6 +8,7 @@ use super::error::McpError;
 use super::registry::{McpRegistry, McpToolAdapter, ToolRoute};
 use super::runtime_status::{McpRuntimeAction, McpRuntimeActionResult, McpServerRuntimeStatus};
 use super::source::{McpSourceSet, MergedMcpServerSource};
+use super::tool_trust::{McpToolTrustDecision, McpToolTrustStore, validate_tool_description_trust};
 use super::types::McpTool;
 use crate::config::{McpAuthKind, McpServerConfig};
 use std::sync::Arc;
@@ -203,10 +204,21 @@ impl McpRegistry {
                 "Failed to discover tools for MCP server '{name}': {error}"
             ))
         })?;
-        self.tool_mapping
-            .retain(|_, route| route.server_name != name);
+
+        let mut trust_store = McpToolTrustStore::load_default()?;
+        let mut trust_decisions = Vec::with_capacity(tools.len());
         for tool in &tools {
             validate_mcp_tool_schema(name, tool)?;
+            validate_tool_description_trust(name, tool)?;
+            trust_decisions.push((tool.name.clone(), trust_store.check_tool(name, tool)));
+        }
+        trust_store.save_if_dirty()?;
+
+        self.tool_mapping
+            .retain(|_, route| route.server_name != name);
+        for (tool, (_, trust_decision)) in tools.iter().zip(trust_decisions) {
+            log_mcp_tool_trust_decision(name, &tool.name, trust_decision);
+            self.warn_remote_tool_name_collision(name, &tool.name);
             let namespaced_name = McpToolAdapter::namespaced_tool_name(name, &tool.name);
             self.tool_mapping.insert(
                 namespaced_name,
@@ -256,6 +268,47 @@ impl McpRegistry {
             .write()
             .mark_server(&status.server_id, status.tool_discovery_state.clone());
         self.statuses.insert(status.server_id.clone(), status);
+    }
+
+    fn warn_remote_tool_name_collision(&self, server_name: &str, remote_name: &str) -> usize {
+        let mut collision_count = 0;
+        for entry in self.tool_mapping.iter() {
+            let route = entry.value();
+            if route.server_name != server_name && route.remote_name == remote_name {
+                collision_count += 1;
+                tracing::warn!(
+                    server = server_name,
+                    existing_server = route.server_name.as_str(),
+                    tool = remote_name,
+                    namespaced_tool = entry.key().as_str(),
+                    "MCP tool name collision detected; Sage keeps server-qualified tool routes to avoid shadowing"
+                );
+            }
+        }
+        collision_count
+    }
+}
+
+fn log_mcp_tool_trust_decision(server_name: &str, tool_name: &str, decision: McpToolTrustDecision) {
+    match decision {
+        McpToolTrustDecision::BaselineCreated { hash } => {
+            tracing::info!(
+                server = server_name,
+                tool = tool_name,
+                hash = hash.as_str(),
+                "Created MCP tool trust baseline"
+            );
+        }
+        McpToolTrustDecision::Unchanged => {}
+        McpToolTrustDecision::Drift { previous, current } => {
+            tracing::warn!(
+                server = server_name,
+                tool = tool_name,
+                previous = previous.as_str(),
+                current = current.as_str(),
+                "MCP tool description/schema trust baseline drift detected"
+            );
+        }
     }
 }
 
@@ -329,5 +382,26 @@ fn refresh_status_auth(source: &MergedMcpServerSource, status: &mut McpServerRun
         )
     {
         status.state = super::runtime_status::McpRuntimeState::Disconnected;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn same_remote_tool_name_collision_is_detected_across_servers() {
+        let registry = McpRegistry::new();
+        registry.tool_mapping.insert(
+            "docs__read".to_string(),
+            ToolRoute {
+                server_name: "docs".to_string(),
+                remote_name: "read".to_string(),
+            },
+        );
+
+        assert_eq!(registry.warn_remote_tool_name_collision("fs", "read"), 1);
+        assert_eq!(registry.warn_remote_tool_name_collision("docs", "read"), 0);
+        assert_eq!(registry.warn_remote_tool_name_collision("fs", "write"), 0);
     }
 }
