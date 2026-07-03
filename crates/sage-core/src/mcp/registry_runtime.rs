@@ -207,19 +207,18 @@ impl McpRegistry {
 
         let mut trust_store = McpToolTrustStore::load_default()?;
         let trusted_tools = trusted_mcp_tools_for_server(name, tools, &mut trust_store)?;
-        let cached_tools = trusted_tools
-            .iter()
-            .map(|(tool, _)| tool.clone())
-            .collect::<Vec<_>>();
-        *client.tools().write().await = cached_tools.clone();
         trust_store.save_if_dirty()?;
 
         self.tool_mapping
             .retain(|_, route| route.server_name != name);
+        let mut routed_tools = Vec::with_capacity(trusted_tools.len());
         for (tool, trust_decision) in &trusted_tools {
             log_mcp_tool_trust_decision(name, &tool.name, trust_decision.clone());
             self.warn_remote_tool_name_collision(name, &tool.name);
             let namespaced_name = McpToolAdapter::namespaced_tool_name(name, &tool.name);
+            if self.warn_namespaced_tool_route_collision(name, &tool.name, &namespaced_name) {
+                continue;
+            }
             self.tool_mapping.insert(
                 namespaced_name,
                 ToolRoute {
@@ -227,10 +226,12 @@ impl McpRegistry {
                     remote_name: tool.name.clone(),
                 },
             );
+            routed_tools.push(tool.clone());
         }
+        *client.tools().write().await = routed_tools.clone();
         self.deferred_tools
             .write()
-            .replace_server_tools(name.to_string(), cached_tools);
+            .replace_server_tools(name.to_string(), routed_tools);
 
         if let Ok(resources) = client.list_resources().await {
             for resource in resources {
@@ -255,21 +256,18 @@ impl McpRegistry {
             .map(|entry| entry.value().clone())
             .ok_or_else(|| McpError::connection(format!("MCP server '{name}' is not configured")))
     }
-
     fn current_or_initial_status(&self, source: &MergedMcpServerSource) -> McpServerRuntimeStatus {
         self.statuses
             .get(&source.selected.server_id)
             .map(|entry| entry.value().clone())
             .unwrap_or_else(|| McpServerRuntimeStatus::from_source(source))
     }
-
     fn store_status(&self, status: McpServerRuntimeStatus) {
         self.deferred_tools
             .write()
             .mark_server(&status.server_id, status.tool_discovery_state.clone());
         self.statuses.insert(status.server_id.clone(), status);
     }
-
     fn warn_remote_tool_name_collision(&self, server_name: &str, remote_name: &str) -> usize {
         let mut collision_count = 0;
         for entry in self.tool_mapping.iter() {
@@ -287,8 +285,29 @@ impl McpRegistry {
         }
         collision_count
     }
+    fn warn_namespaced_tool_route_collision(
+        &self,
+        server_name: &str,
+        remote_name: &str,
+        namespaced_name: &str,
+    ) -> bool {
+        let Some(existing) = self.tool_mapping.get(namespaced_name) else {
+            return false;
+        };
+        if existing.server_name == server_name && existing.remote_name == remote_name {
+            return false;
+        }
+        tracing::warn!(
+            server = server_name,
+            existing_server = existing.server_name.as_str(),
+            tool = remote_name,
+            existing_tool = existing.remote_name.as_str(),
+            namespaced_tool = namespaced_name,
+            "MCP tool namespaced route collision detected; skipping the later route to avoid silent shadowing"
+        );
+        true
+    }
 }
-
 fn trusted_mcp_tools_for_server(
     server_name: &str,
     tools: Vec<McpTool>,
@@ -311,7 +330,6 @@ fn trusted_mcp_tools_for_server(
     }
     Ok(trusted_tools)
 }
-
 fn log_mcp_tool_trust_decision(server_name: &str, tool_name: &str, decision: McpToolTrustDecision) {
     match decision {
         McpToolTrustDecision::BaselineCreated { hash } => {
@@ -430,6 +448,29 @@ mod tests {
     }
 
     #[test]
+    fn normalized_namespaced_tool_route_collision_is_detected() {
+        let registry = McpRegistry::new();
+        registry.tool_mapping.insert(
+            "mcp__fs_prod__read".to_string(),
+            ToolRoute {
+                server_name: "fs-prod".to_string(),
+                remote_name: "read".to_string(),
+            },
+        );
+
+        assert!(registry.warn_namespaced_tool_route_collision(
+            "fs_prod",
+            "read",
+            "mcp__fs_prod__read"
+        ));
+        assert!(!registry.warn_namespaced_tool_route_collision(
+            "fs-prod",
+            "read",
+            "mcp__fs_prod__read"
+        ));
+    }
+
+    #[test]
     fn untrusted_mcp_tool_is_skipped_without_rejecting_safe_tools()
     -> Result<(), Box<dyn std::error::Error>> {
         let dir = TempDir::new()?;
@@ -446,8 +487,13 @@ mod tests {
         assert_eq!(trusted[0].0.name, "safe");
         trust_store.save_if_dirty()?;
         let baseline = std::fs::read_to_string(dir.path().join("trust.json"))?;
-        assert!(baseline.contains("docs/safe"));
-        assert!(!baseline.contains("docs/poison"));
+        let baseline: serde_json::Value = serde_json::from_str(&baseline)?;
+        let hashes = baseline
+            .get("tool_hashes")
+            .and_then(serde_json::Value::as_object)
+            .ok_or_else(|| std::io::Error::other("trust baseline must contain tool hashes"))?;
+        assert!(hashes.contains_key(r#"["docs","safe"]"#));
+        assert!(!hashes.contains_key(r#"["docs","poison"]"#));
         Ok(())
     }
 }

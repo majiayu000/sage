@@ -149,9 +149,7 @@ impl McpRegistry {
     pub async fn all_tools(&self) -> Vec<McpTool> {
         let mut tools = Vec::new();
         for entry in self.clients.iter() {
-            if let Ok(t) = entry.value().list_tools().await {
-                tools.extend(t);
-            }
+            tools.extend(entry.value().cached_tools().await);
         }
         tools
     }

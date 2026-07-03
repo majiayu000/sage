@@ -142,7 +142,8 @@ fn default_path() -> PathBuf {
 }
 
 fn tool_key(server_id: &str, tool_name: &str) -> String {
-    format!("{server_id}/{tool_name}")
+    serde_json::to_string(&(server_id, tool_name))
+        .unwrap_or_else(|_| format!("{}\0{}", server_id, tool_name))
 }
 
 fn tool_hash(tool: &McpTool) -> String {
@@ -248,6 +249,12 @@ mod tests {
             McpToolTrustDecision::Drift { .. }
         ));
         Ok(())
+    }
+
+    #[test]
+    fn trust_store_key_escapes_components_unambiguously() {
+        assert_ne!(tool_key("a/b", "c"), tool_key("a", "b/c"));
+        assert_eq!(tool_key("server", "tool"), r#"["server","tool"]"#);
     }
 
     #[test]
