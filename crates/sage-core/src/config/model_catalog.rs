@@ -135,14 +135,58 @@ impl ModelCatalogManager {
             Ok(Some(mut cache)) => {
                 cache.fetched_at = epoch_seconds(now);
                 cache.freshness = CatalogFreshness::NotModified;
-                let _ = self.save_cache(&cache);
-                self.snapshot_from_cache(static_provider, cache, CatalogFreshness::NotModified)
+                let last_error = match self.save_cache(&cache) {
+                    Ok(()) => None,
+                    Err(error) => {
+                        let message = error.to_string();
+                        warn!(
+                            "Failed to update model catalog cache timestamp for {}: {}",
+                            static_provider.id, message
+                        );
+                        Some(message)
+                    }
+                };
+                let mut snapshot =
+                    self.snapshot_from_cache(static_provider, cache, CatalogFreshness::NotModified);
+                snapshot.last_error = last_error.or(snapshot.last_error);
+                snapshot
             }
             Ok(None) => self.static_snapshot(
                 static_provider,
                 Some("remote returned not modified without cache".to_string()),
             ),
             Err(error) => self.static_snapshot(static_provider, Some(error.to_string())),
+        }
+    }
+
+    pub fn fallback_snapshot(
+        &self,
+        static_provider: &ProviderInfo,
+        last_error: impl Into<String>,
+    ) -> ProviderCatalogSnapshot {
+        let last_error = last_error.into();
+        match self.load_cache(&static_provider.id) {
+            Ok(Some(cache)) => {
+                let freshness = if cache.is_expired_at(SystemTime::now()) {
+                    CatalogFreshness::Stale
+                } else {
+                    CatalogFreshness::Fresh
+                };
+                let mut snapshot = self.snapshot_from_cache(static_provider, cache, freshness);
+                snapshot.last_error = Some(last_error);
+                snapshot
+            }
+            Ok(None) => self.static_snapshot(static_provider, Some(last_error)),
+            Err(error) => {
+                let cache_error = error.to_string();
+                self.static_snapshot(
+                    static_provider,
+                    Some(format!(
+                        "{}; failed to read model catalog cache: {}",
+                        last_error, cache_error
+                    )),
+                )
+            }
         }
     }
 
