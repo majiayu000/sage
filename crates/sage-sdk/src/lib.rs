@@ -4,24 +4,17 @@
 //!
 //! # API Versioning
 //!
-//! The SDK follows semantic versioning (SemVer 2.0.0) for its public API.
-//! Version information and compatibility checks are available through the
-//! [`version`] module.
+//! The SDK reports semantic API versions through the [`version`] module.
+//! While the SDK remains `0.x`, breaking public API changes can ship in minor
+//! releases and are recorded in the changelog instead of preserved behind
+//! compatibility aliases.
 //!
 //! Current API version: **0.1.0**
 //!
 //! ## Version Compatibility
 //!
-//! The SDK maintains backward compatibility within the same MAJOR version.
 //! Clients can check compatibility using [`version::is_compatible`] or
 //! [`version::negotiate_version`].
-//!
-//! ## Deprecation Policy
-//!
-//! - Deprecated APIs are marked with `#[deprecated]` attributes
-//! - Deprecated APIs are maintained for at least one MINOR version
-//! - Migration paths are provided in documentation
-//! - Removed in next MAJOR version
 //!
 //! # Example
 //!
@@ -49,8 +42,8 @@ pub mod client;
 pub mod version;
 
 pub use client::{
-    ExecutionError, ExecutionErrorKind, ExecutionOutcome, ExecutionResult, RunOptions,
-    SageAgentSdk, UnifiedRunOptions,
+    ExecutionConfigSummary, ExecutionError, ExecutionErrorKind, ExecutionOutcome, ExecutionResult,
+    RunOptions, SageAgentSdk,
 };
 
 // Re-export commonly used types from core

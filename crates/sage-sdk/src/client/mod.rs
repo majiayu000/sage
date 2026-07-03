@@ -9,8 +9,8 @@ mod options;
 mod result;
 
 // Re-export public types
-pub use options::{RunOptions, UnifiedRunOptions};
-pub use result::ExecutionResult;
+pub use options::RunOptions;
+pub use result::{ExecutionConfigSummary, ExecutionResult};
 
 // Import and re-export outcome types from core
 pub use sage_core::agent::{ExecutionError, ExecutionErrorKind, ExecutionOutcome};

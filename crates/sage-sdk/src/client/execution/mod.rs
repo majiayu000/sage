@@ -1,7 +1,6 @@
 //! Task execution module
 
 mod run;
-mod unified;
 
 use sage_core::{
     config::model::Config, error::SageResult, skills::SkillRegistry, thread_store::ThreadStore,

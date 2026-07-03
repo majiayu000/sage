@@ -1,28 +1,20 @@
 //! API Versioning for Sage Agent SDK
 //!
-//! This module provides versioning utilities for the Sage Agent SDK, following
-//! semantic versioning principles (SemVer 2.0.0).
+//! This module provides versioning utilities for the Sage Agent SDK.
 //!
 //! ## Versioning Strategy
 //!
 //! The SDK uses semantic versioning with three components: MAJOR.MINOR.PATCH
 //!
-//! - **MAJOR**: Incremented for incompatible API changes
-//! - **MINOR**: Incremented for backward-compatible functionality additions
-//! - **PATCH**: Incremented for backward-compatible bug fixes
+//! - **MAJOR**: Incremented for incompatible API changes after the SDK is stable
+//! - **MINOR**: May include breaking public API changes while the SDK is `0.x`
+//! - **PATCH**: Incremented for bug fixes
 //!
 //! ## Version Compatibility
 //!
-//! The SDK maintains backward compatibility within the same MAJOR version.
-//! Clients can check compatibility using the version negotiation utilities.
-//!
-//! ## Deprecation Policy
-//!
-//! When deprecating APIs:
-//! 1. Mark with `#[deprecated]` attribute and use deprecation macros
-//! 2. Provide migration path in documentation
-//! 3. Maintain deprecated APIs for at least one MINOR version
-//! 4. Remove in next MAJOR version
+//! Compatibility helpers expose the current supported version range. They do
+//! not imply deprecated API retention; breaking `0.x` changes are removed
+//! directly and documented in release notes.
 //!
 //! ## Example
 //!
@@ -55,8 +47,8 @@ pub const API_VERSION: Version = Version {
 /// Minimum supported API version
 ///
 /// Clients using versions older than this may encounter compatibility issues.
-/// This allows the SDK to drop support for very old versions while maintaining
-/// backward compatibility within the supported range.
+/// This allows the SDK to reject versions outside the currently supported
+/// negotiation range.
 pub const MIN_SUPPORTED_VERSION: Version = Version {
     major: 0,
     minor: 1,
@@ -316,28 +308,6 @@ pub fn version_info() -> String {
             "Stable"
         }
     )
-}
-
-/// Macro to mark a function or type as deprecated with version information
-///
-/// This macro generates a standard deprecation warning with the version when
-/// the API was deprecated and a suggested alternative.
-///
-/// # Example
-///
-/// ```rust,ignore
-/// use sage_sdk::deprecated_since;
-///
-/// #[deprecated_since(version = "0.2.0", note = "Use new_function() instead")]
-/// pub fn old_function() {
-///     // ...
-/// }
-/// ```
-#[macro_export]
-macro_rules! deprecated_since {
-    (version = $ver:expr, note = $note:expr) => {
-        #[deprecated(since = $ver, note = $note)]
-    };
 }
 
 /// Macro to mark experimental APIs that may change
