@@ -258,8 +258,24 @@ impl PermissionCache {
     }
 
     fn path_glob_matches(pattern: &str, text: &str) -> bool {
+        Self::path_glob_matches_with_case_sensitivity(
+            pattern,
+            text,
+            Self::default_path_glob_case_sensitive(),
+        )
+    }
+
+    fn default_path_glob_case_sensitive() -> bool {
+        !(cfg!(windows) || cfg!(target_os = "macos"))
+    }
+
+    fn path_glob_matches_with_case_sensitivity(
+        pattern: &str,
+        text: &str,
+        case_sensitive: bool,
+    ) -> bool {
         let options = MatchOptions {
-            case_sensitive: true,
+            case_sensitive,
             require_literal_separator: true,
             require_literal_leading_dot: false,
         };

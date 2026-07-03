@@ -139,15 +139,17 @@ fn audit_summary_from_event(event: &DiagnosticEvent) -> Option<PolicyAuditSummar
         _ => return None,
     };
 
+    let raw_context = format!(
+        "event_id={} kind={:?} source={}",
+        event.event_id, event.kind, event.source
+    );
+
     Some(PolicyAuditSummary {
         decision,
         source: source_from_event_source(&event.source),
         matched_rule: Some(event.source.clone()),
         reason: event.payload_summary.clone(),
-        redacted_context: format!(
-            "event_id={} kind={:?} source={}",
-            event.event_id, event.kind, event.source
-        ),
+        redacted_context: DiagnosticRedactor::new().redact_text(&raw_context).value,
     })
 }
 
@@ -435,7 +437,7 @@ mod tests {
         let ring = DiagnosticEventRing::new(4);
         ring.record(DiagnosticEvent::new(
             DiagnosticEventKind::Permission,
-            "managed_policy",
+            "managed_policy /Users/alice/project/.env",
             DiagnosticSeverity::Warn,
             RedactionClass::Sensitive,
             "decision=deny reason=Read(.env)",
@@ -458,6 +460,7 @@ mod tests {
         let summaries = audit_summaries_from_events(&ring.snapshot());
 
         assert_eq!(summaries.len(), 3);
+        assert!(!summaries[0].redacted_context.contains("/Users/alice"));
         assert_eq!(summaries[0].decision, AuditDecisionKind::Deny);
         assert_eq!(summaries[0].source, Some(PermissionProfileSource::Managed));
         assert_eq!(summaries[1].decision, AuditDecisionKind::ProviderError);

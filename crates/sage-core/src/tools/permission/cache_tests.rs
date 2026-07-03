@@ -151,9 +151,23 @@ async fn test_pattern_matches() {
         "Read(src/**)",
         "Read(src/main.rs)"
     ));
-    assert!(!PermissionCache::pattern_matches(
-        "Read(src/**)",
-        "Read(Src/main.rs)"
+    assert_eq!(
+        PermissionCache::pattern_matches("Read(src/**)", "Read(Src/main.rs)"),
+        !PermissionCache::default_path_glob_case_sensitive()
+    );
+}
+
+#[tokio::test]
+async fn test_path_permission_glob_can_match_case_insensitively() {
+    assert!(PermissionCache::path_glob_matches_with_case_sensitivity(
+        "src/**",
+        "Src/main.rs",
+        false
+    ));
+    assert!(!PermissionCache::path_glob_matches_with_case_sensitivity(
+        "src/**",
+        "Src/main.rs",
+        true
     ));
 }
 
