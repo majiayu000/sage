@@ -462,7 +462,6 @@ fn test_cli_sdk_execution_uses_runtime_facade_boundary() {
         "crates/sage-cli/src/commands/unified/execute.rs",
         "crates/sage-cli/src/commands/unified/session.rs",
         "crates/sage-cli/src/commands/unified/stream.rs",
-        "crates/sage-sdk/src/client/execution/unified.rs",
         "crates/sage-sdk/src/client/execution/run.rs",
     ];
 
@@ -481,7 +480,6 @@ fn test_cli_sdk_execution_uses_runtime_facade_boundary() {
 
     for relative in [
         "crates/sage-cli/src/commands/unified/execute.rs",
-        "crates/sage-sdk/src/client/execution/unified.rs",
         "crates/sage-sdk/src/client/execution/run.rs",
     ] {
         let content = fs::read_to_string(root.join(relative)).unwrap_or_else(|err| {
@@ -511,7 +509,6 @@ fn test_cli_sdk_runtime_setup_seams_are_bounded() {
         "crates/sage-cli/src/commands/unified/execute.rs",
         "crates/sage-cli/src/commands/unified/session.rs",
         "crates/sage-cli/src/commands/unified/stream.rs",
-        "crates/sage-sdk/src/client/execution/unified.rs",
         "crates/sage-sdk/src/client/execution/run.rs",
     ]
     .into_iter()
@@ -546,7 +543,6 @@ fn test_cli_sdk_runtime_setup_seams_are_bounded() {
 
     for relative in [
         "crates/sage-cli/src/commands/unified/execute.rs",
-        "crates/sage-sdk/src/client/execution/unified.rs",
         "crates/sage-sdk/src/client/execution/run.rs",
     ] {
         let content = fs::read_to_string(root.join(relative)).unwrap_or_else(|err| {

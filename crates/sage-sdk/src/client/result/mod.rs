@@ -3,4 +3,4 @@
 mod analysis;
 mod core;
 
-pub use core::ExecutionResult;
+pub use core::{ExecutionConfigSummary, ExecutionResult};
