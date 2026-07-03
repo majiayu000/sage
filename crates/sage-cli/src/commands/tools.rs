@@ -10,6 +10,9 @@ pub fn show_tools_sync() -> SageResult<()> {
     console.print_header("Available Tools");
 
     let mut tools = sage_tools::get_default_tools();
+    let working_dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let settings = sage_core::load_settings_for_workspace(&working_dir)?;
+    tools = sage_core::tools::filter_tools_by_settings(tools, &settings.tools)?;
     tools.sort_by(|a, b| a.name().cmp(b.name()));
 
     console.print_table_header(&["Tool Name", "Description"]);

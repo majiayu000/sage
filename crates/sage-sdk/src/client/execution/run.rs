@@ -6,9 +6,11 @@ use sage_core::{
     agent::{ExecutionMode, ExecutionOptions},
     error::SageResult,
     input::{InputChannel, InputResponse},
+    load_settings_for_workspace,
     mcp::{clear_active_mcp_registry, set_active_mcp_registry},
     runtime::Runtime,
     runtime_protocol::RuntimeSource,
+    tools::filter_tools_by_settings,
     types::TaskMetadata,
 };
 use std::sync::Arc;
@@ -140,6 +142,8 @@ impl SageAgentSdk {
             clear_active_mcp_registry();
         }
 
+        let settings = load_settings_for_workspace(&working_dir)?;
+        all_tools = filter_tools_by_settings(all_tools, &settings.tools)?;
         executor.register_tools(all_tools);
 
         // Initialize sub-agent support

@@ -2,59 +2,43 @@
 //!
 //! This module handles saving credentials and configuration during onboarding.
 
-use crate::config::Config;
 use crate::config::ModelParameters;
-use crate::config::credential::CredentialsFile;
+use crate::config::persistence::ConfigPersistence;
 use crate::error::{SageError, SageResult};
 use std::path::Path;
 use tracing::info;
 
 /// Save credentials to the credentials file
 pub fn save_credentials(global_dir: &Path, provider: &str, api_key: &str) -> SageResult<()> {
-    let creds_path = global_dir.join("credentials.json");
-    let mut creds = CredentialsFile::load(&creds_path)
-        .map_err(|e| SageError::config(format!("Failed to load credentials: {}", e)))?
-        .unwrap_or_default();
-    creds.set_api_key(provider, api_key);
+    let persistence = ConfigPersistence::new(global_dir);
+    persistence.set_api_key(provider, api_key)?;
 
-    creds
-        .save(&creds_path)
-        .map_err(|e| SageError::config(format!("Failed to save credentials: {}", e)))?;
-
-    info!("Saved {} credentials to {}", provider, creds_path.display());
+    info!(
+        "Saved {} credentials to {}",
+        provider,
+        persistence.credentials_path().display()
+    );
 
     Ok(())
 }
 
 /// Save global configuration for a provider
 pub fn save_global_config(global_dir: &Path, provider: &str) -> SageResult<()> {
-    let config_path = global_dir.join("config.json");
-    let mut config = Config::default();
-
-    if !config.model_providers.contains_key(provider) {
-        let params = create_provider_params(provider);
-        config.model_providers.insert(provider.to_string(), params);
+    let persistence = ConfigPersistence::new(global_dir);
+    let mut params = create_provider_params(provider);
+    if params.api_key.is_none() {
+        params.api_key = Some(format!("${{{}_API_KEY}}", provider.to_uppercase()));
     }
 
-    config.set_default_provider(provider.to_string())?;
+    let provider_value = serde_json::to_value(params)
+        .map_err(|error| SageError::config(format!("Failed to serialize provider: {}", error)))?;
+    persistence.set_default_provider(provider)?;
+    persistence.set_field(&format!("model_providers.{}", provider), provider_value)?;
 
-    if let Some(params) = config.model_providers.get_mut(provider) {
-        apply_provider_defaults(provider, params);
-        if params.api_key.is_none() {
-            params.api_key = Some(format!("${{{}_API_KEY}}", provider.to_uppercase()));
-        }
-    }
-
-    std::fs::create_dir_all(global_dir)
-        .map_err(|e| SageError::config(format!("Failed to create config directory: {}", e)))?;
-
-    let config_json = serde_json::to_string_pretty(&config)
-        .map_err(|e| SageError::config(format!("Failed to serialize config: {}", e)))?;
-
-    std::fs::write(&config_path, config_json)
-        .map_err(|e| SageError::config(format!("Failed to save config: {}", e)))?;
-
-    info!("Saved global config to {}", config_path.display());
+    info!(
+        "Saved global config to {}",
+        persistence.config_path().display()
+    );
     Ok(())
 }
 
