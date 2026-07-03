@@ -15,6 +15,7 @@ mod logging_config;
 mod mcp_config;
 mod memory_config;
 mod model_catalog;
+mod model_catalog_service;
 mod model_params;
 pub mod models_api;
 mod provider_defaults;
@@ -46,6 +47,7 @@ pub use model_catalog::{
     CatalogCacheEntry, CatalogFreshness, CatalogSource, ModelCatalogManager,
     ProviderCatalogSnapshot, merge_provider_catalog,
 };
+pub use model_catalog_service::{model_catalog_error_reason, refresh_provider_model_catalog};
 pub use model_params::ModelParameters;
 pub use models_api::{FetchedModel, ModelsApiClient};
 pub use persistence::{ConfigPersistence, ConfigUpdate};

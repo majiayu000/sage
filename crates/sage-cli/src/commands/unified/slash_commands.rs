@@ -2,6 +2,7 @@
 
 use crate::console::CliConsole;
 use sage_core::commands::{CommandExecutor, CommandRegistry};
+use sage_core::config::{CatalogFreshness, ProviderCatalogSnapshot};
 use sage_core::error::SageResult;
 use sage_core::output::OutputMode;
 use std::sync::Arc;
@@ -148,7 +149,10 @@ pub async fn handle_interactive_command_v2(
         }
         InteractiveCommand::ModelSelect => {
             // Fetch models and return them for interactive selection
-            use sage_core::config::{ModelsApiClient, ProviderRegistry, load_config};
+            use sage_core::config::{
+                ProviderRegistry, default_data_dir_or_warn, load_config,
+                refresh_provider_model_catalog,
+            };
 
             // Get current provider
             let config = match load_config() {
@@ -164,93 +168,50 @@ pub async fn handle_interactive_command_v2(
 
             // Get provider info
             let mut registry = ProviderRegistry::with_defaults();
-            let provider_info = registry.get_provider(provider_name).cloned();
+            let Some(provider_info) = registry.get_provider(provider_name).cloned() else {
+                return Ok(SlashCommandAction::HandledWithOutput(no_models_output(
+                    None,
+                )));
+            };
 
             // Get credentials
             let (base_url, api_key) = {
-                let mut base_url = provider_info
-                    .as_ref()
-                    .map(|p| p.api_base_url.clone())
-                    .unwrap_or_default();
+                let mut base_url = provider_info.api_base_url.clone();
                 let mut api_key = None;
 
                 if let Some(params) = config.model_providers.get(provider_name) {
                     if let Some(url) = &params.base_url {
                         base_url = url.clone();
                     }
-                    api_key = params.api_key.clone();
-                }
-
-                // Check environment variables
-                if api_key.is_none() {
-                    let env_var = match provider_name {
-                        "anthropic" => "ANTHROPIC_API_KEY",
-                        "openai" => "OPENAI_API_KEY",
-                        "zai" => "ZAI_API_KEY",
-                        "google" => "GOOGLE_API_KEY",
-                        "glm" | "zhipu" => "GLM_API_KEY",
-                        "moonshot" | "kimi" => "MOONSHOT_API_KEY",
-                        _ => "",
-                    };
-                    if !env_var.is_empty() {
-                        api_key = std::env::var(env_var).ok();
-                    }
+                    api_key = params.get_api_key_info_for_provider(provider_name).key;
                 }
 
                 (base_url, api_key)
             };
 
-            // Fetch models from API
-            let client = ModelsApiClient::new();
-            let static_models = || -> Vec<String> {
-                provider_info
-                    .as_ref()
-                    .map(|p| p.models.iter().map(|m| m.id.clone()).collect())
-                    .unwrap_or_default()
-            };
-            let mut fallback_warning = None;
-            let models: Vec<String> = {
-                let mut fallback_on_error = |error: &dyn std::fmt::Display| -> Vec<String> {
-                    tracing::warn!(
-                        provider = provider_name,
-                        reason = model_fetch_fallback_reason(error),
-                        "failed to fetch live model list; falling back to static models"
-                    );
-                    fallback_warning.get_or_insert_with(|| {
-                        model_fetch_fallback_warning(
-                            provider_name,
-                            model_fetch_fallback_reason(error),
-                        )
-                    });
-                    static_models()
-                };
-
-                match provider_name {
-                    "anthropic" | "glm" | "zhipu" => {
-                        match client
-                            .fetch_anthropic_models(&base_url, api_key.as_deref().unwrap_or(""))
-                            .await
-                        {
-                            Ok(m) => m.into_iter().map(|m| m.id).collect(),
-                            Err(e) => fallback_on_error(&e),
-                        }
-                    }
-                    "openai" | "openrouter" | "zai" | "moonshot" | "kimi" => {
-                        match client
-                            .fetch_openai_models(&base_url, api_key.as_deref().unwrap_or(""))
-                            .await
-                        {
-                            Ok(m) => m.into_iter().map(|m| m.id).collect(),
-                            Err(e) => fallback_on_error(&e),
-                        }
-                    }
-                    "ollama" => match client.fetch_ollama_models(&base_url).await {
-                        Ok(m) => m.into_iter().map(|m| m.id).collect(),
-                        Err(e) => fallback_on_error(&e),
-                    },
-                    _ => static_models(),
+            let snapshot = match refresh_provider_model_catalog(
+                provider_name,
+                &provider_info,
+                &base_url,
+                api_key.as_deref(),
+                default_data_dir_or_warn(),
+            )
+            .await
+            {
+                Ok(snapshot) => snapshot,
+                Err(error) => {
+                    return Ok(SlashCommandAction::HandledWithOutput(format!(
+                        "Failed to load model catalog: {error}"
+                    )));
                 }
             };
+            let fallback_warning = model_catalog_warning(provider_name, &snapshot);
+            let models: Vec<String> = snapshot
+                .provider
+                .models
+                .iter()
+                .map(|model| model.id.clone())
+                .collect();
 
             if models.is_empty() {
                 return Ok(SlashCommandAction::HandledWithOutput(no_models_output(
@@ -272,13 +233,6 @@ pub async fn handle_interactive_command_v2(
     }
 }
 
-fn model_fetch_fallback_warning(provider_name: &str, reason: &'static str) -> String {
-    format!(
-        "Failed to fetch live model list for provider '{}' ({reason}); using static model list.",
-        provider_name,
-    )
-}
-
 fn no_models_output(warning: Option<&str>) -> String {
     match warning {
         Some(warning) => format!("{warning}\nNo models available for this provider"),
@@ -286,73 +240,104 @@ fn no_models_output(warning: Option<&str>) -> String {
     }
 }
 
-fn model_fetch_fallback_reason(error: &dyn std::fmt::Display) -> &'static str {
-    let message = error.to_string().to_ascii_lowercase();
-    if message.contains("401")
-        || message.contains("403")
-        || message.contains("unauthorized")
-        || message.contains("forbidden")
-        || message.contains("invalid api key")
-    {
-        "authentication or authorization error"
-    } else if message.contains("429") || message.contains("rate limit") {
-        "rate limit error"
-    } else if message.contains("timeout") || message.contains("timed out") {
-        "network timeout"
-    } else if message.contains("parse response")
-        || message.contains("decode")
-        || message.contains("json")
-    {
-        "response parse error"
-    } else if message.contains("failed to fetch")
-        || message.contains("connection")
-        || message.contains("dns")
-        || message.contains("request")
-    {
-        "network or endpoint error"
-    } else {
-        "provider request error"
+fn model_catalog_warning(
+    provider_name: &str,
+    snapshot: &ProviderCatalogSnapshot,
+) -> Option<String> {
+    let reason = snapshot
+        .last_error
+        .as_deref()
+        .unwrap_or("live model catalog unavailable");
+    match snapshot.freshness {
+        CatalogFreshness::StaticFallback => Some(format!(
+            "Using static model list for provider '{provider_name}' ({reason})."
+        )),
+        CatalogFreshness::Stale => Some(format!(
+            "Using stale cached model list for provider '{provider_name}' ({reason})."
+        )),
+        CatalogFreshness::Fresh if snapshot.last_error.is_some() => Some(format!(
+            "Fetched live model list for provider '{provider_name}', but cache update failed ({reason})."
+        )),
+        _ => None,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sage_core::config::{CatalogSource, ModelInfo, ProviderInfo, model_catalog_error_reason};
+
+    fn provider_snapshot(
+        freshness: CatalogFreshness,
+        last_error: Option<&str>,
+    ) -> ProviderCatalogSnapshot {
+        ProviderCatalogSnapshot {
+            provider: ProviderInfo {
+                id: "zai".to_string(),
+                name: "Z.ai".to_string(),
+                description: "Z.ai".to_string(),
+                api_base_url: "https://api.z.ai/api/paas/v4".to_string(),
+                env_var: "ZAI_API_KEY".to_string(),
+                help_url: None,
+                requires_api_key: true,
+                models: vec![ModelInfo {
+                    id: "glm-test".to_string(),
+                    name: "GLM Test".to_string(),
+                    default: true,
+                    context_window: None,
+                    max_output_tokens: None,
+                }],
+            },
+            freshness,
+            source: CatalogSource::StaticFallback,
+            etag: None,
+            fetched_at: None,
+            ttl_seconds: 86_400,
+            last_error: last_error.map(ToString::to_string),
+        }
+    }
 
     #[test]
-    fn model_fetch_fallback_warning_omits_provider_error_text() {
+    fn model_catalog_warning_omits_provider_error_text() {
         let raw_error = "API key provided: abcdef1234567890abcdef";
-        let warning = model_fetch_fallback_warning(
+        let Some(warning) = model_catalog_warning(
             "zai",
-            model_fetch_fallback_reason(&format!("401 Unauthorized: {raw_error}")),
-        );
+            &provider_snapshot(
+                CatalogFreshness::StaticFallback,
+                Some(model_catalog_error_reason(&format!(
+                    "401 Unauthorized: {raw_error}"
+                ))),
+            ),
+        ) else {
+            panic!("expected static fallback warning");
+        };
 
         assert!(warning.contains("zai"));
         assert!(warning.contains("authentication or authorization error"));
-        assert!(warning.contains("using static model list"));
+        assert!(warning.contains("Using static model list"));
         assert!(!warning.contains(raw_error));
         assert!(!warning.contains("abcdef1234567890abcdef"));
     }
 
     #[test]
-    fn model_fetch_fallback_reason_classifies_safe_error_categories() {
+    fn model_catalog_error_reason_classifies_safe_error_categories() {
         assert_eq!(
-            model_fetch_fallback_reason(&"Failed to fetch OpenAI models: dns error"),
+            model_catalog_error_reason(&"Failed to fetch OpenAI models: dns error"),
             "network or endpoint error"
         );
         assert_eq!(
-            model_fetch_fallback_reason(&"Failed to parse response: expected value"),
+            model_catalog_error_reason(&"Failed to parse response: expected value"),
             "response parse error"
         );
         assert_eq!(
-            model_fetch_fallback_reason(&"429 Too Many Requests"),
+            model_catalog_error_reason(&"429 Too Many Requests"),
             "rate limit error"
         );
     }
 
     #[test]
     fn no_models_output_preserves_fallback_warning() {
-        let warning = "Failed to fetch live model list for provider 'kimi' (network timeout); using static model list.";
+        let warning = "Using stale cached model list for provider 'kimi' (network timeout).";
         let output = no_models_output(Some(warning));
 
         assert!(output.contains(warning));
