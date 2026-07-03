@@ -4,12 +4,14 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use reqwest::{Response, StatusCode, Url};
+use reqwest::{Response, StatusCode};
 use tokio::time::{Instant, timeout};
 use tracing::{debug, info};
 
+use super::super::validation::{
+    ValidatedEndpoint, resolve_and_validate_url, verify_response_endpoint,
+};
 use super::types::{AuthType, HttpClientParams, HttpMethod, HttpResponse, RequestBody};
-use super::validate_url_security;
 use crate::tools::network::redirect::{
     MAX_REDIRECTS, is_redirect_status, same_origin, validate_redirect_target,
 };
@@ -80,6 +82,8 @@ pub fn create_client(
     reqwest::Client::builder()
         .danger_accept_invalid_certs(!verify_ssl)
         .redirect(reqwest::redirect::Policy::none())
+        .no_proxy()
+        .pool_max_idle_per_host(0)
         .timeout(Duration::from_secs(timeout_secs))
         .user_agent("Sage-Agent-HTTP-Client/1.0")
         .build()
@@ -107,14 +111,34 @@ async fn send_request_once(
     client: &reqwest::Client,
     params: &HttpClientParams,
     method: reqwest::Method,
-    url: Url,
+    endpoint: &ValidatedEndpoint,
     request_timeout: Duration,
     include_body: bool,
     include_sensitive_headers: bool,
+    verify_remote_endpoint: bool,
 ) -> Result<Response> {
+    let url = endpoint.url().clone();
     debug!("Making HTTP request: {} {}", method, url);
 
-    let mut request = client.request(method, url);
+    let pinned_client;
+    let request_client = if verify_remote_endpoint {
+        let builder = reqwest::Client::builder()
+            .danger_accept_invalid_certs(!params.verify_ssl.unwrap_or(true))
+            .redirect(reqwest::redirect::Policy::none())
+            .timeout(request_timeout)
+            .no_proxy()
+            .pool_max_idle_per_host(0)
+            .user_agent("Sage-Agent-HTTP-Client/1.0");
+        pinned_client = endpoint
+            .apply_dns_pinning(builder)?
+            .build()
+            .context("Failed to create pinned HTTP client")?;
+        &pinned_client
+    } else {
+        client
+    };
+
+    let mut request = request_client.request(method, url);
 
     if let Some(headers) = &params.headers {
         for (key, value) in headers {
@@ -150,8 +174,22 @@ pub async fn execute_request(
     client: &reqwest::Client,
     params: HttpClientParams,
 ) -> Result<HttpResponse> {
-    validate_url_security(&params.url).await?;
+    execute_request_inner(client, params, true).await
+}
 
+#[cfg(test)]
+pub(super) async fn execute_request_without_remote_verification_for_tests(
+    client: &reqwest::Client,
+    params: HttpClientParams,
+) -> Result<HttpResponse> {
+    execute_request_inner(client, params, false).await
+}
+
+async fn execute_request_inner(
+    client: &reqwest::Client,
+    params: HttpClientParams,
+    verify_remote_endpoint: bool,
+) -> Result<HttpResponse> {
     let timeout_secs = params.timeout.unwrap_or(30);
     let request_timeout = Duration::from_secs(timeout_secs);
     let deadline = Instant::now()
@@ -159,7 +197,7 @@ pub async fn execute_request(
         .ok_or_else(|| anyhow::anyhow!("timeout is too large"))?;
     let mut method = to_reqwest_method(&params.method);
     let follow_redirects = params.follow_redirects.unwrap_or(true);
-    let mut current_url = Url::parse(&params.url).context("Invalid URL format")?;
+    let mut current_endpoint = resolve_and_validate_url(&params.url).await?;
     let mut include_body = true;
     let mut include_sensitive_headers = true;
     let mut redirect_count = 0;
@@ -176,12 +214,16 @@ pub async fn execute_request(
             client,
             &params,
             method.clone(),
-            current_url.clone(),
+            &current_endpoint,
             remaining_timeout,
             include_body,
             include_sensitive_headers,
+            verify_remote_endpoint,
         )
         .await?;
+        if verify_remote_endpoint {
+            verify_response_endpoint(&current_endpoint, &response)?;
+        }
 
         if !follow_redirects || !is_redirect_status(response.status()) {
             break response;
@@ -191,15 +233,15 @@ pub async fn execute_request(
             anyhow::bail!("Redirect limit exceeded ({MAX_REDIRECTS})");
         }
 
-        let next_url = validate_redirect_target(response.url(), response.headers()).await?;
+        let next_endpoint = validate_redirect_target(response.url(), response.headers()).await?;
         include_sensitive_headers =
-            include_sensitive_headers && same_origin(response.url(), &next_url);
+            include_sensitive_headers && same_origin(response.url(), next_endpoint.url());
         if should_rewrite_redirect_to_get(response.status(), &method) {
             method = reqwest::Method::GET;
             include_body = false;
         }
 
-        current_url = next_url;
+        current_endpoint = next_endpoint;
         redirect_count += 1;
     };
 

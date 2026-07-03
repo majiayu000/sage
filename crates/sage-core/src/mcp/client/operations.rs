@@ -15,14 +15,19 @@ impl McpClient {
     /// List available tools
     #[instrument(skip(self), level = "debug")]
     pub async fn list_tools(&self) -> Result<Vec<McpTool>, McpError> {
+        self.fetch_tools().await
+    }
+
+    pub(crate) async fn list_tools_uncached(&self) -> Result<Vec<McpTool>, McpError> {
+        self.fetch_tools().await
+    }
+
+    async fn fetch_tools(&self) -> Result<Vec<McpTool>, McpError> {
         self.ensure_initialized().await?;
 
         let result: Value = self.call(methods::TOOLS_LIST, None).await?;
 
-        let tools: Vec<McpTool> = decode_required_array(methods::TOOLS_LIST, &result, "tools")?;
-
-        *self.tools().write().await = tools.clone();
-        Ok(tools)
+        decode_required_array(methods::TOOLS_LIST, &result, "tools")
     }
 
     /// Call a tool with timeout
@@ -112,7 +117,10 @@ impl McpClient {
         Ok(())
     }
 
-    /// Refresh all caches (tools, resources, prompts)
+    /// Refresh server listings.
+    ///
+    /// Tool listings are fetched but are not written into the shared tool cache;
+    /// registry refresh owns trust filtering before model-visible tools are cached.
     pub async fn refresh_caches(&self) -> Result<(), McpError> {
         self.list_tools().await?;
         self.list_resources().await?;

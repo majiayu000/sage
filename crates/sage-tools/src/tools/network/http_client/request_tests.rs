@@ -10,7 +10,8 @@ use tokio::sync::oneshot;
 use tokio::time::Instant;
 
 use super::request::{
-    create_graphql_request, execute_request, should_rewrite_redirect_to_get, to_reqwest_method,
+    create_graphql_request, execute_request_without_remote_verification_for_tests,
+    should_rewrite_redirect_to_get, to_reqwest_method,
 };
 use super::{HttpClientParams, HttpMethod, validate_url_security};
 
@@ -222,7 +223,7 @@ async fn test_http_request_rejects_redirect_to_loopback() -> Result<()> {
         graphql_variables: None,
     };
 
-    let result = execute_request(&client, params).await;
+    let result = execute_request_without_remote_verification_for_tests(&client, params).await;
 
     assert!(
         result.is_err(),
@@ -259,7 +260,7 @@ async fn test_cross_origin_redirect_keeps_sensitive_headers_stripped() -> Result
         graphql_variables: None,
     };
 
-    let response = execute_request(&client, params).await?;
+    let response = execute_request_without_remote_verification_for_tests(&client, params).await?;
     let final_request = final_request_receiver
         .await
         .context("capture final redirected request")?;
@@ -305,7 +306,7 @@ async fn test_redirect_chain_uses_single_timeout_budget() -> Result<()> {
     };
 
     let start = Instant::now();
-    let result = execute_request(&client, params).await;
+    let result = execute_request_without_remote_verification_for_tests(&client, params).await;
 
     assert!(
         result.is_err(),

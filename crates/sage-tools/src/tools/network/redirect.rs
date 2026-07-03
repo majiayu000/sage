@@ -4,7 +4,7 @@ use anyhow::{Result, anyhow};
 use reqwest::header::{HeaderMap, LOCATION};
 use reqwest::{StatusCode, Url};
 
-use super::validation::validate_url_security;
+use super::validation::{ValidatedEndpoint, resolve_and_validate_url};
 
 pub const MAX_REDIRECTS: usize = 10;
 
@@ -19,7 +19,10 @@ pub fn is_redirect_status(status: StatusCode) -> bool {
     )
 }
 
-pub async fn validate_redirect_target(current_url: &Url, headers: &HeaderMap) -> Result<Url> {
+pub async fn validate_redirect_target(
+    current_url: &Url,
+    headers: &HeaderMap,
+) -> Result<ValidatedEndpoint> {
     let location = headers
         .get(LOCATION)
         .ok_or_else(|| anyhow!("Redirect response missing Location header"))?
@@ -30,11 +33,9 @@ pub async fn validate_redirect_target(current_url: &Url, headers: &HeaderMap) ->
         .join(location)
         .map_err(|error| anyhow!("Invalid redirect Location header: {}", error))?;
 
-    validate_url_security(next_url.as_str())
+    resolve_and_validate_url(next_url.as_str())
         .await
-        .map_err(|error| anyhow!("Redirect target failed URL validation: {}", error))?;
-
-    Ok(next_url)
+        .map_err(|error| anyhow!("Redirect target failed URL validation: {}", error))
 }
 
 pub fn same_origin(left: &Url, right: &Url) -> bool {
@@ -73,9 +74,9 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert(LOCATION, HeaderValue::from_static("../next"));
 
-        let next_url = validate_redirect_target(&current_url, &headers).await?;
+        let endpoint = validate_redirect_target(&current_url, &headers).await?;
 
-        assert_eq!(next_url.as_str(), "http://1.1.1.1/next");
+        assert_eq!(endpoint.url().as_str(), "http://1.1.1.1/next");
 
         Ok(())
     }

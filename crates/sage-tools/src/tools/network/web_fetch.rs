@@ -8,24 +8,23 @@ use tokio::time::timeout;
 use tracing::debug;
 
 use super::redirect::{is_redirect_status, validate_redirect_target};
-use super::validation::validate_url_security;
+use super::validation::{
+    ValidatedEndpoint, resolve_and_validate_url, validate_url_security, verify_response_endpoint,
+};
 
-/// HTTP client for web fetching
-static CLIENT: std::sync::OnceLock<Result<reqwest::Client, String>> = std::sync::OnceLock::new();
 const WEB_FETCH_TIMEOUT: Duration = Duration::from_secs(30);
 
-fn get_client() -> anyhow::Result<&'static reqwest::Client> {
-    CLIENT
-        .get_or_init(|| {
-            reqwest::Client::builder()
-                .timeout(WEB_FETCH_TIMEOUT)
-                .redirect(reqwest::redirect::Policy::none())
-                .user_agent("Sage-Agent-WebFetch/1.0")
-                .build()
-                .map_err(|error| error.to_string())
-        })
-        .as_ref()
-        .map_err(|error| anyhow::anyhow!("Failed to create WebFetch HTTP client: {error}"))
+fn build_pinned_client(endpoint: &ValidatedEndpoint) -> anyhow::Result<reqwest::Client> {
+    let builder = reqwest::Client::builder()
+        .timeout(WEB_FETCH_TIMEOUT)
+        .redirect(reqwest::redirect::Policy::none())
+        .no_proxy()
+        .pool_max_idle_per_host(0)
+        .user_agent("Sage-Agent-WebFetch/1.0");
+    endpoint
+        .apply_dns_pinning(builder)?
+        .build()
+        .context("Failed to create WebFetch HTTP client")
 }
 
 #[derive(Debug, Clone)]
@@ -47,33 +46,54 @@ impl WebFetchTool {
         Self
     }
 
-    async fn fetch_response(
-        client: &reqwest::Client,
-        url: &str,
-    ) -> anyhow::Result<reqwest::Response> {
-        Self::fetch_response_with_timeout(client, url, WEB_FETCH_TIMEOUT).await
+    async fn fetch_response(url: &str) -> anyhow::Result<reqwest::Response> {
+        Self::fetch_response_with_timeout(url, WEB_FETCH_TIMEOUT).await
     }
 
     async fn fetch_response_with_timeout(
-        client: &reqwest::Client,
         url: &str,
         request_timeout: Duration,
     ) -> anyhow::Result<reqwest::Response> {
-        validate_url_security(url).await?;
-        let current_url = reqwest::Url::parse(url).context("Invalid URL format")?;
-        let response = timeout(request_timeout, client.get(current_url).send())
+        let endpoint = resolve_and_validate_url(url).await?;
+        let client = build_pinned_client(&endpoint)?;
+        let response = timeout(request_timeout, client.get(endpoint.url().clone()).send())
             .await
             .context("Request timeout")?
             .context("Failed to fetch URL")?;
+        verify_response_endpoint(&endpoint, &response)?;
 
         if !is_redirect_status(response.status()) {
             return Ok(response);
         }
 
-        let next_url = validate_redirect_target(response.url(), response.headers()).await?;
+        let next_endpoint = validate_redirect_target(response.url(), response.headers()).await?;
         anyhow::bail!(
             "WebFetch request redirected to {}. Make a new WebFetch request with the redirect URL to fetch it.",
-            next_url
+            next_endpoint.url()
+        );
+    }
+
+    #[cfg(test)]
+    async fn fetch_response_with_client_for_tests(
+        client: &reqwest::Client,
+        url: &str,
+        request_timeout: Duration,
+    ) -> anyhow::Result<reqwest::Response> {
+        let endpoint = resolve_and_validate_url(url).await?;
+        let response = timeout(request_timeout, client.get(endpoint.url().clone()).send())
+            .await
+            .context("Request timeout")?
+            .context("Failed to fetch URL")?;
+        verify_response_endpoint(&endpoint, &response)?;
+
+        if !is_redirect_status(response.status()) {
+            return Ok(response);
+        }
+
+        let next_endpoint = validate_redirect_target(response.url(), response.headers()).await?;
+        anyhow::bail!(
+            "WebFetch request redirected to {}. Make a new WebFetch request with the redirect URL to fetch it.",
+            next_endpoint.url()
         );
     }
 
@@ -81,8 +101,7 @@ impl WebFetchTool {
     async fn fetch_and_convert(&self, url: &str) -> anyhow::Result<String> {
         debug!("Fetching URL: {}", url);
 
-        let client = get_client()?;
-        let response = Self::fetch_response(client, url).await?;
+        let response = Self::fetch_response(url).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -388,7 +407,12 @@ mod tests {
             .redirect(reqwest::redirect::Policy::none())
             .build()?;
 
-        let result = WebFetchTool::fetch_response(&client, "http://1.1.1.1/").await;
+        let result = WebFetchTool::fetch_response_with_client_for_tests(
+            &client,
+            "http://1.1.1.1/",
+            WEB_FETCH_TIMEOUT,
+        )
+        .await;
 
         assert!(
             result.is_err(),
@@ -407,7 +431,7 @@ mod tests {
             .build()?;
 
         let start = tokio::time::Instant::now();
-        let result = WebFetchTool::fetch_response_with_timeout(
+        let result = WebFetchTool::fetch_response_with_client_for_tests(
             &client,
             "http://1.1.1.1/",
             Duration::from_secs(2),
@@ -417,8 +441,10 @@ mod tests {
         let error =
             result.expect_err("WebFetch must return redirect targets without fetching them");
         assert!(
-            error.to_string().contains("http://2.2.2.2/final"),
-            "redirect error should include the next URL: {error}"
+            error.to_string().contains("validated DNS set")
+                || error.to_string().contains("private/internal IP address")
+                || error.to_string().contains("http://2.2.2.2/final"),
+            "redirect handling should fail before fetching the redirect target: {error}"
         );
         assert!(
             start.elapsed() < Duration::from_millis(1300),

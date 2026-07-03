@@ -353,6 +353,8 @@ fn test_file_size_limits() {
     let allowlist: HashSet<&str> = [
         // GH120 shell parser hardening is intentionally kept localized; split after the security fix lands.
         "crates/sage-core/src/permissions/shell_safety.rs",
+        // GH129 SSRF DNS pinning is intentionally kept localized; split the network validation module after the security fix lands.
+        "crates/sage-tools/src/tools/network/validation.rs",
     ]
     .into_iter()
     .collect();

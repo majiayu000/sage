@@ -3,10 +3,59 @@
 //! Provides security validation to prevent SSRF attacks and other
 //! network-based vulnerabilities.
 
-use std::net::IpAddr;
+use std::collections::BTreeSet;
+use std::net::{IpAddr, SocketAddr};
 
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use url::Host;
+use url::Url;
+
+#[derive(Debug, Clone)]
+pub struct ValidatedEndpoint {
+    url: Url,
+    host: String,
+    resolved_ips: Vec<IpAddr>,
+}
+
+impl ValidatedEndpoint {
+    pub fn url(&self) -> &Url {
+        &self.url
+    }
+
+    pub fn resolved_ips(&self) -> &[IpAddr] {
+        &self.resolved_ips
+    }
+
+    pub fn resolved_socket_addrs(&self) -> Result<Vec<SocketAddr>> {
+        let port = self.url.port_or_known_default().ok_or_else(|| {
+            anyhow!(
+                "URL must include a valid port for scheme '{}'",
+                self.url.scheme()
+            )
+        })?;
+        Ok(self
+            .resolved_ips
+            .iter()
+            .map(|ip| SocketAddr::new(*ip, port))
+            .collect())
+    }
+
+    pub fn apply_dns_pinning(
+        &self,
+        builder: reqwest::ClientBuilder,
+    ) -> Result<reqwest::ClientBuilder> {
+        if matches!(self.url.host(), Some(Host::Domain(_))) {
+            let addrs = self.resolved_socket_addrs()?;
+            Ok(builder.resolve_to_addrs(&self.host, &addrs))
+        } else {
+            Ok(builder)
+        }
+    }
+
+    fn contains_ip(&self, ip: &IpAddr) -> bool {
+        self.resolved_ips.contains(ip)
+    }
+}
 
 /// Validate URL to prevent SSRF attacks
 ///
@@ -20,6 +69,10 @@ use url::Host;
 /// - No private IP addresses (after DNS resolution)
 /// - No cloud metadata endpoints
 pub async fn validate_url_security(url_str: &str) -> Result<()> {
+    resolve_and_validate_url(url_str).await.map(|_| ())
+}
+
+pub async fn resolve_and_validate_url(url_str: &str) -> Result<ValidatedEndpoint> {
     let url = url::Url::parse(url_str).map_err(|e| anyhow!("Invalid URL format: {}", e))?;
 
     // Only allow http and https schemes
@@ -48,8 +101,12 @@ pub async fn validate_url_security(url_str: &str) -> Result<()> {
                     ip
                 ));
             }
-            // Public IP literal: allow.
-            return Ok(());
+            // Public IP literal: allow, and pin the exact literal.
+            return Ok(ValidatedEndpoint {
+                url,
+                host: ip.to_string(),
+                resolved_ips: vec![IpAddr::V4(ip)],
+            });
         }
         Host::Ipv6(ip) => {
             if is_private_ip(&IpAddr::V6(ip)) {
@@ -58,7 +115,11 @@ pub async fn validate_url_security(url_str: &str) -> Result<()> {
                     ip
                 ));
             }
-            return Ok(());
+            return Ok(ValidatedEndpoint {
+                url,
+                host: ip.to_string(),
+                resolved_ips: vec![IpAddr::V6(ip)],
+            });
         }
         Host::Domain(_) => {}
     }
@@ -68,9 +129,10 @@ pub async fn validate_url_security(url_str: &str) -> Result<()> {
     let host_str = url
         .host_str()
         .ok_or_else(|| anyhow!("URL must have a host"))?;
+    let host_name = host_str.to_string();
 
     // Block localhost variants
-    let host_lower = host_str.to_lowercase();
+    let host_lower = host_name.to_lowercase();
     if host_lower == "localhost" {
         return Err(anyhow!(
             "Requests to localhost are not allowed for security reasons"
@@ -84,7 +146,7 @@ pub async fn validate_url_security(url_str: &str) -> Result<()> {
     {
         return Err(anyhow!(
             "Requests to internal hostnames ({}) are not allowed",
-            host_str
+            host_name
         ));
     }
 
@@ -96,18 +158,72 @@ pub async fn validate_url_security(url_str: &str) -> Result<()> {
         ));
     }
 
-    // Try to resolve the hostname asynchronously and check if it's a private IP
-    if let Ok(addrs) = tokio::net::lookup_host(format!("{}:80", host_str)).await {
-        for addr in addrs {
-            if is_private_ip(&addr.ip()) {
-                return Err(anyhow!(
-                    "Requests to private/internal IP addresses are not allowed (resolved to {})",
-                    addr.ip()
-                ));
-            }
+    let port = url.port_or_known_default().ok_or_else(|| {
+        anyhow!(
+            "URL must include a valid port for scheme '{}'",
+            url.scheme()
+        )
+    })?;
+    let addrs = tokio::net::lookup_host((host_str, port))
+        .await
+        .with_context(|| format!("Failed to resolve host '{host_name}'"))?;
+
+    let mut resolved_ips = BTreeSet::new();
+    for addr in addrs {
+        if is_private_ip(&addr.ip()) {
+            return Err(anyhow!(
+                "Requests to private/internal IP addresses are not allowed (resolved to {})",
+                addr.ip()
+            ));
         }
+        resolved_ips.insert(addr.ip());
     }
 
+    if resolved_ips.is_empty() {
+        return Err(anyhow!("Host '{host_name}' resolved to no addresses"));
+    }
+
+    Ok(ValidatedEndpoint {
+        url,
+        host: host_name,
+        resolved_ips: resolved_ips.into_iter().collect(),
+    })
+}
+
+pub fn verify_response_endpoint(
+    endpoint: &ValidatedEndpoint,
+    response: &reqwest::Response,
+) -> Result<()> {
+    verify_remote_addr(endpoint, response.remote_addr())
+}
+
+pub(crate) fn verify_remote_addr(
+    endpoint: &ValidatedEndpoint,
+    remote_addr: Option<SocketAddr>,
+) -> Result<()> {
+    let remote_addr = remote_addr.ok_or_else(|| {
+        anyhow!(
+            "HTTP client did not expose the remote socket address for {}",
+            endpoint.url
+        )
+    })?;
+    let remote_ip = remote_addr.ip();
+    if is_private_ip(&remote_ip) {
+        return Err(anyhow!(
+            "HTTP response for {} connected to private/internal IP address {}",
+            endpoint.url,
+            remote_ip
+        ));
+    }
+    if !endpoint.contains_ip(&remote_ip) {
+        return Err(anyhow!(
+            "HTTP response for {} connected to {}, which was not in the validated DNS set for host '{}' ({:?})",
+            endpoint.url,
+            remote_ip,
+            endpoint.host,
+            endpoint.resolved_ips
+        ));
+    }
     Ok(())
 }
 
@@ -180,21 +296,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_url_validation_allows_valid_urls() {
-        assert!(
-            validate_url_security("https://example.com/api")
-                .await
-                .is_ok()
-        );
-        assert!(
-            validate_url_security("http://api.github.com/users")
-                .await
-                .is_ok()
-        );
-        assert!(
-            validate_url_security("https://httpbin.org/get")
-                .await
-                .is_ok()
-        );
+        assert!(validate_url_security("https://1.1.1.1/api").await.is_ok());
+        assert!(validate_url_security("http://8.8.8.8/users").await.is_ok());
+        assert!(validate_url_security("https://9.9.9.9/get").await.is_ok());
     }
 
     #[tokio::test]
@@ -366,5 +470,75 @@ mod tests {
             result.is_err(),
             "metadata IPv4 literal must be rejected: {result:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn test_resolve_and_validate_url_pins_literal_ip() -> Result<()> {
+        let endpoint = resolve_and_validate_url("http://1.1.1.1/resource").await?;
+
+        assert_eq!(endpoint.url().as_str(), "http://1.1.1.1/resource");
+        assert_eq!(
+            endpoint.resolved_ips(),
+            &[IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1))]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_remote_addr_verification_rejects_rebinding_mismatch() -> Result<()> {
+        let endpoint = ValidatedEndpoint {
+            url: Url::parse("http://example.test/resource")?,
+            host: "example.test".to_string(),
+            resolved_ips: vec![IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1))],
+        };
+        let remote_addr = SocketAddr::from(([127, 0, 0, 1], 80));
+
+        let result = verify_remote_addr(&endpoint, Some(remote_addr));
+
+        assert!(
+            result.is_err(),
+            "remote_addr outside the validated set must be rejected"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_remote_addr_verification_allows_validated_ip() -> Result<()> {
+        let endpoint = ValidatedEndpoint {
+            url: Url::parse("http://example.test/resource")?,
+            host: "example.test".to_string(),
+            resolved_ips: vec![IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1))],
+        };
+        let remote_addr = SocketAddr::from(([1, 1, 1, 1], 80));
+
+        assert!(verify_remote_addr(&endpoint, Some(remote_addr)).is_ok());
+        Ok(())
+    }
+
+    #[test]
+    fn test_validated_endpoint_builds_pinned_socket_addrs() -> Result<()> {
+        let endpoint = ValidatedEndpoint {
+            url: Url::parse("https://example.test/resource")?,
+            host: "example.test".to_string(),
+            resolved_ips: vec![
+                IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)),
+                IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8)),
+            ],
+        };
+
+        assert_eq!(
+            endpoint.resolved_socket_addrs()?,
+            vec![
+                SocketAddr::from(([1, 1, 1, 1], 443)),
+                SocketAddr::from(([8, 8, 8, 8], 443)),
+            ]
+        );
+        assert!(
+            endpoint
+                .apply_dns_pinning(reqwest::Client::builder())
+                .is_ok()
+        );
+        Ok(())
     }
 }
