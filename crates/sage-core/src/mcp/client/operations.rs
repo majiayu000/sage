@@ -15,14 +15,21 @@ impl McpClient {
     /// List available tools
     #[instrument(skip(self), level = "debug")]
     pub async fn list_tools(&self) -> Result<Vec<McpTool>, McpError> {
+        let tools = self.fetch_tools().await?;
+        *self.tools().write().await = tools.clone();
+        Ok(tools)
+    }
+
+    pub(crate) async fn list_tools_uncached(&self) -> Result<Vec<McpTool>, McpError> {
+        self.fetch_tools().await
+    }
+
+    async fn fetch_tools(&self) -> Result<Vec<McpTool>, McpError> {
         self.ensure_initialized().await?;
 
         let result: Value = self.call(methods::TOOLS_LIST, None).await?;
 
-        let tools: Vec<McpTool> = decode_required_array(methods::TOOLS_LIST, &result, "tools")?;
-
-        *self.tools().write().await = tools.clone();
-        Ok(tools)
+        decode_required_array(methods::TOOLS_LIST, &result, "tools")
     }
 
     /// Call a tool with timeout

@@ -199,7 +199,7 @@ impl McpRegistry {
         name: &str,
         client: &Arc<McpClient>,
     ) -> Result<(), McpError> {
-        let tools = client.list_tools().await.map_err(|error| {
+        let tools = client.list_tools_uncached().await.map_err(|error| {
             McpError::schema(format!(
                 "Failed to discover tools for MCP server '{name}': {error}"
             ))
