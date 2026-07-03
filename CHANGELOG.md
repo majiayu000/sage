@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Settings-backed permissions now honor approval cache TTLs, fail closed for unsupported transform/modify decisions, and check every filesystem path against preflight denies.
 - Logged live model list fetch failures in `/model` instead of silently falling back to the static model list.
 - Permission decision persistence now fails instead of silently rebuilding an unreadable `settings.local.json`, preserving previously configured allow/deny rules.
 - `/init` now reports `settings.json` write failures instead of claiming success.

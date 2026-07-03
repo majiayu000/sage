@@ -7,6 +7,7 @@ use crate::error::{ResultExt, SageResult};
 use crate::hooks::{HookExecutor, HookRegistry};
 use crate::llm::model_capabilities::get_model_capability;
 use crate::output::StreamingOutput;
+use crate::permissions::ApprovalCache;
 use crate::skills::SkillRegistry;
 use crate::tools::executor::ToolExecutor;
 use std::sync::Arc;
@@ -95,6 +96,7 @@ impl UnifiedExecutor {
             auto_compact,
             skill_registry: Arc::new(RwLock::new(skill_registry)),
             output_strategy: Arc::new(StreamingOutput::new()),
+            approval_cache: ApprovalCache::default(),
             conversation_history: Vec::new(),
         })
     }

@@ -66,7 +66,7 @@ impl ToolPermissionResult {
 
     /// Check if this result allows execution
     pub fn is_allowed(&self) -> bool {
-        matches!(self, Self::Allow | Self::Transform { .. })
+        matches!(self, Self::Allow)
     }
 }
 
@@ -127,6 +127,6 @@ pub enum PermissionDecision {
 impl PermissionDecision {
     /// Check if this decision allows execution
     pub fn is_allowed(&self) -> bool {
-        matches!(self, Self::Allow | Self::AllowAlways | Self::Modify { .. })
+        matches!(self, Self::Allow | Self::AllowAlways)
     }
 }

@@ -64,6 +64,7 @@ use tracing::instrument;
 // Re-export types for convenience
 use crate::agent::ExecutionOptions;
 use crate::config::model::Config;
+use crate::permissions::ApprovalCache;
 
 /// Unified executor that implements the Claude Code style execution loop
 pub struct UnifiedExecutor {
@@ -89,6 +90,8 @@ pub struct UnifiedExecutor {
     skill_registry: Arc<RwLock<SkillRegistry>>,
     /// Output strategy for flexible display modes (streaming, batch, json, silent)
     output_strategy: Arc<dyn OutputStrategy>,
+    /// Session-scoped cache for repeated settings approval prompts.
+    approval_cache: ApprovalCache,
     /// Accumulated conversation history (excludes system prompt) for multi-turn interactive mode
     conversation_history: Vec<crate::llm::messages::LlmMessage>,
 }

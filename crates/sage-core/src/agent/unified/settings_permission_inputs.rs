@@ -81,8 +81,7 @@ fn filesystem_inputs(
 
     paths
         .into_iter()
-        .enumerate()
-        .map(|(index, path)| {
+        .map(|path| {
             let input = PermissionDecisionInput::new(
                 PermissionAction::Filesystem,
                 tool_name,
@@ -90,11 +89,7 @@ fn filesystem_inputs(
             )
             .with_path(path)
             .with_working_directory(working_dir.to_string_lossy());
-            if index == 0 {
-                with_preflights(input, preflight_denies.clone(), scoped_allows.clone())
-            } else {
-                input
-            }
+            with_preflights(input, preflight_denies.clone(), scoped_allows.clone())
         })
         .collect()
 }
@@ -118,12 +113,12 @@ fn http_client_inputs(
                     .cloned()
                     .collect(),
             ),
-            preflight_denies,
-            scoped_allows,
+            preflight_denies.clone(),
+            scoped_allows.clone(),
         ));
     }
     if let Some(path) = tool_call.get_argument::<String>("save_to_file") {
-        inputs.push(
+        inputs.push(with_preflights(
             PermissionDecisionInput::new(
                 PermissionAction::Filesystem,
                 "Write",
@@ -134,13 +129,15 @@ fn http_client_inputs(
             )
             .with_path(path)
             .with_working_directory(working_dir.to_string_lossy()),
-        );
+            preflight_denies.clone(),
+            scoped_allows.clone(),
+        ));
     }
     if inputs.is_empty() {
-        inputs.push(PermissionDecisionInput::new(
-            PermissionAction::Tool,
-            tool_name,
-            keys,
+        inputs.push(with_preflights(
+            PermissionDecisionInput::new(PermissionAction::Tool, tool_name, keys),
+            preflight_denies,
+            scoped_allows,
         ));
     }
     inputs
@@ -275,5 +272,36 @@ mod tests {
         let call = ToolCall::new("call-1", "grep", HashMap::new());
 
         assert_eq!(filesystem_paths("grep", &call), vec![".".to_string()]);
+    }
+
+    #[test]
+    fn multiedit_attaches_preflight_to_every_path_input() {
+        let mut arguments = HashMap::new();
+        arguments.insert(
+            "file_path".to_string(),
+            serde_json::Value::String("src/lib.rs".to_string()),
+        );
+        arguments.insert(
+            "edits".to_string(),
+            serde_json::json!([
+                { "file_path": "secrets/key.txt", "old_string": "a", "new_string": "b" }
+            ]),
+        );
+        let call = ToolCall::new("call-1", "multiedit", arguments);
+        let preflight = PermissionPreflight::new(
+            "MultiEdit path overlaps deny rule 'MultiEdit(secrets/**)'",
+            Some("MultiEdit(secrets/**)".to_string()),
+        );
+
+        let inputs = filesystem_inputs(
+            "MultiEdit",
+            &call,
+            Path::new("/workspace/sage"),
+            vec![preflight],
+            Vec::new(),
+        );
+
+        assert_eq!(inputs.len(), 2);
+        assert!(inputs.iter().all(|input| input.preflight_denies.len() == 1));
     }
 }

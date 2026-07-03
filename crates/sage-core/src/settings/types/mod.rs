@@ -16,5 +16,7 @@ pub use config::{
     ManagedSandboxConfig, ModelSettings, UiSettings, WorkspaceSettings,
 };
 pub use hooks::HooksSettings;
+#[allow(unused_imports)]
+pub use permissions::ApprovalSettings;
 pub use permissions::{PermissionSettings, SettingsPermissionBehavior};
 pub use tools::ToolSettings;

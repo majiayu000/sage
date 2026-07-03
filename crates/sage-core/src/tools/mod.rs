@@ -25,8 +25,8 @@ pub use parallel_executor::{
     ToolExecutionResult,
 };
 pub use permission::{
-    PermissionCache, PermissionDecision, PermissionHandler, PermissionPolicy, PermissionRequest,
-    PolicyHandler, RiskLevel, SharedPermissionHandler, ToolContext, ToolPermissionResult,
+    PermissionCache, PermissionDecision, PermissionHandler, PermissionRequest, RiskLevel,
+    SharedPermissionHandler, ToolContext, ToolPermissionResult,
 };
 pub use registry::ToolRegistry;
 pub use tool_cache::{

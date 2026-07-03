@@ -3,8 +3,9 @@
 use crate::error::SageResult;
 use crate::input::{InputRequest, InputResponseKind};
 use crate::permissions::{
-    FilesystemPermissionProfile, PermissionDecisionEngine, PermissionDecisionKind,
-    PermissionPreflight, PermissionProfile, PermissionProfileSource, SandboxSupport,
+    ApprovalCacheDecision, ApprovalCacheLookup, FilesystemPermissionProfile,
+    PermissionDecisionEngine, PermissionDecisionKind, PermissionPreflight, PermissionProfile,
+    PermissionProfileSource, SandboxSupport,
 };
 use crate::settings::SettingsLoader;
 use crate::settings::locations::SettingsLocations;
@@ -12,6 +13,7 @@ use crate::settings::types::Settings;
 use crate::settings::validation::SettingsValidator;
 use crate::tools::types::{ToolCall, ToolResult};
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 use super::UnifiedExecutor;
 use super::tool_orchestrator::ToolExecutionContext;
@@ -42,7 +44,14 @@ pub(in crate::agent::unified) use settings_permission_check::SettingsPermissionC
 enum SettingsPermissionDecision {
     Allow,
     Deny(String),
-    Ask(String),
+    Ask(SettingsPermissionAsk),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SettingsPermissionAsk {
+    reason: String,
+    audit_key: String,
+    cache_ttl_ms: Option<u64>,
 }
 
 enum SettingsPermissionPromptResult {
@@ -50,7 +59,10 @@ enum SettingsPermissionPromptResult {
         tool_call: ToolCall,
         input_modified: bool,
     },
-    Blocked(ToolResult),
+    Blocked {
+        result: ToolResult,
+        cache_decision: Option<ApprovalCacheDecision>,
+    },
 }
 
 impl UnifiedExecutor {
@@ -96,7 +108,30 @@ impl UnifiedExecutor {
                         tool_call: current_call,
                     }));
                 }
-                SettingsPermissionDecision::Ask(reason) => {
+                SettingsPermissionDecision::Ask(ask) => {
+                    let cache_ttl = approval_cache_ttl(ask.cache_ttl_ms);
+                    if cache_ttl.is_some() {
+                        match self.approval_cache.lookup(&ask.audit_key, Instant::now()) {
+                            ApprovalCacheLookup::Hit(ApprovalCacheDecision::Allow) => {
+                                return Ok(Some(SettingsPermissionCheck::Allowed(current_call)));
+                            }
+                            ApprovalCacheLookup::Hit(ApprovalCacheDecision::Deny) => {
+                                let result = Self::settings_permission_blocked_result(
+                                    &current_call,
+                                    format!(
+                                        "Permission denied by cached approval decision: {}",
+                                        ask.reason
+                                    ),
+                                );
+                                return Ok(Some(SettingsPermissionCheck::Blocked {
+                                    result,
+                                    tool_call: current_call,
+                                }));
+                            }
+                            ApprovalCacheLookup::Expired | ApprovalCacheLookup::Miss => {}
+                        }
+                    }
+
                     prompted_count += 1;
                     if prompted_count > 8 {
                         let result = Self::settings_permission_blocked_result(
@@ -110,7 +145,7 @@ impl UnifiedExecutor {
                     }
 
                     match self
-                        .request_settings_permission(&current_call, reason)
+                        .request_settings_permission(&current_call, ask.reason)
                         .await?
                     {
                         SettingsPermissionPromptResult::Allowed {
@@ -122,9 +157,28 @@ impl UnifiedExecutor {
                                 continue;
                             }
 
+                            if let Some(ttl) = cache_ttl {
+                                self.approval_cache.insert(
+                                    ask.audit_key,
+                                    ApprovalCacheDecision::Allow,
+                                    Some(ttl),
+                                    Instant::now(),
+                                );
+                            }
                             return Ok(Some(SettingsPermissionCheck::Allowed(approved_call)));
                         }
-                        SettingsPermissionPromptResult::Blocked(result) => {
+                        SettingsPermissionPromptResult::Blocked {
+                            result,
+                            cache_decision,
+                        } => {
+                            if let (Some(ttl), Some(cache_decision)) = (cache_ttl, cache_decision) {
+                                self.approval_cache.insert(
+                                    ask.audit_key,
+                                    cache_decision,
+                                    Some(ttl),
+                                    Instant::now(),
+                                );
+                            }
                             return Ok(Some(SettingsPermissionCheck::Blocked {
                                 result,
                                 tool_call: current_call,
@@ -154,12 +208,12 @@ impl UnifiedExecutor {
                     format!("Permission denied by settings: {}", reason),
                 )))
             }
-            SettingsPermissionDecision::Ask(reason) => {
+            SettingsPermissionDecision::Ask(ask) => {
                 Ok(Some(Self::settings_permission_blocked_result(
                     tool_call,
                     format!(
                         "Permission required by settings but sub-agent tool calls cannot prompt for approval: {}",
-                        reason
+                        ask.reason
                     ),
                 )))
             }
@@ -188,12 +242,13 @@ impl UnifiedExecutor {
         let response = match self.request_user_input(request).await {
             Ok(response) => response,
             Err(err) => {
-                return Ok(SettingsPermissionPromptResult::Blocked(
-                    Self::settings_permission_blocked_result(
+                return Ok(SettingsPermissionPromptResult::Blocked {
+                    result: Self::settings_permission_blocked_result(
                         tool_call,
                         format!("Permission request failed: {}", err),
                     ),
-                ));
+                    cache_decision: None,
+                });
             }
         };
 
@@ -217,19 +272,21 @@ impl UnifiedExecutor {
             }
             InputResponseKind::PermissionDenied { reason } => {
                 let reason = reason.unwrap_or_else(|| "No reason provided".to_string());
-                Ok(SettingsPermissionPromptResult::Blocked(
-                    Self::settings_permission_blocked_result(
+                Ok(SettingsPermissionPromptResult::Blocked {
+                    result: Self::settings_permission_blocked_result(
                         tool_call,
                         format!("Permission denied by user: {}", reason),
                     ),
-                ))
+                    cache_decision: Some(ApprovalCacheDecision::Deny),
+                })
             }
-            InputResponseKind::Cancelled => Ok(SettingsPermissionPromptResult::Blocked(
-                Self::settings_permission_blocked_result(
+            InputResponseKind::Cancelled => Ok(SettingsPermissionPromptResult::Blocked {
+                result: Self::settings_permission_blocked_result(
                     tool_call,
                     "Permission request cancelled by user.",
                 ),
-            )),
+                cache_decision: None,
+            }),
             InputResponseKind::FreeText { text }
             | InputResponseKind::Simple { content: text, .. } => {
                 match Self::legacy_permission_text_decision(&text) {
@@ -237,26 +294,29 @@ impl UnifiedExecutor {
                         tool_call: tool_call.clone(),
                         input_modified: false,
                     }),
-                    Some(false) => Ok(SettingsPermissionPromptResult::Blocked(
-                        Self::settings_permission_blocked_result(
+                    Some(false) => Ok(SettingsPermissionPromptResult::Blocked {
+                        result: Self::settings_permission_blocked_result(
                             tool_call,
                             format!("Permission denied by user response: {}", text),
                         ),
-                    )),
-                    None => Ok(SettingsPermissionPromptResult::Blocked(
-                        Self::settings_permission_blocked_result(
+                        cache_decision: Some(ApprovalCacheDecision::Deny),
+                    }),
+                    None => Ok(SettingsPermissionPromptResult::Blocked {
+                        result: Self::settings_permission_blocked_result(
                             tool_call,
                             "Invalid permission response from input handler.",
                         ),
-                    )),
+                        cache_decision: None,
+                    }),
                 }
             }
-            _ => Ok(SettingsPermissionPromptResult::Blocked(
-                Self::settings_permission_blocked_result(
+            _ => Ok(SettingsPermissionPromptResult::Blocked {
+                result: Self::settings_permission_blocked_result(
                     tool_call,
                     "Invalid permission response from input handler.",
                 ),
-            )),
+                cache_decision: None,
+            }),
         }
     }
 
@@ -406,6 +466,7 @@ impl UnifiedExecutor {
             }
         }
 
+        let approval_cache_ttl_ms = profile.approval.cache_ttl_ms;
         let decisions = settings_permission_inputs::settings_permission_inputs(
             &tool_name,
             tool_call,
@@ -440,8 +501,10 @@ impl UnifiedExecutor {
                     ));
                 }
                 PermissionDecisionKind::Ask => {
-                    first_ask.get_or_insert_with(|| {
-                        settings_permission_policy::decision_reason(&decision)
+                    first_ask.get_or_insert_with(|| SettingsPermissionAsk {
+                        reason: settings_permission_policy::decision_reason(&decision),
+                        audit_key: decision.audit_key,
+                        cache_ttl_ms: approval_cache_ttl_ms,
                     });
                 }
                 PermissionDecisionKind::Unsupported => {
@@ -455,8 +518,8 @@ impl UnifiedExecutor {
 
         if !has_configured_rules {
             None
-        } else if let Some(reason) = first_ask {
-            Some(SettingsPermissionDecision::Ask(reason))
+        } else if let Some(ask) = first_ask {
+            Some(SettingsPermissionDecision::Ask(ask))
         } else {
             Some(SettingsPermissionDecision::Allow)
         }
@@ -471,6 +534,12 @@ impl UnifiedExecutor {
             _ => None,
         }
     }
+}
+
+fn approval_cache_ttl(cache_ttl_ms: Option<u64>) -> Option<Duration> {
+    cache_ttl_ms
+        .filter(|ttl_ms| *ttl_ms > 0)
+        .map(Duration::from_millis)
 }
 
 #[cfg(test)]

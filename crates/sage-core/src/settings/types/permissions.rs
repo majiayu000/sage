@@ -17,6 +17,21 @@ pub struct PermissionSettings {
 
     /// Whether default_behavior was explicitly declared by a settings file.
     pub default_behavior_set: bool,
+
+    /// Approval prompt settings.
+    pub approval: ApprovalSettings,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApprovalSettings {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_ttl_ms: Option<u64>,
+}
+
+impl ApprovalSettings {
+    fn is_empty(&self) -> bool {
+        self.cache_ttl_ms.is_none()
+    }
 }
 
 impl Serialize for PermissionSettings {
@@ -36,6 +51,9 @@ impl Serialize for PermissionSettings {
         {
             len += 1;
         }
+        if !self.approval.is_empty() {
+            len += 1;
+        }
 
         let mut state = serializer.serialize_struct("PermissionSettings", len)?;
         if !self.allow.is_empty() {
@@ -48,6 +66,9 @@ impl Serialize for PermissionSettings {
             || self.default_behavior != SettingsPermissionBehavior::default()
         {
             state.serialize_field("default_behavior", &self.default_behavior)?;
+        }
+        if !self.approval.is_empty() {
+            state.serialize_field("approval", &self.approval)?;
         }
         state.end()
     }
@@ -67,6 +88,10 @@ impl PermissionSettings {
         {
             self.default_behavior = other.default_behavior;
             self.default_behavior_set = true;
+        }
+
+        if other.approval.cache_ttl_ms.is_some() {
+            self.approval.cache_ttl_ms = other.approval.cache_ttl_ms;
         }
     }
 
@@ -107,6 +132,8 @@ impl<'de> Deserialize<'de> for PermissionSettings {
             #[serde(default)]
             deny: Vec<String>,
             default_behavior: Option<SettingsPermissionBehavior>,
+            #[serde(default)]
+            approval: ApprovalSettings,
         }
 
         let wire = PermissionSettingsWire::deserialize(deserializer)?;
@@ -115,6 +142,7 @@ impl<'de> Deserialize<'de> for PermissionSettings {
             deny: wire.deny,
             default_behavior: wire.default_behavior.unwrap_or_default(),
             default_behavior_set: wire.default_behavior.is_some(),
+            approval: wire.approval,
         })
     }
 }
@@ -192,11 +220,21 @@ mod tests {
     }
 
     #[test]
+    fn test_deserialize_approval_cache_ttl() -> serde_json::Result<()> {
+        let settings: PermissionSettings =
+            serde_json::from_str(r#"{"approval": {"cache_ttl_ms": 5000}}"#)?;
+
+        assert_eq!(settings.approval.cache_ttl_ms, Some(5000));
+        Ok(())
+    }
+
+    #[test]
     fn test_implicit_default_behavior_is_not_serialized() {
         let settings = PermissionSettings::default();
 
         let json = serde_json::to_string(&settings).unwrap();
 
         assert!(!json.contains("default_behavior"));
+        assert!(!json.contains("approval"));
     }
 }

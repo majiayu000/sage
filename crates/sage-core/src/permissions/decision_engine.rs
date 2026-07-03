@@ -299,31 +299,12 @@ impl PermissionDecisionEngine {
             );
         }
 
-        let supplied_allow_matches: Vec<&PermissionRule> = input
-            .permission_keys
-            .iter()
-            .filter_map(|key| self.matching_rule_for_key(&self.profile.allow, key))
-            .collect();
-        let structured_allow_matches: Vec<&PermissionRule> = rule_match_keys
-            .iter()
-            .filter(|key| !input.permission_keys.contains(key))
-            .filter_map(|key| self.matching_rule_for_key(&self.profile.allow, key))
-            .collect();
-        let allow_matched = if input.permission_keys.is_empty() {
-            !structured_allow_matches.is_empty()
-        } else {
-            supplied_allow_matches.len() == input.permission_keys.len()
-                || !structured_allow_matches.is_empty()
-        };
-        if !rule_match_keys.is_empty() && allow_matched {
+        if let Some(rule) = self.matching_structured_allow(&input, &rule_match_keys) {
             return PermissionDecision::new(
                 PermissionDecisionKind::Allow,
                 audit_key,
                 "matched allow rule",
-                supplied_allow_matches
-                    .first()
-                    .or_else(|| structured_allow_matches.first())
-                    .map(|rule| (*rule).clone()),
+                Some(rule.clone()),
             );
         }
 
@@ -336,6 +317,15 @@ impl PermissionDecisionEngine {
                     .matched_rule
                     .as_ref()
                     .map(|pattern| PermissionRule::new(pattern.clone(), self.profile.source)),
+            );
+        }
+
+        if let Some(rule) = self.matching_supplied_compatibility_allow(&input) {
+            return PermissionDecision::new(
+                PermissionDecisionKind::Allow,
+                audit_key,
+                "matched allow rule",
+                Some(rule.clone()),
             );
         }
 
@@ -386,6 +376,33 @@ impl PermissionDecisionEngine {
         rules
             .iter()
             .find(|rule| bash_aware_allow_matches(&rule.pattern, key))
+    }
+
+    fn matching_structured_allow<'a>(
+        &'a self,
+        input: &PermissionDecisionInput,
+        rule_match_keys: &[String],
+    ) -> Option<&'a PermissionRule> {
+        rule_match_keys
+            .iter()
+            .filter(|key| !input.permission_keys.contains(key))
+            .find_map(|key| self.matching_rule_for_key(&self.profile.allow, key))
+    }
+
+    fn matching_supplied_compatibility_allow<'a>(
+        &'a self,
+        input: &PermissionDecisionInput,
+    ) -> Option<&'a PermissionRule> {
+        let mut matches = input
+            .permission_keys
+            .iter()
+            .map(|key| self.matching_rule_for_key(&self.profile.allow, key));
+        let first = matches.next().flatten()?;
+        if matches.all(|rule| rule.is_some()) {
+            Some(first)
+        } else {
+            None
+        }
     }
 
     fn path_is_in_workspace(&self, path: &str, working_directory: Option<&str>) -> bool {
