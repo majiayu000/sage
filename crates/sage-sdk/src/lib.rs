@@ -9,7 +9,7 @@
 //! releases and are recorded in the changelog instead of preserved behind
 //! compatibility aliases.
 //!
-//! Current API version: **0.1.0**
+//! Current API version: **0.2.0**
 //!
 //! ## Version Compatibility
 //!
@@ -25,7 +25,7 @@
 //! println!("SDK Version: {}", version::version_string());
 //!
 //! // Verify client compatibility
-//! let client_version = version::Version::new(0, 1, 0);
+//! let client_version = version::Version::new(0, 2, 0);
 //! assert!(version::is_compatible(&client_version));
 //! ```
 

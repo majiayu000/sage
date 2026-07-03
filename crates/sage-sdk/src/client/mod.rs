@@ -145,7 +145,7 @@ impl SageAgentSdk {
     /// use sage_sdk::{SageAgentSdk, version::Version};
     ///
     /// let sdk = SageAgentSdk::new().unwrap();
-    /// let client_version = Version::new(0, 1, 0);
+    /// let client_version = Version::new(0, 2, 0);
     /// assert!(sdk.is_compatible_with(&client_version));
     /// ```
     pub fn is_compatible_with(&self, client_version: &crate::version::Version) -> bool {

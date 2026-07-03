@@ -7,7 +7,7 @@ use crate::trace::write_jsonl;
 use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
 use sage_core::trajectory::{SessionEntry, SessionReplayer};
-use sage_sdk::{SageAgentSdk, UnifiedRunOptions};
+use sage_sdk::{RunOptions, SageAgentSdk};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
@@ -92,7 +92,7 @@ impl SdkAgentRunner {
 impl EvalRunner for SdkAgentRunner {
     async fn run_task(&self, task: &EvalTask, run_dir: &Path) -> Result<TaskRunOutput> {
         let workspace_path = prepare_workspace(task, run_dir).await?;
-        let mut options = UnifiedRunOptions::new()
+        let mut options = RunOptions::new()
             .with_working_directory(&workspace_path)
             .with_non_interactive(true);
         if let Some(max_steps) = self.max_steps {
@@ -101,7 +101,7 @@ impl EvalRunner for SdkAgentRunner {
 
         let result = self
             .sdk
-            .execute_non_interactive(&task.prompt, options)
+            .run_with_options(&task.prompt, options)
             .await
             .with_context(|| format!("SDK eval task '{}' failed to run", task.id))?;
         let session = SessionReplayer::list_sessions(&workspace_path)

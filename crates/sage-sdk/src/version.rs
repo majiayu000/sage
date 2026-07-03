@@ -14,7 +14,8 @@
 //!
 //! Compatibility helpers expose the current supported version range. They do
 //! not imply deprecated API retention; breaking `0.x` changes are removed
-//! directly and documented in release notes.
+//! directly and documented in release notes. While the SDK is `0.x`, minor
+//! versions are incompatible with each other.
 //!
 //! ## Example
 //!
@@ -22,11 +23,11 @@
 //! use sage_sdk::version::{API_VERSION, Version, is_compatible};
 //!
 //! // Check if client version is compatible
-//! let client_version = Version::new(0, 1, 0);
+//! let client_version = Version::new(0, 2, 0);
 //! assert!(is_compatible(&client_version));
 //!
 //! // Parse version from string
-//! let version = Version::parse("0.1.0").unwrap();
+//! let version = Version::parse("0.2.0").unwrap();
 //! assert_eq!(version.major(), 0);
 //! ```
 
@@ -40,7 +41,7 @@ use thiserror::Error;
 /// When the API changes in an incompatible way, the MAJOR version will be incremented.
 pub const API_VERSION: Version = Version {
     major: 0,
-    minor: 1,
+    minor: 2,
     patch: 0,
 };
 
@@ -51,7 +52,7 @@ pub const API_VERSION: Version = Version {
 /// negotiation range.
 pub const MIN_SUPPORTED_VERSION: Version = Version {
     major: 0,
-    minor: 1,
+    minor: 2,
     patch: 0,
 };
 
@@ -115,8 +116,10 @@ impl Version {
 
     /// Check if this version is compatible with another version
     ///
-    /// Two versions are compatible if they have the same MAJOR version and
-    /// this version is greater than or equal to the minimum required version.
+    /// Two stable versions are compatible if they have the same MAJOR version
+    /// and this version is greater than or equal to the minimum required
+    /// version. For pre-1.0 APIs, MINOR versions are incompatible with each
+    /// other because minor releases may remove or reshape public APIs.
     ///
     /// # Example
     ///
@@ -132,12 +135,14 @@ impl Version {
     /// assert!(!v3.is_compatible_with(&v1)); // Different major
     /// ```
     pub const fn is_compatible_with(&self, required: &Version) -> bool {
-        // Must have same major version
         if self.major != required.major {
             return false;
         }
 
-        // Must be at least the required version
+        if self.major == 0 && self.minor != required.minor {
+            return false;
+        }
+
         if self.minor < required.minor {
             return false;
         }
@@ -225,7 +230,7 @@ pub enum VersionError {
 /// ```
 /// use sage_sdk::version::{Version, is_compatible};
 ///
-/// let client_version = Version::new(0, 1, 0);
+/// let client_version = Version::new(0, 2, 0);
 /// assert!(is_compatible(&client_version));
 /// ```
 pub fn is_compatible(client_version: &Version) -> bool {
@@ -242,7 +247,7 @@ pub fn is_compatible(client_version: &Version) -> bool {
 /// ```
 /// use sage_sdk::version::{Version, negotiate_version};
 ///
-/// let client_version = Version::new(0, 1, 0);
+/// let client_version = Version::new(0, 2, 0);
 /// assert!(negotiate_version(&client_version).is_ok());
 ///
 /// let incompatible = Version::new(1, 0, 0);
@@ -278,7 +283,7 @@ pub fn negotiate_version(client_version: &Version) -> Result<(), VersionError> {
 /// use sage_sdk::version::version_string;
 ///
 /// let version = version_string();
-/// assert_eq!(version, "0.1.0");
+/// assert_eq!(version, "0.2.0");
 /// ```
 pub fn version_string() -> String {
     API_VERSION.to_string()
@@ -295,7 +300,7 @@ pub fn version_string() -> String {
 ///
 /// let info = version_info();
 /// assert!(info.contains("Sage Agent SDK"));
-/// assert!(info.contains("0.1.0"));
+/// assert!(info.contains("0.2.0"));
 /// ```
 pub fn version_info() -> String {
     format!(
@@ -397,17 +402,20 @@ mod tests {
 
     #[test]
     fn test_current_api_version() {
-        assert_eq!(API_VERSION, Version::new(0, 1, 0));
-        assert_eq!(MIN_SUPPORTED_VERSION, Version::new(0, 1, 0));
+        assert_eq!(API_VERSION, Version::new(0, 2, 0));
+        assert_eq!(MIN_SUPPORTED_VERSION, Version::new(0, 2, 0));
     }
 
     #[test]
     fn test_is_compatible() {
-        let current = Version::new(0, 1, 0);
+        let current = Version::new(0, 2, 0);
         assert!(is_compatible(&current));
 
-        // Future minor version should be compatible with current
-        let future_minor = Version::new(0, 2, 0);
+        let old_minor = Version::new(0, 1, 0);
+        assert!(!is_compatible(&old_minor));
+
+        // Future minor version is not compatible with current 0.x APIs.
+        let future_minor = Version::new(0, 3, 0);
         assert!(!is_compatible(&future_minor)); // Not compatible because API is older
 
         // Different major version
@@ -417,8 +425,11 @@ mod tests {
 
     #[test]
     fn test_negotiate_version() {
-        let current = Version::new(0, 1, 0);
+        let current = Version::new(0, 2, 0);
         assert!(negotiate_version(&current).is_ok());
+
+        let old_minor = Version::new(0, 1, 0);
+        assert!(negotiate_version(&old_minor).is_err());
 
         let incompatible = Version::new(1, 0, 0);
         assert!(negotiate_version(&incompatible).is_err());
@@ -426,28 +437,37 @@ mod tests {
 
     #[test]
     fn test_version_string() {
-        assert_eq!(version_string(), "0.1.0");
+        assert_eq!(version_string(), "0.2.0");
     }
 
     #[test]
     fn test_version_info() {
         let info = version_info();
         assert!(info.contains("Sage Agent SDK"));
-        assert!(info.contains("0.1.0"));
+        assert!(info.contains("0.2.0"));
         assert!(info.contains("Development"));
     }
 
     #[test]
     fn test_is_supported() {
-        let current = Version::new(0, 1, 0);
+        let current = Version::new(0, 2, 0);
         assert!(current.is_supported());
 
         // Too old (below minimum)
-        let too_old = Version::new(0, 0, 1);
+        let too_old = Version::new(0, 1, 9);
         assert!(!too_old.is_supported());
 
         // Future version (above current)
-        let future = Version::new(0, 2, 0);
+        let future = Version::new(0, 3, 0);
         assert!(!future.is_supported());
+    }
+
+    #[test]
+    fn test_pre_1_minor_versions_are_incompatible() {
+        let current = Version::new(0, 2, 0);
+
+        assert!(current.is_compatible_with(&Version::new(0, 2, 0)));
+        assert!(!current.is_compatible_with(&Version::new(0, 1, 0)));
+        assert!(!current.is_compatible_with(&Version::new(0, 3, 0)));
     }
 }
