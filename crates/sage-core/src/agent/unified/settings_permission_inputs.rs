@@ -79,6 +79,8 @@ fn filesystem_inputs(
         )];
     }
 
+    // Build one decision input per path so deny preflights cover every
+    // filesystem target, including future multi-path tools.
     paths
         .into_iter()
         .map(|path| {

@@ -265,6 +265,14 @@ def ensure_safe_member(dest: Path, name: str) -> None:
         fail(f"archive member escapes extraction directory: {name}")
 
 
+def ensure_safe_tar_member(dest: Path, member: tarfile.TarInfo) -> None:
+    ensure_safe_member(dest, member.name)
+    if member.issym() or member.islnk():
+        fail(f"archive member uses link entry: {member.name}")
+    if not (member.isfile() or member.isdir()):
+        fail(f"archive member has unsupported type: {member.name}")
+
+
 def extract_archive(path: Path, dest: Path) -> None:
     if path.suffix == ".zip":
         with zipfile.ZipFile(path) as archive:
@@ -274,7 +282,7 @@ def extract_archive(path: Path, dest: Path) -> None:
     else:
         with tarfile.open(path, "r:*") as archive:
             for member in archive.getmembers():
-                ensure_safe_member(dest, member.name)
+                ensure_safe_tar_member(dest, member)
             archive.extractall(dest)
 
 
@@ -454,6 +462,22 @@ def command_self_test(_args: argparse.Namespace) -> None:
         errors = validate_action_policy(repo, release_config(repo))
         if not any("Docker action" in error for error in errors):
             fail("self-test expected mutable Docker action policy violation")
+
+    with tempfile.TemporaryDirectory(prefix="sage-archive-safety-test-") as temp:
+        root = Path(temp)
+        dest = root / "out"
+        dest.mkdir()
+        for tar_type, label in [(tarfile.SYMTYPE, "symlink"), (tarfile.LNKTYPE, "hardlink")]:
+            archive_path = root / f"{label}.tar"
+            with tarfile.open(archive_path, "w") as archive:
+                member = tarfile.TarInfo(f"{label}-escape")
+                member.type = tar_type
+                member.linkname = "../escape"
+                archive.addfile(member)
+            expect_failure(
+                f"tar {label} escape",
+                lambda path=archive_path: extract_archive(path, dest),
+            )
 
     with tempfile.TemporaryDirectory(prefix="sage-release-artifact-test-") as temp:
         root = Path(temp)
