@@ -1,0 +1,61 @@
+{
+  "name": "offline-smoke",
+  "tasks": [
+    {
+      "id": "read_marker_file",
+      "prompt": "Read marker.txt and report the marker token.",
+      "required_tool_categories": ["file_read"],
+      "expected_tool_names": ["Read"],
+      "workspace_files": [
+        {
+          "path": "marker.txt",
+          "content": "sage-eval-marker\n"
+        }
+      ],
+      "assertions": [
+        {
+          "kind": "output_contains",
+          "value": "sage-eval-marker"
+        }
+      ],
+      "offline": {
+        "final_output": "sage-eval-marker",
+        "tool_intents": [
+          {
+            "tool_category": "file_read",
+            "tool_name": "Read",
+            "reason": "Need to inspect marker.txt before answering."
+          }
+        ],
+        "tool_calls": [
+          {
+            "tool_name": "Read",
+            "tool_input": {
+              "file_path": "marker.txt"
+            },
+            "success": true,
+            "output": "sage-eval-marker\n"
+          }
+        ]
+      }
+    },
+    {
+      "id": "direct_answer_no_tool",
+      "prompt": "Answer with the exact word done.",
+      "required_tool_categories": [],
+      "expected_tool_names": [],
+      "workspace_files": [],
+      "assertions": [
+        {
+          "kind": "output_contains",
+          "value": "done"
+        }
+      ],
+      "offline": {
+        "final_output": "done",
+        "tool_intents": [],
+        "tool_calls": []
+      }
+    }
+  ]
+}

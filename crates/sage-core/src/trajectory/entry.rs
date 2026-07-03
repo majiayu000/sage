@@ -70,6 +70,19 @@ pub enum SessionEntry {
         timestamp: String,
     },
 
+    /// Tool intent recorded before a tool call is executed.
+    #[serde(rename = "tool_intent")]
+    ToolIntent {
+        uuid: Uuid,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        parent_uuid: Option<Uuid>,
+        tool_category: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        tool_name: Option<String>,
+        reason: String,
+        timestamp: String,
+    },
+
     /// Tool result
     #[serde(rename = "tool_result")]
     ToolResult {
@@ -121,6 +134,7 @@ impl SessionEntry {
             Self::LlmRequest { uuid, .. } => *uuid,
             Self::LlmResponse { uuid, .. } => *uuid,
             Self::ToolCall { uuid, .. } => *uuid,
+            Self::ToolIntent { uuid, .. } => *uuid,
             Self::ToolResult { uuid, .. } => *uuid,
             Self::Error { uuid, .. } => *uuid,
             Self::SessionEnd { uuid, .. } => *uuid,
@@ -135,6 +149,7 @@ impl SessionEntry {
             Self::LlmRequest { parent_uuid, .. } => *parent_uuid,
             Self::LlmResponse { parent_uuid, .. } => *parent_uuid,
             Self::ToolCall { parent_uuid, .. } => *parent_uuid,
+            Self::ToolIntent { parent_uuid, .. } => *parent_uuid,
             Self::ToolResult { parent_uuid, .. } => *parent_uuid,
             Self::Error { parent_uuid, .. } => *parent_uuid,
             Self::SessionEnd { parent_uuid, .. } => *parent_uuid,
@@ -149,6 +164,7 @@ impl SessionEntry {
             Self::LlmRequest { timestamp, .. } => timestamp,
             Self::LlmResponse { timestamp, .. } => timestamp,
             Self::ToolCall { timestamp, .. } => timestamp,
+            Self::ToolIntent { timestamp, .. } => timestamp,
             Self::ToolResult { timestamp, .. } => timestamp,
             Self::Error { timestamp, .. } => timestamp,
             Self::SessionEnd { timestamp, .. } => timestamp,
@@ -163,6 +179,7 @@ impl SessionEntry {
             Self::LlmRequest { .. } => "llm_request",
             Self::LlmResponse { .. } => "llm_response",
             Self::ToolCall { .. } => "tool_call",
+            Self::ToolIntent { .. } => "tool_intent",
             Self::ToolResult { .. } => "tool_result",
             Self::Error { .. } => "error",
             Self::SessionEnd { .. } => "session_end",
@@ -206,5 +223,22 @@ mod tests {
         let json = serde_json::to_string(&usage).unwrap();
         assert!(json.contains("\"input_tokens\":100"));
         assert!(!json.contains("cache_write_tokens")); // skip_serializing_if
+    }
+
+    #[test]
+    fn test_tool_intent_entry_type() {
+        let entry = SessionEntry::ToolIntent {
+            uuid: Uuid::new_v4(),
+            parent_uuid: None,
+            tool_category: "file_read".to_string(),
+            tool_name: Some("Read".to_string()),
+            reason: "Need file contents".to_string(),
+            timestamp: "2024-01-01T00:00:00Z".to_string(),
+        };
+
+        let json = serde_json::to_string(&entry).unwrap();
+
+        assert!(json.contains("\"type\":\"tool_intent\""));
+        assert_eq!(entry.entry_type(), "tool_intent");
     }
 }

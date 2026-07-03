@@ -262,6 +262,27 @@ impl SessionRecorder {
         Ok(uuid)
     }
 
+    /// Record intended tool category before execution.
+    pub async fn record_tool_intent(
+        &mut self,
+        tool_category: &str,
+        tool_name: Option<&str>,
+        reason: &str,
+    ) -> SageResult<Uuid> {
+        let uuid = Uuid::new_v4();
+        let entry = SessionEntry::ToolIntent {
+            uuid,
+            parent_uuid: self.last_uuid,
+            tool_category: tool_category.to_string(),
+            tool_name: tool_name.map(str::to_string),
+            reason: reason.to_string(),
+            timestamp: Utc::now().to_rfc3339(),
+        };
+
+        self.append(entry).await?;
+        Ok(uuid)
+    }
+
     /// Record tool result
     pub async fn record_tool_result(
         &mut self,

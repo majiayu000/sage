@@ -2516,6 +2516,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "sage-eval"
+version = "0.13.57"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "clap",
+ "sage-core",
+ "sage-sdk",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "sage-sdk"
 version = "0.13.57"
 dependencies = [
