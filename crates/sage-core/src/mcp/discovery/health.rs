@@ -96,7 +96,7 @@ impl HealthTracker {
     /// Update all health statuses to disconnected
     pub async fn mark_all_disconnected(&self) {
         let mut health = self.health.write().await;
-        for (_, h) in health.iter_mut() {
+        for h in health.values_mut() {
             h.status = ServerStatus::Disconnected;
         }
     }

@@ -54,7 +54,7 @@ toml = "1.1"
 
 # HTTP client
 reqwest = { workspace = true }
-base64 = "0.22"
+base64 = { version = "0.23", default-features = false, features = ["std"] }
 
 # Regular expressions
 regex = "1.5"
@@ -70,7 +70,7 @@ walkdir = "2"
 grep-regex = "0.1"
 grep-searcher = "0.1"
 grep-matcher = "0.1"
-ignore = "0.4.27"
+ignore = "0.4.33"
 
 # Process control (Unix only)
 [target.'cfg(unix)'.dependencies]
@@ -80,6 +80,6 @@ nix = { workspace = true }
 mockall = { workspace = true }
 tokio-test = "0.4"
 tempfile = "3.8"
-serial_test = "3.5"
+serial_test = "4.0"
 
 # Note: Examples are defined in the root workspace package to avoid filename collisions
