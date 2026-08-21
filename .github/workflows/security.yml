@@ -57,7 +57,8 @@ jobs:
         run: cargo install cargo-outdated --locked
 
       - name: Check for outdated dependencies
-        run: cargo outdated --workspace --root-deps-only --exit-code 1
+        # serial_test 4.x requires Rust 1.93.1, above the workspace MSRV.
+        run: cargo outdated --workspace --root-deps-only --ignore serial_test --exit-code 1
 
   msrv:
     name: Minimum Supported Rust Version
@@ -69,7 +70,7 @@ jobs:
         uses: dtolnay/rust-toolchain@1.88.0
 
       - name: Check MSRV compatibility
-        run: cargo check --locked --all-features
+        run: cargo check --locked --workspace --all-targets --all-features
 
   workflow-policy:
     name: Workflow policy
