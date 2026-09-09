@@ -401,10 +401,14 @@ mod tests {
         assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(
             100, 100, 100, 200
         ))));
-        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(100, 127, 255, 255))));
+        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(
+            100, 127, 255, 255
+        ))));
 
         // Adjacent addresses outside 100.64.0.0/10 must remain public
-        assert!(!is_private_ip(&IpAddr::V4(Ipv4Addr::new(100, 63, 255, 255))));
+        assert!(!is_private_ip(&IpAddr::V4(Ipv4Addr::new(
+            100, 63, 255, 255
+        ))));
         assert!(!is_private_ip(&IpAddr::V4(Ipv4Addr::new(100, 128, 0, 0))));
 
         // Public IPs should return false
