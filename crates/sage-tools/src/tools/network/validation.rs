@@ -251,6 +251,13 @@ pub fn is_private_ip(ip: &IpAddr) -> bool {
             if ipv4.octets()[0] == 169 && ipv4.octets()[1] == 254 {
                 return true;
             }
+            // 100.64.0.0/10 - Shared address space / CGNAT (RFC 6598).
+            // Covers Alibaba/Tencent metadata (100.100.100.200) and
+            // Tailscale/overlay addresses. Prefer an octet check over
+            // `Ipv4Addr::is_shared()` which is still unstable (`feature(ip)`).
+            if ipv4.octets()[0] == 100 && (64..=127).contains(&ipv4.octets()[1]) {
+                return true;
+            }
             // 0.0.0.0/8 - Current network
             if ipv4.octets()[0] == 0 {
                 return true;
@@ -389,6 +396,17 @@ mod tests {
         // Link-local
         assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(169, 254, 1, 1))));
 
+        // CGNAT / shared address space 100.64.0.0/10 (RFC 6598)
+        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(100, 64, 0, 1))));
+        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(
+            100, 100, 100, 200
+        ))));
+        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(100, 127, 255, 255))));
+
+        // Adjacent addresses outside 100.64.0.0/10 must remain public
+        assert!(!is_private_ip(&IpAddr::V4(Ipv4Addr::new(100, 63, 255, 255))));
+        assert!(!is_private_ip(&IpAddr::V4(Ipv4Addr::new(100, 128, 0, 0))));
+
         // Public IPs should return false
         assert!(!is_private_ip(&IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8))));
         assert!(!is_private_ip(&IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1))));
@@ -405,10 +423,25 @@ mod tests {
         let mapped_priv: std::net::Ipv6Addr = "::ffff:10.0.0.1".parse().unwrap();
         assert!(is_private_ip(&IpAddr::V6(mapped_priv)));
 
+        // ::ffff:100.100.100.200 — CGNAT via IPv4-mapped recursion.
+        let mapped_cgnat: std::net::Ipv6Addr = "::ffff:100.100.100.200".parse().unwrap();
+        assert!(is_private_ip(&IpAddr::V6(mapped_cgnat)));
+
         // ::ffff:8.8.8.8 — public IPv4 mapped into IPv6 — must NOT be
         // flagged as private.
         let mapped_public: std::net::Ipv6Addr = "::ffff:8.8.8.8".parse().unwrap();
         assert!(!is_private_ip(&IpAddr::V6(mapped_public)));
+    }
+
+    #[tokio::test]
+    async fn test_url_validation_blocks_cgnat_metadata_literal() {
+        // Alibaba/Tencent cloud metadata often lives at 100.100.100.200
+        // inside CGNAT 100.64.0.0/10. Literal hosts must be rejected.
+        let result = validate_url_security("http://100.100.100.200/").await;
+        assert!(
+            result.is_err(),
+            "CGNAT metadata IPv4 literal must be rejected: {result:?}"
+        );
     }
 
     #[tokio::test]
