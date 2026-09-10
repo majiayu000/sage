@@ -66,8 +66,9 @@ async fn test_destructive_confirmation_edit_rechecks_settings() -> SageResult<()
         .await;
 
     match result {
-        Err((blocked, blocked_call)) => {
-            assert!(blocked.error.is_some_and(|error| {
+        Err(blocked) => {
+            let (blocked_result, blocked_call) = *blocked;
+            assert!(blocked_result.error.is_some_and(|error| {
                 error.contains("Permission denied by settings") && error.contains("Bash(curl *)")
             }));
             assert_eq!(

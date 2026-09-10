@@ -120,7 +120,8 @@ impl UnifiedExecutor {
                             }
                             current_call = approved_call;
                         }
-                        Err((blocked_result, blocked_call)) => {
+                        Err(blocked) => {
+                            let (blocked_result, blocked_call) = *blocked;
                             let executed_call =
                                 Self::without_user_confirmation_marker(&blocked_call);
                             return (blocked_result, executed_call, false);
@@ -164,7 +165,7 @@ impl UnifiedExecutor {
         confirmed_call: ToolCall,
         context: &ToolExecutionContext,
         input_modified: bool,
-    ) -> std::result::Result<SettingsRecheckAfterDestructiveConfirmation, (ToolResult, ToolCall)>
+    ) -> std::result::Result<SettingsRecheckAfterDestructiveConfirmation, Box<(ToolResult, ToolCall)>>
     {
         if !input_modified {
             return Ok(SettingsRecheckAfterDestructiveConfirmation::Ready(
@@ -177,7 +178,7 @@ impl UnifiedExecutor {
             .await
         {
             Ok(Some(SettingsPermissionCheck::Blocked { result, tool_call })) => {
-                Err((result, tool_call))
+                Err(Box::new((result, tool_call)))
             }
             Ok(Some(SettingsPermissionCheck::Allowed(mut approved_call))) => {
                 let confirmed_without_marker =
@@ -204,7 +205,7 @@ impl UnifiedExecutor {
                     &confirmed_call.name,
                     format!("Settings permission check failed: {}", err),
                 );
-                Err((result, confirmed_call))
+                Err(Box::new((result, confirmed_call)))
             }
         }
     }
