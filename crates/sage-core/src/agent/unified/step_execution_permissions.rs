@@ -165,10 +165,8 @@ impl UnifiedExecutor {
         confirmed_call: ToolCall,
         context: &ToolExecutionContext,
         input_modified: bool,
-    ) -> std::result::Result<
-        SettingsRecheckAfterDestructiveConfirmation,
-        Box<(ToolResult, ToolCall)>,
-    > {
+    ) -> std::result::Result<SettingsRecheckAfterDestructiveConfirmation, Box<(ToolResult, ToolCall)>>
+    {
         if !input_modified {
             return Ok(SettingsRecheckAfterDestructiveConfirmation::Ready(
                 confirmed_call,
