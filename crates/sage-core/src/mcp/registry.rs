@@ -20,6 +20,7 @@ use dashmap::DashMap;
 use parking_lot::RwLock;
 use serde_json::Value;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 #[derive(Debug, Clone)]
 pub(crate) struct ToolRoute {
@@ -43,6 +44,8 @@ pub struct McpRegistry {
     pub(crate) prompt_mapping: DashMap<String, String>,
     /// Deferred searchable tool metadata
     pub(crate) deferred_tools: RwLock<McpDeferredToolIndex>,
+    /// When true, trust baseline drift only warns and still registers tools.
+    pub(crate) warn_on_tool_trust_drift: AtomicBool,
 }
 
 impl McpRegistry {
@@ -56,7 +59,19 @@ impl McpRegistry {
             resource_mapping: DashMap::new(),
             prompt_mapping: DashMap::new(),
             deferred_tools: RwLock::new(McpDeferredToolIndex::new()),
+            warn_on_tool_trust_drift: AtomicBool::new(false),
         }
+    }
+
+    /// Configure whether MCP tool trust baseline drift should warn instead of reject.
+    pub fn set_warn_on_tool_trust_drift(&self, enabled: bool) {
+        self.warn_on_tool_trust_drift
+            .store(enabled, Ordering::Relaxed);
+    }
+
+    /// Return whether MCP tool trust baseline drift only warns (legacy behavior).
+    pub fn warn_on_tool_trust_drift(&self) -> bool {
+        self.warn_on_tool_trust_drift.load(Ordering::Relaxed)
     }
 
     /// Register and connect to an MCP server
@@ -463,24 +478,5 @@ impl Tool for McpToolAdapter {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_registry_creation() {
-        let registry = McpRegistry::new();
-        assert!(registry.server_names().is_empty());
-    }
-
-    #[test]
-    fn test_namespaced_tool_name() {
-        let namespaced = McpToolAdapter::namespaced_tool_name("filesystem-server", "Read File");
-        assert_eq!(namespaced, "mcp__filesystem_server__read_file");
-    }
-
-    #[test]
-    fn test_transport_config() {
-        let config = TransportConfig::stdio("echo", vec!["hello".to_string()]);
-        assert!(matches!(config, TransportConfig::Stdio { .. }));
-    }
-}
+#[path = "registry_tests.rs"]
+mod registry_tests;
