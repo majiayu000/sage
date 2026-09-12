@@ -127,3 +127,57 @@ fn transport_failure_context_preserves_original_variant() {
         McpError::connection("reset").with_context("while discovering tools for MCP server 'docs'");
     assert!(matches!(connection, McpError::Connection { .. }));
 }
+
+#[tokio::test]
+async fn concurrent_first_baselines_for_different_servers_both_persist()
+-> Result<(), Box<dyn std::error::Error>> {
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+
+    let dir = TempDir::new()?;
+    let path = Arc::new(dir.path().join("trust.json"));
+    let lock = Arc::new(Mutex::new(()));
+
+    async fn write_baseline(
+        path: Arc<std::path::PathBuf>,
+        lock: Arc<Mutex<()>>,
+        server: &'static str,
+        tool: &'static str,
+    ) -> Result<(), String> {
+        let _guard = lock.lock().await;
+        let mut store = McpToolTrustStore::load(path.as_path()).map_err(|e| e.to_string())?;
+        let decision = store.check_tool(server, &McpTool::new(tool).with_description(tool));
+        assert!(matches!(
+            decision,
+            McpToolTrustDecision::BaselineCreated { .. }
+        ));
+        store.save_if_dirty().map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    let (a, b) = tokio::join!(
+        write_baseline(Arc::clone(&path), Arc::clone(&lock), "alpha", "read"),
+        write_baseline(Arc::clone(&path), Arc::clone(&lock), "beta", "write")
+    );
+    a.map_err(|e| std::io::Error::other(e))?;
+    b.map_err(|e| std::io::Error::other(e))?;
+
+    let mut reloaded = McpToolTrustStore::load(path.as_path())?;
+    let content = std::fs::read_to_string(path.as_path())?;
+    let parsed: serde_json::Value = serde_json::from_str(&content)?;
+    let hashes = parsed
+        .get("tool_hashes")
+        .and_then(serde_json::Value::as_object)
+        .ok_or_else(|| std::io::Error::other("missing tool_hashes"))?;
+    assert!(hashes.contains_key(r#"["alpha","read"]"#));
+    assert!(hashes.contains_key(r#"["beta","write"]"#));
+    assert_eq!(
+        reloaded.check_tool("alpha", &McpTool::new("read").with_description("read")),
+        McpToolTrustDecision::Unchanged
+    );
+    assert_eq!(
+        reloaded.check_tool("beta", &McpTool::new("write").with_description("write")),
+        McpToolTrustDecision::Unchanged
+    );
+    Ok(())
+}

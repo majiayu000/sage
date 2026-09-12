@@ -43,8 +43,10 @@ pub struct McpRegistry {
     pub(crate) deferred_tools: RwLock<McpDeferredToolIndex>,
     /// When true, trust baseline drift only warns and still registers tools.
     pub(crate) warn_on_tool_trust_drift: AtomicBool,
-    /// Per-server locks that serialize capability refreshes.
+    /// Per-server locks that serialize capability refreshes and same-name registration.
     pub(crate) capability_refresh_locks: DashMap<String, Arc<tokio::sync::Mutex<()>>>,
+    /// Registry-wide lock for the shared mcp_tool_trust.json load/check/save transaction.
+    pub(crate) tool_trust_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl McpRegistry {
@@ -60,13 +62,22 @@ impl McpRegistry {
             deferred_tools: RwLock::new(McpDeferredToolIndex::new()),
             warn_on_tool_trust_drift: AtomicBool::new(false),
             capability_refresh_locks: DashMap::new(),
+            tool_trust_lock: Arc::new(tokio::sync::Mutex::new(())),
         }
     }
 
     /// Configure whether MCP tool trust baseline drift should warn instead of reject.
-    pub fn set_warn_on_tool_trust_drift(&self, enabled: bool) {
+    ///
+    /// When connected clients already exist and the policy changes, revalidates
+    /// routes/allowlists immediately so warn→fail-closed cannot leave drifted
+    /// tools callable until a later `all_tools()` call.
+    pub async fn set_warn_on_tool_trust_drift(&self, enabled: bool) {
+        let previous = self.warn_on_tool_trust_drift.load(Ordering::Relaxed);
         self.warn_on_tool_trust_drift
             .store(enabled, Ordering::Relaxed);
+        if previous != enabled && !self.clients.is_empty() {
+            let _ = self.all_tools().await;
+        }
     }
 
     /// Return whether MCP tool trust baseline drift only warns (legacy behavior).
@@ -121,6 +132,11 @@ impl McpRegistry {
         // clients leave the allowlist inactive.
         client.replace_trusted_tools(Vec::new()).await;
 
+        // Serialize same-name revoke/insert/refresh so a failed older refresh
+        // cannot remove a newer client or wipe its routes.
+        let refresh_lock = self.capability_refresh_lock(&name);
+        let _refresh_guard = refresh_lock.lock().await;
+
         // Same-name re-registration must revoke the displaced client so
         // previously issued adapters cannot keep calling a drifted schema.
         self.revoke_displaced_server_client(&name).await;
@@ -128,9 +144,21 @@ impl McpRegistry {
         // Store client
         self.clients.insert(name.clone(), client.clone());
 
-        // Discover tools, resources, and prompts
-        if let Err(error) = self.refresh_server_capabilities(&name, &client).await {
-            self.clients.remove(&name);
+        // Discover tools, resources, and prompts (lock already held).
+        if let Err(error) = self
+            .refresh_server_capabilities_locked(&name, &client)
+            .await
+        {
+            // Only tear down registry state if we still own this slot.
+            if self.remove_client_if_current(&name, &client) {
+                self.tool_mapping
+                    .retain(|_, route| route.server_name != name);
+                self.resource_mapping.retain(|_, v| v != &name);
+                self.prompt_mapping.retain(|_, v| v != &name);
+                self.deferred_tools
+                    .write()
+                    .mark_server(name.clone(), McpToolDiscoveryState::SchemaError);
+            }
             if let Err(close_error) = client.close().await {
                 tracing::debug!(
                     "Failed to close MCP client '{}' after capability error: {}",
@@ -138,17 +166,22 @@ impl McpRegistry {
                     close_error
                 );
             }
-            self.tool_mapping
-                .retain(|_, route| route.server_name != name);
-            self.resource_mapping.retain(|_, v| v != &name);
-            self.prompt_mapping.retain(|_, v| v != &name);
-            self.deferred_tools
-                .write()
-                .mark_server(name.clone(), McpToolDiscoveryState::SchemaError);
             return Err(error);
         }
 
         Ok(server_info)
+    }
+
+    /// Remove `client` from `clients` only when it is still the live mapping.
+    pub(crate) fn remove_client_if_current(&self, name: &str, client: &Arc<McpClient>) -> bool {
+        let Some(entry) = self.clients.get(name) else {
+            return false;
+        };
+        if !Arc::ptr_eq(entry.value(), client) {
+            return false;
+        }
+        drop(entry);
+        self.clients.remove(name).is_some()
     }
 
     async fn revoke_displaced_server_client(&self, name: &str) {

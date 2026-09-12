@@ -17,3 +17,13 @@ fn test_transport_config() {
     let config = TransportConfig::stdio("echo", vec!["hello".to_string()]);
     assert!(matches!(config, TransportConfig::Stdio { .. }));
 }
+
+#[tokio::test]
+async fn set_warn_on_tool_trust_drift_updates_flag_without_clients() {
+    let registry = McpRegistry::new();
+    assert!(!registry.warn_on_tool_trust_drift());
+    registry.set_warn_on_tool_trust_drift(true).await;
+    assert!(registry.warn_on_tool_trust_drift());
+    registry.set_warn_on_tool_trust_drift(false).await;
+    assert!(!registry.warn_on_tool_trust_drift());
+}

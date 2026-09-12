@@ -214,6 +214,15 @@ impl McpRegistry {
         // overwrite a newer drift rejection / allowlist update.
         let refresh_lock = self.capability_refresh_lock(name);
         let _refresh_guard = refresh_lock.lock().await;
+        self.refresh_server_capabilities_locked(name, client).await
+    }
+
+    /// Refresh capabilities while the caller already holds `capability_refresh_lock`.
+    pub(crate) async fn refresh_server_capabilities_locked(
+        &self,
+        name: &str,
+        client: &Arc<McpClient>,
+    ) -> Result<(), McpError> {
         let refresh_result = self.refresh_server_capabilities_inner(name, client).await;
         if let Err(error) = &refresh_result {
             // Fail closed: do not keep previously trusted routes/cache when a
@@ -234,11 +243,25 @@ impl McpRegistry {
             error.with_context(format!("while discovering tools for MCP server '{name}'"))
         })?;
 
+        // Serialize the global trust baseline so concurrent first baselines for
+        // different servers cannot overwrite each other and later treat a lost
+        // entry as BaselineCreated.
+        let _trust_guard = self.tool_trust_lock.lock().await;
         let mut trust_store = McpToolTrustStore::load_default()?;
         let warn_on_drift = self.warn_on_tool_trust_drift();
         let trusted_tools =
             trusted_mcp_tools_for_server(name, tools, &mut trust_store, warn_on_drift)?;
         trust_store.save_if_dirty()?;
+        drop(_trust_guard);
+
+        // A displaced same-name registration may have replaced this client while
+        // we were awaiting list_tools; do not publish routes for a stale Arc.
+        if !self.is_current_client(name, client) {
+            client.replace_trusted_tools(Vec::new()).await;
+            return Err(McpError::connection(format!(
+                "MCP server '{name}' was replaced during capability refresh"
+            )));
+        }
 
         self.tool_mapping
             .retain(|_, route| route.server_name != name);
@@ -282,6 +305,12 @@ impl McpRegistry {
         Ok(())
     }
 
+    fn is_current_client(&self, name: &str, client: &Arc<McpClient>) -> bool {
+        self.clients
+            .get(name)
+            .is_some_and(|entry| Arc::ptr_eq(entry.value(), client))
+    }
+
     fn clear_runtime_error_after_successful_refresh(&self, name: &str) {
         let Some(entry) = self.statuses.get(name) else {
             return;
@@ -298,9 +327,15 @@ impl McpRegistry {
         client: &Arc<McpClient>,
         error: &McpError,
     ) {
+        // Always revoke this client's allowlist; only mutate shared routes/status
+        // when this Arc is still (or was already) the live mapping for `name`.
+        client.replace_trusted_tools(Vec::new()).await;
+        if !self.is_current_client(name, client) && self.clients.contains_key(name) {
+            return;
+        }
+
         self.tool_mapping
             .retain(|_, route| route.server_name != name);
-        client.replace_trusted_tools(Vec::new()).await;
 
         let discovery_state = match error {
             McpError::Schema { .. } => McpToolDiscoveryState::SchemaError,

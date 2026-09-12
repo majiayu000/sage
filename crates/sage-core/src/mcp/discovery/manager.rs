@@ -207,16 +207,13 @@ impl McpServerManager {
         self.registry.server_names()
     }
 
-    /// Apply the registry trust policy, revalidating existing clients on either
-    /// transition so fail-closed→warn re-admits previously filtered tools and
-    /// warn→fail-closed revokes drifted routes across discover() re-entry.
+    /// Apply the registry trust policy. The registry setter revalidates
+    /// connected clients on either transition so fail-closed↔warn cannot leave
+    /// stale routes/allowlists in place.
     async fn apply_trust_policy(&self, warn_on_tool_trust_drift: bool) {
-        let previous = self.registry.warn_on_tool_trust_drift();
         self.registry
-            .set_warn_on_tool_trust_drift(warn_on_tool_trust_drift);
-        if previous != warn_on_tool_trust_drift {
-            let _ = self.registry.all_tools().await;
-        }
+            .set_warn_on_tool_trust_drift(warn_on_tool_trust_drift)
+            .await;
     }
 
     async fn rollback_connected_servers(&self, names: &[String]) -> Vec<String> {
