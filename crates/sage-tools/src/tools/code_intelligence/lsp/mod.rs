@@ -25,7 +25,7 @@ pub use types::{
 };
 
 use async_trait::async_trait;
-use sage_core::tools::base::{Tool, ToolError};
+use sage_core::tools::base::{FileSystemTool, Tool, ToolError};
 use sage_core::tools::types::{ToolCall, ToolParameter, ToolResult, ToolSchema};
 use std::path::{Path, PathBuf};
 
@@ -74,14 +74,11 @@ impl LspTool {
 
         None
     }
+}
 
-    fn resolve_workspace_path(&self, file_path: &str) -> PathBuf {
-        let path = Path::new(file_path);
-        if path.is_absolute() {
-            path.to_path_buf()
-        } else {
-            self.working_directory.join(path)
-        }
+impl FileSystemTool for LspTool {
+    fn working_directory(&self) -> &Path {
+        &self.working_directory
     }
 }
 
@@ -203,6 +200,7 @@ Results are structured JSON. LSP unavailable and capability unsupported return s
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sage_core::tools::base::FileSystemTool;
     use serde_json::json;
 
     fn create_tool_call(operation: &str, file_path: &str, line: u32, character: u32) -> ToolCall {
@@ -286,5 +284,33 @@ mod tests {
 
         assert!(tool.description().contains("status=degraded"));
         assert!(tool.description().contains("Grep/Glob"));
+    }
+
+    #[test]
+    fn resolve_workspace_path_rejects_absolute_escape() {
+        let dir = tempfile::tempdir().unwrap();
+        let tool = LspTool::with_working_directory(dir.path());
+
+        let result = tool.resolve_workspace_path("/etc/passwd");
+        assert!(matches!(result, Err(ToolError::PermissionDenied(_))));
+    }
+
+    #[test]
+    fn resolve_workspace_path_rejects_parent_dir_escape() {
+        let dir = tempfile::tempdir().unwrap();
+        let tool = LspTool::with_working_directory(dir.path());
+
+        let result = tool.resolve_workspace_path("../outside.rs");
+        assert!(matches!(result, Err(ToolError::PermissionDenied(_))));
+    }
+
+    #[test]
+    fn resolve_workspace_path_allows_workspace_relative_file() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("lib.rs"), "fn main() {}\n").unwrap();
+        let tool = LspTool::with_working_directory(dir.path());
+
+        let resolved = tool.resolve_workspace_path("lib.rs").unwrap();
+        assert!(resolved.starts_with(dir.path()));
     }
 }

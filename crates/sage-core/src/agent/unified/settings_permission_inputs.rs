@@ -41,6 +41,14 @@ pub(super) fn settings_permission_inputs(
             preflight_denies,
             scoped_allows,
         ),
+        "gotodefinition" | "findreferences" | "typehierarchy" | "lsp" => file_reading_tool_inputs(
+            tool_name,
+            tool_call,
+            working_dir,
+            keys,
+            preflight_denies,
+            scoped_allows,
+        ),
         "bash" => vec![with_preflights(
             PermissionDecisionInput::new(PermissionAction::Exec, tool_name, keys),
             preflight_denies,
@@ -153,7 +161,10 @@ fn file_reading_tool_inputs(
     preflight_denies: Vec<PermissionPreflight>,
     scoped_allows: Vec<PermissionPreflight>,
 ) -> Vec<PermissionDecisionInput> {
-    if let Some(path) = tool_call.get_argument::<String>("file_path") {
+    if let Some(path) = tool_call
+        .get_argument::<String>("file_path")
+        .or_else(|| tool_call.get_argument::<String>("filePath"))
+    {
         return vec![with_preflights(
             PermissionDecisionInput::new(PermissionAction::Filesystem, "Read", keys)
                 .with_path(path)
@@ -268,6 +279,29 @@ fn with_preflights(
 mod tests {
     use super::*;
     use std::collections::HashMap;
+
+    #[test]
+    fn file_reading_tool_inputs_accepts_lsp_file_path_alias() {
+        let mut arguments = HashMap::new();
+        arguments.insert(
+            "filePath".to_string(),
+            serde_json::Value::String("src/lib.rs".to_string()),
+        );
+        let call = ToolCall::new("call-1", "LSP", arguments);
+
+        let inputs = file_reading_tool_inputs(
+            "LSP",
+            &call,
+            Path::new("/workspace/sage"),
+            vec!["LSP".to_string()],
+            Vec::new(),
+            Vec::new(),
+        );
+
+        assert_eq!(inputs.len(), 1);
+        assert_eq!(inputs[0].action, PermissionAction::Filesystem);
+        assert_eq!(inputs[0].path.as_deref(), Some("src/lib.rs"));
+    }
 
     #[test]
     fn pathless_grep_uses_workspace_scope() {

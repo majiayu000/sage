@@ -500,6 +500,73 @@ fn test_settings_permission_routes_log_analyzer_through_filesystem_guard() {
 }
 
 #[test]
+fn test_settings_permission_routes_lsp_navigation_through_filesystem_guard() {
+    let settings = Settings {
+        permissions: PermissionSettings {
+            allow: vec![
+                "GoToDefinition".to_string(),
+                "FindReferences".to_string(),
+                "TypeHierarchy".to_string(),
+                "LSP".to_string(),
+            ],
+            default_behavior: SettingsPermissionBehavior::Allow,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let protected = ".sage/settings.local.json";
+    for (tool, args) in [
+        (
+            "GoToDefinition",
+            serde_json::json!({
+                "file_path": protected,
+                "line": 1,
+                "character": 1
+            }),
+        ),
+        (
+            "FindReferences",
+            serde_json::json!({
+                "file_path": protected,
+                "line": 1,
+                "character": 1
+            }),
+        ),
+        (
+            "TypeHierarchy",
+            serde_json::json!({
+                "file_path": protected,
+                "line": 1,
+                "character": 1
+            }),
+        ),
+        (
+            "LSP",
+            serde_json::json!({
+                "operation": "goToDefinition",
+                "filePath": protected,
+                "line": 1,
+                "character": 1
+            }),
+        ),
+    ] {
+        let decision = UnifiedExecutor::settings_permission_decision(
+            &settings,
+            &review_tool_call(tool, args),
+            review_workspace_dir(),
+        );
+        assert!(
+            matches!(
+                decision,
+                Some(SettingsPermissionDecision::Deny(ref reason)) if reason.contains("protected")
+            ),
+            "expected protected deny for {tool}, got {decision:?}"
+        );
+    }
+}
+
+#[test]
 fn test_settings_permission_routes_write_through_filesystem_guard() {
     let settings = Settings {
         permissions: PermissionSettings {
