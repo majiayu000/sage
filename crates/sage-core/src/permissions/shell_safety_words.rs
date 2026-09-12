@@ -10,7 +10,36 @@ pub(super) fn strip_shell_command_word_prefix<'a>(
     prefix: &str,
 ) -> Option<&'a str> {
     let (word, rest) = split_shell_word(segment)?;
-    (quote_removed_shell_word(word) == prefix).then_some(rest)
+    let command = quote_removed_shell_word(word);
+    (shell_command_basename(&command) == prefix).then_some(rest)
+}
+
+/// Reduce a path-qualified command word to its final path component.
+/// `/bin/rm`, `./rm`, and `C:\Windows\rm` all become `rm`.
+pub(super) fn shell_command_basename(command: &str) -> &str {
+    command
+        .rsplit(['/', '\\'])
+        .next()
+        .filter(|name| !name.is_empty())
+        .unwrap_or(command)
+}
+
+/// Rewrite the first command word to its basename so deny globs like `rm *`
+/// also match `/bin/rm` and `./rm`.
+pub(super) fn reduce_first_command_word_to_basename(segment: &str) -> String {
+    let trimmed = segment.trim_start();
+    let Some((word, rest)) = split_shell_word(trimmed) else {
+        return trimmed.to_string();
+    };
+    let base = shell_command_basename(word);
+    if base == word {
+        return trimmed.to_string();
+    }
+    if rest.is_empty() {
+        base.to_string()
+    } else {
+        format!("{base} {rest}")
+    }
 }
 
 pub(super) fn split_shell_word(input: &str) -> Option<(&str, &str)> {
