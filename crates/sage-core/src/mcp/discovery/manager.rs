@@ -58,7 +58,11 @@ impl McpServerManager {
 
         for source in sources {
             match discover_from_source(source).await {
-                Ok((_, servers)) => {
+                Ok((discovered_config, servers)) => {
+                    // Propagate trust policy from every discovery source, not only
+                    // discover_from_config, so warn_on_tool_trust_drift is honored.
+                    self.registry
+                        .set_warn_on_tool_trust_drift(discovered_config.warn_on_tool_trust_drift);
                     for (name, config) in servers {
                         match self
                             .connection_manager

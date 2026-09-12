@@ -32,6 +32,8 @@ pub struct McpConfig {
     /// When true, description/schema trust baseline drift only warns and still
     /// registers the tool. Default false fails closed (skip drifted tools).
     pub warn_on_tool_trust_drift: bool,
+    /// Whether warn_on_tool_trust_drift was explicitly declared by a config source.
+    pub warn_on_tool_trust_drift_set: bool,
 }
 
 impl Default for McpConfig {
@@ -44,6 +46,7 @@ impl Default for McpConfig {
             auto_connect: true,
             auto_connect_set: false,
             warn_on_tool_trust_drift: false,
+            warn_on_tool_trust_drift_set: false,
         }
     }
 }
@@ -56,7 +59,8 @@ impl Serialize for McpConfig {
         let include_timeout =
             self.default_timeout_secs_set || self.default_timeout_secs != default_mcp_timeout();
         let include_auto_connect = self.auto_connect_set || !self.auto_connect;
-        let include_warn_on_drift = self.warn_on_tool_trust_drift;
+        let include_warn_on_drift =
+            self.warn_on_tool_trust_drift_set || self.warn_on_tool_trust_drift;
         let len = 2
             + usize::from(include_timeout)
             + usize::from(include_auto_connect)
@@ -90,8 +94,7 @@ impl<'de> Deserialize<'de> for McpConfig {
             servers: HashMap<String, McpServerConfig>,
             default_timeout_secs: Option<u64>,
             auto_connect: Option<bool>,
-            #[serde(default)]
-            warn_on_tool_trust_drift: bool,
+            warn_on_tool_trust_drift: Option<bool>,
         }
 
         let wire = McpConfigWire::deserialize(deserializer)?;
@@ -104,7 +107,8 @@ impl<'de> Deserialize<'de> for McpConfig {
             default_timeout_secs_set: wire.default_timeout_secs.is_some(),
             auto_connect: wire.auto_connect.unwrap_or_else(default_true),
             auto_connect_set: wire.auto_connect.is_some(),
-            warn_on_tool_trust_drift: wire.warn_on_tool_trust_drift,
+            warn_on_tool_trust_drift: wire.warn_on_tool_trust_drift.unwrap_or(false),
+            warn_on_tool_trust_drift_set: wire.warn_on_tool_trust_drift.is_some(),
         })
     }
 }
@@ -195,8 +199,9 @@ impl McpConfig {
             self.auto_connect_set = true;
         }
 
-        if other.warn_on_tool_trust_drift {
-            self.warn_on_tool_trust_drift = true;
+        if other.warn_on_tool_trust_drift_set {
+            self.warn_on_tool_trust_drift = other.warn_on_tool_trust_drift;
+            self.warn_on_tool_trust_drift_set = true;
         }
     }
 

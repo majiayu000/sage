@@ -1,4 +1,3 @@
-
 use super::*;
 
 #[test]
@@ -16,11 +15,17 @@ fn test_mcp_config_default() {
 fn test_mcp_config_warn_on_tool_trust_drift_opt_in() -> Result<(), serde_json::Error> {
     let implicit: McpConfig = serde_json::from_str("{}")?;
     let enabled: McpConfig = serde_json::from_str(r#"{"warn_on_tool_trust_drift": true}"#)?;
+    let disabled: McpConfig = serde_json::from_str(r#"{"warn_on_tool_trust_drift": false}"#)?;
 
     assert!(!implicit.warn_on_tool_trust_drift);
+    assert!(!implicit.warn_on_tool_trust_drift_set);
     assert!(enabled.warn_on_tool_trust_drift);
+    assert!(enabled.warn_on_tool_trust_drift_set);
+    assert!(!disabled.warn_on_tool_trust_drift);
+    assert!(disabled.warn_on_tool_trust_drift_set);
     assert!(!serde_json::to_string(&McpConfig::default())?.contains("warn_on_tool_trust_drift"));
     assert!(serde_json::to_string(&enabled)?.contains("\"warn_on_tool_trust_drift\":true"));
+    assert!(serde_json::to_string(&disabled)?.contains("\"warn_on_tool_trust_drift\":false"));
     Ok(())
 }
 
@@ -52,6 +57,34 @@ fn test_mcp_config_merge_default_does_not_override_disabled_auto_connect() {
     config1.merge(McpConfig::default());
 
     assert!(!config1.auto_connect);
+}
+
+#[test]
+fn test_mcp_config_merge_honors_explicit_false_warn_on_tool_trust_drift() {
+    let mut config1 = McpConfig::default();
+    config1.warn_on_tool_trust_drift = true;
+    config1.warn_on_tool_trust_drift_set = true;
+
+    let mut config2 = McpConfig::default();
+    config2.warn_on_tool_trust_drift = false;
+    config2.warn_on_tool_trust_drift_set = true;
+
+    config1.merge(config2);
+
+    assert!(!config1.warn_on_tool_trust_drift);
+    assert!(config1.warn_on_tool_trust_drift_set);
+}
+
+#[test]
+fn test_mcp_config_merge_default_does_not_override_explicit_warn_on_tool_trust_drift() {
+    let mut config1 = McpConfig::default();
+    config1.warn_on_tool_trust_drift = true;
+    config1.warn_on_tool_trust_drift_set = true;
+
+    config1.merge(McpConfig::default());
+
+    assert!(config1.warn_on_tool_trust_drift);
+    assert!(config1.warn_on_tool_trust_drift_set);
 }
 
 #[test]

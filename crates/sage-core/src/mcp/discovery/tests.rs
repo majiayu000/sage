@@ -148,4 +148,24 @@ mod tests {
         assert!(result.is_err());
         assert!(manager.connected_servers().is_empty());
     }
+
+    #[tokio::test]
+    async fn test_manager_discover_applies_warn_on_tool_trust_drift_from_config_source() {
+        let manager = McpServerManager::new();
+        let mut config = config_with_server(
+            "offline",
+            McpServerConfig::stdio("__sage_missing_mcp_binary__", Vec::new()),
+        );
+        config.auto_connect = false;
+        config.warn_on_tool_trust_drift = true;
+        config.warn_on_tool_trust_drift_set = true;
+
+        let connected = manager
+            .discover(vec![DiscoverySource::Config(config)])
+            .await
+            .expect("discover should succeed when auto_connect is false");
+
+        assert!(connected.is_empty());
+        assert!(manager.registry().warn_on_tool_trust_drift());
+    }
 }

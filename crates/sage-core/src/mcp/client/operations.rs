@@ -35,6 +35,17 @@ impl McpClient {
     pub async fn call_tool(&self, name: &str, arguments: Value) -> Result<McpToolResult, McpError> {
         self.ensure_initialized().await?;
 
+        // Enforce the trusted-tool cache so stale McpToolAdapter handles cannot
+        // invoke tools that were later skipped for trust-baseline drift.
+        let allowed = self
+            .cached_tools()
+            .await
+            .iter()
+            .any(|tool| tool.name == name);
+        if !allowed {
+            return Err(McpError::tool_not_found(name.to_string()));
+        }
+
         let params = json!({
             "name": name,
             "arguments": arguments
