@@ -72,8 +72,8 @@ impl McpServerManager {
                 }
             }
         }
-        self.registry
-            .set_warn_on_tool_trust_drift(effective_config.warn_on_tool_trust_drift);
+        self.apply_trust_policy(effective_config.warn_on_tool_trust_drift)
+            .await;
 
         for (name, config) in pending_servers {
             match self
@@ -108,8 +108,7 @@ impl McpServerManager {
 
     /// Discover servers from configuration
     pub async fn discover_from_config(&self, config: McpConfig) -> Result<Vec<String>, McpError> {
-        self.registry
-            .set_warn_on_tool_trust_drift(config.warn_on_tool_trust_drift);
+        self.apply_trust_policy(config.warn_on_tool_trust_drift).await;
         if !config.enabled || !config.auto_connect {
             debug!("MCP integration is disabled in config");
             return Ok(Vec::new());
@@ -205,6 +204,18 @@ impl McpServerManager {
     /// Get list of connected server names
     pub fn connected_servers(&self) -> Vec<String> {
         self.registry.server_names()
+    }
+
+    /// Apply the registry trust policy, revalidating existing clients when
+    /// tightening from warn mode to fail-closed so previously routed drifted
+    /// tools cannot remain callable across discover() re-entry.
+    async fn apply_trust_policy(&self, warn_on_tool_trust_drift: bool) {
+        let previous = self.registry.warn_on_tool_trust_drift();
+        self.registry
+            .set_warn_on_tool_trust_drift(warn_on_tool_trust_drift);
+        if previous && !warn_on_tool_trust_drift {
+            let _ = self.registry.all_tools().await;
+        }
     }
 
     async fn rollback_connected_servers(&self, names: &[String]) -> Vec<String> {

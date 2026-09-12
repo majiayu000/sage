@@ -74,6 +74,20 @@ impl McpDeferredToolIndex {
             .insert(server_id.to_string(), McpToolDiscoveryState::Stale);
     }
 
+    /// Clear cached tools for a server and record a non-fresh discovery state.
+    ///
+    /// Unlike [`Self::replace_server_tools`], this never reports `Fresh`, so
+    /// failed capability refreshes cannot look like a successful empty refresh.
+    pub fn clear_server_tools(
+        &mut self,
+        server_id: impl Into<String>,
+        state: McpToolDiscoveryState,
+    ) {
+        let server_id = server_id.into();
+        self.tools.retain(|_, tool| tool.server_id != server_id);
+        self.server_states.insert(server_id, state);
+    }
+
     /// Replace cached tools for one server.
     pub fn replace_server_tools(
         &mut self,
@@ -221,6 +235,19 @@ mod tests {
         assert_eq!(
             index.server_state("docs"),
             Some(McpToolDiscoveryState::Stale)
+        );
+    }
+
+    #[test]
+    fn mcp_deferred_tools_clear_server_tools_is_not_fresh() {
+        let mut index = McpDeferredToolIndex::new();
+        index.replace_server_tools("docs", [McpTool::new("read")]);
+        index.clear_server_tools("docs", McpToolDiscoveryState::SchemaError);
+
+        assert!(index.list().is_empty());
+        assert_eq!(
+            index.server_state("docs"),
+            Some(McpToolDiscoveryState::SchemaError)
         );
     }
 }

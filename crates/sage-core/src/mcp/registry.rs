@@ -108,6 +108,12 @@ impl McpRegistry {
         let client = Arc::new(McpClient::new(transport));
         let server_info = client.initialize().await?;
 
+        // Activate an empty trusted-tool allowlist before publishing the client
+        // so concurrent get_client()/call_tool cannot bypass trust filtering
+        // while capability refresh is still in flight. Direct/standalone
+        // clients leave the allowlist inactive.
+        client.replace_trusted_tools(Vec::new()).await;
+
         // Store client
         self.clients.insert(name.clone(), client.clone());
 

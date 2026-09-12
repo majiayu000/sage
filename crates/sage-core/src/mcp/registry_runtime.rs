@@ -6,7 +6,7 @@ use super::deferred_tools::{McpDeferredTool, McpDeferredToolIndex, namespaced_to
 use super::discovery::utils::server_config_to_transport;
 use super::error::McpError;
 use super::registry::{McpRegistry, McpToolAdapter, ToolRoute};
-use super::runtime_status::{McpRuntimeAction, McpRuntimeActionResult, McpServerRuntimeStatus};
+use super::runtime_status::{McpRuntimeAction, McpRuntimeActionResult, McpServerRuntimeStatus, McpToolDiscoveryState};
 use super::source::{McpSourceSet, MergedMcpServerSource};
 use super::tool_trust::{McpToolTrustDecision, McpToolTrustStore, validate_tool_description_trust};
 use super::types::McpTool;
@@ -200,10 +200,10 @@ impl McpRegistry {
         client: &Arc<McpClient>,
     ) -> Result<(), McpError> {
         let refresh_result = self.refresh_server_capabilities_inner(name, client).await;
-        if refresh_result.is_err() {
+        if let Err(error) = &refresh_result {
             // Fail closed: do not keep previously trusted routes/cache when a
             // refresh cannot complete (e.g. drifted tools mixed with schema errors).
-            self.clear_server_trusted_tools(name, client).await;
+            self.clear_server_trusted_tools(name, client, error).await;
         }
         refresh_result
     }
@@ -266,13 +266,33 @@ impl McpRegistry {
         Ok(())
     }
 
-    async fn clear_server_trusted_tools(&self, name: &str, client: &Arc<McpClient>) {
+    async fn clear_server_trusted_tools(
+        &self,
+        name: &str,
+        client: &Arc<McpClient>,
+        error: &McpError,
+    ) {
         self.tool_mapping
             .retain(|_, route| route.server_name != name);
         client.replace_trusted_tools(Vec::new()).await;
+
+        let discovery_state = match error {
+            McpError::Schema { .. } => McpToolDiscoveryState::SchemaError,
+            _ => McpToolDiscoveryState::Stale,
+        };
         self.deferred_tools
             .write()
-            .replace_server_tools(name.to_string(), Vec::new());
+            .clear_server_tools(name, discovery_state.clone());
+
+        if let Some(entry) = self.statuses.get(name) {
+            let mut status = entry.value().clone();
+            drop(entry);
+            status.mark_error(error);
+            // Keep the discovery state derived above when mark_error would
+            // otherwise leave a non-schema failure looking merely Deferred.
+            status.tool_discovery_state = discovery_state;
+            self.store_status(status);
+        }
     }
 
     fn configured_source(&self, name: &str) -> Result<MergedMcpServerSource, McpError> {
