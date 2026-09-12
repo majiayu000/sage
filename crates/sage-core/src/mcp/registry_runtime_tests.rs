@@ -114,3 +114,16 @@ fn mixed_drift_and_schema_error_fails_refresh_validation() -> Result<(), Box<dyn
     assert!(matches!(err, McpError::Schema { .. }));
     Ok(())
 }
+
+#[test]
+fn transport_failure_context_preserves_original_variant() {
+    let timeout =
+        McpError::timeout(5).with_context("while discovering tools for MCP server 'docs'");
+    assert!(matches!(timeout, McpError::Timeout { .. }));
+    let transport = McpError::transport("broken pipe")
+        .with_context("while discovering tools for MCP server 'docs'");
+    assert!(matches!(transport, McpError::Transport { .. }));
+    let connection =
+        McpError::connection("reset").with_context("while discovering tools for MCP server 'docs'");
+    assert!(matches!(connection, McpError::Connection { .. }));
+}

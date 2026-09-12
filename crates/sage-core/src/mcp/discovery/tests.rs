@@ -239,4 +239,41 @@ mod tests {
             "re-entry with explicit fail-closed must tighten the registry policy"
         );
     }
+
+    #[tokio::test]
+    async fn test_manager_discover_reentry_enabling_warn_mode_flips_policy() {
+        let manager = McpServerManager::new();
+
+        let mut fail_closed = config_with_server(
+            "reject-first",
+            McpServerConfig::stdio("__sage_missing_mcp_binary__", Vec::new()),
+        );
+        fail_closed.auto_connect = false;
+        fail_closed.warn_on_tool_trust_drift = false;
+        fail_closed.warn_on_tool_trust_drift_set = true;
+
+        manager
+            .discover(vec![DiscoverySource::Config(fail_closed)])
+            .await
+            .expect("first discover should succeed");
+        assert!(!manager.registry().warn_on_tool_trust_drift());
+
+        let mut warn_config = config_with_server(
+            "warn-later",
+            McpServerConfig::stdio("__sage_missing_mcp_binary__", Vec::new()),
+        );
+        warn_config.auto_connect = false;
+        warn_config.warn_on_tool_trust_drift = true;
+        // Programmatic opt-in without presence flag must still enable warn mode.
+        warn_config.warn_on_tool_trust_drift_set = false;
+
+        manager
+            .discover(vec![DiscoverySource::Config(warn_config)])
+            .await
+            .expect("second discover should succeed");
+        assert!(
+            manager.registry().warn_on_tool_trust_drift(),
+            "fail-closed→warn re-entry must flip the registry trust policy"
+        );
+    }
 }

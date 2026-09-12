@@ -199,7 +199,9 @@ impl McpConfig {
             self.auto_connect_set = true;
         }
 
-        if other.warn_on_tool_trust_drift_set {
+        // Treat a programmatic non-default `true` as explicit even when the
+        // presence flag was never set (mirrors auto_connect's non-default path).
+        if other.warn_on_tool_trust_drift_set || other.warn_on_tool_trust_drift {
             self.warn_on_tool_trust_drift = other.warn_on_tool_trust_drift;
             self.warn_on_tool_trust_drift_set = true;
         }

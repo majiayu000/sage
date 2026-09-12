@@ -207,14 +207,14 @@ impl McpServerManager {
         self.registry.server_names()
     }
 
-    /// Apply the registry trust policy, revalidating existing clients when
-    /// tightening from warn mode to fail-closed so previously routed drifted
-    /// tools cannot remain callable across discover() re-entry.
+    /// Apply the registry trust policy, revalidating existing clients on either
+    /// transition so fail-closed→warn re-admits previously filtered tools and
+    /// warn→fail-closed revokes drifted routes across discover() re-entry.
     async fn apply_trust_policy(&self, warn_on_tool_trust_drift: bool) {
         let previous = self.registry.warn_on_tool_trust_drift();
         self.registry
             .set_warn_on_tool_trust_drift(warn_on_tool_trust_drift);
-        if previous && !warn_on_tool_trust_drift {
+        if previous != warn_on_tool_trust_drift {
             let _ = self.registry.all_tools().await;
         }
     }

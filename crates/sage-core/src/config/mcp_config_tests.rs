@@ -60,6 +60,20 @@ fn test_mcp_config_merge_default_does_not_override_disabled_auto_connect() {
 }
 
 #[test]
+fn test_mcp_config_merge_programmatic_true_warn_on_tool_trust_drift_without_presence_flag() {
+    let mut base = McpConfig::default();
+    let mut programmatic = McpConfig::default();
+    programmatic.warn_on_tool_trust_drift = true;
+    // Presence flag intentionally left false — mirrors `let mut c = McpConfig::default();
+    // c.warn_on_tool_trust_drift = true;` construction.
+
+    base.merge(programmatic);
+
+    assert!(base.warn_on_tool_trust_drift);
+    assert!(base.warn_on_tool_trust_drift_set);
+}
+
+#[test]
 fn test_mcp_config_merge_honors_explicit_false_warn_on_tool_trust_drift() {
     let mut config1 = McpConfig::default();
     config1.warn_on_tool_trust_drift = true;
