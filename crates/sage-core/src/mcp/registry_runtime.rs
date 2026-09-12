@@ -5,7 +5,7 @@ use super::client::McpClient;
 use super::deferred_tools::{McpDeferredTool, McpDeferredToolIndex, namespaced_tool_prefix};
 use super::discovery::utils::server_config_to_transport;
 use super::error::McpError;
-use super::registry::{McpRegistry, ToolRoute};
+use super::registry::{McpRegistry, ToolRoute, global_tool_trust_lock};
 use super::registry_adapter::McpToolAdapter;
 use super::registry_runtime_helpers::{
     ensure_supported_transport, log_mcp_tool_trust_decision, refresh_status_auth,
@@ -243,9 +243,9 @@ impl McpRegistry {
             error.with_context(format!("while discovering tools for MCP server '{name}'"))
         })?;
 
-        // Serialize the global trust baseline so concurrent first baselines for
-        // different servers cannot overwrite each other and later treat a lost
-        // entry as BaselineCreated.
+        // Serialize the process-wide trust baseline so concurrent first
+        // baselines across servers *and* separate McpRegistry instances cannot
+        // overwrite each other and later treat a lost entry as BaselineCreated.
         let _trust_guard = self.tool_trust_lock.lock().await;
         let mut trust_store = McpToolTrustStore::load_default()?;
         let warn_on_drift = self.warn_on_tool_trust_drift();

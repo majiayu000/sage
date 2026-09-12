@@ -14,8 +14,8 @@ use crate::tools::base::Tool;
 use dashmap::DashMap;
 use parking_lot::RwLock;
 use serde_json::Value;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, OnceLock};
 
 pub use super::registry_adapter::McpToolAdapter;
 
@@ -23,6 +23,15 @@ pub use super::registry_adapter::McpToolAdapter;
 pub(crate) struct ToolRoute {
     pub(crate) server_name: String,
     pub(crate) remote_name: String,
+}
+
+/// Process-wide lock for the shared `mcp_tool_trust.json` load/check/save
+/// transaction. Separate `McpRegistry` instances must share this lock so
+/// concurrent first baselines cannot overwrite each other.
+pub(crate) fn global_tool_trust_lock() -> Arc<tokio::sync::Mutex<()>> {
+    static LOCK: OnceLock<Arc<tokio::sync::Mutex<()>>> = OnceLock::new();
+    LOCK.get_or_init(|| Arc::new(tokio::sync::Mutex::new(())))
+        .clone()
 }
 
 /// Registry for managing MCP servers and their capabilities
@@ -45,7 +54,7 @@ pub struct McpRegistry {
     pub(crate) warn_on_tool_trust_drift: AtomicBool,
     /// Per-server locks that serialize capability refreshes and same-name registration.
     pub(crate) capability_refresh_locks: DashMap<String, Arc<tokio::sync::Mutex<()>>>,
-    /// Registry-wide lock for the shared mcp_tool_trust.json load/check/save transaction.
+    /// Shared process-wide lock for the mcp_tool_trust.json load/check/save transaction.
     pub(crate) tool_trust_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
@@ -62,7 +71,7 @@ impl McpRegistry {
             deferred_tools: RwLock::new(McpDeferredToolIndex::new()),
             warn_on_tool_trust_drift: AtomicBool::new(false),
             capability_refresh_locks: DashMap::new(),
-            tool_trust_lock: Arc::new(tokio::sync::Mutex::new(())),
+            tool_trust_lock: global_tool_trust_lock(),
         }
     }
 

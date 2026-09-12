@@ -181,3 +181,88 @@ async fn concurrent_first_baselines_for_different_servers_both_persist()
     );
     Ok(())
 }
+
+#[tokio::test]
+async fn separate_registries_share_process_wide_trust_lock_and_persist_baselines()
+-> Result<(), Box<dyn std::error::Error>> {
+    use std::sync::Arc;
+
+    let registry_a = McpRegistry::new();
+    let registry_b = McpRegistry::new();
+    assert!(
+        Arc::ptr_eq(&registry_a.tool_trust_lock, &registry_b.tool_trust_lock),
+        "separate McpRegistry instances must share the process-wide trust-store lock"
+    );
+    assert!(Arc::ptr_eq(
+        &registry_a.tool_trust_lock,
+        &global_tool_trust_lock()
+    ));
+
+    let dir = TempDir::new()?;
+    let path = Arc::new(dir.path().join("trust.json"));
+
+    async fn write_baseline(
+        path: Arc<std::path::PathBuf>,
+        lock: Arc<tokio::sync::Mutex<()>>,
+        server: &'static str,
+        tool: &'static str,
+    ) -> Result<(), String> {
+        // Yield so both tasks contend on the shared lock before writing.
+        tokio::task::yield_now().await;
+        let _guard = lock.lock().await;
+        let mut store = McpToolTrustStore::load(path.as_path()).map_err(|e| e.to_string())?;
+        let decision = store.check_tool(server, &McpTool::new(tool).with_description(tool));
+        assert!(matches!(
+            decision,
+            McpToolTrustDecision::BaselineCreated { .. }
+        ));
+        // Yield while holding the lock so the peer must wait, exercising
+        // cross-registry serialization rather than lucky scheduling.
+        tokio::task::yield_now().await;
+        store.save_if_dirty().map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    let (a, b) = tokio::join!(
+        write_baseline(
+            Arc::clone(&path),
+            Arc::clone(&registry_a.tool_trust_lock),
+            "gamma",
+            "list"
+        ),
+        write_baseline(
+            Arc::clone(&path),
+            Arc::clone(&registry_b.tool_trust_lock),
+            "delta",
+            "fetch"
+        )
+    );
+    a.map_err(|e| std::io::Error::other(e))?;
+    b.map_err(|e| std::io::Error::other(e))?;
+
+    let content = std::fs::read_to_string(path.as_path())?;
+    let parsed: serde_json::Value = serde_json::from_str(&content)?;
+    let hashes = parsed
+        .get("tool_hashes")
+        .and_then(serde_json::Value::as_object)
+        .ok_or_else(|| std::io::Error::other("missing tool_hashes"))?;
+    assert!(
+        hashes.contains_key(r#"["gamma","list"]"#),
+        "first registry baseline must survive concurrent peer save"
+    );
+    assert!(
+        hashes.contains_key(r#"["delta","fetch"]"#),
+        "second registry baseline must survive concurrent peer save"
+    );
+
+    let mut reloaded = McpToolTrustStore::load(path.as_path())?;
+    assert_eq!(
+        reloaded.check_tool("gamma", &McpTool::new("list").with_description("list")),
+        McpToolTrustDecision::Unchanged
+    );
+    assert_eq!(
+        reloaded.check_tool("delta", &McpTool::new("fetch").with_description("fetch")),
+        McpToolTrustDecision::Unchanged
+    );
+    Ok(())
+}
