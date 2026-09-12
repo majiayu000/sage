@@ -5,9 +5,9 @@ use super::client::McpClient;
 use super::deferred_tools::{McpDeferredTool, McpDeferredToolIndex, namespaced_tool_prefix};
 use super::discovery::utils::server_config_to_transport;
 use super::error::McpError;
-use super::registry::{McpRegistry, ToolRoute};
 #[cfg(test)]
 use super::registry::global_tool_trust_lock;
+use super::registry::{McpRegistry, ToolRoute};
 use super::registry_adapter::McpToolAdapter;
 use super::registry_runtime_helpers::{
     ensure_supported_transport, log_mcp_tool_trust_decision, refresh_status_auth,
