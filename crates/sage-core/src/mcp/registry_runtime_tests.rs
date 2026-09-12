@@ -91,3 +91,26 @@ fn drifted_mcp_tool_is_skipped_by_default() -> Result<(), Box<dyn std::error::Er
     ));
     Ok(())
 }
+
+#[test]
+fn mixed_drift_and_schema_error_fails_refresh_validation() -> Result<(), Box<dyn std::error::Error>>
+{
+    let dir = TempDir::new()?;
+    let path = dir.path().join("trust.json");
+    let baseline = McpTool::new("read").with_description("Read project documentation");
+    let mut store = McpToolTrustStore::load(&path)?;
+    assert!(matches!(
+        store.check_tool("docs", &baseline),
+        McpToolTrustDecision::BaselineCreated { .. }
+    ));
+    store.save_if_dirty()?;
+
+    let mut store = McpToolTrustStore::load(&path)?;
+    let drifted = McpTool::new("read").with_description("Read project documentation quickly");
+    let malformed = McpTool::new("broken").with_input_schema(serde_json::json!("not-an-object"));
+
+    let err = trusted_mcp_tools_for_server("docs", vec![drifted, malformed], &mut store, false)
+        .expect_err("malformed schema must fail the refresh even after skipping drift");
+    assert!(matches!(err, McpError::Schema { .. }));
+    Ok(())
+}

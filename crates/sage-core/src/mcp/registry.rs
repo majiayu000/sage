@@ -176,8 +176,9 @@ impl McpRegistry {
                 tracing::warn!(
                     server = server_name.as_str(),
                     error = %error,
-                    "Failed to refresh trusted MCP tools before listing; returning last trusted cache"
+                    "Failed to refresh trusted MCP tools before listing; invalidated routes and trusted cache"
                 );
+                continue;
             }
             tools.extend(client.cached_tools().await);
         }

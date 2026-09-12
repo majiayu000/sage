@@ -45,6 +45,10 @@ pub struct McpClient {
     capabilities: RwLock<McpCapabilities>,
     /// Cached tools
     tools: RwLock<Vec<McpTool>>,
+    /// When true, `call_tool` only allows names present in the trusted-tool cache.
+    /// Registry refresh activates this; direct clients leave it off so
+    /// initialize → list_tools → call_tool keeps working.
+    trusted_tool_allowlist: AtomicBool,
     /// Cached resources
     resources: RwLock<Vec<McpResource>>,
     /// Cached prompts
@@ -91,6 +95,7 @@ impl McpClient {
             server_info: RwLock::new(None),
             capabilities: RwLock::new(McpCapabilities::default()),
             tools: RwLock::new(Vec::new()),
+            trusted_tool_allowlist: AtomicBool::new(false),
             resources: RwLock::new(Vec::new()),
             prompts: RwLock::new(Vec::new()),
             request_id: AtomicU64::new(1),
@@ -287,6 +292,17 @@ impl McpClient {
         self.tools.read().await.clone()
     }
 
+    /// Whether registry trust filtering has activated the call_tool allowlist.
+    pub(crate) fn trusted_tool_allowlist_active(&self) -> bool {
+        self.trusted_tool_allowlist.load(Ordering::Acquire)
+    }
+
+    /// Replace the trusted-tool cache and require call_tool to consult it.
+    pub(crate) async fn replace_trusted_tools(&self, tools: Vec<McpTool>) {
+        *self.tools.write().await = tools;
+        self.trusted_tool_allowlist.store(true, Ordering::Release);
+    }
+
     /// Get cached resources
     pub async fn cached_resources(&self) -> Vec<McpResource> {
         self.resources.read().await.clone()
@@ -300,10 +316,6 @@ impl McpClient {
     /// Check if the client is connected
     pub fn is_connected(&self) -> bool {
         self.running.load(Ordering::SeqCst)
-    }
-
-    pub(crate) fn tools(&self) -> &RwLock<Vec<McpTool>> {
-        &self.tools
     }
 
     pub(crate) fn resources(&self) -> &RwLock<Vec<McpResource>> {

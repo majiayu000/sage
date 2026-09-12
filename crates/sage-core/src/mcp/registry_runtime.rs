@@ -199,6 +199,20 @@ impl McpRegistry {
         name: &str,
         client: &Arc<McpClient>,
     ) -> Result<(), McpError> {
+        let refresh_result = self.refresh_server_capabilities_inner(name, client).await;
+        if refresh_result.is_err() {
+            // Fail closed: do not keep previously trusted routes/cache when a
+            // refresh cannot complete (e.g. drifted tools mixed with schema errors).
+            self.clear_server_trusted_tools(name, client).await;
+        }
+        refresh_result
+    }
+
+    async fn refresh_server_capabilities_inner(
+        &self,
+        name: &str,
+        client: &Arc<McpClient>,
+    ) -> Result<(), McpError> {
         let tools = client.list_tools_uncached().await.map_err(|error| {
             McpError::schema(format!(
                 "Failed to discover tools for MCP server '{name}': {error}"
@@ -230,7 +244,7 @@ impl McpRegistry {
             );
             routed_tools.push(tool.clone());
         }
-        *client.tools().write().await = routed_tools.clone();
+        client.replace_trusted_tools(routed_tools.clone()).await;
         self.deferred_tools
             .write()
             .replace_server_tools(name.to_string(), routed_tools);
@@ -250,6 +264,15 @@ impl McpRegistry {
         }
 
         Ok(())
+    }
+
+    async fn clear_server_trusted_tools(&self, name: &str, client: &Arc<McpClient>) {
+        self.tool_mapping
+            .retain(|_, route| route.server_name != name);
+        client.replace_trusted_tools(Vec::new()).await;
+        self.deferred_tools
+            .write()
+            .replace_server_tools(name.to_string(), Vec::new());
     }
 
     fn configured_source(&self, name: &str) -> Result<MergedMcpServerSource, McpError> {

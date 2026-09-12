@@ -168,4 +168,39 @@ mod tests {
         assert!(connected.is_empty());
         assert!(manager.registry().warn_on_tool_trust_drift());
     }
+
+    #[tokio::test]
+    async fn test_manager_discover_merges_trust_policy_before_connecting() {
+        let manager = McpServerManager::new();
+
+        let mut warn_config = config_with_server(
+            "warn-src",
+            McpServerConfig::stdio("__sage_missing_mcp_binary__", Vec::new()),
+        );
+        warn_config.auto_connect = false;
+        warn_config.warn_on_tool_trust_drift = true;
+        warn_config.warn_on_tool_trust_drift_set = true;
+
+        let mut fail_closed = config_with_server(
+            "reject-src",
+            McpServerConfig::stdio("__sage_missing_mcp_binary__", Vec::new()),
+        );
+        fail_closed.auto_connect = false;
+        fail_closed.warn_on_tool_trust_drift = false;
+        fail_closed.warn_on_tool_trust_drift_set = true;
+
+        let connected = manager
+            .discover(vec![
+                DiscoverySource::Config(warn_config),
+                DiscoverySource::Config(fail_closed),
+            ])
+            .await
+            .expect("discover should succeed when auto_connect is false");
+
+        assert!(connected.is_empty());
+        assert!(
+            !manager.registry().warn_on_tool_trust_drift(),
+            "later explicit fail-closed policy must win before any connect"
+        );
+    }
 }

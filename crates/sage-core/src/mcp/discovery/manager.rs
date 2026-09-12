@@ -55,36 +55,42 @@ impl McpServerManager {
     pub async fn discover(&self, sources: Vec<DiscoverySource>) -> Result<Vec<String>, McpError> {
         let mut connected_servers = Vec::new();
         let mut failures = Vec::new();
+        let mut pending_servers = Vec::new();
+        let mut effective_config = McpConfig::default();
 
+        // Resolve the merged trust policy before connecting any server so an
+        // earlier warn-mode source cannot leave drifted tools callable after a
+        // later fail-closed policy wins.
         for source in sources {
             match discover_from_source(source).await {
                 Ok((discovered_config, servers)) => {
-                    // Propagate trust policy from every discovery source, not only
-                    // discover_from_config, so warn_on_tool_trust_drift is honored.
-                    self.registry
-                        .set_warn_on_tool_trust_drift(discovered_config.warn_on_tool_trust_drift);
-                    for (name, config) in servers {
-                        match self
-                            .connection_manager
-                            .connect_server(&name, config, &self.registry, &self.health_tracker)
-                            .await
-                        {
-                            Ok(_) => {
-                                info!("Connected to MCP server: {}", name);
-                                connected_servers.push(name);
-                            }
-                            Err(e) => {
-                                error!("Failed to connect to MCP server '{}': {}", name, e);
-                                self.health_tracker
-                                    .update_health(&name, ServerStatus::Failed(e.to_string()))
-                                    .await;
-                                failures.push(format!("{}: {}", name, e));
-                            }
-                        }
-                    }
+                    effective_config.merge(discovered_config);
+                    pending_servers.extend(servers);
                 }
                 Err(e) => {
                     warn!("Failed to discover from source: {}", e);
+                }
+            }
+        }
+        self.registry
+            .set_warn_on_tool_trust_drift(effective_config.warn_on_tool_trust_drift);
+
+        for (name, config) in pending_servers {
+            match self
+                .connection_manager
+                .connect_server(&name, config, &self.registry, &self.health_tracker)
+                .await
+            {
+                Ok(_) => {
+                    info!("Connected to MCP server: {}", name);
+                    connected_servers.push(name);
+                }
+                Err(e) => {
+                    error!("Failed to connect to MCP server '{}': {}", name, e);
+                    self.health_tracker
+                        .update_health(&name, ServerStatus::Failed(e.to_string()))
+                        .await;
+                    failures.push(format!("{}: {}", name, e));
                 }
             }
         }
