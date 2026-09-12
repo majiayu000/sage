@@ -6,7 +6,9 @@ use super::deferred_tools::{McpDeferredTool, McpDeferredToolIndex, namespaced_to
 use super::discovery::utils::server_config_to_transport;
 use super::error::McpError;
 use super::registry::{McpRegistry, McpToolAdapter, ToolRoute};
-use super::runtime_status::{McpRuntimeAction, McpRuntimeActionResult, McpServerRuntimeStatus, McpToolDiscoveryState};
+use super::runtime_status::{
+    McpRuntimeAction, McpRuntimeActionResult, McpServerRuntimeStatus, McpToolDiscoveryState,
+};
 use super::source::{McpSourceSet, MergedMcpServerSource};
 use super::tool_trust::{McpToolTrustDecision, McpToolTrustStore, validate_tool_description_trust};
 use super::types::McpTool;

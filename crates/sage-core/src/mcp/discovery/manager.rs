@@ -108,7 +108,8 @@ impl McpServerManager {
 
     /// Discover servers from configuration
     pub async fn discover_from_config(&self, config: McpConfig) -> Result<Vec<String>, McpError> {
-        self.apply_trust_policy(config.warn_on_tool_trust_drift).await;
+        self.apply_trust_policy(config.warn_on_tool_trust_drift)
+            .await;
         if !config.enabled || !config.auto_connect {
             debug!("MCP integration is disabled in config");
             return Ok(Vec::new());
