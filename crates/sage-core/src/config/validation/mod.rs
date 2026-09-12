@@ -16,7 +16,7 @@ pub use lakeview::validate_lakeview;
 pub use limits::validate_limits;
 pub use logging::validate_logging;
 pub use model::validate_models;
-pub use paths::validate_paths;
+pub use paths::{resolve_within_working_dir, validate_paths};
 pub use provider::validate_providers;
 pub use tools::validate_tools;
 

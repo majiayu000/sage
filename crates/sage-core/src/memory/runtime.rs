@@ -1,6 +1,7 @@
 //! Core-owned runtime API for agent memory and learning recall.
 
 use crate::config::AgentMemoryConfig;
+use crate::config::validation::resolve_within_working_dir;
 use crate::diagnostics::{DiagnosticRedactor, RedactionReport};
 use crate::error::{SageError, SageResult};
 use crate::learning::{
@@ -195,7 +196,7 @@ pub async fn init_agent_memory_runtime(
         return Ok(None);
     }
 
-    let storage_path = resolve_storage_path(config, working_dir);
+    let storage_path = resolve_storage_path(config, working_dir)?;
     let key = runtime_key(&storage_path);
 
     if let Some(existing) = RUNTIME_REGISTRY.read().await.get(&key).cloned() {
@@ -226,7 +227,7 @@ pub async fn init_global_memory_manager(
     config: &AgentMemoryConfig,
     working_dir: &Path,
 ) -> SageResult<SharedMemoryManager> {
-    let storage_path = resolve_storage_path(config, working_dir);
+    let storage_path = resolve_storage_path(config, working_dir)?;
     create_memory_manager(MemoryConfig::with_file_storage(&storage_path).max_memories(10_000))
         .await
         .map_err(|error| {
@@ -244,7 +245,7 @@ pub async fn init_global_learning_engine(
     working_dir: &Path,
     memory_manager: SharedMemoryManager,
 ) -> SageResult<SharedLearningEngine> {
-    let storage_path = resolve_storage_path(config, working_dir);
+    let storage_path = resolve_storage_path(config, working_dir)?;
     let learning_config = LearningConfig::with_storage(storage_path);
     let learning_engine = create_learning_engine_with_memory(learning_config, memory_manager);
     learning_engine.load_from_memory().await.map_err(|error| {
@@ -452,16 +453,12 @@ fn bound_items(
     kept
 }
 
-fn resolve_storage_path(config: &AgentMemoryConfig, working_dir: &Path) -> PathBuf {
+fn resolve_storage_path(config: &AgentMemoryConfig, working_dir: &Path) -> SageResult<PathBuf> {
     let configured = config
         .storage_path
         .clone()
         .unwrap_or_else(|| PathBuf::from(".sage/memory/agent-memory.json"));
-    if configured.is_absolute() {
-        configured
-    } else {
-        working_dir.join(configured)
-    }
+    resolve_within_working_dir(&configured, working_dir)
 }
 
 fn runtime_key(storage_path: &Path) -> String {
