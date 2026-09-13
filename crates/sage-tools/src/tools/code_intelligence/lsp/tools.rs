@@ -224,6 +224,25 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn dedicated_tool_rejects_path_escape_before_lsp() {
+        let dir = tempfile::tempdir().unwrap();
+        let tool = GoToDefinitionTool::with_working_directory(dir.path());
+
+        let result = tool
+            .execute(&call(
+                "GoToDefinition",
+                json!({
+                    "file_path": "../outside.rs",
+                    "line": 1,
+                    "character": 1
+                }),
+            ))
+            .await;
+
+        assert!(matches!(result, Err(ToolError::PermissionDenied(_))));
+    }
+
+    #[tokio::test]
     async fn dedicated_tool_reports_degraded_when_lsp_unavailable() {
         let dir = tempfile::tempdir().unwrap();
         let source_path = dir.path().join("lib.rs");

@@ -7,7 +7,7 @@ use super::response::{
     workspace_symbol_items,
 };
 use super::types::{DegradedReason, NavigationResponse};
-use sage_core::tools::base::ToolError;
+use sage_core::tools::base::{FileSystemTool, ToolError};
 use serde_json::{Value, json};
 use std::path::Path;
 use std::time::Duration;
@@ -120,7 +120,7 @@ impl LspTool {
         character: u32,
     ) -> Result<String, ToolError> {
         let operation = "type_hierarchy";
-        let resolved_path = self.resolve_workspace_path(file_path);
+        let resolved_path = self.resolve_workspace_path(file_path)?;
         let Some(language) = self.detect_language(&resolved_path) else {
             return response_json(self.degraded_no_language(operation, file_path));
         };
@@ -203,12 +203,12 @@ impl LspTool {
         _line: u32,
         _character: u32,
     ) -> Result<String, ToolError> {
-        response_json(self.legacy_degraded("hover", file_path))
+        response_json(self.legacy_degraded("hover", file_path)?)
     }
 
     /// Legacy document symbols operation: superseded by SymbolSearch.
     pub(super) async fn document_symbol(&self, file_path: &str) -> Result<String, ToolError> {
-        response_json(self.legacy_degraded("document_symbol", file_path))
+        response_json(self.legacy_degraded("document_symbol", file_path)?)
     }
 
     /// Legacy implementation operation.
@@ -218,7 +218,7 @@ impl LspTool {
         _line: u32,
         _character: u32,
     ) -> Result<String, ToolError> {
-        response_json(self.legacy_degraded("go_to_implementation", file_path))
+        response_json(self.legacy_degraded("go_to_implementation", file_path)?)
     }
 
     /// Legacy call hierarchy operation.
@@ -228,7 +228,7 @@ impl LspTool {
         _line: u32,
         _character: u32,
     ) -> Result<String, ToolError> {
-        response_json(self.legacy_degraded("prepare_call_hierarchy", file_path))
+        response_json(self.legacy_degraded("prepare_call_hierarchy", file_path)?)
     }
 
     /// Legacy incoming calls operation.
@@ -238,7 +238,7 @@ impl LspTool {
         _line: u32,
         _character: u32,
     ) -> Result<String, ToolError> {
-        response_json(self.legacy_degraded("incoming_calls", file_path))
+        response_json(self.legacy_degraded("incoming_calls", file_path)?)
     }
 
     /// Legacy outgoing calls operation.
@@ -248,7 +248,7 @@ impl LspTool {
         _line: u32,
         _character: u32,
     ) -> Result<String, ToolError> {
-        response_json(self.legacy_degraded("outgoing_calls", file_path))
+        response_json(self.legacy_degraded("outgoing_calls", file_path)?)
     }
 
     async fn position_request(
@@ -261,7 +261,7 @@ impl LspTool {
         character: u32,
         extra_params: Value,
     ) -> Result<String, ToolError> {
-        let resolved_path = self.resolve_workspace_path(file_path);
+        let resolved_path = self.resolve_workspace_path(file_path)?;
         let Some(language) = self.detect_language(&resolved_path) else {
             return response_json(self.degraded_no_language(operation, file_path));
         };
@@ -361,9 +361,13 @@ impl LspTool {
         )
     }
 
-    fn legacy_degraded(&self, operation: &str, file_path: &str) -> NavigationResponse {
-        let resolved_path = self.resolve_workspace_path(file_path);
-        NavigationResponse::degraded(
+    fn legacy_degraded(
+        &self,
+        operation: &str,
+        file_path: &str,
+    ) -> Result<NavigationResponse, ToolError> {
+        let resolved_path = self.resolve_workspace_path(file_path)?;
+        Ok(NavigationResponse::degraded(
             operation,
             self.detect_language(&resolved_path),
             self.workspace_root_display(),
@@ -373,7 +377,7 @@ impl LspTool {
                 operation,
                 resolved_path.display()
             ),
-        )
+        ))
     }
 
     fn workspace_root_display(&self) -> String {
