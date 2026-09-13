@@ -230,6 +230,19 @@ impl McpClient {
     where
         T: serde::de::DeserializeOwned,
     {
+        let response_receiver = self.begin_call(method, params).await?;
+        self.finish_call(response_receiver).await
+    }
+
+    /// Register and send a request without waiting for the response.
+    ///
+    /// `call_tool` holds the tools write lock across this method so listChanged
+    /// cannot revoke authorization between the allowlist check and dispatch.
+    pub(crate) async fn begin_call(
+        &self,
+        method: &str,
+        params: Option<Value>,
+    ) -> Result<oneshot::Receiver<super::protocol::McpResponse>, McpError> {
         let id = self.next_request_id();
         let id_str = id.to_string();
 
@@ -240,31 +253,36 @@ impl McpClient {
             request
         };
 
-        // Create response channel
         let (response_sender, response_receiver) = oneshot::channel();
 
-        // Register the pending request
         self.command_sender
             .send(ReceiverCommand::RegisterRequest {
-                id: id_str.clone(),
+                id: id_str,
                 sender: response_sender,
             })
             .await
             .map_err(|_| McpError::connection("Failed to register request"))?;
 
-        // Send request
         {
             let mut transport = self.transport.lock().await;
             transport.send(McpMessage::Request(request)).await?;
         }
 
-        // Wait for response with timeout
+        Ok(response_receiver)
+    }
+
+    pub(crate) async fn finish_call<T>(
+        &self,
+        response_receiver: oneshot::Receiver<super::protocol::McpResponse>,
+    ) -> Result<T, McpError>
+    where
+        T: serde::de::DeserializeOwned,
+    {
         let response = timeout(self.request_timeout, response_receiver)
             .await
             .map_err(|_| McpError::timeout(self.request_timeout.as_secs()))?
             .map_err(|_| McpError::connection("Response channel closed"))?;
 
-        // Handle response
         match response.into_result() {
             Ok(value) => serde_json::from_value(value).map_err(McpError::from),
             Err(e) => Err(McpError::server(e.code, e.message)),
@@ -318,9 +336,44 @@ impl McpClient {
 
     /// Replace the trusted-tool cache and require call_tool to consult it.
     pub(crate) async fn replace_trusted_tools(&self, tools: Vec<McpTool>) {
-        *self.tools.write().await = tools;
+        let mut guard = self.tools.write().await;
+        let allowlist_was_active = self.trusted_tool_allowlist.load(Ordering::Acquire);
+        let auth_changed =
+            !allowlist_was_active || trusted_tool_names_differ(guard.as_slice(), tools.as_slice());
+        *guard = tools;
         self.trusted_tool_allowlist.store(true, Ordering::Release);
-        self.list_changed_generation.fetch_add(1, Ordering::AcqRel);
+        if auth_changed {
+            self.list_changed_generation.fetch_add(1, Ordering::AcqRel);
+        }
+    }
+
+    /// Publish trusted tools only when `expected_generation` still matches.
+    ///
+    /// Holds the tools write lock across the generation check and cache write so
+    /// a concurrent listChanged clear cannot be overwritten by a stale refresh.
+    /// Advances the generation only when the authorized name set changes (or the
+    /// allowlist is first activated), so identical republishes do not invalidate
+    /// in-flight calls.
+    pub(crate) async fn replace_trusted_tools_if_generation(
+        &self,
+        tools: Vec<McpTool>,
+        expected_generation: u64,
+    ) -> Result<(), McpError> {
+        let mut guard = self.tools.write().await;
+        if self.list_changed_generation.load(Ordering::Acquire) != expected_generation {
+            return Err(McpError::schema(
+                "MCP tools/listChanged during trusted-tool publish; retry required".to_string(),
+            ));
+        }
+        let allowlist_was_active = self.trusted_tool_allowlist.load(Ordering::Acquire);
+        let auth_changed =
+            !allowlist_was_active || trusted_tool_names_differ(guard.as_slice(), tools.as_slice());
+        *guard = tools;
+        self.trusted_tool_allowlist.store(true, Ordering::Release);
+        if auth_changed {
+            self.list_changed_generation.fetch_add(1, Ordering::AcqRel);
+        }
+        Ok(())
     }
 
     /// Get cached resources
@@ -360,6 +413,17 @@ impl Drop for McpClient {
             }
         }
     }
+}
+
+fn trusted_tool_names_differ(previous: &[McpTool], next: &[McpTool]) -> bool {
+    if previous.len() != next.len() {
+        return true;
+    }
+    let mut previous_names: Vec<&str> = previous.iter().map(|tool| tool.name.as_str()).collect();
+    let mut next_names: Vec<&str> = next.iter().map(|tool| tool.name.as_str()).collect();
+    previous_names.sort_unstable();
+    next_names.sort_unstable();
+    previous_names != next_names
 }
 
 #[cfg(test)]

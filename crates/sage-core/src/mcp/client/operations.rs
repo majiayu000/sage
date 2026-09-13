@@ -43,19 +43,22 @@ impl McpClient {
         // When the registry has installed a trusted-tool allowlist, refuse tools
         // that were later skipped for trust-baseline drift. Direct clients leave
         // the allowlist inactive so initialize → list_tools → call_tool works.
-        // Authorize under a short tools lock, then await without holding it:
-        // the background receiver needs the same lock to clear on listChanged
-        // and to deliver this call's response, so a held read guard deadlocks.
-        // A generation token detects revoke/listChanged that raced the await.
+        //
+        // Authorize and dispatch under the tools write lock so listChanged cannot
+        // revoke between the check and the on-wire send (holding a read lock across
+        // the remote await deadlocks the receiver). Await the response after
+        // releasing the lock; a generation token still detects revoke-during-await.
         if self.trusted_tool_allowlist_active() {
-            let generation = self.list_changed_generation();
-            {
-                let authorization = self.tools().read().await;
+            let (generation, response_receiver) = {
+                let authorization = self.tools().write().await;
                 if !authorization.iter().any(|tool| tool.name == name) {
                     return Err(McpError::tool_not_found(name.to_string()));
                 }
-            }
-            let result: McpToolResult = self.call(methods::TOOLS_CALL, Some(params)).await?;
+                let generation = self.list_changed_generation();
+                let response_receiver = self.begin_call(methods::TOOLS_CALL, Some(params)).await?;
+                (generation, response_receiver)
+            };
+            let result: McpToolResult = self.finish_call(response_receiver).await?;
             if self.list_changed_generation() != generation
                 || !self
                     .tools()

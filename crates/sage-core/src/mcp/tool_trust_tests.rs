@@ -1008,6 +1008,83 @@ fn trust_store_keeps_file_version_stable_while_migrating_entries()
 }
 
 #[test]
+fn tool_hash_detects_description_whitespace_drift() {
+    let spaced = McpTool::new("docs").with_description("Reads  files");
+    let newline = McpTool::new("docs").with_description("Reads\nfiles");
+    assert_ne!(tool_hash(&spaced), tool_hash(&newline));
+}
+
+#[test]
+fn trust_store_preserves_other_server_legacy_after_version_bump()
+-> Result<(), Box<dyn std::error::Error>> {
+    let dir = TempDir::new()?;
+    let path = dir.path().join("trust.json");
+    let alpha = McpTool::new("alpha")
+        .with_description("Alpha Tool")
+        .with_input_schema(json!({
+            "type": "object",
+            "required": ["b", "a"],
+            "properties": {
+                "a": { "type": "string" },
+                "b": { "type": "string" }
+            }
+        }));
+    let beta = McpTool::new("beta")
+        .with_description("Beta Tool")
+        .with_input_schema(json!({
+            "type": "object",
+            "required": ["y", "x"],
+            "properties": {
+                "x": { "type": "string" },
+                "y": { "type": "string" }
+            }
+        }));
+    std::fs::write(
+        &path,
+        serde_json::to_string_pretty(&serde_json::json!({
+            "tool_hashes": {
+                r#"["docs","alpha"]"#: legacy_raw_tool_hash(&alpha),
+                r#"["other","beta"]"#: legacy_raw_tool_hash(&beta)
+            }
+        }))?,
+    )?;
+
+    let alpha_now = McpTool::new("alpha")
+        .with_description("Alpha Tool")
+        .with_input_schema(json!({
+            "type": "object",
+            "required": ["a", "b"],
+            "properties": {
+                "a": { "type": "string" },
+                "b": { "type": "string" }
+            }
+        }));
+    let mut first = McpToolTrustStore::load(&path)?;
+    assert_eq!(
+        first.check_tool("docs", &alpha_now),
+        McpToolTrustDecision::Unchanged
+    );
+    first.save_if_dirty()?;
+
+    let beta_now = McpTool::new("beta")
+        .with_description("Beta Tool")
+        .with_input_schema(json!({
+            "type": "object",
+            "required": ["x", "y"],
+            "properties": {
+                "x": { "type": "string" },
+                "y": { "type": "string" }
+            }
+        }));
+    let mut second = McpToolTrustStore::load(&path)?;
+    assert_eq!(
+        second.check_tool("other", &beta_now),
+        McpToolTrustDecision::Unchanged
+    );
+    Ok(())
+}
+
+#[test]
 fn trust_hash_keeps_i64_max_and_two_pow_63_float_distinct() {
     let max_i64 = McpTool::new("bound").with_input_schema(json!({
         "maximum": 9223372036854775807_i64

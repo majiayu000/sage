@@ -26,7 +26,9 @@ const MAX_LEGACY_SYNC_HASH_BYTES: usize = 4 * 1024 * 1024;
 pub(super) fn tool_hash(tool: &McpTool) -> String {
     hash_tool_parts(
         &tool.name,
-        DescriptionEncoding::Present(tool.description.as_deref().map(collapse_whitespace)),
+        // Hash exact description bytes so whitespace-only drift is detected.
+        // Whitespace collapse remains for high-risk phrase scanning only.
+        DescriptionEncoding::Present(tool.description.clone()),
         &canonicalize_schema_value(&tool.input_schema),
     )
 }

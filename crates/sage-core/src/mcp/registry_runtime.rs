@@ -292,15 +292,10 @@ impl McpRegistry {
 
         // listChanged after tools/list (e.g. during the blocking trust check)
         // cleared the allowlist; refuse to republish the now-stale response.
-        if client.list_changed_generation() != list_generation {
-            return Err(McpError::schema(format!(
-                "MCP server '{name}' tools/listChanged during capability refresh; retry required"
-            )));
-        }
-
-        self.tool_mapping
-            .retain(|_, route| route.server_name != name);
+        // Build routes first without mutating shared mappings, then publish
+        // under a generation-checked tools write so check+replace stay atomic.
         let mut routed_tools = Vec::with_capacity(trusted_tools.len());
+        let mut new_routes = Vec::with_capacity(trusted_tools.len());
         for (tool, trust_decision) in &trusted_tools {
             log_mcp_tool_trust_decision(name, &tool.name, trust_decision.clone());
             self.warn_remote_tool_name_collision(name, &tool.name);
@@ -308,16 +303,28 @@ impl McpRegistry {
             if self.warn_namespaced_tool_route_collision(name, &tool.name, &namespaced_name) {
                 continue;
             }
-            self.tool_mapping.insert(
+            new_routes.push((
                 namespaced_name,
                 ToolRoute {
                     server_name: name.to_string(),
                     remote_name: tool.name.clone(),
                 },
-            );
+            ));
             routed_tools.push(tool.clone());
         }
-        client.replace_trusted_tools(routed_tools.clone()).await;
+        client
+            .replace_trusted_tools_if_generation(routed_tools.clone(), list_generation)
+            .await
+            .map_err(|error| {
+                error.with_context(format!(
+                    "while publishing trusted tools for MCP server '{name}'"
+                ))
+            })?;
+        self.tool_mapping
+            .retain(|_, route| route.server_name != name);
+        for (namespaced_name, route) in new_routes {
+            self.tool_mapping.insert(namespaced_name, route);
+        }
         self.deferred_tools
             .write()
             .replace_server_tools(name.to_string(), routed_tools);

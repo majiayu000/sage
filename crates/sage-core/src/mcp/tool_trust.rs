@@ -35,7 +35,8 @@ const TRUST_FILE_VERSION: u32 = 1;
 /// Stored baseline hash. Untagged plain strings from parent-release files
 /// (file version 0) are treated as legacy encodings so upgrades can migrate.
 /// Once the file is at `TRUST_FILE_VERSION`, any remaining plain string is
-/// treated as the current encoding (fail-closed against cross-format preimages).
+/// treated as the current encoding (fail-closed against cross-format preimages)
+/// unless rewritten as an explicit legacy `Versioned` encoding on save/load.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 enum StoredToolHash {
@@ -59,6 +60,13 @@ impl StoredToolHash {
         }
     }
 
+    fn legacy_plain(hash: String) -> Self {
+        Self::Versioned {
+            hash,
+            encoding: LEGACY_HASH_ENCODING,
+        }
+    }
+
     fn hash(&self) -> &str {
         match self {
             Self::Plain(hash) | Self::Versioned { hash, .. } => hash,
@@ -67,9 +75,7 @@ impl StoredToolHash {
 
     fn encoding(&self, file_version: u32) -> u32 {
         match self {
-            // Parent-release plain strings were produced by the legacy hasher.
             Self::Plain(_) if file_version < TRUST_FILE_VERSION => LEGACY_HASH_ENCODING,
-            // After the file has been migrated, plain strings are fail-closed.
             Self::Plain(_) => CURRENT_HASH_ENCODING,
             Self::Versioned { encoding, .. } => *encoding,
         }
@@ -158,6 +164,17 @@ impl McpToolTrustStore {
         })
     }
 
+    fn retag_plain_as_explicit_legacy(&mut self) -> bool {
+        let mut changed = false;
+        for value in self.tool_hashes.values_mut() {
+            if let StoredToolHash::Plain(hash) = value.clone() {
+                *value = StoredToolHash::legacy_plain(hash);
+                changed = true;
+            }
+        }
+        changed
+    }
+
     pub(crate) fn check_tool(&mut self, server_id: &str, tool: &McpTool) -> McpToolTrustDecision {
         let key = tool_key(server_id, &tool.name);
         let hash = tool_hash(tool);
@@ -177,17 +194,8 @@ impl McpToolTrustStore {
                 McpToolTrustDecision::Unchanged
             }
             Some(previous) => {
-                // Upgrade only versioned-as-legacy / parent-release plain
-                // baselines (raw schema bytes with set-array reorder
-                // equivalence). Current-encoding baselines must not fall back
-                // to legacy hashing — that admits cross-format preimages
-                // (e.g. current("Safe") == legacy("1Safe")). Prior lossy
-                // canonicalizers and absent/empty description collisions still
-                // require explicit re-baselining.
-                //
-                // Keep `file_version` at the loaded value for the whole refresh
-                // loop so migrating the first plain entry cannot make later
-                // plain entries look current-format and skip legacy matching.
+                // Upgrade only legacy / parent-release plain baselines. Keep
+                // loaded `file_version` stable for the whole refresh loop.
                 if previous.allows_legacy_match(self.file_version)
                     && !description_option_ambiguous(tool)
                     && legacy_raw_baseline_matches(previous.hash(), tool)
@@ -213,6 +221,11 @@ impl McpToolTrustStore {
     pub(crate) fn save_if_dirty(&mut self) -> Result<(), McpError> {
         if !self.dirty {
             return Ok(());
+        }
+        // Ensure untouched Plain entries survive the version bump as explicit
+        // legacy encodings across separate per-server load/save transactions.
+        if self.file_version < TRUST_FILE_VERSION {
+            self.retag_plain_as_explicit_legacy();
         }
         if let Some(parent) = self.path.parent() {
             std::fs::create_dir_all(parent).map_err(|error| {
