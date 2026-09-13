@@ -43,8 +43,19 @@ pub struct McpClient {
     server_info: RwLock<Option<McpServerInfo>>,
     /// Server capabilities
     capabilities: RwLock<McpCapabilities>,
-    /// Cached tools
-    tools: RwLock<Vec<McpTool>>,
+    /// Cached tools (shared with the background receiver for listChanged revoke)
+    tools: Arc<RwLock<Vec<McpTool>>>,
+    /// When true, `call_tool` only allows names present in the trusted-tool cache.
+    /// Registry refresh activates this; direct clients leave it off so
+    /// initialize → list_tools → call_tool keeps working.
+    /// Shared with the receiver so `notifications/tools/listChanged` can clear
+    /// the allowlist without waiting for the next registry refresh.
+    trusted_tool_allowlist: Arc<AtomicBool>,
+    /// Bumped whenever the trusted-tool cache is cleared or replaced so
+    /// `call_tool` and capability refresh can detect invalidation without
+    /// holding the tools `RwLock` across remote awaits (which deadlocks the
+    /// receiver when listChanged needs the write lock).
+    list_changed_generation: Arc<AtomicU64>,
     /// Cached resources
     resources: RwLock<Vec<McpResource>>,
     /// Cached prompts
@@ -76,6 +87,9 @@ impl McpClient {
         let (command_sender, command_receiver) = mpsc::channel(100);
         let transport = Arc::new(Mutex::new(transport));
         let running = Arc::new(AtomicBool::new(true));
+        let tools = Arc::new(RwLock::new(Vec::new()));
+        let trusted_tool_allowlist = Arc::new(AtomicBool::new(false));
+        let list_changed_generation = Arc::new(AtomicU64::new(0));
 
         // Start background message receiver
         let transport_clone = Arc::clone(&transport);
@@ -84,13 +98,18 @@ impl McpClient {
             transport_clone,
             command_receiver,
             running_clone,
+            Arc::clone(&tools),
+            Arc::clone(&trusted_tool_allowlist),
+            Arc::clone(&list_changed_generation),
         ));
 
         Self {
             transport: Arc::clone(&transport),
             server_info: RwLock::new(None),
             capabilities: RwLock::new(McpCapabilities::default()),
-            tools: RwLock::new(Vec::new()),
+            tools,
+            trusted_tool_allowlist,
+            list_changed_generation,
             resources: RwLock::new(Vec::new()),
             prompts: RwLock::new(Vec::new()),
             request_id: AtomicU64::new(1),
@@ -211,6 +230,21 @@ impl McpClient {
     where
         T: serde::de::DeserializeOwned,
     {
+        let response_receiver = self.begin_call(method, params).await?;
+        self.finish_call(response_receiver).await
+    }
+
+    /// Register and send a request without waiting for the response.
+    ///
+    /// Prefer [`Self::begin_authorized_tool_call`] when the tools write lock must
+    /// stay held across dispatch; that path reserves the command-queue slot
+    /// before taking the lock so a full bounded channel cannot deadlock against
+    /// the receiver's listChanged clear.
+    pub(crate) async fn begin_call(
+        &self,
+        method: &str,
+        params: Option<Value>,
+    ) -> Result<oneshot::Receiver<super::protocol::McpResponse>, McpError> {
         let id = self.next_request_id();
         let id_str = id.to_string();
 
@@ -221,31 +255,76 @@ impl McpClient {
             request
         };
 
-        // Create response channel
         let (response_sender, response_receiver) = oneshot::channel();
 
-        // Register the pending request
         self.command_sender
             .send(ReceiverCommand::RegisterRequest {
-                id: id_str.clone(),
+                id: id_str,
                 sender: response_sender,
             })
             .await
             .map_err(|_| McpError::connection("Failed to register request"))?;
 
-        // Send request
         {
             let mut transport = self.transport.lock().await;
             transport.send(McpMessage::Request(request)).await?;
         }
 
-        // Wait for response with timeout
+        Ok(response_receiver)
+    }
+
+    /// Authorize + dispatch: wake receiver (RegisterRequest), then transport → tools write.
+    pub(super) async fn begin_authorized_tool_call(
+        &self,
+        name: &str,
+        params: Value,
+    ) -> Result<oneshot::Receiver<super::protocol::McpResponse>, McpError> {
+        let permit = self
+            .command_sender
+            .reserve()
+            .await
+            .map_err(|_| McpError::connection("Failed to reserve request registration"))?;
+
+        {
+            let authorization = self.tools.read().await;
+            if !authorization.iter().any(|tool| tool.name == name) {
+                return Err(McpError::tool_not_found(name.to_string()));
+            }
+        }
+
+        let id = self.next_request_id();
+        let id_str = id.to_string();
+        let request = McpRequest::new(id, methods::TOOLS_CALL).with_params(params);
+        let (response_sender, response_receiver) = oneshot::channel();
+        // Wake idle receive() before transport.lock() so it can release the mutex.
+        permit.send(ReceiverCommand::RegisterRequest {
+            id: id_str,
+            sender: response_sender,
+        });
+
+        let mut transport = self.transport.lock().await;
+        let authorization = self.tools.write().await;
+        if !authorization.iter().any(|tool| tool.name == name) {
+            return Err(McpError::tool_not_found(name.to_string()));
+        }
+        transport.send(McpMessage::Request(request)).await?;
+        drop(authorization);
+        drop(transport);
+        Ok(response_receiver)
+    }
+
+    pub(crate) async fn finish_call<T>(
+        &self,
+        response_receiver: oneshot::Receiver<super::protocol::McpResponse>,
+    ) -> Result<T, McpError>
+    where
+        T: serde::de::DeserializeOwned,
+    {
         let response = timeout(self.request_timeout, response_receiver)
             .await
             .map_err(|_| McpError::timeout(self.request_timeout.as_secs()))?
             .map_err(|_| McpError::connection("Response channel closed"))?;
 
-        // Handle response
         match response.into_result() {
             Ok(value) => serde_json::from_value(value).map_err(McpError::from),
             Err(e) => Err(McpError::server(e.code, e.message)),
@@ -287,6 +366,58 @@ impl McpClient {
         self.tools.read().await.clone()
     }
 
+    /// Whether registry trust filtering has activated the call_tool allowlist.
+    pub(crate) fn trusted_tool_allowlist_active(&self) -> bool {
+        self.trusted_tool_allowlist.load(Ordering::Acquire)
+    }
+
+    /// Generation bumped on listChanged clears and trusted-tool replacements.
+    pub(crate) fn list_changed_generation(&self) -> u64 {
+        self.list_changed_generation.load(Ordering::Acquire)
+    }
+
+    /// Replace the trusted-tool cache and require call_tool to consult it.
+    pub(crate) async fn replace_trusted_tools(&self, tools: Vec<McpTool>) {
+        let mut guard = self.tools.write().await;
+        let allowlist_was_active = self.trusted_tool_allowlist.load(Ordering::Acquire);
+        let auth_changed =
+            !allowlist_was_active || trusted_tool_names_differ(guard.as_slice(), tools.as_slice());
+        *guard = tools;
+        self.trusted_tool_allowlist.store(true, Ordering::Release);
+        if auth_changed {
+            self.list_changed_generation.fetch_add(1, Ordering::AcqRel);
+        }
+    }
+
+    /// Publish trusted tools only when `expected_generation` still matches.
+    ///
+    /// Holds the tools write lock across the generation check and cache write so
+    /// a concurrent listChanged clear cannot be overwritten by a stale refresh.
+    /// Advances the generation only when the authorized name set changes (or the
+    /// allowlist is first activated), so identical republishes do not invalidate
+    /// in-flight calls.
+    pub(crate) async fn replace_trusted_tools_if_generation(
+        &self,
+        tools: Vec<McpTool>,
+        expected_generation: u64,
+    ) -> Result<(), McpError> {
+        let mut guard = self.tools.write().await;
+        if self.list_changed_generation.load(Ordering::Acquire) != expected_generation {
+            return Err(McpError::schema(
+                "MCP tools/listChanged during trusted-tool publish; retry required".to_string(),
+            ));
+        }
+        let allowlist_was_active = self.trusted_tool_allowlist.load(Ordering::Acquire);
+        let auth_changed =
+            !allowlist_was_active || trusted_tool_names_differ(guard.as_slice(), tools.as_slice());
+        *guard = tools;
+        self.trusted_tool_allowlist.store(true, Ordering::Release);
+        if auth_changed {
+            self.list_changed_generation.fetch_add(1, Ordering::AcqRel);
+        }
+        Ok(())
+    }
+
     /// Get cached resources
     pub async fn cached_resources(&self) -> Vec<McpResource> {
         self.resources.read().await.clone()
@@ -302,12 +433,12 @@ impl McpClient {
         self.running.load(Ordering::SeqCst)
     }
 
-    pub(crate) fn tools(&self) -> &RwLock<Vec<McpTool>> {
-        &self.tools
-    }
-
     pub(crate) fn resources(&self) -> &RwLock<Vec<McpResource>> {
         &self.resources
+    }
+
+    pub(crate) fn tools(&self) -> &RwLock<Vec<McpTool>> {
+        self.tools.as_ref()
     }
 
     pub(crate) fn prompts(&self) -> &RwLock<Vec<McpPrompt>> {
@@ -324,6 +455,17 @@ impl Drop for McpClient {
             }
         }
     }
+}
+
+fn trusted_tool_names_differ(previous: &[McpTool], next: &[McpTool]) -> bool {
+    if previous.len() != next.len() {
+        return true;
+    }
+    let mut previous_names: Vec<&str> = previous.iter().map(|tool| tool.name.as_str()).collect();
+    let mut next_names: Vec<&str> = next.iter().map(|tool| tool.name.as_str()).collect();
+    previous_names.sort_unstable();
+    next_names.sort_unstable();
+    previous_names != next_names
 }
 
 #[cfg(test)]

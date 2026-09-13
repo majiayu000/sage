@@ -3,9 +3,7 @@
 //! Provides centralized management of MCP servers and their tools.
 
 use super::client::McpClient;
-use super::deferred_tools::{
-    McpDeferredToolIndex, namespaced_tool_name as build_namespaced_tool_name,
-};
+use super::deferred_tools::McpDeferredToolIndex;
 use super::error::McpError;
 use super::registry_tool_errors::tool_unavailable_error;
 use super::runtime_status::{McpServerRuntimeStatus, McpToolDiscoveryState};
@@ -13,18 +11,28 @@ use super::source::MergedMcpServerSource;
 use super::transport::{HttpTransport, HttpTransportConfig, StdioTransport, TransportConfig};
 use super::types::{McpPrompt, McpResource, McpServerInfo, McpTool};
 use crate::tools::base::Tool;
-use crate::tools::types::{ToolCall, ToolResult, ToolSchema};
-use crate::types::tool::ToolParameter;
-use async_trait::async_trait;
 use dashmap::DashMap;
 use parking_lot::RwLock;
 use serde_json::Value;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, OnceLock};
+
+pub use super::registry_adapter::McpToolAdapter;
 
 #[derive(Debug, Clone)]
 pub(crate) struct ToolRoute {
     pub(crate) server_name: String,
     pub(crate) remote_name: String,
+}
+
+/// Process-wide lock for the shared `mcp_tool_trust.json` load/check/save
+/// transaction. Separate `McpRegistry` instances must share this lock so
+/// concurrent first baselines cannot overwrite each other. Cross-process
+/// coordination uses `ToolTrustFileLock` inside the trust-store load path.
+pub(crate) fn global_tool_trust_lock() -> Arc<tokio::sync::Mutex<()>> {
+    static LOCK: OnceLock<Arc<tokio::sync::Mutex<()>>> = OnceLock::new();
+    LOCK.get_or_init(|| Arc::new(tokio::sync::Mutex::new(())))
+        .clone()
 }
 
 /// Registry for managing MCP servers and their capabilities
@@ -43,6 +51,19 @@ pub struct McpRegistry {
     pub(crate) prompt_mapping: DashMap<String, String>,
     /// Deferred searchable tool metadata
     pub(crate) deferred_tools: RwLock<McpDeferredToolIndex>,
+    /// When true, trust baseline drift only warns and still registers tools.
+    pub(crate) warn_on_tool_trust_drift: AtomicBool,
+    /// Per-server locks that serialize capability refreshes and same-name registration.
+    pub(crate) capability_refresh_locks: DashMap<String, Arc<tokio::sync::Mutex<()>>>,
+    /// Serializes namespaced route collision checks and publishes across servers
+    /// so concurrent refreshes for IDs that normalize identically cannot both
+    /// observe a free route and overwrite each other.
+    pub(crate) route_publish_lock: tokio::sync::Mutex<()>,
+    /// Shared process-wide lock for the mcp_tool_trust.json load/check/save transaction.
+    pub(crate) tool_trust_lock: Arc<tokio::sync::Mutex<()>>,
+    /// Serializes trust-policy transitions so concurrent same-value callers wait
+    /// for an in-flight revalidation before returning.
+    pub(crate) policy_transition_lock: tokio::sync::Mutex<()>,
 }
 
 impl McpRegistry {
@@ -56,7 +77,43 @@ impl McpRegistry {
             resource_mapping: DashMap::new(),
             prompt_mapping: DashMap::new(),
             deferred_tools: RwLock::new(McpDeferredToolIndex::new()),
+            warn_on_tool_trust_drift: AtomicBool::new(false),
+            capability_refresh_locks: DashMap::new(),
+            route_publish_lock: tokio::sync::Mutex::new(()),
+            tool_trust_lock: global_tool_trust_lock(),
+            policy_transition_lock: tokio::sync::Mutex::new(()),
         }
+    }
+
+    /// Configure whether MCP tool trust baseline drift should warn instead of reject.
+    ///
+    /// When connected clients already exist and the policy changes, revalidates
+    /// routes/allowlists immediately so warn→fail-closed cannot leave drifted
+    /// tools callable until a later `all_tools()` call. The whole transition is
+    /// serialized so a concurrent same-value caller waits for in-flight
+    /// revalidation instead of returning while allowlists still contain drift.
+    pub async fn set_warn_on_tool_trust_drift(&self, enabled: bool) {
+        let _guard = self.policy_transition_lock.lock().await;
+        // Atomic swap so concurrent enable/disable cannot both observe the same
+        // stale previous value and skip the fail-closed revalidation.
+        let previous = self
+            .warn_on_tool_trust_drift
+            .swap(enabled, Ordering::AcqRel);
+        if previous != enabled && !self.clients.is_empty() {
+            let _ = self.all_tools().await;
+        }
+    }
+
+    /// Return whether MCP tool trust baseline drift only warns (legacy behavior).
+    pub fn warn_on_tool_trust_drift(&self) -> bool {
+        self.warn_on_tool_trust_drift.load(Ordering::Acquire)
+    }
+
+    pub(crate) fn capability_refresh_lock(&self, name: &str) -> Arc<tokio::sync::Mutex<()>> {
+        self.capability_refresh_locks
+            .entry(name.to_string())
+            .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+            .clone()
     }
 
     /// Register and connect to an MCP server
@@ -93,12 +150,41 @@ impl McpRegistry {
         let client = Arc::new(McpClient::new(transport));
         let server_info = client.initialize().await?;
 
+        // Activate an empty trusted-tool allowlist before publishing the client
+        // so concurrent get_client()/call_tool cannot bypass trust filtering
+        // while capability refresh is still in flight. Direct/standalone
+        // clients leave the allowlist inactive.
+        client.replace_trusted_tools(Vec::new()).await;
+
+        // Serialize same-name revoke/insert/refresh so a failed older refresh
+        // cannot remove a newer client or wipe its routes.
+        let refresh_lock = self.capability_refresh_lock(&name);
+        let _refresh_guard = refresh_lock.lock().await;
+
+        // Same-name re-registration must revoke the displaced client so
+        // previously issued adapters cannot keep calling a drifted schema.
+        self.revoke_displaced_server_client(&name).await;
+
         // Store client
         self.clients.insert(name.clone(), client.clone());
 
-        // Discover tools, resources, and prompts
-        if let Err(error) = self.refresh_server_capabilities(&name, &client).await {
-            self.clients.remove(&name);
+        // Discover tools, resources, and prompts (lock already held).
+        if let Err(error) = self
+            .refresh_server_capabilities_locked(&name, &client)
+            .await
+        {
+            // Only tear down registry state if we still own this slot.
+            if self.remove_client_if_current(&name, &client) {
+                let _route_guard = self.route_publish_lock.lock().await;
+                self.tool_mapping
+                    .retain(|_, route| route.server_name != name);
+                drop(_route_guard);
+                self.resource_mapping.retain(|_, v| v != &name);
+                self.prompt_mapping.retain(|_, v| v != &name);
+                self.deferred_tools
+                    .write()
+                    .mark_server(name.clone(), McpToolDiscoveryState::SchemaError);
+            }
             if let Err(close_error) = client.close().await {
                 tracing::debug!(
                     "Failed to close MCP client '{}' after capability error: {}",
@@ -106,25 +192,61 @@ impl McpRegistry {
                     close_error
                 );
             }
-            self.tool_mapping
-                .retain(|_, route| route.server_name != name);
-            self.resource_mapping.retain(|_, v| v != &name);
-            self.prompt_mapping.retain(|_, v| v != &name);
-            self.deferred_tools
-                .write()
-                .mark_server(name.clone(), McpToolDiscoveryState::SchemaError);
             return Err(error);
         }
 
         Ok(server_info)
     }
 
-    /// Unregister and disconnect from an MCP server
-    pub async fn unregister_server(&self, name: &str) -> Result<(), McpError> {
-        if let Some((_, client)) = self.clients.remove(name) {
-            // Remove mappings for this server
+    /// Remove `client` from `clients` only when it is still the live mapping.
+    pub(crate) fn remove_client_if_current(&self, name: &str, client: &Arc<McpClient>) -> bool {
+        let Some(entry) = self.clients.get(name) else {
+            return false;
+        };
+        if !Arc::ptr_eq(entry.value(), client) {
+            return false;
+        }
+        drop(entry);
+        self.clients.remove(name).is_some()
+    }
+
+    async fn revoke_displaced_server_client(&self, name: &str) {
+        let Some((_, old_client)) = self.clients.remove(name) else {
+            return;
+        };
+        old_client.replace_trusted_tools(Vec::new()).await;
+        {
+            let _route_guard = self.route_publish_lock.lock().await;
             self.tool_mapping
                 .retain(|_, route| route.server_name != name);
+        }
+        self.resource_mapping.retain(|_, v| v != name);
+        self.prompt_mapping.retain(|_, v| v != name);
+        if let Err(close_error) = old_client.close().await {
+            tracing::debug!(
+                "Failed to close displaced MCP client '{}': {}",
+                name,
+                close_error
+            );
+        }
+    }
+
+    /// Unregister and disconnect from an MCP server.
+    ///
+    /// Holds `capability_refresh_lock` so unregister cannot race a registration
+    /// or `all_tools()` refresh that has already passed `is_current_client` and
+    /// is about to publish routes for a client we are closing.
+    pub async fn unregister_server(&self, name: &str) -> Result<(), McpError> {
+        let refresh_lock = self.capability_refresh_lock(name);
+        let _refresh_guard = refresh_lock.lock().await;
+
+        if let Some((_, client)) = self.clients.remove(name) {
+            // Remove mappings for this server
+            {
+                let _route_guard = self.route_publish_lock.lock().await;
+                self.tool_mapping
+                    .retain(|_, route| route.server_name != name);
+            }
             self.resource_mapping.retain(|_, v| v != name);
             self.prompt_mapping.retain(|_, v| v != name);
 
@@ -161,8 +283,9 @@ impl McpRegistry {
                 tracing::warn!(
                     server = server_name.as_str(),
                     error = %error,
-                    "Failed to refresh trusted MCP tools before listing; returning last trusted cache"
+                    "Failed to refresh trusted MCP tools before listing; invalidated routes and trusted cache"
                 );
+                continue;
             }
             tools.extend(client.cached_tools().await);
         }
@@ -294,193 +417,6 @@ impl Default for McpRegistry {
     }
 }
 
-/// Adapter that wraps an MCP tool as a Sage Tool.
-/// Canonical definition — sage-tools re-exports this.
-pub struct McpToolAdapter {
-    exposed_name: String,
-    mcp_tool: McpTool,
-    client: Arc<McpClient>,
-    server_name: String,
-}
-
-impl McpToolAdapter {
-    pub fn new(mcp_tool: McpTool, client: Arc<McpClient>, server_name: String) -> Self {
-        let exposed_name = Self::namespaced_tool_name(&server_name, &mcp_tool.name);
-        Self {
-            exposed_name,
-            mcp_tool,
-            client,
-            server_name,
-        }
-    }
-
-    pub fn namespaced_tool_name(server_name: &str, remote_tool_name: &str) -> String {
-        build_namespaced_tool_name(server_name, remote_tool_name)
-    }
-
-    pub fn server_name(&self) -> &str {
-        &self.server_name
-    }
-
-    pub fn mcp_tool(&self) -> &McpTool {
-        &self.mcp_tool
-    }
-
-    fn convert_schema(&self) -> Vec<ToolParameter> {
-        let mut params = Vec::new();
-        let input_schema = &self.mcp_tool.input_schema;
-
-        if input_schema.is_null() {
-            return params;
-        }
-
-        if let Some(properties) = input_schema.get("properties").and_then(|p| p.as_object()) {
-            let required_fields: Vec<String> = input_schema
-                .get("required")
-                .and_then(|r| r.as_array())
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                        .collect()
-                })
-                .unwrap_or_default();
-
-            for (name, schema) in properties {
-                let description = schema
-                    .get("description")
-                    .and_then(|d| d.as_str())
-                    .unwrap_or("")
-                    .to_string();
-
-                let is_required = required_fields.contains(name);
-                let param_type = schema
-                    .get("type")
-                    .and_then(|t| t.as_str())
-                    .unwrap_or("string");
-
-                let param = match (is_required, param_type) {
-                    (true, "string") => ToolParameter::string(name, &description),
-                    (true, "integer") | (true, "number") => {
-                        ToolParameter::number(name, &description)
-                    }
-                    (true, "boolean") => ToolParameter::boolean(name, &description),
-                    (true, _) => ToolParameter::string(name, &description),
-                    (false, "string") => ToolParameter::optional_string(name, &description),
-                    (false, _) => ToolParameter::optional_string(name, &description),
-                };
-
-                params.push(param);
-            }
-        }
-
-        params
-    }
-
-    fn convert_result(
-        &self,
-        call: &ToolCall,
-        mcp_result: super::types::McpToolResult,
-    ) -> ToolResult {
-        let output = mcp_result
-            .content
-            .iter()
-            .map(|c| match c {
-                super::types::McpContent::Text { text } => text.clone(),
-                super::types::McpContent::Image { .. } => "[Image content]".to_string(),
-                super::types::McpContent::Resource { .. } => "[Resource reference]".to_string(),
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        if mcp_result.is_error {
-            ToolResult::error(
-                &call.id,
-                self.name(),
-                format!("MCP tool execution failed: {}", output),
-            )
-        } else {
-            ToolResult::success(&call.id, self.name(), output)
-        }
-    }
-}
-
-impl std::fmt::Debug for McpToolAdapter {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("McpToolAdapter")
-            .field("name", &self.exposed_name)
-            .field("remote_name", &self.mcp_tool.name)
-            .field("server", &self.server_name)
-            .finish()
-    }
-}
-
-impl Clone for McpToolAdapter {
-    fn clone(&self) -> Self {
-        Self {
-            exposed_name: self.exposed_name.clone(),
-            mcp_tool: self.mcp_tool.clone(),
-            client: Arc::clone(&self.client),
-            server_name: self.server_name.clone(),
-        }
-    }
-}
-
-#[async_trait]
-impl Tool for McpToolAdapter {
-    fn name(&self) -> &str {
-        &self.exposed_name
-    }
-
-    fn description(&self) -> &str {
-        self.mcp_tool.description.as_deref().unwrap_or("MCP tool")
-    }
-
-    fn schema(&self) -> ToolSchema {
-        ToolSchema::new(self.name(), self.description(), self.convert_schema())
-    }
-
-    async fn execute(&self, call: &ToolCall) -> Result<ToolResult, crate::tools::base::ToolError> {
-        let arguments: Value = serde_json::to_value(&call.arguments).map_err(|e| {
-            crate::tools::base::ToolError::InvalidArguments(format!(
-                "Failed to serialize arguments: {}",
-                e
-            ))
-        })?;
-
-        let result = self
-            .client
-            .call_tool(&self.mcp_tool.name, arguments)
-            .await
-            .map_err(|e| {
-                crate::tools::base::ToolError::ExecutionFailed(format!(
-                    "MCP tool call failed: {}",
-                    e
-                ))
-            })?;
-
-        Ok(self.convert_result(call, result))
-    }
-}
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_registry_creation() {
-        let registry = McpRegistry::new();
-        assert!(registry.server_names().is_empty());
-    }
-
-    #[test]
-    fn test_namespaced_tool_name() {
-        let namespaced = McpToolAdapter::namespaced_tool_name("filesystem-server", "Read File");
-        assert_eq!(namespaced, "mcp__filesystem_server__read_file");
-    }
-
-    #[test]
-    fn test_transport_config() {
-        let config = TransportConfig::stdio("echo", vec!["hello".to_string()]);
-        assert!(matches!(config, TransportConfig::Stdio { .. }));
-    }
-}
+#[path = "registry_tests.rs"]
+mod registry_tests;

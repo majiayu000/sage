@@ -61,12 +61,16 @@ async fn discover_from_file(
 /// Discover servers from standard paths
 async fn discover_from_standard_paths()
 -> Result<(McpConfig, Vec<(String, McpServerConfig)>), McpError> {
-    let standard_paths = get_standard_mcp_paths();
+    discover_from_candidate_paths(&get_standard_mcp_paths()).await
+}
 
+async fn discover_from_candidate_paths(
+    standard_paths: &[PathBuf],
+) -> Result<(McpConfig, Vec<(String, McpServerConfig)>), McpError> {
     for path in standard_paths {
         if path.exists() {
             debug!("Checking standard MCP config path: {:?}", path);
-            match discover_from_file(&path).await {
+            match discover_from_file(path).await {
                 Ok(result) => return Ok(result),
                 Err(e) => {
                     debug!("No valid MCP config at {:?}: {}", path, e);
@@ -75,8 +79,12 @@ async fn discover_from_standard_paths()
         }
     }
 
-    // Return empty config if no standard paths found
-    Ok((McpConfig::default(), Vec::new()))
+    // Treat a complete miss as discovery failure (not a default config) so
+    // callers do not apply McpConfig::default() and silently reset an existing
+    // warn-mode trust policy to fail-closed.
+    Err(McpError::connection(
+        "No MCP configuration found in standard paths",
+    ))
 }
 
 /// Get standard MCP configuration paths
@@ -99,4 +107,34 @@ pub fn get_standard_mcp_paths() -> Vec<PathBuf> {
     }
 
     paths
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn empty_candidate_paths_are_error_not_default_config() {
+        let err = discover_from_candidate_paths(&[])
+            .await
+            .expect_err("miss must be Err, not Ok(default)");
+        assert!(
+            err.to_string()
+                .contains("No MCP configuration found in standard paths"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn missing_candidate_file_is_error_not_default_config() {
+        let missing = PathBuf::from("/tmp/__sage_missing_standard_mcp_config__.json");
+        let err = discover_from_candidate_paths(&[missing])
+            .await
+            .expect_err("missing file must be Err, not Ok(default)");
+        assert!(
+            err.to_string()
+                .contains("No MCP configuration found in standard paths"),
+            "unexpected error: {err}"
+        );
+    }
 }

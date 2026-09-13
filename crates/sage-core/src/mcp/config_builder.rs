@@ -22,6 +22,9 @@ pub async fn build_mcp_registry_from_config_and_packages<'a>(
     package_registrations: impl IntoIterator<Item = &'a PackageMcpServerRegistration>,
 ) -> SageResult<McpRegistry> {
     let registry = McpRegistry::new();
+    registry
+        .set_warn_on_tool_trust_drift(config.mcp.warn_on_tool_trust_drift)
+        .await;
 
     let mut sources = direct_config_sources(&config.mcp);
     if config.mcp.enabled {

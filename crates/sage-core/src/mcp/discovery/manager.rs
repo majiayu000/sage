@@ -55,32 +55,48 @@ impl McpServerManager {
     pub async fn discover(&self, sources: Vec<DiscoverySource>) -> Result<Vec<String>, McpError> {
         let mut connected_servers = Vec::new();
         let mut failures = Vec::new();
+        let mut pending_servers = Vec::new();
+        let mut effective_config = McpConfig::default();
 
+        // Resolve the merged trust policy before connecting any server so an
+        // earlier warn-mode source cannot leave drifted tools callable after a
+        // later fail-closed policy wins. Only apply when at least one source
+        // produced configuration — all-source failure must not silently reset
+        // an existing warn-mode policy to the default fail-closed value.
+        let mut discovered_any_config = false;
         for source in sources {
             match discover_from_source(source).await {
-                Ok((_, servers)) => {
-                    for (name, config) in servers {
-                        match self
-                            .connection_manager
-                            .connect_server(&name, config, &self.registry, &self.health_tracker)
-                            .await
-                        {
-                            Ok(_) => {
-                                info!("Connected to MCP server: {}", name);
-                                connected_servers.push(name);
-                            }
-                            Err(e) => {
-                                error!("Failed to connect to MCP server '{}': {}", name, e);
-                                self.health_tracker
-                                    .update_health(&name, ServerStatus::Failed(e.to_string()))
-                                    .await;
-                                failures.push(format!("{}: {}", name, e));
-                            }
-                        }
-                    }
+                Ok((discovered_config, servers)) => {
+                    discovered_any_config = true;
+                    effective_config.merge(discovered_config);
+                    pending_servers.extend(servers);
                 }
                 Err(e) => {
                     warn!("Failed to discover from source: {}", e);
+                }
+            }
+        }
+        if discovered_any_config {
+            self.apply_trust_policy(effective_config.warn_on_tool_trust_drift)
+                .await;
+        }
+
+        for (name, config) in pending_servers {
+            match self
+                .connection_manager
+                .connect_server(&name, config, &self.registry, &self.health_tracker)
+                .await
+            {
+                Ok(_) => {
+                    info!("Connected to MCP server: {}", name);
+                    connected_servers.push(name);
+                }
+                Err(e) => {
+                    error!("Failed to connect to MCP server '{}': {}", name, e);
+                    self.health_tracker
+                        .update_health(&name, ServerStatus::Failed(e.to_string()))
+                        .await;
+                    failures.push(format!("{}: {}", name, e));
                 }
             }
         }
@@ -98,6 +114,8 @@ impl McpServerManager {
 
     /// Discover servers from configuration
     pub async fn discover_from_config(&self, config: McpConfig) -> Result<Vec<String>, McpError> {
+        self.apply_trust_policy(config.warn_on_tool_trust_drift)
+            .await;
         if !config.enabled || !config.auto_connect {
             debug!("MCP integration is disabled in config");
             return Ok(Vec::new());
@@ -193,6 +211,15 @@ impl McpServerManager {
     /// Get list of connected server names
     pub fn connected_servers(&self) -> Vec<String> {
         self.registry.server_names()
+    }
+
+    /// Apply the registry trust policy. The registry setter revalidates
+    /// connected clients on either transition so fail-closed↔warn cannot leave
+    /// stale routes/allowlists in place.
+    async fn apply_trust_policy(&self, warn_on_tool_trust_drift: bool) {
+        self.registry
+            .set_warn_on_tool_trust_drift(warn_on_tool_trust_drift)
+            .await;
     }
 
     async fn rollback_connected_servers(&self, names: &[String]) -> Vec<String> {
