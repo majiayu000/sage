@@ -1193,7 +1193,10 @@ fn trust_store_rejects_future_file_and_hash_encodings() -> Result<(), Box<dyn st
         }))?,
     )?;
     let err = McpToolTrustStore::load(&path).expect_err("future file version");
-    assert!(err.to_string().contains("Unsupported MCP tool trust file version"));
+    assert!(
+        err.to_string()
+            .contains("Unsupported MCP tool trust file version")
+    );
 
     std::fs::write(
         &path,
@@ -1205,6 +1208,9 @@ fn trust_store_rejects_future_file_and_hash_encodings() -> Result<(), Box<dyn st
         }))?,
     )?;
     let err = McpToolTrustStore::load(&path).expect_err("future hash encoding");
-    assert!(err.to_string().contains("Unsupported MCP tool trust hash encoding"));
+    assert!(
+        err.to_string()
+            .contains("Unsupported MCP tool trust hash encoding")
+    );
     Ok(())
 }
