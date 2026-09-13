@@ -46,10 +46,30 @@ pub(super) async fn message_receiver(
                     }
                 }
             }
-            // Receive messages from transport
-            result = async {
-                let mut transport = transport.lock().await;
-                transport.receive().await
+            // Receive messages from transport. For listChanged, revoke the
+            // allowlist before releasing the transport mutex so a concurrent
+            // call_tool cannot send under stale authorization between receive
+            // and clear (call_tool acquires transport before the tools lock).
+            result = {
+                let transport = Arc::clone(&transport);
+                let tools = Arc::clone(&tools);
+                let trusted_tool_allowlist = Arc::clone(&trusted_tool_allowlist);
+                let list_changed_generation = Arc::clone(&list_changed_generation);
+                async move {
+                    let mut transport = transport.lock().await;
+                    let received = transport.receive().await;
+                    if let Ok(McpMessage::Notification(ref notification)) = received {
+                        if notification.method == notification_methods::TOOLS_LIST_CHANGED {
+                            clear_trusted_allowlist_if_active(
+                                &tools,
+                                &trusted_tool_allowlist,
+                                &list_changed_generation,
+                            )
+                            .await;
+                        }
+                    }
+                    received
+                }
             } => {
                 match result {
                     Ok(message) => {
@@ -66,16 +86,6 @@ pub(super) async fn message_receiver(
                             }
                             McpMessage::Notification(notification) => {
                                 debug!("Received notification: {}", notification.method);
-                                if notification.method
-                                    == notification_methods::TOOLS_LIST_CHANGED
-                                {
-                                    clear_trusted_allowlist_if_active(
-                                        &tools,
-                                        &trusted_tool_allowlist,
-                                        &list_changed_generation,
-                                    )
-                                    .await;
-                                }
                             }
                             McpMessage::Request(request) => {
                                 // Server-initiated requests (rare in current MCP usage)

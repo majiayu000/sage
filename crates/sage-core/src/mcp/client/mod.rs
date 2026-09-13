@@ -273,26 +273,28 @@ impl McpClient {
         Ok(response_receiver)
     }
 
-    /// Authorize a trusted tool and dispatch under the tools write lock.
+    /// Authorize a trusted tool and dispatch under transport → tools locks.
     ///
-    /// Reserves a command-queue permit before acquiring the lock so backpressure
-    /// cannot deadlock against listChanged (which needs that same write lock).
+    /// Reserves a command-queue permit before acquiring locks so backpressure
+    /// cannot deadlock against listChanged. Lock order matches the receiver's
+    /// listChanged path (transport then tools write) so revoke-while-receive
+    /// cannot race a stale authorized send.
     pub(super) async fn begin_authorized_tool_call(
         &self,
         name: &str,
         params: Value,
-    ) -> Result<(u64, oneshot::Receiver<super::protocol::McpResponse>), McpError> {
+    ) -> Result<oneshot::Receiver<super::protocol::McpResponse>, McpError> {
         let permit = self
             .command_sender
             .reserve()
             .await
             .map_err(|_| McpError::connection("Failed to reserve request registration"))?;
 
+        let mut transport = self.transport.lock().await;
         let authorization = self.tools.write().await;
         if !authorization.iter().any(|tool| tool.name == name) {
             return Err(McpError::tool_not_found(name.to_string()));
         }
-        let generation = self.list_changed_generation();
 
         let id = self.next_request_id();
         let id_str = id.to_string();
@@ -302,12 +304,10 @@ impl McpClient {
             id: id_str,
             sender: response_sender,
         });
-        {
-            let mut transport = self.transport.lock().await;
-            transport.send(McpMessage::Request(request)).await?;
-        }
+        transport.send(McpMessage::Request(request)).await?;
         drop(authorization);
-        Ok((generation, response_receiver))
+        drop(transport);
+        Ok(response_receiver)
     }
 
     pub(crate) async fn finish_call<T>(

@@ -1166,3 +1166,17 @@ fn trust_hash_keeps_i64_max_and_two_pow_63_float_distinct() {
         super::tool_trust_hash::tool_hash(&two_pow_63)
     );
 }
+
+#[test]
+fn trust_hash_canonicalizes_two_pow_63_u64_and_float() {
+    let as_u64 = McpTool::new("bound").with_input_schema(json!({
+        "maximum": 9223372036854775808_u64
+    }));
+    let as_f64 = McpTool::new("bound").with_input_schema(json!({
+        "maximum": 9223372036854775808.0
+    }));
+    assert_eq!(
+        super::tool_trust_hash::tool_hash(&as_u64),
+        super::tool_trust_hash::tool_hash(&as_f64)
+    );
+}

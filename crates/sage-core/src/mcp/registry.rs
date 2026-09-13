@@ -55,6 +55,10 @@ pub struct McpRegistry {
     pub(crate) warn_on_tool_trust_drift: AtomicBool,
     /// Per-server locks that serialize capability refreshes and same-name registration.
     pub(crate) capability_refresh_locks: DashMap<String, Arc<tokio::sync::Mutex<()>>>,
+    /// Serializes namespaced route collision checks and publishes across servers
+    /// so concurrent refreshes for IDs that normalize identically cannot both
+    /// observe a free route and overwrite each other.
+    pub(crate) route_publish_lock: tokio::sync::Mutex<()>,
     /// Shared process-wide lock for the mcp_tool_trust.json load/check/save transaction.
     pub(crate) tool_trust_lock: Arc<tokio::sync::Mutex<()>>,
     /// Serializes trust-policy transitions so concurrent same-value callers wait
@@ -75,6 +79,7 @@ impl McpRegistry {
             deferred_tools: RwLock::new(McpDeferredToolIndex::new()),
             warn_on_tool_trust_drift: AtomicBool::new(false),
             capability_refresh_locks: DashMap::new(),
+            route_publish_lock: tokio::sync::Mutex::new(()),
             tool_trust_lock: global_tool_trust_lock(),
             policy_transition_lock: tokio::sync::Mutex::new(()),
         }
@@ -170,8 +175,10 @@ impl McpRegistry {
         {
             // Only tear down registry state if we still own this slot.
             if self.remove_client_if_current(&name, &client) {
+                let _route_guard = self.route_publish_lock.lock().await;
                 self.tool_mapping
                     .retain(|_, route| route.server_name != name);
+                drop(_route_guard);
                 self.resource_mapping.retain(|_, v| v != &name);
                 self.prompt_mapping.retain(|_, v| v != &name);
                 self.deferred_tools
@@ -208,8 +215,11 @@ impl McpRegistry {
             return;
         };
         old_client.replace_trusted_tools(Vec::new()).await;
-        self.tool_mapping
-            .retain(|_, route| route.server_name != name);
+        {
+            let _route_guard = self.route_publish_lock.lock().await;
+            self.tool_mapping
+                .retain(|_, route| route.server_name != name);
+        }
         self.resource_mapping.retain(|_, v| v != name);
         self.prompt_mapping.retain(|_, v| v != name);
         if let Err(close_error) = old_client.close().await {
@@ -232,8 +242,11 @@ impl McpRegistry {
 
         if let Some((_, client)) = self.clients.remove(name) {
             // Remove mappings for this server
-            self.tool_mapping
-                .retain(|_, route| route.server_name != name);
+            {
+                let _route_guard = self.route_publish_lock.lock().await;
+                self.tool_mapping
+                    .retain(|_, route| route.server_name != name);
+            }
             self.resource_mapping.retain(|_, v| v != name);
             self.prompt_mapping.retain(|_, v| v != name);
 

@@ -44,23 +44,23 @@ impl McpClient {
         // that were later skipped for trust-baseline drift. Direct clients leave
         // the allowlist inactive so initialize → list_tools → call_tool works.
         //
-        // Authorize and dispatch under the tools write lock so listChanged cannot
-        // revoke between the check and the on-wire send (holding a read lock across
-        // the remote await deadlocks the receiver). Await the response after
-        // releasing the lock; a generation token still detects revoke-during-await.
-        // Reservation of the command-queue slot happens before the write lock so a
+        // Authorize and dispatch under transport → tools locks so listChanged
+        // revoke (same order) cannot race a stale send. Await the response after
+        // releasing those locks. Reject only when this tool is no longer
+        // authorized: a client-wide generation bump from an unrelated tool-set
+        // change must not turn a still-allowed call into tool_not_found (which
+        // encourages duplicate retries after the remote side effect).
+        // Reservation of the command-queue slot happens before the locks so a
         // full bounded channel cannot deadlock against listChanged draining.
         if self.trusted_tool_allowlist_active() {
-            let (generation, response_receiver) =
-                self.begin_authorized_tool_call(name, params).await?;
+            let response_receiver = self.begin_authorized_tool_call(name, params).await?;
             let result: McpToolResult = self.finish_call(response_receiver).await?;
-            if self.list_changed_generation() != generation
-                || !self
-                    .tools()
-                    .read()
-                    .await
-                    .iter()
-                    .any(|tool| tool.name == name)
+            if !self
+                .tools()
+                .read()
+                .await
+                .iter()
+                .any(|tool| tool.name == name)
             {
                 return Err(McpError::tool_not_found(name.to_string()));
             }

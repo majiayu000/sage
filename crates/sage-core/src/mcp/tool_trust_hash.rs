@@ -269,6 +269,11 @@ fn canonicalize_json_number(number: &serde_json::Number) -> Value {
             if let Some(as_i64) = exact_i64_from_integral_f64(normalized) {
                 return Value::Number(as_i64.into());
             }
+            // Same for the unsigned range above i64::MAX: `2^63` as u64 and
+            // `2^63` as f64 must hash identically.
+            if let Some(as_u64) = exact_u64_from_integral_f64(normalized) {
+                return Value::Number(as_u64.into());
+            }
             if let Some(canonical) = serde_json::Number::from_f64(normalized) {
                 return Value::Number(canonical);
             }
@@ -291,6 +296,27 @@ fn exact_i64_from_integral_f64(value: f64) -> Option<i64> {
     let as_i64 = value as i64;
     if as_i64 as f64 == value {
         Some(as_i64)
+    } else {
+        None
+    }
+}
+
+/// Convert an integral finite f64 to u64 when the round-trip is exact.
+///
+/// Covers values from 2^63 through the representable portion of the u64 range
+/// so schema regenerations that emit `9223372036854775808.0` match `as_u64`.
+fn exact_u64_from_integral_f64(value: f64) -> Option<u64> {
+    if value.fract() != 0.0 || value < 0.0 {
+        return None;
+    }
+    // 2^64 is exactly representable in f64; u64::MAX is not.
+    const TWO_POW_64: f64 = 18_446_744_073_709_551_616.0;
+    if !(0.0..TWO_POW_64).contains(&value) {
+        return None;
+    }
+    let as_u64 = value as u64;
+    if as_u64 as f64 == value {
+        Some(as_u64)
     } else {
         None
     }

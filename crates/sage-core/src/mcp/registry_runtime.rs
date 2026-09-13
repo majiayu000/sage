@@ -292,46 +292,51 @@ impl McpRegistry {
 
         // listChanged after tools/list (e.g. during the blocking trust check)
         // cleared the allowlist; refuse to republish the now-stale response.
-        // Build routes first without mutating shared mappings, then publish
-        // under a generation-checked tools write so check+replace stay atomic.
-        let mut routed_tools = Vec::with_capacity(trusted_tools.len());
-        let mut new_routes = Vec::with_capacity(trusted_tools.len());
-        let mut pending_namespaced = std::collections::HashSet::new();
-        for (tool, trust_decision) in &trusted_tools {
-            log_mcp_tool_trust_decision(name, &tool.name, trust_decision.clone());
-            self.warn_remote_tool_name_collision(name, &tool.name);
-            let namespaced_name = McpToolAdapter::namespaced_tool_name(name, &tool.name);
-            if self.warn_namespaced_tool_route_collision(
-                name,
-                &tool.name,
-                &namespaced_name,
-                &pending_namespaced,
-            ) {
-                continue;
+        // Claim and publish namespaced routes under a registry-wide lock so two
+        // servers whose IDs normalize identically cannot both pass the collision
+        // check and overwrite each other's route.
+        let routed_tools = {
+            let _route_guard = self.route_publish_lock.lock().await;
+            let mut routed_tools = Vec::with_capacity(trusted_tools.len());
+            let mut new_routes = Vec::with_capacity(trusted_tools.len());
+            let mut pending_namespaced = std::collections::HashSet::new();
+            for (tool, trust_decision) in &trusted_tools {
+                log_mcp_tool_trust_decision(name, &tool.name, trust_decision.clone());
+                self.warn_remote_tool_name_collision(name, &tool.name);
+                let namespaced_name = McpToolAdapter::namespaced_tool_name(name, &tool.name);
+                if self.warn_namespaced_tool_route_collision(
+                    name,
+                    &tool.name,
+                    &namespaced_name,
+                    &pending_namespaced,
+                ) {
+                    continue;
+                }
+                pending_namespaced.insert(namespaced_name.clone());
+                new_routes.push((
+                    namespaced_name,
+                    ToolRoute {
+                        server_name: name.to_string(),
+                        remote_name: tool.name.clone(),
+                    },
+                ));
+                routed_tools.push(tool.clone());
             }
-            pending_namespaced.insert(namespaced_name.clone());
-            new_routes.push((
-                namespaced_name,
-                ToolRoute {
-                    server_name: name.to_string(),
-                    remote_name: tool.name.clone(),
-                },
-            ));
-            routed_tools.push(tool.clone());
-        }
-        client
-            .replace_trusted_tools_if_generation(routed_tools.clone(), list_generation)
-            .await
-            .map_err(|error| {
-                error.with_context(format!(
-                    "while publishing trusted tools for MCP server '{name}'"
-                ))
-            })?;
-        self.tool_mapping
-            .retain(|_, route| route.server_name != name);
-        for (namespaced_name, route) in new_routes {
-            self.tool_mapping.insert(namespaced_name, route);
-        }
+            client
+                .replace_trusted_tools_if_generation(routed_tools.clone(), list_generation)
+                .await
+                .map_err(|error| {
+                    error.with_context(format!(
+                        "while publishing trusted tools for MCP server '{name}'"
+                    ))
+                })?;
+            self.tool_mapping
+                .retain(|_, route| route.server_name != name);
+            for (namespaced_name, route) in new_routes {
+                self.tool_mapping.insert(namespaced_name, route);
+            }
+            routed_tools
+        };
         self.deferred_tools
             .write()
             .replace_server_tools(name.to_string(), routed_tools);
@@ -383,8 +388,11 @@ impl McpRegistry {
             return;
         }
 
-        self.tool_mapping
-            .retain(|_, route| route.server_name != name);
+        {
+            let _route_guard = self.route_publish_lock.lock().await;
+            self.tool_mapping
+                .retain(|_, route| route.server_name != name);
+        }
 
         let discovery_state = match error {
             McpError::Schema { .. } => McpToolDiscoveryState::SchemaError,
