@@ -348,29 +348,35 @@ fn trust_store_upgrades_legacy_required_reorder_without_false_drift()
 -> Result<(), Box<dyn std::error::Error>> {
     let dir = TempDir::new()?;
     let path = dir.path().join("trust.json");
-    let original = McpTool::new("search").with_input_schema(json!({
-        "type": "object",
-        "required": ["b", "a"],
-        "properties": {
-            "a": { "type": "string" },
-            "b": { "type": "string" }
-        }
-    }));
-    let reordered = McpTool::new("search").with_input_schema(json!({
-        "type": "object",
-        "required": ["a", "b"],
-        "properties": {
-            "a": { "type": "string" },
-            "b": { "type": "string" }
-        }
-    }));
+    let original = McpTool::new("search")
+        .with_description("search project docs")
+        .with_input_schema(json!({
+            "type": "object",
+            "required": ["b", "a"],
+            "properties": {
+                "a": { "type": "string" },
+                "b": { "type": "string" }
+            }
+        }));
+    let reordered = McpTool::new("search")
+        .with_description("search project docs")
+        .with_input_schema(json!({
+            "type": "object",
+            "required": ["a", "b"],
+            "properties": {
+                "a": { "type": "string" },
+                "b": { "type": "string" }
+            }
+        }));
 
     // Seed a pre-canonicalization baseline from the original raw schema bytes.
+    // Non-empty description keeps the legacy upgrade path unambiguous.
     let legacy = {
         use sha2::{Digest, Sha256};
         let mut hasher = Sha256::new();
         hasher.update(b"search");
         hasher.update(b"\0");
+        hasher.update(b"search project docs");
         hasher.update(b"\0");
         hasher.update(serde_json::to_vec(&original.input_schema)?);
         hasher
@@ -391,6 +397,50 @@ fn trust_store_upgrades_legacy_required_reorder_without_false_drift()
         store.check_tool("docs", &reordered),
         McpToolTrustDecision::Unchanged
     );
+    Ok(())
+}
+
+#[test]
+fn trust_store_rejects_ambiguous_absent_empty_legacy_upgrade()
+-> Result<(), Box<dyn std::error::Error>> {
+    let dir = TempDir::new()?;
+    let path = dir.path().join("trust.json");
+    let absent = McpTool::new("geo");
+    // Legacy encoding with no description bytes matches both None and Some("").
+    let legacy = {
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(b"geo");
+        hasher.update(b"\0");
+        hasher.update(b"\0");
+        hasher.update(serde_json::to_vec(
+            &super::tool_trust_hash::canonicalize_schema_value(&absent.input_schema),
+        )?);
+        hasher
+            .finalize()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    };
+    std::fs::write(
+        &path,
+        serde_json::to_string_pretty(&serde_json::json!({
+            "tool_hashes": { r#"["docs","geo"]"#: legacy }
+        }))?,
+    )?;
+
+    let empty = McpTool::new("geo").with_description("");
+    let mut store = McpToolTrustStore::load(&path)?;
+    assert!(matches!(
+        store.check_tool("docs", &empty),
+        McpToolTrustDecision::Drift { .. }
+    ));
+
+    let mut store = McpToolTrustStore::load(&path)?;
+    assert!(matches!(
+        store.check_tool("docs", &absent),
+        McpToolTrustDecision::Drift { .. }
+    ));
     Ok(())
 }
 

@@ -7,6 +7,7 @@ use super::source::MergedMcpServerSource;
 use super::tool_trust::{McpToolTrustDecision, McpToolTrustStore, validate_tool_description_trust};
 use super::types::McpTool;
 use crate::config::McpServerConfig;
+use std::collections::HashSet;
 
 pub(crate) fn trusted_mcp_tools_for_server(
     server_name: &str,
@@ -14,6 +15,24 @@ pub(crate) fn trusted_mcp_tools_for_server(
     trust_store: &mut McpToolTrustStore,
     warn_on_drift: bool,
 ) -> Result<Vec<(McpTool, McpToolTrustDecision)>, McpError> {
+    // Reject duplicate names before baselines/routes: call_tool authorizes by
+    // name only, so conflicting schemas in one listing are unsafe to expose.
+    let mut seen_names = HashSet::new();
+    let mut duplicate_names = HashSet::new();
+    for tool in &tools {
+        if !seen_names.insert(tool.name.as_str()) {
+            duplicate_names.insert(tool.name.clone());
+        }
+    }
+    if !duplicate_names.is_empty() {
+        let mut names: Vec<_> = duplicate_names.into_iter().collect();
+        names.sort();
+        return Err(McpError::schema(format!(
+            "MCP server '{server_name}' returned duplicate tool names: {}",
+            names.join(", ")
+        )));
+    }
+
     let mut trusted_tools = Vec::with_capacity(tools.len());
     for tool in tools {
         validate_mcp_tool_schema(server_name, &tool)?;

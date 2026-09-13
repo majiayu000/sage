@@ -12,7 +12,8 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use tool_trust_hash::{
-    collapse_whitespace, legacy_raw_baseline_matches, prior_canonical_tool_hash, tool_hash,
+    collapse_whitespace, description_option_ambiguous, legacy_raw_baseline_matches,
+    prior_canonical_tool_hash, tool_hash,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -94,8 +95,11 @@ impl McpToolTrustStore {
                 // Upgrade known prior encodings in place. Legacy case-folded
                 // description hashes are not accepted: they cannot prove letter
                 // case was unchanged and require explicit re-baselining.
-                if previous == &prior_canonical_tool_hash(tool)
-                    || legacy_raw_baseline_matches(previous, tool)
+                // Absent vs empty descriptions also collide under legacy
+                // encodings, so refuse those upgrades as ambiguous.
+                if !description_option_ambiguous(tool)
+                    && (previous == &prior_canonical_tool_hash(tool)
+                        || legacy_raw_baseline_matches(previous, tool))
                 {
                     self.tool_hashes.insert(key, hash);
                     self.dirty = true;

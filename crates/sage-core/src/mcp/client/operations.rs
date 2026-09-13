@@ -35,24 +35,26 @@ impl McpClient {
     pub async fn call_tool(&self, name: &str, arguments: Value) -> Result<McpToolResult, McpError> {
         self.ensure_initialized().await?;
 
-        // When the registry has installed a trusted-tool allowlist, refuse tools
-        // that were later skipped for trust-baseline drift. Direct clients leave
-        // the allowlist inactive so initialize → list_tools → call_tool works.
-        if self.trusted_tool_allowlist_active() {
-            let allowed = self
-                .cached_tools()
-                .await
-                .iter()
-                .any(|tool| tool.name == name);
-            if !allowed {
-                return Err(McpError::tool_not_found(name.to_string()));
-            }
-        }
-
         let params = json!({
             "name": name,
             "arguments": arguments
         });
+
+        // When the registry has installed a trusted-tool allowlist, refuse tools
+        // that were later skipped for trust-baseline drift. Direct clients leave
+        // the allowlist inactive so initialize → list_tools → call_tool works.
+        // Hold the tools read guard across the remote call so a concurrent
+        // replace_trusted_tools (drift revoke) cannot clear authorization after
+        // this check and still let tools/call proceed.
+        if self.trusted_tool_allowlist_active() {
+            let authorization = self.tools().read().await;
+            if !authorization.iter().any(|tool| tool.name == name) {
+                return Err(McpError::tool_not_found(name.to_string()));
+            }
+            let result: McpToolResult = self.call(methods::TOOLS_CALL, Some(params)).await?;
+            drop(authorization);
+            return Ok(result);
+        }
 
         let result: McpToolResult = self.call(methods::TOOLS_CALL, Some(params)).await?;
         Ok(result)

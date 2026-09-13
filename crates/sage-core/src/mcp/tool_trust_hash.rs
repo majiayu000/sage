@@ -36,7 +36,7 @@ pub(super) fn legacy_raw_baseline_matches(previous: &str, tool: &McpTool) -> boo
         .iter()
         .any(|schema| {
             previous
-                == &hash_tool_parts(
+                == hash_tool_parts(
                     &tool.name,
                     DescriptionEncoding::Legacy(tool.description.clone()),
                     schema,
@@ -77,8 +77,9 @@ fn hash_tool_parts(name: &str, description: DescriptionEncoding, schema: &Value)
 /// Normalize JSON Schema for trust hashing: sort object keys and order-insensitive
 /// set-like arrays such as `required`, `enum`, and multi-type `type`.
 ///
-/// Arrays beneath literal-valued keywords (`const`, `default`, and `enum` item
-/// values) keep their original order so semantically distinct literals diverge.
+/// Arrays beneath literal-valued keywords (`const`, `default`, `examples`, and
+/// `enum` item values) keep their original order so semantically distinct
+/// literals diverge.
 pub(super) fn canonicalize_schema_value(value: &Value) -> Value {
     canonicalize_schema_value_inner(value, false)
 }
@@ -113,7 +114,21 @@ fn canonicalize_schema_value_inner(value: &Value, in_literal: bool) -> Value {
 }
 
 fn is_literal_valued_schema_key(key: &str) -> bool {
-    matches!(key, "const" | "default")
+    matches!(key, "const" | "default" | "examples")
+}
+
+/// Legacy encodings omit an Option discriminant, so absent and empty
+/// descriptions collide and cannot safely prove the option state is unchanged.
+pub(super) fn description_option_ambiguous(tool: &McpTool) -> bool {
+    match tool
+        .description
+        .as_deref()
+        .map(collapse_whitespace)
+        .as_deref()
+    {
+        None | Some("") => true,
+        Some(_) => false,
+    }
 }
 
 fn is_order_insensitive_schema_key(key: &str) -> bool {
@@ -242,7 +257,7 @@ fn heap_permute(items: &mut [Value], k: usize, out: &mut Vec<Vec<Value>>, budget
         if out.len() >= budget {
             return;
         }
-        if k % 2 == 0 {
+        if k.is_multiple_of(2) {
             items.swap(i, k - 1);
         } else {
             items.swap(0, k - 1);
@@ -327,6 +342,17 @@ mod tests {
         }));
         let right = McpTool::new("auth").with_input_schema(json!({
             "const": { "required": ["user", "admin"] }
+        }));
+        assert_ne!(tool_hash(&left), tool_hash(&right));
+    }
+
+    #[test]
+    fn tool_hash_preserves_examples_required_array_order() {
+        let left = McpTool::new("auth").with_input_schema(json!({
+            "examples": [{ "required": ["admin", "user"] }]
+        }));
+        let right = McpTool::new("auth").with_input_schema(json!({
+            "examples": [{ "required": ["user", "admin"] }]
         }));
         assert_ne!(tool_hash(&left), tool_hash(&right));
     }

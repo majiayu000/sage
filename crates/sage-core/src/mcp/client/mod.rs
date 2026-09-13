@@ -322,6 +322,10 @@ impl McpClient {
         &self.resources
     }
 
+    pub(crate) fn tools(&self) -> &RwLock<Vec<McpTool>> {
+        &self.tools
+    }
+
     pub(crate) fn prompts(&self) -> &RwLock<Vec<McpPrompt>> {
         &self.prompts
     }

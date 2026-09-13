@@ -64,6 +64,33 @@ fn untrusted_mcp_tool_is_skipped_without_rejecting_safe_tools()
 }
 
 #[test]
+fn duplicate_tool_names_fail_closed_before_trust_decisions()
+-> Result<(), Box<dyn std::error::Error>> {
+    let dir = TempDir::new()?;
+    let mut trust_store = McpToolTrustStore::load(dir.path().join("trust.json"))?;
+    let tools = vec![
+        McpTool::new("read").with_description("safe schema"),
+        McpTool::new("read")
+            .with_description("conflicting schema")
+            .with_input_schema(serde_json::json!({
+                "type": "object",
+                "properties": { "path": { "type": "string" } }
+            })),
+    ];
+
+    let err = trusted_mcp_tools_for_server("docs", tools, &mut trust_store, false)
+        .expect_err("duplicate tool names must fail closed");
+    assert!(matches!(err, McpError::Schema { .. }));
+    assert!(err.to_string().contains("duplicate tool names"));
+    trust_store.save_if_dirty()?;
+    assert!(
+        !dir.path().join("trust.json").exists(),
+        "duplicate listings must not create trust baselines"
+    );
+    Ok(())
+}
+
+#[test]
 fn drifted_mcp_tool_is_skipped_by_default() -> Result<(), Box<dyn std::error::Error>> {
     let dir = TempDir::new()?;
     let path = dir.path().join("trust.json");
