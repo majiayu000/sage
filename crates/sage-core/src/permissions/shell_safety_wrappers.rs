@@ -84,7 +84,10 @@ fn strip_env_short_cluster<'a>(option: &str, rest: &'a str) -> Option<&'a str> {
     if chars.is_empty() {
         return Some(rest);
     }
-    if chars.iter().any(|c| !matches!(c, 'i' | '0' | 'v' | 'u' | 'C' | 'S' | 'a')) {
+    if chars
+        .iter()
+        .any(|c| !matches!(c, 'i' | '0' | 'v' | 'u' | 'C' | 'S' | 'a'))
+    {
         return None;
     }
     let needs_arg = matches!(chars.last(), Some('u' | 'C' | 'S' | 'a'));
