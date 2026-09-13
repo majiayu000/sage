@@ -20,15 +20,18 @@ mod shell_safety_normalize;
 mod shell_safety_scan;
 #[path = "shell_safety_words.rs"]
 mod shell_safety_words;
+#[path = "shell_safety_wrappers.rs"]
+mod shell_safety_wrappers;
 use shell_safety_normalize::normalized_command_segments;
 use shell_safety_scan::{
     contains_unquoted_shell_control_metachar, shell_command_segments, substitution_body_segments,
 };
 use shell_safety_words::{
-    normalize_shell_whitespace, quote_removed_shell_word, skip_shell_whitespace, skip_shell_word,
-    split_shell_word, starts_shell_comment, strip_shell_command_word_prefix,
-    strip_shell_word_prefix,
+    normalize_shell_whitespace, quote_removed_shell_word, reduce_first_command_word_to_basename,
+    skip_shell_whitespace, skip_shell_word, split_shell_word, starts_shell_comment,
+    strip_shell_command_word_prefix, strip_shell_word_prefix,
 };
+use shell_safety_wrappers::strip_shell_utility_wrappers;
 
 pub(crate) const UNKNOWN_EXEC_SEGMENT: &str = "__sage_unknown_shell_execution__";
 
@@ -82,10 +85,15 @@ pub(crate) fn command_segments(command: &str) -> Vec<String> {
 }
 
 /// Strip leading `VAR=value` assignments so `FOO=1 rm -rf x` is matched as
-/// `rm -rf x`.
+/// `rm -rf x`. Also strips utility wrappers and reduces path-qualified
+/// command words to basename so `env rm`, `nice rm`, and `/bin/rm` match
+/// deny rules like `Bash(rm *)`.
 fn normalize_command_segment(segment: &str) -> String {
     let rest = strip_leading_assignment_words(segment);
-    normalize_shell_whitespace(&quote_removed_shell_word(strip_shell_leading_syntax(rest)))
+    let stripped = strip_shell_leading_syntax(rest);
+    let unquoted = quote_removed_shell_word(stripped);
+    let basenamed = reduce_first_command_word_to_basename(&unquoted);
+    normalize_shell_whitespace(&basenamed)
 }
 
 fn strip_leading_assignment_words(mut segment: &str) -> &str {
@@ -246,6 +254,7 @@ fn strip_shell_leading_syntax(mut segment: &str) -> &str {
         segment = strip_shell_group_prefixes(segment);
         segment = strip_shell_time_prefix(segment);
         segment = strip_shell_command_prefixes(segment);
+        segment = strip_shell_utility_wrappers(segment);
         segment = strip_shell_reserved_prefixes(segment);
         if segment.len() == before_len {
             return segment;

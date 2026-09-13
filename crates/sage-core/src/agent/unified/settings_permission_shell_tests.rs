@@ -197,6 +197,20 @@ fn test_deny_matches_chained_command_segment() {
         "eval -- rm -rf important/",
         "builtin -- eval rm -rf important/",
         "$(printf rm) -rf important/",
+        "env rm -rf important/",
+        "env -i rm -rf important/",
+        "env FOO=1 rm -rf important/",
+        "/usr/bin/env rm -rf important/",
+        "nice rm -rf important/",
+        "nice -n 19 rm -rf important/",
+        "nohup rm -rf important/",
+        "stdbuf -oL rm -rf important/",
+        "timeout 10 rm -rf important/",
+        "timeout -k 5 10 rm -rf important/",
+        "/bin/rm -rf important/",
+        "/usr/bin/rm -rf important/",
+        "./rm -rf important/",
+        "env nice /bin/rm -rf important/",
     ] {
         assert!(
             matches!(

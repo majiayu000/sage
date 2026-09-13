@@ -167,6 +167,36 @@ fn strips_shell_command_prefixes() {
 }
 
 #[test]
+fn strips_utility_wrappers_and_path_qualified_binaries() {
+    for command in [
+        "env rm -rf important/",
+        "env -i rm -rf important/",
+        "env FOO=1 rm -rf important/",
+        "/usr/bin/env rm -rf important/",
+        "nice rm -rf important/",
+        "nice -n 19 rm -rf important/",
+        "nice -10 rm -rf important/",
+        "nohup rm -rf important/",
+        "nohup -- rm -rf important/",
+        "stdbuf -oL rm -rf important/",
+        "stdbuf -i0 -oL -eL rm -rf important/",
+        "timeout 10 rm -rf important/",
+        "timeout -k 5 10 rm -rf important/",
+        "timeout --foreground 10 rm -rf important/",
+        "/bin/rm -rf important/",
+        "/usr/bin/rm -rf important/",
+        "./rm -rf important/",
+        "env nice nohup /bin/rm -rf important/",
+    ] {
+        let segments = command_segments(command);
+        assert!(
+            segments.contains(&"rm -rf important/".to_string()),
+            "expected wrapper/path normalization for: {command}; got {segments:?}"
+        );
+    }
+}
+
+#[test]
 fn strips_shell_negation_prefix() {
     let segments = command_segments("! rm -rf important/");
     assert!(segments.contains(&"rm -rf important/".to_string()));
