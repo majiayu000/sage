@@ -124,8 +124,9 @@ fn hash_tool_parts(name: &str, description: DescriptionEncoding, schema: &Value)
 }
 
 /// Normalize JSON Schema for trust hashing: sort object keys and order-insensitive
-/// arrays (`required`, `enum`, multi-type `type`, `allOf`/`anyOf`/`oneOf`, and
-/// `dependentRequired` value arrays).
+/// arrays (`required`, `enum`, multi-type `type`, `allOf`/`anyOf`/`oneOf`,
+/// `dependentRequired` value arrays, and Draft-7 `dependencies` property arrays).
+/// Integer-valued JSON numbers (`1` / `1.0`) share one representation.
 ///
 /// Arrays beneath literal-valued keywords (`const`, `default`, `examples`, and
 /// `enum` item values) keep their original order. Keys inside schema-valued maps
@@ -174,6 +175,7 @@ fn canonicalize_schema_value_inner(value: &Value, mode: TraverseMode) -> Value {
                 .map(|item| canonicalize_schema_value_inner(item, mode))
                 .collect(),
         ),
+        Value::Number(number) => canonicalize_json_number(number),
         other => other.clone(),
     }
 }
@@ -182,7 +184,11 @@ fn child_mode_for_schema_key(key: &str, child: &Value) -> Value {
     if is_schema_valued_map_key(key) {
         canonicalize_schema_value_inner(child, TraverseMode::SchemaMap)
     } else if key == "dependentRequired" {
-        canonicalize_dependent_required_map(child)
+        canonicalize_property_dependency_map(child, false)
+    } else if key == "dependencies" {
+        // Draft-7: array values are property deps (order-insensitive); object
+        // values are schema deps and stay schemas.
+        canonicalize_property_dependency_map(child, true)
     } else if is_literal_valued_schema_key(key) {
         canonicalize_schema_value_inner(child, TraverseMode::Literal)
     } else if is_order_insensitive_schema_key(key) {
@@ -192,7 +198,12 @@ fn child_mode_for_schema_key(key: &str, child: &Value) -> Value {
     }
 }
 
-fn canonicalize_dependent_required_map(value: &Value) -> Value {
+/// Canonicalize `dependentRequired` / Draft-7 `dependencies` maps.
+///
+/// When `schema_valued_entries` is true (Draft-7 `dependencies`), non-array
+/// values are treated as schemas. When false (`dependentRequired`), every value
+/// is treated as a property-name array.
+fn canonicalize_property_dependency_map(value: &Value, schema_valued_entries: bool) -> Value {
     match value {
         Value::Object(map) => {
             let mut sorted: Vec<_> = map.iter().collect();
@@ -200,12 +211,49 @@ fn canonicalize_dependent_required_map(value: &Value) -> Value {
             Value::Object(
                 sorted
                     .into_iter()
-                    .map(|(key, child)| (key.clone(), canonicalize_set_like_array(child, true)))
+                    .map(|(key, child)| {
+                        let canon = if schema_valued_entries {
+                            match child {
+                                Value::Array(_) => canonicalize_set_like_array(child, true),
+                                other => {
+                                    canonicalize_schema_value_inner(other, TraverseMode::Schema)
+                                }
+                            }
+                        } else {
+                            canonicalize_set_like_array(child, true)
+                        };
+                        (key.clone(), canon)
+                    })
                     .collect(),
             )
         }
         other => canonicalize_schema_value_inner(other, TraverseMode::Schema),
     }
+}
+
+fn canonicalize_json_number(number: &serde_json::Number) -> Value {
+    if let Some(i) = number.as_i64() {
+        return Value::Number(i.into());
+    }
+    if let Some(u) = number.as_u64() {
+        return Value::Number(u.into());
+    }
+    if let Some(f) = number.as_f64() {
+        if f.is_finite() {
+            let normalized = if f == -0.0 { 0.0 } else { f };
+            // Integer-valued floats share the integer spelling (`1` == `1.0`).
+            if normalized.fract() == 0.0
+                && normalized >= i64::MIN as f64
+                && normalized <= i64::MAX as f64
+            {
+                return Value::Number((normalized as i64).into());
+            }
+            if let Some(canonical) = serde_json::Number::from_f64(normalized) {
+                return Value::Number(canonical);
+            }
+        }
+    }
+    Value::Number(number.clone())
 }
 
 pub(super) fn is_literal_valued_schema_key(key: &str) -> bool {

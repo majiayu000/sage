@@ -255,6 +255,65 @@ fn tool_hash_canonicalizes_dependent_required_value_order() {
 }
 
 #[test]
+fn tool_hash_canonicalizes_draft7_dependencies_array_order() {
+    let left = McpTool::new("pay").with_input_schema(json!({
+        "dependencies": {
+            "credit_card": ["billing_address", "name"]
+        }
+    }));
+    let right = McpTool::new("pay").with_input_schema(json!({
+        "dependencies": {
+            "credit_card": ["name", "billing_address"]
+        }
+    }));
+    assert_eq!(tool_hash(&left), tool_hash(&right));
+}
+
+#[test]
+fn tool_hash_preserves_draft7_schema_dependency_structure() {
+    let left = McpTool::new("pay").with_input_schema(json!({
+        "dependencies": {
+            "credit_card": {
+                "properties": {
+                    "billing_address": { "type": "string" }
+                },
+                "required": ["billing_address"]
+            }
+        }
+    }));
+    let right = McpTool::new("pay").with_input_schema(json!({
+        "dependencies": {
+            "credit_card": {
+                "required": ["billing_address"],
+                "properties": {
+                    "billing_address": { "type": "string" }
+                }
+            }
+        }
+    }));
+    assert_eq!(tool_hash(&left), tool_hash(&right));
+}
+
+#[test]
+fn tool_hash_canonicalizes_equivalent_json_numbers() {
+    let left = McpTool::new("scale").with_input_schema(json!({
+        "type": "object",
+        "properties": {
+            "step": { "type": "number", "multipleOf": 1 },
+            "mode": { "enum": [1, 2] }
+        }
+    }));
+    let right = McpTool::new("scale").with_input_schema(json!({
+        "type": "object",
+        "properties": {
+            "step": { "type": "number", "multipleOf": 1.0 },
+            "mode": { "enum": [1.0, 2.0] }
+        }
+    }));
+    assert_eq!(tool_hash(&left), tool_hash(&right));
+}
+
+#[test]
 fn tool_hash_ignores_allof_anyof_oneof_branch_order() {
     let left = McpTool::new("shape").with_input_schema(json!({
         "allOf": [
@@ -534,11 +593,13 @@ fn trust_store_rejects_cross_format_description_preimage() -> Result<(), Box<dyn
         McpToolTrustDecision::Drift { .. }
     ));
 
-    // Plain (unversioned) current-format hashes are also fail-closed.
+    // Plain (unversioned) current-format hashes under a migrated file version
+    // remain fail-closed against cross-format preimages.
     let current_hash = super::tool_trust_hash::tool_hash(&safe);
     std::fs::write(
         &path,
         serde_json::to_string_pretty(&serde_json::json!({
+            "version": 1,
             "tool_hashes": { r#"["docs","geo"]"#: current_hash }
         }))?,
     )?;
@@ -547,6 +608,60 @@ fn trust_store_rejects_cross_format_description_preimage() -> Result<(), Box<dyn
         plain.check_tool("docs", &preimage),
         McpToolTrustDecision::Drift { .. }
     ));
+    Ok(())
+}
+
+#[test]
+fn trust_store_upgrades_parent_release_plain_legacy_hashes()
+-> Result<(), Box<dyn std::error::Error>> {
+    let dir = TempDir::new()?;
+    let path = dir.path().join("trust.json");
+    let tool = McpTool::new("search")
+        .with_description("search project docs")
+        .with_input_schema(json!({
+            "type": "object",
+            "required": ["b", "a"],
+            "properties": {
+                "a": { "type": "string" },
+                "b": { "type": "string" }
+            }
+        }));
+    let legacy = {
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(b"search");
+        hasher.update(b"\0");
+        hasher.update(b"search project docs");
+        hasher.update(b"\0");
+        hasher.update(serde_json::to_vec(&tool.input_schema)?);
+        hasher
+            .finalize()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    };
+    // Parent release: plain string hashes, no file version field.
+    std::fs::write(
+        &path,
+        serde_json::to_string_pretty(&serde_json::json!({
+            "tool_hashes": { r#"["docs","search"]"#: legacy }
+        }))?,
+    )?;
+    let reordered = McpTool::new("search")
+        .with_description("search project docs")
+        .with_input_schema(json!({
+            "type": "object",
+            "required": ["a", "b"],
+            "properties": {
+                "a": { "type": "string" },
+                "b": { "type": "string" }
+            }
+        }));
+    let mut store = McpToolTrustStore::load(&path)?;
+    assert_eq!(
+        store.check_tool("docs", &reordered),
+        McpToolTrustDecision::Unchanged
+    );
     Ok(())
 }
 

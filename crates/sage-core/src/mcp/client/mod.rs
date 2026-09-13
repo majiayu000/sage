@@ -43,12 +43,14 @@ pub struct McpClient {
     server_info: RwLock<Option<McpServerInfo>>,
     /// Server capabilities
     capabilities: RwLock<McpCapabilities>,
-    /// Cached tools
-    tools: RwLock<Vec<McpTool>>,
+    /// Cached tools (shared with the background receiver for listChanged revoke)
+    tools: Arc<RwLock<Vec<McpTool>>>,
     /// When true, `call_tool` only allows names present in the trusted-tool cache.
     /// Registry refresh activates this; direct clients leave it off so
     /// initialize → list_tools → call_tool keeps working.
-    trusted_tool_allowlist: AtomicBool,
+    /// Shared with the receiver so `notifications/tools/listChanged` can clear
+    /// the allowlist without waiting for the next registry refresh.
+    trusted_tool_allowlist: Arc<AtomicBool>,
     /// Cached resources
     resources: RwLock<Vec<McpResource>>,
     /// Cached prompts
@@ -80,6 +82,8 @@ impl McpClient {
         let (command_sender, command_receiver) = mpsc::channel(100);
         let transport = Arc::new(Mutex::new(transport));
         let running = Arc::new(AtomicBool::new(true));
+        let tools = Arc::new(RwLock::new(Vec::new()));
+        let trusted_tool_allowlist = Arc::new(AtomicBool::new(false));
 
         // Start background message receiver
         let transport_clone = Arc::clone(&transport);
@@ -88,14 +92,16 @@ impl McpClient {
             transport_clone,
             command_receiver,
             running_clone,
+            Arc::clone(&tools),
+            Arc::clone(&trusted_tool_allowlist),
         ));
 
         Self {
             transport: Arc::clone(&transport),
             server_info: RwLock::new(None),
             capabilities: RwLock::new(McpCapabilities::default()),
-            tools: RwLock::new(Vec::new()),
-            trusted_tool_allowlist: AtomicBool::new(false),
+            tools,
+            trusted_tool_allowlist,
             resources: RwLock::new(Vec::new()),
             prompts: RwLock::new(Vec::new()),
             request_id: AtomicU64::new(1),
@@ -323,7 +329,7 @@ impl McpClient {
     }
 
     pub(crate) fn tools(&self) -> &RwLock<Vec<McpTool>> {
-        &self.tools
+        self.tools.as_ref()
     }
 
     pub(crate) fn prompts(&self) -> &RwLock<Vec<McpPrompt>> {

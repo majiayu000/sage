@@ -28,9 +28,14 @@ const CURRENT_HASH_ENCODING: u32 = 1;
 /// Pre-current / unknown-legacy encoding. Only this value may use legacy matching.
 const LEGACY_HASH_ENCODING: u32 = 0;
 
-/// Stored baseline hash. Plain strings are treated as the current encoding so
-/// ambiguous pre-versioning current baselines cannot accept cross-format
-/// legacy preimages. Explicit `encoding: 0` marks a known pre-current baseline.
+/// Trust-file format version. Missing/`0` is the pre-versioning parent release
+/// (`BTreeMap<String, String>` plain hashes). `1` is the versioned encoding era.
+const TRUST_FILE_VERSION: u32 = 1;
+
+/// Stored baseline hash. Untagged plain strings from parent-release files
+/// (file version 0) are treated as legacy encodings so upgrades can migrate.
+/// Once the file is at `TRUST_FILE_VERSION`, any remaining plain string is
+/// treated as the current encoding (fail-closed against cross-format preimages).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 enum StoredToolHash {
@@ -60,29 +65,35 @@ impl StoredToolHash {
         }
     }
 
-    fn encoding(&self) -> u32 {
+    fn encoding(&self, file_version: u32) -> u32 {
         match self {
-            // Plain pre-versioning entries may already be current-format; do
-            // not reinterpret them via legacy matching.
+            // Parent-release plain strings were produced by the legacy hasher.
+            Self::Plain(_) if file_version < TRUST_FILE_VERSION => LEGACY_HASH_ENCODING,
+            // After the file has been migrated, plain strings are fail-closed.
             Self::Plain(_) => CURRENT_HASH_ENCODING,
             Self::Versioned { encoding, .. } => *encoding,
         }
     }
 
-    fn allows_legacy_match(&self) -> bool {
-        self.encoding() == LEGACY_HASH_ENCODING
+    fn allows_legacy_match(&self, file_version: u32) -> bool {
+        self.encoding(file_version) == LEGACY_HASH_ENCODING
     }
 
-    fn needs_encoding_persist(&self) -> bool {
+    fn needs_encoding_persist(&self, file_version: u32) -> bool {
         match self {
             Self::Plain(_) => true,
-            Self::Versioned { encoding, .. } => *encoding != CURRENT_HASH_ENCODING,
+            Self::Versioned { encoding, .. } => {
+                *encoding != CURRENT_HASH_ENCODING || file_version < TRUST_FILE_VERSION
+            }
         }
     }
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct McpToolTrustFile {
+    /// Absent/`0` = parent-release plain-hash file; `1` = versioned encodings.
+    #[serde(default)]
+    version: u32,
     #[serde(default)]
     tool_hashes: BTreeMap<String, StoredToolHash>,
 }
@@ -90,6 +101,7 @@ struct McpToolTrustFile {
 #[derive(Debug, Clone)]
 pub(crate) struct McpToolTrustStore {
     path: PathBuf,
+    file_version: u32,
     tool_hashes: BTreeMap<String, StoredToolHash>,
     dirty: bool,
 }
@@ -117,6 +129,7 @@ impl McpToolTrustStore {
         if !path.exists() {
             return Ok(Self {
                 path,
+                file_version: TRUST_FILE_VERSION,
                 tool_hashes: BTreeMap::new(),
                 dirty: false,
             });
@@ -139,6 +152,7 @@ impl McpToolTrustStore {
 
         Ok(Self {
             path,
+            file_version: file.version,
             tool_hashes: file.tool_hashes,
             dirty: false,
         })
@@ -151,25 +165,27 @@ impl McpToolTrustStore {
             Some(previous) if previous.hash() == hash => {
                 // Persist versioned current encoding on exact matches so plain
                 // and legacy-tagged current hashes stop accepting legacy fallback.
-                if previous.needs_encoding_persist() {
+                if previous.needs_encoding_persist(self.file_version) {
                     self.tool_hashes.insert(key, StoredToolHash::current(hash));
+                    self.file_version = TRUST_FILE_VERSION;
                     self.dirty = true;
                 }
                 McpToolTrustDecision::Unchanged
             }
             Some(previous) => {
-                // Upgrade only versioned-as-legacy / plain pre-canonicalization
+                // Upgrade only versioned-as-legacy / parent-release plain
                 // baselines (raw schema bytes with set-array reorder
                 // equivalence). Current-encoding baselines must not fall back
                 // to legacy hashing — that admits cross-format preimages
                 // (e.g. current("Safe") == legacy("1Safe")). Prior lossy
                 // canonicalizers and absent/empty description collisions still
                 // require explicit re-baselining.
-                if previous.allows_legacy_match()
+                if previous.allows_legacy_match(self.file_version)
                     && !description_option_ambiguous(tool)
                     && legacy_raw_baseline_matches(previous.hash(), tool)
                 {
                     self.tool_hashes.insert(key, StoredToolHash::current(hash));
+                    self.file_version = TRUST_FILE_VERSION;
                     self.dirty = true;
                     return McpToolTrustDecision::Unchanged;
                 }
@@ -181,6 +197,7 @@ impl McpToolTrustStore {
             None => {
                 self.tool_hashes
                     .insert(key, StoredToolHash::current(hash.clone()));
+                self.file_version = TRUST_FILE_VERSION;
                 self.dirty = true;
                 McpToolTrustDecision::BaselineCreated { hash }
             }
@@ -201,6 +218,7 @@ impl McpToolTrustStore {
             })?;
         }
         let content = serde_json::to_string_pretty(&McpToolTrustFile {
+            version: TRUST_FILE_VERSION,
             tool_hashes: self.tool_hashes.clone(),
         })
         .map_err(|error| {
@@ -209,6 +227,7 @@ impl McpToolTrustStore {
             ))
         })?;
         atomic_write(&self.path, content.as_bytes())?;
+        self.file_version = TRUST_FILE_VERSION;
         self.dirty = false;
         Ok(())
     }

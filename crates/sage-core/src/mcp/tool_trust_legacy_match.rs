@@ -71,16 +71,10 @@ fn collect_set_array_lengths(value: &Value, mode: TraverseMode, out: &mut Vec<us
     match value {
         Value::Object(map) => {
             for (key, child) in map {
-                if matches!(mode, TraverseMode::Schema) && key == "dependentRequired" {
-                    if let Value::Object(deps) = child {
-                        for reqs in deps.values() {
-                            if let Value::Array(items) = reqs
-                                && items.len() > 1
-                            {
-                                out.push(items.len());
-                            }
-                        }
-                    }
+                if matches!(mode, TraverseMode::Schema)
+                    && matches!(key.as_str(), "dependentRequired" | "dependencies")
+                {
+                    collect_property_dependency_lengths(child, key == "dependencies", out);
                     continue;
                 }
                 let child_mode = match mode {
@@ -225,8 +219,15 @@ fn find_set_array_path_excluding_inner(
             for (key, child) in map {
                 let mut here = prefix.to_vec();
                 here.push(PathStep::Key(key.clone()));
-                if matches!(mode, TraverseMode::Schema) && key == "dependentRequired" {
-                    if let Some(path) = find_dependent_required_set_array(child, &here, exclude) {
+                if matches!(mode, TraverseMode::Schema)
+                    && matches!(key.as_str(), "dependentRequired" | "dependencies")
+                {
+                    if let Some(path) = find_property_dependency_set_array(
+                        child,
+                        &here,
+                        exclude,
+                        key == "dependencies",
+                    ) {
                         return Some(path);
                     }
                     continue;
@@ -279,22 +280,49 @@ fn find_set_array_path_excluding_inner(
     }
 }
 
-fn find_dependent_required_set_array(
+fn collect_property_dependency_lengths(
+    value: &Value,
+    schema_valued_entries: bool,
+    out: &mut Vec<usize>,
+) {
+    let Value::Object(deps) = value else {
+        return;
+    };
+    for child in deps.values() {
+        match child {
+            Value::Array(items) if items.len() > 1 => out.push(items.len()),
+            other if schema_valued_entries => {
+                collect_set_array_lengths(other, TraverseMode::Schema, out);
+            }
+            _ => {}
+        }
+    }
+}
+
+fn find_property_dependency_set_array(
     value: &Value,
     prefix: &[PathStep],
     exclude: &[Vec<PathStep>],
+    schema_valued_entries: bool,
 ) -> Option<Vec<PathStep>> {
     let Value::Object(map) = value else {
         return None;
     };
-    for (prop, reqs) in map {
+    for (prop, child) in map {
         let mut here = prefix.to_vec();
         here.push(PathStep::Key(prop.clone()));
-        if let Value::Array(items) = reqs
-            && items.len() > 1
-            && !path_in_excludes(&here, exclude)
-        {
-            return Some(here);
+        match child {
+            Value::Array(items) if items.len() > 1 && !path_in_excludes(&here, exclude) => {
+                return Some(here);
+            }
+            other if schema_valued_entries => {
+                if let Some(sub) =
+                    find_set_array_path_excluding_inner(other, TraverseMode::Schema, exclude, &here)
+                {
+                    return Some(sub);
+                }
+            }
+            _ => {}
         }
     }
     None

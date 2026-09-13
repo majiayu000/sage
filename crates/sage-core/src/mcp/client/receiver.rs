@@ -1,11 +1,13 @@
 //! Background message receiver for MCP client
 
+use super::super::notifications::methods as notification_methods;
 use super::super::protocol::{McpMessage, McpResponse, McpRpcError, RequestId};
 use super::super::transport::McpTransport;
+use super::super::types::McpTool;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use tokio::sync::{Mutex, mpsc, oneshot};
+use tokio::sync::{Mutex, RwLock, mpsc, oneshot};
 use tracing::{debug, error, warn};
 
 /// Message sender command for the background receiver
@@ -24,6 +26,8 @@ pub(super) async fn message_receiver(
     transport: Arc<Mutex<Box<dyn McpTransport>>>,
     mut command_receiver: mpsc::Receiver<ReceiverCommand>,
     running: Arc<AtomicBool>,
+    tools: Arc<RwLock<Vec<McpTool>>>,
+    trusted_tool_allowlist: Arc<AtomicBool>,
 ) {
     let mut pending_requests: HashMap<String, oneshot::Sender<McpResponse>> = HashMap::new();
 
@@ -61,7 +65,15 @@ pub(super) async fn message_receiver(
                             }
                             McpMessage::Notification(notification) => {
                                 debug!("Received notification: {}", notification.method);
-                                // Notifications are logged; custom handlers can be added
+                                if notification.method
+                                    == notification_methods::TOOLS_LIST_CHANGED
+                                {
+                                    clear_trusted_allowlist_if_active(
+                                        &tools,
+                                        &trusted_tool_allowlist,
+                                    )
+                                    .await;
+                                }
                             }
                             McpMessage::Request(request) => {
                                 // Server-initiated requests (rare in current MCP usage)
@@ -86,5 +98,40 @@ pub(super) async fn message_receiver(
                 }
             }
         }
+    }
+}
+
+/// Fail-closed: clear the registry allowlist so drifted/changed tools cannot be
+/// called by name until the next capability refresh.
+pub(super) async fn clear_trusted_allowlist_if_active(
+    tools: &RwLock<Vec<McpTool>>,
+    trusted_tool_allowlist: &AtomicBool,
+) {
+    if trusted_tool_allowlist.load(Ordering::Acquire) {
+        tools.write().await.clear();
+        debug!("Cleared trusted-tool allowlist after tools/listChanged");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::mcp::types::McpTool;
+
+    #[tokio::test]
+    async fn list_changed_clears_active_allowlist() {
+        let tools = RwLock::new(vec![McpTool::new("read")]);
+        let allowlist = AtomicBool::new(true);
+        clear_trusted_allowlist_if_active(&tools, &allowlist).await;
+        assert!(tools.read().await.is_empty());
+        assert!(allowlist.load(Ordering::Acquire));
+    }
+
+    #[tokio::test]
+    async fn list_changed_leaves_inactive_direct_client_cache() {
+        let tools = RwLock::new(vec![McpTool::new("read")]);
+        let allowlist = AtomicBool::new(false);
+        clear_trusted_allowlist_if_active(&tools, &allowlist).await;
+        assert_eq!(tools.read().await.len(), 1);
     }
 }
