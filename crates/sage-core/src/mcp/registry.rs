@@ -27,7 +27,8 @@ pub(crate) struct ToolRoute {
 
 /// Process-wide lock for the shared `mcp_tool_trust.json` load/check/save
 /// transaction. Separate `McpRegistry` instances must share this lock so
-/// concurrent first baselines cannot overwrite each other.
+/// concurrent first baselines cannot overwrite each other. Cross-process
+/// coordination uses `ToolTrustFileLock` inside the trust-store load path.
 pub(crate) fn global_tool_trust_lock() -> Arc<tokio::sync::Mutex<()>> {
     static LOCK: OnceLock<Arc<tokio::sync::Mutex<()>>> = OnceLock::new();
     LOCK.get_or_init(|| Arc::new(tokio::sync::Mutex::new(())))
@@ -211,8 +212,15 @@ impl McpRegistry {
         }
     }
 
-    /// Unregister and disconnect from an MCP server
+    /// Unregister and disconnect from an MCP server.
+    ///
+    /// Holds `capability_refresh_lock` so unregister cannot race a registration
+    /// or `all_tools()` refresh that has already passed `is_current_client` and
+    /// is about to publish routes for a client we are closing.
     pub async fn unregister_server(&self, name: &str) -> Result<(), McpError> {
+        let refresh_lock = self.capability_refresh_lock(name);
+        let _refresh_guard = refresh_lock.lock().await;
+
         if let Some((_, client)) = self.clients.remove(name) {
             // Remove mappings for this server
             self.tool_mapping

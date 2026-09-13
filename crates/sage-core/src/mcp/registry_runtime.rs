@@ -248,12 +248,15 @@ impl McpRegistry {
         // Serialize the process-wide trust baseline so concurrent first
         // baselines across servers *and* separate McpRegistry instances cannot
         // overwrite each other and later treat a lost entry as BaselineCreated.
+        // The file lock additionally serializes concurrent Sage processes that
+        // share the same home-directory trust file.
         let _trust_guard = self.tool_trust_lock.lock().await;
-        let mut trust_store = McpToolTrustStore::load_default()?;
+        let (_file_lock, mut trust_store) = McpToolTrustStore::load_default_locked()?;
         let warn_on_drift = self.warn_on_tool_trust_drift();
         let trusted_tools =
             trusted_mcp_tools_for_server(name, tools, &mut trust_store, warn_on_drift)?;
         trust_store.save_if_dirty()?;
+        drop(_file_lock);
         drop(_trust_guard);
 
         // A displaced same-name registration may have replaced this client while
