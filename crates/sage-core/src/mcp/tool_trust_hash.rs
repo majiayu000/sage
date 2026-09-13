@@ -35,8 +35,9 @@ pub(super) fn tool_hash(tool: &McpTool) -> String {
 ///
 /// Permutes set-like arrays in a single working tree and hashes each candidate
 /// immediately (no Cartesian `Vec<Value>` of full schemas). Only explores
-/// complete `n!` coverage when it fits the budget; larger reorderings require
-/// re-baselining.
+/// complete `n!` coverage when it fits the budget; the Cartesian product of
+/// multiple affordable set-array factorials must also fit, otherwise the
+/// current wire order is tried once. Larger reorderings require re-baselining.
 ///
 /// Legacy case-folded description hashes are not matched. When the current
 /// description is already lowercase (so it can collide with a case-folded

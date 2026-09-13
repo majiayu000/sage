@@ -644,6 +644,55 @@ fn legacy_raw_matches_multiple_set_arrays_without_stack_overflow() {
 }
 
 #[test]
+fn legacy_raw_refuses_multi_array_cartesian_over_budget() {
+    // Three 4-element set arrays: 24³ = 13_824 > LEGACY_REORDER_BUDGET (5040).
+    // Without a product bound the search would explore the Cartesian product
+    // (and keep generating perms after the hash budget hits zero) while holding
+    // the process-wide trust lock on the blocking pool.
+    let original = McpTool::new("search").with_input_schema(json!({
+        "required": ["d", "c", "b", "a"],
+        "enum": ["w", "x", "y", "z"],
+        "anyOf": [
+            { "const": "p" },
+            { "const": "q" },
+            { "const": "r" },
+            { "const": "s" }
+        ]
+    }));
+    let reordered = McpTool::new("search").with_input_schema(json!({
+        "required": ["a", "b", "c", "d"],
+        "enum": ["z", "y", "x", "w"],
+        "anyOf": [
+            { "const": "s" },
+            { "const": "r" },
+            { "const": "q" },
+            { "const": "p" }
+        ]
+    }));
+    assert!(!super::tool_trust_hash::legacy_raw_baseline_matches(
+        &legacy_raw_tool_hash(&original),
+        &reordered
+    ));
+}
+
+#[test]
+fn legacy_raw_still_matches_two_small_set_arrays_within_budget() {
+    // 3! × 3! = 36 ≤ 5040 — full coverage remains available.
+    let original = McpTool::new("search").with_input_schema(json!({
+        "required": ["c", "b", "a"],
+        "enum": ["z", "y", "x"]
+    }));
+    let reordered = McpTool::new("search").with_input_schema(json!({
+        "required": ["a", "b", "c"],
+        "enum": ["x", "y", "z"]
+    }));
+    assert!(super::tool_trust_hash::legacy_raw_baseline_matches(
+        &legacy_raw_tool_hash(&original),
+        &reordered
+    ));
+}
+
+#[test]
 fn atomic_write_replaces_existing_trust_file() -> Result<(), Box<dyn std::error::Error>> {
     let dir = TempDir::new()?;
     let path = dir.path().join("trust.json");
