@@ -5,7 +5,11 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 /// Cap permutations explored when matching a pre-canonicalization baseline.
-const LEGACY_REORDER_BUDGET: usize = 128;
+///
+/// Sized to cover full `7!` set-array reorderings (common large `required` /
+/// `enum` lists) while remaining a hard upper bound so huge arrays cannot
+/// trigger unbounded factorial work.
+const LEGACY_REORDER_BUDGET: usize = 5040;
 
 pub(super) fn tool_hash(tool: &McpTool) -> String {
     hash_tool_parts(
@@ -223,12 +227,73 @@ fn permutations(items: Vec<Value>, budget: usize) -> Vec<Vec<Value>> {
     if items.len() <= 1 {
         return vec![items];
     }
-    // Guard factorial blow-up for large set-like arrays.
-    if items.len() > 6 {
-        return vec![items];
+
+    // Size-safe large-array path: recognize set-equivalent orderings without
+    // exploring full n! when n! would exceed `budget`. Always include the
+    // current order and the sorted representative, then fill remaining budget
+    // with Heap permutations (early-exit in the caller on hash match).
+    if factorial_exceeds(items.len(), budget) {
+        return bounded_set_order_variants(items, budget);
     }
+
     let mut out = Vec::new();
     permute_recurse(items, &mut out, budget);
+    out
+}
+
+fn factorial_exceeds(n: usize, budget: usize) -> bool {
+    let mut acc: usize = 1;
+    for i in 2..=n {
+        match acc.checked_mul(i) {
+            Some(next) if next <= budget => acc = next,
+            _ => return true,
+        }
+    }
+    false
+}
+
+fn json_sort_key(value: &Value) -> String {
+    serde_json::to_string(value).unwrap_or_default()
+}
+
+fn sort_values(items: &mut [Value]) {
+    items.sort_by_key(json_sort_key);
+}
+
+/// Build a bounded set of orderings for large set-like arrays.
+///
+/// Includes identity + sorted (O(n log n) set-equivalence representatives) and
+/// then budget-limited Heap permutations so legacy baselines stored under an
+/// arbitrary prior ordering can still match after a server-side reorder.
+fn bounded_set_order_variants(items: Vec<Value>, budget: usize) -> Vec<Vec<Value>> {
+    let mut out: Vec<Vec<Value>> = Vec::new();
+    let push_unique = |candidate: Vec<Value>, out: &mut Vec<Vec<Value>>| {
+        if out.len() >= budget {
+            return;
+        }
+        if !out.iter().any(|existing| existing == &candidate) {
+            out.push(candidate);
+        }
+    };
+
+    push_unique(items.clone(), &mut out);
+
+    let mut sorted = items.clone();
+    sort_values(&mut sorted);
+    push_unique(sorted, &mut out);
+
+    if out.len() >= budget {
+        return out;
+    }
+
+    let mut perms = Vec::new();
+    permute_recurse(items, &mut perms, budget);
+    for perm in perms {
+        push_unique(perm, &mut out);
+        if out.len() >= budget {
+            break;
+        }
+    }
     out
 }
 
@@ -373,6 +438,44 @@ mod tests {
             "properties": {
                 "a": { "type": "string" },
                 "b": { "type": "string" }
+            }
+        }));
+        let previous = hash_tool_parts(
+            &original.name,
+            DescriptionEncoding::Legacy(original.description.clone()),
+            &original.input_schema,
+        );
+        assert!(legacy_raw_baseline_matches(&previous, &reordered));
+    }
+
+    #[test]
+    fn legacy_raw_matches_large_required_reorder() {
+        // Seven-plus entries previously short-circuited to identity-only and
+        // false-drifted on equivalent server-side reorders during migration.
+        let original = McpTool::new("search").with_input_schema(json!({
+            "type": "object",
+            "required": ["g", "f", "e", "d", "c", "b", "a"],
+            "properties": {
+                "a": { "type": "string" },
+                "b": { "type": "string" },
+                "c": { "type": "string" },
+                "d": { "type": "string" },
+                "e": { "type": "string" },
+                "f": { "type": "string" },
+                "g": { "type": "string" }
+            }
+        }));
+        let reordered = McpTool::new("search").with_input_schema(json!({
+            "type": "object",
+            "required": ["a", "b", "c", "d", "e", "f", "g"],
+            "properties": {
+                "a": { "type": "string" },
+                "b": { "type": "string" },
+                "c": { "type": "string" },
+                "d": { "type": "string" },
+                "e": { "type": "string" },
+                "f": { "type": "string" },
+                "g": { "type": "string" }
             }
         }));
         let previous = hash_tool_parts(
