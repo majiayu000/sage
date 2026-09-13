@@ -22,16 +22,75 @@ pub(crate) enum McpToolTrustDecision {
     Drift { previous: String, current: String },
 }
 
+/// Current tool-identity encoding: present/absent description marker + canonical schema.
+const CURRENT_HASH_ENCODING: u32 = 1;
+
+/// Pre-current / unknown-legacy encoding. Only this value may use legacy matching.
+const LEGACY_HASH_ENCODING: u32 = 0;
+
+/// Stored baseline hash. Plain strings are treated as the current encoding so
+/// ambiguous pre-versioning current baselines cannot accept cross-format
+/// legacy preimages. Explicit `encoding: 0` marks a known pre-current baseline.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+enum StoredToolHash {
+    Plain(String),
+    Versioned {
+        hash: String,
+        #[serde(default = "default_stored_hash_encoding")]
+        encoding: u32,
+    },
+}
+
+fn default_stored_hash_encoding() -> u32 {
+    CURRENT_HASH_ENCODING
+}
+
+impl StoredToolHash {
+    fn current(hash: String) -> Self {
+        Self::Versioned {
+            hash,
+            encoding: CURRENT_HASH_ENCODING,
+        }
+    }
+
+    fn hash(&self) -> &str {
+        match self {
+            Self::Plain(hash) | Self::Versioned { hash, .. } => hash,
+        }
+    }
+
+    fn encoding(&self) -> u32 {
+        match self {
+            // Plain pre-versioning entries may already be current-format; do
+            // not reinterpret them via legacy matching.
+            Self::Plain(_) => CURRENT_HASH_ENCODING,
+            Self::Versioned { encoding, .. } => *encoding,
+        }
+    }
+
+    fn allows_legacy_match(&self) -> bool {
+        self.encoding() == LEGACY_HASH_ENCODING
+    }
+
+    fn needs_encoding_persist(&self) -> bool {
+        match self {
+            Self::Plain(_) => true,
+            Self::Versioned { encoding, .. } => *encoding != CURRENT_HASH_ENCODING,
+        }
+    }
+}
+
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct McpToolTrustFile {
     #[serde(default)]
-    tool_hashes: BTreeMap<String, String>,
+    tool_hashes: BTreeMap<String, StoredToolHash>,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct McpToolTrustStore {
     path: PathBuf,
-    tool_hashes: BTreeMap<String, String>,
+    tool_hashes: BTreeMap<String, StoredToolHash>,
     dirty: bool,
 }
 
@@ -88,30 +147,40 @@ impl McpToolTrustStore {
     pub(crate) fn check_tool(&mut self, server_id: &str, tool: &McpTool) -> McpToolTrustDecision {
         let key = tool_key(server_id, &tool.name);
         let hash = tool_hash(tool);
-        match self.tool_hashes.get(&key) {
-            Some(previous) if previous == &hash => McpToolTrustDecision::Unchanged,
+        match self.tool_hashes.get(&key).cloned() {
+            Some(previous) if previous.hash() == hash => {
+                // Persist versioned current encoding on exact matches so plain
+                // and legacy-tagged current hashes stop accepting legacy fallback.
+                if previous.needs_encoding_persist() {
+                    self.tool_hashes.insert(key, StoredToolHash::current(hash));
+                    self.dirty = true;
+                }
+                McpToolTrustDecision::Unchanged
+            }
             Some(previous) => {
-                // Upgrade only lossless pre-canonicalization baselines (raw
-                // schema bytes with set-array reorder equivalence). Prior
-                // lossy canonicalizers (case-folded descriptions, sorted
-                // literal contexts) cannot prove metadata was unchanged and
-                // require explicit re-baselining. Absent vs empty descriptions
-                // also collide under legacy encodings, so refuse those as
-                // ambiguous.
-                if !description_option_ambiguous(tool)
-                    && legacy_raw_baseline_matches(previous, tool)
+                // Upgrade only versioned-as-legacy / plain pre-canonicalization
+                // baselines (raw schema bytes with set-array reorder
+                // equivalence). Current-encoding baselines must not fall back
+                // to legacy hashing — that admits cross-format preimages
+                // (e.g. current("Safe") == legacy("1Safe")). Prior lossy
+                // canonicalizers and absent/empty description collisions still
+                // require explicit re-baselining.
+                if previous.allows_legacy_match()
+                    && !description_option_ambiguous(tool)
+                    && legacy_raw_baseline_matches(previous.hash(), tool)
                 {
-                    self.tool_hashes.insert(key, hash);
+                    self.tool_hashes.insert(key, StoredToolHash::current(hash));
                     self.dirty = true;
                     return McpToolTrustDecision::Unchanged;
                 }
                 McpToolTrustDecision::Drift {
-                    previous: previous.clone(),
+                    previous: previous.hash().to_string(),
                     current: hash,
                 }
             }
             None => {
-                self.tool_hashes.insert(key, hash.clone());
+                self.tool_hashes
+                    .insert(key, StoredToolHash::current(hash.clone()));
                 self.dirty = true;
                 McpToolTrustDecision::BaselineCreated { hash }
             }

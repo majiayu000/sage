@@ -33,18 +33,11 @@ pub(super) fn walk(
     // permute it; when none remain, hash the root once.
     match find_set_array_path(root, mode) {
         None => hash_once(root, budget, previous, tool),
-        Some(path) => {
-            permute_at_path(root, &path, &[], budget, &mut abort, previous, tool)
-        }
+        Some(path) => permute_at_path(root, &path, &[], budget, &mut abort, previous, tool),
     }
 }
 
-fn hash_once(
-    root: &Value,
-    budget: &mut usize,
-    previous: &str,
-    tool: &McpTool,
-) -> bool {
+fn hash_once(root: &Value, budget: &mut usize, previous: &str, tool: &McpTool) -> bool {
     if *budget == 0 {
         return false;
     }

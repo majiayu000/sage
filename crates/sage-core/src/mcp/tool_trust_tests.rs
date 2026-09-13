@@ -495,7 +495,12 @@ fn trust_store_upgrades_legacy_required_reorder_without_false_drift()
     std::fs::write(
         &path,
         serde_json::to_string_pretty(&serde_json::json!({
-            "tool_hashes": { r#"["docs","search"]"#: legacy }
+            "tool_hashes": {
+                r#"["docs","search"]"#: {
+                    "hash": legacy,
+                    "encoding": 0
+                }
+            }
         }))?,
     )?;
 
@@ -504,6 +509,44 @@ fn trust_store_upgrades_legacy_required_reorder_without_false_drift()
         store.check_tool("docs", &reordered),
         McpToolTrustDecision::Unchanged
     );
+    Ok(())
+}
+
+#[test]
+fn trust_store_rejects_cross_format_description_preimage() -> Result<(), Box<dyn std::error::Error>>
+{
+    let dir = TempDir::new()?;
+    let path = dir.path().join("trust.json");
+    let safe = McpTool::new("geo").with_description("Safe");
+    let mut store = McpToolTrustStore::load(&path)?;
+    assert!(matches!(
+        store.check_tool("docs", &safe),
+        McpToolTrustDecision::BaselineCreated { .. }
+    ));
+    store.save_if_dirty()?;
+
+    // current("Safe") hashes bytes `1Safe`; legacy("1Safe") hashes the same
+    // bytes. Versioned current baselines must not accept that as Unchanged.
+    let preimage = McpTool::new("geo").with_description("1Safe");
+    let mut reloaded = McpToolTrustStore::load(&path)?;
+    assert!(matches!(
+        reloaded.check_tool("docs", &preimage),
+        McpToolTrustDecision::Drift { .. }
+    ));
+
+    // Plain (unversioned) current-format hashes are also fail-closed.
+    let current_hash = super::tool_trust_hash::tool_hash(&safe);
+    std::fs::write(
+        &path,
+        serde_json::to_string_pretty(&serde_json::json!({
+            "tool_hashes": { r#"["docs","geo"]"#: current_hash }
+        }))?,
+    )?;
+    let mut plain = McpToolTrustStore::load(&path)?;
+    assert!(matches!(
+        plain.check_tool("docs", &preimage),
+        McpToolTrustDecision::Drift { .. }
+    ));
     Ok(())
 }
 
@@ -532,7 +575,12 @@ fn trust_store_rejects_ambiguous_absent_empty_legacy_upgrade()
     std::fs::write(
         &path,
         serde_json::to_string_pretty(&serde_json::json!({
-            "tool_hashes": { r#"["docs","geo"]"#: legacy }
+            "tool_hashes": {
+                r#"["docs","geo"]"#: {
+                    "hash": legacy,
+                    "encoding": 0
+                }
+            }
         }))?,
     )?;
 
