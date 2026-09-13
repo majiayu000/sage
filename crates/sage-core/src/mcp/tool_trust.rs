@@ -12,8 +12,7 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use tool_trust_hash::{
-    collapse_whitespace, description_option_ambiguous, legacy_raw_baseline_matches,
-    prior_canonical_tool_hash, tool_hash,
+    collapse_whitespace, description_option_ambiguous, legacy_raw_baseline_matches, tool_hash,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -92,14 +91,15 @@ impl McpToolTrustStore {
         match self.tool_hashes.get(&key) {
             Some(previous) if previous == &hash => McpToolTrustDecision::Unchanged,
             Some(previous) => {
-                // Upgrade known prior encodings in place. Legacy case-folded
-                // description hashes are not accepted: they cannot prove letter
-                // case was unchanged and require explicit re-baselining.
-                // Absent vs empty descriptions also collide under legacy
-                // encodings, so refuse those upgrades as ambiguous.
+                // Upgrade only lossless pre-canonicalization baselines (raw
+                // schema bytes with set-array reorder equivalence). Prior
+                // lossy canonicalizers (case-folded descriptions, sorted
+                // literal contexts) cannot prove metadata was unchanged and
+                // require explicit re-baselining. Absent vs empty descriptions
+                // also collide under legacy encodings, so refuse those as
+                // ambiguous.
                 if !description_option_ambiguous(tool)
-                    && (previous == &prior_canonical_tool_hash(tool)
-                        || legacy_raw_baseline_matches(previous, tool))
+                    && legacy_raw_baseline_matches(previous, tool)
                 {
                     self.tool_hashes.insert(key, hash);
                     self.dirty = true;
@@ -146,14 +146,34 @@ impl McpToolTrustStore {
 }
 
 fn atomic_write(path: &Path, content: &[u8]) -> Result<(), McpError> {
+    use std::fs::File;
+    use std::io::Write;
+
     let temp_path = path.with_extension("json.tmp");
-    std::fs::write(&temp_path, content).map_err(|error| {
-        McpError::schema(format!(
-            "Failed to write MCP tool trust baseline temp {}: {}",
-            temp_path.display(),
-            error
-        ))
-    })?;
+    {
+        let mut file = File::create(&temp_path).map_err(|error| {
+            McpError::schema(format!(
+                "Failed to create MCP tool trust baseline temp {}: {}",
+                temp_path.display(),
+                error
+            ))
+        })?;
+        file.write_all(content).map_err(|error| {
+            McpError::schema(format!(
+                "Failed to write MCP tool trust baseline temp {}: {}",
+                temp_path.display(),
+                error
+            ))
+        })?;
+        // Durable publish: sync file contents before renaming into place.
+        file.sync_all().map_err(|error| {
+            McpError::schema(format!(
+                "Failed to sync MCP tool trust baseline temp {}: {}",
+                temp_path.display(),
+                error
+            ))
+        })?;
+    }
     replace_file(&temp_path, path).map_err(|error| {
         let _ = std::fs::remove_file(&temp_path);
         McpError::schema(format!(
@@ -162,6 +182,14 @@ fn atomic_write(path: &Path, content: &[u8]) -> Result<(), McpError> {
             error
         ))
     })?;
+    // Sync the parent directory so the renamed directory entry reaches stable
+    // storage on platforms that require it (crash between rename and return
+    // must not lose a first-use baseline).
+    if let Some(parent) = path.parent() {
+        if let Ok(dir) = File::open(parent) {
+            let _ = dir.sync_all();
+        }
+    }
     Ok(())
 }
 

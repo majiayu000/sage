@@ -240,6 +240,70 @@ fn tool_hash_ignores_enum_and_type_array_order() {
 }
 
 #[test]
+fn tool_hash_ignores_allof_anyof_oneof_branch_order() {
+    let left = McpTool::new("shape").with_input_schema(json!({
+        "allOf": [
+            { "type": "object", "required": ["a"] },
+            { "anyOf": [{ "type": "string" }, { "type": "number" }] }
+        ],
+        "oneOf": [{ "const": 1 }, { "const": 2 }]
+    }));
+    let right = McpTool::new("shape").with_input_schema(json!({
+        "oneOf": [{ "const": 2 }, { "const": 1 }],
+        "allOf": [
+            { "anyOf": [{ "type": "number" }, { "type": "string" }] },
+            { "type": "object", "required": ["a"] }
+        ]
+    }));
+    assert_eq!(tool_hash(&left), tool_hash(&right));
+}
+
+fn legacy_raw_tool_hash(tool: &McpTool) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(tool.name.as_bytes());
+    hasher.update(b"\0");
+    if let Some(description) = &tool.description {
+        hasher.update(description.as_bytes());
+    }
+    hasher.update(b"\0");
+    hasher.update(serde_json::to_vec(&tool.input_schema).unwrap_or_default());
+    hasher
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+#[test]
+fn legacy_raw_matches_seven_item_required_reorder() {
+    let original = McpTool::new("search").with_input_schema(json!({
+        "required": ["g", "f", "e", "d", "c", "b", "a"]
+    }));
+    let reordered = McpTool::new("search").with_input_schema(json!({
+        "required": ["a", "b", "c", "d", "e", "f", "g"]
+    }));
+    assert!(super::tool_trust_hash::legacy_raw_baseline_matches(
+        &legacy_raw_tool_hash(&original),
+        &reordered
+    ));
+}
+
+#[test]
+fn legacy_raw_rejects_eight_item_reorder_without_full_coverage() {
+    let original = McpTool::new("search").with_input_schema(json!({
+        "required": ["h", "g", "f", "e", "d", "c", "b", "a"]
+    }));
+    let reordered = McpTool::new("search").with_input_schema(json!({
+        "required": ["a", "b", "c", "d", "e", "f", "g", "h"]
+    }));
+    assert!(!super::tool_trust_hash::legacy_raw_baseline_matches(
+        &legacy_raw_tool_hash(&original),
+        &reordered
+    ));
+}
+
+#[test]
 fn tool_hash_preserves_description_letter_case() {
     let upper = McpTool::new("geo").with_description("Query US regions");
     let lower = McpTool::new("geo").with_description("Query us regions");
@@ -338,6 +402,15 @@ fn trust_store_rejects_casefolded_legacy_upgrade_as_drift() -> Result<(), Box<dy
     let mut store = McpToolTrustStore::load(&path)?;
     assert!(matches!(
         store.check_tool("docs", &upper),
+        McpToolTrustDecision::Drift { .. }
+    ));
+
+    // Even when the current description equals the lossy case-folded bytes,
+    // refuse the upgrade: that encoding cannot prove capitalization was
+    // unchanged.
+    let mut store = McpToolTrustStore::load(&path)?;
+    assert!(matches!(
+        store.check_tool("docs", &lower),
         McpToolTrustDecision::Drift { .. }
     ));
     Ok(())
