@@ -1,14 +1,19 @@
 //! Trust checks for MCP tool descriptions and schemas.
 
+#[path = "tool_trust_hash.rs"]
+mod tool_trust_hash;
+
 use super::error::McpError;
 use super::tool_trust_file_lock::ToolTrustFileLock;
 use super::types::McpTool;
 use crate::config::default_data_dir_or_warn;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use tool_trust_hash::{
+    collapse_whitespace, legacy_raw_baseline_matches, prior_canonical_tool_hash, tool_hash,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum McpToolTrustDecision {
@@ -86,9 +91,12 @@ impl McpToolTrustStore {
         match self.tool_hashes.get(&key) {
             Some(previous) if previous == &hash => McpToolTrustDecision::Unchanged,
             Some(previous) => {
-                // Upgrade older hash encodings in place so schema reorder or the
-                // prior case-folded description form alone does not false-positive.
-                if previous == &casefolded_tool_hash(tool) || previous == &legacy_tool_hash(tool) {
+                // Upgrade known prior encodings in place. Legacy case-folded
+                // description hashes are not accepted: they cannot prove letter
+                // case was unchanged and require explicit re-baselining.
+                if previous == &prior_canonical_tool_hash(tool)
+                    || legacy_raw_baseline_matches(previous, tool)
+                {
                     self.tool_hashes.insert(key, hash);
                     self.dirty = true;
                     return McpToolTrustDecision::Unchanged;
@@ -229,95 +237,6 @@ fn tool_key(server_id: &str, tool_name: &str) -> String {
         .unwrap_or_else(|_| format!("{}\0{}", server_id, tool_name))
 }
 
-fn tool_hash(tool: &McpTool) -> String {
-    hash_tool_parts(
-        &tool.name,
-        tool.description.as_deref().map(collapse_whitespace),
-        &canonicalize_schema_value(&tool.input_schema),
-    )
-}
-
-/// Prior hash that case-folded descriptions; retained for baseline upgrade.
-fn casefolded_tool_hash(tool: &McpTool) -> String {
-    hash_tool_parts(
-        &tool.name,
-        tool.description.as_deref().map(normalize_whitespace),
-        &canonicalize_schema_value(&tool.input_schema),
-    )
-}
-
-/// Pre-canonicalization hash retained so existing baselines can be upgraded
-/// without treating equivalent schemas as drift.
-fn legacy_tool_hash(tool: &McpTool) -> String {
-    hash_tool_parts(&tool.name, tool.description.clone(), &tool.input_schema)
-}
-
-fn hash_tool_parts(name: &str, description: Option<String>, schema: &Value) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(name.as_bytes());
-    hasher.update(b"\0");
-    if let Some(description) = description.as_deref() {
-        hasher.update(description.as_bytes());
-    }
-    hasher.update(b"\0");
-    hasher
-        .update(serde_json::to_vec(schema).unwrap_or_else(|_| b"<unserializable-schema>".to_vec()));
-    hex_encode(&hasher.finalize())
-}
-
-/// Normalize JSON Schema for trust hashing: sort object keys and order-insensitive
-/// set-like arrays such as `required`, `enum`, and multi-type `type`.
-fn canonicalize_schema_value(value: &Value) -> Value {
-    match value {
-        Value::Object(map) => {
-            let mut sorted: Vec<_> = map.iter().collect();
-            sorted.sort_by_key(|(key, _)| *key);
-            let canonical = sorted
-                .into_iter()
-                .map(|(key, child)| {
-                    let canon = if is_order_insensitive_schema_key(key) {
-                        canonicalize_set_like_array(child)
-                    } else {
-                        canonicalize_schema_value(child)
-                    };
-                    (key.clone(), canon)
-                })
-                .collect();
-            Value::Object(canonical)
-        }
-        Value::Array(items) => Value::Array(items.iter().map(canonicalize_schema_value).collect()),
-        other => other.clone(),
-    }
-}
-
-fn is_order_insensitive_schema_key(key: &str) -> bool {
-    matches!(key, "required" | "enum" | "type")
-}
-
-fn canonicalize_set_like_array(value: &Value) -> Value {
-    match value {
-        Value::Array(items) => {
-            let mut canon_items: Vec<Value> = items.iter().map(canonicalize_schema_value).collect();
-            canon_items.sort_by(|left, right| {
-                let left_key = serde_json::to_string(left).unwrap_or_default();
-                let right_key = serde_json::to_string(right).unwrap_or_default();
-                left_key.cmp(&right_key)
-            });
-            Value::Array(canon_items)
-        }
-        // JSON Schema `type` is often a single string; leave non-arrays alone.
-        other => canonicalize_schema_value(other),
-    }
-}
-
-fn hex_encode(bytes: &[u8]) -> String {
-    let mut output = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        output.push_str(&format!("{byte:02x}"));
-    }
-    output
-}
-
 fn collect_schema_trust_texts<'a>(value: &'a Value, texts: &mut Vec<(&'static str, &'a str)>) {
     match value {
         Value::Object(object) => {
@@ -380,11 +299,6 @@ fn contains_priority_authority_claim(text: &str) -> bool {
         ]
         .into_iter()
         .any(|phrase| contains_word_phrase(text, phrase))
-}
-
-/// Collapse runs of whitespace without changing letter case (trust hashing).
-fn collapse_whitespace(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// Collapse whitespace and case-fold for high-risk phrase scanning only.

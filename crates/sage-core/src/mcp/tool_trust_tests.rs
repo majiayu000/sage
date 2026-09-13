@@ -305,6 +305,130 @@ fn trust_store_detects_description_case_drift() -> Result<(), Box<dyn std::error
 }
 
 #[test]
+fn trust_store_rejects_casefolded_legacy_upgrade_as_drift() -> Result<(), Box<dyn std::error::Error>>
+{
+    let dir = TempDir::new()?;
+    let path = dir.path().join("trust.json");
+    let lower = McpTool::new("geo").with_description("query us regions");
+    // Simulate a baseline written under the old case-folded hasher.
+    let casefolded = {
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(b"geo");
+        hasher.update(b"\0");
+        hasher.update(b"query us regions");
+        hasher.update(b"\0");
+        hasher.update(serde_json::to_vec(
+            &super::tool_trust_hash::canonicalize_schema_value(&lower.input_schema),
+        )?);
+        hasher
+            .finalize()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    };
+    std::fs::write(
+        &path,
+        serde_json::to_string_pretty(&serde_json::json!({
+            "tool_hashes": { r#"["docs","geo"]"#: casefolded }
+        }))?,
+    )?;
+
+    let upper = McpTool::new("geo").with_description("QUERY US REGIONS");
+    let mut store = McpToolTrustStore::load(&path)?;
+    assert!(matches!(
+        store.check_tool("docs", &upper),
+        McpToolTrustDecision::Drift { .. }
+    ));
+    Ok(())
+}
+
+#[test]
+fn trust_store_upgrades_legacy_required_reorder_without_false_drift()
+-> Result<(), Box<dyn std::error::Error>> {
+    let dir = TempDir::new()?;
+    let path = dir.path().join("trust.json");
+    let original = McpTool::new("search").with_input_schema(json!({
+        "type": "object",
+        "required": ["b", "a"],
+        "properties": {
+            "a": { "type": "string" },
+            "b": { "type": "string" }
+        }
+    }));
+    let reordered = McpTool::new("search").with_input_schema(json!({
+        "type": "object",
+        "required": ["a", "b"],
+        "properties": {
+            "a": { "type": "string" },
+            "b": { "type": "string" }
+        }
+    }));
+
+    // Seed a pre-canonicalization baseline from the original raw schema bytes.
+    let legacy = {
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(b"search");
+        hasher.update(b"\0");
+        hasher.update(b"\0");
+        hasher.update(serde_json::to_vec(&original.input_schema)?);
+        hasher
+            .finalize()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    };
+    std::fs::write(
+        &path,
+        serde_json::to_string_pretty(&serde_json::json!({
+            "tool_hashes": { r#"["docs","search"]"#: legacy }
+        }))?,
+    )?;
+
+    let mut store = McpToolTrustStore::load(&path)?;
+    assert_eq!(
+        store.check_tool("docs", &reordered),
+        McpToolTrustDecision::Unchanged
+    );
+    Ok(())
+}
+
+#[test]
+fn trust_store_detects_absent_vs_empty_description_drift() -> Result<(), Box<dyn std::error::Error>>
+{
+    let dir = TempDir::new()?;
+    let path = dir.path().join("trust.json");
+    let absent = McpTool::new("geo");
+    let empty = McpTool::new("geo").with_description("");
+
+    let mut store = McpToolTrustStore::load(&path)?;
+    assert!(matches!(
+        store.check_tool("docs", &absent),
+        McpToolTrustDecision::BaselineCreated { .. }
+    ));
+    store.save_if_dirty()?;
+
+    let mut reloaded = McpToolTrustStore::load(&path)?;
+    assert!(matches!(
+        reloaded.check_tool("docs", &empty),
+        McpToolTrustDecision::Drift { .. }
+    ));
+    Ok(())
+}
+
+#[test]
+fn tool_hash_preserves_const_required_array_order() {
+    let left = McpTool::new("auth").with_input_schema(json!({
+        "const": { "required": ["admin", "user"] }
+    }));
+    let right = McpTool::new("auth").with_input_schema(json!({
+        "const": { "required": ["user", "admin"] }
+    }));
+    assert_ne!(tool_hash(&left), tool_hash(&right));
+}
+
+#[test]
 fn atomic_write_replaces_existing_trust_file() -> Result<(), Box<dyn std::error::Error>> {
     let dir = TempDir::new()?;
     let path = dir.path().join("trust.json");
