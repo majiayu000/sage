@@ -222,6 +222,31 @@ fn tool_hash_ignores_required_array_order_and_object_key_order() {
 }
 
 #[test]
+fn tool_hash_ignores_enum_and_type_array_order() {
+    let left = McpTool::new("format").with_input_schema(json!({
+        "type": ["object", "null"],
+        "properties": {
+            "mode": { "enum": ["json", "text"] }
+        }
+    }));
+    let right = McpTool::new("format").with_input_schema(json!({
+        "type": ["null", "object"],
+        "properties": {
+            "mode": { "enum": ["text", "json"] }
+        }
+    }));
+
+    assert_eq!(tool_hash(&left), tool_hash(&right));
+}
+
+#[test]
+fn tool_hash_preserves_description_letter_case() {
+    let upper = McpTool::new("geo").with_description("Query US regions");
+    let lower = McpTool::new("geo").with_description("Query us regions");
+    assert_ne!(tool_hash(&upper), tool_hash(&lower));
+}
+
+#[test]
 fn trust_store_treats_required_reorder_as_unchanged() -> Result<(), Box<dyn std::error::Error>> {
     let dir = TempDir::new()?;
     let path = dir.path().join("trust.json");
@@ -254,6 +279,28 @@ fn trust_store_treats_required_reorder_as_unchanged() -> Result<(), Box<dyn std:
         reloaded.check_tool("docs", &reordered),
         McpToolTrustDecision::Unchanged
     );
+    Ok(())
+}
+
+#[test]
+fn trust_store_detects_description_case_drift() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = TempDir::new()?;
+    let path = dir.path().join("trust.json");
+    let original = McpTool::new("geo").with_description("Query US regions");
+    let case_changed = McpTool::new("geo").with_description("Query us regions");
+
+    let mut store = McpToolTrustStore::load(&path)?;
+    assert!(matches!(
+        store.check_tool("docs", &original),
+        McpToolTrustDecision::BaselineCreated { .. }
+    ));
+    store.save_if_dirty()?;
+
+    let mut reloaded = McpToolTrustStore::load(&path)?;
+    assert!(matches!(
+        reloaded.check_tool("docs", &case_changed),
+        McpToolTrustDecision::Drift { .. }
+    ));
     Ok(())
 }
 

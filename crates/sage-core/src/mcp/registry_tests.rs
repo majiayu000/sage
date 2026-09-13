@@ -29,6 +29,32 @@ async fn set_warn_on_tool_trust_drift_updates_flag_without_clients() {
 }
 
 #[tokio::test]
+async fn set_warn_on_tool_trust_drift_serializes_concurrent_same_value_calls() {
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    let registry = Arc::new(McpRegistry::new());
+    registry.set_warn_on_tool_trust_drift(true).await;
+
+    // Hold the policy transition lock so a concurrent fail-closed call blocks.
+    let guard = registry.policy_transition_lock.lock().await;
+    let waiting = {
+        let registry = Arc::clone(&registry);
+        tokio::spawn(async move {
+            registry.set_warn_on_tool_trust_drift(false).await;
+        })
+    };
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert!(
+        !waiting.is_finished(),
+        "same-value/fail-closed callers must wait for an in-flight policy transition"
+    );
+    drop(guard);
+    waiting.await.expect("policy transition task");
+    assert!(!registry.warn_on_tool_trust_drift());
+}
+
+#[tokio::test]
 async fn unregister_server_waits_for_capability_refresh_lock() {
     use std::sync::Arc;
     use std::time::Duration;

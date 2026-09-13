@@ -86,10 +86,9 @@ impl McpToolTrustStore {
         match self.tool_hashes.get(&key) {
             Some(previous) if previous == &hash => McpToolTrustDecision::Unchanged,
             Some(previous) => {
-                // Upgrade legacy non-canonical hashes in place so schema-key /
-                // required-array reorder alone does not false-positive as drift.
-                let legacy = legacy_tool_hash(tool);
-                if previous == &legacy {
+                // Upgrade older hash encodings in place so schema reorder or the
+                // prior case-folded description form alone does not false-positive.
+                if previous == &casefolded_tool_hash(tool) || previous == &legacy_tool_hash(tool) {
                     self.tool_hashes.insert(key, hash);
                     self.dirty = true;
                     return McpToolTrustDecision::Unchanged;
@@ -156,18 +155,42 @@ fn atomic_write(path: &Path, content: &[u8]) -> Result<(), McpError> {
 
 /// Atomically publish `from` over `to`.
 ///
-/// Unix `rename(2)` replaces an existing destination; Windows `MoveFile` does
-/// not, so replace by removing the destination first while the trust-file lock
-/// is held.
+/// Unix `rename(2)` replaces an existing destination. On Windows, use
+/// `MoveFileExW` with `MOVEFILE_REPLACE_EXISTING` so the baseline is never
+/// deleted before the replacement lands (a remove-then-rename gap would accept
+/// drifted schemas as a fresh baseline after a crash).
 fn replace_file(from: &Path, to: &Path) -> std::io::Result<()> {
     #[cfg(windows)]
     {
-        match std::fs::rename(from, to) {
-            Ok(()) => Ok(()),
-            Err(_) => {
-                let _ = std::fs::remove_file(to);
-                std::fs::rename(from, to)
-            }
+        use std::os::windows::ffi::OsStrExt;
+
+        #[link(name = "kernel32")]
+        unsafe extern "system" {
+            fn MoveFileExW(
+                lpExistingFileName: *const u16,
+                lpNewFileName: *const u16,
+                dwFlags: u32,
+            ) -> i32;
+        }
+
+        const MOVEFILE_REPLACE_EXISTING: u32 = 0x1;
+        const MOVEFILE_WRITE_THROUGH: u32 = 0x8;
+
+        let from_wide: Vec<u16> = from.as_os_str().encode_wide().chain(Some(0)).collect();
+        let to_wide: Vec<u16> = to.as_os_str().encode_wide().chain(Some(0)).collect();
+        // SAFETY: both paths are NUL-terminated wide strings; flags request an
+        // atomic replace of an existing destination without a delete gap.
+        let ok = unsafe {
+            MoveFileExW(
+                from_wide.as_ptr(),
+                to_wide.as_ptr(),
+                MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+            )
+        };
+        if ok == 0 {
+            Err(std::io::Error::last_os_error())
+        } else {
+            Ok(())
         }
     }
     #[cfg(not(windows))]
@@ -209,6 +232,15 @@ fn tool_key(server_id: &str, tool_name: &str) -> String {
 fn tool_hash(tool: &McpTool) -> String {
     hash_tool_parts(
         &tool.name,
+        tool.description.as_deref().map(collapse_whitespace),
+        &canonicalize_schema_value(&tool.input_schema),
+    )
+}
+
+/// Prior hash that case-folded descriptions; retained for baseline upgrade.
+fn casefolded_tool_hash(tool: &McpTool) -> String {
+    hash_tool_parts(
+        &tool.name,
         tool.description.as_deref().map(normalize_whitespace),
         &canonicalize_schema_value(&tool.input_schema),
     )
@@ -234,7 +266,7 @@ fn hash_tool_parts(name: &str, description: Option<String>, schema: &Value) -> S
 }
 
 /// Normalize JSON Schema for trust hashing: sort object keys and order-insensitive
-/// constructs such as `required` string arrays.
+/// set-like arrays such as `required`, `enum`, and multi-type `type`.
 fn canonicalize_schema_value(value: &Value) -> Value {
     match value {
         Value::Object(map) => {
@@ -243,8 +275,8 @@ fn canonicalize_schema_value(value: &Value) -> Value {
             let canonical = sorted
                 .into_iter()
                 .map(|(key, child)| {
-                    let canon = if key == "required" {
-                        canonicalize_required_array(child)
+                    let canon = if is_order_insensitive_schema_key(key) {
+                        canonicalize_set_like_array(child)
                     } else {
                         canonicalize_schema_value(child)
                     };
@@ -258,21 +290,22 @@ fn canonicalize_schema_value(value: &Value) -> Value {
     }
 }
 
-fn canonicalize_required_array(value: &Value) -> Value {
+fn is_order_insensitive_schema_key(key: &str) -> bool {
+    matches!(key, "required" | "enum" | "type")
+}
+
+fn canonicalize_set_like_array(value: &Value) -> Value {
     match value {
         Value::Array(items) => {
-            let mut strings = Vec::with_capacity(items.len());
-            for item in items {
-                match item.as_str() {
-                    Some(text) => strings.push(text.to_string()),
-                    None => {
-                        return Value::Array(items.iter().map(canonicalize_schema_value).collect());
-                    }
-                }
-            }
-            strings.sort();
-            Value::Array(strings.into_iter().map(Value::String).collect())
+            let mut canon_items: Vec<Value> = items.iter().map(canonicalize_schema_value).collect();
+            canon_items.sort_by(|left, right| {
+                let left_key = serde_json::to_string(left).unwrap_or_default();
+                let right_key = serde_json::to_string(right).unwrap_or_default();
+                left_key.cmp(&right_key)
+            });
+            Value::Array(canon_items)
         }
+        // JSON Schema `type` is often a single string; leave non-arrays alone.
         other => canonicalize_schema_value(other),
     }
 }
@@ -349,11 +382,14 @@ fn contains_priority_authority_claim(text: &str) -> bool {
         .any(|phrase| contains_word_phrase(text, phrase))
 }
 
+/// Collapse runs of whitespace without changing letter case (trust hashing).
+fn collapse_whitespace(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Collapse whitespace and case-fold for high-risk phrase scanning only.
 fn normalize_whitespace(text: &str) -> String {
-    text.split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .to_ascii_lowercase()
+    collapse_whitespace(text).to_ascii_lowercase()
 }
 
 fn normalized_word_tokens(text: &str) -> Vec<&str> {

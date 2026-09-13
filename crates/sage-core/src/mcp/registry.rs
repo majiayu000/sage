@@ -57,6 +57,9 @@ pub struct McpRegistry {
     pub(crate) capability_refresh_locks: DashMap<String, Arc<tokio::sync::Mutex<()>>>,
     /// Shared process-wide lock for the mcp_tool_trust.json load/check/save transaction.
     pub(crate) tool_trust_lock: Arc<tokio::sync::Mutex<()>>,
+    /// Serializes trust-policy transitions so concurrent same-value callers wait
+    /// for an in-flight revalidation before returning.
+    pub(crate) policy_transition_lock: tokio::sync::Mutex<()>,
 }
 
 impl McpRegistry {
@@ -73,6 +76,7 @@ impl McpRegistry {
             warn_on_tool_trust_drift: AtomicBool::new(false),
             capability_refresh_locks: DashMap::new(),
             tool_trust_lock: global_tool_trust_lock(),
+            policy_transition_lock: tokio::sync::Mutex::new(()),
         }
     }
 
@@ -80,8 +84,11 @@ impl McpRegistry {
     ///
     /// When connected clients already exist and the policy changes, revalidates
     /// routes/allowlists immediately so warn→fail-closed cannot leave drifted
-    /// tools callable until a later `all_tools()` call.
+    /// tools callable until a later `all_tools()` call. The whole transition is
+    /// serialized so a concurrent same-value caller waits for in-flight
+    /// revalidation instead of returning while allowlists still contain drift.
     pub async fn set_warn_on_tool_trust_drift(&self, enabled: bool) {
+        let _guard = self.policy_transition_lock.lock().await;
         // Atomic swap so concurrent enable/disable cannot both observe the same
         // stale previous value and skip the fail-closed revalidation.
         let previous = self
