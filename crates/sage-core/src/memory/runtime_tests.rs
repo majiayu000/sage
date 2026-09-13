@@ -119,3 +119,56 @@ async fn failure_outcome_is_recalled_as_lesson() {
     assert!(rendered.contains("outcome"));
     assert!(rendered.contains("memory defaults"));
 }
+
+#[tokio::test]
+async fn default_relative_storage_path_stays_under_working_dir() {
+    clear_runtime_registry_for_tests().await;
+    let dir = tempdir().unwrap();
+    let config = AgentMemoryConfig {
+        enabled: true,
+        enabled_set: true,
+        storage_path: None,
+        ..AgentMemoryConfig::default()
+    };
+
+    let runtime = init_agent_memory_runtime(&config, dir.path())
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(
+        runtime.storage_path(),
+        dir.path().join(".sage/memory/agent-memory.json")
+    );
+    assert!(runtime.storage_path().starts_with(dir.path()));
+}
+
+#[tokio::test]
+async fn escaping_storage_path_is_rejected() {
+    clear_runtime_registry_for_tests().await;
+    let dir = tempdir().unwrap();
+    let config = enabled_config(PathBuf::from("../escape-memory.json"));
+
+    let result = init_agent_memory_runtime(&config, dir.path()).await;
+    let error = match result {
+        Ok(_) => panic!("expected escaping storage path to be rejected"),
+        Err(error) => error.to_string(),
+    };
+
+    assert!(error.contains("escapes working directory"));
+}
+
+#[tokio::test]
+async fn absolute_storage_path_outside_working_dir_is_rejected() {
+    clear_runtime_registry_for_tests().await;
+    let dir = tempdir().unwrap();
+    let config = enabled_config(PathBuf::from("/tmp/sage-evil-memory.json"));
+
+    let result = init_agent_memory_runtime(&config, dir.path()).await;
+    let error = match result {
+        Ok(_) => panic!("expected absolute escape to be rejected"),
+        Err(error) => error.to_string(),
+    };
+
+    assert!(error.contains("escapes working directory"));
+}

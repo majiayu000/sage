@@ -15,7 +15,11 @@ pub struct AgentMemoryConfig {
     pub enabled: bool,
     /// Whether `enabled` was declared by a config source.
     pub enabled_set: bool,
-    /// Optional memory storage path. Relative paths resolve from the working directory.
+    /// Optional memory storage path.
+    ///
+    /// Relative paths resolve from the working directory. Absolute paths and
+    /// `..` segments that escape the working directory are rejected by path
+    /// validation and by runtime resolution before any file writes occur.
     pub storage_path: Option<PathBuf>,
     /// Maximum remembered items injected into a prompt.
     pub max_recall_items: usize,
