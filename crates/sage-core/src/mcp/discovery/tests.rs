@@ -276,4 +276,32 @@ mod tests {
             "fail-closed→warn re-entry must flip the registry trust policy"
         );
     }
+
+    #[tokio::test]
+    async fn test_manager_discover_all_source_failure_preserves_warn_policy() {
+        let manager = McpServerManager::new();
+        manager
+            .registry()
+            .set_warn_on_tool_trust_drift(true)
+            .await;
+        assert!(manager.registry().warn_on_tool_trust_drift());
+
+        let connected = manager
+            .discover(vec![
+                DiscoverySource::Environment(
+                    "__SAGE_MISSING_MCP_DISCOVERY_ENV_FOR_TRUST_POLICY__".to_string(),
+                ),
+                DiscoverySource::File(std::path::PathBuf::from(
+                    "/tmp/__sage_missing_mcp_config_for_trust_policy__.json",
+                )),
+            ])
+            .await
+            .expect("discover should succeed when source errors are only logged");
+
+        assert!(connected.is_empty());
+        assert!(
+            manager.registry().warn_on_tool_trust_drift(),
+            "all-source failure must not reset an existing warn-mode policy"
+        );
+    }
 }

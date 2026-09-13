@@ -251,7 +251,16 @@ impl McpRegistry {
         // The file lock additionally serializes concurrent Sage processes that
         // share the same home-directory trust file.
         let _trust_guard = self.tool_trust_lock.lock().await;
-        let (_file_lock, mut trust_store) = McpToolTrustStore::load_default_locked()?;
+        // Acquire the inter-process flock off the async worker so a contended
+        // LOCK_EX (or Windows retry loop) cannot stall the Tokio runtime.
+        let (_file_lock, mut trust_store) =
+            tokio::task::spawn_blocking(McpToolTrustStore::load_default_locked)
+                .await
+                .map_err(|error| {
+                    McpError::schema(format!(
+                        "Failed to acquire MCP tool trust lock on blocking pool: {error}"
+                    ))
+                })??;
         let warn_on_drift = self.warn_on_tool_trust_drift();
         let trusted_tools =
             trusted_mcp_tools_for_server(name, tools, &mut trust_store, warn_on_drift)?;

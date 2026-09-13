@@ -85,10 +85,20 @@ impl McpToolTrustStore {
         let hash = tool_hash(tool);
         match self.tool_hashes.get(&key) {
             Some(previous) if previous == &hash => McpToolTrustDecision::Unchanged,
-            Some(previous) => McpToolTrustDecision::Drift {
-                previous: previous.clone(),
-                current: hash,
-            },
+            Some(previous) => {
+                // Upgrade legacy non-canonical hashes in place so schema-key /
+                // required-array reorder alone does not false-positive as drift.
+                let legacy = legacy_tool_hash(tool);
+                if previous == &legacy {
+                    self.tool_hashes.insert(key, hash);
+                    self.dirty = true;
+                    return McpToolTrustDecision::Unchanged;
+                }
+                McpToolTrustDecision::Drift {
+                    previous: previous.clone(),
+                    current: hash,
+                }
+            }
             None => {
                 self.tool_hashes.insert(key, hash.clone());
                 self.dirty = true;
@@ -133,7 +143,7 @@ fn atomic_write(path: &Path, content: &[u8]) -> Result<(), McpError> {
             error
         ))
     })?;
-    std::fs::rename(&temp_path, path).map_err(|error| {
+    replace_file(&temp_path, path).map_err(|error| {
         let _ = std::fs::remove_file(&temp_path);
         McpError::schema(format!(
             "Failed to publish MCP tool trust baseline {}: {}",
@@ -142,6 +152,28 @@ fn atomic_write(path: &Path, content: &[u8]) -> Result<(), McpError> {
         ))
     })?;
     Ok(())
+}
+
+/// Atomically publish `from` over `to`.
+///
+/// Unix `rename(2)` replaces an existing destination; Windows `MoveFile` does
+/// not, so replace by removing the destination first while the trust-file lock
+/// is held.
+fn replace_file(from: &Path, to: &Path) -> std::io::Result<()> {
+    #[cfg(windows)]
+    {
+        match std::fs::rename(from, to) {
+            Ok(()) => Ok(()),
+            Err(_) => {
+                let _ = std::fs::remove_file(to);
+                std::fs::rename(from, to)
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        std::fs::rename(from, to)
+    }
 }
 
 pub(crate) fn validate_tool_description_trust(
@@ -175,18 +207,74 @@ fn tool_key(server_id: &str, tool_name: &str) -> String {
 }
 
 fn tool_hash(tool: &McpTool) -> String {
+    hash_tool_parts(
+        &tool.name,
+        tool.description.as_deref().map(normalize_whitespace),
+        &canonicalize_schema_value(&tool.input_schema),
+    )
+}
+
+/// Pre-canonicalization hash retained so existing baselines can be upgraded
+/// without treating equivalent schemas as drift.
+fn legacy_tool_hash(tool: &McpTool) -> String {
+    hash_tool_parts(&tool.name, tool.description.clone(), &tool.input_schema)
+}
+
+fn hash_tool_parts(name: &str, description: Option<String>, schema: &Value) -> String {
     let mut hasher = Sha256::new();
-    hasher.update(tool.name.as_bytes());
+    hasher.update(name.as_bytes());
     hasher.update(b"\0");
-    if let Some(description) = tool.description.as_deref() {
+    if let Some(description) = description.as_deref() {
         hasher.update(description.as_bytes());
     }
     hasher.update(b"\0");
-    hasher.update(
-        serde_json::to_vec(&tool.input_schema)
-            .unwrap_or_else(|_| b"<unserializable-schema>".to_vec()),
-    );
+    hasher
+        .update(serde_json::to_vec(schema).unwrap_or_else(|_| b"<unserializable-schema>".to_vec()));
     hex_encode(&hasher.finalize())
+}
+
+/// Normalize JSON Schema for trust hashing: sort object keys and order-insensitive
+/// constructs such as `required` string arrays.
+fn canonicalize_schema_value(value: &Value) -> Value {
+    match value {
+        Value::Object(map) => {
+            let mut sorted: Vec<_> = map.iter().collect();
+            sorted.sort_by_key(|(key, _)| *key);
+            let canonical = sorted
+                .into_iter()
+                .map(|(key, child)| {
+                    let canon = if key == "required" {
+                        canonicalize_required_array(child)
+                    } else {
+                        canonicalize_schema_value(child)
+                    };
+                    (key.clone(), canon)
+                })
+                .collect();
+            Value::Object(canonical)
+        }
+        Value::Array(items) => Value::Array(items.iter().map(canonicalize_schema_value).collect()),
+        other => other.clone(),
+    }
+}
+
+fn canonicalize_required_array(value: &Value) -> Value {
+    match value {
+        Value::Array(items) => {
+            let mut strings = Vec::with_capacity(items.len());
+            for item in items {
+                match item.as_str() {
+                    Some(text) => strings.push(text.to_string()),
+                    None => {
+                        return Value::Array(items.iter().map(canonicalize_schema_value).collect());
+                    }
+                }
+            }
+            strings.sort();
+            Value::Array(strings.into_iter().map(Value::String).collect())
+        }
+        other => canonicalize_schema_value(other),
+    }
 }
 
 fn hex_encode(bytes: &[u8]) -> String {

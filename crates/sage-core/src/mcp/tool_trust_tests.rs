@@ -198,3 +198,91 @@ fn schema_key_scanner_rejects_prompt_text_property_names() {
 
     assert!(error.to_string().contains("untrusted schema key"));
 }
+
+#[test]
+fn tool_hash_ignores_required_array_order_and_object_key_order() {
+    let left = McpTool::new("search").with_input_schema(json!({
+        "type": "object",
+        "required": ["query", "limit"],
+        "properties": {
+            "limit": { "type": "integer" },
+            "query": { "type": "string" }
+        }
+    }));
+    let right = McpTool::new("search").with_input_schema(json!({
+        "properties": {
+            "query": { "type": "string" },
+            "limit": { "type": "integer" }
+        },
+        "required": ["limit", "query"],
+        "type": "object"
+    }));
+
+    assert_eq!(tool_hash(&left), tool_hash(&right));
+}
+
+#[test]
+fn trust_store_treats_required_reorder_as_unchanged() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = TempDir::new()?;
+    let path = dir.path().join("trust.json");
+    let original = McpTool::new("search").with_input_schema(json!({
+        "type": "object",
+        "required": ["a", "b"],
+        "properties": {
+            "a": { "type": "string" },
+            "b": { "type": "string" }
+        }
+    }));
+    let reordered = McpTool::new("search").with_input_schema(json!({
+        "type": "object",
+        "required": ["b", "a"],
+        "properties": {
+            "b": { "type": "string" },
+            "a": { "type": "string" }
+        }
+    }));
+
+    let mut store = McpToolTrustStore::load(&path)?;
+    assert!(matches!(
+        store.check_tool("docs", &original),
+        McpToolTrustDecision::BaselineCreated { .. }
+    ));
+    store.save_if_dirty()?;
+
+    let mut reloaded = McpToolTrustStore::load(&path)?;
+    assert_eq!(
+        reloaded.check_tool("docs", &reordered),
+        McpToolTrustDecision::Unchanged
+    );
+    Ok(())
+}
+
+#[test]
+fn atomic_write_replaces_existing_trust_file() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = TempDir::new()?;
+    let path = dir.path().join("trust.json");
+    let mut store = McpToolTrustStore::load(&path)?;
+    assert!(matches!(
+        store.check_tool("docs", &McpTool::new("read")),
+        McpToolTrustDecision::BaselineCreated { .. }
+    ));
+    store.save_if_dirty()?;
+    assert!(path.exists());
+
+    let mut store = McpToolTrustStore::load(&path)?;
+    assert!(matches!(
+        store.check_tool("docs", &McpTool::new("write")),
+        McpToolTrustDecision::BaselineCreated { .. }
+    ));
+    store.save_if_dirty()?;
+
+    let content = std::fs::read_to_string(&path)?;
+    let parsed: serde_json::Value = serde_json::from_str(&content)?;
+    let hashes = parsed
+        .get("tool_hashes")
+        .and_then(|v| v.as_object())
+        .expect("tool_hashes object");
+    assert!(hashes.contains_key(r#"["docs","read"]"#));
+    assert!(hashes.contains_key(r#"["docs","write"]"#));
+    Ok(())
+}

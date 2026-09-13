@@ -82,9 +82,11 @@ impl McpRegistry {
     /// routes/allowlists immediately so warn→fail-closed cannot leave drifted
     /// tools callable until a later `all_tools()` call.
     pub async fn set_warn_on_tool_trust_drift(&self, enabled: bool) {
-        let previous = self.warn_on_tool_trust_drift.load(Ordering::Relaxed);
-        self.warn_on_tool_trust_drift
-            .store(enabled, Ordering::Relaxed);
+        // Atomic swap so concurrent enable/disable cannot both observe the same
+        // stale previous value and skip the fail-closed revalidation.
+        let previous = self
+            .warn_on_tool_trust_drift
+            .swap(enabled, Ordering::AcqRel);
         if previous != enabled && !self.clients.is_empty() {
             let _ = self.all_tools().await;
         }
@@ -92,7 +94,7 @@ impl McpRegistry {
 
     /// Return whether MCP tool trust baseline drift only warns (legacy behavior).
     pub fn warn_on_tool_trust_drift(&self) -> bool {
-        self.warn_on_tool_trust_drift.load(Ordering::Relaxed)
+        self.warn_on_tool_trust_drift.load(Ordering::Acquire)
     }
 
     pub(crate) fn capability_refresh_lock(&self, name: &str) -> Arc<tokio::sync::Mutex<()>> {

@@ -60,10 +60,14 @@ impl McpServerManager {
 
         // Resolve the merged trust policy before connecting any server so an
         // earlier warn-mode source cannot leave drifted tools callable after a
-        // later fail-closed policy wins.
+        // later fail-closed policy wins. Only apply when at least one source
+        // produced configuration — all-source failure must not silently reset
+        // an existing warn-mode policy to the default fail-closed value.
+        let mut discovered_any_config = false;
         for source in sources {
             match discover_from_source(source).await {
                 Ok((discovered_config, servers)) => {
+                    discovered_any_config = true;
                     effective_config.merge(discovered_config);
                     pending_servers.extend(servers);
                 }
@@ -72,8 +76,10 @@ impl McpServerManager {
                 }
             }
         }
-        self.apply_trust_policy(effective_config.warn_on_tool_trust_drift)
-            .await;
+        if discovered_any_config {
+            self.apply_trust_policy(effective_config.warn_on_tool_trust_drift)
+                .await;
+        }
 
         for (name, config) in pending_servers {
             match self
