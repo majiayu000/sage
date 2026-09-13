@@ -240,6 +240,21 @@ fn tool_hash_ignores_enum_and_type_array_order() {
 }
 
 #[test]
+fn tool_hash_canonicalizes_dependent_required_value_order() {
+    let left = McpTool::new("pay").with_input_schema(json!({
+        "dependentRequired": {
+            "credit_card": ["billing_address", "name"]
+        }
+    }));
+    let right = McpTool::new("pay").with_input_schema(json!({
+        "dependentRequired": {
+            "credit_card": ["name", "billing_address"]
+        }
+    }));
+    assert_eq!(tool_hash(&left), tool_hash(&right));
+}
+
+#[test]
 fn tool_hash_ignores_allof_anyof_oneof_branch_order() {
     let left = McpTool::new("shape").with_input_schema(json!({
         "allOf": [
@@ -297,6 +312,25 @@ fn legacy_raw_rejects_eight_item_reorder_without_full_coverage() {
     let reordered = McpTool::new("search").with_input_schema(json!({
         "required": ["a", "b", "c", "d", "e", "f", "g", "h"]
     }));
+    assert!(!super::tool_trust_hash::legacy_raw_baseline_matches(
+        &legacy_raw_tool_hash(&original),
+        &reordered
+    ));
+}
+
+#[test]
+fn legacy_raw_caps_seven_item_reorder_when_schema_bytes_amplify() {
+    let pad = "x".repeat(900);
+    let original = McpTool::new("search").with_input_schema(json!({
+        "title": pad,
+        "required": ["g", "f", "e", "d", "c", "b", "a"]
+    }));
+    let reordered = McpTool::new("search").with_input_schema(json!({
+        "title": pad,
+        "required": ["a", "b", "c", "d", "e", "f", "g"]
+    }));
+    // wire_len × 5040 would exceed the sync-hash byte cap, so the effective
+    // budget drops below 7! and full reorder coverage is refused.
     assert!(!super::tool_trust_hash::legacy_raw_baseline_matches(
         &legacy_raw_tool_hash(&original),
         &reordered

@@ -251,21 +251,25 @@ impl McpRegistry {
         // The file lock additionally serializes concurrent Sage processes that
         // share the same home-directory trust file.
         let _trust_guard = self.tool_trust_lock.lock().await;
-        // Acquire the inter-process flock off the async worker so a contended
-        // LOCK_EX (or Windows retry loop) cannot stall the Tokio runtime.
-        let (_file_lock, mut trust_store) =
-            tokio::task::spawn_blocking(McpToolTrustStore::load_default_locked)
-                .await
-                .map_err(|error| {
-                    McpError::schema(format!(
-                        "Failed to acquire MCP tool trust lock on blocking pool: {error}"
-                    ))
-                })??;
+        // Run the full load / check / durable-save transaction on the blocking
+        // pool so contended flocks, schema hashing, and sync_all cannot stall
+        // the Tokio worker while process-wide and inter-process locks are held.
+        let server_name = name.to_string();
         let warn_on_drift = self.warn_on_tool_trust_drift();
-        let trusted_tools =
-            trusted_mcp_tools_for_server(name, tools, &mut trust_store, warn_on_drift)?;
-        trust_store.save_if_dirty()?;
-        drop(_file_lock);
+        let trusted_tools = tokio::task::spawn_blocking(move || {
+            let (_file_lock, mut trust_store) = McpToolTrustStore::load_default_locked()?;
+            let trusted =
+                trusted_mcp_tools_for_server(&server_name, tools, &mut trust_store, warn_on_drift)?;
+            trust_store.save_if_dirty()?;
+            drop(_file_lock);
+            Ok::<_, McpError>(trusted)
+        })
+        .await
+        .map_err(|error| {
+            McpError::schema(format!(
+                "Failed to refresh MCP tool trust on blocking pool: {error}"
+            ))
+        })??;
         drop(_trust_guard);
 
         // A displaced same-name registration may have replaced this client while

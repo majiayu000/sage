@@ -1,8 +1,12 @@
 //! Tool identity hashing and schema canonicalization for MCP trust baselines.
 
+#[path = "tool_trust_legacy_match.rs"]
+mod tool_trust_legacy_match;
+
 use super::super::types::McpTool;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
+use tool_trust_legacy_match::walk;
 
 /// Cap permutations explored when matching a pre-canonicalization baseline.
 ///
@@ -14,6 +18,10 @@ const LEGACY_REORDER_BUDGET: usize = 5040;
 /// Skip permutation reconstruction when schema wire size could amplify into a
 /// process-exhausting drift check.
 const MAX_LEGACY_SCHEMA_BYTES: usize = 256 * 1024;
+
+/// Cap total synchronous hash bytes (`wire_len × candidates`) during legacy
+/// matching so a near-limit schema cannot amplify into GiB-scale work.
+const MAX_LEGACY_SYNC_HASH_BYTES: usize = 4 * 1024 * 1024;
 
 pub(super) fn tool_hash(tool: &McpTool) -> String {
     hash_tool_parts(
@@ -42,8 +50,19 @@ pub(super) fn legacy_raw_baseline_matches(previous: &str, tool: &McpTool) -> boo
     }
 
     let mut working = tool.input_schema.clone();
-    let mut budget = LEGACY_REORDER_BUDGET;
-    walk(&mut working, TraverseMode::Schema, &mut budget, previous, tool)
+    let mut budget = legacy_reorder_budget(wire.len());
+    walk(
+        &mut working,
+        TraverseMode::Schema,
+        &mut budget,
+        previous,
+        tool,
+    )
+}
+
+fn legacy_reorder_budget(wire_len: usize) -> usize {
+    let max_by_bytes = MAX_LEGACY_SYNC_HASH_BYTES / wire_len.max(1);
+    max_by_bytes.min(LEGACY_REORDER_BUDGET)
 }
 
 fn description_casefold_ambiguous(tool: &McpTool) -> bool {
@@ -53,7 +72,11 @@ fn description_casefold_ambiguous(tool: &McpTool) -> bool {
     }
 }
 
-fn lossless_legacy_match(previous: &str, tool: &McpTool, matched_schema: &Value) -> bool {
+pub(super) fn lossless_legacy_match(
+    previous: &str,
+    tool: &McpTool,
+    matched_schema: &Value,
+) -> bool {
     if !legacy_hash_eq(previous, tool, matched_schema) {
         return false;
     }
@@ -100,7 +123,8 @@ fn hash_tool_parts(name: &str, description: DescriptionEncoding, schema: &Value)
 }
 
 /// Normalize JSON Schema for trust hashing: sort object keys and order-insensitive
-/// arrays (`required`, `enum`, multi-type `type`, and `allOf`/`anyOf`/`oneOf`).
+/// arrays (`required`, `enum`, multi-type `type`, `allOf`/`anyOf`/`oneOf`, and
+/// `dependentRequired` value arrays).
 ///
 /// Arrays beneath literal-valued keywords (`const`, `default`, `examples`, and
 /// `enum` item values) keep their original order. Keys inside schema-valued maps
@@ -110,7 +134,7 @@ pub(super) fn canonicalize_schema_value(value: &Value) -> Value {
 }
 
 #[derive(Clone, Copy)]
-enum TraverseMode {
+pub(super) enum TraverseMode {
     /// Normal schema object: member names are keywords.
     Schema,
     /// Schema-valued map (`properties`/`$defs`/…): member names are identifiers.
@@ -156,6 +180,8 @@ fn canonicalize_schema_value_inner(value: &Value, mode: TraverseMode) -> Value {
 fn child_mode_for_schema_key(key: &str, child: &Value) -> Value {
     if is_schema_valued_map_key(key) {
         canonicalize_schema_value_inner(child, TraverseMode::SchemaMap)
+    } else if key == "dependentRequired" {
+        canonicalize_dependent_required_map(child)
     } else if is_literal_valued_schema_key(key) {
         canonicalize_schema_value_inner(child, TraverseMode::Literal)
     } else if is_order_insensitive_schema_key(key) {
@@ -165,11 +191,27 @@ fn child_mode_for_schema_key(key: &str, child: &Value) -> Value {
     }
 }
 
-fn is_literal_valued_schema_key(key: &str) -> bool {
+fn canonicalize_dependent_required_map(value: &Value) -> Value {
+    match value {
+        Value::Object(map) => {
+            let mut sorted: Vec<_> = map.iter().collect();
+            sorted.sort_by_key(|(key, _)| *key);
+            Value::Object(
+                sorted
+                    .into_iter()
+                    .map(|(key, child)| (key.clone(), canonicalize_set_like_array(child, true)))
+                    .collect(),
+            )
+        }
+        other => canonicalize_schema_value_inner(other, TraverseMode::Schema),
+    }
+}
+
+pub(super) fn is_literal_valued_schema_key(key: &str) -> bool {
     matches!(key, "const" | "default" | "examples")
 }
 
-fn is_schema_valued_map_key(key: &str) -> bool {
+pub(super) fn is_schema_valued_map_key(key: &str) -> bool {
     matches!(
         key,
         "properties" | "patternProperties" | "$defs" | "definitions" | "dependentSchemas"
@@ -188,7 +230,7 @@ pub(super) fn description_option_ambiguous(tool: &McpTool) -> bool {
     }
 }
 
-fn is_order_insensitive_schema_key(key: &str) -> bool {
+pub(super) fn is_order_insensitive_schema_key(key: &str) -> bool {
     matches!(
         key,
         "required" | "enum" | "type" | "allOf" | "anyOf" | "oneOf"
@@ -216,225 +258,6 @@ fn canonicalize_set_like_array(value: &Value, items_are_literals: bool) -> Value
         }
         other => canonicalize_schema_value_inner(other, TraverseMode::Schema),
     }
-}
-
-/// Depth-first in-place walk. Hashes the whole `root` once each set-array
-/// assignment under `node` is complete.
-fn walk(
-    root: &mut Value,
-    mode: TraverseMode,
-    budget: &mut usize,
-    previous: &str,
-    tool: &McpTool,
-) -> bool {
-    // Locate the first unset order-insensitive array under root via path, then
-    // permute it; when none remain, hash the root once.
-    match find_set_array_path(root, mode) {
-        None => {
-            if *budget == 0 {
-                return false;
-            }
-            *budget = budget.saturating_sub(1);
-            lossless_legacy_match(previous, tool, root)
-        }
-        Some(path) => permute_at_path(root, &path, &[], budget, previous, tool),
-    }
-}
-
-#[derive(Clone, PartialEq, Eq)]
-enum PathStep {
-    Key(String),
-    Index(usize),
-}
-
-fn find_set_array_path(value: &Value, mode: TraverseMode) -> Option<Vec<PathStep>> {
-    find_set_array_path_excluding(value, mode, &[])
-}
-
-fn permute_at_path(
-    root: &mut Value,
-    path: &[PathStep],
-    assigned: &[Vec<PathStep>],
-    budget: &mut usize,
-    previous: &str,
-    tool: &McpTool,
-) -> bool {
-    let array = match get_array_mut(root, path) {
-        Some(array) => array,
-        None => return walk_after_assigned(root, assigned, budget, previous, tool),
-    };
-    let n = array.len();
-    let mut next_assigned = assigned.to_vec();
-    next_assigned.push(path.to_vec());
-    if !factorial_fits(n, *budget) {
-        // Versioned migration: do not partially sample large set arrays.
-        return walk_after_assigned(root, &next_assigned, budget, previous, tool);
-    }
-
-    // Take ownership of the array for Heap permutation, then restore.
-    let mut items = std::mem::take(array);
-    let hit = heap_permute(&mut items, n, &mut |perm| {
-        if let Some(slot) = get_array_mut(root, path) {
-            *slot = perm.to_vec();
-        }
-        // Continue with every already-assigned path excluded so nested
-        // set-arrays cannot rediscover ancestors and stack-overflow.
-        walk_after_assigned(root, &next_assigned, budget, previous, tool)
-    });
-    if let Some(slot) = get_array_mut(root, path) {
-        *slot = items;
-    }
-    hit
-}
-
-fn walk_after_assigned(
-    root: &mut Value,
-    assigned: &[Vec<PathStep>],
-    budget: &mut usize,
-    previous: &str,
-    tool: &McpTool,
-) -> bool {
-    match find_set_array_path_excluding(root, TraverseMode::Schema, assigned) {
-        None => {
-            if *budget == 0 {
-                return false;
-            }
-            *budget = budget.saturating_sub(1);
-            lossless_legacy_match(previous, tool, root)
-        }
-        Some(next) => permute_at_path(root, &next, assigned, budget, previous, tool),
-    }
-}
-
-fn find_set_array_path_excluding(
-    value: &Value,
-    mode: TraverseMode,
-    exclude: &[Vec<PathStep>],
-) -> Option<Vec<PathStep>> {
-    find_set_array_path_excluding_inner(value, mode, exclude, &[])
-}
-
-fn find_set_array_path_excluding_inner(
-    value: &Value,
-    mode: TraverseMode,
-    exclude: &[Vec<PathStep>],
-    prefix: &[PathStep],
-) -> Option<Vec<PathStep>> {
-    match value {
-        Value::Object(map) => {
-            for (key, child) in map {
-                let mut here = prefix.to_vec();
-                here.push(PathStep::Key(key.clone()));
-                let child_mode = match mode {
-                    TraverseMode::Literal => TraverseMode::Literal,
-                    TraverseMode::SchemaMap => TraverseMode::Schema,
-                    TraverseMode::Schema => {
-                        if is_schema_valued_map_key(key) {
-                            TraverseMode::SchemaMap
-                        } else if is_literal_valued_schema_key(key) {
-                            TraverseMode::Literal
-                        } else if is_order_insensitive_schema_key(key) {
-                            if let Value::Array(items) = child {
-                                if items.len() > 1 && !path_in_excludes(&here, exclude) {
-                                    return Some(here);
-                                }
-                            }
-                            // enum/required/type items are values; combinators are schemas.
-                            if matches!(key.as_str(), "enum" | "required" | "type") {
-                                TraverseMode::Literal
-                            } else {
-                                TraverseMode::Schema
-                            }
-                        } else {
-                            TraverseMode::Schema
-                        }
-                    }
-                };
-                if let Some(sub) =
-                    find_set_array_path_excluding_inner(child, child_mode, exclude, &here)
-                {
-                    return Some(sub);
-                }
-            }
-            None
-        }
-        Value::Array(items) => {
-            for (index, child) in items.iter().enumerate() {
-                let mut here = prefix.to_vec();
-                here.push(PathStep::Index(index));
-                if let Some(sub) =
-                    find_set_array_path_excluding_inner(child, mode, exclude, &here)
-                {
-                    return Some(sub);
-                }
-            }
-            None
-        }
-        _ => None,
-    }
-}
-
-fn path_in_excludes(path: &[PathStep], exclude: &[Vec<PathStep>]) -> bool {
-    exclude.iter().any(|ex| path_eq(path, ex))
-}
-
-fn path_eq(left: &[PathStep], right: &[PathStep]) -> bool {
-    left == right
-}
-
-fn get_array_mut<'a>(root: &'a mut Value, path: &[PathStep]) -> Option<&'a mut Vec<Value>> {
-    let mut cur = root;
-    for step in &path[..path.len().saturating_sub(1)] {
-        cur = match step {
-            PathStep::Key(key) => cur.as_object_mut()?.get_mut(key)?,
-            PathStep::Index(index) => cur.as_array_mut()?.get_mut(*index)?,
-        };
-    }
-    match path.last()? {
-        PathStep::Key(key) => match cur.as_object_mut()?.get_mut(key)? {
-            Value::Array(items) => Some(items),
-            _ => None,
-        },
-        PathStep::Index(index) => match cur.as_array_mut()?.get_mut(*index)? {
-            Value::Array(items) => Some(items),
-            _ => None,
-        },
-    }
-}
-
-fn heap_permute(
-    items: &mut [Value],
-    k: usize,
-    visit: &mut dyn FnMut(&mut [Value]) -> bool,
-) -> bool {
-    if k <= 1 {
-        return visit(items);
-    }
-    if heap_permute(items, k - 1, visit) {
-        return true;
-    }
-    for i in 0..k - 1 {
-        if k.is_multiple_of(2) {
-            items.swap(i, k - 1);
-        } else {
-            items.swap(0, k - 1);
-        }
-        if heap_permute(items, k - 1, visit) {
-            return true;
-        }
-    }
-    false
-}
-
-fn factorial_fits(n: usize, budget: usize) -> bool {
-    let mut acc: usize = 1;
-    for i in 2..=n {
-        match acc.checked_mul(i) {
-            Some(next) if next <= budget => acc = next,
-            _ => return false,
-        }
-    }
-    true
 }
 
 fn hex_encode(bytes: &[u8]) -> String {
