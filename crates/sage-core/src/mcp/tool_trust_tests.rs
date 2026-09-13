@@ -1216,8 +1216,7 @@ fn trust_hash_still_collapses_safe_integer_one_and_one_point_zero() {
 }
 
 #[test]
-fn durability_pending_marker_blocks_load_until_cleared() -> Result<(), Box<dyn std::error::Error>>
-{
+fn durability_pending_marker_blocks_load_until_cleared() -> Result<(), Box<dyn std::error::Error>> {
     let dir = TempDir::new()?;
     let path = dir.path().join("trust.json");
     let mut store = McpToolTrustStore::load(&path)?;
