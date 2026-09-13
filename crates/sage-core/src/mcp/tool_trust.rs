@@ -162,12 +162,16 @@ impl McpToolTrustStore {
         let key = tool_key(server_id, &tool.name);
         let hash = tool_hash(tool);
         match self.tool_hashes.get(&key).cloned() {
-            Some(previous) if previous.hash() == hash => {
+            // Exact equality is only safe for current-encoding baselines.
+            // Legacy hashes can collide with current encodings (e.g. legacy
+            // description `1Safe` vs current `Safe` both hash bytes `1Safe`).
+            Some(previous)
+                if previous.hash() == hash && !previous.allows_legacy_match(self.file_version) =>
+            {
                 // Persist versioned current encoding on exact matches so plain
-                // and legacy-tagged current hashes stop accepting legacy fallback.
+                // current hashes under a versioned file stop needing rewrite.
                 if previous.needs_encoding_persist(self.file_version) {
                     self.tool_hashes.insert(key, StoredToolHash::current(hash));
-                    self.file_version = TRUST_FILE_VERSION;
                     self.dirty = true;
                 }
                 McpToolTrustDecision::Unchanged
@@ -180,12 +184,15 @@ impl McpToolTrustStore {
                 // (e.g. current("Safe") == legacy("1Safe")). Prior lossy
                 // canonicalizers and absent/empty description collisions still
                 // require explicit re-baselining.
+                //
+                // Keep `file_version` at the loaded value for the whole refresh
+                // loop so migrating the first plain entry cannot make later
+                // plain entries look current-format and skip legacy matching.
                 if previous.allows_legacy_match(self.file_version)
                     && !description_option_ambiguous(tool)
                     && legacy_raw_baseline_matches(previous.hash(), tool)
                 {
                     self.tool_hashes.insert(key, StoredToolHash::current(hash));
-                    self.file_version = TRUST_FILE_VERSION;
                     self.dirty = true;
                     return McpToolTrustDecision::Unchanged;
                 }
@@ -197,7 +204,6 @@ impl McpToolTrustStore {
             None => {
                 self.tool_hashes
                     .insert(key, StoredToolHash::current(hash.clone()));
-                self.file_version = TRUST_FILE_VERSION;
                 self.dirty = true;
                 McpToolTrustDecision::BaselineCreated { hash }
             }

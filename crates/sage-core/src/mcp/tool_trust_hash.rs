@@ -242,11 +242,11 @@ fn canonicalize_json_number(number: &serde_json::Number) -> Value {
         if f.is_finite() {
             let normalized = if f == -0.0 { 0.0 } else { f };
             // Integer-valued floats share the integer spelling (`1` == `1.0`).
-            if normalized.fract() == 0.0
-                && normalized >= i64::MIN as f64
-                && normalized <= i64::MAX as f64
-            {
-                return Value::Number((normalized as i64).into());
+            // Do not use `i64::MAX as f64` as an upper bound: that cast rounds
+            // up to 2^63, so `9223372036854775808.0` would collide with
+            // `i64::MAX`. Use exclusive 2^63 (exact in f64) and a round-trip.
+            if let Some(as_i64) = exact_i64_from_integral_f64(normalized) {
+                return Value::Number(as_i64.into());
             }
             if let Some(canonical) = serde_json::Number::from_f64(normalized) {
                 return Value::Number(canonical);
@@ -254,6 +254,25 @@ fn canonicalize_json_number(number: &serde_json::Number) -> Value {
         }
     }
     Value::Number(number.clone())
+}
+
+/// Convert an integral finite f64 to i64 only when the value lies in range
+/// without relying on the lossy `i64::MAX as f64` bound.
+fn exact_i64_from_integral_f64(value: f64) -> Option<i64> {
+    if value.fract() != 0.0 {
+        return None;
+    }
+    // 2^63 is exactly representable in f64; i64::MAX (2^63-1) is not.
+    const TWO_POW_63: f64 = 9_223_372_036_854_775_808.0;
+    if !(-TWO_POW_63..TWO_POW_63).contains(&value) {
+        return None;
+    }
+    let as_i64 = value as i64;
+    if as_i64 as f64 == value {
+        Some(as_i64)
+    } else {
+        None
+    }
 }
 
 pub(super) fn is_literal_valued_schema_key(key: &str) -> bool {

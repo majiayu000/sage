@@ -6,7 +6,7 @@ use super::super::transport::McpTransport;
 use super::super::types::McpTool;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use tokio::sync::{Mutex, RwLock, mpsc, oneshot};
 use tracing::{debug, error, warn};
 
@@ -28,6 +28,7 @@ pub(super) async fn message_receiver(
     running: Arc<AtomicBool>,
     tools: Arc<RwLock<Vec<McpTool>>>,
     trusted_tool_allowlist: Arc<AtomicBool>,
+    list_changed_generation: Arc<AtomicU64>,
 ) {
     let mut pending_requests: HashMap<String, oneshot::Sender<McpResponse>> = HashMap::new();
 
@@ -71,6 +72,7 @@ pub(super) async fn message_receiver(
                                     clear_trusted_allowlist_if_active(
                                         &tools,
                                         &trusted_tool_allowlist,
+                                        &list_changed_generation,
                                     )
                                     .await;
                                 }
@@ -106,9 +108,11 @@ pub(super) async fn message_receiver(
 pub(super) async fn clear_trusted_allowlist_if_active(
     tools: &RwLock<Vec<McpTool>>,
     trusted_tool_allowlist: &AtomicBool,
+    list_changed_generation: &AtomicU64,
 ) {
     if trusted_tool_allowlist.load(Ordering::Acquire) {
         tools.write().await.clear();
+        list_changed_generation.fetch_add(1, Ordering::AcqRel);
         debug!("Cleared trusted-tool allowlist after tools/listChanged");
     }
 }
@@ -122,16 +126,20 @@ mod tests {
     async fn list_changed_clears_active_allowlist() {
         let tools = RwLock::new(vec![McpTool::new("read")]);
         let allowlist = AtomicBool::new(true);
-        clear_trusted_allowlist_if_active(&tools, &allowlist).await;
+        let generation = AtomicU64::new(0);
+        clear_trusted_allowlist_if_active(&tools, &allowlist, &generation).await;
         assert!(tools.read().await.is_empty());
         assert!(allowlist.load(Ordering::Acquire));
+        assert_eq!(generation.load(Ordering::Acquire), 1);
     }
 
     #[tokio::test]
     async fn list_changed_leaves_inactive_direct_client_cache() {
         let tools = RwLock::new(vec![McpTool::new("read")]);
         let allowlist = AtomicBool::new(false);
-        clear_trusted_allowlist_if_active(&tools, &allowlist).await;
+        let generation = AtomicU64::new(0);
+        clear_trusted_allowlist_if_active(&tools, &allowlist, &generation).await;
         assert_eq!(tools.read().await.len(), 1);
+        assert_eq!(generation.load(Ordering::Acquire), 0);
     }
 }

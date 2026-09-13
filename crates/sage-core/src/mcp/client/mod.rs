@@ -51,6 +51,11 @@ pub struct McpClient {
     /// Shared with the receiver so `notifications/tools/listChanged` can clear
     /// the allowlist without waiting for the next registry refresh.
     trusted_tool_allowlist: Arc<AtomicBool>,
+    /// Bumped whenever the trusted-tool cache is cleared or replaced so
+    /// `call_tool` and capability refresh can detect invalidation without
+    /// holding the tools `RwLock` across remote awaits (which deadlocks the
+    /// receiver when listChanged needs the write lock).
+    list_changed_generation: Arc<AtomicU64>,
     /// Cached resources
     resources: RwLock<Vec<McpResource>>,
     /// Cached prompts
@@ -84,6 +89,7 @@ impl McpClient {
         let running = Arc::new(AtomicBool::new(true));
         let tools = Arc::new(RwLock::new(Vec::new()));
         let trusted_tool_allowlist = Arc::new(AtomicBool::new(false));
+        let list_changed_generation = Arc::new(AtomicU64::new(0));
 
         // Start background message receiver
         let transport_clone = Arc::clone(&transport);
@@ -94,6 +100,7 @@ impl McpClient {
             running_clone,
             Arc::clone(&tools),
             Arc::clone(&trusted_tool_allowlist),
+            Arc::clone(&list_changed_generation),
         ));
 
         Self {
@@ -102,6 +109,7 @@ impl McpClient {
             capabilities: RwLock::new(McpCapabilities::default()),
             tools,
             trusted_tool_allowlist,
+            list_changed_generation,
             resources: RwLock::new(Vec::new()),
             prompts: RwLock::new(Vec::new()),
             request_id: AtomicU64::new(1),
@@ -303,10 +311,16 @@ impl McpClient {
         self.trusted_tool_allowlist.load(Ordering::Acquire)
     }
 
+    /// Generation bumped on listChanged clears and trusted-tool replacements.
+    pub(crate) fn list_changed_generation(&self) -> u64 {
+        self.list_changed_generation.load(Ordering::Acquire)
+    }
+
     /// Replace the trusted-tool cache and require call_tool to consult it.
     pub(crate) async fn replace_trusted_tools(&self, tools: Vec<McpTool>) {
         *self.tools.write().await = tools;
         self.trusted_tool_allowlist.store(true, Ordering::Release);
+        self.list_changed_generation.fetch_add(1, Ordering::AcqRel);
     }
 
     /// Get cached resources

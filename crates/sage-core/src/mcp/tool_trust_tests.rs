@@ -884,3 +884,139 @@ fn atomic_write_replaces_existing_trust_file() -> Result<(), Box<dyn std::error:
     assert!(hashes.contains_key(r#"["docs","write"]"#));
     Ok(())
 }
+
+#[test]
+fn trust_store_rejects_reverse_cross_format_exact_match() -> Result<(), Box<dyn std::error::Error>>
+{
+    // Legacy baseline for description `1Safe` hashes the same bytes as the
+    // current encoding of `Safe`. Exact equality must not accept the drift.
+    let dir = TempDir::new()?;
+    let path = dir.path().join("trust.json");
+    let preimage = McpTool::new("geo").with_description("1Safe");
+    let legacy = {
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(b"geo");
+        hasher.update(b"\0");
+        hasher.update(b"1Safe");
+        hasher.update(b"\0");
+        hasher.update(serde_json::to_vec(&preimage.input_schema)?);
+        hasher
+            .finalize()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    };
+    std::fs::write(
+        &path,
+        serde_json::to_string_pretty(&serde_json::json!({
+            "tool_hashes": { r#"["docs","geo"]"#: legacy }
+        }))?,
+    )?;
+
+    let safe = McpTool::new("geo").with_description("Safe");
+    let mut store = McpToolTrustStore::load(&path)?;
+    assert!(matches!(
+        store.check_tool("docs", &safe),
+        McpToolTrustDecision::Drift { .. }
+    ));
+    Ok(())
+}
+
+#[test]
+fn trust_store_keeps_file_version_stable_while_migrating_entries()
+-> Result<(), Box<dyn std::error::Error>> {
+    let dir = TempDir::new()?;
+    let path = dir.path().join("trust.json");
+    // Mixed-case descriptions avoid the casefold-ambiguous legacy gate; unsorted
+    // required arrays prove lossless pre-canonicalization baselines.
+    let alpha = McpTool::new("alpha")
+        .with_description("Alpha Tool")
+        .with_input_schema(json!({
+            "type": "object",
+            "required": ["b", "a"],
+            "properties": {
+                "a": { "type": "string" },
+                "b": { "type": "string" }
+            }
+        }));
+    let beta = McpTool::new("beta")
+        .with_description("Beta Tool")
+        .with_input_schema(json!({
+            "type": "object",
+            "required": ["y", "x"],
+            "properties": {
+                "x": { "type": "string" },
+                "y": { "type": "string" }
+            }
+        }));
+    let legacy_alpha = legacy_raw_tool_hash(&alpha);
+    let legacy_beta = legacy_raw_tool_hash(&beta);
+    std::fs::write(
+        &path,
+        serde_json::to_string_pretty(&serde_json::json!({
+            "tool_hashes": {
+                r#"["docs","alpha"]"#: legacy_alpha,
+                r#"["docs","beta"]"#: legacy_beta
+            }
+        }))?,
+    )?;
+
+    let alpha_now = McpTool::new("alpha")
+        .with_description("Alpha Tool")
+        .with_input_schema(json!({
+            "type": "object",
+            "required": ["a", "b"],
+            "properties": {
+                "a": { "type": "string" },
+                "b": { "type": "string" }
+            }
+        }));
+    let beta_now = McpTool::new("beta")
+        .with_description("Beta Tool")
+        .with_input_schema(json!({
+            "type": "object",
+            "required": ["x", "y"],
+            "properties": {
+                "x": { "type": "string" },
+                "y": { "type": "string" }
+            }
+        }));
+
+    let mut store = McpToolTrustStore::load(&path)?;
+    assert_eq!(
+        store.check_tool("docs", &alpha_now),
+        McpToolTrustDecision::Unchanged
+    );
+    // Second plain entry must still use legacy matching; bumping file_version
+    // after the first migration would reject it as drift.
+    assert_eq!(
+        store.check_tool("docs", &beta_now),
+        McpToolTrustDecision::Unchanged
+    );
+    store.save_if_dirty()?;
+    let content = std::fs::read_to_string(&path)?;
+    let parsed: serde_json::Value = serde_json::from_str(&content)?;
+    assert_eq!(parsed.get("version").and_then(|v| v.as_u64()), Some(1));
+    let hashes = parsed
+        .get("tool_hashes")
+        .and_then(|v| v.as_object())
+        .expect("tool_hashes object");
+    assert!(hashes.contains_key(r#"["docs","alpha"]"#));
+    assert!(hashes.contains_key(r#"["docs","beta"]"#));
+    Ok(())
+}
+
+#[test]
+fn trust_hash_keeps_i64_max_and_two_pow_63_float_distinct() {
+    let max_i64 = McpTool::new("bound").with_input_schema(json!({
+        "maximum": 9223372036854775807_i64
+    }));
+    let two_pow_63 = McpTool::new("bound").with_input_schema(json!({
+        "maximum": 9223372036854775808.0
+    }));
+    assert_ne!(
+        super::tool_trust_hash::tool_hash(&max_i64),
+        super::tool_trust_hash::tool_hash(&two_pow_63)
+    );
+}

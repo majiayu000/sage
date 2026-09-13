@@ -241,9 +241,18 @@ impl McpRegistry {
     ) -> Result<(), McpError> {
         // Preserve transport/timeout/connection variants; only trust-store and
         // schema validation failures become Schema errors below.
+        // Capture listChanged generation before tools/list so a notification
+        // during fetch or the subsequent blocking trust check cannot let this
+        // refresh republish a stale allowlist.
+        let list_generation = client.list_changed_generation();
         let tools = client.list_tools_uncached().await.map_err(|error| {
             error.with_context(format!("while discovering tools for MCP server '{name}'"))
         })?;
+        if client.list_changed_generation() != list_generation {
+            return Err(McpError::schema(format!(
+                "MCP server '{name}' tools/listChanged during capability refresh; retry required"
+            )));
+        }
 
         // Serialize the process-wide trust baseline so concurrent first
         // baselines across servers *and* separate McpRegistry instances cannot
@@ -278,6 +287,14 @@ impl McpRegistry {
             client.replace_trusted_tools(Vec::new()).await;
             return Err(McpError::connection(format!(
                 "MCP server '{name}' was replaced during capability refresh"
+            )));
+        }
+
+        // listChanged after tools/list (e.g. during the blocking trust check)
+        // cleared the allowlist; refuse to republish the now-stale response.
+        if client.list_changed_generation() != list_generation {
+            return Err(McpError::schema(format!(
+                "MCP server '{name}' tools/listChanged during capability refresh; retry required"
             )));
         }
 
