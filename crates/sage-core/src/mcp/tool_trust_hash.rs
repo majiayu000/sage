@@ -41,15 +41,22 @@ pub(super) fn tool_hash(tool: &McpTool) -> String {
 /// multiple affordable set-array factorials must also fit, otherwise the
 /// current wire order is tried once. Larger reorderings require re-baselining.
 ///
-/// Legacy case-folded description hashes are not matched. When the current
-/// description is already lowercase (so it can collide with a case-folded
-/// prior hash), a match is accepted only if the matched schema wire form
-/// differs from the canonical schema — proving a lossless pre-canonicalization
-/// baseline rather than a lossy prior canonicalizer.
-pub(super) fn legacy_raw_baseline_matches(previous: &str, tool: &McpTool) -> bool {
+/// Legacy case-folded description hashes are not matched unless
+/// `parent_release` is set. Parent-release (file version 0) plain hashes used
+/// exact description bytes, so already-lowercase tools with already-canonical
+/// schemas must still migrate. For explicit legacy encodings under a versioned
+/// file, when the current description is already lowercase (so it can collide
+/// with a case-folded prior hash), a match is accepted only if the matched
+/// schema wire form differs from the canonical schema — proving a lossless
+/// pre-canonicalization baseline rather than a lossy prior canonicalizer.
+pub(super) fn legacy_raw_baseline_matches(
+    previous: &str,
+    tool: &McpTool,
+    parent_release: bool,
+) -> bool {
     let wire = serde_json::to_vec(&tool.input_schema).unwrap_or_default();
     if wire.len() > MAX_LEGACY_SCHEMA_BYTES {
-        return lossless_legacy_match(previous, tool, &tool.input_schema);
+        return lossless_legacy_match(previous, tool, &tool.input_schema, parent_release);
     }
 
     let mut working = tool.input_schema.clone();
@@ -60,6 +67,7 @@ pub(super) fn legacy_raw_baseline_matches(previous: &str, tool: &McpTool) -> boo
         &mut budget,
         previous,
         tool,
+        parent_release,
     )
 }
 
@@ -79,9 +87,16 @@ pub(super) fn lossless_legacy_match(
     previous: &str,
     tool: &McpTool,
     matched_schema: &Value,
+    parent_release: bool,
 ) -> bool {
     if !legacy_hash_eq(previous, tool, matched_schema) {
         return false;
+    }
+    // Parent-release plain hashes used exact description bytes, not a lossy
+    // case-folded hasher. Skip the ambiguity gate so unchanged lowercase tools
+    // with already-canonical schemas still upgrade.
+    if parent_release {
+        return true;
     }
     if !description_casefold_ambiguous(tool) {
         return true;
@@ -195,8 +210,12 @@ fn child_mode_for_schema_key(key: &str, child: &Value) -> Value {
         canonicalize_schema_value_inner(child, TraverseMode::Literal)
     } else if is_order_insensitive_schema_key(key) {
         canonicalize_set_like_array(child, key == "enum")
-    } else {
+    } else if is_schema_valued_keyword(key) {
         canonicalize_schema_value_inner(child, TraverseMode::Schema)
+    } else {
+        // Unknown / extension keywords may carry order-sensitive literal
+        // payloads (e.g. `x-policy`). Do not reinterpret them as schemas.
+        canonicalize_schema_value_inner(child, TraverseMode::Literal)
     }
 }
 
@@ -304,6 +323,26 @@ pub(super) fn is_order_insensitive_schema_key(key: &str) -> bool {
     matches!(
         key,
         "required" | "enum" | "type" | "allOf" | "anyOf" | "oneOf"
+    )
+}
+
+/// Keywords whose values are schemas (or arrays of schemas), not literals.
+pub(super) fn is_schema_valued_keyword(key: &str) -> bool {
+    matches!(
+        key,
+        "items"
+            | "additionalItems"
+            | "additionalProperties"
+            | "not"
+            | "if"
+            | "then"
+            | "else"
+            | "contains"
+            | "propertyNames"
+            | "unevaluatedItems"
+            | "unevaluatedProperties"
+            | "contentSchema"
+            | "prefixItems"
     )
 }
 

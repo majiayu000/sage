@@ -359,7 +359,8 @@ fn legacy_raw_matches_seven_item_required_reorder() {
     }));
     assert!(super::tool_trust_hash::legacy_raw_baseline_matches(
         &legacy_raw_tool_hash(&original),
-        &reordered
+        &reordered,
+        false,
     ));
 }
 
@@ -373,7 +374,8 @@ fn legacy_raw_rejects_eight_item_reorder_without_full_coverage() {
     }));
     assert!(!super::tool_trust_hash::legacy_raw_baseline_matches(
         &legacy_raw_tool_hash(&original),
-        &reordered
+        &reordered,
+        false,
     ));
 }
 
@@ -392,7 +394,8 @@ fn legacy_raw_caps_seven_item_reorder_when_schema_bytes_amplify() {
     // budget drops below 7! and full reorder coverage is refused.
     assert!(!super::tool_trust_hash::legacy_raw_baseline_matches(
         &legacy_raw_tool_hash(&original),
-        &reordered
+        &reordered,
+        false,
     ));
 }
 
@@ -484,10 +487,17 @@ fn trust_store_rejects_casefolded_legacy_upgrade_as_drift() -> Result<(), Box<dy
             .map(|byte| format!("{byte:02x}"))
             .collect::<String>()
     };
+    // Explicit legacy encoding under a versioned file keeps the casefold gate.
     std::fs::write(
         &path,
         serde_json::to_string_pretty(&serde_json::json!({
-            "tool_hashes": { r#"["docs","geo"]"#: casefolded }
+            "version": 1,
+            "tool_hashes": {
+                r#"["docs","geo"]"#: {
+                    "hash": casefolded,
+                    "encoding": 0
+                }
+            }
         }))?,
     )?;
 
@@ -506,6 +516,51 @@ fn trust_store_rejects_casefolded_legacy_upgrade_as_drift() -> Result<(), Box<dy
         store.check_tool("docs", &lower),
         McpToolTrustDecision::Drift { .. }
     ));
+    Ok(())
+}
+
+#[test]
+fn trust_store_upgrades_parent_release_lowercase_canonical_schema()
+-> Result<(), Box<dyn std::error::Error>> {
+    let dir = TempDir::new()?;
+    let path = dir.path().join("trust.json");
+    let tool = McpTool::new("search")
+        .with_description("search project docs")
+        .with_input_schema(json!({
+            "type": "object",
+            "required": ["a", "b"],
+            "properties": {
+                "a": { "type": "string" },
+                "b": { "type": "string" }
+            }
+        }));
+    let legacy = {
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(b"search");
+        hasher.update(b"\0");
+        hasher.update(b"search project docs");
+        hasher.update(b"\0");
+        hasher.update(serde_json::to_vec(&tool.input_schema)?);
+        hasher
+            .finalize()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    };
+    // Parent release: plain string hashes, no file version field. Already
+    // lowercase description + already-canonical schema must still migrate.
+    std::fs::write(
+        &path,
+        serde_json::to_string_pretty(&serde_json::json!({
+            "tool_hashes": { r#"["docs","search"]"#: legacy }
+        }))?,
+    )?;
+    let mut store = McpToolTrustStore::load(&path)?;
+    assert_eq!(
+        store.check_tool("docs", &tool),
+        McpToolTrustDecision::Unchanged
+    );
     Ok(())
 }
 
@@ -785,6 +840,17 @@ fn tool_hash_preserves_examples_literal_array_order() {
 }
 
 #[test]
+fn tool_hash_preserves_unknown_extension_keyword_literal_order() {
+    let left = McpTool::new("auth").with_input_schema(json!({
+        "x-policy": { "required": ["admin", "user"] }
+    }));
+    let right = McpTool::new("auth").with_input_schema(json!({
+        "x-policy": { "required": ["user", "admin"] }
+    }));
+    assert_ne!(tool_hash(&left), tool_hash(&right));
+}
+
+#[test]
 fn legacy_raw_matches_multiple_set_arrays_without_stack_overflow() {
     let original = McpTool::new("search").with_input_schema(json!({
         "type": "object",
@@ -802,7 +868,8 @@ fn legacy_raw_matches_multiple_set_arrays_without_stack_overflow() {
     }));
     assert!(super::tool_trust_hash::legacy_raw_baseline_matches(
         &legacy_raw_tool_hash(&original),
-        &reordered
+        &reordered,
+        false,
     ));
 }
 
@@ -834,7 +901,8 @@ fn legacy_raw_refuses_multi_array_cartesian_over_budget() {
     }));
     assert!(!super::tool_trust_hash::legacy_raw_baseline_matches(
         &legacy_raw_tool_hash(&original),
-        &reordered
+        &reordered,
+        false,
     ));
 }
 
@@ -851,7 +919,8 @@ fn legacy_raw_still_matches_two_small_set_arrays_within_budget() {
     }));
     assert!(super::tool_trust_hash::legacy_raw_baseline_matches(
         &legacy_raw_tool_hash(&original),
-        &reordered
+        &reordered,
+        false,
     ));
 }
 

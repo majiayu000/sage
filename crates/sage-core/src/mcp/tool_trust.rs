@@ -198,7 +198,11 @@ impl McpToolTrustStore {
                 // loaded `file_version` stable for the whole refresh loop.
                 if previous.allows_legacy_match(self.file_version)
                     && !description_option_ambiguous(tool)
-                    && legacy_raw_baseline_matches(previous.hash(), tool)
+                    && legacy_raw_baseline_matches(
+                        previous.hash(),
+                        tool,
+                        self.file_version < TRUST_FILE_VERSION,
+                    )
                 {
                     self.tool_hashes.insert(key, StoredToolHash::current(hash));
                     self.dirty = true;

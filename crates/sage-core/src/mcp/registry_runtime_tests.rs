@@ -27,12 +27,39 @@ fn normalized_namespaced_tool_route_collision_is_detected() {
             remote_name: "read".to_string(),
         },
     );
+    let pending = std::collections::HashSet::new();
 
-    assert!(registry.warn_namespaced_tool_route_collision("fs_prod", "read", "mcp__fs_prod__read"));
+    assert!(registry.warn_namespaced_tool_route_collision(
+        "fs_prod",
+        "read",
+        "mcp__fs_prod__read",
+        &pending
+    ));
     assert!(!registry.warn_namespaced_tool_route_collision(
         "fs-prod",
         "read",
-        "mcp__fs_prod__read"
+        "mcp__fs_prod__read",
+        &pending
+    ));
+}
+
+#[test]
+fn intra_list_normalized_namespaced_route_collision_is_detected() {
+    let registry = McpRegistry::new();
+    let mut pending = std::collections::HashSet::new();
+    pending.insert("mcp__docs__read_file".to_string());
+
+    assert!(registry.warn_namespaced_tool_route_collision(
+        "docs",
+        "read-file",
+        "mcp__docs__read_file",
+        &pending
+    ));
+    assert!(!registry.warn_namespaced_tool_route_collision(
+        "docs",
+        "read_file",
+        "mcp__docs__read_file",
+        &std::collections::HashSet::new()
     ));
 }
 

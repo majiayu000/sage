@@ -2,7 +2,7 @@
 
 use super::{
     TraverseMode, is_literal_valued_schema_key, is_order_insensitive_schema_key,
-    is_schema_valued_map_key, lossless_legacy_match,
+    is_schema_valued_keyword, is_schema_valued_map_key, lossless_legacy_match,
 };
 use crate::mcp::types::McpTool;
 use serde_json::Value;
@@ -20,29 +20,45 @@ pub(super) fn walk(
     budget: &mut usize,
     previous: &str,
     tool: &McpTool,
+    parent_release: bool,
 ) -> bool {
     // Individually oversized arrays are skipped (not partially sampled). The
     // product of the remaining affordable factorials must still fit the budget;
     // otherwise try the current wire order once and stop.
     if !permutable_cartesian_fits(root, mode, *budget) {
-        return hash_once(root, budget, previous, tool);
+        return hash_once(root, budget, previous, tool, parent_release);
     }
 
     let mut abort = false;
     // Locate the first unset order-insensitive array under root via path, then
     // permute it; when none remain, hash the root once.
     match find_set_array_path(root, mode) {
-        None => hash_once(root, budget, previous, tool),
-        Some(path) => permute_at_path(root, &path, &[], budget, &mut abort, previous, tool),
+        None => hash_once(root, budget, previous, tool, parent_release),
+        Some(path) => permute_at_path(
+            root,
+            &path,
+            &[],
+            budget,
+            &mut abort,
+            previous,
+            tool,
+            parent_release,
+        ),
     }
 }
 
-fn hash_once(root: &Value, budget: &mut usize, previous: &str, tool: &McpTool) -> bool {
+fn hash_once(
+    root: &Value,
+    budget: &mut usize,
+    previous: &str,
+    tool: &McpTool,
+    parent_release: bool,
+) -> bool {
     if *budget == 0 {
         return false;
     }
     *budget = budget.saturating_sub(1);
-    lossless_legacy_match(previous, tool, root)
+    lossless_legacy_match(previous, tool, root, parent_release)
 }
 
 /// `true` when the Cartesian product of set-array `n!` values that individually
@@ -96,8 +112,10 @@ fn collect_set_array_lengths(value: &Value, mode: TraverseMode, out: &mut Vec<us
                             } else {
                                 TraverseMode::Schema
                             }
-                        } else {
+                        } else if is_schema_valued_keyword(key) {
                             TraverseMode::Schema
+                        } else {
+                            TraverseMode::Literal
                         }
                     }
                 };
@@ -139,6 +157,7 @@ fn permute_at_path(
     abort: &mut bool,
     previous: &str,
     tool: &McpTool,
+    parent_release: bool,
 ) -> bool {
     if *abort || *budget == 0 {
         *abort = true;
@@ -146,14 +165,32 @@ fn permute_at_path(
     }
     let array = match get_array_mut(root, path) {
         Some(array) => array,
-        None => return walk_after_assigned(root, assigned, budget, abort, previous, tool),
+        None => {
+            return walk_after_assigned(
+                root,
+                assigned,
+                budget,
+                abort,
+                previous,
+                tool,
+                parent_release,
+            );
+        }
     };
     let n = array.len();
     let mut next_assigned = assigned.to_vec();
     next_assigned.push(path.to_vec());
     if !factorial_fits(n, *budget) {
         // Versioned migration: do not partially sample large set arrays.
-        return walk_after_assigned(root, &next_assigned, budget, abort, previous, tool);
+        return walk_after_assigned(
+            root,
+            &next_assigned,
+            budget,
+            abort,
+            previous,
+            tool,
+            parent_release,
+        );
     }
 
     // Take ownership of the array for Heap permutation, then restore.
@@ -167,7 +204,15 @@ fn permute_at_path(
         }
         // Continue with every already-assigned path excluded so nested
         // set-arrays cannot rediscover ancestors and stack-overflow.
-        walk_after_assigned(root, &next_assigned, budget, abort, previous, tool)
+        walk_after_assigned(
+            root,
+            &next_assigned,
+            budget,
+            abort,
+            previous,
+            tool,
+            parent_release,
+        )
     });
     if let Some(slot) = get_array_mut(root, path) {
         *slot = items;
@@ -182,6 +227,7 @@ fn walk_after_assigned(
     abort: &mut bool,
     previous: &str,
     tool: &McpTool,
+    parent_release: bool,
 ) -> bool {
     if *abort {
         return false;
@@ -194,9 +240,18 @@ fn walk_after_assigned(
                 *abort = true;
                 return false;
             }
-            hash_once(root, budget, previous, tool)
+            hash_once(root, budget, previous, tool, parent_release)
         }
-        Some(next) => permute_at_path(root, &next, assigned, budget, abort, previous, tool),
+        Some(next) => permute_at_path(
+            root,
+            &next,
+            assigned,
+            budget,
+            abort,
+            previous,
+            tool,
+            parent_release,
+        ),
     }
 }
 
@@ -252,8 +307,10 @@ fn find_set_array_path_excluding_inner(
                             } else {
                                 TraverseMode::Schema
                             }
-                        } else {
+                        } else if is_schema_valued_keyword(key) {
                             TraverseMode::Schema
+                        } else {
+                            TraverseMode::Literal
                         }
                     }
                 };

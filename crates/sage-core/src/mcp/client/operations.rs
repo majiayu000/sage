@@ -48,16 +48,11 @@ impl McpClient {
         // revoke between the check and the on-wire send (holding a read lock across
         // the remote await deadlocks the receiver). Await the response after
         // releasing the lock; a generation token still detects revoke-during-await.
+        // Reservation of the command-queue slot happens before the write lock so a
+        // full bounded channel cannot deadlock against listChanged draining.
         if self.trusted_tool_allowlist_active() {
-            let (generation, response_receiver) = {
-                let authorization = self.tools().write().await;
-                if !authorization.iter().any(|tool| tool.name == name) {
-                    return Err(McpError::tool_not_found(name.to_string()));
-                }
-                let generation = self.list_changed_generation();
-                let response_receiver = self.begin_call(methods::TOOLS_CALL, Some(params)).await?;
-                (generation, response_receiver)
-            };
+            let (generation, response_receiver) =
+                self.begin_authorized_tool_call(name, params).await?;
             let result: McpToolResult = self.finish_call(response_receiver).await?;
             if self.list_changed_generation() != generation
                 || !self

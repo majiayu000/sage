@@ -296,13 +296,20 @@ impl McpRegistry {
         // under a generation-checked tools write so check+replace stay atomic.
         let mut routed_tools = Vec::with_capacity(trusted_tools.len());
         let mut new_routes = Vec::with_capacity(trusted_tools.len());
+        let mut pending_namespaced = std::collections::HashSet::new();
         for (tool, trust_decision) in &trusted_tools {
             log_mcp_tool_trust_decision(name, &tool.name, trust_decision.clone());
             self.warn_remote_tool_name_collision(name, &tool.name);
             let namespaced_name = McpToolAdapter::namespaced_tool_name(name, &tool.name);
-            if self.warn_namespaced_tool_route_collision(name, &tool.name, &namespaced_name) {
+            if self.warn_namespaced_tool_route_collision(
+                name,
+                &tool.name,
+                &namespaced_name,
+                &pending_namespaced,
+            ) {
                 continue;
             }
+            pending_namespaced.insert(namespaced_name.clone());
             new_routes.push((
                 namespaced_name,
                 ToolRoute {
@@ -438,7 +445,17 @@ impl McpRegistry {
         server_name: &str,
         remote_name: &str,
         namespaced_name: &str,
+        pending_namespaced: &std::collections::HashSet<String>,
     ) -> bool {
+        if pending_namespaced.contains(namespaced_name) {
+            tracing::warn!(
+                server = server_name,
+                tool = remote_name,
+                namespaced_tool = namespaced_name,
+                "MCP tool namespaced route collision within the same tools/list response; skipping the later route to avoid silent shadowing"
+            );
+            return true;
+        }
         let Some(existing) = self.tool_mapping.get(namespaced_name) else {
             return false;
         };

@@ -236,8 +236,10 @@ impl McpClient {
 
     /// Register and send a request without waiting for the response.
     ///
-    /// `call_tool` holds the tools write lock across this method so listChanged
-    /// cannot revoke authorization between the allowlist check and dispatch.
+    /// Prefer [`Self::begin_authorized_tool_call`] when the tools write lock must
+    /// stay held across dispatch; that path reserves the command-queue slot
+    /// before taking the lock so a full bounded channel cannot deadlock against
+    /// the receiver's listChanged clear.
     pub(crate) async fn begin_call(
         &self,
         method: &str,
@@ -269,6 +271,43 @@ impl McpClient {
         }
 
         Ok(response_receiver)
+    }
+
+    /// Authorize a trusted tool and dispatch under the tools write lock.
+    ///
+    /// Reserves a command-queue permit before acquiring the lock so backpressure
+    /// cannot deadlock against listChanged (which needs that same write lock).
+    pub(super) async fn begin_authorized_tool_call(
+        &self,
+        name: &str,
+        params: Value,
+    ) -> Result<(u64, oneshot::Receiver<super::protocol::McpResponse>), McpError> {
+        let permit = self
+            .command_sender
+            .reserve()
+            .await
+            .map_err(|_| McpError::connection("Failed to reserve request registration"))?;
+
+        let authorization = self.tools.write().await;
+        if !authorization.iter().any(|tool| tool.name == name) {
+            return Err(McpError::tool_not_found(name.to_string()));
+        }
+        let generation = self.list_changed_generation();
+
+        let id = self.next_request_id();
+        let id_str = id.to_string();
+        let request = McpRequest::new(id, methods::TOOLS_CALL).with_params(params);
+        let (response_sender, response_receiver) = oneshot::channel();
+        permit.send(ReceiverCommand::RegisterRequest {
+            id: id_str,
+            sender: response_sender,
+        });
+        {
+            let mut transport = self.transport.lock().await;
+            transport.send(McpMessage::Request(request)).await?;
+        }
+        drop(authorization);
+        Ok((generation, response_receiver))
     }
 
     pub(crate) async fn finish_call<T>(
