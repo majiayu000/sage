@@ -55,10 +55,7 @@ pub fn validate_paths(config: &Config) -> SageResult<()> {
 ///
 /// Relative paths are joined with `working_dir`. Absolute paths are kept as-is
 /// only when they still resolve inside `working_dir` after lexical normalization.
-pub fn resolve_within_working_dir(
-    configured: &Path,
-    working_dir: &Path,
-) -> SageResult<PathBuf> {
+pub fn resolve_within_working_dir(configured: &Path, working_dir: &Path) -> SageResult<PathBuf> {
     let root = normalize_lexical(&make_absolute(working_dir)?);
     let joined = if configured.is_absolute() {
         configured.to_path_buf()
@@ -225,11 +222,9 @@ mod tests {
     #[test]
     fn resolve_within_working_dir_keeps_default_relative_path() {
         let dir = tempdir().unwrap();
-        let resolved = resolve_within_working_dir(
-            Path::new(".sage/memory/agent-memory.json"),
-            dir.path(),
-        )
-        .unwrap();
+        let resolved =
+            resolve_within_working_dir(Path::new(".sage/memory/agent-memory.json"), dir.path())
+                .unwrap();
 
         assert_eq!(
             resolved,
