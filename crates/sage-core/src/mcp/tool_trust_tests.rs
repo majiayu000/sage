@@ -552,6 +552,64 @@ fn tool_hash_preserves_const_required_array_order() {
 }
 
 #[test]
+fn tool_hash_sorts_required_inside_properties_named_default() {
+    // Property names may literally be "const"/"default"/"examples"; those are
+    // schemas, not literal-valued keywords.
+    let left = McpTool::new("cfg").with_input_schema(json!({
+        "type": "object",
+        "properties": {
+            "default": {
+                "type": "object",
+                "required": ["b", "a"]
+            }
+        }
+    }));
+    let right = McpTool::new("cfg").with_input_schema(json!({
+        "type": "object",
+        "properties": {
+            "default": {
+                "type": "object",
+                "required": ["a", "b"]
+            }
+        }
+    }));
+    assert_eq!(tool_hash(&left), tool_hash(&right));
+}
+
+#[test]
+fn tool_hash_preserves_examples_literal_array_order() {
+    let left = McpTool::new("demo").with_input_schema(json!({
+        "examples": [{ "required": ["admin", "user"] }]
+    }));
+    let right = McpTool::new("demo").with_input_schema(json!({
+        "examples": [{ "required": ["user", "admin"] }]
+    }));
+    assert_ne!(tool_hash(&left), tool_hash(&right));
+}
+
+#[test]
+fn legacy_raw_matches_multiple_set_arrays_without_stack_overflow() {
+    let original = McpTool::new("search").with_input_schema(json!({
+        "type": "object",
+        "required": ["b", "a"],
+        "properties": {
+            "mode": { "enum": ["text", "json"] }
+        }
+    }));
+    let reordered = McpTool::new("search").with_input_schema(json!({
+        "type": "object",
+        "required": ["a", "b"],
+        "properties": {
+            "mode": { "enum": ["json", "text"] }
+        }
+    }));
+    assert!(super::tool_trust_hash::legacy_raw_baseline_matches(
+        &legacy_raw_tool_hash(&original),
+        &reordered
+    ));
+}
+
+#[test]
 fn atomic_write_replaces_existing_trust_file() -> Result<(), Box<dyn std::error::Error>> {
     let dir = TempDir::new()?;
     let path = dir.path().join("trust.json");
