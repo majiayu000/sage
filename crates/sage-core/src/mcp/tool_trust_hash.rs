@@ -60,7 +60,10 @@ pub(super) fn legacy_raw_baseline_matches(
     }
 
     let mut working = tool.input_schema.clone();
-    let mut budget = legacy_reorder_budget(wire.len());
+    // Budget by full hash preimage size (name + description + schema), not
+    // schema alone — large descriptions would otherwise amplify into GiB-scale
+    // hashing under the trust locks.
+    let mut budget = legacy_reorder_budget(legacy_hash_preimage_len(tool, wire.len()));
     walk(
         &mut working,
         TraverseMode::Schema,
@@ -71,8 +74,14 @@ pub(super) fn legacy_raw_baseline_matches(
     )
 }
 
-fn legacy_reorder_budget(wire_len: usize) -> usize {
-    let max_by_bytes = MAX_LEGACY_SYNC_HASH_BYTES / wire_len.max(1);
+fn legacy_hash_preimage_len(tool: &McpTool, wire_len: usize) -> usize {
+    wire_len
+        .saturating_add(tool.name.len())
+        .saturating_add(tool.description.as_ref().map_or(0, String::len))
+}
+
+fn legacy_reorder_budget(preimage_len: usize) -> usize {
+    let max_by_bytes = MAX_LEGACY_SYNC_HASH_BYTES / preimage_len.max(1);
     max_by_bytes.min(LEGACY_REORDER_BUDGET)
 }
 
@@ -143,7 +152,9 @@ fn hash_tool_parts(name: &str, description: DescriptionEncoding, schema: &Value)
 /// Normalize JSON Schema for trust hashing: sort object keys and order-insensitive
 /// arrays (`required`, `enum`, multi-type `type`, `allOf`/`anyOf`/`oneOf`,
 /// `dependentRequired` value arrays, and Draft-7 `dependencies` property arrays).
-/// Integer-valued JSON numbers (`1` / `1.0`) share one representation.
+/// Integer-valued JSON numbers share one representation only inside the safe
+/// integer range (`|n| ≤ 2^53-1`); larger float magnitudes stay as floats so
+/// mantissa-rounded decimals cannot collapse onto integer baselines.
 ///
 /// Arrays beneath literal-valued keywords (`const`, `default`, `examples`, and
 /// `enum` item values) keep their original order. Keys inside schema-valued maps
@@ -253,26 +264,29 @@ fn canonicalize_property_dependency_map(value: &Value, schema_valued_entries: bo
 }
 
 fn canonicalize_json_number(number: &serde_json::Number) -> Value {
-    if let Some(i) = number.as_i64() {
-        return Value::Number(i.into());
+    // Only trust integer/unsigned storage. `as_i64()` on an f64-backed Number
+    // can accept mantissa-rounded values (e.g. 2^53+1 → 2^53) and would hide
+    // real drift against a true integer baseline.
+    if number.is_i64() {
+        if let Some(i) = number.as_i64() {
+            return Value::Number(i.into());
+        }
     }
-    if let Some(u) = number.as_u64() {
-        return Value::Number(u.into());
+    if number.is_u64() {
+        if let Some(u) = number.as_u64() {
+            return Value::Number(u.into());
+        }
     }
     if let Some(f) = number.as_f64() {
         if f.is_finite() {
             let normalized = if f == -0.0 { 0.0 } else { f };
-            // Integer-valued floats share the integer spelling (`1` == `1.0`).
-            // Do not use `i64::MAX as f64` as an upper bound: that cast rounds
-            // up to 2^63, so `9223372036854775808.0` would collide with
-            // `i64::MAX`. Use exclusive 2^63 (exact in f64) and a round-trip.
+            // Integer-valued floats share the integer spelling (`1` == `1.0`)
+            // only inside the safe JSON integer range where every integer is
+            // uniquely representable in f64. Above |2^53-1|, a decimal such as
+            // `9007199254740993.0` rounds before we see it and must not collapse
+            // onto integer `9007199254740992`.
             if let Some(as_i64) = exact_i64_from_integral_f64(normalized) {
                 return Value::Number(as_i64.into());
-            }
-            // Same for the unsigned range above i64::MAX: `2^63` as u64 and
-            // `2^63` as f64 must hash identically.
-            if let Some(as_u64) = exact_u64_from_integral_f64(normalized) {
-                return Value::Number(as_u64.into());
             }
             if let Some(canonical) = serde_json::Number::from_f64(normalized) {
                 return Value::Number(canonical);
@@ -282,41 +296,22 @@ fn canonicalize_json_number(number: &serde_json::Number) -> Value {
     Value::Number(number.clone())
 }
 
-/// Convert an integral finite f64 to i64 only when the value lies in range
-/// without relying on the lossy `i64::MAX as f64` bound.
+/// Convert an integral finite f64 to i64 only inside the safe integer range.
+///
+/// `Number.MAX_SAFE_INTEGER` (`2^53 - 1`) is the largest magnitude where every
+/// integer is unique in f64; beyond that, neighboring integers round together.
 fn exact_i64_from_integral_f64(value: f64) -> Option<i64> {
     if value.fract() != 0.0 {
         return None;
     }
-    // 2^63 is exactly representable in f64; i64::MAX (2^63-1) is not.
-    const TWO_POW_63: f64 = 9_223_372_036_854_775_808.0;
-    if !(-TWO_POW_63..TWO_POW_63).contains(&value) {
+    // 2^53 is exact in f64; 2^53-1 is the last safe consecutive integer.
+    const MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
+    if !(-MAX_SAFE_INTEGER..=MAX_SAFE_INTEGER).contains(&value) {
         return None;
     }
     let as_i64 = value as i64;
     if as_i64 as f64 == value {
         Some(as_i64)
-    } else {
-        None
-    }
-}
-
-/// Convert an integral finite f64 to u64 when the round-trip is exact.
-///
-/// Covers values from 2^63 through the representable portion of the u64 range
-/// so schema regenerations that emit `9223372036854775808.0` match `as_u64`.
-fn exact_u64_from_integral_f64(value: f64) -> Option<u64> {
-    if value.fract() != 0.0 || value < 0.0 {
-        return None;
-    }
-    // 2^64 is exactly representable in f64; u64::MAX is not.
-    const TWO_POW_64: f64 = 18_446_744_073_709_551_616.0;
-    if !(0.0..TWO_POW_64).contains(&value) {
-        return None;
-    }
-    let as_u64 = value as u64;
-    if as_u64 as f64 == value {
-        Some(as_u64)
     } else {
         None
     }

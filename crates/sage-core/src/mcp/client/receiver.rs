@@ -33,19 +33,12 @@ pub(super) async fn message_receiver(
     let mut pending_requests: HashMap<String, oneshot::Sender<McpResponse>> = HashMap::new();
 
     while running.load(Ordering::SeqCst) {
+        // Prefer a ready transport receive (including listChanged revoke) over
+        // RegisterRequest when both are ready. An unbiased select can cancel the
+        // receive future, release the transport mutex, and let call_tool send
+        // under a still-authorized allowlist before the notification is drained.
         tokio::select! {
-            // Handle commands from the client
-            cmd = command_receiver.recv() => {
-                match cmd {
-                    Some(ReceiverCommand::RegisterRequest { id, sender }) => {
-                        pending_requests.insert(id, sender);
-                    }
-                    Some(ReceiverCommand::Shutdown) | None => {
-                        debug!("MCP message receiver shutting down");
-                        break;
-                    }
-                }
-            }
+            biased;
             // Receive messages from transport. For listChanged, revoke the
             // allowlist before releasing the transport mutex so a concurrent
             // call_tool cannot send under stale authorization between receive
@@ -105,6 +98,18 @@ pub(super) async fn message_receiver(
                                 McpRpcError::new(-32000, e.to_string()),
                             ));
                         }
+                        break;
+                    }
+                }
+            }
+            // Handle commands from the client only when receive is not ready.
+            cmd = command_receiver.recv() => {
+                match cmd {
+                    Some(ReceiverCommand::RegisterRequest { id, sender }) => {
+                        pending_requests.insert(id, sender);
+                    }
+                    Some(ReceiverCommand::Shutdown) | None => {
+                        debug!("MCP message receiver shutting down");
                         break;
                     }
                 }

@@ -84,22 +84,76 @@ pub(crate) fn atomic_write(path: &Path, content: &[u8]) -> Result<(), McpError> 
             error
         ))
     })?;
-    // Sync parent dir so the rename is durable (Unix). Fail closed if we cannot.
+    // After rename, record incomplete durability until the parent directory
+    // sync succeeds. A failed sync must not leave a baseline that later loads
+    // as authoritative without ever syncing.
     #[cfg(unix)]
-    if let Some(parent) = path.parent() {
-        let dir = File::open(parent).map_err(|error| {
+    {
+        let marker = durability_pending_path(path);
+        std::fs::write(&marker, b"pending").map_err(|error| {
             McpError::schema(format!(
-                "Failed to open MCP tool trust parent directory {}: {error}",
-                parent.display()
+                "Failed to record MCP tool trust durability marker {}: {error}",
+                marker.display()
             ))
         })?;
-        dir.sync_all().map_err(|error| {
+        match sync_parent_directory(path) {
+            Ok(()) => {
+                let _ = std::fs::remove_file(&marker);
+            }
+            Err(error) => {
+                return Err(error);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Sibling marker left when rename succeeded but directory durability did not.
+pub(crate) fn durability_pending_path(trust_path: &Path) -> PathBuf {
+    trust_path.with_extension("json.durability_pending")
+}
+
+/// If a prior publish left a durability marker, finish the parent-dir sync
+/// before the baseline may authorize tools. Fail closed when sync still fails.
+pub(crate) fn ensure_published_baseline_durable(path: &Path) -> Result<(), McpError> {
+    #[cfg(unix)]
+    {
+        let marker = durability_pending_path(path);
+        if !marker.exists() {
+            return Ok(());
+        }
+        sync_parent_directory(path)?;
+        std::fs::remove_file(&marker).map_err(|error| {
             McpError::schema(format!(
-                "Failed to sync MCP tool trust parent directory {}: {error}",
-                parent.display()
+                "Failed to clear MCP tool trust durability marker {}: {error}",
+                marker.display()
             ))
         })?;
     }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn sync_parent_directory(path: &Path) -> Result<(), McpError> {
+    let Some(parent) = path.parent() else {
+        return Ok(());
+    };
+    let dir = File::open(parent).map_err(|error| {
+        McpError::schema(format!(
+            "Failed to open MCP tool trust parent directory {}: {error}",
+            parent.display()
+        ))
+    })?;
+    dir.sync_all().map_err(|error| {
+        McpError::schema(format!(
+            "Failed to sync MCP tool trust parent directory {}: {error}",
+            parent.display()
+        ))
+    })?;
     Ok(())
 }
 
@@ -185,17 +239,35 @@ fn open_lock_file(lock_path: &Path) -> Result<File, McpError> {
 #[cfg(unix)]
 fn acquire_exclusive_file(lock_path: &Path) -> Result<File, McpError> {
     use std::os::unix::io::AsRawFd;
+    use std::time::Duration;
 
+    // Bound the wait like Windows: a suspended holder must not hang every MCP
+    // capability refresh indefinitely outside the request timeout.
+    let mut delay = Duration::from_millis(5);
     let file = open_lock_file(lock_path)?;
-    let rc = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX) };
-    if rc != 0 {
+    for _ in 0..200 {
+        let rc = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
+        if rc == 0 {
+            return Ok(file);
+        }
+        let err = std::io::Error::last_os_error();
+        if err.kind() == std::io::ErrorKind::WouldBlock
+            || err.raw_os_error() == Some(libc::EAGAIN)
+            || err.raw_os_error() == Some(libc::EWOULDBLOCK)
+        {
+            std::thread::sleep(delay);
+            delay = (delay * 2).min(Duration::from_millis(50));
+            continue;
+        }
         return Err(McpError::schema(format!(
-            "Failed to lock MCP tool trust file {}: {}",
-            lock_path.display(),
-            std::io::Error::last_os_error()
+            "Failed to lock MCP tool trust file {}: {err}",
+            lock_path.display()
         )));
     }
-    Ok(file)
+    Err(McpError::schema(format!(
+        "Timed out locking MCP tool trust file {}",
+        lock_path.display()
+    )))
 }
 
 #[cfg(all(unix, test))]

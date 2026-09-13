@@ -132,6 +132,9 @@ impl McpToolTrustStore {
 
     pub(crate) fn load(path: impl Into<PathBuf>) -> Result<Self, McpError> {
         let path = path.into();
+        // A prior rename may have installed content while directory sync failed.
+        // Refuse to authorize from that baseline until durability completes.
+        tool_trust_file_lock::ensure_published_baseline_durable(&path)?;
         if !path.exists() {
             return Ok(Self {
                 path,

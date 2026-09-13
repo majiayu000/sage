@@ -1168,17 +1168,79 @@ fn trust_hash_keeps_i64_max_and_two_pow_63_float_distinct() {
 }
 
 #[test]
-fn trust_hash_canonicalizes_two_pow_63_u64_and_float() {
+fn trust_hash_keeps_two_pow_63_u64_and_float_distinct() {
+    // Outside the safe integer range, float→int collapse is unsafe: a rounded
+    // decimal can share an f64 bit pattern with a true integer baseline.
     let as_u64 = McpTool::new("bound").with_input_schema(json!({
         "maximum": 9223372036854775808_u64
     }));
     let as_f64 = McpTool::new("bound").with_input_schema(json!({
         "maximum": 9223372036854775808.0
     }));
-    assert_eq!(
+    assert_ne!(
         super::tool_trust_hash::tool_hash(&as_u64),
         super::tool_trust_hash::tool_hash(&as_f64)
     );
+}
+
+#[test]
+fn trust_hash_detects_mantissa_rounded_large_decimal_drift() {
+    // serde_json without arbitrary_precision parses large decimals as f64, so
+    // `9007199254740993.0` loses exact integer identity. That float-backed
+    // Number must not canonicalize onto integer `9007199254740992`.
+    let as_int = McpTool::new("bound").with_input_schema(json!({
+        "maximum": 9007199254740992_u64
+    }));
+    let rounded_decimal = McpTool::new("bound").with_input_schema(
+        serde_json::from_str::<serde_json::Value>(r#"{"maximum": 9007199254740993.0}"#)
+            .expect("parse"),
+    );
+    assert!(
+        rounded_decimal.input_schema["maximum"].is_f64(),
+        "expected float-backed Number after JSON parse"
+    );
+    assert_ne!(
+        super::tool_trust_hash::tool_hash(&as_int),
+        super::tool_trust_hash::tool_hash(&rounded_decimal)
+    );
+}
+
+#[test]
+fn trust_hash_still_collapses_safe_integer_one_and_one_point_zero() {
+    let as_int = McpTool::new("bound").with_input_schema(json!({ "maximum": 1 }));
+    let as_float = McpTool::new("bound").with_input_schema(json!({ "maximum": 1.0 }));
+    assert_eq!(
+        super::tool_trust_hash::tool_hash(&as_int),
+        super::tool_trust_hash::tool_hash(&as_float)
+    );
+}
+
+#[test]
+fn durability_pending_marker_blocks_load_until_cleared() -> Result<(), Box<dyn std::error::Error>>
+{
+    let dir = TempDir::new()?;
+    let path = dir.path().join("trust.json");
+    let mut store = McpToolTrustStore::load(&path)?;
+    assert!(matches!(
+        store.check_tool("docs", &McpTool::new("read")),
+        McpToolTrustDecision::BaselineCreated { .. }
+    ));
+    store.save_if_dirty()?;
+    assert!(!super::tool_trust_file_lock::durability_pending_path(&path).exists());
+
+    // Simulate rename-without-durable-sync: marker present beside a published file.
+    std::fs::write(
+        super::tool_trust_file_lock::durability_pending_path(&path),
+        b"pending",
+    )?;
+    // ensure_published_baseline_durable should sync and clear the marker on load.
+    let mut reloaded = McpToolTrustStore::load(&path)?;
+    assert!(!super::tool_trust_file_lock::durability_pending_path(&path).exists());
+    assert_eq!(
+        reloaded.check_tool("docs", &McpTool::new("read")),
+        McpToolTrustDecision::Unchanged
+    );
+    Ok(())
 }
 
 #[test]
