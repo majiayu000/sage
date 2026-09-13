@@ -280,10 +280,7 @@ mod tests {
     #[tokio::test]
     async fn test_manager_discover_all_source_failure_preserves_warn_policy() {
         let manager = McpServerManager::new();
-        manager
-            .registry()
-            .set_warn_on_tool_trust_drift(true)
-            .await;
+        manager.registry().set_warn_on_tool_trust_drift(true).await;
         assert!(manager.registry().warn_on_tool_trust_drift());
 
         let connected = manager
