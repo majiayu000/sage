@@ -273,12 +273,7 @@ impl McpClient {
         Ok(response_receiver)
     }
 
-    /// Authorize a trusted tool and dispatch under transport → tools locks.
-    ///
-    /// Reserves a command-queue permit before acquiring locks so backpressure
-    /// cannot deadlock against listChanged. Lock order matches the receiver's
-    /// listChanged path (transport then tools write) so revoke-while-receive
-    /// cannot race a stale authorized send.
+    /// Authorize + dispatch: wake receiver (RegisterRequest), then transport → tools write.
     pub(super) async fn begin_authorized_tool_call(
         &self,
         name: &str,
@@ -290,20 +285,28 @@ impl McpClient {
             .await
             .map_err(|_| McpError::connection("Failed to reserve request registration"))?;
 
-        let mut transport = self.transport.lock().await;
-        let authorization = self.tools.write().await;
-        if !authorization.iter().any(|tool| tool.name == name) {
-            return Err(McpError::tool_not_found(name.to_string()));
+        {
+            let authorization = self.tools.read().await;
+            if !authorization.iter().any(|tool| tool.name == name) {
+                return Err(McpError::tool_not_found(name.to_string()));
+            }
         }
 
         let id = self.next_request_id();
         let id_str = id.to_string();
         let request = McpRequest::new(id, methods::TOOLS_CALL).with_params(params);
         let (response_sender, response_receiver) = oneshot::channel();
+        // Wake idle receive() before transport.lock() so it can release the mutex.
         permit.send(ReceiverCommand::RegisterRequest {
             id: id_str,
             sender: response_sender,
         });
+
+        let mut transport = self.transport.lock().await;
+        let authorization = self.tools.write().await;
+        if !authorization.iter().any(|tool| tool.name == name) {
+            return Err(McpError::tool_not_found(name.to_string()));
+        }
         transport.send(McpMessage::Request(request)).await?;
         drop(authorization);
         drop(transport);

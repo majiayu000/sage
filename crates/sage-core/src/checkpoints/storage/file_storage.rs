@@ -273,6 +273,10 @@ impl CheckpointStorage for FileCheckpointStorage {
         file.write_all(json.as_bytes())
             .await
             .map_err(|e| SageError::storage(format!("Failed to write checkpoint file: {}", e)))?;
+        // tokio::fs::File buffers writes; flush before drop so load() cannot race empty files.
+        file.flush()
+            .await
+            .map_err(|e| SageError::storage(format!("Failed to flush checkpoint file: {}", e)))?;
 
         tracing::debug!("Saved checkpoint {} to {:?}", checkpoint.id, path);
         Ok(())
@@ -384,6 +388,9 @@ impl CheckpointStorage for FileCheckpointStorage {
         file.write_all(&compressed)
             .await
             .map_err(|e| SageError::storage(format!("Failed to write content file: {}", e)))?;
+        file.flush()
+            .await
+            .map_err(|e| SageError::storage(format!("Failed to flush content file: {}", e)))?;
 
         tracing::debug!(
             "Stored content {} ({} -> {} bytes)",

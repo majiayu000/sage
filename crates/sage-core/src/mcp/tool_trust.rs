@@ -4,13 +4,13 @@
 mod tool_trust_hash;
 
 use super::error::McpError;
-use super::tool_trust_file_lock::ToolTrustFileLock;
+use super::tool_trust_file_lock::{self, ToolTrustFileLock};
 use super::types::McpTool;
 use crate::config::default_data_dir_or_warn;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tool_trust_hash::{
     collapse_whitespace, description_option_ambiguous, legacy_raw_baseline_matches, tool_hash,
 };
@@ -155,6 +155,21 @@ impl McpToolTrustStore {
                 error
             ))
         })?;
+        if file.version > TRUST_FILE_VERSION {
+            return Err(McpError::schema(format!(
+                "Unsupported MCP tool trust file version {} (max {TRUST_FILE_VERSION})",
+                file.version
+            )));
+        }
+        for value in file.tool_hashes.values() {
+            if let StoredToolHash::Versioned { encoding, .. } = value {
+                if *encoding > CURRENT_HASH_ENCODING {
+                    return Err(McpError::schema(format!(
+                        "Unsupported MCP tool trust hash encoding {encoding} (max {CURRENT_HASH_ENCODING})"
+                    )));
+                }
+            }
+        }
 
         Ok(Self {
             path,
@@ -249,104 +264,10 @@ impl McpToolTrustStore {
                 "Failed to serialize MCP tool trust baseline: {error}"
             ))
         })?;
-        atomic_write(&self.path, content.as_bytes())?;
+        tool_trust_file_lock::atomic_write(&self.path, content.as_bytes())?;
         self.file_version = TRUST_FILE_VERSION;
         self.dirty = false;
         Ok(())
-    }
-}
-
-fn atomic_write(path: &Path, content: &[u8]) -> Result<(), McpError> {
-    use std::fs::File;
-    use std::io::Write;
-
-    let temp_path = path.with_extension("json.tmp");
-    {
-        let mut file = File::create(&temp_path).map_err(|error| {
-            McpError::schema(format!(
-                "Failed to create MCP tool trust baseline temp {}: {}",
-                temp_path.display(),
-                error
-            ))
-        })?;
-        file.write_all(content).map_err(|error| {
-            McpError::schema(format!(
-                "Failed to write MCP tool trust baseline temp {}: {}",
-                temp_path.display(),
-                error
-            ))
-        })?;
-        // Durable publish: sync file contents before renaming into place.
-        file.sync_all().map_err(|error| {
-            McpError::schema(format!(
-                "Failed to sync MCP tool trust baseline temp {}: {}",
-                temp_path.display(),
-                error
-            ))
-        })?;
-    }
-    replace_file(&temp_path, path).map_err(|error| {
-        let _ = std::fs::remove_file(&temp_path);
-        McpError::schema(format!(
-            "Failed to publish MCP tool trust baseline {}: {}",
-            path.display(),
-            error
-        ))
-    })?;
-    // Sync the parent directory so the renamed directory entry reaches stable
-    // storage on platforms that require it (crash between rename and return
-    // must not lose a first-use baseline).
-    if let Some(parent) = path.parent() {
-        if let Ok(dir) = File::open(parent) {
-            let _ = dir.sync_all();
-        }
-    }
-    Ok(())
-}
-
-/// Atomically publish `from` over `to`.
-///
-/// Unix `rename(2)` replaces an existing destination. On Windows, use
-/// `MoveFileExW` with `MOVEFILE_REPLACE_EXISTING` so the baseline is never
-/// deleted before the replacement lands (a remove-then-rename gap would accept
-/// drifted schemas as a fresh baseline after a crash).
-fn replace_file(from: &Path, to: &Path) -> std::io::Result<()> {
-    #[cfg(windows)]
-    {
-        use std::os::windows::ffi::OsStrExt;
-
-        #[link(name = "kernel32")]
-        unsafe extern "system" {
-            fn MoveFileExW(
-                lpExistingFileName: *const u16,
-                lpNewFileName: *const u16,
-                dwFlags: u32,
-            ) -> i32;
-        }
-
-        const MOVEFILE_REPLACE_EXISTING: u32 = 0x1;
-        const MOVEFILE_WRITE_THROUGH: u32 = 0x8;
-
-        let from_wide: Vec<u16> = from.as_os_str().encode_wide().chain(Some(0)).collect();
-        let to_wide: Vec<u16> = to.as_os_str().encode_wide().chain(Some(0)).collect();
-        // SAFETY: both paths are NUL-terminated wide strings; flags request an
-        // atomic replace of an existing destination without a delete gap.
-        let ok = unsafe {
-            MoveFileExW(
-                from_wide.as_ptr(),
-                to_wide.as_ptr(),
-                MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
-            )
-        };
-        if ok == 0 {
-            Err(std::io::Error::last_os_error())
-        } else {
-            Ok(())
-        }
-    }
-    #[cfg(not(windows))]
-    {
-        std::fs::rename(from, to)
     }
 }
 

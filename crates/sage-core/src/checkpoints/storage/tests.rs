@@ -183,7 +183,10 @@ async fn test_file_storage_large_content_externalization() {
 
         assert!(storage.save(&checkpoint).await.is_ok());
         let loaded_result = storage.load(&checkpoint.id).await;
-        assert!(loaded_result.is_ok());
+        assert!(
+            loaded_result.is_ok(),
+            "load after externalized save failed: {loaded_result:?}"
+        );
         if let Ok(loaded) = loaded_result {
             assert!(loaded.is_some());
             if let Some(loaded) = loaded {

@@ -48,6 +48,100 @@ impl Drop for ToolTrustFileLock {
     }
 }
 
+/// Atomically write `content` to `path` with durable publish semantics.
+pub(crate) fn atomic_write(path: &Path, content: &[u8]) -> Result<(), McpError> {
+    use std::io::Write;
+
+    let temp_path = path.with_extension("json.tmp");
+    {
+        let mut file = File::create(&temp_path).map_err(|error| {
+            McpError::schema(format!(
+                "Failed to create MCP tool trust baseline temp {}: {}",
+                temp_path.display(),
+                error
+            ))
+        })?;
+        file.write_all(content).map_err(|error| {
+            McpError::schema(format!(
+                "Failed to write MCP tool trust baseline temp {}: {}",
+                temp_path.display(),
+                error
+            ))
+        })?;
+        file.sync_all().map_err(|error| {
+            McpError::schema(format!(
+                "Failed to sync MCP tool trust baseline temp {}: {}",
+                temp_path.display(),
+                error
+            ))
+        })?;
+    }
+    replace_file(&temp_path, path).map_err(|error| {
+        let _ = std::fs::remove_file(&temp_path);
+        McpError::schema(format!(
+            "Failed to publish MCP tool trust baseline {}: {}",
+            path.display(),
+            error
+        ))
+    })?;
+    // Sync parent dir so the rename is durable (Unix). Fail closed if we cannot.
+    #[cfg(unix)]
+    if let Some(parent) = path.parent() {
+        let dir = File::open(parent).map_err(|error| {
+            McpError::schema(format!(
+                "Failed to open MCP tool trust parent directory {}: {error}",
+                parent.display()
+            ))
+        })?;
+        dir.sync_all().map_err(|error| {
+            McpError::schema(format!(
+                "Failed to sync MCP tool trust parent directory {}: {error}",
+                parent.display()
+            ))
+        })?;
+    }
+    Ok(())
+}
+
+/// Atomically publish `from` over `to` (Unix rename / Windows MoveFileExW replace).
+fn replace_file(from: &Path, to: &Path) -> std::io::Result<()> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+
+        #[link(name = "kernel32")]
+        unsafe extern "system" {
+            fn MoveFileExW(
+                lpExistingFileName: *const u16,
+                lpNewFileName: *const u16,
+                dwFlags: u32,
+            ) -> i32;
+        }
+
+        const MOVEFILE_REPLACE_EXISTING: u32 = 0x1;
+        const MOVEFILE_WRITE_THROUGH: u32 = 0x8;
+
+        let from_wide: Vec<u16> = from.as_os_str().encode_wide().chain(Some(0)).collect();
+        let to_wide: Vec<u16> = to.as_os_str().encode_wide().chain(Some(0)).collect();
+        let ok = unsafe {
+            MoveFileExW(
+                from_wide.as_ptr(),
+                to_wide.as_ptr(),
+                MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+            )
+        };
+        if ok == 0 {
+            Err(std::io::Error::last_os_error())
+        } else {
+            Ok(())
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        std::fs::rename(from, to)
+    }
+}
+
 fn lock_path_for(trust_path: &Path) -> PathBuf {
     let mut lock_path = trust_path.to_path_buf();
     let suffix = trust_path

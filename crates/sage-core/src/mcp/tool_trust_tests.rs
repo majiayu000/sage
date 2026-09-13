@@ -1180,3 +1180,31 @@ fn trust_hash_canonicalizes_two_pow_63_u64_and_float() {
         super::tool_trust_hash::tool_hash(&as_f64)
     );
 }
+
+#[test]
+fn trust_store_rejects_future_file_and_hash_encodings() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempfile::TempDir::new()?;
+    let path = dir.path().join("mcp_tool_trust.json");
+    std::fs::write(
+        &path,
+        serde_json::to_string_pretty(&serde_json::json!({
+            "version": 2,
+            "tool_hashes": {}
+        }))?,
+    )?;
+    let err = McpToolTrustStore::load(&path).expect_err("future file version");
+    assert!(err.to_string().contains("Unsupported MCP tool trust file version"));
+
+    std::fs::write(
+        &path,
+        serde_json::to_string_pretty(&serde_json::json!({
+            "version": 1,
+            "tool_hashes": {
+                r#"["srv","t"]"#: { "hash": "abc", "encoding": 2 }
+            }
+        }))?,
+    )?;
+    let err = McpToolTrustStore::load(&path).expect_err("future hash encoding");
+    assert!(err.to_string().contains("Unsupported MCP tool trust hash encoding"));
+    Ok(())
+}
