@@ -1,3 +1,5 @@
+> **Status:** maintenance only. No new general-agent surface.
+
 <div align="center">
 
 # Sage 🦀
