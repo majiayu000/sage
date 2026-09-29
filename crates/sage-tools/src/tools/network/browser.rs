@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use sage_core::tools::{Tool, ToolCall, ToolError, ToolParameter, ToolResult, ToolSchema};
 use serde::{Deserialize, Serialize};
+#[cfg(not(windows))]
 use tokio::process::Command;
 use url::Url;
 
@@ -40,53 +41,95 @@ fn browser_url(raw: &str) -> Result<Url, ToolError> {
     Ok(parsed)
 }
 
-/// One quoted argument for `cmd /D /V:OFF /C start "" <arg>`.
-///
-/// `%` is doubled so `cmd` restores a literal percent. A quote is encoded as
-/// `%22` before that doubling, which keeps this a single argument.
+/// NUL-terminated UTF-16 for `ShellExecuteW`. The canonical URL is copied
+/// unchanged, so `%20`, `%22`, and `%COMSPEC%` are not doubled or expanded.
 #[cfg(any(windows, test))]
-fn windows_quoted_start_arg(canonical: &str) -> String {
-    let mut encoded = String::with_capacity(canonical.len());
-    for ch in canonical.chars() {
-        if ch == '"' {
-            encoded.push_str("%22");
-        } else {
-            encoded.push(ch);
-        }
-    }
-    format!("\"{}\"", encoded.replace('%', "%%"))
+fn windows_wide_arg(value: &str) -> Vec<u16> {
+    value.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
-/// `start` treats the first quoted string as a window title, so the title is
-/// empty. `raw_arg` avoids `cmd` quoting rules for the canonical URL.
-#[cfg(windows)]
-fn windows_browser_command(canonical: &str) -> Command {
-    let mut command = Command::new("cmd");
-    command.raw_arg("/D");
-    command.raw_arg("/V:OFF");
-    command.raw_arg("/C");
-    command.raw_arg("start");
-    command.raw_arg("\"\"");
-    command.raw_arg(windows_quoted_start_arg(canonical));
+#[cfg(not(windows))]
+fn browser_process(canonical: &str) -> Command {
+    #[cfg(target_os = "macos")]
+    let program = "open";
+    #[cfg(not(target_os = "macos"))]
+    let program = "xdg-open";
+
+    let mut command = Command::new(program);
+    command.arg(canonical);
     command
 }
 
-fn browser_process(canonical: &str) -> Command {
-    #[cfg(target_os = "macos")]
-    {
-        let mut command = Command::new("open");
-        command.arg(canonical);
-        command
+/// Open the canonical URL with `ShellExecuteW`. `lpFile` is not a `cmd /C`
+/// command line, so the command interpreter does not expand `%`.
+#[cfg(windows)]
+fn open_browser_shell_execute(canonical: &str) -> Result<(), ToolError> {
+    #[link(name = "shell32")]
+    unsafe extern "system" {
+        fn ShellExecuteW(
+            hwnd: *mut std::ffi::c_void,
+            lp_operation: *const u16,
+            lp_file: *const u16,
+            lp_parameters: *const u16,
+            lp_directory: *const u16,
+            n_show_cmd: i32,
+        ) -> *mut std::ffi::c_void;
     }
+
+    const SW_SHOWNORMAL: i32 = 1;
+    // Values at or below 32 are ShellExecute error codes, not module handles.
+    const SHELL_EXECUTE_ERROR_MAX: usize = 32;
+
+    let operation = windows_wide_arg("open");
+    let file = windows_wide_arg(canonical);
+    // SAFETY: both buffers are NUL-terminated and live for this synchronous call.
+    // The other pointers are null, which this API allows. The return value is
+    // compared as an integer and is never dereferenced.
+    let status = unsafe {
+        ShellExecuteW(
+            std::ptr::null_mut(),
+            operation.as_ptr(),
+            file.as_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            SW_SHOWNORMAL,
+        )
+    };
+    if (status as usize) > SHELL_EXECUTE_ERROR_MAX {
+        Ok(())
+    } else {
+        Err(ToolError::ExecutionFailed(format!(
+            "Failed to open browser: ShellExecuteW returned {}",
+            status as usize
+        )))
+    }
+}
+
+async fn open_canonical_url(canonical: &str) -> Result<(), ToolError> {
     #[cfg(windows)]
     {
-        windows_browser_command(canonical)
+        let canonical = canonical.to_string();
+        match tokio::task::spawn_blocking(move || open_browser_shell_execute(&canonical)).await {
+            Ok(result) => result,
+            Err(error) => Err(ToolError::ExecutionFailed(format!(
+                "Failed to execute browser command: {error}"
+            ))),
+        }
     }
-    #[cfg(not(any(target_os = "macos", windows)))]
+    #[cfg(not(windows))]
     {
-        let mut command = Command::new("xdg-open");
-        command.arg(canonical);
-        command
+        match browser_process(canonical).output().await {
+            Ok(output) if output.status.success() => Ok(()),
+            Ok(output) => {
+                let error = String::from_utf8_lossy(&output.stderr);
+                Err(ToolError::ExecutionFailed(format!(
+                    "Failed to open browser: {error}"
+                )))
+            }
+            Err(error) => Err(ToolError::ExecutionFailed(format!(
+                "Failed to execute browser command: {error}"
+            ))),
+        }
     }
 }
 
@@ -116,31 +159,13 @@ impl Tool for BrowserTool {
             .get_string("url")
             .ok_or_else(|| ToolError::InvalidArguments("Missing 'url' parameter".to_string()))?;
         let url = browser_url(&raw_url)?;
-        let canonical = url.as_str();
-
-        let result = browser_process(canonical).output().await;
-
-        match result {
-            Ok(output) => {
-                if output.status.success() {
-                    Ok(ToolResult::success(
-                        &call.id,
-                        self.name(),
-                        format!("Opened {} in default browser", canonical),
-                    ))
-                } else {
-                    let error = String::from_utf8_lossy(&output.stderr);
-                    Err(ToolError::ExecutionFailed(format!(
-                        "Failed to open browser: {}",
-                        error
-                    )))
-                }
-            }
-            Err(e) => Err(ToolError::ExecutionFailed(format!(
-                "Failed to execute browser command: {}",
-                e
-            ))),
-        }
+        let canonical = url.as_str().to_string();
+        open_canonical_url(&canonical).await?;
+        Ok(ToolResult::success(
+            &call.id,
+            self.name(),
+            format!("Opened {} in default browser", canonical),
+        ))
     }
 }
 
@@ -230,26 +255,56 @@ mod tests {
         );
     }
 
+    fn decode_wide_arg(units: &[u16]) -> String {
+        assert_eq!(
+            units.last().copied(),
+            Some(0),
+            "wide argument must be NUL-terminated"
+        );
+        let body = &units[..units.len() - 1];
+        assert!(
+            !body.contains(&0),
+            "wide argument must not contain an embedded NUL"
+        );
+        String::from_utf16(body).expect("wide opener argument is UTF-16")
+    }
+
     #[test]
     fn open_browser_url_encodes_quote_in_path() {
         let canonical = browser_url("https://example.com/a\"b").unwrap();
         assert_eq!(canonical.as_str(), "https://example.com/a%22b");
-        let quoted = windows_quoted_start_arg(canonical.as_str());
-        assert_eq!(quoted, "\"https://example.com/a%%22b\"");
-        assert_eq!(quoted.chars().filter(|ch| *ch == '"').count(), 2);
+        assert_eq!(
+            decode_wide_arg(&windows_wide_arg(canonical.as_str())),
+            "https://example.com/a%22b"
+        );
     }
 
     #[test]
-    fn open_browser_windows_quoted_start_arg_quotes_metacharacters() {
-        let quoted = windows_quoted_start_arg("https://example.com/search?q=%COMSPEC%&x=1|y^z");
+    fn open_browser_windows_opener_preserves_percent_escapes() {
+        let space = browser_url("https://example.com/a%20b").unwrap();
+        assert_eq!(space.as_str(), "https://example.com/a%20b");
         assert_eq!(
-            quoted,
-            "\"https://example.com/search?q=%%COMSPEC%%&x=1|y^z\""
+            decode_wide_arg(&windows_wide_arg(space.as_str())),
+            "https://example.com/a%20b"
         );
-        assert_eq!(quoted.chars().filter(|ch| *ch == '"').count(), 2);
+
+        let quote = browser_url("https://example.com/a%22b").unwrap();
+        assert_eq!(quote.as_str(), "https://example.com/a%22b");
         assert_eq!(
-            windows_quoted_start_arg("https://example.com/a\"b"),
-            "\"https://example.com/a%%22b\""
+            decode_wide_arg(&windows_wide_arg(quote.as_str())),
+            "https://example.com/a%22b"
+        );
+
+        let comspec = browser_url("https://example.com/search?q=%COMSPEC%&x=1|y^z").unwrap();
+        assert_eq!(
+            comspec.as_str(),
+            "https://example.com/search?q=%COMSPEC%&x=1|y^z"
+        );
+        let opener_arg = decode_wide_arg(&windows_wide_arg(comspec.as_str()));
+        assert_eq!(opener_arg, "https://example.com/search?q=%COMSPEC%&x=1|y^z");
+        assert!(
+            !opener_arg.contains("%%"),
+            "opener argument must not double percent signs: {opener_arg}"
         );
     }
 
