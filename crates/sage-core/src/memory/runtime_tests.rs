@@ -303,3 +303,27 @@ async fn symlink_working_directory_allows_normal_memory_storage() {
 
     assert!(project.join(".sage/memory/agent-memory.json").is_file());
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn outcome_rejects_directory_symlink_created_after_recall() {
+    let dir = tempdir().unwrap();
+    let outside = tempdir().unwrap();
+    let config = enabled_config(PathBuf::from(".sage/memory/agent-memory.json"));
+    recall_agent_context(&config, dir.path(), &RecallQuery::for_task("test task", 4))
+        .await
+        .unwrap();
+    assert!(!dir.path().join(".sage").exists());
+    std::os::unix::fs::symlink(outside.path(), dir.path().join(".sage")).unwrap();
+
+    let result = record_agent_outcome(
+        &config,
+        dir.path(),
+        AgentOutcomeRecord::new("test task", AgentOutcomeKind::Success, "test outcome"),
+    )
+    .await;
+
+    assert!(matches!(result, Err(SageError::Config { ref message, .. })
+        if message.contains("escapes working directory")));
+    assert!(!outside.path().join("memory/agent-memory.json").exists());
+}
