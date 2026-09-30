@@ -716,3 +716,249 @@ fn project_base_urls_preserve_all_provider_overrides() {
         }
     }
 }
+
+#[cfg(unix)]
+#[tokio::test]
+#[serial]
+async fn mcp_consent_does_not_trust_project_provider_endpoints()
+-> Result<(), Box<dyn std::error::Error>> {
+    let _env = EnvVarGuard::clean_config_env();
+    unsafe {
+        env::set_var("ANTHROPIC_API_KEY", "composition-test-key");
+    }
+    let expected_url = Config::default().model_providers["anthropic"]
+        .base_url
+        .clone();
+    for extension in ["json", "toml", "yaml", "yml"] {
+        for explicit in [false, true] {
+            let dir = tempdir()?;
+            let path = dir.path().join(format!("sage_config.{extension}"));
+            let marker = dir.path().join("spawned");
+            let value = serde_json::json!({
+                "default_provider": "anthropic",
+                "model_providers": {"anthropic": {
+                    "model": "claude-test", "api_key": "${ANTHROPIC_API_KEY}",
+                    "base_url": "https://project-endpoint.example.test"
+                }},
+                "mcp": {"enabled": true, "default_timeout_secs": 1, "servers": {
+                    "workspace": {"transport": "stdio", "command": "/bin/sh",
+                        "args": ["-c", "printf spawned > \"$1\"", "sage-mcp-test", marker]}
+                }}
+            });
+            let content = match extension {
+                "json" => serde_json::to_string(&value)?,
+                "toml" => toml::to_string(&value)?,
+                _ => serde_yaml::to_string(&value)?,
+            };
+            std::fs::write(&path, content)?;
+            let mut loader = UnifiedConfigLoader::new()
+                .with_working_dir(dir.path())
+                .with_global_dir(dir.path().join("global"));
+            if explicit {
+                loader = loader.with_config_file(&path);
+            }
+            for config in [loader.load_strict()?, loader.load().config] {
+                let params = &config.model_providers["anthropic"];
+                assert_eq!(params.base_url, expected_url);
+                assert_eq!(
+                    params
+                        .get_api_key_info_for_provider("anthropic")
+                        .key
+                        .as_deref(),
+                    Some("composition-test-key")
+                );
+                let (client, _, _) = crate::llm::LlmClient::from_config(&config)?;
+                assert_eq!(client.config().base_url(), expected_url.as_ref());
+                let registry =
+                    crate::mcp::build_mcp_registry_from_config_and_packages(&config, []).await?;
+                assert_eq!(config.mcp.enabled, explicit);
+                assert_eq!(marker.exists(), explicit);
+                assert_eq!(registry.runtime_statuses().is_empty(), !explicit);
+                if explicit {
+                    std::fs::remove_file(&marker)?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+#[tokio::test]
+#[serial]
+async fn discovered_workspace_mcp_never_spawns_commands() -> Result<(), Box<dyn std::error::Error>>
+{
+    let _env = EnvVarGuard::clean_config_env();
+    for extension in ["json", "toml", "yaml", "yml"] {
+        let dir = tempdir()?;
+        let marker = dir.path().join("spawned");
+        let value = serde_json::json!({
+            "default_provider": "ollama",
+            "mcp": {
+                "enabled": true,
+                "default_timeout_secs": 1,
+                "servers": {
+                    "workspace": {
+                        "transport": "stdio", "command": "/bin/sh",
+                        "args": ["-c", "printf spawned > \"$1\"", "sage-mcp-test", marker]
+                    }
+                }
+            }
+        });
+        let content = match extension {
+            "json" => serde_json::to_string(&value)?,
+            "toml" => toml::to_string(&value)?,
+            _ => serde_yaml::to_string(&value)?,
+        };
+        std::fs::write(dir.path().join(format!("sage_config.{extension}")), content)?;
+        let loader = UnifiedConfigLoader::new()
+            .with_working_dir(dir.path())
+            .with_global_dir(dir.path().join("global"));
+        for config in [loader.load_strict()?, loader.load().config] {
+            let registry =
+                crate::mcp::build_mcp_registry_from_config_and_packages(&config, []).await?;
+            assert!(
+                !marker.exists(),
+                "{extension} workspace command spawned without consent"
+            );
+            assert!(!config.mcp.enabled);
+            assert!(config.mcp.servers.is_empty());
+            assert!(registry.runtime_statuses().is_empty());
+            assert_eq!(config.default_provider, "ollama");
+        }
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+#[tokio::test]
+#[serial]
+async fn trusted_global_mcp_survives_workspace_overrides() -> Result<(), Box<dyn std::error::Error>>
+{
+    let _env = EnvVarGuard::clean_config_env();
+    let dir = tempdir()?;
+    let global_dir = dir.path().join("global");
+    std::fs::create_dir(&global_dir)?;
+    let marker = dir.path().join("trusted-spawned");
+    std::fs::write(
+        dir.path().join("sage_config.json"),
+        r#"{"default_provider":"ollama","mcp":{"enabled":true,"auto_connect":false,
+            "warn_on_tool_trust_drift":true,"servers":{"trusted":{"transport":"stdio",
+            "command":"__workspace_override__"},"extra":{"transport":"stdio","command":"__workspace_extra__"}}}}"#,
+    )?;
+    std::fs::write(
+        global_dir.join("config.json"),
+        serde_json::to_string(&serde_json::json!({
+            "mcp": {"enabled": true, "default_timeout_secs": 1, "servers": {
+                "trusted": {"transport":"stdio","command":"/bin/sh",
+                "args":["-c", "printf spawned > \"$1\"", "sage-mcp-test", marker]}
+            }}
+        }))?,
+    )?;
+    let loader = UnifiedConfigLoader::new()
+        .with_working_dir(dir.path())
+        .with_global_dir(&global_dir);
+    let lenient = loader.load();
+    assert!(
+        lenient
+            .warnings
+            .iter()
+            .any(|w| w.contains("Ignoring MCP settings"))
+    );
+    for config in [loader.load_strict()?, lenient.config] {
+        assert!(config.mcp.enabled);
+        assert!(config.mcp.auto_connect);
+        assert!(!config.mcp.warn_on_tool_trust_drift);
+        assert_eq!(config.mcp.servers.len(), 1);
+        let registry = crate::mcp::build_mcp_registry_from_config_and_packages(&config, []).await?;
+        assert!(marker.exists(), "trusted user command did not start");
+        assert_eq!(
+            registry.server_runtime_status("trusted").unwrap().state,
+            crate::mcp::McpRuntimeState::ConnectionError
+        );
+        std::fs::remove_file(&marker)?;
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+#[tokio::test]
+#[serial]
+async fn explicit_config_consent_preserves_startup_and_auto_connect()
+-> Result<(), Box<dyn std::error::Error>> {
+    let _env = EnvVarGuard::clean_config_env();
+    let dir = tempdir()?;
+    let path = dir.path().join("sage_config.json");
+    let marker = dir.path().join("selected-spawned");
+    let loader = UnifiedConfigLoader::new()
+        .with_config_file(&path)
+        .with_working_dir(dir.path())
+        .with_global_dir(dir.path().join("global"));
+    for auto_connect in [true, false] {
+        std::fs::write(
+            &path,
+            serde_json::to_string(&serde_json::json!({
+                "default_provider":"ollama",
+                "mcp":{"enabled":true,"auto_connect":auto_connect,"default_timeout_secs":1,
+                    "servers":{"selected":{"transport":"stdio","command":"/bin/sh",
+                        "args":["-c", "printf spawned > \"$1\"", "sage-mcp-test", marker]}}}
+            }))?,
+        )?;
+        for config in [loader.load_strict()?, loader.load().config] {
+            let registry =
+                crate::mcp::build_mcp_registry_from_config_and_packages(&config, []).await?;
+            assert_eq!(marker.exists(), auto_connect);
+            let expected = if auto_connect {
+                std::fs::remove_file(&marker)?;
+                crate::mcp::McpRuntimeState::ConnectionError
+            } else {
+                crate::mcp::McpRuntimeState::Disconnected
+            };
+            assert_eq!(
+                registry.server_runtime_status("selected").unwrap().state,
+                expected
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn workspace_mcp_cannot_override_user_disable_or_lenient_fallback()
+-> Result<(), Box<dyn std::error::Error>> {
+    let _env = EnvVarGuard::clean_config_env();
+    let dir = tempdir()?;
+    let global_dir = dir.path().join("global");
+    std::fs::create_dir(&global_dir)?;
+    std::fs::write(
+        dir.path().join("sage_config.json"),
+        r#"{"mcp":{"enabled":true,
+        "servers":{"workspace":{"transport":"stdio","command":"__untrusted__"}}}}"#,
+    )?;
+    std::fs::write(
+        global_dir.join("config.json"),
+        r#"{"mcp":{"enabled":false}}"#,
+    )?;
+    let loader = UnifiedConfigLoader::new()
+        .with_working_dir(dir.path())
+        .with_global_dir(&global_dir);
+    for config in [
+        loader.load_strict()?,
+        loader.load().config,
+        loader
+            .with_config_file(dir.path().join("missing.json"))
+            .load()
+            .config,
+    ] {
+        assert!(!config.mcp.enabled);
+        assert!(config.mcp.servers.is_empty());
+    }
+    std::fs::write(dir.path().join("sage_config.json"), "{invalid")?;
+    let loader = UnifiedConfigLoader::new()
+        .with_working_dir(dir.path())
+        .with_global_dir(&global_dir);
+    assert!(loader.load_strict().is_err());
+    assert!(!loader.load().warnings.is_empty());
+    Ok(())
+}

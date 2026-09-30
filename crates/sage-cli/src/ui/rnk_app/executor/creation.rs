@@ -13,12 +13,13 @@ use std::sync::Arc;
 /// Create executor with unified configuration path
 pub async fn create_executor(
     ui_context: Option<UiContext>,
-    config_file: &str,
+    config_file: Option<&str>,
     working_dir: Option<std::path::PathBuf>,
     max_steps: Option<u32>,
 ) -> SageResult<UnifiedExecutor> {
-    let config = if std::path::Path::new(config_file).exists() {
-        sage_core::config::load_config_from_file(config_file)?
+    let config = if let Some(path) = config_file.filter(|path| std::path::Path::new(path).exists())
+    {
+        sage_core::config::load_config_from_file(path)?
     } else {
         sage_core::config::load_config()?
     };

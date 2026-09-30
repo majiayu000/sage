@@ -49,7 +49,8 @@ impl SageAgentSdk {
         Self { config }
     }
 
-    /// Create SDK instance with configuration file.
+    /// Create SDK instance with an explicitly selected trusted configuration file.
+    /// Selecting this file grants consent to its MCP commands.
     ///
     /// Loads configuration from the specified file path, applying environment
     /// variable substitutions.

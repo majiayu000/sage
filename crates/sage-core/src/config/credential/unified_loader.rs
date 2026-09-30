@@ -16,6 +16,8 @@ use crate::error::SageError;
 use std::path::{Path, PathBuf};
 use tracing::{debug, warn};
 
+mod endpoints;
+
 /// Configuration loader that never fails
 ///
 /// This loader:
@@ -45,7 +47,7 @@ impl UnifiedConfigLoader {
         }
     }
 
-    /// Set the config file path
+    /// Explicitly select a trusted config file, including its MCP commands.
     pub fn with_config_file(mut self, path: impl Into<PathBuf>) -> Self {
         self.config_file = Some(path.into());
         self
@@ -161,6 +163,7 @@ impl UnifiedConfigLoader {
         config: &mut Config,
         warnings: &mut Vec<String>,
     ) -> Option<PathBuf> {
+        let mut project_file_used = None;
         // Try project-level config
         for project_config in [
             self.working_dir.join("sage_config.json"),
@@ -170,10 +173,16 @@ impl UnifiedConfigLoader {
         ] {
             if project_config.exists() {
                 match self.load_config_file(&project_config, warnings) {
-                    Ok(file_config) => {
+                    Ok(mut file_config) => {
                         debug!("Loaded project config from {}", project_config.display());
+                        if let Some(warning) =
+                            Self::discard_project_mcp(&mut file_config, &project_config)
+                        {
+                            warnings.push(warning);
+                        }
                         config.merge(file_config);
-                        return Some(project_config);
+                        project_file_used = Some(project_config);
+                        break;
                     }
                     Err(error) => warnings.push(format!(
                         "Config file {} could not be loaded: {}",
@@ -190,8 +199,12 @@ impl UnifiedConfigLoader {
             match self.load_config_file(&global_config, warnings) {
                 Ok(file_config) => {
                     debug!("Loaded global config from {}", global_config.display());
-                    config.merge(file_config);
-                    return Some(global_config);
+                    if project_file_used.is_some() {
+                        config.mcp.merge(file_config.mcp);
+                    } else {
+                        config.merge(file_config);
+                    }
+                    return project_file_used.or(Some(global_config));
                 }
                 Err(error) => {
                     warnings.push(format!(
@@ -203,7 +216,23 @@ impl UnifiedConfigLoader {
             }
         }
 
-        None
+        project_file_used
+    }
+
+    /// Automatic workspace discovery does not grant consent to MCP commands.
+    fn discard_project_mcp(config: &mut Config, path: &Path) -> Option<String> {
+        let declares_mcp = config.mcp.enabled || !config.mcp.servers.is_empty();
+        config.mcp = crate::config::McpConfig::default();
+        if !declares_mcp {
+            return None;
+        }
+        let warning = format!(
+            "Ignoring MCP settings from automatically discovered workspace config {}. \
+             Only select this file explicitly with --config-file or with_config_file after reviewing its MCP commands.",
+            path.display()
+        );
+        warn!("{warning}");
+        Some(warning)
     }
 
     /// Load a config file
@@ -214,8 +243,8 @@ impl UnifiedConfigLoader {
     ) -> Result<Config, SageError> {
         let mut config = file_loader::load_from_file(path)?;
         // A project file must never choose where environment or stored keys are sent.
-        // Only the user-level config may supply endpoints; explicit file paths alone
-        // do not establish trust because the CLI also passes auto-discovered files.
+        // Only the user-level config may supply endpoints. Explicit file selection
+        // consents to MCP commands without trusting provider endpoints.
         if !self.global_dir.is_absolute() || path != self.global_dir.join("config.json") {
             for (provider, params) in &mut config.model_providers {
                 let base_url = params.base_url.take();
@@ -236,51 +265,6 @@ impl UnifiedConfigLoader {
         Ok(config)
     }
 
-    /// Load endpoints for every supported provider, including aliases that are
-    /// absent from the shipped config and providers omitted by the env loader.
-    fn apply_env_base_urls(config: &mut Config) {
-        for provider in super::providers::default_providers() {
-            if let Ok(base_url) =
-                std::env::var(format!("{}_BASE_URL", provider.name.to_uppercase()))
-            {
-                let params = config
-                    .model_providers
-                    .entry(provider.name.clone())
-                    .or_insert_with(|| {
-                        crate::config::provider_defaults::default_parameters_for_provider(
-                            &provider.name,
-                        )
-                        .unwrap_or_default()
-                    });
-                params.base_url = Some(base_url);
-            }
-        }
-    }
-
-    /// Honor user endpoints even when an explicit/project file is selected.
-    /// Other user config fields keep their existing loading precedence.
-    fn apply_global_base_urls(&self, config: &mut Config) -> Result<(), SageError> {
-        let path = self.global_dir.join("config.json");
-        if self.global_dir.is_absolute() && path.exists() {
-            let user_config = file_loader::load_from_file(&path)?;
-            for (provider, params) in user_config.model_providers {
-                if let Some(base_url) = params.base_url {
-                    let effective_params = config
-                        .model_providers
-                        .entry(provider.clone())
-                        .or_insert_with(|| {
-                            crate::config::provider_defaults::default_parameters_for_provider(
-                                &provider,
-                            )
-                            .unwrap_or_default()
-                        });
-                    effective_params.base_url = Some(base_url);
-                }
-            }
-        }
-        Ok(())
-    }
-
     /// Load configuration for execution paths.
     ///
     /// Unlike `load`, this preserves the legacy strict API by returning parse,
@@ -294,7 +278,11 @@ impl UnifiedConfigLoader {
 
         for path in self.strict_config_paths() {
             if path.exists() {
-                config.merge(self.load_config_file(&path, &mut warnings)?);
+                let mut file_config = self.load_config_file(&path, &mut warnings)?;
+                if self.config_file.is_none() && path != self.global_dir.join("config.json") {
+                    Self::discard_project_mcp(&mut file_config, &path);
+                }
+                config.merge(file_config);
             } else {
                 debug!("Config file {} not found, skipping", path.display());
             }

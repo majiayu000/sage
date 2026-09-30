@@ -258,3 +258,18 @@ fn test_default_functions() {
     assert_eq!(default_mcp_timeout(), 300);
     assert!(default_true());
 }
+
+#[test]
+fn explicit_mcp_disable_overrides_enable_without_implicit_disable() -> Result<(), serde_json::Error>
+{
+    let mut config: McpConfig = serde_json::from_str(r#"{"enabled":true}"#)?;
+    config.merge(McpConfig::default());
+    assert!(config.enabled);
+    let disabled: McpConfig = serde_json::from_str(r#"{"enabled":false}"#)?;
+    assert!(disabled.enabled_set);
+    config.merge(disabled);
+    assert!(!config.enabled);
+    assert!(config.enabled_set);
+    assert!(serde_json::from_str::<McpConfig>(r#"{"enabled":null}"#).is_err());
+    Ok(())
+}

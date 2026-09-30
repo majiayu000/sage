@@ -15,6 +15,14 @@ Provider endpoints are user settings. The execution loader ignores `base_url` in
 
 ## Quick Setup / 快速设置
 
+### MCP startup consent / MCP 启动授权
+
+Automatically discovered `sage_config.json`, `sage_config.toml`, `sage_config.yaml`, and `sage_config.yml` files do not supply MCP settings. Ordinary project settings still load. MCP settings in the user config (`~/.sage/config.json`) remain trusted.
+自动发现的上述工作区配置不提供 MCP 设置；普通项目设置仍会加载。用户全局配置中的 MCP 设置仍受信任。
+
+After reviewing a project's MCP commands, explicitly select its configuration with `sage --config-file sage_config.json`. This selection grants consent to the file's MCP commands for that invocation, including in print mode. SDK callers can use `SageAgentSdk::with_config_file` or a programmatically constructed trusted `Config`.
+检查项目的 MCP 命令后，可显式指定上述配置文件；这会授权本次调用使用该文件的 MCP 命令，也适用于非交互模式。SDK 可显式选择配置文件或传入受信任的配置对象。
+
 ### Step 1: Initialize Configuration / 初始化配置
 
 ```bash

@@ -38,7 +38,7 @@ pub async fn executor_loop(
     mut rx: mpsc::Receiver<UiCommand>,
     input_channel: InputChannel,
     ui_context: UiContext,
-    config_file: String,
+    config_file: Option<String>,
     working_dir: Option<std::path::PathBuf>,
     max_steps: Option<u32>,
 ) {
@@ -48,7 +48,7 @@ pub async fn executor_loop(
     // Create executor with UI context
     let mut executor = match create_executor(
         Some(ui_context),
-        &config_file,
+        config_file.as_deref(),
         working_dir.clone(),
         max_steps,
     )
@@ -123,7 +123,13 @@ pub async fn executor_loop(
                         continue;
                     }
                     Ok(SlashCommandAction::Doctor) => {
-                        handle_doctor(&state, &config_file).await;
+                        handle_doctor(
+                            &state,
+                            config_file
+                                .as_deref()
+                                .unwrap_or(crate::args::DEFAULT_CONFIG_FILE),
+                        )
+                        .await;
                         continue;
                     }
                     Ok(SlashCommandAction::Exit) => {

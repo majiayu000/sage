@@ -89,10 +89,9 @@ enum LogFormat {
 }
 
 fn resolve_log_format(cli: &Cli) -> LogFormat {
-    let config = if cli.config_file == args::DEFAULT_CONFIG_FILE {
-        load_config().ok()
-    } else {
-        load_config_from_file(&cli.config_file).ok()
+    let config = match cli.config_file.as_deref() {
+        Some(path) => load_config_from_file(path).ok(),
+        None => load_config().ok(),
     };
 
     match config.as_ref().map(|cfg| cfg.logging.format.as_str()) {
