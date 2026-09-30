@@ -13,7 +13,10 @@ pub fn load_from_file(path: &Path) -> SageResult<Config> {
     if !path.exists() {
         return Ok(Config::default());
     }
+    load_from_file_as(path)
+}
 
+pub(crate) fn load_from_file_as<T: serde::de::DeserializeOwned>(path: &Path) -> SageResult<T> {
     let content = fs::read_to_string(path).map_err(|e| {
         SageError::config_with_context(
             format!("Failed to read config file: {}", e),
@@ -21,7 +24,7 @@ pub fn load_from_file(path: &Path) -> SageResult<Config> {
         )
     })?;
 
-    let config: Config = match path.extension().and_then(|s| s.to_str()) {
+    let config = match path.extension().and_then(|s| s.to_str()) {
         Some("toml") => toml::from_str(&content).map_err(|e| {
             SageError::config_with_context(
                 format!("Failed to parse TOML config: {}", e),

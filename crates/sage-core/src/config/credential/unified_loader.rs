@@ -89,10 +89,9 @@ impl UnifiedConfigLoader {
             config_file_used = self.try_default_locations(&mut config, &mut warnings);
         }
 
-        if config_file_used
-            .as_ref()
-            .is_some_and(|path| path != &self.global_dir.join("config.json"))
-        {
+        if self.config_file.as_ref().is_some_and(|path| {
+            config_file_used.as_ref() == Some(path) && path != &self.global_dir.join("config.json")
+        }) {
             if let Err(error) = self.apply_global_base_urls(&mut config) {
                 warn!("Failed to load user provider endpoints: {}", error);
                 warnings.push(format!(
@@ -173,13 +172,8 @@ impl UnifiedConfigLoader {
         ] {
             if project_config.exists() {
                 match self.load_config_file(&project_config, warnings) {
-                    Ok(mut file_config) => {
+                    Ok(file_config) => {
                         debug!("Loaded project config from {}", project_config.display());
-                        if let Some(warning) =
-                            Self::discard_project_mcp(&mut file_config, &project_config)
-                        {
-                            warnings.push(warning);
-                        }
                         config.merge(file_config);
                         project_file_used = Some(project_config);
                         break;
@@ -201,6 +195,7 @@ impl UnifiedConfigLoader {
                     debug!("Loaded global config from {}", global_config.display());
                     if project_file_used.is_some() {
                         config.mcp.merge(file_config.mcp);
+                        Self::merge_base_urls(config, file_config.model_providers);
                     } else {
                         config.merge(file_config);
                     }
@@ -241,11 +236,22 @@ impl UnifiedConfigLoader {
         path: &Path,
         warnings: &mut Vec<String>,
     ) -> Result<Config, SageError> {
-        let mut config = file_loader::load_from_file(path)?;
+        let trusted_global =
+            self.global_dir.is_absolute() && path == self.global_dir.join("config.json");
+        let mut config = if trusted_global {
+            Self::load_user_config(path)?
+        } else {
+            file_loader::load_from_file(path)?
+        };
         // A project file must never choose where environment or stored keys are sent.
         // Only the user-level config may supply endpoints. Explicit file selection
         // consents to MCP commands without trusting provider endpoints.
-        if !self.global_dir.is_absolute() || path != self.global_dir.join("config.json") {
+        if !trusted_global {
+            if self.config_file.as_deref() != Some(path) {
+                if let Some(warning) = Self::discard_project_mcp(&mut config, path) {
+                    warnings.push(warning);
+                }
+            }
             for (provider, params) in &mut config.model_providers {
                 let base_url = params.base_url.take();
                 let shipped_base_url =
@@ -275,14 +281,19 @@ impl UnifiedConfigLoader {
         Self::apply_env_base_urls(&mut config);
         config.merge(env_loader::load_from_env()?);
         let mut warnings = Vec::new();
+        let mut project_file_used = false;
+        let global_config = self.global_dir.join("config.json");
 
         for path in self.strict_config_paths() {
             if path.exists() {
-                let mut file_config = self.load_config_file(&path, &mut warnings)?;
-                if self.config_file.is_none() && path != self.global_dir.join("config.json") {
-                    Self::discard_project_mcp(&mut file_config, &path);
+                let file_config = self.load_config_file(&path, &mut warnings)?;
+                if project_file_used && path == global_config {
+                    config.mcp.merge(file_config.mcp);
+                    Self::merge_base_urls(&mut config, file_config.model_providers);
+                } else {
+                    config.merge(file_config);
+                    project_file_used = path != global_config;
                 }
-                config.merge(file_config);
             } else {
                 debug!("Config file {} not found, skipping", path.display());
             }
