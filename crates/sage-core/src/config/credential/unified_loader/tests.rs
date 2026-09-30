@@ -634,3 +634,85 @@ fn project_base_urls_do_not_trust_relative_global_fallback() {
         );
     }
 }
+
+#[test]
+#[serial]
+fn project_base_urls_preserve_all_provider_overrides() {
+    let _env = EnvVarGuard::clean_config_env();
+    for provider in default_providers() {
+        let dir = tempdir().unwrap();
+        let global_dir = dir.path().join("global");
+        let path = dir.path().join("sage_config.json");
+        let params = std::collections::HashMap::from([(
+            provider.name.clone(),
+            serde_json::json!({
+                "model": "test-model", "api_key": "project-test-key",
+                "base_url": "https://project-endpoint.example.test"
+            }),
+        )]);
+        std::fs::write(
+            &path,
+            serde_json::to_string(&serde_json::json!({
+                "default_provider": provider.name,
+                "model_providers": params
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        let env_name = format!("{}_BASE_URL", provider.name.to_uppercase());
+        unsafe {
+            env::set_var(&env_name, "https://env-endpoint.example.test");
+        }
+        for explicit in [false, true] {
+            let mut loader = UnifiedConfigLoader::new()
+                .with_working_dir(dir.path())
+                .with_global_dir(&global_dir);
+            if explicit {
+                loader = loader.with_config_file(&path);
+            }
+            for config in [loader.load().config, loader.load_strict().unwrap()] {
+                assert_eq!(
+                    config.model_providers[&provider.name].base_url.as_deref(),
+                    Some("https://env-endpoint.example.test"),
+                    "{}",
+                    provider.name
+                );
+            }
+        }
+        unsafe {
+            env::remove_var(&env_name);
+        }
+
+        // CLI can select an alias that the project did not declare.
+        std::fs::write(&path, "{}").unwrap();
+        std::fs::create_dir_all(&global_dir).unwrap();
+        let mut user_params = params;
+        user_params.get_mut(&provider.name).unwrap()["base_url"] =
+            serde_json::json!("https://user-endpoint.example.test");
+        std::fs::write(
+            global_dir.join("config.json"),
+            serde_json::to_string(&serde_json::json!({
+                "model_providers": user_params
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        let loader = UnifiedConfigLoader::new()
+            .with_config_file(&path)
+            .with_working_dir(dir.path())
+            .with_global_dir(&global_dir)
+            .with_cli_overrides(
+                CliOverrides::new()
+                    .with_provider(&provider.name)
+                    .with_api_key("cli-test-key"),
+            );
+        for config in [loader.load().config, loader.load_strict().unwrap()] {
+            assert_eq!(
+                config.model_providers[&provider.name].base_url.as_deref(),
+                Some("https://user-endpoint.example.test"),
+                "{}",
+                provider.name
+            );
+        }
+    }
+}

@@ -75,12 +75,7 @@ impl UnifiedConfigLoader {
         let mut config = Config::default();
         let mut config_file_used: Option<PathBuf> = None;
 
-        // Endpoint overrides from the environment are user-controlled.
-        for (provider, params) in &mut config.model_providers {
-            if let Ok(base_url) = std::env::var(format!("{}_BASE_URL", provider.to_uppercase())) {
-                params.base_url = Some(base_url);
-            }
-        }
+        Self::apply_env_base_urls(&mut config);
 
         // 1. Try to load from specified config file
         if let Some(ref path) = self.config_file {
@@ -241,6 +236,27 @@ impl UnifiedConfigLoader {
         Ok(config)
     }
 
+    /// Load endpoints for every supported provider, including aliases that are
+    /// absent from the shipped config and providers omitted by the env loader.
+    fn apply_env_base_urls(config: &mut Config) {
+        for provider in super::providers::default_providers() {
+            if let Ok(base_url) =
+                std::env::var(format!("{}_BASE_URL", provider.name.to_uppercase()))
+            {
+                let params = config
+                    .model_providers
+                    .entry(provider.name.clone())
+                    .or_insert_with(|| {
+                        crate::config::provider_defaults::default_parameters_for_provider(
+                            &provider.name,
+                        )
+                        .unwrap_or_default()
+                    });
+                params.base_url = Some(base_url);
+            }
+        }
+    }
+
     /// Honor user endpoints even when an explicit/project file is selected.
     /// Other user config fields keep their existing loading precedence.
     fn apply_global_base_urls(&self, config: &mut Config) -> Result<(), SageError> {
@@ -249,9 +265,16 @@ impl UnifiedConfigLoader {
             let user_config = file_loader::load_from_file(&path)?;
             for (provider, params) in user_config.model_providers {
                 if let Some(base_url) = params.base_url {
-                    if let Some(effective_params) = config.model_providers.get_mut(&provider) {
-                        effective_params.base_url = Some(base_url);
-                    }
+                    let effective_params = config
+                        .model_providers
+                        .entry(provider.clone())
+                        .or_insert_with(|| {
+                            crate::config::provider_defaults::default_parameters_for_provider(
+                                &provider,
+                            )
+                            .unwrap_or_default()
+                        });
+                    effective_params.base_url = Some(base_url);
                 }
             }
         }
@@ -265,6 +288,7 @@ impl UnifiedConfigLoader {
     /// credential resolution path.
     pub fn load_strict(&self) -> Result<Config, SageError> {
         let mut config = Config::default();
+        Self::apply_env_base_urls(&mut config);
         config.merge(env_loader::load_from_env()?);
         let mut warnings = Vec::new();
 
