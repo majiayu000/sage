@@ -16,6 +16,14 @@ impl EnvVarGuard {
             .into_iter()
             .map(|provider| provider.env_var)
             .collect();
+        for provider in default_providers() {
+            vars.extend(
+                crate::config::api_key_helpers::get_standard_env_vars_for_provider(&provider.name),
+            );
+            let prefix = provider.name.to_uppercase();
+            vars.push(format!("SAGE_{prefix}_API_KEY"));
+            vars.push(format!("{prefix}_BASE_URL"));
+        }
         vars.sort();
         vars.dedup();
 
@@ -367,4 +375,262 @@ fn strict_loader_applies_persisted_doubao_credentials() -> Result<(), Box<dyn st
     };
     assert_eq!(params.api_key.as_deref(), Some("doubao-test-key"));
     Ok(())
+}
+
+fn write_project_endpoint(path: &Path, api_key: Option<&str>) {
+    let config = serde_json::json!({
+        "default_provider": "anthropic",
+        "model_providers": {
+            "anthropic": {
+                "model": "claude-test",
+                "api_key": api_key,
+                "base_url": "https://project-endpoint.example.test"
+            }
+        }
+    });
+    let content = match path.extension().and_then(|ext| ext.to_str()) {
+        Some("toml") => {
+            let key = api_key
+                .map(|key| format!("api_key = {key:?}\n"))
+                .unwrap_or_default();
+            format!(
+                "default_provider = \"anthropic\"\n[model_providers.anthropic]\nmodel = \"claude-test\"\nbase_url = \"https://project-endpoint.example.test\"\n{key}"
+            )
+        }
+        Some("yaml" | "yml") => serde_yaml::to_string(&config).unwrap(),
+        _ => serde_json::to_string(&config).unwrap(),
+    };
+    std::fs::write(path, content).unwrap();
+}
+
+#[test]
+#[serial]
+fn project_base_urls_cannot_receive_inherited_credentials() {
+    let _env = EnvVarGuard::clean_config_env();
+    let expected_url = Config::default().model_providers["anthropic"]
+        .base_url
+        .clone();
+
+    for extension in ["json", "toml", "yaml", "yml"] {
+        for explicit in [false, true] {
+            for environment_key in [false, true] {
+                let dir = tempdir().unwrap();
+                let global_dir = dir.path().join("global");
+                let mut credentials = CredentialsFile::default();
+                credentials.set_api_key("anthropic", "stored-test-key");
+                credentials
+                    .save(&global_dir.join("credentials.json"))
+                    .unwrap();
+                unsafe {
+                    if environment_key {
+                        env::set_var("ANTHROPIC_API_KEY", "environment-test-key");
+                    } else {
+                        env::remove_var("ANTHROPIC_API_KEY");
+                    }
+                }
+                let path = dir.path().join(format!("sage_config.{extension}"));
+                let mut loader = UnifiedConfigLoader::new()
+                    .with_working_dir(dir.path())
+                    .with_global_dir(&global_dir);
+                if explicit {
+                    loader = loader.with_config_file(&path);
+                }
+                for project_key in [None, Some("${ANTHROPIC_API_KEY}"), Some("project-test-key")] {
+                    write_project_endpoint(&path, project_key);
+                    for config in [loader.load().config, loader.load_strict().unwrap()] {
+                        let params = &config.model_providers["anthropic"];
+                        assert_eq!(
+                            params.base_url, expected_url,
+                            "{extension}, explicit={explicit}, env={environment_key}"
+                        );
+                        let key = params
+                            .get_api_key_info_for_provider("anthropic")
+                            .key
+                            .unwrap();
+                        let expected_key = if environment_key {
+                            "environment-test-key"
+                        } else {
+                            project_key
+                                .filter(|key| !key.starts_with("${"))
+                                .unwrap_or("stored-test-key")
+                        };
+                        assert_eq!(key, expected_key);
+                        let (client, _, _) = crate::llm::LlmClient::from_config(&config).unwrap();
+                        assert_eq!(
+                            client.config().base_url().map(String::as_str),
+                            expected_url.as_deref()
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+#[serial]
+fn project_base_urls_preserve_user_endpoint_overrides() {
+    let _env = EnvVarGuard::clean_config_env();
+    let dir = tempdir().unwrap();
+    let global_dir = dir.path().join("global");
+    let path = dir.path().join("sage_config.json");
+    write_project_endpoint(&path, None);
+    unsafe {
+        env::set_var("ANTHROPIC_API_KEY", "environment-test-key");
+        env::set_var("ANTHROPIC_BASE_URL", "https://env-endpoint.example.test");
+    }
+    for explicit in [false, true] {
+        let mut loader = UnifiedConfigLoader::new()
+            .with_working_dir(dir.path())
+            .with_global_dir(&global_dir);
+        if explicit {
+            loader = loader.with_config_file(&path);
+        }
+        for config in [loader.load().config, loader.load_strict().unwrap()] {
+            assert_eq!(
+                config.model_providers["anthropic"].base_url.as_deref(),
+                Some("https://env-endpoint.example.test")
+            );
+        }
+        std::fs::create_dir_all(&global_dir).unwrap();
+        std::fs::write(
+            global_dir.join("config.json"),
+            r#"{
+            "model_providers": {"anthropic": {
+                "model": "claude-user", "base_url": "https://user-endpoint.example.test"
+            }}
+        }"#,
+        )
+        .unwrap();
+        for config in [loader.load().config, loader.load_strict().unwrap()] {
+            assert_eq!(
+                config.model_providers["anthropic"].base_url.as_deref(),
+                Some("https://user-endpoint.example.test")
+            );
+        }
+        let loader = loader.with_cli_overrides(
+            CliOverrides::new()
+                .with_provider("anthropic")
+                .with_model_base_url("https://cli-endpoint.example.test"),
+        );
+        for config in [loader.load().config, loader.load_strict().unwrap()] {
+            assert_eq!(
+                config.model_providers["anthropic"].base_url.as_deref(),
+                Some("https://cli-endpoint.example.test")
+            );
+        }
+        std::fs::remove_file(global_dir.join("config.json")).unwrap();
+    }
+}
+
+#[test]
+#[serial]
+fn project_base_urls_are_ignored_for_every_provider() {
+    let _env = EnvVarGuard::clean_config_env();
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("sage_config.json");
+    let providers = default_providers();
+    let model_providers = providers
+        .iter()
+        .map(|provider| {
+            (
+                provider.name.clone(),
+                serde_json::json!({
+                    "model": "test-model", "api_key": "project-test-key",
+                    "base_url": "https://project-endpoint.example.test"
+                }),
+            )
+        })
+        .collect::<serde_json::Map<String, serde_json::Value>>();
+    std::fs::write(
+        &path,
+        serde_json::to_string(&serde_json::json!({
+            "model_providers": model_providers
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let loader = UnifiedConfigLoader::new()
+        .with_working_dir(dir.path())
+        .with_global_dir(dir.path().join("global"));
+    let loaded = loader.load();
+    assert_eq!(loaded.warnings.len(), providers.len());
+    for mut config in [loaded.config, loader.load_strict().unwrap()] {
+        for provider in &providers {
+            config.set_default_provider(provider.name.clone()).unwrap();
+            let (client, _, _) = crate::llm::LlmClient::from_config(&config).unwrap();
+            assert_ne!(
+                client.config().get_base_url(),
+                "https://project-endpoint.example.test",
+                "{} must not use a project endpoint",
+                provider.name
+            );
+        }
+    }
+}
+
+#[test]
+#[serial]
+fn project_base_urls_preserve_config_error_contracts() {
+    let _env = EnvVarGuard::clean_config_env();
+    let dir = tempdir().unwrap();
+    let global_dir = dir.path().join("global");
+    let path = dir.path().join("sage_config.json");
+    write_project_endpoint(&path, None);
+    std::fs::create_dir_all(&global_dir).unwrap();
+    std::fs::write(global_dir.join("config.json"), "{ invalid json }").unwrap();
+    let loader = UnifiedConfigLoader::new()
+        .with_config_file(&path)
+        .with_working_dir(dir.path())
+        .with_global_dir(&global_dir);
+    assert!(
+        loader
+            .load_strict()
+            .unwrap_err()
+            .to_string()
+            .contains("Failed to parse JSON config")
+    );
+    let loaded = loader.load();
+    assert!(
+        loaded
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("User provider endpoints could not be loaded"))
+    );
+    assert_ne!(
+        loaded.config.model_providers["anthropic"]
+            .base_url
+            .as_deref(),
+        Some("https://project-endpoint.example.test")
+    );
+
+    std::fs::write(&path, "{ invalid json }").unwrap();
+    assert!(
+        loader
+            .load_strict()
+            .unwrap_err()
+            .to_string()
+            .contains("Failed to parse JSON config")
+    );
+    assert!(!loader.load().warnings.is_empty());
+}
+
+#[test]
+#[serial]
+fn project_base_urls_do_not_trust_relative_global_fallback() {
+    let _env = EnvVarGuard::clean_config_env();
+    let dir = tempfile::tempdir_in(".").unwrap();
+    let global_dir = PathBuf::from(".").join(dir.path().file_name().unwrap());
+    let path = global_dir.join("config.json");
+    write_project_endpoint(&path, None);
+    let loader = UnifiedConfigLoader::new()
+        .with_config_file(&path)
+        .with_working_dir(dir.path())
+        .with_global_dir(&global_dir);
+    for config in [loader.load().config, loader.load_strict().unwrap()] {
+        assert_eq!(
+            config.model_providers["anthropic"].base_url,
+            Config::default().model_providers["anthropic"].base_url
+        );
+    }
 }

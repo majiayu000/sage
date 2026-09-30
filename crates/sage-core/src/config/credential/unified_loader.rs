@@ -75,6 +75,13 @@ impl UnifiedConfigLoader {
         let mut config = Config::default();
         let mut config_file_used: Option<PathBuf> = None;
 
+        // Endpoint overrides from the environment are user-controlled.
+        for (provider, params) in &mut config.model_providers {
+            if let Ok(base_url) = std::env::var(format!("{}_BASE_URL", provider.to_uppercase())) {
+                params.base_url = Some(base_url);
+            }
+        }
+
         // 1. Try to load from specified config file
         if let Some(ref path) = self.config_file {
             config_file_used = self.try_load_file(path, &mut config, &mut warnings);
@@ -83,6 +90,19 @@ impl UnifiedConfigLoader {
         // 2. Try default locations if no file specified or found
         if config_file_used.is_none() {
             config_file_used = self.try_default_locations(&mut config, &mut warnings);
+        }
+
+        if config_file_used
+            .as_ref()
+            .is_some_and(|path| path != &self.global_dir.join("config.json"))
+        {
+            if let Err(error) = self.apply_global_base_urls(&mut config) {
+                warn!("Failed to load user provider endpoints: {}", error);
+                warnings.push(format!(
+                    "User provider endpoints could not be loaded: {}",
+                    error
+                ));
+            }
         }
 
         // 3. Apply CLI overrides
@@ -115,7 +135,7 @@ impl UnifiedConfigLoader {
         warnings: &mut Vec<String>,
     ) -> Option<PathBuf> {
         if path.exists() {
-            match self.load_config_file(path) {
+            match self.load_config_file(path, warnings) {
                 Ok(file_config) => {
                     debug!("Loaded config from {}", path.display());
                     config.merge(file_config);
@@ -154,7 +174,7 @@ impl UnifiedConfigLoader {
             self.working_dir.join("sage_config.yml"),
         ] {
             if project_config.exists() {
-                match self.load_config_file(&project_config) {
+                match self.load_config_file(&project_config, warnings) {
                     Ok(file_config) => {
                         debug!("Loaded project config from {}", project_config.display());
                         config.merge(file_config);
@@ -172,7 +192,7 @@ impl UnifiedConfigLoader {
         // Try global config
         let global_config = self.global_dir.join("config.json");
         if global_config.exists() {
-            match self.load_config_file(&global_config) {
+            match self.load_config_file(&global_config, warnings) {
                 Ok(file_config) => {
                     debug!("Loaded global config from {}", global_config.display());
                     config.merge(file_config);
@@ -192,8 +212,50 @@ impl UnifiedConfigLoader {
     }
 
     /// Load a config file
-    fn load_config_file(&self, path: &Path) -> Result<Config, SageError> {
-        file_loader::load_from_file(path)
+    fn load_config_file(
+        &self,
+        path: &Path,
+        warnings: &mut Vec<String>,
+    ) -> Result<Config, SageError> {
+        let mut config = file_loader::load_from_file(path)?;
+        // A project file must never choose where environment or stored keys are sent.
+        // Only the user-level config may supply endpoints; explicit file paths alone
+        // do not establish trust because the CLI also passes auto-discovered files.
+        if !self.global_dir.is_absolute() || path != self.global_dir.join("config.json") {
+            for (provider, params) in &mut config.model_providers {
+                let base_url = params.base_url.take();
+                let shipped_base_url =
+                    crate::config::provider_defaults::default_parameters_for_provider(provider)
+                        .and_then(|defaults| defaults.base_url);
+                if base_url.is_some() && base_url != shipped_base_url {
+                    let warning = format!(
+                        "Ignored project base_url for {provider} in {}. Set the endpoint in \
+                         the user config, a provider BASE_URL environment variable, or CLI override.",
+                        path.display()
+                    );
+                    warn!("{}", warning);
+                    warnings.push(warning);
+                }
+            }
+        }
+        Ok(config)
+    }
+
+    /// Honor user endpoints even when an explicit/project file is selected.
+    /// Other user config fields keep their existing loading precedence.
+    fn apply_global_base_urls(&self, config: &mut Config) -> Result<(), SageError> {
+        let path = self.global_dir.join("config.json");
+        if self.global_dir.is_absolute() && path.exists() {
+            let user_config = file_loader::load_from_file(&path)?;
+            for (provider, params) in user_config.model_providers {
+                if let Some(base_url) = params.base_url {
+                    if let Some(effective_params) = config.model_providers.get_mut(&provider) {
+                        effective_params.base_url = Some(base_url);
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Load configuration for execution paths.
@@ -204,15 +266,23 @@ impl UnifiedConfigLoader {
     pub fn load_strict(&self) -> Result<Config, SageError> {
         let mut config = Config::default();
         config.merge(env_loader::load_from_env()?);
+        let mut warnings = Vec::new();
 
         for path in self.strict_config_paths() {
             if path.exists() {
-                config.merge(self.load_config_file(&path)?);
+                config.merge(self.load_config_file(&path, &mut warnings)?);
             } else {
                 debug!("Config file {} not found, skipping", path.display());
             }
         }
 
+        if self
+            .config_file
+            .as_ref()
+            .is_some_and(|path| path != &self.global_dir.join("config.json"))
+        {
+            self.apply_global_base_urls(&mut config)?;
+        }
         self.apply_cli_overrides(&mut config);
         self.resolve_credentials(&mut config);
         self.reject_unknown_legacy_credential_providers(&config)?;

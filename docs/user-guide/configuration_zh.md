@@ -7,6 +7,10 @@ Sage Agent 使用 JSON 配置文件来管理 LLM 提供商设置、API 密钥、
 
 **Default Configuration File / 默认配置文件:** `sage_config.json`
 
+Provider endpoints are user settings. The execution loader ignores `base_url` in project JSON, TOML, and YAML files, including a project file passed with `--config-file`, so project configuration cannot redirect your API credentials. Set custom endpoints in `model_providers.<provider>.base_url` in `~/.sage/config.json`, a provider environment variable such as `ANTHROPIC_BASE_URL`, or a `model_base_url` override when using the configuration API. User config endpoints take precedence over environment endpoints; explicit overrides take precedence over both.
+
+提供商 endpoint 属于用户设置。执行配置加载器会忽略项目 JSON、TOML 和 YAML 文件中的 `base_url`，包括通过 `--config-file` 传入的项目文件，防止项目配置改变 API 凭据的发送地址。自定义 endpoint 请写入 `~/.sage/config.json` 的 `model_providers.<provider>.base_url`，使用 `ANTHROPIC_BASE_URL` 等提供商环境变量，或在配置 API 中传入 `model_base_url` 覆盖项。用户配置中的 endpoint 优先于环境变量，显式覆盖项优先于两者。
+
 ---
 
 ## Quick Setup / 快速设置
