@@ -45,7 +45,7 @@ impl UnifiedConfigLoader {
         }
     }
 
-    /// Set the config file path
+    /// Explicitly select a trusted config file, including its MCP commands.
     pub fn with_config_file(mut self, path: impl Into<PathBuf>) -> Self {
         self.config_file = Some(path.into());
         self
@@ -146,6 +146,7 @@ impl UnifiedConfigLoader {
         config: &mut Config,
         warnings: &mut Vec<String>,
     ) -> Option<PathBuf> {
+        let mut project_file_used = None;
         // Try project-level config
         for project_config in [
             self.working_dir.join("sage_config.json"),
@@ -155,10 +156,16 @@ impl UnifiedConfigLoader {
         ] {
             if project_config.exists() {
                 match self.load_config_file(&project_config) {
-                    Ok(file_config) => {
+                    Ok(mut file_config) => {
                         debug!("Loaded project config from {}", project_config.display());
+                        if let Some(warning) =
+                            Self::discard_project_mcp(&mut file_config, &project_config)
+                        {
+                            warnings.push(warning);
+                        }
                         config.merge(file_config);
-                        return Some(project_config);
+                        project_file_used = Some(project_config);
+                        break;
                     }
                     Err(error) => warnings.push(format!(
                         "Config file {} could not be loaded: {}",
@@ -175,8 +182,12 @@ impl UnifiedConfigLoader {
             match self.load_config_file(&global_config) {
                 Ok(file_config) => {
                     debug!("Loaded global config from {}", global_config.display());
-                    config.merge(file_config);
-                    return Some(global_config);
+                    if project_file_used.is_some() {
+                        config.mcp.merge(file_config.mcp);
+                    } else {
+                        config.merge(file_config);
+                    }
+                    return project_file_used.or(Some(global_config));
                 }
                 Err(error) => {
                     warnings.push(format!(
@@ -188,7 +199,23 @@ impl UnifiedConfigLoader {
             }
         }
 
-        None
+        project_file_used
+    }
+
+    /// Automatic workspace discovery does not grant consent to MCP commands.
+    fn discard_project_mcp(config: &mut Config, path: &Path) -> Option<String> {
+        let declares_mcp = config.mcp.enabled || !config.mcp.servers.is_empty();
+        config.mcp = crate::config::McpConfig::default();
+        if !declares_mcp {
+            return None;
+        }
+        let warning = format!(
+            "Ignoring MCP settings from automatically discovered workspace config {}. \
+             Only select this file explicitly with --config-file or with_config_file after reviewing its MCP commands.",
+            path.display()
+        );
+        warn!("{warning}");
+        Some(warning)
     }
 
     /// Load a config file
@@ -207,7 +234,11 @@ impl UnifiedConfigLoader {
 
         for path in self.strict_config_paths() {
             if path.exists() {
-                config.merge(self.load_config_file(&path)?);
+                let mut file_config = self.load_config_file(&path)?;
+                if self.config_file.is_none() && path != self.global_dir.join("config.json") {
+                    Self::discard_project_mcp(&mut file_config, &path);
+                }
+                config.merge(file_config);
             } else {
                 debug!("Config file {} not found, skipping", path.display());
             }

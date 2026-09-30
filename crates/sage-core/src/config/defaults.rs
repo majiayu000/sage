@@ -7,7 +7,9 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// Convenience function to load configuration with default sources
+/// Convenience function to load configuration with default sources.
+/// Automatically discovered workspace files cannot configure MCP; the user
+/// config in the global data directory remains trusted for MCP startup.
 ///
 /// Loads configuration in this order:
 /// 1. Default configuration
@@ -19,7 +21,8 @@ pub fn load_config() -> SageResult<Config> {
     load_config_with_overrides(None, HashMap::new())
 }
 
-/// Load configuration with custom file path
+/// Load configuration from an explicitly selected trusted file.
+/// Selecting this file grants consent to its MCP commands.
 ///
 /// Loads configuration in this order:
 /// 1. Default configuration
