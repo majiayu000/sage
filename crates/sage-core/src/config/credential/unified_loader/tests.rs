@@ -147,6 +147,40 @@ fn test_unified_loader_load_nonexistent_file() {
 
 #[test]
 #[serial]
+fn strict_loader_rejects_missing_explicit_config() {
+    let _env = EnvVarGuard::clean_config_env();
+    let dir = tempdir().unwrap();
+    let global_dir = dir.path().join("global");
+    std::fs::create_dir(&global_dir).unwrap();
+    std::fs::write(dir.path().join("sage_config.json"), "{}").unwrap();
+    std::fs::write(global_dir.join("config.json"), "{}").unwrap();
+
+    for missing_path in [
+        dir.path().join("missing.json"),
+        global_dir.join("missing.json"),
+    ] {
+        let loader = UnifiedConfigLoader::new()
+            .with_working_dir(dir.path())
+            .with_global_dir(&global_dir)
+            .with_config_file(&missing_path);
+        let error = format!("{:?}", loader.load_strict().unwrap_err());
+        assert!(error.contains("Failed to read config file"), "{error}");
+        assert!(error.contains(missing_path.to_str().unwrap()), "{error}");
+    }
+
+    std::fs::remove_file(global_dir.join("config.json")).unwrap();
+    let error = UnifiedConfigLoader::new()
+        .with_working_dir(dir.path())
+        .with_global_dir(&global_dir)
+        .with_config_file(global_dir.join("config.json"))
+        .load_strict()
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("Failed to read config file"), "{error}");
+}
+
+#[test]
+#[serial]
 fn test_unified_loader_cli_overrides() {
     let _env = EnvVarGuard::clean_config_env();
 

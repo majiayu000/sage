@@ -241,7 +241,7 @@ impl UnifiedConfigLoader {
         let mut config = if trusted_global {
             Self::load_user_config(path)?
         } else {
-            file_loader::load_from_file(path)?
+            file_loader::load_from_file_as(path)?
         };
         // A project file must never choose where environment or stored keys are sent.
         // Only the user-level config may supply endpoints. Explicit file selection
@@ -285,7 +285,7 @@ impl UnifiedConfigLoader {
         let global_config = self.global_dir.join("config.json");
 
         for path in self.strict_config_paths() {
-            if path.exists() {
+            if self.config_file.is_some() || path.exists() {
                 let file_config = self.load_config_file(&path, &mut warnings)?;
                 if project_file_used && path == global_config {
                     config.mcp.merge(file_config.mcp);
