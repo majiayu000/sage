@@ -10,7 +10,7 @@ use tokio::sync::oneshot;
 use tokio::time::Instant;
 
 use super::request::{
-    create_graphql_request, execute_request_without_remote_verification_for_tests,
+    create_graphql_request, execute_request, execute_request_without_remote_verification_for_tests,
     should_rewrite_redirect_to_get, to_reqwest_method,
 };
 use super::{HttpClientParams, HttpMethod, validate_url_security};
@@ -77,6 +77,33 @@ async fn test_http_request_validation_blocks_ipv4_mapped_loopback() {
         result.is_err(),
         "HTTP client request validation must reject IPv4-mapped loopback literals"
     );
+}
+
+#[tokio::test]
+async fn test_http_request_rejects_internal_ipv6_before_sending() -> Result<()> {
+    let client = reqwest::Client::builder().no_proxy().build()?;
+    for address in [
+        "64:ff9b::a9fe:a9fe",
+        "2002:a9fe:a9fe::",
+        "64:ff9b:1:a9fe:a9:fe00::",
+        "::",
+    ] {
+        // An expired deadline prevents any network request if validation regresses.
+        let params: HttpClientParams = serde_json::from_value(json!({
+            "method": "GET",
+            "url": format!("http://[{address}]/latest/meta-data/"),
+            "timeout": 0,
+        }))?;
+        let error = execute_request(&client, params)
+            .await
+            .expect_err("internal literal must fail before sending");
+        let ip: std::net::IpAddr = address.parse()?;
+        assert_eq!(
+            error.to_string(),
+            format!("Requests to private/internal IP addresses are not allowed (literal {ip})")
+        );
+    }
+    Ok(())
 }
 
 async fn spawn_http_client_loopback_redirect_proxy() -> Result<String> {

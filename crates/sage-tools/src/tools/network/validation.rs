@@ -4,7 +4,7 @@
 //! network-based vulnerabilities.
 
 use std::collections::BTreeSet;
-use std::net::{IpAddr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 use anyhow::{Context, Result, anyhow};
 use url::Host;
@@ -265,8 +265,8 @@ pub fn is_private_ip(ip: &IpAddr) -> bool {
             false
         }
         IpAddr::V6(ipv6) => {
-            // ::1 - Loopback
-            if ipv6.is_loopback() {
+            // :: - Unspecified, ::1 - Loopback
+            if ipv6.is_unspecified() || ipv6.is_loopback() {
                 return true;
             }
             // fe80::/10 - Link-local
@@ -277,19 +277,32 @@ pub fn is_private_ip(ip: &IpAddr) -> bool {
             if (ipv6.segments()[0] & 0xfe00) == 0xfc00 {
                 return true;
             }
+            let segments = ipv6.segments();
+            // RFC 8215 local-use translation prefix. The embedded IPv4
+            // layout is deployment-specific, so reject the whole /48.
+            if segments[..3] == [0x64, 0xff9b, 1] {
+                return true;
+            }
+            let octets = ipv6.octets();
+            // RFC 6052 well-known NAT64 /96: IPv4 is in the last 32 bits.
+            if segments[..6] == [0x64, 0xff9b, 0, 0, 0, 0] {
+                let v4 = Ipv4Addr::new(octets[12], octets[13], octets[14], octets[15]);
+                return is_private_ip(&IpAddr::V4(v4));
+            }
+            // RFC 3056 6to4 /16: IPv4 follows the 2002 prefix.
+            if segments[0] == 0x2002 {
+                let v4 = Ipv4Addr::new(octets[2], octets[3], octets[4], octets[5]);
+                return is_private_ip(&IpAddr::V4(v4));
+            }
             // ::ffff:0:0/96 — IPv4-mapped IPv6. Recurse on the embedded
             // v4 address so e.g. ::ffff:127.0.0.1 is treated as private.
             if let Some(v4) = ipv6.to_ipv4_mapped() {
                 return is_private_ip(&IpAddr::V4(v4));
             }
-            // ::ffff:a.b.c.d (legacy IPv4-compatible, deprecated but
+            // ::a.b.c.d (legacy IPv4-compatible, deprecated but
             // still parseable). `to_ipv4()` covers both forms.
             if let Some(v4) = ipv6.to_ipv4() {
-                // Skip the all-zeros / unspecified case which `to_ipv4`
-                // returns as 0.0.0.0; not a real address.
-                if !v4.is_unspecified() {
-                    return is_private_ip(&IpAddr::V4(v4));
-                }
+                return is_private_ip(&IpAddr::V4(v4));
             }
             false
         }
@@ -435,6 +448,74 @@ mod tests {
         // flagged as private.
         let mapped_public: std::net::Ipv6Addr = "::ffff:8.8.8.8".parse().unwrap();
         assert!(!is_private_ip(&IpAddr::V6(mapped_public)));
+    }
+
+    #[tokio::test]
+    async fn test_ipv6_translation_rejects_internal_addresses() -> Result<()> {
+        for address in [
+            "64:ff9b::a9fe:a9fe", // 169.254.169.254 metadata
+            "64:ff9b::169.254.169.254",
+            "64:ff9b::7f00:1",    // loopback
+            "64:ff9b::a00:1",     // 10.0.0.1
+            "64:ff9b::ac10:1",    // 172.16.0.1
+            "64:ff9b::c0a8:101",  // 192.168.1.1
+            "64:ff9b::6464:64c8", // CGNAT metadata
+            "64:ff9b::1",         // 0.0.0.1 current network
+            "64:ff9b::",
+            "2002:a9fe:a9fe::",
+            "2002:a9fe:a9fe:1234::1", // nonzero subnet/interface
+            "2002:7f00:1::",
+            "2002:a00:1::",
+            "2002:ac10:1::",
+            "2002:c0a8:101::",
+            "2002:6464:64c8::",
+            "2002:0:1::",
+            "2002::",
+            "64:ff9b:1:a9fe:a9:fe00::", // local-use /48 layout
+            "64:ff9b:1::a9fe:a9fe",     // local-use /96 layout
+            "64:ff9b:1:ffff:ffff:ffff:ffff:ffff",
+            "::",
+        ] {
+            let ip: IpAddr = address.parse()?;
+            assert!(is_private_ip(&ip), "internal address accepted: {address}");
+
+            let error = validate_url_security(&format!("http://[{address}]/"))
+                .await
+                .expect_err("internal literal must fail URL validation");
+            assert_eq!(
+                error.to_string(),
+                format!("Requests to private/internal IP addresses are not allowed (literal {ip})")
+            );
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_ipv6_translation_preserves_public_addresses() -> Result<()> {
+        for address in [
+            "64:ff9b::808:808",
+            "64:ff9b::8.8.8.8",
+            "64:ff9b::101:101",
+            "2002:808:808:1234::1",
+            "2002:101:101::",
+            "::ffff:8.8.8.8",
+            "::8.8.8.8",
+            "2606:4700:4700::1111",
+            "64:ff9b:0:1::a9fe:a9fe", // outside the well-known /96
+            "64:ff9b:2::a9fe:a9fe",   // outside the local-use /48
+            "2003:a9fe:a9fe::",       // outside 6to4 /16
+        ] {
+            let ip: IpAddr = address.parse()?;
+            assert!(!is_private_ip(&ip), "public address rejected: {address}");
+
+            let endpoint = resolve_and_validate_url(&format!("https://[{address}]/")).await?;
+            assert_eq!(endpoint.resolved_ips(), &[ip]);
+            assert_eq!(
+                endpoint.resolved_socket_addrs()?,
+                vec![SocketAddr::new(ip, 443)]
+            );
+        }
+        Ok(())
     }
 
     #[tokio::test]
