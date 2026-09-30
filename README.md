@@ -14,7 +14,7 @@ Local startup benchmark • Single binary • Works offline with Ollama
 [![CI](https://github.com/majiayu000/sage/actions/workflows/ci.yml/badge.svg)](https://github.com/majiayu000/sage/actions)
 [![Release](https://img.shields.io/github/v/release/majiayu000/sage)](https://github.com/majiayu000/sage/releases)
 
-[Installation](#-quick-install) • [Features](#-features) • [Documentation](#-documentation) • [Contributing](#-contributing)
+[Installation](#-quick-install) • [Quick start](#-quick-start) • [Configuration](docs/user-guide/configuration.md) • [Documentation](docs/README.md) • [Contributing](CONTRIBUTING.md)
 
 </div>
 
