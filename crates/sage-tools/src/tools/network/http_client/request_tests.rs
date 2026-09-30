@@ -15,6 +15,36 @@ use super::request::{
 };
 use super::{HttpClientParams, HttpMethod, validate_url_security};
 
+#[tokio::test]
+async fn test_http_client_rejects_missing_parent_traversal_before_request() {
+    use super::HttpClientTool;
+    use sage_core::tools::base::{Tool, ToolError};
+    use sage_core::tools::types::ToolCall;
+
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let workspace = temp_dir.path().join("work");
+    std::fs::create_dir(&workspace).unwrap();
+    let tool = HttpClientTool::with_working_directory(&workspace);
+    let call = ToolCall::new(
+        "test-save-traversal",
+        "http_client",
+        HashMap::from([
+            ("url".to_string(), json!("http://127.0.0.1/")),
+            (
+                "save_to_file".to_string(),
+                json!("missing/../../outside.txt"),
+            ),
+        ]),
+    );
+
+    assert!(matches!(
+        tool.execute(&call).await,
+        Err(ToolError::PermissionDenied(_))
+    ));
+    assert!(!temp_dir.path().join("outside.txt").exists());
+    assert!(!workspace.join("missing").exists());
+}
+
 #[test]
 fn test_graphql_request_creation() {
     let query = "query { user { name } }";
