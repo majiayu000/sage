@@ -25,17 +25,18 @@ Local startup benchmark • Single binary • Works offline with Ollama
 </div>
 -->
 
-## Why Sage?
+## 选择 Sage 工作流
 
-|  | Claude Code | Aider | **Sage** |
-|---|:---:|:---:|:---:|
-| **Startup Time** | ~500ms | ~800ms | **~50ms** |
-| **Binary Size** | ~200MB | ~100MB | **~15MB** |
-| **Offline Mode** | ❌ | ✅ | **✅ Ollama** |
-| **Open Source** | ❌ | ✅ | **✅** |
-| **MCP Support** | ✅ | ❌ | **✅** |
-| **Memory System** | ❌ | ❌ | **✅** |
-| **Single Binary** | ❌ | ❌ | **✅** |
+Sage Agent 是以 `sage-cli` 包分发的 Rust 编码代理，运行命令为 `sage`。本仓库目前仅维护已有功能；使用前请结合[限制](#limitations)评估实际工作流。
+
+| 任务 | 入口 | 预期行为 |
+|---|---|---|
+| 了解陌生项目 | `sage "先解释项目结构，不要修改文件"` | 在当前工作区交互执行；审查工具请求。 |
+| 执行有限步数的一次性任务 | `sage -p "解释这段代码" --max-steps 5` | 非交互执行后退出；步数上限不等于费用上限。 |
+| 继续之前的任务 | `sage -c` 或 `sage -r SESSION_ID` | 继续最近会话，或选择指定的已保存会话。 |
+| 使用本地模型 | [Ollama 配置](docs/user-guide/configuration_zh.md) | 需要已启动的本地 Ollama 和已安装模型；云端路线仍需要网络与密钥。 |
+
+这里描述的是 Sage 自身的命令路径。启动耗时、二进制大小与模型质量受构建、机器和提供商影响，本仓库没有受控的跨产品性能对照实验。
 
 ## 🚀 Quick Install
 
@@ -80,6 +81,25 @@ sage -c
 # Resume specific session
 sage -r <session-id>
 ```
+
+### 首次任务前检查配置
+
+```bash
+sage --version
+sage --help
+sage config init
+sage config validate
+sage doctor
+```
+
+在目标项目目录中运行。`config init` 创建默认的 `sage_config.json`；按[配置指南](docs/user-guide/configuration_zh.md)设置提供商后，再验证配置。诊断输出可能包含环境信息，提交问题前删除密钥和私有项目数据。
+
+### 任务与会话问题
+
+- **`-p` 会把文件操作限制为只读吗？** 不会，它选择非交互执行。工具仍可能编辑文件、运行命令；使用合适的项目副本并检查结果。
+- **应该用 `sage run` 或 `sage interactive` 吗？** 当前入口是 `sage "任务"`、`sage -p "任务"` 或直接 `sage`。旧指南不一致时，以已安装版本的 `sage --help` 为准。
+- **重开终端后怎么继续？** 用 `sage -c` 继续最近会话，或用 `sage -r SESSION_ID` 选择会话；两者互斥，不能同时使用。
+- **Ollama 路线全部离线吗？** 模型安装后推理可在本地进行；Web 等网络工具仍依赖连接。详见下面的限制。
 
 ## Limitations
 

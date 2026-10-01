@@ -27,17 +27,22 @@ Local startup benchmark • Single binary • Works offline with Ollama
 </div>
 -->
 
-## Why Sage?
+## Choose a Sage workflow
 
-|  | Claude Code | Aider | **Sage** |
-|---|:---:|:---:|:---:|
-| **Startup Time** | ~500ms | ~800ms | **~50ms** |
-| **Binary Size** | ~200MB | ~100MB | **~15MB** |
-| **Offline Mode** | ❌ | ✅ | **✅ Ollama** |
-| **Open Source** | ❌ | ✅ | **✅** |
-| **MCP Support** | ✅ | ❌ | **✅** |
-| **Memory System** | ❌ | ❌ | **✅** |
-| **Single Binary** | ❌ | ❌ | **✅** |
+Sage Agent is the Rust coding-agent CLI distributed as `sage-cli`; the command
+is `sage`. This repository is in maintenance-only mode. Evaluate its shipped
+workflows and [limitations](#limitations) before adopting it.
+
+| Your task | Start here | What to expect |
+|---|---|---|
+| Explore an unfamiliar checkout | `sage "Explain the project structure before changing files"` | Interactive task in the current workspace. Review tool requests. |
+| Run a bounded one-shot task | `sage -p "Explain this code" --max-steps 5` | Print mode exits without an interactive prompt; the step limit is not a cost limit. |
+| Return to previous work | `sage -c` or `sage -r SESSION_ID` | Continue the latest session or select a specific saved session. |
+| Use a local model | [Ollama configuration](docs/user-guide/configuration.md) | Requires a running local Ollama service and an installed model; cloud routes require network access and credentials. |
+
+This table describes Sage's own command paths. Startup time, binary size and
+model quality depend on the build, machine and provider; there is no controlled
+cross-product benchmark here.
 
 ## 🚀 Quick Install
 
@@ -82,6 +87,37 @@ sage -c
 # Resume specific session
 sage -r <session-id>
 ```
+
+### Check setup before the first task
+
+```bash
+sage --version
+sage --help
+sage config init
+sage config validate
+sage doctor
+```
+
+Run these in the intended checkout. `config init` creates the default
+`sage_config.json`; configure the selected provider using the
+[configuration guide](docs/user-guide/configuration.md), then validate it.
+Diagnostic output can contain environment details: redact credentials and
+private project data before sharing it in an issue.
+
+### Task and session questions
+
+- **Does `-p` make file access read-only?** No. It selects non-interactive
+  execution. Sage tools can edit files and run commands; use an appropriate
+  checkout and review the result.
+- **Do I use `sage run` or `sage interactive`?** The current top-level interface
+  is `sage "task"`, `sage -p "task"`, or plain `sage`. Follow `sage --help` for
+  the installed version if an older guide differs.
+- **How do I continue after restarting the terminal?** Use `sage -c` for the
+  most recent session or `sage -r SESSION_ID` for a known session. These flags
+  are alternatives and cannot be combined.
+- **Is the whole agent offline when using Ollama?** Model inference can be
+  local once the model is installed. Web and network-dependent tools still
+  require connectivity; see the limitations below.
 
 ## Limitations
 
