@@ -1,33 +1,35 @@
 # Sage Agent Documentation
 
+本目录链接当前版本中实际存在的文件；未附链接的主题仅作参考列出。
+
 Welcome to the Sage Agent documentation! This directory contains comprehensive documentation for developers, users, and contributors.
 
 ## 📚 Documentation Structure
 
 ### 📖 User Guide (`user-guide/`)
 Documentation for end users of Sage Agent:
-- **[Getting Started](user-guide/getting-started.md)** - Installation and basic usage
-- **[Configuration Guide](user-guide/configuration.md)** - Configuration options and examples
-- **[CLI Reference](user-guide/cli-reference.md)** - Command-line interface documentation
-- **[SDK Usage](user-guide/sdk-usage.md)** - Programmatic usage with the SDK
-- **[Tools Reference](user-guide/tools-reference.md)** - Available tools and their usage
-- **[Troubleshooting](user-guide/troubleshooting.md)** - Common issues and solutions
+- **[Getting Started](user-guide/installation_zh.md)** - Installation and basic usage
+- **[Configuration Guide](user-guide/configuration_zh.md)** - Configuration options and examples
+- **CLI Reference** - Command-line interface documentation
+- **SDK Usage** - Programmatic usage with the SDK
+- **[Tools Reference](tools/README_zh.md)** - Available tools and their usage
+- **Troubleshooting** - Common issues and solutions
 
 ### 🏗️ Architecture (`architecture/`)
 System design and architecture documentation:
-- **[System Overview](architecture/system-overview.md)** - High-level architecture
-- **[Agent Execution Model](architecture/agent-execution.md)** - How agents work
-- **[Tool System](architecture/tool-system.md)** - Tool architecture and design
-- **[LLM Integration](architecture/llm-integration.md)** - Language model integration
-- **[Configuration System](architecture/configuration.md)** - Configuration architecture
-- **[UI Components](architecture/ui-components.md)** - User interface design
+- **System Overview** - High-level architecture
+- **Agent Execution Model** - How agents work
+- **Tool System** - Tool architecture and design
+- **LLM Integration** - Language model integration
+- **Configuration System** - Configuration architecture
+- **UI Components** - User interface design
 
 ### 🔧 Development (`development/`)
 Documentation for developers and contributors:
-- **[Development Setup](development/setup.md)** - Setting up development environment
-- **[Contributing Guide](development/contributing.md)** - How to contribute to the project
-- **[Code Style Guide](development/code-style.md)** - Coding standards and conventions
-- **[Testing Guide](development/testing.md)** - Testing strategies and practices
+- **Development Setup** - Setting up development environment
+- **[Contributing Guide](../CONTRIBUTING.md)** - How to contribute to the project
+- **Code Style Guide** - Coding standards and conventions
+- **Testing Guide** - Testing strategies and practices
 - **[MCP Integration Plan](development/MCP_INTEGRATION_PLAN.md)** - Model Context Protocol integration
 - **[Tools Expansion Plan](development/TOOLS_EXPANSION_PLAN.md)** - Tool ecosystem expansion
 - **[Release Process](development/release-process.md)** - How releases are managed
@@ -37,32 +39,32 @@ Documentation for developers and contributors:
 Project planning and roadmap documentation:
 - **[TODO List (中文)](planning/TODO.md)** - Chinese version of TODO items
 - **[TODO List (English)](planning/TODO_EN.md)** - English version of TODO items
-- **[Roadmap](planning/roadmap.md)** - Project roadmap and milestones
+- **Roadmap** - Project roadmap and milestones
 - **[Architecture Decisions](planning/adr/)** - Architecture Decision Records
 
 ### 🔌 API Reference (`api/`)
 API documentation and references:
-- **[Core API](api/core-api.md)** - sage-core crate API reference
-- **[SDK API](api/sdk-api.md)** - sage-sdk crate API reference
-- **[Tools API](api/tools-api.md)** - sage-tools crate API reference
-- **[CLI API](api/cli-api.md)** - sage-cli crate API reference
+- **Core API** - sage-core crate API reference
+- **SDK API** - sage-sdk crate API reference
+- **Tools API** - sage-tools crate API reference
+- **CLI API** - sage-cli crate API reference
 
 ## 🚀 Quick Start
 
 ### For Users
-1. Start with [Getting Started](user-guide/getting-started.md)
-2. Review [Configuration Guide](user-guide/configuration.md)
-3. Explore [Tools Reference](user-guide/tools-reference.md)
+1. Start with [Getting Started](user-guide/installation_zh.md)
+2. Review [Configuration Guide](user-guide/configuration_zh.md)
+3. Explore [Tools Reference](tools/README_zh.md)
 
 ### For Developers
-1. Read [Development Setup](development/setup.md)
-2. Review [Contributing Guide](development/contributing.md)
-3. Check [Architecture Overview](architecture/system-overview.md)
+1. Read Development Setup
+2. Review [Contributing Guide](../CONTRIBUTING.md)
+3. Check Architecture Overview
 
 ### For Contributors
-1. Review [Contributing Guide](development/contributing.md)
+1. Review [Contributing Guide](../CONTRIBUTING.md)
 2. Check [TODO Lists](planning/) for available tasks
-3. Read [Code Style Guide](development/code-style.md)
+3. Read Code Style Guide
 
 ## 📝 Documentation Standards
 

@@ -144,7 +144,7 @@ sage tools
 
 # Run a simple test
 # 运行简单测试
-sage run "echo Hello from Sage"
+sage "echo Hello from Sage"
 ```
 
 ---
@@ -236,11 +236,11 @@ rm -rf ~/.sage
 After successful installation:
 安装成功后:
 
-1. **Configure API Keys** → See [Configuration Guide](configuration.md)
-   **配置 API 密钥** → 查看 [配置指南](configuration.md)
+1. **Configure API Keys** → See [Configuration Guide](configuration_zh.md)
+   **配置 API 密钥** → 查看 [配置指南](configuration_zh.md)
 
-2. **Quick Start** → See [Quick Start Guide](quick-start.md)
-   **快速开始** → 查看 [快速入门指南](quick-start.md)
+2. **Quick Start** → See [Quick Start Guide](../../README_zh.md#-quick-start)
+   **快速开始** → 查看 [快速入门指南](../../README_zh.md#-quick-start)
 
 3. **Explore Examples** → Run examples with `make examples`
    **探索示例** → 使用 `make examples` 运行示例
