@@ -17,8 +17,7 @@ pub async fn create_executor(
     working_dir: Option<std::path::PathBuf>,
     max_steps: Option<u32>,
 ) -> SageResult<UnifiedExecutor> {
-    let config = if let Some(path) = config_file.filter(|path| std::path::Path::new(path).exists())
-    {
+    let config = if let Some(path) = config_file {
         sage_core::config::load_config_from_file(path)?
     } else {
         sage_core::config::load_config()?
@@ -114,4 +113,28 @@ pub async fn create_executor(
     }
 
     Ok(executor)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn tui_executor_rejects_missing_explicit_config() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing_path = dir.path().join("missing.json");
+        let result = create_executor(
+            None,
+            missing_path.to_str(),
+            Some(dir.path().to_path_buf()),
+            None,
+        )
+        .await;
+        let Err(error) = result else {
+            panic!("Missing explicit config must fail before executor creation");
+        };
+        let error = format!("{error:?}");
+        assert!(error.contains("Failed to read config file"), "{error}");
+        assert!(error.contains(missing_path.to_str().unwrap()), "{error}");
+    }
 }
