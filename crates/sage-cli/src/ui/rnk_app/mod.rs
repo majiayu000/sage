@@ -263,8 +263,12 @@ fn app() -> Element {
 /// Run the rnk-based app (async version)
 pub async fn run_rnk_app(cli: &Cli) -> io::Result<()> {
     // Load config to get model/provider info for header
-    let (model, provider) = match if std::path::Path::new(&cli.config_file).exists() {
-        sage_core::config::load_config_from_file(&cli.config_file)
+    let (model, provider) = match if let Some(path) = cli
+        .config_file
+        .as_deref()
+        .filter(|path| std::path::Path::new(path).exists())
+    {
+        sage_core::config::load_config_from_file(path)
     } else {
         sage_core::config::load_config()
     } {

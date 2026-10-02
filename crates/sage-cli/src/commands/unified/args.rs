@@ -19,8 +19,8 @@ pub enum OutputModeArg {
 pub struct UnifiedArgs {
     /// The task to execute (None for interactive mode with prompt)
     pub task: Option<String>,
-    /// Path to configuration file
-    pub config_file: String,
+    /// Explicitly selected trusted configuration file
+    pub config_file: Option<String>,
     /// Working directory for the agent
     pub working_dir: Option<PathBuf>,
     /// Maximum number of execution steps
@@ -47,7 +47,7 @@ mod tests {
     fn test_unified_args_defaults() {
         let args = UnifiedArgs {
             task: None,
-            config_file: "sage_config.json".to_string(),
+            config_file: None,
             working_dir: None,
             max_steps: None,
             verbose: false,

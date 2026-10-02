@@ -33,14 +33,20 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
     }
 
     // Load configuration
-    let config = if std::path::Path::new(&args.config_file).exists() {
-        load_config_from_file(&args.config_file)?
+    let config = if let Some(path) = args
+        .config_file
+        .as_deref()
+        .filter(|path| std::path::Path::new(path).exists())
+    {
+        load_config_from_file(path)?
     } else {
         let global_config = dirs::home_dir().map(|h| h.join(".sage").join("config.json"));
-        if global_config.as_ref().is_none_or(|path| !path.exists()) {
+        if let Some(path) = args.config_file.as_deref()
+            && global_config.as_ref().is_none_or(|path| !path.exists())
+        {
             console.warn(&format!(
                 "Configuration file not found: {}, using defaults",
-                args.config_file
+                path
             ));
         }
         sage_core::config::load_config()?
@@ -135,7 +141,10 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
         console.warn(&format!("Failed to enable session recording: {}", e));
     }
 
-    let config_file = args.config_file.clone();
+    let config_file = args
+        .config_file
+        .clone()
+        .unwrap_or_else(|| crate::args::DEFAULT_CONFIG_FILE.to_string());
 
     // Handle session resume (-c or -r flags)
     if args.continue_recent || args.resume_session_id.is_some() {
@@ -178,7 +187,7 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
             &jsonl_storage,
             &session_recorder,
             &task_description,
-            &args.config_file,
+            &config_file,
         )
         .await;
 

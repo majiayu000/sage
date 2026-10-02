@@ -168,7 +168,6 @@ async fn route_config(action: ConfigAction) -> SageResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::args::DEFAULT_CONFIG_FILE;
     use crate::commands::unified::OutputModeArg;
     use clap::Parser;
 
@@ -259,7 +258,7 @@ mod tests {
             continue_session: false,
             resume_session: None,
             max_steps: None,
-            config_file: DEFAULT_CONFIG_FILE.to_string(),
+            config_file: None,
             working_dir: None,
             verbose: false,
             stream_json: false,

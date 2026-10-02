@@ -14,11 +14,20 @@ fn default_true() -> bool {
     true
 }
 
+fn deserialize_enabled<'de, D>(deserializer: D) -> Result<Option<bool>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    bool::deserialize(deserializer).map(Some)
+}
+
 /// MCP (Model Context Protocol) configuration
 #[derive(Debug, Clone)]
 pub struct McpConfig {
     /// Whether MCP integration is enabled
     pub enabled: bool,
+    /// Whether enabled was explicitly declared by a config source.
+    pub enabled_set: bool,
     /// MCP servers to connect to
     pub servers: HashMap<String, McpServerConfig>,
     /// Default timeout for MCP requests in seconds
@@ -40,6 +49,7 @@ impl Default for McpConfig {
     fn default() -> Self {
         Self {
             enabled: false,
+            enabled_set: false,
             servers: HashMap::new(),
             default_timeout_secs: default_mcp_timeout(),
             default_timeout_secs_set: false,
@@ -88,8 +98,8 @@ impl<'de> Deserialize<'de> for McpConfig {
     {
         #[derive(Deserialize)]
         struct McpConfigWire {
-            #[serde(default)]
-            enabled: bool,
+            #[serde(default, deserialize_with = "deserialize_enabled")]
+            enabled: Option<bool>,
             #[serde(default)]
             servers: HashMap<String, McpServerConfig>,
             default_timeout_secs: Option<u64>,
@@ -99,7 +109,8 @@ impl<'de> Deserialize<'de> for McpConfig {
 
         let wire = McpConfigWire::deserialize(deserializer)?;
         Ok(Self {
-            enabled: wire.enabled,
+            enabled: wire.enabled.unwrap_or(false),
+            enabled_set: wire.enabled.is_some(),
             servers: wire.servers,
             default_timeout_secs: wire
                 .default_timeout_secs
@@ -180,8 +191,9 @@ pub struct McpServerConfig {
 impl McpConfig {
     /// Merge with another MCP config (other takes precedence)
     pub fn merge(&mut self, other: McpConfig) {
-        if other.enabled {
-            self.enabled = true;
+        if other.enabled_set || other.enabled {
+            self.enabled = other.enabled;
+            self.enabled_set = true;
         }
 
         // Merge servers
