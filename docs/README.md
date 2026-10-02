@@ -1,6 +1,6 @@
 # Sage Agent Documentation
 
-This index links to files available in this checkout. Unlinked reference topics do not currently have a standalone guide.
+This index links to files available in this checkout. Unlinked topics are listed for reference.
 
 Welcome to the Sage Agent documentation! This directory contains comprehensive documentation for developers, users, and contributors.
 
@@ -12,7 +12,7 @@ Documentation for end users of Sage Agent:
 - **[Configuration Guide](user-guide/configuration.md)** - Configuration options and examples
 - **CLI Reference** - Command-line interface documentation
 - **SDK Usage** - Programmatic usage with the SDK
-- **Tools Reference** - Available tools and their usage
+- **[Tools Reference](tools/README.md)** - Available tools and their usage
 - **Troubleshooting** - Common issues and solutions
 
 ### 🏗️ Architecture (`architecture/`)
@@ -54,7 +54,7 @@ API documentation and references:
 ### For Users
 1. Start with [Getting Started](user-guide/installation.md)
 2. Review [Configuration Guide](user-guide/configuration.md)
-3. Explore Tools Reference
+3. Explore [Tools Reference](tools/README.md)
 
 ### For Developers
 1. Read Development Setup

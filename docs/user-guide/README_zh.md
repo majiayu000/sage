@@ -1,21 +1,21 @@
 # User Guide
 
-本目录仅链接当前版本中实际存在的文件；未附链接的参考主题暂时没有独立指南。
+本目录链接当前版本中实际存在的文件；未附链接的主题仅作参考列出。
 
 This section contains documentation for end users of Sage Agent.
 
 ## 📖 Contents
 
 ### Getting Started
-- **[Installation](installation.md)** - How to install Sage Agent
-- **[First Steps](../../README.md#-quick-start)** - Your first Sage Agent task
-- **[Basic Usage](../../README.md#-quick-start)** - Common usage patterns
+- **[Installation](installation_zh.md)** - How to install Sage Agent
+- **[First Steps](../../README_zh.md#-quick-start)** - Your first Sage Agent task
+- **[Basic Usage](../../README_zh.md#-quick-start)** - Common usage patterns
 
 ### Configuration
-- **[Configuration File](configuration.md)** - Setting up sage_config.json
-- **[Environment Variables](configuration.md)** - Environment-based configuration
-- **[Provider Setup](configuration.md)** - LLM provider configuration
-- **[Advanced Settings](configuration.md)** - Advanced configuration options
+- **[Configuration File](configuration_zh.md)** - Setting up sage_config.json
+- **[Environment Variables](configuration_zh.md)** - Environment-based configuration
+- **[Provider Setup](configuration_zh.md)** - LLM provider configuration
+- **[Advanced Settings](configuration_zh.md)** - Advanced configuration options
 
 ### Command Line Interface
 - **CLI Commands** - Available CLI commands
@@ -30,7 +30,7 @@ This section contains documentation for end users of Sage Agent.
 - **Examples** - Practical SDK examples
 
 ### Tools Reference
-- **Built-in Tools** - Available built-in tools
+- **[Built-in Tools](../tools/README_zh.md)** - Available built-in tools
 - **Tool Usage** - How to use tools effectively
 - **Custom Tools** - Creating custom tools
 - **Tool Configuration** - Tool-specific configuration
@@ -44,13 +44,13 @@ This section contains documentation for end users of Sage Agent.
 ## 🎯 Quick Navigation
 
 ### New Users
-1. [Installation](installation.md)
-2. [Basic Configuration](configuration.md)
-3. [First Task](../../README.md#-quick-start)
+1. [Installation](installation_zh.md)
+2. [Basic Configuration](configuration_zh.md)
+3. [First Task](../../README_zh.md#-quick-start)
 
 ### Existing Users
-- [Advanced Configuration](configuration.md)
-- All Available Tools
+- [Advanced Configuration](configuration_zh.md)
+- [All Available Tools](../tools/README_zh.md)
 - SDK Integration
 
 ### Troubleshooting

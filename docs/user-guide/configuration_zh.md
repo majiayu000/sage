@@ -487,15 +487,15 @@ You can maintain different configurations for different scenarios:
 ```bash
 # Production configuration
 # 生产环境配置
-sage run "Task" --config-file prod_config.json
+sage "Task" --config-file prod_config.json
 
 # Development configuration
 # 开发环境配置
-sage run "Task" --config-file dev_config.json
+sage "Task" --config-file dev_config.json
 
 # Testing with local models
 # 使用本地模型测试
-sage run "Task" --config-file ollama_config.json
+sage "Task" --config-file ollama_config.json
 ```
 
 **Example File Structure / 示例文件结构:**
@@ -587,11 +587,11 @@ After configuration is complete:
 
 1. **Test Configuration** / **测试配置**
    ```bash
-   sage run "echo Hello, Sage"
+   sage "echo Hello, Sage"
    ```
 
 2. **Read Quick Start Guide** / **阅读快速入门指南**
-   → [Quick Start Guide](quick-start.md)
+   → [Quick Start Guide](../../README_zh.md#-quick-start)
 
 3. **Explore Examples** / **探索示例**
    ```bash

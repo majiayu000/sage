@@ -1,6 +1,6 @@
 # Sage Agent Documentation
 
-本目录仅链接当前版本中实际存在的文件；未附链接的参考主题暂时没有独立指南。
+本目录链接当前版本中实际存在的文件；未附链接的主题仅作参考列出。
 
 Welcome to the Sage Agent documentation! This directory contains comprehensive documentation for developers, users, and contributors.
 
@@ -8,11 +8,11 @@ Welcome to the Sage Agent documentation! This directory contains comprehensive d
 
 ### 📖 User Guide (`user-guide/`)
 Documentation for end users of Sage Agent:
-- **[Getting Started](user-guide/installation.md)** - Installation and basic usage
-- **[Configuration Guide](user-guide/configuration.md)** - Configuration options and examples
+- **[Getting Started](user-guide/installation_zh.md)** - Installation and basic usage
+- **[Configuration Guide](user-guide/configuration_zh.md)** - Configuration options and examples
 - **CLI Reference** - Command-line interface documentation
 - **SDK Usage** - Programmatic usage with the SDK
-- **Tools Reference** - Available tools and their usage
+- **[Tools Reference](tools/README_zh.md)** - Available tools and their usage
 - **Troubleshooting** - Common issues and solutions
 
 ### 🏗️ Architecture (`architecture/`)
@@ -52,9 +52,9 @@ API documentation and references:
 ## 🚀 Quick Start
 
 ### For Users
-1. Start with [Getting Started](user-guide/installation.md)
-2. Review [Configuration Guide](user-guide/configuration.md)
-3. Explore Tools Reference
+1. Start with [Getting Started](user-guide/installation_zh.md)
+2. Review [Configuration Guide](user-guide/configuration_zh.md)
+3. Explore [Tools Reference](tools/README_zh.md)
 
 ### For Developers
 1. Read Development Setup

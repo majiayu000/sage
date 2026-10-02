@@ -1,6 +1,6 @@
 # User Guide
 
-This index links to files available in this checkout. Unlinked reference topics do not currently have a standalone guide.
+This index links to files available in this checkout. Unlinked topics are listed for reference.
 
 This section contains documentation for end users of Sage Agent.
 
@@ -30,7 +30,7 @@ This section contains documentation for end users of Sage Agent.
 - **Examples** - Practical SDK examples
 
 ### Tools Reference
-- **Built-in Tools** - Available built-in tools
+- **[Built-in Tools](../tools/README.md)** - Available built-in tools
 - **Tool Usage** - How to use tools effectively
 - **Custom Tools** - Creating custom tools
 - **Tool Configuration** - Tool-specific configuration
@@ -50,7 +50,7 @@ This section contains documentation for end users of Sage Agent.
 
 ### Existing Users
 - [Advanced Configuration](configuration.md)
-- All Available Tools
+- [All Available Tools](../tools/README.md)
 - SDK Integration
 
 ### Troubleshooting
