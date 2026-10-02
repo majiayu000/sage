@@ -56,9 +56,9 @@ pub struct Cli {
     #[arg(long)]
     pub max_steps: Option<u32>,
 
-    /// Path to configuration file
-    #[arg(long, default_value = DEFAULT_CONFIG_FILE)]
-    pub config_file: String,
+    /// Explicitly trust a configuration file, including its MCP commands
+    #[arg(long)]
+    pub config_file: Option<String>,
 
     /// Working directory for the agent
     #[arg(long)]
@@ -176,6 +176,14 @@ mod tests {
             Ok(cli) => cli,
             Err(err) => panic!("expected CLI args to parse: {err}"),
         }
+    }
+
+    #[test]
+    fn cli_distinguishes_discovery_from_explicit_config_consent() {
+        let discovered = Cli::try_parse_from(["sage"]).unwrap();
+        let selected = Cli::try_parse_from(["sage", "--config-file", DEFAULT_CONFIG_FILE]).unwrap();
+        assert!(discovered.config_file.is_none());
+        assert_eq!(selected.config_file.as_deref(), Some(DEFAULT_CONFIG_FILE));
     }
 
     #[test]

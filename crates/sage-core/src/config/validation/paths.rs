@@ -51,10 +51,11 @@ pub fn validate_paths(config: &Config) -> SageResult<()> {
     Ok(())
 }
 
-/// Resolve `configured` under `working_dir`, rejecting absolute/`..` escapes.
+/// Resolve `configured` under `working_dir`, rejecting absolute/`..`/symlink escapes.
 ///
 /// Relative paths are joined with `working_dir`. Absolute paths are kept as-is
 /// only when they still resolve inside `working_dir` after lexical normalization.
+/// Existing ancestors are canonicalized; missing descendants may be created later.
 pub fn resolve_within_working_dir(configured: &Path, working_dir: &Path) -> SageResult<PathBuf> {
     let root = normalize_lexical(&make_absolute(working_dir)?);
     let joined = if configured.is_absolute() {
@@ -72,6 +73,52 @@ pub fn resolve_within_working_dir(configured: &Path, working_dir: &Path) -> Sage
         )));
     }
 
+    let canonical_root = root.canonicalize().map_err(|error| {
+        SageError::config(format!(
+            "failed to resolve working directory '{}': {error}",
+            root.display()
+        ))
+    })?;
+    let canonical_path = canonicalize_existing_ancestor(&resolved).map_err(|error| {
+        SageError::config(format!(
+            "failed to resolve memory.storage_path '{}': {error}",
+            configured.display()
+        ))
+    })?;
+    if !canonical_path.starts_with(&canonical_root) {
+        return Err(SageError::config(format!(
+            "memory.storage_path '{}' escapes working directory '{}'",
+            configured.display(),
+            canonical_root.display()
+        )));
+    }
+
+    Ok(canonical_path)
+}
+
+fn canonicalize_existing_ancestor(path: &Path) -> std::io::Result<PathBuf> {
+    let mut ancestor = path.to_path_buf();
+    let mut missing = Vec::new();
+    // symlink_metadata distinguishes a missing component from a dangling link.
+    while let Err(error) = std::fs::symlink_metadata(&ancestor) {
+        if error.kind() != std::io::ErrorKind::NotFound {
+            return Err(error);
+        }
+        let name = ancestor.file_name().ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "path has no existing ancestor",
+            )
+        })?;
+        missing.push(name.to_os_string());
+        if !ancestor.pop() {
+            return Err(error);
+        }
+    }
+    let mut resolved = ancestor.canonicalize()?;
+    for component in missing.into_iter().rev() {
+        resolved.push(component);
+    }
     Ok(resolved)
 }
 
@@ -228,7 +275,10 @@ mod tests {
 
         assert_eq!(
             resolved,
-            normalize_lexical(&dir.path().join(".sage/memory/agent-memory.json"))
+            dir.path()
+                .canonicalize()
+                .unwrap()
+                .join(".sage/memory/agent-memory.json")
         );
     }
 
@@ -258,7 +308,10 @@ mod tests {
         let inside = dir.path().join("memory.json");
         let resolved = resolve_within_working_dir(&inside, dir.path()).unwrap();
 
-        assert_eq!(resolved, normalize_lexical(&inside));
+        assert_eq!(
+            resolved,
+            dir.path().canonicalize().unwrap().join("memory.json")
+        );
     }
 
     #[test]

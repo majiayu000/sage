@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod suite {
     use crate::tools::file_ops::write::WriteTool;
-    use sage_core::tools::base::Tool;
+    use sage_core::tools::base::{FileSystemTool, Tool, ToolError};
     use sage_core::tools::types::ToolCall;
     use serde_json::json;
     use std::collections::HashMap;
@@ -23,6 +23,99 @@ mod suite {
             arguments,
             call_id: None,
         }
+    }
+
+    #[tokio::test]
+    async fn test_write_tool_rejects_missing_parent_traversal() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace = temp_dir.path().join("work");
+        fs::create_dir(&workspace).await.unwrap();
+        let tool = WriteTool::with_working_directory(&workspace);
+
+        let result = tool
+            .write_file("missing/../../outside.txt", "escaped")
+            .await;
+
+        assert!(
+            !temp_dir.path().join("outside.txt").exists(),
+            "Write must not create a file outside the workspace; result: {result:?}"
+        );
+        assert!(matches!(result, Err(ToolError::PermissionDenied(_))));
+        assert!(!workspace.join("missing").exists());
+        assert!(!tool.is_safe_path(&workspace.join("missing/../../outside.txt")));
+    }
+
+    #[tokio::test]
+    async fn test_write_tool_workspace_path_boundary() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace = temp_dir.path().join("work");
+        fs::create_dir_all(workspace.join("existing"))
+            .await
+            .unwrap();
+        let tool = WriteTool::with_working_directory(&workspace);
+        let canonical_workspace = workspace.canonicalize().unwrap();
+
+        for path in ["new/nested/file.txt", "existing/../file.txt"] {
+            let resolved = tool.resolve_workspace_path(path).unwrap();
+            let expected = if path.starts_with("new/") {
+                canonical_workspace.join(path)
+            } else {
+                canonical_workspace.join("file.txt")
+            };
+            assert_eq!(resolved, expected);
+            assert!(tool.is_safe_path(&tool.resolve_path(path)));
+            assert!(tool.write_file(path, "inside").await.unwrap().success);
+            assert_eq!(fs::read_to_string(resolved).await.unwrap(), "inside");
+        }
+
+        for path in [
+            workspace.join("missing/../denied.txt"),
+            temp_dir.path().join("work-other/new.txt"),
+            workspace.join("../outside.txt"),
+        ] {
+            assert!(!tool.is_safe_path(&path));
+            assert!(matches!(
+                tool.write_file(path.to_str().unwrap(), "denied").await,
+                Err(ToolError::PermissionDenied(_))
+            ));
+            assert!(!path.exists());
+        }
+        assert!(!workspace.join("missing").exists());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_write_tool_workspace_symlink_paths() {
+        use std::os::unix::fs::symlink;
+
+        let temp_dir = TempDir::new().unwrap();
+        let workspace = temp_dir.path().join("work");
+        let outside = temp_dir.path().join("outside");
+        fs::create_dir_all(workspace.join("inside")).await.unwrap();
+        fs::create_dir(&outside).await.unwrap();
+        symlink(workspace.join("inside"), workspace.join("safe-link")).unwrap();
+        symlink(&outside, workspace.join("outside-link")).unwrap();
+        symlink(outside.join("missing.txt"), workspace.join("dangling-link")).unwrap();
+        let tool = WriteTool::with_working_directory(&workspace);
+
+        let safe_path = "safe-link/new/file.txt";
+        let expected = workspace
+            .canonicalize()
+            .unwrap()
+            .join("inside/new/file.txt");
+        assert_eq!(tool.resolve_workspace_path(safe_path).unwrap(), expected);
+        assert!(tool.write_file(safe_path, "inside").await.unwrap().success);
+        assert_eq!(fs::read_to_string(expected).await.unwrap(), "inside");
+
+        for path in ["outside-link/new/file.txt", "dangling-link"] {
+            assert!(!tool.is_safe_path(&tool.resolve_path(path)));
+            assert!(matches!(
+                tool.write_file(path, "denied").await,
+                Err(ToolError::PermissionDenied(_))
+            ));
+        }
+        assert!(!outside.join("new").exists());
+        assert!(!outside.join("missing.txt").exists());
     }
 
     #[tokio::test]

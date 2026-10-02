@@ -138,9 +138,16 @@ async fn default_relative_storage_path_stays_under_working_dir() {
 
     assert_eq!(
         runtime.storage_path(),
-        dir.path().join(".sage/memory/agent-memory.json")
+        dir.path()
+            .canonicalize()
+            .unwrap()
+            .join(".sage/memory/agent-memory.json")
     );
-    assert!(runtime.storage_path().starts_with(dir.path()));
+    assert!(
+        runtime
+            .storage_path()
+            .starts_with(dir.path().canonicalize().unwrap())
+    );
 }
 
 #[tokio::test]
@@ -171,4 +178,152 @@ async fn absolute_storage_path_outside_working_dir_is_rejected() {
     };
 
     assert!(error.contains("escapes working directory"));
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn directory_symlink_storage_path_cannot_write_outside_working_dir() {
+    let dir = tempdir().unwrap();
+    let working_dir = dir.path().join("project");
+    let outside = dir.path().join("outside");
+    std::fs::create_dir(&working_dir).unwrap();
+    std::fs::create_dir(&outside).unwrap();
+    std::os::unix::fs::symlink(&outside, working_dir.join("link")).unwrap();
+    let config = enabled_config(PathBuf::from("link/nested/agent-memory.json"));
+
+    let result = record_agent_outcome(
+        &config,
+        &working_dir,
+        AgentOutcomeRecord::new("test task", AgentOutcomeKind::Success, "test outcome"),
+    )
+    .await;
+
+    assert!(
+        !outside.join("nested/agent-memory.json").exists(),
+        "memory was written outside the working directory through a symlink"
+    );
+    assert!(
+        matches!(result, Err(SageError::Config { ref message, .. }) if message.contains("escapes working directory")),
+        "expected the storage path to be rejected: {result:?}"
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn file_symlink_storage_path_cannot_overwrite_outside_file() {
+    let dir = tempdir().unwrap();
+    let working_dir = dir.path().join("project");
+    std::fs::create_dir(&working_dir).unwrap();
+    let outside = dir.path().join("outside.json");
+    let original = r#"{"version":1,"memories":[]}"#;
+    std::fs::write(&outside, original).unwrap();
+    std::os::unix::fs::symlink(&outside, working_dir.join("memory.json")).unwrap();
+    let config = enabled_config(PathBuf::from("memory.json"));
+
+    let result = record_agent_outcome(
+        &config,
+        &working_dir,
+        AgentOutcomeRecord::new("test task", AgentOutcomeKind::Success, "test outcome"),
+    )
+    .await;
+
+    assert_eq!(std::fs::read_to_string(&outside).unwrap(), original);
+    assert!(matches!(result, Err(SageError::Config { .. })));
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn internal_directory_symlink_storage_uses_canonical_path() {
+    let dir = tempdir().unwrap();
+    let real = dir.path().join("real");
+    let link = dir.path().join("link");
+    std::fs::create_dir(&real).unwrap();
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+    let config = enabled_config(PathBuf::from("link/nested/agent-memory.json"));
+
+    let runtime = init_agent_memory_runtime(&config, dir.path())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        runtime.storage_path(),
+        real.canonicalize()
+            .unwrap()
+            .join("nested/agent-memory.json")
+    );
+
+    // Retargeting the configured alias must not redirect the initialized storage.
+    let outside = tempdir().unwrap();
+    std::fs::remove_file(&link).unwrap();
+    std::os::unix::fs::symlink(outside.path(), &link).unwrap();
+    runtime
+        .memory_manager()
+        .remember_lesson("test lesson")
+        .await
+        .unwrap();
+
+    assert!(real.join("nested/agent-memory.json").is_file());
+    assert!(!outside.path().join("nested").exists());
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn dangling_symlink_storage_path_is_rejected() {
+    let dir = tempdir().unwrap();
+    let outside = dir.path().join("missing");
+    let working_dir = dir.path().join("project");
+    std::fs::create_dir(&working_dir).unwrap();
+    std::os::unix::fs::symlink(&outside, working_dir.join("link")).unwrap();
+    let config = enabled_config(PathBuf::from("link/nested/agent-memory.json"));
+
+    let result = init_agent_memory_runtime(&config, &working_dir).await;
+
+    assert!(matches!(result, Err(SageError::Config { ref message, .. })
+        if message.contains("failed to resolve memory.storage_path")));
+    assert!(!outside.exists());
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn symlink_working_directory_allows_normal_memory_storage() {
+    let dir = tempdir().unwrap();
+    let project = dir.path().join("project");
+    let alias = dir.path().join("alias");
+    std::fs::create_dir(&project).unwrap();
+    std::os::unix::fs::symlink(&project, &alias).unwrap();
+    let config = enabled_config(PathBuf::from(".sage/memory/agent-memory.json"));
+
+    record_agent_outcome(
+        &config,
+        &alias,
+        AgentOutcomeRecord::new("test task", AgentOutcomeKind::Success, "test outcome"),
+    )
+    .await
+    .unwrap();
+
+    assert!(project.join(".sage/memory/agent-memory.json").is_file());
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn outcome_rejects_directory_symlink_created_after_recall() {
+    let dir = tempdir().unwrap();
+    let outside = tempdir().unwrap();
+    let config = enabled_config(PathBuf::from(".sage/memory/agent-memory.json"));
+    recall_agent_context(&config, dir.path(), &RecallQuery::for_task("test task", 4))
+        .await
+        .unwrap();
+    assert!(!dir.path().join(".sage").exists());
+    std::os::unix::fs::symlink(outside.path(), dir.path().join(".sage")).unwrap();
+
+    let result = record_agent_outcome(
+        &config,
+        dir.path(),
+        AgentOutcomeRecord::new("test task", AgentOutcomeKind::Success, "test outcome"),
+    )
+    .await;
+
+    assert!(matches!(result, Err(SageError::Config { ref message, .. })
+        if message.contains("escapes working directory")));
+    assert!(!outside.path().join("memory/agent-memory.json").exists());
 }

@@ -311,6 +311,6 @@ mod tests {
         let tool = LspTool::with_working_directory(dir.path());
 
         let resolved = tool.resolve_workspace_path("lib.rs").unwrap();
-        assert!(resolved.starts_with(dir.path()));
+        assert_eq!(resolved, dir.path().join("lib.rs").canonicalize().unwrap());
     }
 }

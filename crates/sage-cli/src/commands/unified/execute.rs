@@ -33,16 +33,9 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
     }
 
     // Load configuration
-    let config = if std::path::Path::new(&args.config_file).exists() {
-        load_config_from_file(&args.config_file)?
+    let config = if let Some(path) = args.config_file.as_deref() {
+        load_config_from_file(path)?
     } else {
-        let global_config = dirs::home_dir().map(|h| h.join(".sage").join("config.json"));
-        if global_config.as_ref().is_none_or(|path| !path.exists()) {
-            console.warn(&format!(
-                "Configuration file not found: {}, using defaults",
-                args.config_file
-            ));
-        }
         sage_core::config::load_config()?
     };
 
@@ -135,7 +128,10 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
         console.warn(&format!("Failed to enable session recording: {}", e));
     }
 
-    let config_file = args.config_file.clone();
+    let config_file = args
+        .config_file
+        .clone()
+        .unwrap_or_else(|| crate::args::DEFAULT_CONFIG_FILE.to_string());
 
     // Handle session resume (-c or -r flags)
     if args.continue_recent || args.resume_session_id.is_some() {
@@ -178,7 +174,7 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
             &jsonl_storage,
             &session_recorder,
             &task_description,
-            &args.config_file,
+            &config_file,
         )
         .await;
 
@@ -196,4 +192,30 @@ pub async fn execute(args: UnifiedArgs) -> SageResult<()> {
     Err(sage_core::error::SageError::invalid_input(
         "Interactive mode requires a TTY. Run without piping, or provide a task with `sage \"task\"` or `sage -p \"task\"`.",
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn unified_execute_rejects_missing_explicit_config() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing_path = dir.path().join("missing.json");
+        let args = UnifiedArgs {
+            task: None,
+            config_file: Some(missing_path.to_str().unwrap().to_string()),
+            working_dir: Some(dir.path().to_path_buf()),
+            max_steps: None,
+            verbose: false,
+            non_interactive: true,
+            resume_session_id: None,
+            continue_recent: false,
+            stream_json: false,
+            output_mode: OutputModeArg::Silent,
+        };
+        let error = format!("{:?}", execute(args).await.unwrap_err());
+        assert!(error.contains("Failed to read config file"), "{error}");
+        assert!(error.contains(missing_path.to_str().unwrap()), "{error}");
+    }
 }
