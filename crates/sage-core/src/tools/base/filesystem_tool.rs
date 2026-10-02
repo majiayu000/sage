@@ -2,7 +2,7 @@
 
 use super::ToolError;
 use super::tool_trait::Tool;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 /// Helper trait for tools that need access to the file system.
 ///
@@ -116,17 +116,16 @@ pub trait FileSystemTool: Tool {
     /// Resolve a path and enforce the workspace boundary.
     ///
     /// Tools that touch the filesystem should use this instead of duplicating
-    /// path resolution plus `is_safe_path` checks.
+    /// path resolution plus `is_safe_path` checks. Returns the checked absolute
+    /// path, with existing ancestors canonicalized. Unresolved `..` is denied.
     fn resolve_workspace_path(&self, path: &str) -> Result<PathBuf, ToolError> {
         let resolved_path = self.resolve_path(path);
-        if self.is_safe_path(&resolved_path) {
-            Ok(resolved_path)
-        } else {
-            Err(ToolError::PermissionDenied(format!(
+        resolve_safe_path(&resolved_path, self.working_directory()).ok_or_else(|| {
+            ToolError::PermissionDenied(format!(
                 "Access denied to path: {}",
                 resolved_path.display()
-            )))
-        }
+            ))
+        })
     }
 
     /// Check if a path is safe to access (within working directory)
@@ -137,74 +136,38 @@ pub trait FileSystemTool: Tool {
     /// - Relative paths with `..` components that escape the sandbox
     /// - Symlinks that point outside the working directory
     fn is_safe_path(&self, path: &Path) -> bool {
-        // Get the canonical working directory
-        let working_dir = match self.working_directory().canonicalize() {
-            Ok(p) => p,
-            Err(_) => return false, // Can't verify if working dir doesn't exist
-        };
+        resolve_safe_path(path, self.working_directory()).is_some()
+    }
+}
 
-        // Try to canonicalize the target path
-        let canonical = if path.exists() {
-            match path.canonicalize() {
-                Ok(p) => p,
-                Err(_) => return false,
-            }
-        } else {
-            // For new files/directories, find the nearest existing ancestor
-            // and build the path from there
-            let mut current = path.to_path_buf();
-            let mut components_to_add = Vec::new();
+fn resolve_safe_path(path: &Path, working_directory: &Path) -> Option<PathBuf> {
+    let working_dir = working_directory.canonicalize().ok()?;
+    let mut current = path.to_path_buf();
+    let mut components_to_add = Vec::new();
 
-            // Walk up until we find an existing directory
-            loop {
-                if current.exists() {
-                    match current.canonicalize() {
-                        Ok(canonical_ancestor) => {
-                            // Build the full path by appending non-existent components
-                            let mut result = canonical_ancestor;
-                            for component in components_to_add.into_iter().rev() {
-                                result = result.join(component);
-                            }
-                            break result;
-                        }
-                        Err(_) => return false,
-                    }
+    loop {
+        match std::fs::symlink_metadata(&current) {
+            Ok(_) => {
+                // Canonicalize existing ancestors, including symlinks. A dangling
+                // symlink must fail here rather than be treated as a new file.
+                let mut canonical = current.canonicalize().ok()?;
+                for component in components_to_add.into_iter().rev() {
+                    canonical.push(component);
                 }
-
-                // Get the file name component to add later
-                if let Some(name) = current.file_name() {
-                    components_to_add.push(name.to_os_string());
-                }
-
-                // Move to parent
-                if let Some(parent) = current.parent() {
-                    if parent.as_os_str().is_empty() {
-                        // We've reached the root of a relative path
-                        // Use working directory as the base
-                        let mut result = working_dir.clone();
-                        for component in components_to_add.into_iter().rev() {
-                            result = result.join(component);
-                        }
-                        break result;
-                    }
-                    current = parent.to_path_buf();
-                } else {
-                    return false;
-                }
+                return canonical.starts_with(&working_dir).then_some(canonical);
             }
-        };
-
-        // Check for path traversal attempts in the non-existent portion
-        // by ensuring no ".." components exist after normalization
-        for component in path.components() {
-            if let std::path::Component::ParentDir = component {
-                // Found a ".." - need to verify the final path is still safe
-                // The canonical path already resolved these, but we need to
-                // ensure we don't escape the sandbox
-            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => return None,
         }
 
-        // Check if the canonical path starts with the working directory
-        canonical.starts_with(&working_dir)
+        // Only ordinary names may be appended to the canonical ancestor.
+        // ParentDir cannot be resolved safely past a missing directory.
+        match current.components().next_back()? {
+            Component::Normal(name) => components_to_add.push(name.to_os_string()),
+            _ => return None,
+        }
+        if !current.pop() {
+            return None;
+        }
     }
 }
