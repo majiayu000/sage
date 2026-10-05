@@ -1,6 +1,6 @@
 use super::{JsonlSessionStorage, line_preview};
-use crate::session::types::{FileHistorySnapshot, SessionContext};
 use crate::session::types::unified::SessionMessage;
+use crate::session::types::{FileHistorySnapshot, SessionContext};
 use tempfile::TempDir;
 
 #[test]
@@ -73,11 +73,18 @@ async fn assert_recovers_after_malformed_unicode(reader: &str) {
             assert_eq!(snapshots[0].message_id, message.uuid);
         }
         "get_message" => {
-            let loaded = storage.get_message(&id, &message.uuid).await.unwrap().unwrap();
+            let loaded = storage
+                .get_message(&id, &message.uuid)
+                .await
+                .unwrap()
+                .unwrap();
             assert_eq!(loaded.uuid, message.uuid);
         }
         "get_messages_until" => {
-            let messages = storage.get_messages_until(&id, &message.uuid).await.unwrap();
+            let messages = storage
+                .get_messages_until(&id, &message.uuid)
+                .await
+                .unwrap();
             assert_eq!(messages.len(), 1);
             assert_eq!(messages[0].uuid, message.uuid);
         }
