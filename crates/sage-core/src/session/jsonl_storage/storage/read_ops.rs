@@ -42,7 +42,7 @@ impl JsonlSessionStorage {
                     warn!(
                         "Failed to parse message: {} - line: {}",
                         e,
-                        &line[..50.min(line.len())]
+                        line_preview(&line)
                     );
                 }
             }
@@ -83,7 +83,7 @@ impl JsonlSessionStorage {
                     warn!(
                         "Failed to parse snapshot: {} - line: {}",
                         e,
-                        &line[..50.min(line.len())]
+                        line_preview(&line)
                     );
                 }
             }
@@ -131,7 +131,7 @@ impl JsonlSessionStorage {
                     warn!(
                         "Failed to parse message: {} - line: {}",
                         e,
-                        &line[..50.min(line.len())]
+                        line_preview(&line)
                     );
                 }
             }
@@ -181,7 +181,7 @@ impl JsonlSessionStorage {
                     warn!(
                         "Failed to parse message: {} - line: {}",
                         e,
-                        &line[..50.min(line.len())]
+                        line_preview(&line)
                     );
                 }
             }
@@ -220,3 +220,16 @@ impl JsonlSessionStorage {
         Ok(chain)
     }
 }
+
+/// Keep parse diagnostics within 50 bytes without splitting a UTF-8 character.
+fn line_preview(line: &str) -> &str {
+    let mut end = 50.min(line.len());
+    while !line.is_char_boundary(end) {
+        end -= 1;
+    }
+    &line[..end]
+}
+
+#[cfg(test)]
+#[path = "read_ops_tests.rs"]
+mod tests;
