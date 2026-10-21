@@ -31,7 +31,7 @@ pub(crate) fn load_from_file_as<T: serde::de::DeserializeOwned>(path: &Path) -> 
                 format!("Deserializing TOML configuration from '{}'", path.display()),
             )
         })?,
-        Some("yaml") | Some("yml") => serde_yaml::from_str(&content).map_err(|e| {
+        Some("yaml") | Some("yml") => serde_saphyr::from_str(&content).map_err(|e| {
             SageError::config_with_context(
                 format!("Failed to parse YAML config: {}", e),
                 format!("Deserializing YAML configuration from '{}'", path.display()),

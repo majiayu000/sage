@@ -88,8 +88,9 @@ jobs:
         run: cargo install cargo-outdated --locked
 
       - name: Check outdated dependencies
-        # serial_test 4.x requires Rust 1.93.1, above the workspace MSRV.
-        run: cargo outdated --workspace --root-deps-only --ignore serial_test --exit-code 1
+        # serial_test 4.x requires Rust 1.93.1 and serde-saphyr >= 1.2 requires
+        # Rust 1.89, both above the workspace MSRV.
+        run: cargo outdated --workspace --root-deps-only --ignore serial_test --ignore serde-saphyr --exit-code 1
 
       - name: Install Rust toolchain (MSRV)
         uses: dtolnay/rust-toolchain@1.88.0

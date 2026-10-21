@@ -145,7 +145,7 @@ fn file_declares_default_provider(path: &Path) -> bool {
                     .and_then(|provider| provider.as_str().map(str::to_string))
             })
             .is_some_and(|provider| !provider.is_empty()),
-        Some("yaml") | Some("yml") => serde_yaml::from_str::<serde_yaml::Value>(&content)
+        Some("yaml") | Some("yml") => serde_saphyr::from_str::<serde_json::Value>(&content)
             .ok()
             .and_then(|value| {
                 value
