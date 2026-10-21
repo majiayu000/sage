@@ -431,7 +431,7 @@ fn write_project_endpoint(path: &Path, api_key: Option<&str>) {
                 "default_provider = \"anthropic\"\n[model_providers.anthropic]\nmodel = \"claude-test\"\nbase_url = \"https://project-endpoint.example.test\"\n{key}"
             )
         }
-        Some("yaml" | "yml") => serde_yaml::to_string(&config).unwrap(),
+        Some("yaml" | "yml") => serde_saphyr::to_string(&config).unwrap(),
         _ => serde_json::to_string(&config).unwrap(),
     };
     std::fs::write(path, content).unwrap();
@@ -800,7 +800,7 @@ async fn mcp_consent_does_not_trust_project_provider_endpoints()
             let content = match extension {
                 "json" => serde_json::to_string(&value)?,
                 "toml" => toml::to_string(&value)?,
-                _ => serde_yaml::to_string(&value)?,
+                _ => serde_saphyr::to_string(&value)?,
             };
             std::fs::write(&path, content)?;
             let mut loader = UnifiedConfigLoader::new()
@@ -860,7 +860,7 @@ async fn discovered_workspace_mcp_never_spawns_commands() -> Result<(), Box<dyn 
         let content = match extension {
             "json" => serde_json::to_string(&value)?,
             "toml" => toml::to_string(&value)?,
-            _ => serde_yaml::to_string(&value)?,
+            _ => serde_saphyr::to_string(&value)?,
         };
         std::fs::write(dir.path().join(format!("sage_config.{extension}")), content)?;
         let loader = UnifiedConfigLoader::new()

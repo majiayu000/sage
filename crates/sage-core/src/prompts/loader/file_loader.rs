@@ -87,7 +87,7 @@ impl PromptFile {
 
         // Parse YAML frontmatter
         let metadata: PromptMetadata =
-            serde_yaml::from_str(frontmatter_str).context("Failed to parse frontmatter YAML")?;
+            serde_saphyr::from_str(frontmatter_str).context("Failed to parse frontmatter YAML")?;
 
         Ok((metadata, prompt_content.to_string()))
     }
